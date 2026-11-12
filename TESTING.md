@@ -725,6 +725,14 @@ one tap away under **More**.
   (`node e2e-map.mjs` runs a big list in miniature through all of this in a
   browser, and through the next four; `ONLY=tiles,check node e2e-map.mjs`
   runs parts of it.)
+- **Map, Google Maps refusing** (staging with `GOOGLE_MAPS_TILES=1`) — a
+  key with billing off, or block `/tiles/` in the browser's network tools
+  and reload: the map turns to the free map and says *Google Maps isn’t
+  loading — showing the free map*; a manager's *Why?* beside it opens the
+  Map check, whose top line is *Street map service — Not working · Google
+  Maps* with the plain words, *Google said* and the Recipe B step. Staff and
+  volunteers see no *Why?*. (`ONLY=google node e2e-map.mjs` runs this
+  against a stand-in Google; `GOOGLE_PORT`, `GPORT` pick its ports.)
 - **Map, the street map not loading** — block `basemaps.cartocdn.com` in
   the browser's network tools and reload: within a moment a line says *The
   street map wasn’t loading — switched to Muted* and the streets are there.
@@ -996,7 +1004,8 @@ latest).
   OpenStreetMap, both free and neither for heavy use; choose a provider the
   campaign has an agreement with before election week: Google Maps
   (`GOOGLE_MAPS_TILES=1` and a `GOOGLE_MAPS_SERVER_KEY` with the Map Tiles
-  API enabled) or any `{z}/{x}/{y}` provider (`STARBASE_TILE_URL`) —
+  API enabled), Stadia Maps (`STARBASE_TILE_PROVIDER=stadia`) or any
+  `{z}/{x}/{y}` provider (`STARBASE_TILE_URL`) —
   GOING-LIVE.md, section 5. The browser tests run where neither host can be
   reached, on stand-in tiles: nothing here has checked the real street map.
   If it stops loading, the map says so.

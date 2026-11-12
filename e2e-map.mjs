@@ -43,6 +43,13 @@
 //     by itself (a stand-in address lookup on :4949), the map shows its
 //     progress, and after a pause it tries again with nobody tapping;
 //   · the Map check (managers) says which trouble a map has, in one screen;
+//   · Google Maps through the server (its own second server, a stand-in
+//     Google): a saved Clean, or no pick, draws Google and asks nothing of
+//     the free map; Google refusing (billing off), the map turns to the free
+//     map by itself and says so — "Free map" is never a pick; a manager's
+//     "Why?" opens the Map check, whose top line names the service and what
+//     Google said, the other lines there before it; staff and volunteers see
+//     no "Why?"; Google answering again, both service lines say Working;
 //   · a phone reopened with no answer shows the doors it kept, and the line
 //     that says so lies clear of the zoom and corner buttons; on "My turf"
 //     no "Unavailable" for the list's answers, which aren't drawn there; a
@@ -50,7 +57,8 @@
 //     again" alone — and once it answers again, nothing about kept doors.
 //
 //   (cd web && npm run build) && node e2e-map.mjs        (its own server on :4948, the stand-in lookup on :4949)
-//   ONLY=tiles,check node e2e-map.mjs                    just those parts: list · layout · tiles · turfs · placing · check · kept
+//   ONLY=tiles,check node e2e-map.mjs                    just those parts: list · layout · tiles · turfs · placing · check · google · kept
+//   GOOGLE_PORT / GPORT                                  the stand-in Google and the Google server (default PORT+2, PORT+3)
 import { chromium } from 'playwright-core';
 import { spawn } from 'node:child_process';
 import http from 'node:http';
@@ -107,6 +115,7 @@ await new Promise((resolve, reject) => {
   server.on('exit', (code) => reject(new Error(`server exited ${code}`)));
 });
 const BASE = `http://127.0.0.1:${PORT}`;
+let gServer = null; // the second server, with Google Maps on (the google part)
 
 // (With this on, the tile routes below also answer what a service worker
 // fetches — the part that checks a failed tile under one needs it.)
@@ -1322,12 +1331,194 @@ try {
     await lc.close();
   }
 
+  if (want('google')) {
+    // ── Google Maps through the server, and the free map behind it ──
+    // A stand-in Google: 'ok' answers a session, tiles and a credit; 'billing'
+    // refuses everything as Google does with billing off. Its sessions take a
+    // moment, so the Map check's other lines come before its service lines.
+    const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+    const g = { mode: 'ok', sessions: 0, tiles: 0 };
+    const BILLING = JSON.stringify({ error: { code: 403, message: 'This API method requires billing to be enabled. Please enable billing on project #123 by visiting https://console.developers.google.com/billing/enable?project=123 then retry.', status: 'PERMISSION_DENIED', details: [{ '@type': 'type.googleapis.com/google.rpc.ErrorInfo', reason: 'BILLING_DISABLED' }] } });
+    const standInGoogle = http.createServer((req, res) => {
+      const u = new URL(req.url, 'http://x');
+      const isSession = u.pathname === '/v1/createSession';
+      if (isSession) g.sessions += 1; else if (u.pathname.startsWith('/v1/2dtiles/')) g.tiles += 1;
+      setTimeout(() => {
+        if (g.mode === 'billing') { res.writeHead(403, { 'content-type': 'application/json' }); res.end(BILLING); return; }
+        if (isSession) { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ session: `s${g.sessions}`, expiry: String(Math.floor(Date.now() / 1000) + 86400) })); return; }
+        if (u.pathname === '/tile/v1/viewport') { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ copyright: 'Map data ©2026 Google' })); return; }
+        res.writeHead(200, { 'content-type': 'image/png' }); res.end(PNG);
+      }, isSession ? 1500 : 0);
+    });
+    const GOOGLE_PORT = Number(process.env.GOOGLE_PORT) || PORT + 2;
+    const GPORT = Number(process.env.GPORT) || PORT + 3;
+    await new Promise((resolve) => standInGoogle.listen(GOOGLE_PORT, '127.0.0.1', resolve));
+    gServer = spawn(process.execPath, ['server/index.js'], {
+      cwd: fileURLToPath(new URL('.', import.meta.url)),
+      env: {
+        ...process.env, STARBASE_OPEN_SIGNUP: '1', STARBASE_DATA: 'memory', PORT: String(GPORT), GEOCODE_ON_SAVE: 'off',
+        GOOGLE_MAPS_TILES: '1', GOOGLE_MAPS_SERVER_KEY: 'e2e-not-a-key', GOOGLE_MAPS_TILES_URL: `http://127.0.0.1:${GOOGLE_PORT}/v1`,
+        GEOCODER: 'bc', BC_GEOCODER_URL: `http://127.0.0.1:${PORT + 1}`,
+      },
+      stdio: ['ignore', 'pipe', 'inherit'],
+    });
+    gServer.on('exit', () => standInGoogle.close());
+    await new Promise((resolve, reject) => {
+      const t = setTimeout(() => reject(new Error('the Google server did not start')), 30000);
+      gServer.stdout.on('data', (b) => { if (/starbase on :/.test(String(b))) { clearTimeout(t); resolve(); } });
+    });
+    const GB = `http://127.0.0.1:${GPORT}`;
+    // Every context: the free map's tiles from a stand-in (the sandbox can't reach CARTO), counted.
+    const carto = { asked: 0 };
+    const gContext = async (opts = {}) => {
+      const c = await browser.newContext({ viewport: { width: 1440, height: 900 }, timezoneId: 'America/Vancouver', serviceWorkers: 'block', ...opts });
+      await c.route(/basemaps\.cartocdn\.com/, (route) => { carto.asked += 1; return route.fulfill(standIn); });
+      await c.route(/tile\.openstreetmap\.org/, (route) => route.fulfill(standIn));
+      return c;
+    };
+    const mc = await gContext();
+    const signup = await mc.request.post(`${GB}/api/auth/signup`, { data: { name: 'Riley Manager', email: `g-${EMAIL}`, password: PASSWORD, workspaceName: 'Google map', jurisdiction: 'bc-municipal' } });
+    if (!signup.ok()) throw new Error(`google signup ${signup.status()} ${await signup.text()}`);
+    const gpost = async (path, data) => {
+      const r = await mc.request.post(`${GB}/api${path}`, { data });
+      if (!r.ok()) throw new Error(`${path} ${r.status()} ${await r.text()}`);
+      return r.json();
+    };
+    for (let i = 0; i < 6; i += 1) await gpost('/actions/person.create', { name: `G${i} Example`, address: `${10 + i} Example St`, city: 'Surrey', lat: 49.105 + i * 0.001, lng: -122.84 });
+    const joinAs = async (role, opts) => {
+      const inv = await gpost('/actions/member.invite', { email: `${role}+${Date.now().toString(36)}@example.org`, role });
+      const c = await gContext(opts);
+      const j = await c.request.post(`${GB}/api/auth/join`, { data: { token: inv.joinUrl.split('/').pop(), name: `${role} Example`, password: 'knock-knock-2026' } });
+      if (!j.ok()) throw new Error(`join ${role} ${j.status()} ${await j.text()}`);
+      return c;
+    };
+    const tilesState = (pg) => pg.evaluate(() => document.querySelector('.map-canvas')?.dataset.tiles || null);
+    const drawnFrom = (pg) => pg.evaluate(() => [...document.querySelectorAll('.leaflet-tile-pane img.leaflet-tile')].map((i) => i.getAttribute('src') || ''));
+
+    // 1. Google answering: a saved Clean (nearly every phone) and no pick both draw Google.
+    for (const [name, pick] of [['a saved Clean', 'clean'], ['no pick', null]]) {
+      const before = carto.asked;
+      const pg = await mc.newPage();
+      pg.on('pageerror', (e) => errors.push(`[google ${name}] ${e.message}`));
+      await pg.goto(`${GB}/admin`, { waitUntil: 'domcontentloaded' });
+      await pg.evaluate((v) => { if (v) localStorage.setItem('starbase:map:view', v); else localStorage.removeItem('starbase:map:view'); }, pick);
+      await pg.goto(`${GB}/admin/map`, { waitUntil: 'domcontentloaded' });
+      await pg.waitForFunction(() => document.querySelector('.map-canvas')?.dataset.tiles === 'ok', null, { timeout: 15000 }).catch(() => {});
+      await sleep(800);
+      const srcs = await drawnFrom(pg);
+      check(`Google answering, ${name}: the map draws Google’s tiles through the server and asks nothing of the free map`,
+        srcs.length > 0 && srcs.every((u) => /\/tiles\/\d+\/\d+\/\d+\.png/.test(u)) && carto.asked === before && (await tilesState(pg)) === 'ok',
+        JSON.stringify({ srcs: srcs.slice(0, 2), carto: carto.asked - before, tiles: await tilesState(pg) }));
+      if (!pick) {
+        await pg.waitForFunction(() => /Google Maps · Map data ©2026 Google/.test(document.querySelector('.leaflet-control-attribution')?.innerText || ''), null, { timeout: 6000 }).catch(() => {});
+        const credit = await pg.$eval('.leaflet-control-attribution', (el) => el.innerText).catch(() => '');
+        check('…credited “Google Maps” with Google’s own words for the view', /^Google Maps · Map data ©2026 Google/.test(credit), credit);
+      }
+      await pg.close();
+    }
+
+    // 2. Google refusing (billing off): the free map, by itself, said; never a pick.
+    g.mode = 'billing';
+    const sessionsBefore = g.sessions;
+    const tilesBefore = g.tiles;
+    const mp = await mc.newPage();
+    mp.on('pageerror', (e) => errors.push(`[google refused] ${e.message}`));
+    const opened = Date.now();
+    await mp.goto(`${GB}/admin/map`, { waitUntil: 'domcontentloaded' });
+    const SWITCHED = 'Google Maps isn’t loading — showing the free map';
+    await mp.waitForFunction((w) => (document.querySelector('.map-tilenote--done')?.innerText || '').includes(w), SWITCHED, { timeout: 15000 }).catch(() => {});
+    const tookMs = Date.now() - opened;
+    const note = await mp.$eval('.map-tilenote--done', (el) => el.innerText.replace(/\s+/g, ' ').trim()).catch(() => null);
+    await mp.screenshot({ path: `${SHOTS}/13-google-free-map-manager-1440.png` });
+    const freeSrcs = await drawnFrom(mp);
+    check('Google refusing: the map turns to the free map by itself and says so, under 10 s',
+      note?.startsWith(SWITCHED) && freeSrcs.some((u) => /basemaps\.cartocdn\.com/.test(u)) && tookMs < 10000, JSON.stringify({ note, tookMs, srcs: freeSrcs.slice(0, 1) }));
+    console.log(`      (map open to the free map: ${tookMs} ms)`);
+
+    // 3. A manager taps Why?: the check's top line names the service and what Google said.
+    const why = await mp.$('.map-tilenote__why');
+    check('a manager has a quiet “Why?” there, 48 px tall', Boolean(why) && (await why.boundingBox()).height >= 48);
+    let sawChecking = false;
+    if (why) await why.click();
+    await mp.waitForSelector('.map-check .map-check__row', { timeout: 10000 }).catch(() => {});
+    sawChecking = await mp.evaluate(() => /Checking…/.test(document.querySelector('.map-check [data-key="tilesvc"]')?.innerText || ''));
+    await mp.waitForFunction(() => /Not working/.test(document.querySelector('.map-check [data-key="tilesvc"]')?.innerText || ''), null, { timeout: 12000 }).catch(() => {});
+    const rowsOf = (pg) => pg.$$eval('.map-check .map-check__row', (els) => els.map((r) => ({ key: r.dataset.key, text: r.innerText.trim(), warn: r.classList.contains('is-warn') })));
+    let rows = await rowsOf(mp);
+    await mp.screenshot({ path: `${SHOTS}/13-google-check-flagged-1440.png` });
+    const top = rows[0] || {};
+    check('the Map check’s top line: Street map service — Not working · Google Maps, the plain words, Google’s own and Recipe B step 2',
+      top.key === 'tilesvc' && top.warn && /Street map service/.test(top.text) && /Not working · Google Maps/.test(top.text) && /Billing isn’t turned on/.test(top.text)
+        && /Google said: “This API method requires billing/.test(top.text) && /Recipe B step 2/.test(top.text) && /console\.developers\.google\.com\/billing\/enable/.test(top.text),
+      JSON.stringify(top));
+    check('…the other lines came first, while it asked Google (“Checking…”)', sawChecking && rows.some((r) => r.key === 'file'), String(sawChecking));
+    check('…and the address lookup answers', /Working · BC Address Geocoder/.test(rows.find((r) => r.key === 'lookupsvc')?.text || ''), JSON.stringify(rows.find((r) => r.key === 'lookupsvc')));
+    // Show → Map never offers the free map.
+    await mp.keyboard.press('Escape');
+    await mp.click('.map-filter-btn');
+    await mp.waitForSelector('.map-fsheet');
+    const looks = await mp.$$eval('.map-vchip', (els) => els.map((e) => e.innerText.trim()));
+    check('“Free map” is not a pick in Show → Map', looks.length >= 3 && !looks.includes('Free map'), JSON.stringify(looks));
+    await mp.keyboard.press('Escape');
+    const refusedSessions = g.sessions - sessionsBefore;
+
+    // On a phone, the same: the free map with Why?, then the check flagged.
+    const mphone = await gContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+    await mphone.addCookies(await mc.cookies());
+    const pp = await mphone.newPage();
+    pp.on('pageerror', (e) => errors.push(`[google phone] ${e.message}`));
+    await pp.goto(`${GB}/admin/map`, { waitUntil: 'domcontentloaded' });
+    await pp.waitForFunction((w) => (document.querySelector('.map-tilenote--done')?.innerText || '').includes(w), SWITCHED, { timeout: 15000 }).catch(() => {});
+    await pp.screenshot({ path: `${SHOTS}/13-google-free-map-manager-390.png` });
+    const sideways = await pp.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+    const pwhy = await pp.$('.map-tilenote__why');
+    check('390 px: the manager’s free-map line with “Why?” (48 px), no sideways scroll', Boolean(pwhy) && (await pwhy.boundingBox()).height >= 48 && !sideways, JSON.stringify({ why: Boolean(pwhy), sideways }));
+    if (pwhy) {
+      await pwhy.tap();
+      await pp.waitForFunction(() => /Not working/.test(document.querySelector('.map-check [data-key="tilesvc"]')?.innerText || ''), null, { timeout: 12000 }).catch(() => {});
+      await sleep(300);
+      await pp.screenshot({ path: `${SHOTS}/13-google-check-flagged-390.png` });
+      check('390 px: the check’s first line is the flagged service', (await rowsOf(pp))[0]?.key === 'tilesvc');
+    }
+    await mphone.close();
+
+    // 4. Staff and volunteers: the free map, no Why?.
+    for (const [role, path, opts] of [['staff', '/admin/map', {}], ['volunteer', '/map', { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }]]) {
+      const c = await joinAs(role, opts);
+      const pg = await c.newPage();
+      pg.on('pageerror', (e) => errors.push(`[google ${role}] ${e.message}`));
+      await pg.goto(`${GB}${path}`, { waitUntil: 'domcontentloaded' });
+      await pg.waitForFunction(() => document.querySelector('.map-tilenote'), null, { timeout: 15000 }).catch(() => {});
+      const n = await pg.$eval('.map-tilenote', (el) => el.innerText.replace(/\s+/g, ' ').trim()).catch(() => null);
+      if (role === 'volunteer') await pg.screenshot({ path: `${SHOTS}/13-google-free-map-volunteer-390.png` });
+      check(`a ${role} keeps streets (the free map, said) and sees no “Why?”`, Boolean(n) && !(await pg.$('.map-tilenote__why')) && n.startsWith(SWITCHED), n);
+      await c.close();
+    }
+    check(`Google refusing: the server stopped asking it (${refusedSessions} session calls while four pages opened — the check’s own included)`, refusedSessions <= 2, JSON.stringify({ sessions: refusedSessions, tiles: g.tiles - tilesBefore }));
+
+    // 5. Google answering again: both service lines say Working (the check's
+    //    answer is kept 30 s, so it is asked again after that).
+    g.mode = 'ok';
+    await sleep(31000);
+    await mp.click('.map-filter-btn');
+    await mp.waitForSelector('.map-fsheet');
+    await mp.click('.map-fsheet__check');
+    await mp.waitForFunction(() => /Working/.test(document.querySelector('.map-check [data-key="tilesvc"]')?.innerText || ''), null, { timeout: 12000 }).catch(() => {});
+    rows = await rowsOf(mp);
+    await mp.screenshot({ path: `${SHOTS}/13-google-check-working-1440.png` });
+    const r = Object.fromEntries(rows.map((x) => [x.key, x]));
+    check('Google answering again: Street map service and Address lookup both say Working',
+      /Working · Google Maps/.test(r.tilesvc?.text || '') && /Working · BC Address Geocoder/.test(r.lookupsvc?.text || '') && !r.tilesvc?.warn, JSON.stringify([r.tilesvc, r.lookupsvc]));
+    await mc.close();
+  }
+
   check('no page errors', errors.length === 0, errors.join(' | '));
 } catch (e) {
   failed = e;
 } finally {
   await browser.close().catch(() => {});
   server.kill();
+  gServer?.kill();
   geocoder.close();
 }
 if (failed) { console.error('FAILED', failed); process.exit(1); }

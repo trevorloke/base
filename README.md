@@ -830,6 +830,8 @@ election week should switch to a paid provider.
 | `STARBASE_TILE_URL` | tile template, `https://…/{z}/{x}/{y}.png` (`{s}` optional; an API key can ride in the query string) | `https://tile.openstreetmap.org/{z}/{x}/{y}.png` |
 | `STARBASE_TILE_ATTRIBUTION` | the provider's credit line (text and links) | the OpenStreetMap credit (none for another provider unless set) |
 | `STARBASE_TILE_MAX_ZOOM` | deepest zoom the provider serves, 1–22 | `19` |
+| `STARBASE_TILE_PROVIDER` | a provider by name: `stadia` (Stadia Maps' Alidade Smooth — its address, credit and zoom 20 filled in; `STARBASE_TILE_URL` wins over it) | — |
+| `STARBASE_TILE_KEY` | the named provider's key, added as `?api_key=` (phones can see it — use only where the provider can't be told the campaign's own web address) | — |
 
 A bad value falls back to the default (and logs once); desk roles see which
 tiles took on the map's filter sheet (*Map tiles: OpenStreetMap — custom
@@ -847,9 +849,16 @@ saying it did (*The street map wasn’t loading — switched to Muted*), but
 only if that provider answers (one tile asked of it first): with weak
 signal neither does, and the street map the phone kept stays drawn. If the
 other doesn't answer, or there is no second provider (a campaign's own,
-Google's), *The street map isn’t loading* stays under the count with one
-tap: *Try again*, or *Try Clean* / *Try Muted* only when that provider has
-just answered. The person's own choice of look is only changed by their
+Google's has the free map: below), *The street map isn’t loading* stays
+under the count with one tap: *Try again*, or *Try Clean* / *Try Muted*
+only when that provider has just answered. A manager also gets a quiet
+*Why?* there, which opens the Map check.
+**With Google Maps on, volunteers keep streets while Google is down:** the
+map turns to CARTO's free map by itself (*Google Maps isn’t loading —
+showing the free map*) and back once Google answers. The free map is never
+a look to pick, and `STARBASE_TILE_CLEAN=off` leaves it out. A provider of
+the campaign's own has none: election-week traffic is never sent back to
+the free tiles. The person's own choice of look is only changed by their
 tap, and a look tapped there only once its streets come. The streets a
 phone keeps are its pick's, so the pick is what the map draws with no
 signal, and what it goes back to when the look it switched to stops

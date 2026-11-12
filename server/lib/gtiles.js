@@ -59,8 +59,9 @@ const pauseMs = (code) => (code === 'quota' ? 30_000 : 60_000);
 const refused = (status, said) => {
   const t = googleTrouble(status, said);
   const at = Date.now();
+  const already = pausedFor() > 0; // (tiles already on their way when it began: said once)
   trouble = { at, until: at + pauseMs(t.code), status, ...t };
-  console.warn(`map tiles: Google refused (${status} ${t.code}) — no calls to Google for ${pauseMs(t.code) / 1000} s`);
+  if (!already) console.warn(`map tiles: Google refused (${status} ${t.code}) — no calls to Google for ${pauseMs(t.code) / 1000} s`);
   return trouble;
 };
 const pausedFor = () => (trouble && Date.now() < trouble.until ? trouble.until - Date.now() : 0);

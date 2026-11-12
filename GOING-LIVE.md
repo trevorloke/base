@@ -95,6 +95,7 @@ Then, as each one is ready:
 | `GEOCODER` | leave unset (`bc`, the free BC Address Geocoder); `GEOCODER_FALLBACK=google` to ask Google only for addresses BC can't place | placing people on the map |
 | `GOOGLE_MAPS_SERVER_KEY` | a Google Cloud key with application restriction **None** and API restriction to the APIs used (Map Tiles; Geocoding for Google address lookup) — not a *Websites* key, not an IP restriction on Render (§5, Recipe B) | Google geocoding and Google Maps tiles |
 | `GOOGLE_MAPS_TILES` | `1` (or `true`, `yes`, `on`) to draw the field map on Google's tiles (`GOOGLE_MAPS_TILE_TYPE` roadmap, satellite or terrain); otherwise the free tiles, which are not for a large team in election week (§5, *The street map*) | the map's background |
+| `STARBASE_TILE_PROVIDER`, `STARBASE_TILE_KEY` | `stadia` for Stadia Maps (address, credit and zoom filled in), and its key only if it can't be told the campaign's web address (§5, Recipe A) | the map's background, instead of the free tiles |
 | `STARBASE_TILE_URL`, `STARBASE_TILE_ATTRIBUTION`, `STARBASE_TILE_MAX_ZOOM` | a tile provider the campaign has an agreement with: its `https://…/{z}/{x}/{y}.png` address, its credit line, its deepest zoom (§5, *The street map*) | the map's background, instead of the free tiles |
 | `STARBASE_TRUSTED_PROXIES` | leave unset on Render (one proxy). Set to the number of proxies in front if there is a CDN before Render | rate limits reading the right address |
 | `BASE_DOOR_KEY` | behind the base.win door only: the same 32 or more random characters (`openssl rand -base64 32`) as the door's `BASE_DOOR_KEY` (apps/door/README.md) | each visitor through base.win keeping their own address for the sign-in and form limits — without it, everyone who comes through the door counts as one |
@@ -259,12 +260,14 @@ this was written. Check them on the provider's site.
    draw on this account. If the campaign is reached only through base.win,
    use a key instead (step 4, last line).
 4. On each Render service (staging, then production) set
-   `STARBASE_TILE_URL=https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png`,
-   `STARBASE_TILE_ATTRIBUTION` to Stadia's credit line,
-   `STARBASE_TILE_MAX_ZOOM=20`, and save. Only if domain authentication
-   cannot be used, add `?api_key=<key>` to the URL; phones can see that key.
-5. Open **Map → Show → Map check**: the street map line names
-   `tiles.stadiamaps.com` and counts tiles loaded.
+   `STARBASE_TILE_PROVIDER=stadia` and save: the address, Stadia's credit
+   line and zoom 20 are filled in. Only if domain authentication cannot be
+   used, also set `STARBASE_TILE_KEY=<key>`; phones can see that key.
+   (Stadia's credit is the one its documentation is reported to show; its
+   site could not be read from where this was written.)
+5. Open **Map → Show → Map check**: the street map line names Stadia Maps
+   and counts tiles loaded, and *Street map service* says *Stadia Maps ·
+   straight to the phones*.
 
 Why choose it: no key on the server, no load on the server, and the same
 quiet look as *Clean*. **What it does not settle:** neither Google's nor
@@ -297,6 +300,20 @@ writing** before relying on offline maps.
    Google's own words, and *see Going live §5, Recipe B step N* says which
    of steps 2–6 to redo.
 
+The map's credit reads *Google Maps · Map data ©… Google*, Google's own
+words for the part of the map on screen (Google's policy, as read from
+snippets, accepts the words "Google Maps" where a phone map has no room for
+its logo).
+
+While Google refuses, volunteers keep streets: the map turns to CARTO's free
+map by itself and says *Google Maps isn’t loading — showing the free map*
+(a manager gets *Why?* beside it, which opens the Map check), and goes back
+to Google once it answers. Whether CARTO's keyless free map keeps working
+could not be checked from here (its FAQ now mentions a free key and a
+1,000,000-requests-a-month commercial cap); if it refuses too, the map says
+*The street map isn’t loading*, as before. `STARBASE_TILE_CLEAN=off` turns
+the fallback off.
+
 Cost, as far as could be read: 100,000 tile requests a month free, then
 about US$0.60 per 1,000. A phone draws roughly 15–40 tiles per screen, and
 phones keep what they have drawn. Watch the first busy weekend in Google
@@ -314,7 +331,9 @@ same as the plain values; `0` or `off` turns Google off quietly.
 - **Settings → Services → Map background → Check** says ✓ *Working* (for
   Google), or names the free map in use.
 - On a phone, at a door: the street map draws, and **Map → Show → Map
-  check** names the street map in use with its tiles loaded.
+  check** names the street map in use with its tiles loaded; its *Street
+  map service* and *Address lookup* lines say *Working* (or, flagged at the
+  top, what failed, what Google said and the step that fixes it).
 - Staging first; then the same settings on production, and the same check.
 
 The foot of the map's Show sheet also says *Map tiles: …*. If a provider stops answering, the map says so: it switches
