@@ -460,6 +460,30 @@ test('a long list goes a run at a time: the job hands the rest to the next run, 
   } finally { _setPerRunForTest(null); }
 });
 
+test('a slow email service never holds the job runner: the notice sends beside the jobs behind it', async () => {
+  connect();
+  emails.length = 0; texts.length = 0;
+  at('2030-05-08T00:00:00Z');
+  // The email service takes its time: each answer waits until the test lets it go.
+  let release;
+  const gate = new Promise((res) => { release = res; });
+  onEmail = async () => { await gate; return new Response('{}', { status: 200 }); };
+  try {
+    const r = ok(await mgr.action('shift.tellWeek', { week: MON }));
+    // The runner's own pass (settle: false) is answered while the emails are still waiting.
+    const pass = await Promise.race([
+      runDueJobs(db, { workspaceId: ws, settle: false }).then(() => 'answered'),
+      new Promise((res) => setTimeout(() => res('held'), 1500)),
+    ]);
+    assert.equal(pass, 'answered', 'the runner went on to the next job');
+    release();
+    for (let i = 0; i < 50 && (await noticesOf(r.batch_id)).some((n) => n.state !== 'done'); i += 1) await new Promise((res) => setTimeout(res, 20));
+    assert.deepEqual((await noticesOf(r.batch_id)).map((n) => [n.name, n.state, n.email]), [['Asha Example', 'done', 'sent'], ['Dee Example', 'done', 'sent'], ['Eli Example', 'done', 'sent']]);
+    for (let i = 0; i < 50 && (await rows(`select 1 from jobs where workspace_id = $1 and kind = 'schedule.tell' and status <> 'done'`, [ws])).length; i += 1) await new Promise((res) => setTimeout(res, 20));
+    assert.equal((await rows(`select 1 from jobs where workspace_id = $1 and kind = 'schedule.tell' and status <> 'done'`, [ws])).length, 0, 'and its job is done when they are');
+  } finally { release(); onEmail = () => new Response('{}', { status: 200 }); }
+});
+
 test('a notice whose job gave up doesn’t block the week: the next tap closes what it left and tells them', async () => {
   connect();
   emails.length = 0; texts.length = 0;

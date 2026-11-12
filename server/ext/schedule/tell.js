@@ -176,11 +176,12 @@ const byPerson = (bookings) => {
 };
 
 // ── Sending ──
-// A run sends to a hundred people, or for five minutes when a provider is
-// slow to answer — well inside the ten after which the job runner takes a
-// running job for dead — and the next run carries on.
+// A run sends to a hundred people, or for a minute when a provider is slow
+// to answer — well inside the ten after which the job runner takes a
+// running job for dead, even with a last group of slow answers — and the
+// next run carries on.
 const PER_RUN = 100;
-const RUN_MS = 5 * 60_000;
+const RUN_MS = 60_000;
 const BATCH = 10;
 let perRun = PER_RUN;
 export const _setPerRunForTest = (n) => { perRun = n || PER_RUN; };
@@ -284,16 +285,20 @@ const deliver = async (db, ctx, batchId, { actorId = null, action = TELL_ACTION,
 };
 
 // The job that sends a notice's rows, a run at a time (PER_RUN, RUN_MS), the
-// next run straight away — other background work isn't kept waiting.
+// next run straight away. The sending is handed back to the runner
+// ({ later }, lib/jobs.js): other background work — a ladder's email, a
+// receipt — is never kept waiting on a slow email or text service.
 const runTellJob = async (db, job) => {
   const { batch_id: batchId, actor_id: actorId = null, action } = job.payload || {};
   const ctx = await jobCtx(db, job.workspace_id);
   if (!ctx || !batchId) return;
-  const run = await deliver(db, ctx, batchId, { actorId, action: action === REMIND_ACTION ? REMIND_ACTION : TELL_ACTION });
-  if (run.more) {
-    await enqueueJob(db, { workspaceId: job.workspace_id, kind: TELL_JOB, payload: job.payload });
-    runJobsSoon();
-  }
+  return { later: (async () => {
+    const run = await deliver(db, ctx, batchId, { actorId, action: action === REMIND_ACTION ? REMIND_ACTION : TELL_ACTION });
+    if (run.more) {
+      await enqueueJob(db, { workspaceId: job.workspace_id, kind: TELL_JOB, payload: job.payload });
+      runJobsSoon();
+    }
+  })() };
 };
 
 // One campaign evening (payload.day): everyone booked for tomorrow.
