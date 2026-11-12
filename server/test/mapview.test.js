@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import {
   viewBox, rowsBudget, DOT_ZOOM, LONE_PIN_ZOOM, PIN_ZOOM,
   dotsFrom, dotRadius, dotOnScreen, ringedAt, MARK, cellOf, cellsFrom, cellFill, drawnFor, inBox,
-  tileHealth, TILE_WAIT_MS, checkLines, timeOfDay, placingPoll, retryLate, tileAt, streetMove,
+  tileHealth, TILE_WAIT_MS, checkLines, timeOfDay, placingPoll, retryLate, tileAt, streetMove, pickLook, tileHost,
 } from '../../web/src/pages/mapView.js';
 import { bandOf } from '@starbase/shared/scale';
 
@@ -452,4 +452,84 @@ test('a paused run long past its time to try again — that try never ran — sa
   l = said(checkLines({ ...paused, placing: { ...paused.placing, jobs: false } }, PAGE, { clock, now: t - 60_000 }));
   assert.equal(l.placing.value, 'Paused');
   assert.match(l.placing.note, /background jobs are off on this server/);
+});
+
+// ── Google failing: the free map, never a pick ──
+const G = '/tiles/{z}/{x}/{y}.png';
+const GVIEWS = [
+  { key: 'satellite', label: 'Satellite', url: `${G}?t=satellite` },
+  { key: 'terrain', label: 'Terrain', url: `${G}?t=terrain` },
+  { key: 'free', label: 'Free map', url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', fallback: true },
+];
+const MUTED = { key: 'muted', label: 'Muted' };
+
+test('with Google on, a saved Clean, no pick or an old Free map pick draws Google; the free map is what it turns to', () => {
+  for (const viewPick of ['clean', undefined, 'free', 'muted']) {
+    const r = pickLook({ views: GVIEWS, viewPick, baseUrl: G, muted: MUTED });
+    assert.equal(r.providerView, null, `${viewPick}: Google’s own tiles are drawn`);
+    assert.equal(r.otherLook?.key, 'free', `${viewPick}: the free map is the other look`);
+  }
+  // Satellite picked: Satellite drawn, the free map behind it too.
+  const sat = pickLook({ views: GVIEWS, viewPick: 'satellite', baseUrl: G, muted: MUTED });
+  assert.deepEqual([sat.providerView.key, sat.otherLook.key], ['satellite', 'free']);
+  // Gone there by itself: the free map is drawn (and on it, no other).
+  const auto = pickLook({ views: GVIEWS, viewPick: 'clean', drawnAuto: 'free', baseUrl: G, muted: MUTED });
+  assert.deepEqual([auto.providerView.key, auto.otherLook], ['free', null]);
+  // Without the free map (STARBASE_TILE_CLEAN=off): Google has no other look, as before.
+  assert.equal(pickLook({ views: GVIEWS.slice(0, 2), viewPick: 'clean', baseUrl: G, muted: MUTED }).otherLook, null);
+});
+
+test('on the free tiles, as before: Clean ↔ Muted over OpenStreetMap; a campaign’s own provider has no other', () => {
+  const OSM = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+  const CLEAN = { key: 'clean', label: 'Clean', url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png' };
+  const onClean = pickLook({ views: [CLEAN], viewPick: 'clean', baseUrl: OSM, muted: MUTED });
+  assert.deepEqual([onClean.providerView.key, onClean.otherLook.key], ['clean', 'muted']);
+  const onMuted = pickLook({ views: [CLEAN], viewPick: 'muted', baseUrl: OSM, muted: MUTED });
+  assert.deepEqual([onMuted.providerView, onMuted.otherLook.key], [null, 'clean']);
+  assert.deepEqual(pickLook({ views: [], viewPick: 'clean', baseUrl: 'https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png', muted: MUTED }), { providerView: null, otherLook: null });
+  assert.equal(tileHost('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'), 'basemaps.cartocdn.com');
+  assert.equal(tileHost(G), '');
+});
+
+test('the services behind the map: one line each, after the street map — waiting, working, not working with Google’s words and the step', () => {
+  const clock = () => '3:40 pm';
+  const now = Date.parse('2026-11-10T23:45:00.000Z');
+  const keys = (l) => l.map((x) => x.key);
+  // Not asked (an old caller): no service lines.
+  assert.ok(!keys(checkLines(CHECK, PAGE)).includes('tilesvc'));
+  // While it waits on Google, after it failed, with no signal.
+  for (const [state, words] of [['pending', 'Checking…'], ['error', 'Unavailable — Try again'], ['offline', 'No signal — the check needs it']]) {
+    const l = checkLines(CHECK, PAGE, { services: { state } });
+    assert.deepEqual(keys(l).slice(6, 9), ['tiles', 'tilesvc', 'lookupsvc']);
+    assert.deepEqual([said(l).tilesvc.value, said(l).lookupsvc.value, flagged(l)], [words, words, []]);
+  }
+  const GOOD = { tiles: { provider: 'Google Maps', viaServer: true, probe: { ok: true }, last: null, lastOkAt: '2026-11-10T23:44:00.000Z' },
+    lookup: { provider: 'BC Address Geocoder', fallback: null, probe: { ok: true } } };
+  let l = checkLines(CHECK, PAGE, { clock, now, services: { state: 'ok', data: GOOD } });
+  assert.deepEqual([said(l).tilesvc.value, said(l).tilesvc.note, said(l).lookupsvc.value, flagged(l)], ['Working · Google Maps', null, 'Working · BC Address Geocoder', []]);
+  // Billing off: flagged, plain words, Google's own, and the step.
+  const billing = { ok: false, code: 'billing', plain: 'Billing isn’t turned on for this Google Cloud project.', said: 'This API method requires billing to be enabled.', fix: 'Recipe B step 2' };
+  l = checkLines(CHECK, PAGE, { clock, now, services: { state: 'ok', data: { ...GOOD, tiles: { ...GOOD.tiles, probe: billing } } } });
+  assert.deepEqual(flagged(l), ['tilesvc']);
+  assert.equal(said(l).tilesvc.value, 'Not working · Google Maps');
+  assert.equal(said(l).tilesvc.note, 'Billing isn’t turned on for this Google Cloud project.\nGoogle said: “This API method requires billing to be enabled.”\nSee Going live §5, Recipe B step 2.');
+  // Working now, but it failed under an hour ago: when, and why.
+  const last = { at: '2026-11-10T23:40:00.000Z', plain: billing.plain };
+  l = checkLines(CHECK, PAGE, { clock, now, services: { state: 'ok', data: { ...GOOD, tiles: { ...GOOD.tiles, last } } } });
+  assert.deepEqual([said(l).tilesvc.value, said(l).tilesvc.note, said(l).tilesvc.warn], ['Working · Google Maps', `Failed at 3:40 pm: ${billing.plain}`, false]);
+  l = checkLines(CHECK, PAGE, { clock, now: now + 2 * 3_600_000, services: { state: 'ok', data: { ...GOOD, tiles: { ...GOOD.tiles, last } } } });
+  assert.equal(said(l).tilesvc.note, null, 'an hour on, no longer said');
+  // A provider the phones reach straight: named, nothing asked.
+  l = checkLines(CHECK, PAGE, { services: { state: 'ok', data: { ...GOOD, tiles: { provider: 'Stadia Maps', viaServer: false, probe: null, last: null } } } });
+  assert.deepEqual([said(l).tilesvc.value, said(l).tilesvc.warn], ['Stadia Maps · straight to the phones', false]);
+  // Address lookup: the B.C. service busy (no Google words), Google's refused, or turned off.
+  const busy = { ok: false, code: 'busy', plain: 'The B.C. address service is busy. It tries again by itself; a BC_GEOCODER_KEY raises the limit.', said: '', fix: null };
+  l = checkLines(CHECK, PAGE, { services: { state: 'ok', data: { ...GOOD, lookup: { ...GOOD.lookup, probe: busy } } } });
+  assert.deepEqual([said(l).lookupsvc.value, said(l).lookupsvc.note, flagged(l)], ['Not working · BC Address Geocoder', busy.plain, ['lookupsvc']]);
+  l = checkLines(CHECK, PAGE, { services: { state: 'ok', data: { ...GOOD, lookup: { provider: 'off', fallback: null, probe: { ok: false, code: 'off' } } } } });
+  assert.deepEqual([said(l).lookupsvc.value, flagged(l)], ['Turned off', []]);
+  // The placing run, paused on Google's refusal, says it in plain words.
+  const paused = { ...CHECK, placing: { ...CHECK.placing, state: 'paused', remaining: 5, retryAt: null,
+    lastError: 'geocoder referrer: This key only works from websites. The server needs a key without a website restriction. · Google said: REQUEST_DENIED' } };
+  assert.equal(said(checkLines(paused, PAGE)).placing.note, 'Address lookup isn’t answering (This key only works from websites. The server needs a key without a website restriction. · Google said: REQUEST_DENIED)');
 });

@@ -5,17 +5,25 @@
 // no room on screen. One sheet says which: GET /api/map/check (ext/mapcheck)
 // and what only this page knows, as lines (mapView.js checkLines — tested
 // there), the one that applies flagged. A screenshot of it is enough to tell
-// which trouble a manager is looking at.
+// which trouble a manager is looking at. Whether the services behind the
+// map answer (Google's tiles, address lookup) is asked apart — it waits on
+// them, up to 8 s — so the other lines never wait for it.
 //   facts()  what the page knows now: { build, look, tilesFrom, tiles, size, zoom }
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiGet } from '../api.js';
 import { clockText } from '../offline.js';
 import { checkLines, timeOfDay } from './mapView.js';
+import './mapservices.css';
 
 export default function MapCheck({ facts, onClose }) {
   // Asked for each time the sheet opens: a check is about now.
   const q = useQuery({ queryKey: ['mapCheck'], queryFn: () => apiGet('/map/check'), staleTime: 0, gcTime: 0, retry: 1 });
+  const sq = useQuery({ queryKey: ['mapCheckServices'], queryFn: () => apiGet('/map/check/services'), staleTime: 0, gcTime: 0, retry: 0 });
+  const services = sq.data && !sq.isFetching ? { state: 'ok', data: sq.data }
+    : sq.fetchStatus === 'paused' ? { state: 'offline' }
+      : sq.isError && !sq.isFetching ? { state: 'error' } : { state: 'pending' };
+  const again = () => { q.refetch(); sq.refetch(); };
   // The page's own facts move under the sheet (tiles arrive, the map is
   // dragged): looked at again every second.
   const [page, setPage] = useState(facts);
@@ -26,7 +34,7 @@ export default function MapCheck({ facts, onClose }) {
   }, [facts]);
   // The lines that apply come first: a screenshot must show the trouble,
   // and on a phone the whole check can be taller than the screen.
-  const all = q.data ? checkLines(q.data, page, { clock: timeOfDay }) : null;
+  const all = q.data ? checkLines(q.data, page, { clock: timeOfDay, services }) : null;
   const lines = all && [...all.filter((l) => l.warn), ...all.filter((l) => !l.warn)];
 
   return (
@@ -49,8 +57,8 @@ export default function MapCheck({ facts, onClose }) {
               ))}
             </dl>
             <p className="map-check__when" role="status">
-              {q.isFetching ? 'Checking…' : `Checked ${clockText(q.dataUpdatedAt)}`}
-              <button type="button" className="btn btn-quiet map-check__again" onClick={() => q.refetch()} disabled={q.isFetching}>Check again</button>
+              {q.isFetching || sq.isFetching ? 'Checking…' : `Checked ${clockText(q.dataUpdatedAt)}`}
+              <button type="button" className="btn btn-quiet map-check__again" onClick={again} disabled={q.isFetching || sq.isFetching}>Check again</button>
             </p>
           </>
         ) : q.isError ? (
