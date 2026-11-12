@@ -19,6 +19,12 @@ export const loadList = async (db, ws, id) => {
 // A list is the desk's: who it names never depends on who is looking. A
 // volunteer's call list or walk list narrowed by one reads it as the desk does.
 export const asDesk = (ctx) => (ctx.role === 'volunteer' ? { ...ctx, role: 'staff' } : ctx);
+// …except a list a volunteer made (by_volunteer — actions.js): its rule
+// names who People would show a volunteer, whoever walks, calls or counts
+// it. A money tag, the website's money forms, an email, a field kept from
+// volunteers match nobody (lib/viewer.js) — or putting their list under a
+// sweep or a bank would read those out to them.
+const asVolunteer = (ctx) => ({ ...ctx, role: 'volunteer', user: { ...ctx.user, email: '' } });
 
 // The WHERE (alias p) and params for a list, or for a filter on its own.
 // ctx.listTrail: the lists being read on the way here ("is on another
@@ -30,7 +36,8 @@ export const whereFor = async (db, ctx, { list = null, filter = null }) => {
       params: [ctx.workspaceId, list.id],
     };
   }
-  const inner = list ? { ...ctx, listTrail: [...(ctx.listTrail || []), list.id] } : ctx;
+  const eyes = list?.by_volunteer ? asVolunteer(ctx) : ctx;
+  const inner = list ? { ...eyes, listTrail: [...(ctx.listTrail || []), list.id] } : ctx;
   const { where, params } = await personsWhere(db, inner, list ? list.filter : (filter || {}));
   params[3] = 100000;
   return { where, params };

@@ -263,7 +263,7 @@ function OneList({ id }) {
       <div className="ops-head">
         <h1>{l.name}</h1>
       </div>
-      <p className="ops-meta">{l.kind === 'filter' ? 'A saved filter: whoever matches it today.' : 'Hand-picked: the people put on it.'}</p>
+      <p className="ops-meta">{l.kind !== 'filter' ? 'Hand-picked: the people put on it.' : l.by_volunteer ? 'A volunteer’s saved filter: whoever matches it today, by what a volunteer may see.' : 'A saved filter: whoever matches it today.'}</p>
       <Figures counts={list.data.counts} />
       <Ways id={id} name={l.name} page />
       <div className="ops-actions ls-tools">

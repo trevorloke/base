@@ -11,6 +11,7 @@ import { randomUUID } from 'node:crypto';
 import { freshDb, Client } from './helpers.js';
 import { FILTER_KEYS, cleanFilter, shiftParams } from '../lib/audience.js';
 import { todayOf } from '../ext/audience/index.js';
+import { ensureSiteTables, siteAction } from './siteactions.js';
 
 let db, mgr, vol, ws;
 const P = {};
@@ -236,6 +237,92 @@ test('a volunteer given People and Map still never reads the desk’s rules thro
     await mgr.action('permission.member.set', { user_id: me.id, grant: [] });
   }
   assert.equal((await vol.action('list.create', { name: 'x', kind: 'filter', filter: { tag: 'rules' } })).status, 403, 'the grant taken back');
+});
+
+// The desk's list under an open sweep or a phone bank is read with the
+// desk's eyes. A volunteer given People must not be able to point it at
+// what People hides from them (a money tag, the website's money forms, who
+// has an email, a field not marked for volunteers) and read the answer off
+// their walk list or their calls; and a list of their own is read with a
+// volunteer's eyes, whoever walks or calls it later.
+test('a volunteer given People never reads what People hides from them off a walk list or a call list', async () => {
+  const me = ok(await vol.get('/api/auth/me')).user;
+  await ensureSiteTables(db);
+  const lat = 49.1327; const lng = -122.855;
+  const mk = async (key, name, n, more = {}) => {
+    P[key] = await mgr.createPerson(`${name} Example`, { phone: `604-555-016${n}`, address: `1321${n} 72 Ave`, lat, lng: lng + n * 0.0003, tags: ['chk'], ...more });
+  };
+  await mk('gus', 'Gus', 1, { tags: ['chk', 'donor'] });
+  await mk('hal', 'Hal', 2, { email: `hal.rules.${tag}@example.org` });
+  await mk('ida', 'Ida', 3);
+  await mk('jo', 'Jo', 4);
+  await siteAction(db, ws, { kind: 'donate', personId: P.ida.id });
+  const hidden = ok(await mgr.action('field.create', { name: `Union ${tag}`, kind: 'yesno', volunteers: false })).field;
+  ok(await mgr.action('field.values.set', { person_id: P.jo.id, values: [{ field_id: hidden.id, value: true }] }));
+  const turf = ok(await mgr.action('turf.create', {
+    name: 'Chk block', polygon: [[lat + 0.001, lng - 0.001], [lat + 0.001, lng + 0.003], [lat - 0.001, lng + 0.003], [lat - 0.001, lng - 0.001]],
+  })).turf;
+  ok(await mgr.action('turf.assign', { turf_id: turf.id, user_id: me.id }));
+  const desks = ok(await mgr.action('list.create', { name: 'All chk', kind: 'filter', filter: { tag: 'chk' } })).list;
+  const picked = ok(await mgr.action('list.create', { name: 'Chk by hand', kind: 'people', person_ids: [P.gus.id] })).list;
+  const pass = ok(await mgr.action('pass.start', { name: 'Walk chk', kind: 'persuasion', list_id: desks.id })).pass;
+  const bank = ok(await mgr.action('bank.create', { name: 'Call chk', list_id: desks.id })).bank;
+  ok(await mgr.action('bank.assign', { id: bank.id, user_id: me.id }));
+  const walked = async () => ok(await vol.get(`/api/turfs/${turf.id}/walk`)).doors.flatMap((d) => d.persons.filter((p) => p.pass_listed).map((p) => p.name.split(' ')[0])).sort();
+  const called = async () => ok(await vol.get(`/api/banks/${bank.id}/mine`)).persons.map((p) => p.name.split(' ')[0]).sort();
+  const all = ['Gus', 'Hal', 'Ida', 'Jo'];
+  // What People hides from a volunteer, each as a rule (the desk reads one person by it).
+  const secrets = [
+    [{ tag: 'donor' }, ['Gus']], [{ tag: 'chk', notag: 'donor' }, ['Hal', 'Ida', 'Jo']],
+    [{ tag: 'chk', web: 'donate' }, ['Ida']], [{ tag: 'chk', has: 'email' }, ['Hal']], [{ tag: 'chk', q: 'hal.rules' }, ['Hal']],
+    [{ tag: 'chk', field: `${hidden.id}:yes` }, ['Jo']],
+  ];
+  ok(await mgr.action('permission.member.set', { user_id: me.id, grant: ['people', 'map'] }));
+  try {
+    assert.deepEqual(await walked(), all);
+    assert.deepEqual(await called(), all);
+    // The desk's lists are not theirs to change, by rule or by hand.
+    for (const [filter] of secrets) {
+      assert.equal((await vol.action('list.update', { id: desks.id, filter })).status, 403, `list.update ${JSON.stringify(filter)}`);
+    }
+    assert.equal((await vol.action('list.update', { id: desks.id, name: 'Mine now' })).status, 403);
+    assert.equal((await vol.action('list.add', { id: picked.id, person_ids: [P.hal.id] })).status, 403);
+    assert.equal((await vol.action('list.remove', { id: picked.id, person_ids: [P.gus.id] })).status, 403);
+    assert.equal((await vol.action('list.delete', { id: picked.id })).status, 403);
+    assert.deepEqual(await walked(), all, 'the desk’s list still names who it named');
+    assert.deepEqual(await called(), all);
+    assert.deepEqual(ok(await mgr.get(`/api/lists/${desks.id}`)).list.filter, { tag: 'chk' });
+    // A list of their own keeps a volunteer's eyes: put under a sweep and a
+    // bank by the desk, a hidden rule names nobody — as People does for them.
+    const own = ok(await vol.action('list.create', { name: 'Vic’s chk', kind: 'filter', filter: { tag: 'chk' } })).list;
+    ok(await mgr.action('pass.update', { id: pass.id, list_id: own.id }));
+    const theirs = ok(await mgr.action('bank.create', { name: 'Call Vic’s chk', list_id: own.id })).bank;
+    ok(await mgr.action('bank.assign', { id: theirs.id, user_id: me.id }));
+    const calledOwn = async () => ok(await vol.get(`/api/banks/${theirs.id}/mine`)).persons.map((p) => p.name.split(' ')[0]).sort();
+    assert.deepEqual(await walked(), all);
+    assert.equal(ok(await mgr.get(`/api/lists/${own.id}`)).list.by_volunteer, true, 'the desk’s page says whose it is');
+    for (const [filter, desk] of secrets) {
+      const what = JSON.stringify(filter);
+      const asked = new URLSearchParams(filter).toString();
+      const sees = ok(await vol.get(`/api/persons?limit=50&${asked}`)).persons.map((p) => p.name.split(' ')[0]).sort();
+      assert.deepEqual(ok(await mgr.get(`/api/persons?limit=50&${asked}`)).persons.map((p) => p.name.split(' ')[0]).sort(), desk, `the desk, ${what}`);
+      ok(await vol.action('list.update', { id: own.id, filter }));
+      assert.deepEqual(await walked(), sees, `walk list, ${what}: what People shows them, no more`);
+      assert.deepEqual(await calledOwn(), sees, `calls, ${what}`);
+      assert.equal(ok(await mgr.get(`/api/lists/${own.id}`)).total, sees.length, `the desk’s page of it reads the same, ${what}`);
+    }
+    // The desk makes the rule its own by saving it: read with the desk's eyes again.
+    ok(await mgr.action('list.update', { id: own.id, filter: { tag: 'chk', has: 'email' } }));
+    const adopted = ok(await mgr.get(`/api/lists/${own.id}`));
+    assert.deepEqual([adopted.people.map((p) => p.name.split(' ')[0]), adopted.list.by_volunteer], [['Hal'], false]);
+    // …and from then on it is no longer the volunteer's to re-point.
+    assert.equal((await vol.action('list.update', { id: own.id, filter: { tag: 'chk' } })).status, 403);
+    ok(await mgr.action('pass.end', { id: pass.id }));
+    ok(await mgr.action('bank.remove', { id: bank.id }));
+    ok(await mgr.action('bank.remove', { id: theirs.id }));
+  } finally {
+    await mgr.action('permission.member.set', { user_id: me.id, grant: [] });
+  }
 });
 
 test('a saved filter keeps the new rules; unknown keys are dropped; placeholders move without touching quoted text', () => {

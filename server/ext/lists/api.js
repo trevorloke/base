@@ -16,7 +16,8 @@ import { countsOf, keptCounts, listCounts, loadList, parseJ, peopleOf, REACHES }
 export const api = new Hono();
 const DESK = ['manager', 'treasurer', 'staff'];
 const refuse = (c) => c.json({ error: 'desk only' }, 403);
-const listOut = (l) => ({ id: l.id, name: l.name, kind: l.kind, filter: parseJ(l.filter, {}), note: l.note, created_at: l.created_at, updated_at: l.updated_at });
+// by_volunteer: a volunteer made it — its rule is read with a volunteer's eyes (audience.js).
+const listOut = (l) => ({ id: l.id, name: l.name, kind: l.kind, filter: parseJ(l.filter, {}), note: l.note, by_volunteer: !!l.by_volunteer, created_at: l.created_at, updated_at: l.updated_at });
 
 api.get('/lists', async (c) => {
   const ctx = c.get('ctx'); const db = c.get('db');
