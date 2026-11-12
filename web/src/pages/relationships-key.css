@@ -3,10 +3,7 @@
    Close and Make a list (RelationshipsBits.jsx). Wraps; never scrolls sideways. */
 
 .rk-line {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 2px var(--s-2);
+  display: block; /* runs as text: it breaks between words, not whole entries */
   margin: var(--s-2) 0 0;
   font-size: 15px;
   line-height: 1.4;
@@ -15,10 +12,19 @@
 }
 .rk-word { color: var(--text-3); }
 .rk-dim { color: var(--text-3); font-size: 14px; }
-.rk-tie { display: inline-flex; align-items: center; gap: var(--s-1) 6px; flex-wrap: wrap; min-width: 0; }
-.rk-tie a, .rk-home a { font-weight: 600; overflow-wrap: anywhere; }
-.rk-tie .rb-chip { height: 22px; min-width: 28px; font-size: 12px; }
-.rk-tie + .rk-tie::before { content: '·'; color: var(--text-3); margin-right: 2px; }
+.rk-sep { color: var(--text-3); }
+.rk-lead, .rk-home { white-space: nowrap; }
+/* A long name is cut with "…" (the whole name is its title) */
+.rk-line .rk-name {
+  display: inline-block;
+  max-width: 16em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+  font-weight: 600;
+}
+.rk-tie .rb-chip { display: inline-block; height: 18px; line-height: 16px; padding: 0 6px; min-width: 28px; max-width: 12em; overflow: hidden; text-overflow: ellipsis; font-size: 12px; vertical-align: middle; }
 .rk-more {
   font: inherit;
   color: var(--text-2);
@@ -26,10 +32,16 @@
   border: 0;
   padding: 0;
   text-decoration: underline;
+  white-space: nowrap;
   cursor: pointer;
 }
 .rk-more:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
-@media (max-width: 480px) { .rk-line { font-size: 14px; gap: 0 6px; } }
+@media (max-width: 480px) {
+  .rk-line { font-size: 14px; }
+  .rk-line .rk-name { max-width: 9em; }
+  .rk-home .rk-name { max-width: 6.5em; }
+  .rk-tie .rb-chip { max-width: 8em; }
+}
 /* The Calls card: the line sits in the name block, a little tighter */
 .cl-who__main .rk-line { margin-top: var(--s-1); font-size: 14px; }
 

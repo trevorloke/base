@@ -27,7 +27,7 @@
 //   <KnowMeChip />, <IKnowThem /> "You know them · Friend", and the one-tap
 //                                "I know them" (every role; saved offline)
 // No pronouns are guessed from names: the words never need one.
-import { Fragment, useEffect, useId, useState } from 'react';
+import { Fragment, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { rankTies } from '@starbase/shared/ties';
@@ -303,39 +303,70 @@ export function PersonKnows({ person, query, me = null }) {
 // not ties, so never counted in "N more"; someone already linked isn't
 // repeated, and someone who asked not to be contacted is left out.
 export function KeyTies({ ties = [], n = null, max = 3, housemates = [], state = 'ok', onRetry, onMore, moreTo }) {
-  const head = <span className="rk-word">Knows</span>;
-  if (state === 'loading') return <p className="rk-line" aria-live="polite">{head}<span className="rk-dim">· Loading…</span></p>;
-  if (state === 'offline') return <p className="rk-line">{head}<span className="rk-dim">· needs signal</span></p>;
-  if (state === 'error') return <p className="rk-line">{head}<span className="rk-dim">·</span> <Unavailable onRetry={onRetry} /></p>;
-  const shown = ties.slice(0, max);
-  const total = n == null ? ties.length : n;
-  const more = Math.max(0, total - shown.length);
+  const ref = useRef(null);
   const linked = new Set(ties.map((t) => t.person?.id));
   const homes = housemates.filter((h) => !h.dnc && !linked.has(h.id));
+  // How many ties fit: start from max and drop one while the line runs past
+  // two lines (long names on a phone), before it is painted; last of all
+  // (room 0) the one tie's chip gives its short code ("4C", the full words
+  // in its title). A new set of ties or a new width starts again from max.
+  const sig = `${max}|${ties.map((t) => t.id || t.person?.id).join(',')}|${homes.map((h) => h.id).join(',')}`;
+  const [fit, setFit] = useState([sig, max]);
+  const room = fit[0] === sig ? fit[1] : max;
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || room <= 0 || !ties.length) return;
+    const lh = parseFloat(getComputedStyle(el).lineHeight) || 21;
+    if (el.getBoundingClientRect().height > lh * 2 + 6) setFit([sig, room - 1]);
+  });
+  useEffect(() => {
+    const again = () => setFit(['', max]);
+    window.addEventListener('resize', again);
+    return () => window.removeEventListener('resize', again);
+  }, [max]);
+  const head = <span className="rk-word">Knows</span>;
+  if (state === 'loading') return <p className="rk-line" aria-live="polite">{head} <span className="rk-dim">· Loading…</span></p>;
+  if (state === 'offline') return <p className="rk-line">{head} <span className="rk-dim">· needs signal</span></p>;
+  if (state === 'error') return <p className="rk-line">{head} <span className="rk-dim">·</span> <Unavailable onRetry={onRetry} /></p>;
+  const shown = ties.slice(0, Math.max(1, Math.min(room, max)));
+  const total = n == null ? ties.length : n;
+  const more = Math.max(0, total - shown.length);
   if (!shown.length && !more && !homes.length) return null;
   const moreWords = `${more.toLocaleString('en-CA')} more`;
-  return (
-    <p className="rk-line">
-      {head}
-      {shown.map((t) => (
+  // "Knows" stays with the first name (non-breaking space, one unbroken
+  // piece); each "·" ends the entry before it, so a line never opens with one.
+  const entries = [
+    ...shown.map((t, i) => {
+      const name = <Link className="rk-name" to={`/people/${t.person.id}`} title={t.person.name}>{t.person.name}</Link>;
+      return (
         <span key={t.id || t.person.id} className="rk-tie">
-          <Link to={`/people/${t.person.id}`}>{t.person.name}</Link>
-          <span className="rk-dim">{kindWord(t.kind)}{t.close ? ' · Close' : ''}</span>
-          {t.person.rating && <RatingChip code={t.person.rating} who />}
+          {i === 0 ? <span className="rk-lead">{head}{'\u00a0'}{name}</span> : name}{' '}
+          <span className="rk-dim">{kindWord(t.kind)}{t.close ? '\u00a0· Close' : ''}</span>
+          {t.person.rating && <>{' '}<RatingChip code={t.person.rating} who={room > 0} /></>}
         </span>
+      );
+    }),
+    more > 0 && (
+      <span key="more" className="rk-dim">
+        {onMore ? <a className="rk-more" href="#pf-knows" onClick={(e) => { e.preventDefault(); onMore(); }}>{moreWords}</a>
+          : <Link className="rk-more" to={moreTo}>{moreWords}</Link>}
+      </span>
+    ),
+    homes.length > 0 && (
+      <span key="home" className="rk-dim rk-home">
+        Same address: <Link className="rk-name" to={`/people/${homes[0].id}`} title={homes[0].name}>{homes[0].name}</Link>{homes.length > 1 ? `\u00a0+${homes.length - 1}` : ''}
+      </span>
+    ),
+  ].filter(Boolean);
+  return (
+    <p className="rk-line" ref={ref}>
+      {shown.length ? null : <>{head} </>}
+      {entries.map((e, i) => (
+        <Fragment key={e.key}>
+          {e}
+          {i < entries.length - 1 && <><span className="rk-sep">{'\u00a0·'}</span>{' '}</>}
+        </Fragment>
       ))}
-      {more > 0 && (
-        <span className="rk-dim">
-          ·{' '}
-          {onMore ? <a className="rk-more" href="#pf-knows" onClick={(e) => { e.preventDefault(); onMore(); }}>{moreWords}</a>
-            : <Link className="rk-more" to={moreTo}>{moreWords}</Link>}
-        </span>
-      )}
-      {homes.length > 0 && (
-        <span className="rk-dim rk-home">
-          Same address: <Link to={`/people/${homes[0].id}`}>{homes[0].name}</Link>{homes.length > 1 ? ` +${homes.length - 1}` : ''}
-        </span>
-      )}
     </p>
   );
 }
@@ -390,21 +421,29 @@ export function IKnowThem({ person, me = null }) {
   const queryClient = useQueryClient();
   const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [said, setSaid] = useState(null);
+  const [said, setSaid] = useState(null); // { text, cid }: cid while it waits in the outbox
+  const outbox = useOutbox();
   const labelId = useId();
   if (!person?.id || person.pending) return null;
-  if (said) return <p className="rk-said" role="status">{said}</p>;
+  if (said) {
+    // Saved offline, then sent (gone from the outbox) or refused: say so.
+    const item = said.cid ? outbox.items.find((i) => i.cid === said.cid) : null;
+    const text = !said.cid ? said.text
+      : !item ? 'Added to My people'
+        : item.state === 'refused' ? `Not saved — ${item.error?.message || 'try again'}` : said.text;
+    return <p className="rk-said" role="status">{text}</p>;
+  }
   if (!know.ready || know.link || know.self) return null;
   const add = async (kind) => {
     setBusy(true);
     try {
       const r = await queueAction('relationship.add', { id: newClientId(), person_id: person.id, kind }, { who: person.name });
-      setSaid(r.queued ? queuedText(r) : 'Added to My people');
+      setSaid(r.queued ? { text: queuedText(r), cid: r.client_id } : { text: 'Added to My people' });
       if (!r.queued) {
         await Promise.all([MINE_KEY, ['person', person.id], ['brief']].map((queryKey) => queryClient.invalidateQueries({ queryKey })));
       }
     } catch (err) {
-      setSaid(err.message || 'Not saved — try again');
+      setSaid({ text: err.message || 'Not saved — try again' });
     } finally {
       setBusy(false);
       setAsking(false);
@@ -426,8 +465,8 @@ export function IKnowThem({ person, me = null }) {
   );
 }
 
-// A phone's width: the line keeps to two lines there, so it names two ties
-// (one beside "Same address"); the rest are in "N more".
+// A phone's width: the line names at most two ties there (KeyTies drops one
+// more if long names would take it past two lines); the rest are in "N more".
 const NARROW = '(max-width: 480px)';
 const useNarrow = () => {
   const [narrow, setNarrow] = useState(() => Boolean(globalThis.matchMedia?.(NARROW).matches));
@@ -448,8 +487,5 @@ export function ProfileKeyTies({ query, household = [], onMore }) {
   if (query.isPending) return <KeyTies state="loading" />;
   if (query.isError) return <KeyTies state="error" onRetry={() => query.refetch()} />;
   const knows = query.data?.knows || [];
-  // On a phone a "Same address" entry takes the second tie's place.
-  const linked = new Set(knows.map((k) => k.person.id));
-  const homes = household.some((h) => !h.dnc && !linked.has(h.id));
-  return <KeyTies ties={rankTies(knows)} n={knows.length} max={narrow ? (homes ? 1 : 2) : 3} housemates={household} onMore={onMore} />;
+  return <KeyTies ties={rankTies(knows)} n={knows.length} max={narrow ? 2 : 3} housemates={household} onMore={onMore} />;
 }

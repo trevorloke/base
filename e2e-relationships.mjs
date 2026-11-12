@@ -559,11 +559,11 @@ await page.waitForSelector('.pf-head .rk-line', { timeout: 8000 }).catch(() => {
 const line = await it(page, '.pf-head .rk-line');
 const firstTie = await it(page, '.pf-head .rk-tie');
 check('profile: the key line under the chips, "Knows …"', /^Knows /.test(line) && await page.$('.pf-meta + .rk-line'), line);
-check('…her close tie first: "Sofia Petrova Friend · Close"', ranked[0]?.person.name === 'Sofia Petrova' && /^Sofia Petrova Friend · Close/.test(firstTie), `${firstTie} · ranked ${ranked.slice(0, 3).map((t) => t.person.name).join(', ')}`);
+check('…her close tie first: "Sofia Petrova Friend · Close"', ranked[0]?.person.name === 'Sofia Petrova' && /^(Knows )?Sofia Petrova Friend · Close/.test(firstTie), `${firstTie} · ranked ${ranked.slice(0, 3).map((t) => t.person.name).join(', ')}`);
 const shownNames = await page.$$eval('.pf-head .rk-tie a', (els) => els.map((e) => e.textContent));
 check('…three, in the server’s order (shared/ties.js)', shownNames.join('|') === ranked.slice(0, 3).map((t) => t.person.name).join('|'), shownNames.join(', '));
 check(`…then "· ${pk.length - 3} more"`, (await tc(page, '.pf-head .rk-more')) === `${pk.length - 3} more`, await tc(page, '.pf-head .rk-more'));
-check('…"Same address: Hana Example", never the do-not-contact housemate', /Same address: Hana Example/.test(line) && !/Dee Example/.test(line), line);
+check('…"· N more · Same address: Hana Example", never the do-not-contact housemate', /\d more · Same address: Hana Example$/.test(line) && !/Dee Example/.test(line), line);
 m = await simple(page, 'profile with the key line (desk 1440)');
 await D.shot('11-profile-key-line-desk');
 await page.click('.pf-head .rk-more');
@@ -595,10 +595,55 @@ await page.setViewportSize({ width: 390, height: 844 });
 await D.go(`/people/${priya.id}`);
 await page.waitForSelector('.pf-head .rk-line', { timeout: 8000 }).catch(() => {});
 const lineBox = await page.$eval('.pf-head .rk-line', (e) => ({ h: e.getBoundingClientRect().height, lh: parseFloat(getComputedStyle(e).lineHeight) || 21 }));
-check('at 390 the line keeps to two lines: her close tie, "N more", "Same address"', lineBox.h <= lineBox.lh * 2 + 8 && (await page.$$('.pf-head .rk-tie')).length === 1
-  && (await it(page, '.pf-head .rk-more')) === `${pk.length - 1} more` && /Same address: Hana Example/.test(await it(page, '.pf-head .rk-line')), JSON.stringify(lineBox));
+const phoneTies = (await page.$$('.pf-head .rk-tie')).length;
+const phoneLine = await it(page, '.pf-head .rk-line');
+check('at 390 the line keeps to two lines: her close tie (two ties at most), "· N more · Same address"', lineBox.h <= lineBox.lh * 2 + 8 && phoneTies >= 1 && phoneTies <= 2
+  && (await it(page, '.pf-head .rk-more')) === `${pk.length - phoneTies} more` && /^Knows Sofia Petrova/.test(phoneLine)
+  && /· \d+ more · Same address: Hana Example$/.test(phoneLine), `${JSON.stringify(lineBox)} · ${phoneLine}`);
 m = await simple(page, 'profile with the key line (desk 390)');
 await D.shot('13-profile-key-line-phone');
+// Real-length Surrey names: a close tie rated "4 · Randhawa", a second tie, and
+// a housemate. Still two lines at 390: "Knows" beside the first name, no line
+// opening with a stray "·", and "· N more · Same address: …".
+const keyLayout = () => page.$eval('.pf-head .rk-line', (e) => {
+  const lh = parseFloat(getComputedStyle(e).lineHeight) || 21;
+  const box = e.getBoundingClientRect();
+  const top = (el) => el.getBoundingClientRect().top;
+  const name = e.querySelector('.rk-tie a');
+  // Every separator ends the entry before it: nothing on a line comes before
+  // a dot that starts the line.
+  const dotLeads = [...e.querySelectorAll('.rk-sep')].some((s) => s.getClientRects()[0] && s.getClientRects()[0].left <= box.left + 1);
+  return { lines: Math.round(box.height / lh), h: box.height, lh, sameRow: name ? Math.abs(top(e.querySelector('.rk-word')) - top(name)) < lh / 2 : false, dotLeads, scroll: document.documentElement.scrollWidth > innerWidth };
+});
+const longTie = (await D.api('/actions/person.create', { name: 'Navdeep Kaur Dhaliwal', phone: '604-555-0184' })).json.person;
+await D.api('/actions/contact.log', { person_id: longTie.id, channel: 'door', outcome: 'contacted', rating: '4C' });
+const longTie2 = (await D.api('/actions/person.create', { name: 'Gurpreet Kaur Sandhu-Bains', phone: '604-555-0185' })).json.person;
+await D.api('/actions/contact.log', { person_id: longTie2.id, channel: 'door', outcome: 'contacted', rating: '1' });
+const longLinks = [
+  (await D.api('/actions/relationship.add', { from_id: priya.id, person_id: longTie.id, kind: 'friend', close: true })).json,
+  (await D.api('/actions/relationship.add', { from_id: priya.id, person_id: longTie2.id, kind: 'work' })).json,
+];
+await D.api('/actions/person.update', { id: hana.id, name: 'Harjinder Singh Grewal' });
+await D.go(`/people/${priya.id}`);
+await page.waitForSelector('.pf-head .rk-tie', { timeout: 8000 }).catch(() => {});
+let kl = await keyLayout();
+let klText = await it(page, '.pf-head .rk-line');
+check('long names at 390: two lines at most, "Knows" beside the first name, no line opens with "·"',
+  kl.lines <= 2 && kl.sameRow && !kl.dotLeads && !kl.scroll && /^Knows Navdeep/.test(klText) && /· \d+ more · Same address: Harjinder/.test(klText), `${JSON.stringify(kl)} · ${klText}`);
+await D.shot('13b-profile-key-line-long-names-phone');
+// No housemate to show: two ties on the line, still two lines.
+await D.api('/actions/person.update', { id: hana.id, tags: ['do-not-contact'] });
+await D.go(`/people/${priya.id}`);
+await page.waitForSelector('.pf-head .rk-tie', { timeout: 8000 }).catch(() => {});
+kl = await keyLayout();
+klText = await it(page, '.pf-head .rk-line');
+check('…and with no housemate shown: still two lines at most', kl.lines <= 2 && kl.sameRow && !kl.dotLeads && !kl.scroll && !/Same address/.test(klText) && /\d+ more$/.test(klText), `${JSON.stringify(kl)} · ${klText}`);
+await D.shot('13c-profile-key-line-long-names-no-housemate-phone');
+for (const l of longLinks) await D.api('/actions/relationship.remove', { id: l.relationship?.id || l.id });
+await D.api('/actions/person.update', { id: hana.id, name: 'Hana Example', tags: [] });
+check('…the long-name ties taken off again', (await D.api(`/persons/${priya.id}/knows`)).json.knows.length === pk.length);
+await D.go(`/people/${priya.id}`);
+await page.waitForSelector('.pf-head .rk-more', { timeout: 8000 }).catch(() => {});
 await page.click('.pf-head .rk-more');
 await sleep(400);
 m = await simple(page, 'Knows with Close and Make a list (desk 390)');
@@ -713,6 +758,8 @@ await vctx.setOffline(false);
 const sentOnce = await until(async () => (await D.api(`/persons/${wren.id}/knows`)).json.knows.length === 1, 30000);
 const wk = (await D.api(`/persons/${wren.id}/knows`)).json.knows;
 check('back online: sent once — Priya knows Wren (Friend)', sentOnce && wk.length === 1 && wk[0].person.id === priya.id && wk[0].kind === 'friend', JSON.stringify(wk));
+const saidSent = await until(async () => (await tc(vpage, '.rk-said')) === 'Added to My people', 8000);
+check('…and the door now says "Added to My people", not "Saved offline"', saidSent, await tc(vpage, '.rk-said'));
 await sleep(3000);
 const wEvents = (await D.api('/events?limit=1000')).json.events.filter((e) => e.entity_type === 'relationship' && e.entity_id === wk[0]?.id && e.op === 'create');
 check('…one create on the event log', wEvents.length === 1, wEvents.length);
