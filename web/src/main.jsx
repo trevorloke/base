@@ -117,16 +117,25 @@ if (typeof window !== 'undefined') {
 
 // A screen's file is gone: this page is from before a deploy, and the server
 // no longer has its build (a missing file is a 404 — server/index.js). Take
-// the new page, once (build.js). Not with no signal (the new page would not
-// come either), and not while someone is typing: then the screen says it
-// didn't load, with Reload (components/ScreenBoundary.jsx).
+// the new page, once (build.js). Only when the server says the file is gone:
+// a weak signal that dropped the file is not a deploy, and a reload then would
+// throw away what is half done on the screen (an open sheet) for a page that
+// would not come either. Not while someone is typing. Otherwise the screen
+// says it didn't load, with Reload (components/ScreenBoundary.jsx).
 if (typeof window !== 'undefined') {
   const typing = () => {
     const el = document.activeElement;
     return Boolean(el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable));
   };
-  window.addEventListener('vite:preloadError', () => {
-    if (navigator.onLine !== false && !typing()) reloadOnce();
+  // The file the error names (".../assets/People-xxxx.js"); null if it names none.
+  const fileOf = (err) => /(\S*\/assets\/[^\s'"]+\.(?:js|css))/.exec(String(err?.message || err || ''))?.[1] || null;
+  const gone = async (file) => {
+    if (!file) return true; // nothing to ask about: as before, a missing screen
+    try { return (await fetch(file, { cache: 'no-store' })).status === 404; } catch { return false; }
+  };
+  window.addEventListener('vite:preloadError', async (e) => {
+    if (navigator.onLine === false || typing()) return;
+    if (await gone(fileOf(e.payload)) && !typing()) reloadOnce();
   });
 }
 
