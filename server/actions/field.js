@@ -24,6 +24,7 @@ import {
 import { ATTACH_COUNT, bindAttachments, loadAttachments } from '../ext/abtests/attach.js';
 import { audienceOf, recipientsOf } from '../ext/lists/audience.js';
 import { mayReach, person, address } from '../lib/reach.js';
+import { notSuppressed } from '../lib/mail/index.js';
 import { e164, namesCampaign, MAX_BODY as TEXT_MAX } from '../ext/texting/rules.js';
 import { textConfigured } from '../lib/notify.js';
 import { DEFAULT_TZ } from '../lib/org.js';
@@ -662,7 +663,8 @@ export const FIELD_ACTIONS = {
       // Everyone holding a spot — checked in too: a shift moved after they
       // arrived still reaches them.
       const assignees = (await tx.query(
-        `select a.id as assignment_id, p.id, p.name, p.email, p.phone
+        `select a.id as assignment_id, p.id, p.name, p.email, p.phone,
+                ${notSuppressed('p.workspace_id', 'p.email')} as can_email
          from shift_assignments a join persons p on p.id = a.person_id
          where a.shift_id = $1 and a.workspace_id = $2 and a.status = any($3::text[])`,
         [input.shift_id, ctx.workspaceId, HOLD_SHIFT_STATUSES],
@@ -678,7 +680,11 @@ export const FIELD_ACTIONS = {
       const message = shiftMessage(shift, ctx.workspace.name, ctx.workspace.settings?.tz || DEFAULT_TZ);
       const results = [];
       for (const a of assignees) {
-        const emailRes = a.email
+        // Never an address that bounced for good or reported spam (the
+        // suppression list, ext/mail), as a week's notice and a reminder.
+        const emailRes = a.email && !a.can_email
+          ? { status: 'suppressed', detail: 'the address bounced or reported spam' }
+          : a.email
           ? await sendEmail({
             to: a.email, subject: `Your shift: ${shift.title}`, text: message,
             idempotencyKey: `shift-${shift.id}-${a.assignment_id}-${round}`,

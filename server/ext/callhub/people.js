@@ -18,7 +18,9 @@ const COLS = 'p.id, p.kind, p.name, p.first_name, p.last_name, p.city, p.phone, 
 export const tagsOf = (row) => {
   try { return (typeof row?.tags === 'string' ? JSON.parse(row.tags) : row?.tags) || []; } catch { return []; }
 };
-export const notToBeCalled = (row) => { const t = tagsOf(row); return t.includes(NO_CONTACT_TAG) || t.includes(NO_CALL_TAG); };
+// A do-not tag counts whatever its capitals, as everywhere else (lib/reach.js).
+const lowTags = (row) => tagsOf(row).map((t) => String(t).toLowerCase());
+export const notToBeCalled = (row) => { const t = lowTags(row); return t.includes(NO_CONTACT_TAG) || t.includes(NO_CALL_TAG); };
 
 // What is being sent: a list (everyone it names today) or a phone bank
 // (its numbers still to call). → { kind, id, name, rows } in name order.
@@ -55,10 +57,10 @@ export const notToCall = async (q, ws) => {
   const add = (raw, category) => { const n = e164(raw); if (n) out.set(n, (out.get(n) || 0) | category); };
   const tagged = (await q.query(
     `select phone, tags from persons where workspace_id = $1 and deleted_at is null and coalesce(phone, '') <> ''
-        and (tags @> $2::jsonb or tags @> $3::jsonb)`,
-    [ws, JSON.stringify([NO_CONTACT_TAG]), JSON.stringify([NO_CALL_TAG])],
+        and (lower(tags::text) like $2 or lower(tags::text) like $3)`,
+    [ws, `%"${NO_CONTACT_TAG}"%`, `%"${NO_CALL_TAG}"%`],
   )).rows;
-  for (const r of tagged) add(r.phone, tagsOf(r).includes(NO_CONTACT_TAG) ? 3 : 1);
+  for (const r of tagged) add(r.phone, lowTags(r).includes(NO_CONTACT_TAG) ? 3 : 1);
   const stopped = (await q.query('select phone from texting_optouts where workspace_id = $1 and opted_out', [ws])).rows;
   for (const r of stopped) add(r.phone, 2);
   return out;
@@ -78,7 +80,7 @@ export const peopleOn = async (q, ws, phones) => {
       order by lower(name), id limit 5000`,
     [ws, [...new Set(phones.map(last10))]],
   );
-  return rows.map((p) => ({ id: p.id, name: p.name, number: e164(p.phone), tags: tagsOf(p) })).filter((p) => numbers.has(p.number));
+  return rows.map((p) => ({ id: p.id, name: p.name, number: e164(p.phone), tags: lowTags(p) })).filter((p) => numbers.has(p.number));
 };
 // Whose numbers they are, so the desk can be told who — never which number.
 export const whoseNumbers = async (q, ws, phones) => (await peopleOn(q, ws, phones)).map((p) => ({ id: p.id, name: p.name }));

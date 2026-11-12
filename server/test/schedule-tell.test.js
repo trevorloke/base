@@ -356,6 +356,29 @@ test('an address that bounced for good or reported spam gets no notice by email 
   await db.query('delete from email_suppressions where workspace_id = $1', [ws]);
 });
 
+test('the one-shift Notify follows the same rule: no email to an address that bounced or reported spam; the text still goes', async () => {
+  connect();
+  at('2030-05-06T19:00:00Z');
+  emails.length = 0; texts.length = 0;
+  const { newId } = await import('../lib/events.js');
+  await db.query(
+    `insert into email_suppressions (id, workspace_id, email, reason, source) values ($1, $2, lower($3), 'complaint', 'resend')
+     on conflict (workspace_id, email) do update set lifted_at = null`, [newId(), ws, P.eli.email]);
+  try {
+    const shift = await shiftOn('2030-07-04', '07:00', '08:30'); // outside the week the other tests count
+    await book(shift, P.eli);
+    await book(shift, P.asha);
+    const r = ok(await mgr.action('shift.notify', { shift_id: shift.id }));
+    const by = Object.fromEntries(r.notified.map((n) => [n.name, n]));
+    assert.deepEqual([by['Eli Example'].email, by['Eli Example'].text], ['suppressed', 'sent']);
+    assert.equal(by['Asha Example'].email, 'sent');
+    assert.ok(!emails.some((m) => m.to[0] === P.eli.email), 'nothing was sent to it');
+    assert.ok(emails.some((m) => m.to[0] === P.asha.email));
+  } finally {
+    await db.query('delete from email_suppressions where workspace_id = $1', [ws]);
+  }
+});
+
 test('who may: the desk tells a week; a volunteer only when granted Shifts, and never gets an address or a number', async () => {
   at('2030-05-06T19:00:00Z');
   assert.equal((await vol.action('shift.tellWeek', { week: MON })).status, 403);
