@@ -38,11 +38,15 @@
    word breaks; an address, beat or handle too long for its column ends in
    "…" (the whole of it in the title) rather than breaking mid-word. */
 .md-table { table-layout: fixed; }
-.md-table th { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.md-table td { overflow-wrap: break-word; }
-/* A phone number or "Not opened" wraps only where it has a break (a hyphen,
-   a space), never mid-word. */
-.md-table .md-one { overflow-wrap: normal; }
+/* A header wraps at its space ("Last / release") rather than ending in "…". */
+.md-table th { white-space: normal; overflow-wrap: normal; }
+/* A word too long for its column hyphenates ("Inde-pendent") rather than
+   breaking bare or running into the next column. */
+.md-table td { overflow-wrap: break-word; hyphens: auto; }
+/* A phone number or "Not opened" wraps where it has a break (a hyphen, a
+   space) and, only if a single run of digits is wider than the column,
+   between digits: the whole number stays on screen, inside its column. */
+.md-table .md-one { overflow-wrap: anywhere; hyphens: none; }
 .md-table .md-c-name { width: 16%; }
 .md-table .md-c-outlet { width: 14%; }
 .md-table .md-c-beat { width: 13%; }
@@ -61,11 +65,18 @@
 .md-table .md-handles > * { display: block; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; overflow-wrap: normal; }
 @media (max-width: 1199px) {
   .md-table th, .md-table td { padding-left: 8px; padding-right: 8px; }
+  /* An outlet is one or two words people read whole ("Independent"); an
+     address already ends in "…" with the whole of it in the title. */
+  .md-table.is-desk .md-c-outlet { width: 17%; }
+  .md-table.is-desk .md-c-email { width: 16%; }
 }
 .md-name {
   font: inherit; font-weight: 600; color: var(--text-1); background: none; border: 0; padding: 0; text-align: left;
   min-height: var(--ctl); cursor: pointer; text-decoration: underline; text-decoration-color: var(--rule-2); text-underline-offset: 3px;
 }
+/* In the table the name stays inside its column: a button sizes to its
+   longest word, so a long surname breaks (at its hyphen first) instead. */
+.md-table .md-name { max-width: 100%; overflow-wrap: anywhere; }
 
 /* A contact's sheet, and Add a contact */
 .card.md-sheet { display: flex; flex-direction: column; gap: var(--s-3); padding: var(--s-4); margin-bottom: var(--s-4); }

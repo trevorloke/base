@@ -351,6 +351,7 @@ check('an A/B release with nothing gone: "saved … — not sent yet", not "firs
 for (let i = 0; i < 20; i += 1) await act('media.contact.add', { name: `Reporter ${i} Example`, kind: 'media', email: `reporter${i}@example.org`, outlet: 'Surrey Now-Leader', phone: '604-555-0170' });
 await act('media.contact.add', { name: 'Jennifer Thompson Example', kind: 'media', email: 'jennifer.thompson@surreynowleader.example.org', outlet: 'Surrey Now-Leader', beat: 'Politics and transportation', phone: '604-555-0171' });
 await act('media.contact.add', { name: 'Food Example', kind: 'influencer', email: 'food@example.org', socials: { instagram: '@surrey.food.adventures', tiktok: '@surreyfoodie' } });
+await act('media.contact.add', { name: 'Alexandra Konstantinopoulou-Whitfield Example', kind: 'media', email: 'alexandra@example.org', outlet: 'Independent', phone: '+16045550199' });
 for (const width of [1000, 1100, 1200, 1280, 1440]) {
   await page.setViewportSize({ width, height: 900 });
   await go(page, '/media/contacts');
@@ -359,6 +360,31 @@ for (const width of [1000, 1100, 1200, 1280, 1440]) {
     return { table: !!t, page: document.documentElement.scrollWidth - window.innerWidth, past: t ? Math.round(t.getBoundingClientRect().right - card.getBoundingClientRect().right) : null };
   });
   check(`the desk table at ${width}: no sideways scroll, the table inside its card`, o.table && o.page <= 0 && o.past <= 0, JSON.stringify(o));
+  // Nothing in a cell that doesn't clip runs past its cell's right edge
+  // into the next column (a long surname, an unbroken phone number).
+  const spill = await page.evaluate(() => {
+    const out = [];
+    for (const td of document.querySelectorAll('.md-table td, .md-table th')) {
+      if (getComputedStyle(td).overflow !== 'visible') continue;
+      const edge = td.getBoundingClientRect().right - parseFloat(getComputedStyle(td).paddingRight) + 1;
+      // text inside an element that clips (a handle ending in "…") is cut, not spilled
+      const clipped = (n) => { for (let e = n.parentElement; e && e !== td; e = e.parentElement) if (getComputedStyle(e).overflow !== 'visible') return true; return false; };
+      const walk = document.createTreeWalker(td, NodeFilter.SHOW_TEXT);
+      for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+        if (clipped(n)) continue;
+        const r = document.createRange(); r.selectNodeContents(n);
+        for (const box of r.getClientRects()) if (box.right > edge) out.push(`${n.textContent.trim()} +${Math.round(box.right - edge)}px`);
+      }
+      for (const el of td.querySelectorAll('*')) if (!clipped(el) && el.getBoundingClientRect().right > edge + 1) out.push(`<${el.tagName.toLowerCase()}> ${el.textContent.trim().slice(0, 30)}`);
+    }
+    return out;
+  });
+  check(`the desk table at ${width}: no word runs into the next column`, spill.length === 0, spill.slice(0, 6).join(' | '));
+  const outletLines = await page.evaluate(() => {
+    const td = [...document.querySelectorAll('.md-table td')].find((c) => c.textContent.trim() === 'Independent');
+    if (!td) return null; const r = document.createRange(); r.selectNodeContents(td); return r.getClientRects().length;
+  });
+  check(`the desk table at ${width}: a one-word outlet reads whole, not "Independen / t"`, outletLines === 1, String(outletLines));
   if (width === 1000 || width === 1280) await shot(page, `13-contacts-long-${width}`);
 }
 await page.setViewportSize({ width: 1440, height: 900 });

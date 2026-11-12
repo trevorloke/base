@@ -453,7 +453,9 @@ one tap away under **More**.
   browser: `node e2e-media.mjs` (PORT, SHOTS; the stand-in sender on
   PORT+1) — contacts, Write a release, a release's page with an open, Try
   again and Copy links, a volunteer granted Media, and an A/B release in
-  its wait ("Waits for the winner", no Try again); `e2e-mail.mjs` runs
+  its wait ("Waits for the winner", no Try again), and the desk contacts
+  table from 1000 to 1440 px wide with long names, outlets and phones (no
+  sideways scroll, no word running into the next column); `e2e-mail.mjs` runs
   *From addresses* and Outreach → Email's From line.
 
 - **The campaign's brand** (Settings → Brand) — a manager's
