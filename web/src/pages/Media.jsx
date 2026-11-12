@@ -216,7 +216,7 @@ function Handles({ person, max = Infinity }) {
         const label = `${platformLabel(p)} ${shownHandle(v)}`;
         return url
           ? <a key={p} href={url} target="_blank" rel="noopener noreferrer" aria-label={`${label} (opens a new tab)`} title={shownHandle(v)}>{shownHandle(v)}</a>
-          : <span key={p}>{shownHandle(v)}</span>;
+          : <span key={p} title={shownHandle(v)}>{shownHandle(v)}</span>;
       })}
     </span>
   );
@@ -411,12 +411,12 @@ function ContactsTab({ desk, adding, onCloseAdd, toast }) {
             {beats.length > 8 && !moreBeats && <button type="button" className="chip md-chip" onClick={() => setMoreBeats(true)}>More</button>}
           </div>
           {wide ? (
-            <table className="table md-table">
+            <table className={`table md-table${desk ? ' is-desk' : ''}`}>
               <thead>
                 <tr>
-                  <th>Name</th><th>Outlet</th><th>Beat</th>
-                  {desk && <th>Email</th>}{desk && <th>Phone</th>}
-                  <th>Socials</th><th>Last release</th>
+                  <th className="md-c-name">Name</th><th className="md-c-outlet">Outlet</th><th className="md-c-beat">Beat</th>
+                  {desk && <th className="md-c-email">Email</th>}{desk && <th className="md-c-phone">Phone</th>}
+                  <th className="md-c-socials">Socials</th><th className="md-c-last">Last release</th>
                 </tr>
               </thead>
               <tbody>
@@ -534,7 +534,8 @@ function ReleasePage({ id }) {
       <h2 className="md-subject">{b.subject}</h2>
       <p className="md-meta">
         {b.sent_at ? `Sent ${fmtShort(b.sent_at)}`
-          : testing ? `Testing two subject lines · first sent ${fmtShort(b.first_sent_at || b.created_at)}`
+          : testing ? (b.first_sent_at ? `Testing two subject lines · first sent ${fmtShort(b.first_sent_at)}`
+            : `Testing two subject lines · saved ${fmtShort(b.created_at)} — not sent yet`)
             : b.first_sent_at ? `First sent ${fmtShort(b.first_sent_at)}`
               : `Saved ${fmtShort(b.created_at)} — not sent`}
         {from && <> · from {from}</>}

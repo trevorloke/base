@@ -32,25 +32,35 @@
 .md-wrap { overflow-wrap: anywhere; }
 .md-table td { vertical-align: middle; font-size: 14px; }
 .md-table .md-wont { margin: 0 0 0 var(--s-2); }
-/* Columns sized to what they hold: a long outlet wraps at word breaks
-   instead of widening the table, short things stay on one line, and an
-   address or handle too long for its column ends in "…" (the whole of it
-   in the title) rather than breaking mid-word. */
-.md-table th, .md-table .md-one { white-space: nowrap; }
-.md-table .md-outlet { min-width: 120px; max-width: 220px; }
-.md-table .md-who { min-width: 160px; max-width: 260px; }
+/* Fixed columns that share the card's width: the table never grows past
+   its card (an auto table holds every "…" cell at its max-width, which
+   scrolled the page sideways on a laptop). A long outlet or name wraps at
+   word breaks; an address, beat or handle too long for its column ends in
+   "…" (the whole of it in the title) rather than breaking mid-word. */
+.md-table { table-layout: fixed; }
+.md-table th { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.md-table td { overflow-wrap: break-word; }
+/* A phone number or "Not opened" wraps only where it has a break (a hyphen,
+   a space), never mid-word. */
+.md-table .md-one { overflow-wrap: normal; }
+.md-table .md-c-name { width: 16%; }
+.md-table .md-c-outlet { width: 14%; }
+.md-table .md-c-beat { width: 13%; }
+.md-table .md-c-email { width: 19%; }
+.md-table .md-c-phone { width: 15%; }
+.md-table .md-c-socials { width: 12%; }
+.md-table .md-c-last { width: 11%; }
+.md-table:not(.is-desk) .md-c-name { width: 26%; }
+.md-table:not(.is-desk) .md-c-outlet { width: 24%; }
+.md-table:not(.is-desk) .md-c-beat { width: 18%; }
+.md-table:not(.is-desk) .md-c-socials { width: 18%; }
+.md-table:not(.is-desk) .md-c-last { width: 14%; }
 .md-table .md-who .md-wont { display: table; margin: 4px 0 0; }
-.md-table .md-cut.md-beat { max-width: 160px; }
-.md-table .md-cut { max-width: 240px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.md-table .md-handles { display: flex; flex-direction: column; gap: 2px; }
-.md-table .md-handles a { display: block; max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; overflow-wrap: normal; }
+.md-table .md-cut { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.md-table .md-handles { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.md-table .md-handles > * { display: block; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; overflow-wrap: normal; }
 @media (max-width: 1199px) {
   .md-table th, .md-table td { padding-left: 8px; padding-right: 8px; }
-  .md-table .md-who { min-width: 120px; max-width: 200px; }
-  .md-table .md-outlet { min-width: 90px; max-width: 160px; }
-  .md-table .md-cut { max-width: 150px; }
-  .md-table .md-cut.md-beat { max-width: 100px; }
-  .md-table .md-handles a { max-width: 110px; }
 }
 .md-name {
   font: inherit; font-weight: 600; color: var(--text-1); background: none; border: 0; padding: 0; text-align: left;

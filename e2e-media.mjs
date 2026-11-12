@@ -339,6 +339,30 @@ await go(phone, `/media/releases/${ab.json.blast.id}`);
 await phoneOk('an A/B release’s page');
 await shot(phone, '12-ab-release-390');
 
+// ── 8. An A/B release whose test groups all failed: not "first sent" ──
+await control('/fail', { code: 500 });
+const abFailed = await act('media.send', { subject: 'Plain again', body: 'News', ab: { subject_b: 'Better again', pct: 10, wait_hours: 1, metric: 'opens' } });
+await control('/fail', { code: false });
+await go(page, `/media/releases/${abFailed.json.blast.id}`);
+w = await words(page.locator('.md-meta'));
+check('an A/B release with nothing gone: "saved … — not sent yet", not "first sent"', /Testing two subject lines · saved .* — not sent yet/.test(w) && !/first sent/.test(w), w);
+
+// ── 9. The desk table at laptop widths with long words: no sideways scroll ──
+for (let i = 0; i < 20; i += 1) await act('media.contact.add', { name: `Reporter ${i} Example`, kind: 'media', email: `reporter${i}@example.org`, outlet: 'Surrey Now-Leader', phone: '604-555-0170' });
+await act('media.contact.add', { name: 'Jennifer Thompson Example', kind: 'media', email: 'jennifer.thompson@surreynowleader.example.org', outlet: 'Surrey Now-Leader', beat: 'Politics and transportation', phone: '604-555-0171' });
+await act('media.contact.add', { name: 'Food Example', kind: 'influencer', email: 'food@example.org', socials: { instagram: '@surrey.food.adventures', tiktok: '@surreyfoodie' } });
+for (const width of [1000, 1100, 1200, 1280, 1440]) {
+  await page.setViewportSize({ width, height: 900 });
+  await go(page, '/media/contacts');
+  const o = await page.evaluate(() => {
+    const t = document.querySelector('.md-table'); const card = t?.parentElement;
+    return { table: !!t, page: document.documentElement.scrollWidth - window.innerWidth, past: t ? Math.round(t.getBoundingClientRect().right - card.getBoundingClientRect().right) : null };
+  });
+  check(`the desk table at ${width}: no sideways scroll, the table inside its card`, o.table && o.page <= 0 && o.past <= 0, JSON.stringify(o));
+  if (width === 1000 || width === 1280) await shot(page, `13-contacts-long-${width}`);
+}
+await page.setViewportSize({ width: 1440, height: 900 });
+
 check('the books verify', (await api(page, '/audit/verify')).json?.ok === true);
 check('no page errors', errors.length === 0, errors.join(' | '));
 
