@@ -17,6 +17,7 @@
 import { Hono } from 'hono';
 import { probeLookup } from '../../lib/geocode.js';
 import { googleKey, googleTilesSetting, mapType, probeTiles } from '../../lib/gtiles.js';
+import { tileConfig, tileSource } from '../offline/index.js';
 import { jobRunnerOn } from '../../lib/jobs.js';
 import { KEY_ENV, KEY_MIN, keyStatus } from '../../lib/twostep.js';
 import { basePath } from '../../lib/mount.js';
@@ -60,6 +61,26 @@ const refusedBy = (r) => {
   return { ok: false, said: r.plain, ...(todo ? { todo } : {}) };
 };
 
+// The map's own reading of its settings (offline's tileConfig), so this row
+// and the map never disagree about where the tiles come from.
+const freeTiles = () => {
+  const cfg = tileConfig();
+  return { cfg, source: tileSource(cfg.url) };
+};
+const freeTilesRow = () => {
+  const { cfg, source } = freeTiles();
+  const own = source !== 'OpenStreetMap';
+  const why = googleTilesSetting() === 'unknown' ? `GOOGLE_MAPS_TILES=${env('GOOGLE_MAPS_TILES').slice(0, 40)} isn’t understood — use 1`
+    : cfg.ignored.includes('provider') ? `STARBASE_TILE_PROVIDER=${env('STARBASE_TILE_PROVIDER').toLowerCase().slice(0, 40)} isn’t known — use stadia`
+      : cfg.ignored.includes('url') ? 'STARBASE_TILE_URL needs http(s) and {z}/{x}/{y}' : '';
+  return row('tiles', `Map background (${source})`, 'The map volunteers walk', false, [], {
+    detail: why ? `${why} · ${source} meanwhile`
+      : own ? `${source}, straight to the phones`
+        : 'OpenStreetMap’s free tiles — not for a large team in election week (see Going live §5)',
+    state: why ? 'missing' : own ? 'ready' : 'default',
+  });
+};
+
 const row = (key, name, purpose, launch, needs, extra = {}) => {
   const missing = needs.filter((k) => !has(k));
   return { key, name, for: purpose, launch, missing, set: needs.filter(has), state: missing.length ? 'missing' : 'ready', checkable: true, ...extra };
@@ -92,14 +113,10 @@ export const services = (base = publicUrl()) => {
         state: geo === 'off' ? 'missing' : (geo === 'google' && !googleKey()) ? 'missing' : 'ready',
         ...(geo === 'off' ? { missing: ['GEOCODER'] } : {}),
       }),
-    row('tiles', googleTiles() ? 'Map background (Google Map Tiles)' : 'Map background (OpenStreetMap)', 'The map volunteers walk', false,
-      googleTiles() ? ['GOOGLE_MAPS_SERVER_KEY'] : [], {
-        detail: googleTiles() ? `Google ${mapType()} tiles, through this server`
-          : googleTilesSetting() === 'unknown' ? `GOOGLE_MAPS_TILES=${env('GOOGLE_MAPS_TILES').slice(0, 40)} isn’t understood — use 1 · OpenStreetMap meanwhile`
-            : has('STARBASE_TILE_URL') ? `Tiles from ${env('STARBASE_TILE_URL').replace(/^https?:\/\//, '').split('/')[0]}`
-              : 'OpenStreetMap’s free tiles — not for a large team in election week (GOOGLE_MAPS_TILES=1 or STARBASE_TILE_URL)',
-        state: googleTiles() ? (googleKey() ? 'ready' : 'missing') : googleTilesSetting() === 'unknown' ? 'missing' : has('STARBASE_TILE_URL') ? 'ready' : 'default',
-      }),
+    googleTiles() ? row('tiles', 'Map background (Google Map Tiles)', 'The map volunteers walk', false, ['GOOGLE_MAPS_SERVER_KEY'], {
+      detail: `Google ${mapType()} tiles, through this server`,
+      state: googleKey() ? 'ready' : 'missing',
+    }) : freeTilesRow(),
     row('jobs', 'Background work', 'Sends that go out later, ladder steps, receipts, the address run', true, [], {
       detail: jobRunnerOn() ? 'Running on this server' : 'Off on this server (STARBASE_JOBS=off — take that setting away): scheduled sends wait',
       state: jobRunnerOn() ? 'ready' : 'missing',
@@ -196,8 +213,8 @@ const CHECKS = {
   // refuses. The free maps come straight to each phone: nothing to ask here.
   tiles: async () => {
     if (!googleTiles()) {
-      const url = env('STARBASE_TILE_URL');
-      return { ok: true, said: `${url ? 'Tiles come straight from that host to each phone' : 'OpenStreetMap’s tiles come straight to each phone'} · to choose a provider, see Going live §5` };
+      const { source } = freeTiles();
+      return { ok: true, said: `${source}${source.endsWith('s') ? '’' : '’s'} tiles come straight to each phone · to choose a provider, see Going live §5` };
     }
     if (!googleKey()) return { ok: false, said: 'GOOGLE_MAPS_SERVER_KEY isn’t set', todo: 'see Going live §5, Recipe B step 6' };
     const r = await probeTiles();

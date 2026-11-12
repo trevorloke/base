@@ -19,7 +19,7 @@ const tag = Math.random().toString(36).slice(2, 8);
 const realFetch = globalThis.fetch;
 const saved = { ...process.env };
 const KEYS = ['RESEND_API_KEY', 'MAIL_FROM', 'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM', 'STARBASE_PUBLIC_URL',
-  'GEOCODER', 'GOOGLE_MAPS_TILES', 'GOOGLE_MAPS_SERVER_KEY', 'DATABASE_URL', 'TWILIO_VOICE', 'STARBASE_TILE_URL',
+  'GEOCODER', 'GOOGLE_MAPS_TILES', 'GOOGLE_MAPS_SERVER_KEY', 'DATABASE_URL', 'TWILIO_VOICE', 'STARBASE_TILE_URL', 'STARBASE_TILE_PROVIDER', 'STARBASE_TILE_KEY',
   'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'BASE_PATH', 'CALLHUB_API_KEY', 'CALLHUB_API_BASE'];
 let mgr, staff;
 let resendDomains = [];
@@ -184,6 +184,35 @@ test('the public address, the address service, the database and Google tiles ans
   assert.equal((await check('geocoder')).ok, false);
   _resetLookupForTest();
   delete process.env.GEOCODER;
+});
+
+test('the tiles row reads the map’s own setting: the Stadia preset is named, ready, and never called OpenStreetMap', async () => {
+  const google = process.env.GOOGLE_MAPS_TILES;
+  delete process.env.GOOGLE_MAPS_TILES;
+  process.env.STARBASE_TILE_PROVIDER = 'stadia';
+  process.env.STARBASE_TILE_KEY = 'stadiakey';
+  try {
+    const t = byKey(await list()).tiles;
+    assert.equal(t.name, 'Map background (Stadia Maps)');
+    assert.equal(t.state, 'ready');
+    assert.match(t.detail, /^Stadia Maps, straight to the phones/);
+    const c = await check('tiles');
+    assert.equal(c.ok, true);
+    assert.match(c.said, /^Stadia Maps’ tiles come straight to each phone/);
+    assert.doesNotMatch(JSON.stringify([t, c]), /OpenStreetMap|stadiakey/);
+    // A name the map doesn't know: said, and the free map meanwhile.
+    process.env.STARBASE_TILE_PROVIDER = 'mapbox';
+    const u = byKey(await list()).tiles;
+    assert.equal(u.state, 'missing');
+    assert.match(u.detail, /STARBASE_TILE_PROVIDER=mapbox isn’t known — use stadia/);
+    delete process.env.STARBASE_TILE_PROVIDER;
+    const d = byKey(await list()).tiles;
+    assert.deepEqual([d.name, d.state], ['Map background (OpenStreetMap)', 'default']);
+  } finally {
+    delete process.env.STARBASE_TILE_PROVIDER;
+    delete process.env.STARBASE_TILE_KEY;
+    if (google != null) process.env.GOOGLE_MAPS_TILES = google;
+  }
 });
 
 test('files in: the desk’s own address — /desk under the client’s path on base.win, /admin at a server’s root', async () => {
