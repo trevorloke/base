@@ -230,6 +230,9 @@ try {
   const pressed = (loc) => loc.first().getAttribute('aria-pressed').then((v) => v === 'true').catch(() => false);
   const go = page.locator('.sch-sheet .sch-go');
   const sheetGone = () => until(async () => (await page.locator('.sch-sheet').count()) === 0);
+  // The quarter-hour rows under Another time: "Starts" and "Ends".
+  const stepValue = (row, pg = page) => pg.locator(`.sch-sheet [aria-label="${row}"] .shh-steps__value`).innerText().then((t) => t.trim()).catch(() => null);
+  const stepper = (row, way, pg = page) => pg.locator(`.sch-sheet [aria-label="${row}"] button[aria-label="15 minutes ${way}"]`);
   // The kinds on cards that take more than one line (none should, at a desk).
   const wrappedKinds = (pg) => pg.$$eval('.sch-card__title', (els) => els
     .filter((el) => el.getBoundingClientRect().height > parseFloat(getComputedStyle(el).lineHeight) * 1.5).map((el) => el.innerText.trim()));
@@ -462,15 +465,17 @@ try {
   await chip('6–8 pm').click();
   check('with no time chosen there is nothing to add', await go.isDisabled() && (await go.innerText()).trim() === 'Add shifts');
   await chip('Another time').click();
+  check('another time opens on the usual hours tapped last (6–8 pm), with Starts and Ends rows', await pressed(page.locator('.sch-sheet [aria-label="Starts at"] .sch-chip:text-is("6 pm")'))
+    && !(await pressed(chip('6–8 pm'))) && (await stepValue('Starts')) === '6:00 pm' && (await stepValue('Ends')) === '8:00 pm · 2 h', `${await stepValue('Starts')} | ${await stepValue('Ends')}`);
   await page.locator('.sch-sheet .sch-parts button:has-text("Evening")').click();
   const starts = await page.$$eval('.sch-sheet [aria-label="Starts at"] .sch-chip', (els) => els.map((e) => e.innerText.trim()));
-  check('another time: a start every half hour of the evening', starts.join('|') === '5 pm|5:30 pm|6 pm|6:30 pm|7 pm|7:30 pm|8 pm|8:30 pm|9 pm|9:30 pm', starts.join('|'));
+  check('another time: a start every half hour of the evening, to 11:30 pm', starts.join('|') === '5 pm|5:30 pm|6 pm|6:30 pm|7 pm|7:30 pm|8 pm|8:30 pm|9 pm|9:30 pm|10 pm|10:30 pm|11 pm|11:30 pm', starts.join('|'));
   await page.locator('.sch-sheet [aria-label="Starts at"] .sch-chip:text-is("6:30 pm")').click();
   await page.locator('.sch-sheet [aria-label="How long"] .sch-chip:text-is("1½ h")').click();
   check('…and a length: 6:30–8 pm', (await D.text('.sch-summary')) === `Phone bank · ${wd(wed)}, ${md(wed)} · 6:30–8 pm`, await D.text('.sch-summary'));
   await page.locator('.sch-sheet .sch-parts button:has-text("Early")').click();
   const early = await page.$$eval('.sch-sheet [aria-label="Starts at"] .sch-chip', (els) => els.map((e) => e.innerText.trim()));
-  check('the early starts: 6:00 to 8:30 am', early.join('|') === '6 am|6:30 am|7 am|7:30 am|8 am|8:30 am', early.join('|'));
+  check('the early starts: 5:00 to 8:30 am', early.join('|') === '5 am|5:30 am|6 am|6:30 am|7 am|7:30 am|8 am|8:30 am', early.join('|'));
   await D.shot('08-add-another-time-1440');
   await go.click();
   await sheetGone();
@@ -514,7 +519,7 @@ try {
   check('…and still nothing typed', k.keys === 0 && k.fields.length === 0, JSON.stringify(k));
   await page.locator('.sch-sheet .sch-more').click();
   const moreWords = await D.text('.sch-more__body');
-  check('"More" holds what is typed or rare', ['Name', 'Instructions', 'Link', 'We need', 'Limit sign-ups to', 'Show on the website', 'More options'].every((w) => moreWords.includes(w)), moreWords.slice(0, 200));
+  check('"More" holds what is typed or rare', ['Name', 'Instructions', 'Link', 'We need', 'Limit sign-ups to', 'Drop in any time', 'Show on the website', 'More options'].every((w) => moreWords.includes(w)), moreWords.slice(0, 200));
   check('"More options" is the long form', (await page.locator('.sch-more__body a:has-text("More options")').getAttribute('href')) === '/admin/shifts?new=1');
   check('nothing asks how many people; a limit is there to set, empty', (await page.inputValue('#sch-capacity')) === '' && (await page.getAttribute('#sch-capacity', 'placeholder')) === 'No limit'
     && !/How many/.test(await D.text('.sch-sheet')));
@@ -522,7 +527,7 @@ try {
     && (await page.locator('#sch-need').count()) === 0 && (await D.text('.sch-sheet .sch-chips[aria-label="We need"]')) === 'No target 1 2 3 4 5 6 8 10', await D.text('.sch-sheet .sch-chips[aria-label="We need"]'));
   await page.fill('#sch-name', 'Front desk');
   await page.locator('.sch-sheet [aria-label="We need"] .sch-chip:text-is("2")').click();
-  await page.locator('.sch-more__body .ops-check input').check();
+  await page.locator('.sch-more__body .ops-check:has-text("Show on the website") input').check();
   await D.shot('10-add-more-1440', true);
   await go.click();
   await sheetGone();
@@ -896,19 +901,24 @@ try {
   await page.locator('.sch-sheet .sch-x').click();
   await sheetGone();
   await openCard(late.id);
-  check('11 pm to 12:30 am: its sheet opens on "11 pm" and "1½ h", both pressed (the only length offered there: nothing made by tap runs past midnight); Save waits for a change',
+  check('11 pm to 12:30 am: its sheet opens on "11 pm" and "1½ h", both pressed, every length offered (a tap may run past midnight), Ends "12:30 am next day"; Save waits for a change',
     await pressed(chip('Another time')) && await pressed(startChip('11 pm')) && await pressed(lengthChip('1½ h'))
-    && await lengthChip('1 h').isDisabled() && await go.isDisabled(), await D.text('.sch-sheet .sch-when'));
+    && !(await lengthChip('6 h').isDisabled()) && (await stepValue('Ends')) === '12:30 am next day · 1 h 30 min' && await go.isDisabled(), await D.text('.sch-sheet .sch-when'));
   await D.shot('16b-late-shift-sheet-1440');
   await startChip('9 pm').click();
   check('…"9 pm": the hour and a half comes with it', await pressed(lengthChip('1½ h')) && !(await go.isDisabled()));
   await startChip('11 pm').click({ timeout: 5000 }).catch(() => {});
   check('…"11 pm" again: its own hours are back, nothing to save', await pressed(lengthChip('1½ h')) && await go.isDisabled());
-  await startChip('9 pm').click();
+  await stepper('Ends', 'later').click();
+  await stepper('Ends', 'later').click();
+  check('…"Ends +15 min" twice: "1:00 am next day · 2 h"', (await stepValue('Ends')) === '1:00 am next day · 2 h' && !(await go.isDisabled()), await stepValue('Ends'));
+  const sent = page.waitForRequest((r) => r.url().endsWith('/actions/shift.update') && r.method() === 'POST');
   await go.click();
+  const lateBody = (await sent).postDataJSON();
   await sheetGone();
+  check('…Save sends its length (minutes: 120), never an end before its start', lateBody.minutes === 120 && !('end' in lateBody), JSON.stringify(lateBody));
   const lateNow = (await D.api(`/shifts/${late.id}`)).json.shift;
-  check('…"9 pm", Save: 9–10:30 pm that day', iso(lateNow.starts_at) === at(lateDay, '21:00') && iso(lateNow.ends_at) === at(lateDay, '22:30'), `${lateNow.starts_at} ${lateNow.ends_at}`);
+  check('server: 11 pm to 1 am the next day', iso(lateNow.starts_at) === at(lateDay, '23:00') && iso(lateNow.ends_at) === at(addDays(lateDay, 1), '01:00'), `${lateNow.starts_at} ${lateNow.ends_at}`);
   // An evening event that ends at midnight: a length tapped by mistake can be taken back.
   const gala = (await D.api('/actions/shift.create', { title: 'Volunteer night', kind: 'event', location: 'Campaign office',
     starts_at: at(addDays(lateDay, 1), '22:00'), ends_at: at(addDays(lateDay, 2), '00:00') })).json.shift;
@@ -937,6 +947,100 @@ try {
   check('…"2 h" again: no end, as it was, nothing to save', await noLength() && await go.isDisabled());
   await page.locator('.sch-sheet .sch-x').click();
   await sheetGone();
+
+  // ── 16c. By the quarter hour: a 6:45–8:15 Burma Shave, and an Event from 8 pm to 1 am the next day — taps only ──
+  await D.go(`/shifts?week=${lateWeek}`);
+  await page.waitForSelector(`.sch-day[data-day="${lateDay}"] .sch-plus`, { timeout: 10000 });
+  await D.watchKeys();
+  let taps = 0;
+  const tap = async (loc) => { taps += 1; await loc.click(); };
+  await tap(plus(lateDay));
+  await page.waitForSelector('.sch-sheet .sch-tile', { timeout: 8000 });
+  await tap(tile('Burma Shave'));
+  await page.waitForSelector('.sch-sheet .sch-daychip', { timeout: 8000 });
+  await tap(chip('King George Blvd & 88 Ave'));
+  await tap(chip('Another time'));
+  check('Burma Shave, "Another time": seeded on 6:30 am for 2 h, and the usual 6:30–8:30 chip goes off',
+    await pressed(startChip('6:30 am')) && !(await pressed(chip('6:30–8:30 am'))) && (await stepValue('Starts')) === '6:30 am' && (await stepValue('Ends')) === '8:30 am · 2 h',
+    `${await stepValue('Starts')} | ${await stepValue('Ends')}`);
+  await tap(stepper('Starts', 'later'));
+  check('"Starts +15 min": 6:45 am, the length kept', (await stepValue('Starts')) === '6:45 am' && (await stepValue('Ends')) === '8:45 am · 2 h', await stepValue('Ends'));
+  await tap(stepper('Ends', 'earlier'));
+  await tap(stepper('Ends', 'earlier'));
+  check('"Ends −15 min" twice: 8:15 am · 1 h 30 min; the sheet says 6:45–8:15 am', (await stepValue('Ends')) === '8:15 am · 1 h 30 min'
+    && (await D.text('.sch-summary')).endsWith('6:45–8:15 am') && (await go.innerText()).trim() === 'Add 1 shift', await D.text('.sch-summary'));
+  check('the steppers say what they do and the values are announced', (await page.locator('.sch-sheet .shh-steps__value[aria-live="polite"]').count()) === 2
+    && (await page.locator('.sch-sheet .shh-step[aria-label]').count()) === 4);
+  mm = await measure(page, SHEET_TARGETS);
+  check('the add sheet with Another time (1440): one main button, no sideways scroll', mm.yellow.join('|') === 'Add 1 shift' && mm.overflow <= 0, JSON.stringify(mm));
+  await D.shot('16c-add-quarter-hours-1440');
+  await tap(go);
+  await sheetGone();
+  k = await D.keys();
+  check(`a 6:45–8:15 Burma Shave from "+" to added: ${taps} taps (9 at most), no key, no text field focused`, taps <= 9 && k.keys === 0 && k.fields.length === 0, JSON.stringify(k));
+  let made = (await board(lateWeek)).shifts.filter((s) => s.kind === 'burma_shave' && dayOf(s.starts_at) === lateDay);
+  check('server: 6:45–8:15 that day', made.length === 1 && iso(made[0].starts_at) === at(lateDay, '06:45') && iso(made[0].ends_at) === at(lateDay, '08:15'), JSON.stringify(made));
+  await until(async () => (await cards(lateDay)).some((c) => c.id === made[0]?.id));
+  check('its card: 6:45–8:15 am', (await cards(lateDay)).find((c) => c.id === made[0]?.id)?.time === '6:45–8:15 am');
+
+  taps = 0;
+  await tap(plus(lateDay));
+  await page.waitForSelector('.sch-sheet .sch-tile', { timeout: 8000 });
+  await tap(tile('Event'));
+  await page.waitForSelector('.sch-sheet .sch-daychip', { timeout: 8000 });
+  await tap(page.locator('.sch-sheet .sch-parts button:has-text("Evening")'));
+  await tap(startChip('8 pm'));
+  await tap(lengthChip('6 h'));
+  check('an Event at 8 pm for 6 h: "2:00 am next day · 6 h", the 6 h chip offered', (await stepValue('Ends')) === '2:00 am next day · 6 h', await stepValue('Ends'));
+  for (let i = 0; i < 4; i += 1) await tap(stepper('Ends', 'earlier'));
+  check('…"Ends −15 min" four times: "1:00 am next day · 5 h"', (await stepValue('Ends')) === '1:00 am next day · 5 h', await stepValue('Ends'));
+  await tap(go);
+  await sheetGone();
+  made = (await board(lateWeek)).shifts.filter((s) => s.kind === 'event' && iso(s.starts_at) === at(lateDay, '20:00'));
+  check('server: 8 pm to 1 am the next day', made.length === 1 && iso(made[0].ends_at) === at(addDays(lateDay, 1), '01:00'), JSON.stringify(made));
+  await until(async () => (await cards(lateDay)).some((c) => c.id === made[0]?.id));
+  check('its card, under its start day: 8 pm–1 am', (await cards(lateDay)).find((c) => c.id === made[0]?.id)?.time === '8 pm–1 am', JSON.stringify(await cards(lateDay)));
+  k = await D.keys();
+  check('…no key, no text field focused', k.keys === 0 && k.fields.length === 0, JSON.stringify(k));
+
+  // The same on a phone (390×844): the steppers fit, 48px, no sideways scroll; an overnight shift's sheet.
+  {
+    const ph = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, isMobile: true, hasTouch: true, timezoneId: 'America/Vancouver', locale: 'en-CA', storageState: await desk.storageState() });
+    await tiles(ph);
+    const pp = await ph.newPage();
+    const PP = wire(pp, 'phone-hours');
+    await pp.goto(`${ADMIN}/shifts?week=${lateWeek}`, { waitUntil: 'domcontentloaded' });
+    await pp.waitForSelector('.sch-day', { timeout: 10000 });
+    await pp.locator('.sb-days .sb-day').nth(4).tap();
+    await pp.waitForSelector(`.sch-day[data-day="${lateDay}"]`, { timeout: 8000 });
+    await PP.watchKeys();
+    await pp.locator('.sch-plus').tap();
+    await pp.waitForSelector('.sch-sheet .sch-tile', { timeout: 8000 });
+    await pp.locator('.sch-sheet .sch-tile:has-text("Burma Shave")').tap();
+    await pp.waitForSelector('.sch-sheet .sch-daychip', { timeout: 8000 });
+    await pp.locator('.sch-sheet .sch-chip:has-text("Another time")').tap();
+    await stepper('Starts', 'later', pp).tap();
+    await stepper('Ends', 'earlier', pp).tap();
+    await stepper('Ends', 'earlier', pp).tap();
+    await pp.locator('.sch-sheet [aria-label="Ends"]').scrollIntoViewIfNeeded();
+    mm = await measure(pp, SHEET_TARGETS);
+    check('phone: Another time with both steppers — one main button, no sideways scroll, 48px targets', (await stepValue('Ends', pp)) === '8:15 am · 1 h 30 min'
+      && mm.yellow.length === 1 && mm.overflow <= 0 && mm.minTap >= 47.5, JSON.stringify(mm));
+    const rows = await pp.$$eval('.sch-sheet .shh-steps', (els) => els.map((el) => { const r = el.getBoundingClientRect(); return r.right <= window.innerWidth + 0.5 && r.left >= -0.5; }));
+    check('phone: the Starts and Ends rows fit the width', rows.length === 2 && rows.every(Boolean), JSON.stringify(rows));
+    await PP.shot('16c-add-quarter-hours-390');
+    k = await PP.keys();
+    check('phone: no key, no text field focused', k.keys === 0 && k.fields.length === 0, JSON.stringify(k));
+    await pp.locator('.sch-sheet .sch-x').tap();
+    await until(async () => (await pp.locator('.sch-sheet').count()) === 0);
+    await pp.locator(`.sch-card[data-shift="${late.id}"] .sch-card__head`).tap();
+    await pp.waitForSelector('.sch-sheet .sch-daychip', { timeout: 8000 });
+    await pp.locator('.sch-sheet [aria-label="Ends"]').scrollIntoViewIfNeeded();
+    mm = await measure(pp, SHEET_TARGETS);
+    check('phone: an overnight shift’s sheet — "1:00 am next day · 2 h", no sideways scroll', (await stepValue('Ends', pp)) === '1:00 am next day · 2 h' && mm.overflow <= 0, `${await stepValue('Ends', pp)} ${JSON.stringify(mm)}`);
+    await PP.shot('16c-overnight-sheet-390');
+    await ph.close();
+  }
 
   // ── 17. A laptop on Toronto time shows the campaign's hours ──
   const east = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1, timezoneId: 'America/Toronto', locale: 'en-CA', storageState: await desk.storageState() });

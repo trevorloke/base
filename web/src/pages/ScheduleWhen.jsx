@@ -62,6 +62,11 @@ const lengthLong = (minutes) => {
   return [h ? `${h} h` : null, r ? `${r} min` : null].filter(Boolean).join(' ');
 };
 const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
+// A stepped time to the minute: "6:45 am", "1:00 am".
+const exactWords = (clock) => {
+  const [h, m] = clock.split(':').map(Number);
+  return `${h % 12 || 12}:${pad(m)} ${h < 12 ? 'am' : 'pm'}`;
+};
 
 // One start and length as a time: its end, and whether that is the next day.
 const timeOf = (start, minutes) => {
@@ -98,7 +103,9 @@ export const whenFor = (kind, at = null) => {
 export default function When({ kind, value, onChange, many = false, own = null }) {
   const other = value.other;
   const [part, setPart] = useState(() => weekPartOf(other?.start || '06:00'));
+  const [lastUsual, setLastUsual] = useState(null); // the usual chip tapped last, on or off
   const pickUsual = (key) => {
+    setLastUsual(key);
     if (!many) { onChange({ slots: [key], other: null }); return; }
     const on = value.slots.includes(key);
     onChange({ ...value, slots: on ? value.slots.filter((k) => k !== key) : [...value.slots, key] });
@@ -109,7 +116,7 @@ export default function When({ kind, value, onChange, many = false, own = null }
   // opens with no start.
   const toggleOther = () => {
     if (!other) {
-      const seedKey = value.slots[value.slots.length - 1] || (kind.slots[0] ? keyOf(kind.slots[0]) : null);
+      const seedKey = lastUsual || value.slots[value.slots.length - 1] || (kind.slots[0] ? keyOf(kind.slots[0]) : null);
       if (!seedKey) { onChange({ slots: many ? value.slots : [], other: { start: null, minutes: kind.minutes } }); return; }
       const [start, end] = seedKey.split('-');
       setPart(weekPartOf(start));
@@ -188,7 +195,7 @@ export default function When({ kind, value, onChange, many = false, own = null }
             <div className="shh-steps" role="group" aria-label="Starts">
               <span className="shh-steps__label">Starts</span>
               <button type="button" className="btn btn-quiet shh-step" aria-label="15 minutes earlier" disabled={clockMinutes(t.start) <= 0} onClick={() => nudgeStart(-STEP)}>− 15 min</button>
-              <output className="shh-steps__value" aria-live="polite">{spanWords(t.start)}</output>
+              <output className="shh-steps__value" aria-live="polite">{exactWords(t.start)}</output>
               <button type="button" className="btn btn-quiet shh-step" aria-label="15 minutes later" disabled={clockMinutes(t.start) >= LATEST_START} onClick={() => nudgeStart(STEP)}>+ 15 min</button>
             </div>
           )}
@@ -196,7 +203,7 @@ export default function When({ kind, value, onChange, many = false, own = null }
             <div className="shh-steps" role="group" aria-label="Ends">
               <span className="shh-steps__label">Ends</span>
               <button type="button" className="btn btn-quiet shh-step" aria-label="15 minutes earlier" disabled={shown <= STEP} onClick={() => nudgeEnd(-STEP)}>− 15 min</button>
-              <output className="shh-steps__value" aria-live="polite">{spanWords(t.end)}{t.nextDay ? ' next day' : ''} · {lengthLong(shown)}</output>
+              <output className="shh-steps__value" aria-live="polite">{exactWords(t.end)}{t.nextDay ? ' next day' : ''} · {lengthLong(shown)}</output>
               <button type="button" className="btn btn-quiet shh-step" aria-label="15 minutes later" disabled={shown >= LONGEST} onClick={() => nudgeEnd(STEP)}>+ 15 min</button>
             </div>
           )}

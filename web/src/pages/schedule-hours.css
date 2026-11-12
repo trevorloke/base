@@ -2,15 +2,13 @@
    and a person's own part of a shift (Shifts.jsx "Change my hours", the
    desk's person sheet, the check-in board). */
 
-/* "Starts  [− 15 min]  6:45 am  [+ 15 min]": the two steppers and the value
-   on one line; at 390 px the value wraps under them rather than scroll. */
-.shh-steps { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); min-width: 0; }
-.shh-steps__label { flex: 0 0 auto; min-width: 48px; font-size: 14px; font-weight: 600; color: var(--text-2); }
+/* "Starts" over "[− 15 min]  6:45 am  [+ 15 min]": the steppers at either
+   end and the value between them, its words wrapping there at 390 px
+   rather than scroll. */
+.shh-steps { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 2px var(--s-2); min-width: 0; }
+.shh-steps__label { grid-column: 1 / -1; font-size: 13px; font-weight: 600; color: var(--text-2); }
 .btn.shh-step { min-height: var(--ctl); padding: 0 12px; font-size: 14px; white-space: nowrap; }
-.shh-steps__value { flex: 1 1 auto; min-width: 0; font-size: 15px; font-weight: 600; color: var(--text-1); font-variant-numeric: tabular-nums; }
-@media (max-width: 480px) {
-  .shh-steps__value { order: 4; flex-basis: 100%; }
-}
+.shh-steps__value { min-width: 0; text-align: center; font-size: 15px; font-weight: 600; color: var(--text-1); font-variant-numeric: tabular-nums; }
 
 /* A person's own hours: a quiet second fact. */
 .shh-own { color: var(--text-2); font-variant-numeric: tabular-nums; }
