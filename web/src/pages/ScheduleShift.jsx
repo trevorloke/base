@@ -28,7 +28,7 @@ import { NotifyChip, notifySummary } from '../components/NotifyWords.jsx';
 import { turfNames } from '../components/ShiftTurfs.jsx';
 import NeedChips from './ScheduleNeed.jsx';
 import Sheet from './ScheduleSheet.jsx';
-import When, { timesOf, whenFor } from './ScheduleWhen.jsx';
+import When, { timeInput, timesOf, whenFor } from './ScheduleWhen.jsx';
 import Where, { wherePatch } from './ScheduleWhere.jsx';
 import { countLong, dayWords, peopleWords, plural, shiftClock, shiftSpan } from './ScheduleWords.js';
 
@@ -58,10 +58,12 @@ export default function ScheduleShift({
   const [where0] = useState(() => whereOf(shift, turfs ?? []));
   const [scope, setScope] = useState('one');
   const [day, setDay] = useState(day0);
-  const [when, setWhen] = useState(() => whenFor(kind, at0));
+  const [when, setWhen] = useState(() => whenFor(kind, own));
   const [where, setWhere] = useState(where0);
   const need0 = shift.need ?? null;
   const [need, setNeed] = useState(need0);
+  const dropIn0 = Boolean(shift.drop_in);
+  const [dropIn, setDropIn] = useState(dropIn0);
   const [more, setMore] = useState(false);
   const moreId = useId();
   const [busy, setBusy] = useState(false);
@@ -73,12 +75,14 @@ export default function ScheduleShift({
   const [onSite, setOnSite] = useState(Boolean(shift.public));
   const following = scope === 'following';
 
-  // Only what changed is sent.
+  // Only what changed is sent. A time past midnight is sent as its length.
   const t = timesOf(when)[0] || null;
-  const timePatch = t && (t.start !== at0.start || (t.end || null) !== (at0.end || null))
-    ? { start: t.start, ...(t.end ? { end: t.end } : {}) } : {};
+  const timeMoved = t && (t.start !== at0.start || (t.nextDay
+    ? t.minutes !== own.minutes
+    : (t.end || null) !== (at0.end || null)));
+  const timePatch = timeMoved ? timeInput(t) : {};
   const moves = { ...(day !== day0 ? { day } : {}), ...timePatch, ...wherePatch(where0, where) };
-  const patch = { ...moves, ...(need !== need0 ? { need } : {}) };
+  const patch = { ...moves, ...(need !== need0 ? { need } : {}), ...(dropIn !== dropIn0 ? { drop_in: dropIn } : {}) };
   const dirty = Object.keys(patch).length > 0;
 
   // One write at a time — a second tap before the buttons grey out is
@@ -194,10 +198,16 @@ export default function ScheduleShift({
 
           <button type="button" className="disclose sch-more" aria-expanded={more} aria-controls={moreId} onClick={() => setMore((v) => !v)}>More</button>
           {more && (
-            <section id={moreId} className="sch-sec sch-more__body" aria-label="We need">
-              <h3 className="sch-label">We need</h3>
-              <NeedChips kind={kind} value={need} onChange={setNeed} own={need0} />
-            </section>
+            <div id={moreId} className="sch-more__body">
+              <section className="sch-sec" aria-label="We need">
+                <h3 className="sch-label">We need</h3>
+                <NeedChips kind={kind} value={need} onChange={setNeed} own={need0} />
+              </section>
+              <label className="ops-check">
+                <input type="checkbox" checked={dropIn} onChange={(e) => setDropIn(e.target.checked)} />
+                <span><b>Drop in any time</b><span className="ops-meta">People come and go between these hours</span></span>
+              </label>
+            </div>
           )}
         </>
       )}

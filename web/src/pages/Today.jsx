@@ -37,6 +37,7 @@ import { Suspense, lazy, useEffect, useId, useRef, useState } from 'react';
 import { Link, useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { allCodes, bandOf, ratingByCode } from '@starbase/shared/scale';
+import { hoursOf } from '@starbase/shared/shifthours';
 import { ApiError, apiGet, apiPost, fmtMoney } from '../api.js';
 import { ratingWho, useScale } from '../components/RatingButtons.jsx';
 import { useFollowupCount } from '../components/LaddersCount.js';
@@ -548,7 +549,8 @@ function VolunteerShiftRow({ shifts, me, turfs }) {
   // The shift's walk lists (brief.shiftTurfs): "Saturday canvass · Newton block".
   const names = (s) => turfNames(turfs?.[s.id] || []);
   if (next) {
-    return <WhenRow to={`/shifts/${next.id}`} kicker="Your next shift" title={next.title} when={next.starts_at} tz={tz} extra={names(next) || undefined} />;
+    // Their own hours when they're doing only part of it (shared/shifthours.js).
+    return <WhenRow to={`/shifts/${next.id}`} kicker="Your next shift" title={next.title} when={hoursOf(next, next).starts_at} tz={tz} extra={names(next) || undefined} />;
   }
   const open = shifts.find((s) => !s.capacity || (Number(s.filled) || 0) < s.capacity);
   if (!open) return <LinkRow to="/shifts" main={<span className="muted">No open shifts</span>} />;

@@ -509,7 +509,7 @@ function openingItems(rc, list, limit) {
       day: w?.day || '',
       mon: w?.mon || '',
       date: w?.date || '',
-      time: w?.time || '',
+      time: w?.time ? `${e.drop_in ? 'Drop in ' : ''}${w.time}` : '',
       where: str(e.location).trim(),
       map,
       full: left === 0,

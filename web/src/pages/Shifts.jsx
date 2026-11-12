@@ -81,6 +81,8 @@ import { KindIcon, cardWords, kindVars } from '../components/ShiftKind.jsx';
 import { TurfPicker, turfIsPlace, turfNames, useShiftTurfs } from '../components/ShiftTurfs.jsx';
 import { normalizeLink, safeHref } from '../components/shiftLink.js';
 import { clockText, dayName, longDay, overlaps, stampText, timeRange, zoneOf } from '../components/shiftTime.js';
+import { HoursPicker, canPickHours, hoursWords, ownHours } from '../components/ShiftHours.jsx';
+import { hoursOf } from '@starbase/shared/shifthours';
 import { NOTIFIED_WORD, NotifyChip, notifySummary, outcomeOf, people } from '../components/NotifyWords.jsx';
 import './shifts.css';
 import './schedule.css';
@@ -94,6 +96,15 @@ const saveView = (v) => { try { localStorage.setItem(VIEW_KEY, v); } catch { /* 
 // This phone's own "Count me in" / "Can't make it" still waiting to send, by shift.
 const waitingSelf = (items, shiftId) => [...items].reverse().find((i) => i.state === 'pending'
   && (i.name === 'shift.join' || i.name === 'shift.leave') && i.input?.shift_id === shiftId) || null;
+
+// This phone's own "Change my hours" still waiting to send, for a shift —
+// laid over what was loaded, so the kept copy shows the new hours.
+const waitingHours = (items, shiftId) => [...items].reverse().find((i) => i.state === 'pending'
+  && i.name === 'shift.hours' && i.input?.shift_id === shiftId) || null;
+const asBooking = (item) => (item ? { arrive_at: item.input.from, leave_at: item.input.to } : null);
+// The hours a person is on a shift (their own part, or all of it) — what an
+// overlap is checked against.
+const myHours = (s, booking) => ({ ...s, ...hoursOf(s, booking ?? s) });
 
 const roleLabel = (code) => VOLUNTEER_ROLES.find((r) => r.code === code)?.label ?? code;
 // One set of words for a volunteer's spot (select, chip, hints).
@@ -591,18 +602,19 @@ const roomText = (s, filled = s.filled) => {
 // (`day`: the day too, for a row not under a day's heading). The row opens
 // the shift; `onJoin` puts a volunteer's "Count me in" on the row itself,
 // and `clash` — a shift of theirs at the same time — is asked about first.
-function ShiftRow({ s, tz, now, past = false, mine = false, waiting = false, turfs, day = false, onJoin = null, busy = false, clash = null, asking = false, onAsk, error = null }) {
+function ShiftRow({ s, tz, now, past = false, mine = false, waiting = false, own = null, turfs, day = false, onJoin = null, busy = false, clash = null, asking = false, onAsk, error = null }) {
   const full = !!s.capacity && Number(s.filled) >= s.capacity;
   const names = turfNames(turfs);
   const words = cardWords(s);
   // A turf that is the place is said once, beside the name.
   const place = words.place && !turfIsPlace(words.place, turfs) ? words.place : null;
-  const hours = isLive(s, now) && s.ends_at ? `Now · until ${clockText(s.ends_at, tz)}` : timeRange(s.starts_at, s.ends_at, tz);
+  const span = timeRange(s.starts_at, s.ends_at, tz);
+  const hours = isLive(s, now) && s.ends_at ? `Now · until ${clockText(s.ends_at, tz)}` : s.drop_in ? `Drop in · ${span}` : span;
   const join = !past && !mine && !waiting && !full && onJoin;
   // Nobody on it and no number set: the row has nothing to count.
   const bare = !s.capacity && !s.need && !(Number(s.filled) > 0);
   const state = waiting ? <span className="chip obx-chip ops-chip-lg">Not sent yet</span>
-    : mine ? <span className="chip chip-ok ops-chip-lg">You’re on ✓</span>
+    : mine ? <span className="chip chip-ok ops-chip-lg">{own ? `You’re on ✓ · ${own}` : 'You’re on ✓'}</span>
       : join || bare ? null : <span className={`chip ops-chip-lg${full ? ' chip-ok' : ''}`}>{roomText(s)}</span>;
   return (
     <li className="ops-item sch-vrow" style={kindVars(words.kind)} data-tone={past ? 'past' : undefined} data-shift={s.id} data-kind={words.kind.code}>
@@ -777,7 +789,10 @@ function ShiftList({ canDesk, me }) {
   const [joinError, setJoinError] = useState(null); // { id, message }
   const [said, setSaid] = useState('');
   const holding = (s) => isMineShift(s) || waitingSelf(outbox.items, s.id)?.name === 'shift.join';
-  const clashFor = (s) => upcoming.find((x) => x.id !== s.id && holding(x) && overlaps(x, s)) || null;
+  // Their own hours on a shift (waiting on this phone, else the server's).
+  const ownOf = (s) => asBooking(waitingHours(outbox.items, s.id)) ?? s;
+  const clash0 = (s) => upcoming.find((x) => x.id !== s.id && holding(x) && overlaps(myHours(x, ownOf(x)), s)) || null;
+  const clashFor = (s) => { const x = clash0(s); return x && myHours(x, ownOf(x)); };
   const join = async (s) => {
     setAsking(null);
     setJoinError(null);
@@ -832,7 +847,7 @@ function ShiftList({ canDesk, me }) {
           <h2 className="sch-dayhead">{dayName(g.rows[0].starts_at, tz, { long: true })}</h2>
           <ul className="ops-rows">
             {g.rows.map((s) => (
-              <ShiftRow key={s.id} s={s} tz={tz} now={now} mine={isMineShift(s)} waiting={!!waitingSelf(outbox.items, s.id)} turfs={byShift[s.id]}
+              <ShiftRow key={s.id} s={s} tz={tz} now={now} mine={isMineShift(s)} waiting={!!waitingSelf(outbox.items, s.id)} own={hoursWords(s, ownOf(s), tz)} turfs={byShift[s.id]}
                 onJoin={canJoin ? () => join(s) : null} busy={joining === s.id} clash={canJoin ? clashFor(s) : null}
                 asking={asking === s.id} onAsk={(on) => setAsking(on ? s.id : null)} error={joinError?.id === s.id ? joinError.message : null} />
             ))}
@@ -854,8 +869,16 @@ function ShiftList({ canDesk, me }) {
 }
 
 // ── Detail: one person on the shift; tap to open ──
-function AssigneeRow({ a, tz, open, onToggle, canDesk, busy, onStatus, onRemove, noSignIn = false }) {
+function AssigneeRow({ a, shift, tz, open, onToggle, canDesk, busy, onStatus, onRemove, onHours, noSignIn = false }) {
   const [confirm, setConfirm] = useState(false);
+  // Their own part of the shift: the second fact on the row, and "Hours" in
+  // the sheet (the desk may correct it after the shift too).
+  const own = hoursWords(shift, a, tz);
+  const [hours, setHours] = useState(() => ownHours(a));
+  const online = useOnline();
+  const at = (v) => (v ? new Date(v).getTime() : null);
+  const hoursMoved = at(hours.from) !== at(ownHours(a).from) || at(hours.to) !== at(ownHours(a).to);
+  const pickHours = canDesk && HOLDS_SPOT.includes(a.status) && canPickHours(shift, new Date(0));
   const bodyId = `as-${a.assignment_id}`;
   const tone = ASSIGN_TONE[a.status];
   return (
@@ -864,6 +887,7 @@ function AssigneeRow({ a, tz, open, onToggle, canDesk, busy, onStatus, onRemove,
         onClick={() => { setConfirm(false); onToggle(); }}>
         <span className="ops-row__main">
           <span className="ops-row__name">{a.name}</span>
+          {own && <span className="ops-row__sub shh-own">{own}</span>}
           {/* The shift's walk lists reach a phone through an app sign-in. */}
           {noSignIn && <span className="ops-row__sub st-signin">No app sign-in — add them to the turf on the map</span>}
         </span>
@@ -887,6 +911,18 @@ function AssigneeRow({ a, tz, open, onToggle, canDesk, busy, onStatus, onRemove,
                 {SHIFT_STATUSES.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
               </select>
             </div>
+          )}
+          {pickHours && (
+            <section className="sch-sec" aria-label="Hours">
+              <h3 className="sch-label">Hours</h3>
+              <HoursPicker shift={shift} tz={tz} value={hours} onChange={setHours} disabled={busy} />
+              <div className="shh-pick__foot">
+                <button type="button" className="btn btn-quiet ops-tap" disabled={busy || !online || !hoursMoved} onClick={() => onHours(hours)}>
+                  Save hours
+                </button>
+                {!online && <NeedsSignal>No signal — nothing saved</NeedsSignal>}
+              </div>
+            </section>
           )}
           {a.notified_at && (
             <div className="ops-chips">
@@ -975,6 +1011,11 @@ function ShiftDetail({ id, canDesk, me }) {
   const [joining, setJoining] = useState(false);
   const [joinError, setJoinError] = useState(null);
   const [leaving, setLeaving] = useState(false); // "Can't make it? Yes · No"
+  // "Change my hours": the picker open in place, and what it says so far.
+  const [hoursOpen, setHoursOpen] = useState(false);
+  const [hoursDraft, setHoursDraft] = useState({ from: null, to: null });
+  const [hoursBusy, setHoursBusy] = useState(false);
+  const [hoursError, setHoursError] = useState(null);
   // A volunteer's other shifts (the list's own read and kept copy): one at
   // the same time is asked about before "Count me in" — never refused.
   const mineQ = useQuery({ queryKey: ['shifts'], queryFn: () => apiGet('/shifts'), enabled: !canDesk, ...phoneCopy(me, 'shifts'), meta: { side: true } });
@@ -1093,7 +1134,8 @@ function ShiftDetail({ id, canDesk, me }) {
   const pin = shift.place_lat != null && shift.place_lng != null ? { lat: shift.place_lat, lng: shift.place_lng } : pinPoint(shift.location);
   const unnamed = isPinName(shift.location);
   // Another shift of theirs at the same time (booked, or waiting on this phone).
-  const clash = canDesk ? null : (mineQ.data?.shifts ?? []).find((x) => x.id !== shift.id
+  const clash = canDesk ? null : (mineQ.data?.shifts ?? []).map((x) => myHours(x, asBooking(waitingHours(outbox.items, x.id))))
+    .find((x) => x.id !== shift.id
     && (x.mine || waitingSelf(outbox.items, x.id)?.name === 'shift.join') && !isOver(x, new Date()) && overlaps(x, shift)) || null;
   // A Mainstreet shift opens Mainstreeting with its place filled in — or,
   // at a point nobody has named, asking "Where are you?" (never the
@@ -1139,6 +1181,71 @@ function ShiftDetail({ id, canDesk, me }) {
   const walkHint = canDesk || over ? null
     : onIt ? `${turfs.length === 1 ? 'it’s' : 'they’re'} on your phone`
       : !full && canJoin ? `Count me in puts ${them} on your phone` : null;
+
+  // The desk sets someone's own hours (shift.setHours) — needs signal.
+  const saveHoursFor = async (a, h) => {
+    setError(null);
+    setRowBusy(a.assignment_id);
+    try {
+      await action('shift.setHours', { id: a.assignment_id, from: h.from, to: h.to });
+    } catch (e) {
+      setError(`${a.name}: ${e.message}`);
+    } finally {
+      setRowBusy(null);
+      refresh();
+    }
+  };
+
+  // ── "Change my hours": a volunteer's own part of the shift (shift.hours,
+  // through the outbox — no signal, it waits on the phone and shows here). ──
+  const myRow = active.find(isMine) || null;
+  const hoursWaiting = waitingHours(outbox.items, id);
+  const myBooking = asBooking(hoursWaiting) ?? myRow;
+  const joinWaiting = waiting?.name === 'shift.join' && !waiting.undo && !onIt;
+  const showHours = !canDesk && (offered.includes('shift.hours') || canJoin) && (onIt || joinWaiting)
+    && waiting?.name !== 'shift.leave' && canPickHours(shift);
+  const mineWords = hoursWords(shift, myBooking, tz);
+  const anyTime = !mineWords && shift.drop_in;
+  const openHours = () => { setHoursDraft(ownHours(myBooking)); setHoursError(null); setHoursOpen(true); };
+  const saveHours = async () => {
+    setHoursError(null);
+    setHoursBusy(true);
+    try {
+      const r = await queueAction('shift.hours', { shift_id: id, from: hoursDraft.from, to: hoursDraft.to }, { who: shift.title });
+      if (!r.queued) refresh();
+    } catch (e) {
+      // The server's sentence, in place; the line shows what it has.
+      setHoursError(e.message);
+    } finally {
+      setHoursBusy(false);
+      setHoursOpen(false);
+    }
+  };
+  const hoursBlock = showHours && (
+    <div className="shh-hours" role="group" aria-label="Your hours">
+      {!hoursOpen ? (
+        <p className="shh-line">
+          <span>{mineWords ?? (anyTime ? `Any time ${timeRange(shift.starts_at, shift.ends_at, tz)}` : 'The whole time')}</span>
+          {hoursWaiting && <span className="chip obx-chip">Not sent yet</span>}
+          <span aria-hidden="true">·</span>
+          <button type="button" className="btn btn-quiet ops-tap" onClick={openHours}>
+            {anyTime ? 'Tell us when you’ll come' : 'Change my hours'}
+          </button>
+        </p>
+      ) : (
+        <>
+          <HoursPicker shift={shift} tz={tz} value={hoursDraft} onChange={setHoursDraft} disabled={hoursBusy} />
+          <div className="shh-pick__foot">
+            <button type="button" className="btn btn-primary ops-tap" disabled={hoursBusy} onClick={saveHours}>
+              {hoursBusy ? 'Saving…' : 'Save my hours'}
+            </button>
+            <button type="button" className="btn btn-quiet ops-tap" disabled={hoursBusy} onClick={() => setHoursOpen(false)}>Cancel</button>
+          </div>
+        </>
+      )}
+      {hoursError && <p className="error" role="alert">{hoursError}</p>}
+    </div>
+  );
 
   const setStatus = async (a, status) => {
     setError(null);
@@ -1449,9 +1556,12 @@ function ShiftDetail({ id, canDesk, me }) {
               <p className="ops-pending" role="status">Count me in <span className="chip obx-chip">Not sent yet</span></p>
               <button type="button" className="btn btn-quiet ops-tap" disabled={joining} onClick={takeBack}>Take back</button>
             </div>
-          ) : onIt ? (
+          ) : null}
+          {joinWaiting && !waiting.undo ? hoursBlock : null}
+          {waiting?.name === 'shift.join' && (waiting.undo || !onIt) ? null : onIt ? (
             <>
               <span className="ops-onit" role="status"><span aria-hidden="true">✓</span> You’re on this shift</span>
+              {hoursBlock}
               {waiting?.name === 'shift.leave' ? (
                 <p className="ops-pending" role="status">Can’t make it <span className="chip obx-chip">Not sent yet</span></p>
               ) : canLeave && !over && !checkedIn && (!leaving ? (
@@ -1490,7 +1600,7 @@ function ShiftDetail({ id, canDesk, me }) {
             <p className="ops-empty">Ask your organizer to add you.</p>
           ) : null}
           {joinError && <p className="error" role="alert">{joinError}</p>}
-          {onIt && mainstreet && <Link className="btn btn-primary ops-tap ops-wide" to={mainstreet}>Start mainstreeting</Link>}
+          {onIt && mainstreet && <Link className={`btn ops-tap ops-wide${hoursOpen ? '' : ' btn-primary'}`} to={mainstreet}>Start mainstreeting</Link>}
         </section>
       )}
       {canDesk && mainstreet && (
@@ -1526,6 +1636,7 @@ function ShiftDetail({ id, canDesk, me }) {
             <AssigneeRow
               key={a.assignment_id}
               a={a}
+              shift={shift}
               tz={tz}
               open={openId === a.assignment_id}
               onToggle={() => setOpenId((cur) => (cur === a.assignment_id ? null : a.assignment_id))}
@@ -1533,6 +1644,7 @@ function ShiftDetail({ id, canDesk, me }) {
               busy={rowBusy === a.assignment_id}
               onStatus={(status) => setStatus(a, status)}
               onRemove={() => unassign(a)}
+              onHours={(h) => saveHoursFor(a, h)}
               noSignIn={noSignIn.has(a.assignment_id)}
             />
           ))}

@@ -17,8 +17,8 @@
 // Nothing asks how many people, and no shift is given a number: "More"
 // (closed) holds what is typed or rare — a name, instructions, a link, "We
 // need" (a target that never turns anyone away, by tap; what the kind
-// usually wants is only the first number offered), "Limit sign-ups to" and
-// "Show on the website". "More options" there is the long form
+// usually wants is only the first number offered), "Limit sign-ups to",
+// "Drop in any time" and "Show on the website". "More options" there is the long form
 // (/shifts?new=1).
 import { useId, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -33,7 +33,7 @@ import { KindIcon, kindVars } from '../components/ShiftKind.jsx';
 import { normalizeLink } from '../components/shiftLink.js';
 import NeedChips from './ScheduleNeed.jsx';
 import Sheet from './ScheduleSheet.jsx';
-import When, { timesOf, whenFor } from './ScheduleWhen.jsx';
+import When, { timeInput, timesOf, whenFor } from './ScheduleWhen.jsx';
 import Where, { NOWHERE, whereInput, whereName } from './ScheduleWhere.jsx';
 import { dayWords, daysWords, plural } from './ScheduleWords.js';
 
@@ -57,7 +57,7 @@ export default function ScheduleAdd({ me, days, today, day = null, onClose, onAd
   const [when, setWhen] = useState(null);
   const [repeat, setRepeat] = useState('once');
   const [more, setMore] = useState(false);
-  const [f, setF] = useState({ name: '', instructions: '', link: '', capacity: '', public: false });
+  const [f, setF] = useState({ name: '', instructions: '', link: '', capacity: '', public: false, drop_in: false });
   const [need, setNeed] = useState(null); // no target until someone taps one
   const [busy, setBusy] = useState(false);
   const sending = useRef(false); // a second tap before the button greys out
@@ -114,7 +114,7 @@ export default function ScheduleAdd({ me, days, today, day = null, onClose, onAd
       const res = await action('shift.createMany', {
         kind: kind.code,
         days: picked,
-        ...(times.length === 1 ? times[0] : { slots: times }),
+        ...(times.length === 1 ? timeInput(times[0]) : { slots: times.map(timeInput) }),
         ...(repeatInput ? { repeat: repeatInput } : {}),
         ...whereInput(where),
         ...(f.name.trim() ? { name: f.name.trim() } : {}),
@@ -123,6 +123,7 @@ export default function ScheduleAdd({ me, days, today, day = null, onClose, onAd
         ...(need ? { need } : {}),
         ...(capacity ? { capacity } : {}),
         ...(f.public ? { public: true } : {}),
+        ...(f.drop_in ? { drop_in: true } : {}),
       });
       onAdded(res);
     } catch (e) {
@@ -237,6 +238,10 @@ export default function ScheduleAdd({ me, days, today, day = null, onClose, onAd
                 <input id="sch-capacity" className="input mono" type="number" min="1" step="1" inputMode="numeric" placeholder="No limit"
                   value={f.capacity} onChange={set('capacity')} />
               </div>
+              <label className="ops-check">
+                <input type="checkbox" checked={f.drop_in} onChange={(e) => setF((cur) => ({ ...cur, drop_in: e.target.checked }))} />
+                <span><b>Drop in any time</b><span className="ops-meta">People come and go between these hours</span></span>
+              </label>
               <label className="ops-check">
                 <input type="checkbox" checked={f.public} onChange={(e) => setF((cur) => ({ ...cur, public: e.target.checked }))} />
                 <span><b>Show on the website</b><span className="ops-meta">Anyone can see it there and sign up</span></span>

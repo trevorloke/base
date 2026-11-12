@@ -36,7 +36,8 @@ import { VOLUNTEER_ROLES, noCalls } from '@starbase/shared/canvass';
 import { apiGet, action } from '../api.js';
 import { useOnline } from '../components/NoSignal.jsx';
 import { useDragDrop } from '../components/useDragDrop.js';
-import { clockText } from '../components/shiftTime.js';
+import { clockText, timeRange } from '../components/shiftTime.js';
+import './schedule-hours.css';
 import './shift-crew.css';
 
 const roleLabel = (code) => VOLUNTEER_ROLES.find((r) => r.code === code)?.label ?? code;
@@ -251,11 +252,13 @@ export default function ShiftCrew({ shiftId, tz, canMap = true, onChanged }) {
   const card = (c) => {
     const item = crewItem(c);
     const open = menu === c.assignment_id;
+    // Their own part of the shift, so the lead knows who comes late.
+    const own = c.arrive_at && c.leave_at ? timeRange(c.arrive_at, c.leave_at, tz) : null;
     return (
       <li key={c.assignment_id} className="cb-card" data-job={c.job || undefined}>
         <button type="button" className="cb-card__main" {...dnd.itemProps(item)} disabled={!online || busy}
-          aria-label={`${c.name}${c.job ? `, ${JOBS[c.job]}` : ''} — pick up to move`}>
-          <span className="cb-card__name">{c.name}</span>
+          aria-label={`${c.name}${own ? `, ${own}` : ''}${c.job ? `, ${JOBS[c.job]}` : ''} — pick up to move`}>
+          <span className="cb-card__name">{c.name}{own && <span className="shh-own"> · {own}</span>}</span>
           <span className="cb-tags">
             {c.job && <span className={`chip cb-job cb-job--${c.job}`}>{JOBS[c.job]}</span>}
             {c.status === 'completed' && <span className="chip chip-ok">Here</span>}
