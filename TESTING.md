@@ -480,6 +480,23 @@ one tap away under **More**.
   sideways scroll, no word running into the next column); `e2e-mail.mjs` runs
   *From addresses* and Outreach → Email's From line.
 
+- **Candidates** (Settings → Candidates) — a manager adds and invites
+  candidates; each joins as a volunteer with a seat; their phone opens on
+  Your day (Met someone, their booked shift, their week, Your race); the
+  admin, `/api/candidates`, Path to win and the desk's ties stay closed to
+  them, with People granted to the Candidates column too. Call time: New
+  phone bank → *Who calls* → a candidate (only the desk with Donations);
+  their Today leads with *Start call time →*; on `/call-time` a pledge over
+  the room is refused in words, a pledge, *No answer* and an answer made
+  offline all land, and an offline answer refused as already called drops
+  off the *All done* count; the treasurer sees *Pledges from call time*
+  under Needs you and *Gift in ✓* once the gift is logged; another
+  candidate gets 404; a removed candidate's call time stays closed, with no
+  *Reopen*.
+  Server tests: `server/test/candidates.test.js` (also `banks.test.js`,
+  `admin.test.js` and `twostep-grants.test.js`); in a browser:
+  `e2e-candidates.mjs` (PORT, SHOTS; ports 5170–5179 in its header).
+
 - **The campaign's brand** (Settings → Brand) — a manager's
   saved brand is what every page wears: the app's page signed in or out,
   the installed app's name and icons, the unsubscribe, receipt and lesson

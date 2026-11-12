@@ -1,5 +1,6 @@
-// Settings (managers, in the admin): Members · Teams · Permissions · Services · Campaign · Brand.
+// Settings (managers, in the admin): Members · Candidates · Teams · Permissions · Services · Campaign · Brand.
 //   Members      invite, roles, remove — the Team screen (Team.jsx), as it was
+//   Candidates   the slate's seats: add, invite, unlink, remove (Candidates.jsx)
 //   Teams        groups of members (a neighbourhood crew, the phone bank):
 //                make one, put people on it, name a lead; a team can be put
 //                on a turf in one go (Map → turf → Add a canvasser)
@@ -17,6 +18,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiGet, action } from '../api.js';
 import { NoSignal, noSignal, useOnline, NeedsSignalLine } from '../components/NoSignal.jsx';
 import Team from './Team.jsx';
+import Candidates from './Candidates.jsx';
 import Services from '../components/Services.jsx';
 import CampaignName from '../components/CampaignName.jsx';
 import BrandSettings from '../components/BrandSettings.jsx';
@@ -26,8 +28,12 @@ import './outreach.css';
 import '../editor.css';
 import './admin.css';
 
-const TABS = [['members', 'Members'], ['teams', 'Teams'], ['permissions', 'Permissions'], ['services', 'Services'], ['campaign', 'Campaign'], ['brand', 'Brand']];
-const ROLE_WORD = { manager: 'Manager', treasurer: 'Treasurer', staff: 'Staff', volunteer: 'Volunteer' };
+const TABS = [['members', 'Members'], ['candidates', 'Candidates'], ['teams', 'Teams'], ['permissions', 'Permissions'], ['services', 'Services'], ['campaign', 'Campaign'], ['brand', 'Brand']];
+const ROLE_WORD = { manager: 'Manager', treasurer: 'Treasurer', staff: 'Staff', volunteer: 'Volunteer', candidate: 'Candidate' };
+// The Permissions grid's columns. A candidate is a volunteer with a seat
+// (Candidates.jsx), with a column of their own.
+const GRID_ROLES = ['treasurer', 'staff', 'volunteer', 'candidate'];
+const roleKey = (m) => (m.candidate ? 'candidate' : m.role);
 
 export default function Admin() {
   const { me } = useOutletContext();
@@ -43,6 +49,7 @@ export default function Admin() {
         ))}
       </nav>
       {tab === 'members' && <Team embedded />}
+      {tab === 'candidates' && <Candidates />}
       {tab === 'teams' && <Teams me={me} />}
       {tab === 'permissions' && <Permissions me={me} />}
       {tab === 'services' && <Services />}
@@ -199,7 +206,7 @@ function Permissions({ me }) {
   };
   const toggleMember = (m, key) => {
     const want = !m.areas.includes(key);
-    const asRole = roleHas(m.role, key);
+    const asRole = roleHas(roleKey(m), key);
     const grant = m.grant.filter((k) => k !== key); const deny = m.deny.filter((k) => k !== key);
     if (want && !asRole) grant.push(key);
     if (!want && asRole) deny.push(key);
@@ -214,13 +221,13 @@ function Permissions({ me }) {
       <div className="adm-scroll">
         <table className="adm-grid">
           <thead>
-            <tr><th scope="col">Area</th>{['treasurer', 'staff', 'volunteer'].map((r) => <th key={r} scope="col">{ROLE_WORD[r]}</th>)}</tr>
+            <tr><th scope="col">Area</th>{GRID_ROLES.filter((r) => d.roles[r]).map((r) => <th key={r} scope="col">{ROLE_WORD[r]}</th>)}</tr>
           </thead>
           <tbody>
             {d.areas.map((a) => (
               <tr key={a.key}>
                 <th scope="row"><span>{a.label}</span><span className="muted adm-what">{a.what}</span></th>
-                {['treasurer', 'staff', 'volunteer'].map((r) => (
+                {GRID_ROLES.filter((r) => d.roles[r]).map((r) => (
                   <td key={r}>
                     <input type="checkbox" aria-label={`${a.label} for ${ROLE_WORD[r]}`} checked={roleHas(r, a.key)}
                       disabled={busy || !online} onChange={() => toggleRole(r, a.key)} />
@@ -231,6 +238,9 @@ function Permissions({ me }) {
           </tbody>
         </table>
       </div>
+      {d.roles.candidate && (
+        <p className="muted adm-note">Candidates see what volunteers see in an area you grant. Who-knows-who stays with the desk.</p>
+      )}
 
       <h2 className="ot-sec-h">Volunteers’ map</h2>
       <p className="muted">What a volunteer’s phone carries. Someone given Map &amp; turfs above sees every door either way.</p>
@@ -253,14 +263,14 @@ function Permissions({ me }) {
         <label htmlFor="adm-who">Member</label>
         <select id="adm-who" className="input" value={who} onChange={(e) => setWho(e.target.value)}>
           <option value="">Choose a member…</option>
-          {d.members.filter((m) => m.role !== 'manager').map((m) => <option key={m.id} value={m.id}>{m.name} · {ROLE_WORD[m.role]}</option>)}
+          {d.members.filter((m) => m.role !== 'manager').map((m) => <option key={m.id} value={m.id}>{m.name} · {ROLE_WORD[roleKey(m)]}</option>)}
         </select>
       </div>
       {member && (
         <ul className="adm-areas" aria-label={`Areas for ${member.name}`}>
           {d.areas.map((a) => {
             const has = member.areas.includes(a.key);
-            const asRole = roleHas(member.role, a.key);
+            const asRole = roleHas(roleKey(member), a.key);
             return (
               <li key={a.key}>
                 <label className="ot-check">

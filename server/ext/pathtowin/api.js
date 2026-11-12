@@ -81,6 +81,30 @@ export const countsFor = (db, ws, today, tz, { fresh = false } = {}) => {
   return entry.promise;
 };
 
+// One race now, for a candidate's Today (ext/candidates): its label, the
+// supporters found, how many it needs and the days left — from the same
+// kept counts and saved numbers as the screen. null: no such race, or its
+// numbers aren't set. A failed count throws; the caller says Unavailable.
+export const raceNow = async (db, ctx, code) => {
+  const slate = SLATES.find((s) => s.code === code);
+  if (!slate) return null;
+  const ws = ctx.workspaceId;
+  const saved = await readSettings(db, ws);
+  const win = winNumber(saved.races[code] || null);
+  if (!win) return null;
+  const tz = zoneOf(ctx.workspace?.settings?.tz);
+  const today = await todayOf(db, tz);
+  const gotv = (await db.query('select election_day from voted_settings where workspace_id = $1', [ws]).catch(() => ({ rows: [] }))).rows[0];
+  const day = dateOnly(gotv?.election_day) || saved.election_day;
+  const n = await countsFor(db, ws, today, tz);
+  return {
+    label: slate.label,
+    supporters: n.standing.supporters,
+    supporters_needed: win.supporters,
+    days_left: isDay(day) ? daysBetween(today, day) : null,
+  };
+};
+
 api.get('/pathtowin', async (c) => {
   const ctx = c.get('ctx');
   const db = c.get('db');

@@ -29,7 +29,7 @@ api.get('/two-step', async (c) => {
     unreadable: on && !open,
     // Too many wrong codes in a row: the app's codes are locked (lib/twostep.js).
     locked: on && Boolean(row.locked_at),
-    required: requiredFor(ctx.role, ctx.workspace?.settings, ctx.perms),
+    required: requiredFor(ctx.role, ctx.workspace?.settings, ctx.perms, { candidate: Boolean(ctx.candidate) }),
     must_set_up: Boolean(ctx.twoStep?.mustSetUp),
   });
 });

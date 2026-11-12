@@ -226,8 +226,10 @@ export const hashRecoveryCode = async (code, salt) =>
 // team's roles and this very requirement. perms: the person's (ctx.perms).
 export const DESK_ROLES = ['manager', 'treasurer', 'staff'];
 export const givenAnArea = (perms) => AREA_KEYS.some((k) => decide(perms, k) === true);
-export const requiredFor = (role, settings, perms = null) => settings?.twoStepRequired === true
-  && (DESK_ROLES.includes(role) || givenAnArea(perms));
+// A candidate (ext/candidates) is asked too: call time shows them donors'
+// giving, though their role is a volunteer's.
+export const requiredFor = (role, settings, perms = null, { candidate = false } = {}) => settings?.twoStepRequired === true
+  && (DESK_ROLES.includes(role) || candidate || givenAnArea(perms));
 
 // What the app is told about the signed-in person (GET /api/auth/me).
 export const twoStepOut = (ctx) => ({

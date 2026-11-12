@@ -740,7 +740,11 @@ app.get('/team', async (c) => {
   if (ctx.role !== 'manager') return c.json({ error: 'managers only' }, 403);
   const db = c.get('db');
   const members = (await db.query(
-    `select u.id, u.name, u.email, m.role, m.created_at from memberships m join users u on u.id = m.user_id
+    `select u.id, u.name, u.email, m.role, m.created_at, c.office as candidate_office, c.id is not null as candidate
+       from memberships m join users u on u.id = m.user_id
+       -- a candidate's seat (ext/candidates): Team shows it in place of the role
+       left join candidates c on c.workspace_id = m.workspace_id and c.user_id = m.user_id and c.removed_at is null
+         and m.role = 'volunteer'
      where m.workspace_id = $1 order by m.created_at`,
     [ctx.workspaceId],
   )).rows;

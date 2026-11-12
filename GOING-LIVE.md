@@ -422,7 +422,18 @@ shared, and the code names no client.
   chosen for election week.
 - Two-step sign-in: on for you (**Your profile**, from the account menu)
   and **Require two-step sign-in for desk roles** ticked under **Settings →
-  Members** (it covers volunteers given an area under Permissions too);
+  Members** (it covers volunteers given an area under Permissions, and
+  candidates, too);
+- Candidates: each one added under **Settings → Candidates** (name, office,
+  race, email) and invited; a Mayor race with its own Path to win numbers
+  needs `STARBASE_SLATES` to name it (e.g. `mayor:Mayor,council:City
+  council`). A candidate who must also work the desk needs a second account.
+  Before anyone uses **call time**, your financial agent confirms against
+  Elections BC's *Guide to Local Elections Campaign Financing* that the
+  yearly limit is one limit for the organization and its endorsed
+  candidates together (call time's room assumes so), that candidates only
+  log pledges, and the 60 days after which an unpaid pledge leaves Needs
+  you. Two-step (above) matters here: candidates see donors' giving.
   **Settings → Services** shows the two-step key set up.
 - Keys: every key above is in Render only, never in the repo or a chat.
   Anyone who leaves the campaign is removed under **Admin → Members**, which ends their

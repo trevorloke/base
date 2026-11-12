@@ -65,11 +65,12 @@ import { BASE, NS } from './base.js';
 // the server dedupes it on client_id, server/ext/deskoffline).
 // shift.hours: “only part of it” — the volunteer's own hours on a shift they
 // are on (not undoable: saving again is the undo).
-export const FIELD_ACTIONS = ['contact.log', 'person.create', 'person.addAtDoor', 'person.locate', 'sign.place', 'sign.cancel', 'shift.join', 'shift.leave', 'shift.hours', 'relationship.add', 'person.tag', 'person.details', 'vote.mark', 'request.ask', 'mainstreet.meet'];
+export const FIELD_ACTIONS = ['contact.log', 'person.create', 'person.addAtDoor', 'person.locate', 'sign.place', 'sign.cancel', 'shift.join', 'shift.leave', 'shift.hours', 'relationship.add', 'person.tag', 'person.details', 'vote.mark', 'request.ask', 'mainstreet.meet', 'calltime.log'];
 // Keyed by a client_id the server dedupes on.
-const CLIENT_KEYED = ['contact.log', 'sign.place', 'person.tag', 'vote.mark', 'request.ask', 'mainstreet.meet'];
+const CLIENT_KEYED = ['contact.log', 'sign.place', 'person.tag', 'vote.mark', 'request.ask', 'mainstreet.meet', 'calltime.log'];
 // The writes that add a person, on an id made here.
 export const NEW_PERSON = ['person.create', 'person.addAtDoor'];
+const CALLTIME_WORD = { pledged: 'Pledged', no: 'Not now', no_answer: 'No answer', left_message: 'Left message' };
 // What can be taken back while it waits: a sign request (its cancel is
 // sign.cancel) and "Count me in" (shift.leave).
 const UNDOABLE = ['sign.place', 'shift.join'];
@@ -566,6 +567,8 @@ export function itemText(item, nameOf = () => '') {
     case 'vote.mark': what = i.voted === false ? 'Not voted' : 'Voted'; break;
     case 'request.ask': what = `Ask the office · ${KIND_WORDS[i.kind] || 'Something else'}`; break;
     case 'mainstreet.meet': what = `Met · ${i.place || 'mainstreeting'}`; break;
+    // Call time (pages/CallTime.jsx): the answer, never the note.
+    case 'calltime.log': what = CALLTIME_WORD[i.result] || 'Call time'; break;
     default: what = 'Saved';
   }
   const name = NEW_PERSON.includes(item.name) ? i.name : item.name === 'relationship.add' ? i.person?.name || who : who;

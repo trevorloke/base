@@ -183,3 +183,23 @@ test('someone tagged do-not-call is never put in a phone bank — at the start o
   const again = ok(await mgr.action('bank.add', { id: r.bank.id, person_ids: [quiet] }));
   assert.deepEqual([again.added, again.skipped], [0, 1], 'nor added afterwards');
 });
+
+test('a call-time bank (ext/candidates): the desk with Donations makes it; nobody else works or hands out its numbers', async () => {
+  const seat = ok(await mgr.action('candidate.save', { name: 'Pia Example', office: 'Council', race: 'council' })).candidate.id;
+  const donor = (await mgr.createPerson('Rae Example', { phone: '604-555-0195' })).id;
+  ok(await mgr.action('permission.member.set', { user_id: ids.Sam, grant: [], deny: ['money'] }));
+  const denied = await staff.action('bank.create', { name: 'Pia', person_ids: [donor], candidate_id: seat });
+  assert.deepEqual([denied.status, denied.json.error], [403, 'Call time needs the Donations area']);
+  ok(await mgr.action('permission.member.set', { user_id: ids.Sam, grant: [], deny: [] }));
+  const b = ok(await staff.action('bank.create', { name: 'Pia', person_ids: [donor], candidate_id: seat, ask_cents: 10000 })).bank;
+  assert.deepEqual([b.candidate_name, b.ask_cents, b.assigned], ['Pia Example', 10000, 0], 'nobody’s until Pia signs in');
+  const r = await mgr.action('bank.assign', { id: b.id, user_id: ids.Vic });
+  assert.deepEqual([r.status, r.json.error], [409, 'This is Pia Example’s call time']);
+  // A volunteer's call to the same donor leaves the candidate's number to them.
+  ok(await vic.action('contact.log', { person_id: donor, channel: 'phone', outcome: 'contacted' }));
+  const n = ok(await mgr.get(`/api/banks/${b.id}`));
+  assert.deepEqual([n.bank.done, n.bank.candidate_name], [0, 'Pia Example']);
+  // Back to the volunteers': an ordinary bank again.
+  ok(await mgr.action('bank.update', { id: b.id, candidate_id: null }));
+  ok(await mgr.action('bank.assign', { id: b.id, user_id: ids.Vic }));
+});

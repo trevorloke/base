@@ -1,0 +1,24 @@
+/* Call time (CallTime.jsx): one card at a time, for a phone held in one hand. */
+.ct-page h1:focus { outline: none; }
+.ct-banks { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
+.ct-bank { min-height: 48px; padding: 0 14px; cursor: pointer; font-size: 14px; }
+.ct-bank.is-on { background: var(--mark-soft); border-color: var(--mark); color: var(--text-1); }
+.ct-after { margin: 0 0 12px; }
+.ct-card, .ct-done { display: flex; flex-direction: column; gap: 10px; }
+.ct-left { margin: 0; }
+.ct-name { margin: 0; font-size: 26px; line-height: 1.2; overflow-wrap: anywhere; }
+.ct-city { margin: 0; }
+.ct-call { min-height: 48px; align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; font-size: 16px; }
+.ct-facts { margin: 0; font-size: 15px; color: var(--text-2); }
+.ct-ask { margin: 0; font-size: 20px; font-weight: 600; color: var(--mark-deep); }
+.ct-answers { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 4px; }
+.ct-answer { min-height: 56px; font-size: 16px; justify-content: center; }
+.ct-pledge { display: flex; flex-direction: column; gap: 10px; }
+.ct-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ct-script { margin: 0; white-space: pre-wrap; font-size: 15px; color: var(--text-2); }
+.ct-done h2 { margin: 0; font-size: 22px; }
+.ct-done .btn { align-self: flex-start; }
+@media (max-width: 720px) {
+  .ct-row .btn { min-height: 48px; }
+  .ct-done .btn { align-self: stretch; justify-content: center; }
+}

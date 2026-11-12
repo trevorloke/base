@@ -3,6 +3,10 @@
 //                                                     who leaves the list later leaves the calls not yet made (numbers.js)
 //                                                     who can be called: lib/reach.js — a phone, not do-not-contact, not do-not-call
 // bank.update   { id, name?, script?, closed? }       desk
+//               create and update also take candidate_id and ask_cents: call time, a bank for one
+//               candidate (ext/candidates) — only the desk holding Donations sets them; every
+//               number is the candidate's (assign and release are refused); only their own
+//               call-time log crosses one off (crossOff)
 // bank.remove   { id }                                desk: void (nothing else moves)
 // bank.add      { id, person_ids[] }                  desk: more numbers
 // bank.topup    { id }                                desk: a bank made from a list takes in whoever has joined the list since
@@ -19,6 +23,8 @@ import { newId } from '../../lib/events.js';
 import { mayReach, person } from '../../lib/reach.js';
 import { loadList, whereFor } from '../lists/audience.js';
 import { addFromList, bankCounts, stillOn } from './numbers.js';
+import { areasFor } from '../../lib/perms.js';
+import { handCallTime } from '../candidates/hand.js';
 
 const DESK = ['manager', 'staff', 'treasurer'];
 const ALL = ['manager', 'treasurer', 'staff', 'volunteer'];
@@ -30,6 +36,35 @@ const MAX_NUMBERS = 5000;
 const MAX_HAND = 100_000_000;
 // How a No answer comes back: after this many hours (0: never), up to this many calls.
 const RETRY = { retry_hours: z.number().int().min(0).max(72).optional(), max_tries: z.number().int().min(1).max(5).optional() };
+// Call time: whose, and the ask ($1 to $100,000).
+const CALL_TIME = { candidate_id: uuid().nullish(), ask_cents: z.number().int().min(100).max(10_000_000).nullish() };
+
+// Call time reads donors' giving to the candidate, so making one is the
+// desk's, holding Donations outright — not a volunteer (or a candidate)
+// given People, and not staff denied Donations.
+const callTimeInput = async (tx, ctx, input) => {
+  if (input.candidate_id === undefined && input.ask_cents === undefined) return null;
+  if (ctx.role === 'volunteer' || !areasFor(ctx).includes('money')) throw httpError(403, 'Call time needs the Donations area');
+  if (!input.candidate_id) return { candidate: null };
+  const candidate = (await tx.query(
+    'select id, name, user_id from candidates where id = $1 and workspace_id = $2 and removed_at is null', [input.candidate_id, ctx.workspaceId],
+  )).rows[0];
+  if (!candidate) throw httpError(400, 'Pick a candidate');
+  return { candidate };
+};
+const candidateOf = async (tx, b) => (b.candidate_id
+  ? (await tx.query('select name from candidates where id = $1', [b.candidate_id])).rows[0] || { name: 'a candidate' }
+  : null);
+// Numbers added to a call-time bank later are the candidate's too.
+const toCandidate = async (tx, ctx, b) => {
+  if (!b.candidate_id) return;
+  const seat = (await tx.query('select user_id from candidates where id = $1 and removed_at is null', [b.candidate_id])).rows[0];
+  if (seat?.user_id) await handCallTime(tx, ctx.workspaceId, b.candidate_id, seat.user_id, b.id);
+};
+const notCallTime = async (tx, b) => {
+  const c = await candidateOf(tx, b);
+  if (c) throw httpError(409, `This is ${c.name}’s call time`);
+};
 
 const bankOf = async (tx, ws, id) => {
   const b = (await tx.query('select * from call_banks where id = $1 and workspace_id = $2 and deleted_at is null', [id, ws])).rows[0];
@@ -73,18 +108,21 @@ export const actions = {
     roles: DESK,
     input: z.object({
       name: z.string().max(120), script: z.string().max(20_000).nullish(),
-      person_ids: z.array(uuid()).max(MAX_NUMBERS).optional(), list_id: uuid().optional(), ...RETRY,
+      person_ids: z.array(uuid()).max(MAX_NUMBERS).optional(), list_id: uuid().optional(), ...RETRY, ...CALL_TIME,
     }).refine((v) => !(v.list_id && v.person_ids?.length), 'a list, or people picked by hand — not both'),
     handler: async (tx, ctx, input, emit) => {
       const ws = ctx.workspaceId;
       const name = clean(input.name);
       if (!name) throw httpError(400, 'a phone bank needs a name');
       if (input.list_id) deskReadsLists(ctx);
+      const call = await callTimeInput(tx, ctx, input);
       const list = input.list_id ? await loadList(tx, ws, input.list_id) : null;
       if (input.list_id && !list) throw httpError(404, 'list not found');
       const id = newId();
-      await tx.query('insert into call_banks (id, workspace_id, name, script, created_by, retry_hours, max_tries, list_id) values ($1, $2, $3, $4, $5, $6, $7, $8)',
-        [id, ws, name, input.script || null, ctx.user.id, input.retry_hours ?? 4, input.max_tries ?? 3, list?.id || null]);
+      const candidateId = call?.candidate?.id || null;
+      const ask = input.ask_cents ?? null;
+      await tx.query('insert into call_banks (id, workspace_id, name, script, created_by, retry_hours, max_tries, list_id, candidate_id, ask_cents) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)',
+        [id, ws, name, input.script || null, ctx.user.id, input.retry_hours ?? 4, input.max_tries ?? 3, list?.id || null, candidateId, ask]);
       const bank = { id, list_id: list?.id || null };
       let added; let skipped;
       if (list) {
@@ -93,11 +131,17 @@ export const actions = {
         const { where, params } = await whereFor(tx, ctx, { list });
         skipped = (await tx.query(`select count(*)::int as n from persons p where ${where}`, params)).rows[0].n - added;
       } else ({ added, skipped } = await addNumbers(tx, ws, id, input.person_ids || []));
-      emit('call_bank', id, 'create', { name, numbers: added, ...(list ? { list_id: list.id, list_name: list.name } : {}) });
+      // Call time: every number is the candidate's (nobody's until they sign in).
+      if (call?.candidate?.user_id) await handCallTime(tx, ws, call.candidate.id, call.candidate.user_id, id);
+      emit('call_bank', id, 'create', {
+        name, numbers: added, ...(list ? { list_id: list.id, list_name: list.name } : {}),
+        ...(candidateId ? { candidate_id: candidateId, ask_cents: ask } : {}),
+      });
       return {
         bank: {
           id, name, script: input.script || null, retry_hours: input.retry_hours ?? 4, max_tries: input.max_tries ?? 3,
-          list_id: bank.list_id, list_name: list?.name || null, ...(await counts(tx, ctx, bank)),
+          list_id: bank.list_id, list_name: list?.name || null, candidate_id: candidateId, candidate_name: call?.candidate?.name || null,
+          ask_cents: ask, ...(await counts(tx, ctx, bank)),
         },
         added, skipped,
       };
@@ -105,9 +149,10 @@ export const actions = {
   },
   'bank.update': {
     roles: DESK,
-    input: z.object({ id: uuid(), name: z.string().max(120).optional(), script: z.string().max(20_000).nullish(), closed: z.boolean().optional(), ...RETRY }),
+    input: z.object({ id: uuid(), name: z.string().max(120).optional(), script: z.string().max(20_000).nullish(), closed: z.boolean().optional(), ...RETRY, ...CALL_TIME }),
     handler: async (tx, ctx, input, emit) => {
       const b = await bankOf(tx, ctx.workspaceId, input.id);
+      const call = await callTimeInput(tx, ctx, input);
       const name = input.name === undefined ? b.name : clean(input.name);
       if (!name) throw httpError(400, 'a phone bank needs a name');
       const script = input.script === undefined ? b.script : (input.script || null);
@@ -117,12 +162,33 @@ export const actions = {
       if (b.closed_at && !closed && b.list_id && !(await loadList(tx, ctx.workspaceId, b.list_id))) {
         throw httpError(409, 'The list this bank called is gone — make a new bank');
       }
+      // Removing a candidate closes their call time. Reopened still theirs,
+      // it would be nobody's to call and nobody's to hand out.
+      const keeps = input.candidate_id === undefined ? b.candidate_id : (call?.candidate?.id || null);
+      if (b.closed_at && !closed && keeps) {
+        const gone = (await tx.query('select name from candidates where id = $1 and removed_at is not null', [keeps])).rows[0];
+        if (gone) throw httpError(409, `${gone.name} is no longer a candidate — make a new bank`);
+      }
       const retry = input.retry_hours ?? b.retry_hours;
       const tries = input.max_tries ?? b.max_tries;
       await tx.query('update call_banks set name = $2, script = $3, closed_at = case when $4 then coalesce(closed_at, now()) else null end, retry_hours = $5, max_tries = $6, updated_at = now() where id = $1',
         [b.id, name, script, closed, retry, tries]);
-      emit('call_bank', b.id, 'update', { name, closed, retry_hours: retry, max_tries: tries });
-      return { bank: { id: b.id, name, script, closed, retry_hours: retry, max_tries: tries } };
+      const extra = {};
+      if (call) {
+        const candidateId = input.candidate_id === undefined ? b.candidate_id : (call.candidate?.id || null);
+        // An ask is call time's: back to the volunteers', it goes too.
+        const ask = input.ask_cents !== undefined ? input.ask_cents : candidateId ? b.ask_cents : null;
+        await tx.query('update call_banks set candidate_id = $2, ask_cents = $3 where id = $1', [b.id, candidateId, ask]);
+        // Someone else's call time now (or the volunteers' again): the numbers
+        // not yet called go with it — to the new candidate, or back to nobody.
+        if (candidateId !== b.candidate_id) {
+          if (b.candidate_id) await handCallTime(tx, ctx.workspaceId, b.candidate_id, null, b.id);
+          if (call.candidate?.user_id) await handCallTime(tx, ctx.workspaceId, candidateId, call.candidate.user_id, b.id);
+        }
+        Object.assign(extra, { candidate_id: candidateId, ask_cents: ask });
+      }
+      emit('call_bank', b.id, 'update', { name, closed, retry_hours: retry, max_tries: tries, ...extra });
+      return { bank: { id: b.id, name, script, closed, retry_hours: retry, max_tries: tries, ...extra } };
     },
   },
   'bank.remove': {
@@ -141,6 +207,7 @@ export const actions = {
     handler: async (tx, ctx, input, emit) => {
       const b = await bankOf(tx, ctx.workspaceId, input.id);
       const { added, skipped } = await addNumbers(tx, ctx.workspaceId, b.id, input.person_ids);
+      await toCandidate(tx, ctx, b);
       emit('call_bank', b.id, 'update', { added });
       return { added, skipped, ...(await counts(tx, ctx, b)) };
     },
@@ -156,6 +223,7 @@ export const actions = {
       const list = b.list_id ? await loadList(tx, ctx.workspaceId, b.list_id) : null;
       if (!list) throw httpError(409, b.list_id ? 'the list this phone bank was made from is gone' : 'this phone bank wasn’t made from a list');
       const added = await addFromList(tx, ctx, b, list);
+      await toCandidate(tx, ctx, b);
       if (added) emit('call_bank', b.id, 'update', { added, list_id: list.id });
       return { added, ...(await counts(tx, ctx, b)) };
     },
@@ -167,6 +235,7 @@ export const actions = {
     handler: async (tx, ctx, input, emit) => {
       const ws = ctx.workspaceId;
       const b = await bankOf(tx, ws, input.id);
+      await notCallTime(tx, b);
       if (b.closed_at) throw httpError(409, 'this phone bank is closed');
       let callers;
       if (input.user_id) {
@@ -210,6 +279,7 @@ export const actions = {
     input: z.object({ id: uuid(), user_id: uuid().optional(), person_id: uuid().optional() }),
     handler: async (tx, ctx, input, emit) => {
       const b = await bankOf(tx, ctx.workspaceId, input.id);
+      await notCallTime(tx, b);
       const r = await tx.query(
         `update call_bank_numbers set assigned_to = null, assigned_at = null where bank_id = $1 and done_at is null and assigned_to is not null
            and ($2::uuid is null or assigned_to = $2) and ($3::uuid is null or person_id = $3)`,
@@ -259,6 +329,10 @@ export const actions = {
 // in every open phone bank it is in (contactLogged hook).
 // A No answer comes back instead, after the bank's retry_hours, until its
 // max_tries calls are spent (reply.bank says when: the Calls card's toast).
+// Call time is crossed off by its own candidate's call-time log alone
+// (ctx.calltimeBank, ext/candidates calltime.log), and that log crosses off
+// nothing else: no other caller's call, and no CallHub result, settles a
+// candidate's number.
 // anyCaller: the call was made outside base.win (the dialer, ext/callhub) —
 // whoever the number was handed to, it has been called; ctx.user may be
 // nobody then.
@@ -269,8 +343,9 @@ export const crossOff = async (tx, ctx, { contact, reply, anyCaller = false }) =
   const rows = (await tx.query(
     `select n.bank_id, n.tries, b.retry_hours, b.max_tries from call_bank_numbers n
        join call_banks b on b.id = n.bank_id and b.workspace_id = $1 and b.deleted_at is null
-      where n.person_id = $3 and n.done_at is null and ($4::boolean or n.assigned_to = $2 or n.assigned_to is null)`,
-    [ctx.workspaceId, by, contact.person_id, anyCaller],
+      where n.person_id = $3 and n.done_at is null and ($4::boolean or n.assigned_to = $2 or n.assigned_to is null)
+        and ${ctx.calltimeBank ? 'b.id = $5' : 'b.candidate_id is null'}`,
+    [ctx.workspaceId, by, contact.person_id, anyCaller, ...(ctx.calltimeBank ? [ctx.calltimeBank] : [])],
   )).rows;
   for (const r of rows) {
     const tries = Number(r.tries) + 1;
@@ -300,7 +375,7 @@ export const recross = async (tx, ws, { personIds, at, was, now, by = null }) =>
   const rows = (await tx.query(
     `select n.bank_id, n.person_id, n.tries, n.done_at, b.retry_hours, b.max_tries from call_bank_numbers n
        join call_banks b on b.id = n.bank_id and b.workspace_id = $1 and b.deleted_at is null
-      where n.person_id = any($2::uuid[])
+      where n.person_id = any($2::uuid[]) and b.candidate_id is null
         and ((n.done_at = $3::timestamptz and n.outcome = $4)
           or (n.done_at is null and $4 = 'no_answer' and n.next_at = $3::timestamptz + make_interval(hours => b.retry_hours)))`,
     [ws, personIds, at, was],

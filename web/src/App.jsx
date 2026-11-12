@@ -58,6 +58,7 @@ const RatingScale = lazy(() => import('./pages/RatingScale.jsx'));
 const Fields = lazy(() => import('./pages/Fields.jsx'));
 const MyPeople = lazy(() => import('./pages/MyPeople.jsx'));
 const Share = lazy(() => import('./pages/Share.jsx'));
+const CallTime = lazy(() => import('./pages/CallTime.jsx'));
 const Mainstreet = lazy(() => import('./pages/Mainstreet.jsx'));
 const PeopleConnected = lazy(() => import('./pages/PeopleConnected.jsx'));
 const Passes = lazy(() => import('./pages/Passes.jsx'));
@@ -109,7 +110,7 @@ function NotForYou({ me }) {
   return (
     <AuthPage org={me?.workspace?.name}>
       <h1>Not for your role</h1>
-      <p className="muted">The admin is the campaign office’s. You are signed in as {me?.user?.name} (volunteer) — your app is the field app.</p>
+      <p className="muted">The admin is the campaign office’s. You are signed in as {me?.user?.name} ({me?.candidate ? 'candidate' : 'volunteer'}) — your app is the field app.</p>
       <p><a className="btn btn-primary" href="/">Open the field app</a></p>
     </AuthPage>
   );
@@ -184,6 +185,7 @@ export default function App({ mode = 'field' }) {
           <Route path="/inbox/:id" element={<TextingThread />} />
           <Route path="/my-people" element={<MyPeople />} />
           <Route path="/share" element={<Share />} />
+          <Route path="/call-time" element={<CallTime />} />
           <Route path="/profile" element={<Profile />} />
         <Route path="/mainstreet" element={<Mainstreet />} />
           <Route path="/mainstreet" element={<Mainstreet />} />
@@ -217,6 +219,7 @@ export default function App({ mode = 'field' }) {
         <Route path="/inbox/:id" element={<TextingThread />} />
         <Route path="/my-people" element={<MyPeople />} />
         <Route path="/share" element={<Share />} />
+        <Route path="/call-time" element={<CallTime />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/imagineu" element={<ImagineU />} />
         <Route path="/imagineu/:id" element={<ImagineU />} />

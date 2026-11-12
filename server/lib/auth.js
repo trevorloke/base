@@ -56,12 +56,15 @@ export const loadContext = async (db, token) => {
   const { rows } = await db.query(
     `select u.id as user_id, u.email, u.name as user_name, m.role, m.permissions,
             w.id as workspace_id, w.name as ws_name, w.slug as ws_slug, w.candidate, w.jurisdiction, w.settings,
-            t.on_since is not null as two_step_on
+            t.on_since is not null as two_step_on,
+            c.id as cand_id, c.name as cand_name, c.office as cand_office, c.race as cand_race
      from sessions s
      join users u on u.id = s.user_id
      join memberships m on m.user_id = s.user_id and m.workspace_id = s.workspace_id
      join workspaces w on w.id = s.workspace_id
      left join two_step t on t.user_id = s.user_id
+     left join candidates c on c.workspace_id = s.workspace_id and c.user_id = s.user_id
+       and c.removed_at is null and m.role = 'volunteer'
      where s.token_hash = $1 and s.expires_at > now()`,
     [hashToken(token)],
   );
@@ -69,15 +72,20 @@ export const loadContext = async (db, token) => {
   if (!r) return null;
   const settings = typeof r.settings === 'string' ? JSON.parse(r.settings) : (r.settings || {});
   const own = typeof r.permissions === 'string' ? JSON.parse(r.permissions) : (r.permissions || {});
+  // A candidate's seat (ext/candidates): only ever on a volunteer — any
+  // other role is the desk, never a candidate. Their grants and denies are
+  // the Candidates row's, not the Volunteers'.
+  const candidate = r.cand_id ? { id: r.cand_id, name: r.cand_name, office: r.cand_office, race: r.cand_race } : null;
   // Grants and denies on top of the role (lib/perms.js).
-  const perms = permsOf(r.role, settings, own);
+  const perms = permsOf(candidate ? 'candidate' : r.role, settings, own);
   // Two-step sign-in (lib/twostep.js): on for this account, required here
   // (its role, or an area it was given), and so still to set up before
   // anything else.
-  const required = requiredFor(r.role, settings, perms);
+  const required = requiredFor(r.role, settings, perms, { candidate: Boolean(candidate) });
   return {
     user: { id: r.user_id, email: r.email, name: r.user_name },
     role: r.role,
+    candidate,
     // This sign-in (its hash), so an action can keep it and end the others.
     session: hashToken(token),
     twoStep: { on: Boolean(r.two_step_on), required, mustSetUp: required && !r.two_step_on },

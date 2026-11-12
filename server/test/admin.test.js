@@ -106,3 +106,18 @@ test('permissions: an area taken from a role, or given to one person, changes wh
   assert.deepEqual(view.members.find((m) => m.name === 'Vic').areas, ['outreach']);
   assert.ok(!view.members.find((m) => m.name === 'Sam').areas.includes('money'));
 });
+
+test('permissions: Candidates have a row of their own — set apart from Volunteers, a volunteer’s defaults', async () => {
+  const volAreas = await areasOf(vol);
+  const before = (await mgr.get('/api/admin/permissions')).json;
+  assert.deepEqual(before.roles.candidate, { grant: [], deny: [], base: [] });
+  assert.deepEqual(before.base.candidate, []);
+  const r = await mgr.action('permission.role.set', { role: 'candidate', grant: ['shifts'], deny: ['people'] });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  const after = (await mgr.get('/api/admin/permissions')).json;
+  assert.deepEqual(after.roles.candidate, { grant: ['shifts'], deny: ['people'], base: [] });
+  assert.deepEqual(after.roles.volunteer.grant, [], 'the Volunteers’ row is untouched');
+  assert.deepEqual(await areasOf(vol), volAreas, 'and so are volunteers');
+  assert.equal((await staff.action('permission.role.set', { role: 'candidate', grant: [], deny: [] })).status, 403);
+  await mgr.action('permission.role.set', { role: 'candidate', grant: [], deny: [] });
+});

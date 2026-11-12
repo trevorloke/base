@@ -1,0 +1,26 @@
+/* Settings → Candidates (Candidates.jsx) and the Candidates column's note
+   under Permissions (Admin.jsx). Built from the shared .ot-* pieces. */
+.can { display: grid; gap: var(--s-3, 12px); }
+.can > .btn-primary { justify-self: start; }
+.can-form { display: grid; gap: 12px; padding: 16px; max-width: 520px; }
+.can-form .field { margin: 0; }
+.can-form__acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.can-row { width: 100%; text-align: left; gap: 12px; }
+.can-why { color: var(--warn); }
+.can-body { display: grid; gap: 10px; justify-items: start; }
+.can-more { min-height: 48px; }
+.can-more__body { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.can-said { margin: 0; }
+.adm-note { margin: calc(-1 * var(--s-3, 12px)) 0 var(--s-5, 24px); font-size: 14px; }
+.tm-candidate { display: inline-flex; align-items: center; min-height: var(--ctl, 40px); padding: 0 4px; font-size: 14px; color: var(--text-2); }
+@media (max-width: 600px) {
+  .can > .btn-primary { justify-self: stretch; }
+  .can-body .btn, .can-more__body .btn { min-height: 48px; }
+}
+/* Four role columns on a phone: narrower ticks, so Candidates fits without
+   scrolling the grid sideways. */
+@media (max-width: 600px) {
+  .adm-scroll .adm-grid td { width: 64px; padding: 10px 4px; }
+  .adm-scroll .adm-grid thead th { padding: 10px 4px; font-size: 11px; }
+  .adm-scroll .adm-grid tbody th { padding: 10px 8px; }
+}
