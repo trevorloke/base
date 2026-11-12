@@ -27,7 +27,6 @@ import { newId } from '../../lib/events.js';
 import { decide, areasFor } from '../../lib/perms.js';
 import { FIELD_ACTIONS } from '../../actions/field.js';
 import { roomFor, campaignNow } from '../payments/limits.js';
-import { mayReach, person } from '../../lib/reach.js';
 import { stillOn } from '../banks/numbers.js';
 import { roomsFor, pledgedFor, openPledge, giftIn } from './room.js';
 
@@ -127,17 +126,23 @@ export const actions = {
 // in each, and what they've heard pledged this week.
 export const callTimeOf = async (db, ctx) => {
   if (!ctx.candidate) return null;
-  const params = [ctx.workspaceId, ctx.candidate.id, ctx.user.id];
   const banks = (await db.query(
-    `select b.id, b.name,
-            (count(*) filter (where n.done_at is null and (n.next_at is null or n.next_at <= now())
-               and p.deleted_at is null and ${mayReach('call', 'bank', person('p', '$1::uuid'))}))::int as left
-       from call_banks b
-       left join call_bank_numbers n on n.bank_id = b.id and n.assigned_to = $3
-       left join persons p on p.id = n.person_id
-      where b.workspace_id = $1 and b.candidate_id = $2 and b.deleted_at is null and b.closed_at is null
-      group by b.id order by b.created_at`, params,
+    `select id, name, list_id from call_banks
+      where workspace_id = $1 and candidate_id = $2 and deleted_at is null and closed_at is null order by created_at`,
+    [ctx.workspaceId, ctx.candidate.id],
   )).rows;
+  // Left to call now, by the same rule as the card (one count per bank: a
+  // candidate has one or two).
+  for (const b of banks) {
+    const params = [b.id, ctx.user.id];
+    const still = await stillOn(db, ctx, b, params);
+    b.left = (await db.query(
+      `select count(*)::int as n from call_bank_numbers n join persons p on p.id = n.person_id
+        where n.bank_id = $1 and n.assigned_to = $2 and n.done_at is null and (n.next_at is null or n.next_at <= now()) and ${still}`,
+      params,
+    )).rows[0].n;
+    delete b.list_id;
+  }
   const week = (await db.query(
     `select coalesce(sum(amount_cents), 0)::bigint as cents from calltime_results
       where workspace_id = $1 and candidate_id = $2 and result = 'pledged' and dropped_at is null and created_at > now() - interval '7 days'`,
