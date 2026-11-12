@@ -179,9 +179,10 @@ api.get('/relationships/connected', async (c) => {
 api.get('/relationships/key', async (c) => {
   if (!isDesk(c)) return refuse(c);
   const ctx = c.get('ctx');
-  const ids = [...new Set(String(c.req.query('ids') || '').split(',').map((s) => s.trim()).filter(Boolean))];
-  if (ids.length > KEY_MAX) return c.json({ error: `at most ${KEY_MAX} people at a time` }, 400);
-  if (!ids.every((id) => UUID_RE.test(id))) return c.json({ error: 'ids: people’s ids, with commas' }, 400);
+  const asked = String(c.req.query('ids') || '').split(',').map((s) => s.trim()).filter(Boolean);
+  if (asked.length > KEY_MAX) return c.json({ error: `at most ${KEY_MAX} people at a time` }, 400);
+  if (!asked.every((id) => UUID_RE.test(id))) return c.json({ error: 'ids: people’s ids, with commas' }, 400);
+  const ids = [...new Set(asked.map((id) => id.toLowerCase()))];
   if (!ids.length) return c.json({ ties: {} });
   // Each end through its own index (relationships_a_idx, _b_idx); the people
   // asked about are read once, so someone with no links still answers.
