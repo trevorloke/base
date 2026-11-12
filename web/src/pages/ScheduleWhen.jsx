@@ -145,7 +145,9 @@ export default function When({ kind, value, onChange, many = false, own = null }
     setPart(weekPartOf(c));
     setOther({ start: c });
   };
-  const nudgeEnd = (d) => setOther({ minutes: clamp(shown + d, STEP, LONGEST) });
+  // (A longer shift the long form made only gets shorter from here: never
+  // cut to 16 hours by one tap.)
+  const nudgeEnd = (d) => setOther({ minutes: clamp(shown + d, STEP, Math.max(LONGEST, shown)) });
   const t = other?.start ? timeOf(other.start, shown) : null;
   // Its own length at its own start is its own hours again — the way back
   // from a length tapped by mistake, even where it runs to midnight or past.
