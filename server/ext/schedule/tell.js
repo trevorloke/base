@@ -52,6 +52,7 @@ import { newId, runAction } from '../../lib/events.js';
 import { runHooks } from '../../lib/hooks.js';
 import { enqueueJob, jobRunnerOn, runJobsSoon } from '../../lib/jobs.js';
 import { emailConfigured, sendEmail, sendText, shiftWhen, shiftWhenShort, textConfigured } from '../../lib/notify.js';
+import { shiftsAttachment, withCalendarLine } from '../../lib/calendar.js';
 import { notSuppressed } from '../../lib/mail/index.js';
 import { DEFAULT_TZ } from '../../lib/org.js';
 import { mayRun } from '../../lib/perms.js';
@@ -220,9 +221,10 @@ const deliver = async (db, ctx, batchId, { actorId = null, action = TELL_ACTION,
         // not over (as the count before the tap counted them). A reminder
         // is for tomorrow: one whose day has come is too late to send.
         const shifts = person ? (await tx.query(
-          `select a.id as assignment_id, a.arrive_at, a.leave_at, s.title, s.starts_at, s.ends_at, s.drop_in, s.location, s.instructions, s.link
-
+          `select a.id as assignment_id, a.arrive_at, a.leave_at, s.title, s.starts_at, s.ends_at, s.drop_in, s.location, s.instructions, s.link,
+                  s.id, s.kind, pl.lat as place_lat, pl.lng as place_lng
              from shift_assignments a join shifts s on s.id = a.shift_id and s.deleted_at is null
+             left join places pl on pl.id = s.place_id
             where a.workspace_id = $1 and a.id = any($2::uuid[]) and a.status = any($3::text[])
               and coalesce(s.ends_at, s.starts_at) >= $4 and ($5::timestamptz is null or s.starts_at >= $5)
             order by s.starts_at, s.id`,
@@ -256,7 +258,13 @@ const deliver = async (db, ctx, batchId, { actorId = null, action = TELL_ACTION,
         email = NO_EMAIL_TAGS.some((x) => tags.includes(x)) ? { status: 'opted_out' }
           // Read at the claim, a moment ago: an address on the suppression list.
           : !n.person.can_email ? { status: 'suppressed' }
-          : await sendEmail({ to: n.person.email, subject: words.subject, text: words.email, idempotencyKey: `shift-notice-${n.id}` });
+          // The email carries the person's shifts in this message as one
+          // calendar file, and says so before its sign-off.
+          : await sendEmail({
+            to: n.person.email, subject: words.subject, text: withCalendarLine(words.email),
+            attachments: [shiftsAttachment(n.shifts, { tz, name: ctx.workspace.name })],
+            idempotencyKey: `shift-notice-${n.id}`,
+          });
       }
       // The texting rules (ext/texting) decide, as for shift.notify: never an
       // opted-out or do-not-text number, never in quiet hours.

@@ -2751,3 +2751,32 @@ html[data-heading="inter"] .rail-title {
     color: #000;
   }
 }
+
+/* Add it to your calendar (after a sign-up) and the Events module's
+   calendar link: the words on their line, then the links in a row, each a
+   full-size target on a phone. */
+.rsvp-cal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 2px;
+  margin-top: 6px;
+  font-size: 15px;
+}
+.rsvp-cal-say {
+  flex-basis: 100%;
+  margin-bottom: -6px;
+}
+.rsvp-cal a,
+.events-ics a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 48px;
+  font-weight: 600;
+}
+.rsvp-cal a {
+  padding: 0 8px;
+}
+.rsvp-cal a:first-of-type {
+  padding-left: 0;
+}

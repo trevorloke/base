@@ -45,7 +45,7 @@ test('the data: events hold the Event kind, openings every other kind; a shift w
     'every other kind, and the one made before kinds — soonest first');
   // Each row is the shape the site's cards have always read; the pin is the saved place's.
   for (const row of [...data.events, ...data.shifts]) {
-    assert.deepEqual(Object.keys(row).sort(), ['ends_at', 'id', 'lat', 'lng', 'location', 'spots_left', 'starts_at', 'title']);
+    assert.deepEqual(Object.keys(row).sort(), ['ends_at', 'id', 'kind', 'lat', 'lng', 'location', 'spots_left', 'starts_at', 'title']);
   }
   assert.deepEqual([data.shifts[0].lat, data.shifts[0].lng, data.shifts[0].spots_left], [49.163, -122.8447, null], 'no limit: no “spots left”');
   assert.deepEqual([data.events[0].lat, data.events[0].lng, data.events[0].spots_left], [null, null, 40], 'words alone have no pin');

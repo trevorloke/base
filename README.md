@@ -621,6 +621,29 @@ than a week after they came off is refused. Contacts are door, phone, text or
 | **Action Builder** | assessments (= the rating scale, its words and Voting-for list edited per campaign), tags, roles, relational notes, relationship graph (My people, Knows with a nudge, Most connected, brought in by), event-logged every touch | — |
 | **Action Network** | newsletter list + unsubscribe, press list + releases, email blasts and texts to lists, ladders of engagement, A/B subject lines with open/click tracking; the website's own forms, RSVPs (to a public shift) and online donations | events to RSVP to apart from shifts |
 
+## Calendars
+
+Anything dated can go into Google, Outlook or Apple Calendar: a shift, the
+voting days, a filing date and the website's events. *Add to calendar*
+offers Google, Outlook, or a file every calendar app opens (a link that
+needs no sign-in, good for 10 minutes and 3 opens). Shift emails — the
+notice, the week's notice and the evening-before reminder — carry the same
+file for that person's own shifts; texts don't change.
+
+Each person can also put **their own shifts** in their calendar once, from
+their profile: a secret calendar link their app checks by itself (Google
+every 8–24 hours, Apple as often as they choose). It holds their booked
+shifts (no instructions or Details links — the link lives in another
+company's calendar and may be forwarded), the voting days, and for the
+people who handle money the filing dates; who they are is checked on every
+fetch, so taking someone off the campaign empties it. Google adds such
+links only on a computer, so on a phone the app emails the link instead.
+The link is kept as it is in the database (the person needs it again on
+another device), so a backup carries live links: **Make a new link** on
+the profile ends the old one, for a leaked link or a lost backup alike. The
+data export leaves the links out. The website serves its Events list as
+`<site>/events.ics` (SITE.md). Nothing to set up: no keys or accounts.
+
 ## Public pages
 
 The campaign's website is base.win's own (the **Website** area; SITE.md):
@@ -789,7 +812,7 @@ MAIL_FROM.
 
 Set `STARBASE_PUBLIC_URL` (e.g. `https://starbase.imaginesurrey.ca`) so links
 in outbound mail — newsletter unsubscribe footers, invite links, the
-pictures in a message — point at the public host. Every newsletter and ladder email ends with "Sent by <campaign>"
+pictures in a message, calendar links — point at the public host. Every newsletter and ladder email ends with "Sent by <campaign>"
 and the reader's own unsubscribe link, and carries `List-Unsubscribe` /
 `List-Unsubscribe-Post` headers so mail apps show their own Unsubscribe
 button. Someone who unsubscribed can only rejoin by signing up again — the

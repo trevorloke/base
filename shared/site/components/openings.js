@@ -4,7 +4,7 @@
 // someone has signed up for one — or sent any form on the site in this
 // visit — the next opening is one tap: their details are kept for the
 // visit only (sessionStorage), with a "Not you?" to change them.
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { html, cx } from './h.js';
 import { Icon } from './icons.js';
 import { Hidden, Honeypot, TextField } from './fields.js';
@@ -26,6 +26,19 @@ function DateBadge({ day, mon, small }) {
   return html`<div className=${cx('date-badge', small && 'date-badge--sm')} aria-hidden="true">
     <span className="day">${day}</span><span className="mon">${mon}</span>
   </div>`;
+}
+
+// After a sign-up: three plain links (no script needed to follow them),
+// each a 48 px target on a phone (site.css .rsvp-cal).
+function CalLine({ cal }) {
+  if (!cal || !cal.ics) return null;
+  const links = [
+    cal.google ? { label: 'Google', href: cal.google, away: true } : null,
+    cal.outlook ? { label: 'Outlook', href: cal.outlook, away: true } : null,
+    { label: 'Apple & others', href: cal.ics },
+  ].filter(Boolean);
+  return html`<p className="rsvp-cal"><span className="rsvp-cal-say">Add it to your calendar:</span>${links.map((l, i) => html`<${Fragment} key=${l.label}>
+    ${i ? html`<span aria-hidden="true">·</span>` : ' '}<a href=${l.href} target=${l.away ? '_blank' : undefined} rel=${l.away ? 'noopener noreferrer' : undefined}>${l.label}</a><//>`)}</p>`;
 }
 
 function Rsvp({ uid, item, action, hidden, me, setMe, state, setState, primary }) {
@@ -60,10 +73,11 @@ function Rsvp({ uid, item, action, hidden, me, setMe, state, setState, primary }
   }
 
   if (st.status === 'done') {
-    return html`<div className="rsvp-done" role="status">
+    return html`<${Fragment}><div className="rsvp-done" role="status">
       <${Icon} name="check" size=${18} stroke=${3} />
       <span>You’re signed up${me?.first_name ? `, ${me.first_name}` : ''}. See you there!</span>
-    </div>`;
+    </div>
+    <${CalLine} cal=${item.cal} /><//>`;
   }
   if (item.full) return html`<p className="rsvp-full">This one is full.</p>`;
 
@@ -115,7 +129,8 @@ function Rsvp({ uid, item, action, hidden, me, setMe, state, setState, primary }
 
 // error: after a plain post (no JavaScript) that was refused, what to say
 // ({ field, message }, context.js errorFor) — above the openings.
-export function Openings({ uid, variant = 'shifts', action, hidden = {}, items = [], sent = false, error = null }) {
+// sentItem: after a plain sign-up, the opening it was for (when named).
+export function Openings({ uid, variant = 'shifts', action, hidden = {}, items = [], sent = false, sentItem = '', error = null }) {
   const [me, setMe] = useState(undefined);
   const [states, setStates] = useState({});
   // Who signed up before in this visit, read once the page is live
@@ -124,6 +139,8 @@ export function Openings({ uid, variant = 'shifts', action, hidden = {}, items =
     setMe(readMe());
   }, []);
   const setState = (id, s) => setStates((all) => ({ ...all, [id]: s }));
+  // Back from a plain sign-up: the one named, or the only one there is.
+  const sentOne = sent ? (sentItem ? items.find((it) => it.id === sentItem) : items.length === 1 ? items[0] : null) : null;
   const forget = () => {
     try { sessionStorage.removeItem(ME_KEY); } catch { /* nothing kept */ }
     setMe(null);
@@ -138,6 +155,7 @@ export function Openings({ uid, variant = 'shifts', action, hidden = {}, items =
 
   return html`<div className=${cx('openings', `openings--${variant}`)}>
     ${sent ? html`<p className="rsvp-done rsvp-done--page" role="status"><${Icon} name="check" size=${18} stroke=${3} /><span>You’re signed up. See you there!</span></p>` : null}
+    ${sentOne ? html`<${CalLine} cal=${sentOne.cal} />` : null}
     ${!sent && str(error?.message) ? html`<p className="form-alert" role="alert">${error.message}</p>` : null}
     ${me ? html`<p className="rsvp-me">Signing up as <strong>${me.first_name}</strong>. <button type="button" className="link-button" onClick=${forget}>Not you?</button></p>` : null}
     ${variant === 'events' && items[0] ? html`<article className="event-feature">

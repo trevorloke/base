@@ -18,6 +18,8 @@
     "./socials": "./socials.js",
     "./brand": "./brand.js",
     "./brand-look": "./brand-look.js",
+    "./ics": "./ics.js",
+    "./shifthours": "./shifthours.js",
     "./site/*": "./site/*.js"
   },
   "dependencies": {

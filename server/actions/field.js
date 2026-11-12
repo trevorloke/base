@@ -13,6 +13,7 @@ import { checkRating } from '../ext/scale/rules.js';
 import { createHash, randomBytes } from 'node:crypto';
 import { newId } from '../lib/events.js';
 import { emailConfigured, sendEmail, sendText, shiftMessage } from '../lib/notify.js';
+import { shiftsAttachment, withCalendarLine } from '../lib/calendar.js';
 // Addresses the campaign must not email (they bounced for good or reported spam).
 import { httpError } from './util.js';
 import { runHooks, hasHook } from '../lib/hooks.js';
@@ -689,13 +690,16 @@ export const FIELD_ACTIONS = {
     roles: DESK_ROLES,
     input: z.object({ shift_id: uuid() }),
     handler: async (tx, ctx, input, emit) => {
+      // With its saved place's pin, for the calendar file's GEO.
       const shift = (await tx.query(
-        'select * from shifts where id = $1 and workspace_id = $2 and deleted_at is null',
+        `select s.*, pl.lat as place_lat, pl.lng as place_lng from shifts s left join places pl on pl.id = s.place_id
+          where s.id = $1 and s.workspace_id = $2 and s.deleted_at is null`,
         [input.shift_id, ctx.workspaceId],
       )).rows[0];
       if (!shift) throw httpError(404, 'shift not found');
       // Everyone holding a spot — checked in too: a shift moved after they
-      // arrived still reaches them.
+      // arrived still reaches them. Their own hours (arrive_at, leave_at) go
+      // into their calendar file.
       const assignees = (await tx.query(
         `select a.id as assignment_id, a.arrive_at, a.leave_at, p.id, p.name, p.email, p.phone,
                 ${notSuppressed('p.workspace_id', 'p.email')} as can_email
@@ -716,13 +720,17 @@ export const FIELD_ACTIONS = {
       for (const a of assignees) {
         // Each in their own hours, when they said they can do only part of it.
         const message = shiftMessage(shift, ctx.workspace.name, tz, a);
+        // The email carries the shift as a calendar file and says so before
+        // its sign-off; the text stays the message as it was.
+        const emailText = withCalendarLine(message);
         // Never an address that bounced for good or reported spam (the
         // suppression list, ext/mail), as a week's notice and a reminder.
         const emailRes = a.email && !a.can_email
           ? { status: 'suppressed', detail: 'the address bounced or reported spam' }
           : a.email
           ? await sendEmail({
-            to: a.email, subject: `Your shift: ${shift.title}`, text: message,
+            to: a.email, subject: `Your shift: ${shift.title}`, text: emailText,
+            attachments: [shiftsAttachment([{ ...shift, arrive_at: a.arrive_at, leave_at: a.leave_at }], { tz, name: ctx.workspace.name, filename: 'shift.ics' })],
             idempotencyKey: `shift-${shift.id}-${a.assignment_id}-${round}`,
           })
           : { status: 'skipped', detail: 'no email on file' };

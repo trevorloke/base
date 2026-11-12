@@ -51,7 +51,15 @@ and opens the post's page, `?source=kit-<kit>`) ·
 `/preferences?t=…` and `/unsubscribe?t=…` (email/text consent, signed token) ·
 `/__preview/:pageId?t=…` (a draft, signed short-lived token, `noindex`) ·
 `/sitemap.xml` · `/robots.txt` · `/site-assets/*` (css, fonts, island script) ·
-`POST /api/forms/:kind`.
+`POST /api/forms/:kind` · `/events.ics` (the Events list's upcoming public
+shifts, as a calendar) · `/events/<id>.ics` (one public upcoming shift from
+either list). The two calendar routes answer only where a published page of
+that site has an Events or Volunteer openings section that isn't hidden
+(a microsite without one answers its 404); each entry has the title, times
+(UTC), place words, its pin and the page — never instructions, links, counts
+or people — and ends with the campaign's name, the site's address and the
+authorization line when one is set (`server/ext/site/calendar.js`). The
+app's own calendar links (`/cal/…`) never answer on a site's domain.
 
 ## Tables (`server/ext/site/sql.js`)
 
@@ -188,7 +196,9 @@ anyone matched it is a code of the same shape that is nobody's, and
 `/r/` follows it exactly as it follows a real one.
 A plain form post (no JavaScript) gets a `303` back to the page with
 `?sent=<kind>#m-<module_id>` (or `?error=<field>&module=<module_id>#m-<module_id>`,
-so the page says it on the form that was sent), or to the checkout.
+so the page says it on the form that was sent), or to the checkout. A sign-up
+adds `&shift=<id>`, so the page offers that event for a calendar under its
+*You’re signed up*.
 
 ### What the loaders give the renderer (`data`)
 
@@ -299,8 +309,8 @@ data.payments.membership_min_cents   optional: the join form's amounts start the
 - `preview` — the preview banner, `noindex`, no canonical.
 - `path` — this page's path under the root (`/`, `/about`, `/news/a-post`; the
   root in front is taken off): canonical, share links, the current nav item.
-- `sent` — the `?sent=<kind>` value (or `{ kind, module_id }`): that kind's
-  form shows its thank-you instead.
+- `sent` — the `?sent=<kind>` value (or `{ kind, module_id }`, and `shift` for
+  a sign-up): that kind's form shows its thank-you instead.
 - `error` — the `?error=<field>` value (or `{ field, module_id, kind, message }`):
   the message on that field (with `module_id`, only in that module's form,
   when it is on the page; a bare field marks every form on the page that has

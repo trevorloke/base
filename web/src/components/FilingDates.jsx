@@ -4,7 +4,8 @@
 // confirm and enter.
 //   FilingCountdown   under the big number: each date, counted down ("66
 //                     days left · Disclosure statement due · Jan 15, 2027"),
-//                     from the brief Donations already reads (filingAll)
+//                     from the brief Donations already reads (filingAll),
+//                     each with its own "Add to calendar" until it's past
 //   FilingDatesForm   Donations → More → Filing dates: the two names and
 //                     days, one Save (filing.dates) — managers and treasurers
 // Today shows the ones within 30 days under Coming up (pages/Today.jsx).
@@ -13,6 +14,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { action } from '../api.js';
 import { countdown, filingDay, filingSoon } from './FilingWords.js';
 import { useOnline } from './NoSignal.jsx';
+import { dayEvent } from '@starbase/shared/ics';
+import AddToCalendar from './AddToCalendar.jsx';
 import './filing-dates.css';
 
 export function FilingCountdown({ dates }) {
@@ -27,6 +30,10 @@ export function FilingCountdown({ dates }) {
             <span className="fl-count__what">
               <span className="fl-count__name">{d.name}</span>
               <span className="fl-count__day">{filingDay(d.due_on)}</span>
+              {d.days >= 0 && (
+                <AddToCalendar kind="filing" id={d.slot}
+                  event={dayEvent({ uid: `filing-${d.slot}-${d.due_on}@base.win`, title: d.name, day: String(d.due_on).slice(0, 10) })} />
+              )}
             </span>
           </li>
         );

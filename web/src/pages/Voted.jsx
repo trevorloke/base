@@ -11,6 +11,10 @@ import { Link, useOutletContext } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { action, apiGet } from '../api.js';
 import { NeedsSignal, NoSignal, noSignal, useOnline } from '../components/NoSignal.jsx';
+import { dayEvent } from '@starbase/shared/ics';
+import { dayOf } from '@starbase/shared/dayparts';
+import AddToCalendar from '../components/AddToCalendar.jsx';
+import { zoneOf } from '../components/shiftTime.js';
 import '../components/voted.css';
 import './shifts.css';
 import './surveys.css';
@@ -53,6 +57,14 @@ export default function Voted() {
     patch({ advance_days: [...new Set([...cur.advance_days, newDay])].sort() });
     setNewDay('');
   };
+  // "Add to calendar" for the saved days: Google and Outlook add the first
+  // one still to come (on the campaign's calendar); the file has them all.
+  const savedDays = [...new Set([...(s.advance_days || []), ...(s.election_day ? [s.election_day] : [])])].sort();
+  const today = dayOf(new Date(), zoneOf(me));
+  const nextDay = savedDays.find((d) => d >= today);
+  const nextEvent = nextDay ? dayEvent({
+    uid: `vote-${nextDay}@base.win`, title: nextDay === s.election_day ? 'Election day' : 'Advance voting', day: nextDay, details: me?.workspace?.name || null,
+  }) : null;
   const dayWord = (d) => new Date(`${d}T12:00:00`).toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' });
   const why = s.on
     ? (s.voting_day === 'election' && !s.manual ? 'On — it’s election day.' : s.voting_day === 'advance' && !s.manual ? 'On — it’s an advance-voting day.' : 'On.')
@@ -111,6 +123,7 @@ export default function Voted() {
             </div>
           )}
         </div>
+        {savedDays.length > 0 && <AddToCalendar kind="vote" id="all" event={nextEvent} />}
         <label className="ot-check vt-auto">
           <input type="checkbox" checked={cur.auto} disabled={!isManager || busy} onChange={(e) => patch({ auto: e.target.checked })} />
           <span>Turn on by itself on these days (in the campaign’s time)</span>

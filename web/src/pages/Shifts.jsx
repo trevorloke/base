@@ -87,6 +87,8 @@ import { NOTIFIED_WORD, NotifyChip, notifySummary, outcomeOf, people } from '../
 import './shifts.css';
 import './schedule.css';
 import { NS } from '../base.js';
+import { shiftEvent } from '@starbase/shared/ics';
+import AddToCalendar from '../components/AddToCalendar.jsx';
 
 // The desk's last choice of List or Week, on this device only.
 const VIEW_KEY = `${NS}shifts-view`;
@@ -864,6 +866,9 @@ function ShiftList({ canDesk, me }) {
       {shifts.data && <PastShifts earlier={earlier} tz={tz} now={now} isMine={isMineShift} byShift={byShift} />}
       </>
       )}
+      {/* A person's own shifts, kept in their calendar (Your profile): under
+          the list, and under the desk's week board (its first view). */}
+      {!showNew && <p className="cal-way"><Link to="/profile#calendar">Put my shifts in my calendar</Link></p>}
     </div>
   );
 }
@@ -1202,6 +1207,14 @@ function ShiftDetail({ id, canDesk, me }) {
   const hoursWaiting = waitingHours(outbox.items, id);
   const myBooking = asBooking(hoursWaiting) ?? myRow;
   const joinWaiting = waiting?.name === 'shift.join' && !waiting.undo && !onIt;
+  // "Add to calendar" (while it isn't over): the Google and Outlook links
+  // from the shift as kept, with this person's own hours when they have
+  // them (those still waiting on this phone too); the file comes from the
+  // server when the choices open.
+  const calEvent = over ? null : shiftEvent(shift, {
+    tz, booking: myBooking, appUrl: window.location.href.split('#')[0],
+  });
+  const addToCal = (disabled = false) => calEvent && <AddToCalendar kind="shift" id={shift.id} event={calEvent} disabled={disabled} />;
   const showHours = !canDesk && (offered.includes('shift.hours') || canJoin) && (onIt || joinWaiting)
     && waiting?.name !== 'shift.leave' && canPickHours(shift);
   const mineWords = hoursWords(shift, myBooking, tz);
@@ -1501,6 +1514,7 @@ function ShiftDetail({ id, canDesk, me }) {
           ? <a href={href} target="_blank" rel="noopener noreferrer">{shift.link.replace(/^https?:\/\//i, '')}</a>
           : <span>{shift.link}</span>)}
       </div>
+      {(canDesk || (!onIt && waiting?.name !== 'shift.join')) && addToCal()}
 
       {(turfs.length > 0 || canDesk) && (
         <section className="st-walk" aria-label="Walk lists">
@@ -1558,10 +1572,12 @@ function ShiftDetail({ id, canDesk, me }) {
             </div>
           ) : null}
           {joinWaiting && !waiting.undo ? hoursBlock : null}
+          {joinWaiting ? addToCal(true) : null}
           {waiting?.name === 'shift.join' && (waiting.undo || !onIt) ? null : onIt ? (
             <>
               <span className="ops-onit" role="status"><span aria-hidden="true">✓</span> You’re on this shift</span>
               {hoursBlock}
+              {addToCal()}
               {waiting?.name === 'shift.leave' ? (
                 <p className="ops-pending" role="status">Can’t make it <span className="chip obx-chip">Not sent yet</span></p>
               ) : canLeave && !over && !checkedIn && (!leaving ? (
