@@ -1065,7 +1065,7 @@ function Subscribers({ subs, canWrite, toast }) {
 
   return (
         <section className="ot-sec" aria-label="Subscribers">
-          <h2 className="ot-sec-h">Subscribers <span className="ot-count">{subs.isPending ? LOADING : subscribed == null ? '' : fmt(subscribed)}{unsubscribed > 0 && ` · ${fmt(unsubscribed)} unsubscribed`}</span></h2>
+          <h2 className="ot-sec-h">Subscribers <span className="ot-count">{subs.isPending ? LOADING : subscribed == null ? '' : fmt(subscribed)}{stopped > 0 && ` · ${fmt(stopped)} can’t be emailed`}{unsubscribed > 0 && ` · ${fmt(unsubscribed)} unsubscribed`}</span></h2>
           {subs.isError && <p className="error" role="alert"><Unavailable onRetry={() => subs.refetch()} /></p>}
           {list.length === 0 && subs.isSuccess && <p className="ot-empty">No subscribers yet.</p>}
           {list.length > 0 && (
