@@ -159,7 +159,15 @@ test('staff denied Outreach but holding Media does the whole job; the queued rel
     assert.deepEqual([list[0].id, list[0].status, list[0].queued_count, list[0].retry_count], [r.blast.id, 'queued', 1, 1]);
     assert.equal(list[0].attachments[0].filename, 'notes.txt');
     assert.equal(list[0].body, undefined, 'the list carries no bodies');
+    assert.equal(ok(await staff.get('/api/media/releases')).emailConfigured, false, 'Send now waits for email');
   } finally { emailOn(); }
+  assert.equal(ok(await staff.get('/api/media/releases')).emailConfigured, true);
+  // Press releases' own stats: staff denied Outreach can't read /blasts/stats' every send.
+  ok(await mgr.action('subscription.add', { email: mail('reader') }));
+  ok(await mgr.action('blast.send', { kind: 'newsletter', subject: 'Not press', body: 'Hi' }));
+  const stats = ok(await staff.get('/api/media/stats'));
+  assert.deepEqual(stats.stats.map((x) => x.id), [(await staff.get('/api/media/releases')).json.releases[0].id], 'press only');
+  assert.equal(stats.ab.min, 50);
   const go = ok(await staff.action('media.resend', { id: (await staff.get('/api/media/releases')).json.releases[0].id }));
   assert.equal(go.resent.sent, 1);
 });
@@ -177,6 +185,7 @@ test('a volunteer granted Media reads names, outlets and socials — never an em
   assert.deepEqual(seen[1].person.socials, { instagram: '@samexample' });
   assert.equal((await plain.get('/api/media/contacts')).status, 403);
   assert.equal((await plain.get('/api/media/releases')).status, 403);
+  assert.equal((await plain.get('/api/media/stats')).status, 403);
   assert.equal((await plain.action('media.send', { subject: 'S', body: 'B' })).status, 403);
   // The volunteer sends one; the release page has no addresses or tokens.
   const r = ok(await vol.action('media.send', { subject: 'From a volunteer', body: 'News' }));

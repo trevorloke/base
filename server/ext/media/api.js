@@ -11,6 +11,9 @@
 //   GET /media/releases       the press releases, newest first (200), with
 //                             GET /blasts' counting fields and opened,
 //                             clicked, bounced, ab_status, from_addr
+//                             and emailConfigured (Send now / Try again wait for it)
+//   GET /media/stats          GET /blasts/stats for press releases only (A/B
+//                             state, opens and clicks per send)
 //   GET /media/releases/:id   one, with its body and who it went to: { name,
 //                             outlet, status, opened_at, clicked_at, bounced,
 //                             complained } — no tokens, no addresses
@@ -21,6 +24,8 @@ import { mayReach, person, whyNotSql } from '../../lib/reach.js';
 import { notSuppressed } from '../../lib/mail/index.js';
 import { deliveredRow, goingRow, repeatRow, retryable, sendJobOn } from '../abtests/send.js';
 import { attachmentsOf } from '../abtests/attach.js';
+import { sendStats, statsBody } from '../abtests/stats.js';
+import { emailConfigured } from '../../lib/notify.js';
 import { isDesk, kindOf, onMedia } from './rules.js';
 
 export const api = new Hono();
@@ -133,7 +138,13 @@ api.get('/media/releases', async (c) => {
   const db = c.get('db');
   const { rows } = await db.query(`${releases('')} order by b.created_at desc limit 200`, [ctx.workspaceId]);
   const files = await attachmentsOf(db, ctx.workspaceId);
-  return c.json({ releases: rows.map((b) => releaseOut(b, files)) });
+  return c.json({ releases: rows.map((b) => releaseOut(b, files)), emailConfigured: emailConfigured() });
+});
+
+api.get('/media/stats', async (c) => {
+  const ctx = c.get('ctx');
+  if (!mayRead(ctx)) return refuse(c);
+  return c.json(statsBody(await sendStats(c.get('db'), ctx.workspaceId, { press: true })));
 });
 
 api.get('/media/releases/:id', async (c) => {
@@ -157,5 +168,5 @@ api.get('/media/releases/:id', async (c) => {
     [ctx.workspaceId, id],
   )).rows;
   const files = await attachmentsOf(db, ctx.workspaceId);
-  return c.json({ release: { ...releaseOut(b, files), body: b.body }, recipients });
+  return c.json({ release: { ...releaseOut(b, files), body: b.body }, recipients, emailConfigured: emailConfigured() });
 });

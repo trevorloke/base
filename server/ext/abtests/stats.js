@@ -31,10 +31,10 @@ const groupCols = (g) => `
   (count(r.id) filter (where r.ab_group = '${g}' and ${DELIVERED} and (r.first_open_at is not null or r.first_click_at is not null)))::int as ${g}_opened,
   (count(r.id) filter (where r.ab_group = '${g}' and ${DELIVERED} and r.first_click_at is not null))::int as ${g}_clicked`;
 
-api.get('/blasts/stats', async (c) => {
-  const ctx = c.get('ctx');
-  if (ctx.role === 'volunteer') return c.json({ error: 'volunteers cannot view this' }, 403);
-  const { rows } = await c.get('db').query(
+// The counts for a workspace's recent sends; `press` keeps to press
+// releases (the Media tab's own read, ext/media/api.js).
+export async function sendStats(db, workspaceId, { press = false } = {}) {
+  const { rows } = await db.query(
     `select b.id, b.ab_status, b.ab_subject_b, b.ab_pct, b.ab_wait_hours, b.ab_metric,
             b.ab_decide_at, b.ab_winner, b.ab_decided_at, b.ab_result,
             exists (select 1 from jobs j where j.workspace_id = b.workspace_id and j.kind = '${WINNER_JOB}'
@@ -53,12 +53,12 @@ api.get('/blasts/stats', async (c) => {
             (count(r.id) filter (where r.ab_group = 'rest' and r.status in ('queued', 'sending') and b.ab_winner is not null))::int as rest_left
      from blasts b
      left join blast_recipients r on r.blast_id = b.id and r.workspace_id = b.workspace_id
-     where b.workspace_id = $1
+     where b.workspace_id = $1 ${press ? "and b.kind = 'press'" : ''}
      group by b.id
      order by b.created_at desc limit 200`,
-    [ctx.workspaceId],
+    [workspaceId],
   );
-  const stats = rows.map((r) => {
+  return rows.map((r) => {
     const ab = abOf(r);
     return {
       id: r.id,
@@ -79,5 +79,11 @@ api.get('/blasts/stats', async (c) => {
       },
     };
   });
-  return c.json({ stats, ab: { min: AB_MIN, pcts: AB_PCTS, waits: AB_WAITS } });
+}
+export const statsBody = (stats) => ({ stats, ab: { min: AB_MIN, pcts: AB_PCTS, waits: AB_WAITS } });
+
+api.get('/blasts/stats', async (c) => {
+  const ctx = c.get('ctx');
+  if (ctx.role === 'volunteer') return c.json({ error: 'volunteers cannot view this' }, 403);
+  return c.json(statsBody(await sendStats(c.get('db'), ctx.workspaceId)));
 });
