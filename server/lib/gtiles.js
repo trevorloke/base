@@ -37,7 +37,10 @@ export const googleTilesSetting = (env = process.env) => {
   return 'unknown';
 };
 export const googleTilesOn = (env = process.env) => googleTilesSetting(env) === 'on' && Boolean(googleKey(env));
-export const attribution = () => `Map data &copy;${new Date().getFullYear()} Google`;
+// "Google Maps" in words where the map has no room for Google's logo (its
+// tile policy allows the text where space is limited); the live credit for
+// the view on screen is creditFor(), below.
+export const attribution = () => `Google Maps · Map data &copy;${new Date().getFullYear()} Google`;
 
 export const MAP_TYPES = ['roadmap', 'satellite', 'terrain'];
 const sessions = new Map(); // mapType → { token, expiresAt (ms) }
@@ -180,5 +183,44 @@ export const probeTiles = async () => {
   return result;
 };
 
-// Tests: forget the sessions, the refusal and the probe between cases.
-export const _resetForTest = () => { sessions.clear(); creating.clear(); trouble = null; lastOkAt = null; probed = null; };
+// ── The live credit (GET /api/map/credit) ──
+// Google's credit for the part of the map on screen: "Google Maps · " and
+// the copyright of its viewport answer. Asked with the session the phones
+// already use (never a new one just for the credit); none yet, or Google
+// refusing, and it is the static line. One answer per look, zoom and box
+// (rounded outward to 0.05°) for an hour, 500 at most: panning about a
+// street asks Google once.
+const VIEWPORT = `${API.replace(/\/v1$/, '')}/tile/v1/viewport`;
+const CREDIT_MS = 3_600_000;
+const credits = new Map(); // key → { at, text }
+const escapeHtml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const out05 = (v, up) => Number(((up ? Math.ceil : Math.floor)(v * 20) / 20).toFixed(2));
+// box: { zoom, north, south, east, west }, look: a map type → { text }
+export const creditFor = async (box, look = mapType()) => {
+  const kind = MAP_TYPES.includes(look) ? look : mapType();
+  const fallback = { text: attribution() };
+  const z = Math.max(0, Math.min(MAX_ZOOM, Math.round(Number(box.zoom))));
+  const b = { north: out05(Number(box.north), true), south: out05(Number(box.south), false), east: out05(Number(box.east), true), west: out05(Number(box.west), false) };
+  if (![z, ...Object.values(b)].every(Number.isFinite) || b.north > 90 || b.south < -90 || b.south > b.north) return fallback;
+  const key = `${kind}:${z}:${b.south}:${b.west}:${b.north}:${b.east}`;
+  const kept = credits.get(key);
+  if (kept && Date.now() - kept.at < CREDIT_MS) return { text: kept.text };
+  const s = sessions.get(kind);
+  if (!s || pausedFor() || Date.now() >= s.expiresAt) return fallback;
+  try {
+    const q = new URLSearchParams({ session: s.token, zoom: String(z), north: String(b.north), south: String(b.south), east: String(b.east), west: String(b.west) });
+    const res = await fetch(`${VIEWPORT}?${q}&key=${keyParam()}`, { signal: AbortSignal.timeout(4000) });
+    if (!res.ok) return fallback;
+    const said = String((await res.json())?.copyright || '').trim().slice(0, 300);
+    if (!said) return fallback;
+    const text = `Google Maps · ${escapeHtml(said)}`;
+    if (credits.size >= 500) credits.delete(credits.keys().next().value);
+    credits.set(key, { at: Date.now(), text });
+    return { text };
+  } catch {
+    return fallback;
+  }
+};
+
+// Tests: forget the sessions, the refusal, the probe and the credits between cases.
+export const _resetForTest = () => { sessions.clear(); creating.clear(); trouble = null; lastOkAt = null; probed = null; credits.clear(); };

@@ -916,7 +916,7 @@ function NameTurfForm({ points, doors, takenNames, busy, error, counted = true, 
 const tilesLine = (setup) => {
   if (!setup?.source) return null;
   const ignored = Array.isArray(setup.ignored) ? setup.ignored : [];
-  const off = [ignored.includes('url') && 'custom address ignored', ignored.includes('maxZoom') && 'max zoom ignored'].filter(Boolean);
+  const off = [ignored.includes('google') && 'Google Maps setting ignored', ignored.includes('provider') && 'provider name ignored', ignored.includes('url') && 'custom address ignored', ignored.includes('maxZoom') && 'max zoom ignored'].filter(Boolean);
   return `Map tiles: ${setup.source}${off.length ? ` — ${off.join(', ')}` : ''}`;
 };
 

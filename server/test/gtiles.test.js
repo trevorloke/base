@@ -13,6 +13,7 @@ const env = { ...process.env };
 const log = [];
 let sessionN = 0;
 let tileStatus = 200;
+let viewportStatus = 200;
 let sessionAnswer = null; // { status, body }: Google refuses the session
 const tileAnswers = []; // { status, body }: the next tiles' answers, in turn
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
@@ -29,6 +30,10 @@ before(async () => {
       if (sessionAnswer) return new Response(JSON.stringify(sessionAnswer.body), { status: sessionAnswer.status });
       sessionN += 1;
       return new Response(JSON.stringify({ session: `sess-${sessionN}`, expiry: String(Math.floor(Date.now() / 1000) + 14 * 86400), tileWidth: 256, tileHeight: 256, imageFormat: 'png' }), { status: 200 });
+    }
+    if (u.pathname === '/tile/v1/viewport') {
+      if (viewportStatus !== 200) return new Response('{"error":{"code":500}}', { status: viewportStatus });
+      return new Response(JSON.stringify({ copyright: 'Map data ©2026 Google & <Partners>', maxZoomRects: [] }), { status: 200 });
     }
     const next = tileAnswers.shift();
     if (next) return new Response(typeof next.body === 'string' ? next.body : JSON.stringify(next.body), { status: next.status });
@@ -108,10 +113,17 @@ test('other looks: Satellite and Terrain offered with Google on; each its own se
   _resetForTest();
   log.length = 0;
   const cfg = await (await get('/api/map/config', mgr.cookie)).json();
-  assert.deepEqual(cfg.views.map((v) => [v.key, v.label, v.url]), [
-    ['satellite', 'Satellite', '/tiles/{z}/{x}/{y}.png?t=satellite'],
-    ['terrain', 'Terrain', '/tiles/{z}/{x}/{y}.png?t=terrain'],
+  assert.deepEqual(cfg.views.map((v) => [v.key, v.label, v.url, Boolean(v.fallback)]), [
+    ['satellite', 'Satellite', '/tiles/{z}/{x}/{y}.png?t=satellite', false],
+    ['terrain', 'Terrain', '/tiles/{z}/{x}/{y}.png?t=terrain', false],
+    // The free map the map goes to by itself while Google isn't answering:
+    // never 'clean' (nearly every phone has that saved as its pick).
+    ['free', 'Free map', 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', true],
   ]);
+  assert.ok(!cfg.views.some((v) => v.key === 'clean'));
+  process.env.STARBASE_TILE_CLEAN = 'off';
+  assert.ok(!(await (await get('/api/map/config', mgr.cookie)).json()).views.some((v) => v.fallback), 'STARBASE_TILE_CLEAN=off: no free map');
+  delete process.env.STARBASE_TILE_CLEAN;
   assert.equal((await get('/tiles/14/2611/5636.png?t=satellite', mgr.cookie)).status, 200);
   assert.equal((await get('/tiles/14/2611/5636.png?t=satellite', mgr.cookie)).status, 200);
   assert.equal((await get('/tiles/14/2611/5636.png?t=bogus', mgr.cookie)).status, 200);
@@ -255,4 +267,30 @@ test('the live check: its own session, never kept; a good answer lifts the pause
   const tile = log.filter((l) => l.path.startsWith('/v1/2dtiles/14/')).at(-1);
   assert.notEqual(tile.session, probeTile.session);
   assert.equal(sessions(), 3);
+});
+
+test('the credit line: “Google Maps” in words; the live one for the view, asked once per box an hour, the static one on any trouble', async () => {
+  google();
+  const cfg = await (await get('/api/map/config', mgr.cookie)).json();
+  assert.match(cfg.tiles.attribution, /^Google Maps · Map data &copy;\d{4} Google$/);
+  const credit = (q) => get(`/api/map/credit?${q}`, mgr.cookie).then((r) => { assert.equal(r.status, 200); return r.json(); });
+  const box = 'z=15&n=49.191&s=49.172&e=-122.83&w=-122.86';
+  // No session yet: never a new one just for the credit.
+  assert.equal((await credit(box)).text, cfg.tiles.attribution);
+  assert.equal(sessions(), 0);
+  assert.equal((await get('/tiles/15/5200/11300.png', mgr.cookie)).status, 200);
+  const live = await credit(box);
+  assert.equal(live.text, 'Google Maps · Map data ©2026 Google &amp; &lt;Partners&gt;', 'Google’s words, never as markup');
+  // A small pan inside the same 0.05° box: no new call.
+  assert.deepEqual(await credit('z=15&n=49.193&s=49.171&e=-122.831&w=-122.858'), live);
+  const asked = log.filter((l) => l.path === '/tile/v1/viewport');
+  assert.equal(asked.length, 1, 'two moves in one box: one viewport call');
+  assert.equal(asked[0].session, log.find((l) => l.path.startsWith('/v1/2dtiles/')).session, 'the phones’ own session');
+  // Google failing, or nonsense asked: the static line, never a 5xx.
+  viewportStatus = 500;
+  assert.equal((await credit('z=12&n=49.3&s=49.0&e=-122.6&w=-122.9')).text, cfg.tiles.attribution);
+  assert.equal((await credit('z=a&n=x')).text, cfg.tiles.attribution);
+  viewportStatus = 200;
+  for (const l of log) assert.equal(l.key, 'tiles-key');
+  assert.ok(!JSON.stringify(live).includes('tiles-key'));
 });

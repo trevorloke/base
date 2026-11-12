@@ -66,3 +66,85 @@ test('managers only', async () => {
   assert.equal((await vol.get('/api/map/check')).status, 403);
   assert.equal((await new Client().get('/api/map/check')).status, 401);
 });
+
+// ── The services behind the map, asked live, on their own endpoint ──
+test('the services check: managers only; which street map and address service, whether each answers and Google’s words — never a key', async () => {
+  const { _resetForTest } = await import('../lib/gtiles.js');
+  const { _resetLookupForTest } = await import('../lib/geocode.js');
+  const realFetch = globalThis.fetch;
+  const prev = { t: process.env.GOOGLE_MAPS_TILES, k: process.env.GOOGLE_MAPS_SERVER_KEY, g: process.env.GEOCODER };
+  let billing = true;
+  globalThis.fetch = async (url, init) => {
+    const u = new URL(String(url));
+    if (u.hostname === 'tile.googleapis.com') {
+      if (billing) return new Response(JSON.stringify({ error: { code: 403, message: 'This API method requires billing to be enabled. key=check-key', status: 'PERMISSION_DENIED', details: [{ reason: 'BILLING_DISABLED' }] } }), { status: 403 });
+      if (u.pathname === '/v1/createSession') return new Response(JSON.stringify({ session: 's', expiry: String(Math.floor(Date.now() / 1000) + 86400) }), { status: 200 });
+      return new Response(new Uint8Array([137, 80, 78, 71]), { status: 200, headers: { 'content-type': 'image/png' } });
+    }
+    if (u.hostname === 'geocoder.api.gov.bc.ca') {
+      return new Response(JSON.stringify({ features: [{ geometry: { coordinates: [-122.84, 49.1] }, properties: { fullAddress: '100 Example St, Surrey, BC', score: 95, matchPrecision: 'CIVIC_NUMBER' } }] }), { status: 200 });
+    }
+    return realFetch(url, init);
+  };
+  try {
+    process.env.GOOGLE_MAPS_TILES = '1';
+    process.env.GOOGLE_MAPS_SERVER_KEY = 'check-key';
+    delete process.env.GEOCODER;
+    _resetForTest(); _resetLookupForTest();
+    assert.equal((await staff.get('/api/map/check/services')).status, 403);
+    assert.equal((await vol.get('/api/map/check/services')).status, 403);
+    const bad = ok(await mgr.get('/api/map/check/services'));
+    assert.deepEqual([bad.tiles.provider, bad.tiles.viaServer, bad.tiles.probe.ok, bad.tiles.probe.code, bad.tiles.probe.fix],
+      ['Google Maps', true, false, 'billing', 'Recipe B step 2']);
+    assert.match(bad.tiles.probe.plain, /^Billing isn’t turned on/);
+    assert.match(bad.tiles.probe.said, /requires billing/);
+    assert.deepEqual([bad.lookup.provider, bad.lookup.fallback, bad.lookup.probe.ok], ['BC Address Geocoder', null, true]);
+    assert.ok(!JSON.stringify(bad).includes('check-key'), 'never the key');
+    // The quick check is unchanged: no live call in it.
+    const quick = ok(await mgr.get('/api/map/check'));
+    assert.deepEqual(Object.keys(quick).sort(), ['area', 'build', 'commit', 'people', 'placing', 'tiles', 'turfs']);
+    // Google answering again (past the 30 s the answer is kept).
+    billing = false;
+    _resetForTest(); _resetLookupForTest();
+    const good = ok(await mgr.get('/api/map/check/services'));
+    assert.equal(good.tiles.probe.ok, true);
+    assert.equal(good.tiles.last, null);
+    assert.ok(good.tiles.lastOkAt);
+    // A provider the phones reach straight: named, not probed.
+    delete process.env.GOOGLE_MAPS_TILES;
+    const direct = ok(await mgr.get('/api/map/check/services'));
+    assert.deepEqual([direct.tiles.provider, direct.tiles.viaServer, direct.tiles.probe], ['OpenStreetMap', false, null]);
+  } finally {
+    globalThis.fetch = realFetch;
+    for (const [k, v] of [['GOOGLE_MAPS_TILES', prev.t], ['GOOGLE_MAPS_SERVER_KEY', prev.k], ['GEOCODER', prev.g]]) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+    _resetForTest(); _resetLookupForTest();
+  }
+});
+
+test('the services check answers within 8 s when Google doesn’t answer at all', async () => {
+  const { _resetForTest } = await import('../lib/gtiles.js');
+  const { _resetLookupForTest } = await import('../lib/geocode.js');
+  const realFetch = globalThis.fetch;
+  const prev = { t: process.env.GOOGLE_MAPS_TILES, k: process.env.GOOGLE_MAPS_SERVER_KEY, g: process.env.GEOCODER };
+  // Never answers, until the caller gives up.
+  globalThis.fetch = (url, init) => (new URL(String(url)).hostname !== 'tile.googleapis.com' ? realFetch(url, init) : new Promise((resolve, reject) => {
+    init?.signal?.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'TimeoutError' })));
+  }));
+  const awake = setInterval(() => {}, 1000); // (the probe's own timer doesn't keep a test alive)
+  try {
+    process.env.GOOGLE_MAPS_TILES = '1';
+    process.env.GOOGLE_MAPS_SERVER_KEY = 'check-key';
+    process.env.GEOCODER = 'off';
+    _resetForTest(); _resetLookupForTest();
+    const t0 = Date.now();
+    const r = ok(await mgr.get('/api/map/check/services').finally(() => clearInterval(awake)));
+    const took = Date.now() - t0;
+    assert.ok(took < 9000, `answered in ${took} ms`);
+    assert.deepEqual([r.tiles.probe.ok, r.tiles.probe.code], [false, 'timeout']);
+    assert.deepEqual([r.lookup.provider, r.lookup.probe.code], ['off', 'off']);
+  } finally {
+    globalThis.fetch = realFetch;
+    for (const [k, v] of [['GOOGLE_MAPS_TILES', prev.t], ['GOOGLE_MAPS_SERVER_KEY', prev.k], ['GEOCODER', prev.g]]) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+    _resetForTest(); _resetLookupForTest();
+  }
+});

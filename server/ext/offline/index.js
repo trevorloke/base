@@ -15,6 +15,11 @@
 //   STARBASE_TILE_URL          https://…/{z}/{x}/{y}.png  ({s} optional)
 //   STARBASE_TILE_ATTRIBUTION  the provider's credit line (links allowed)
 //   STARBASE_TILE_MAX_ZOOM     1–22 (default 19)
+// Or a provider by name, its address and credit filled in:
+//   STARBASE_TILE_PROVIDER     stadia — Stadia Maps' Alidade Smooth (STARBASE_TILE_URL,
+//                              if set, wins over it)
+//   STARBASE_TILE_KEY          the provider's key, if it isn't set to know the
+//                              campaign's own web address (phones can see it)
 // Read on every request, so a restart is all a change needs.
 // Google Maps instead (lib/gtiles.js): GOOGLE_MAPS_TILES=1 with a
 // GOOGLE_MAPS_SERVER_KEY that has the Map Tiles API enabled. The map then
@@ -24,7 +29,7 @@ import { Hono } from 'hono';
 import { getCookie } from 'hono/cookie';
 import { getDb } from '../../db/client.js';
 import { loadContext, SESSION_COOKIE } from '../../lib/auth.js';
-import { googleTilesOn, googleTilesSetting, fetchTile, attribution as googleCredit, TILE_PATH as GOOGLE_PATH, MAX_ZOOM as GOOGLE_MAX, MAP_TYPES, mapType } from '../../lib/gtiles.js';
+import { googleTilesOn, googleTilesSetting, fetchTile, creditFor, attribution as googleCredit, TILE_PATH as GOOGLE_PATH, MAX_ZOOM as GOOGLE_MAX, MAP_TYPES, mapType } from '../../lib/gtiles.js';
 import { here } from '../../lib/mount.js';
 import { scrub } from '../../lib/googleerr.js';
 
@@ -38,6 +43,16 @@ export const TILE_DEFAULTS = Object.freeze({
   attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
   maxZoom: 19,
 });
+
+// Providers by name (STARBASE_TILE_PROVIDER). Stadia's credit is the one its
+// documentation shows for its OpenMapTiles-based styles.
+const PRESETS = {
+  stadia: {
+    url: 'https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png',
+    attribution: '&copy; <a href="https://stadiamaps.com/">Stadia Maps</a> &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    maxZoom: 20,
+  },
+};
 
 // A tile template the map can use: http(s), with {z}, {x} and {y}.
 const validUrl = (v) => {
@@ -70,9 +85,21 @@ export const tileConfig = (env = process.env) => {
     out.ignored.push('google');
     warnOnce(`GOOGLE_MAPS_TILES=${String(env.GOOGLE_MAPS_TILES).trim().slice(0, 40)} isn’t understood — use 1`);
   }
+  const presetName = String(env.STARBASE_TILE_PROVIDER ?? '').trim().toLowerCase();
+  const preset = PRESETS[presetName] || null;
+  if (presetName && !preset) {
+    out.ignored.push('provider');
+    warnOnce(`STARBASE_TILE_PROVIDER=${presetName.slice(0, 40)} isn’t known — use stadia`);
+  }
+  if (preset) {
+    const key = String(env.STARBASE_TILE_KEY ?? '').trim();
+    out.url = key ? `${preset.url}?api_key=${encodeURIComponent(key)}` : preset.url;
+    out.attribution = preset.attribution;
+    out.maxZoom = preset.maxZoom;
+  }
   if (env.STARBASE_TILE_URL) {
     const url = validUrl(env.STARBASE_TILE_URL);
-    if (url) out.url = url;
+    if (url) { out.url = url; if (!preset || !url.startsWith(preset.url)) out.maxZoom = TILE_DEFAULTS.maxZoom; }
     else {
       out.ignored.push('url');
       warnOnce('STARBASE_TILE_URL needs http(s) and {z}/{x}/{y} — using OpenStreetMap');
@@ -82,7 +109,7 @@ export const tileConfig = (env = process.env) => {
   // OpenStreetMap's (that would be a false credit).
   if (env.STARBASE_TILE_ATTRIBUTION != null && env.STARBASE_TILE_ATTRIBUTION !== '') {
     out.attribution = String(env.STARBASE_TILE_ATTRIBUTION).slice(0, 500);
-  } else if (!/openstreetmap\.org\//i.test(out.url)) {
+  } else if (!/openstreetmap\.org\//i.test(out.url) && !(preset && out.url.startsWith(preset.url))) {
     out.attribution = '';
   }
   if (env.STARBASE_TILE_MAX_ZOOM) {
@@ -102,6 +129,8 @@ const hostOf = (url) => { try { return new URL(String(url).replace(/\{s\}/g, 'a'
 export const tileSource = (url) => {
   if (url === GOOGLE_PATH) return 'Google Maps';
   if (url === TILE_DEFAULTS.url || /(^|\.)openstreetmap\.org$/i.test(hostOf(url))) return 'OpenStreetMap';
+  if (/(^|\.)stadiamaps\.com$/i.test(hostOf(url))) return 'Stadia Maps';
+  if (/(^|\.)cartocdn\.com$/i.test(hostOf(url))) return 'CARTO';
   return hostOf(url) || 'custom';
 };
 
@@ -129,6 +158,11 @@ api.get('/map/config', (c) => {
     out.views = MAP_TYPES.filter((k) => k !== mapType()).map((k) => ({
       key: k, label: words[k], url: own(`${GOOGLE_PATH}?t=${k}`), attribution: t.attribution, maxZoom: t.maxZoom,
     }));
+    // While Google isn't answering, volunteers keep streets: the map goes to
+    // this free map by itself (never offered as a pick — key 'free', not
+    // 'clean', which nearly every phone has saved and would then draw in
+    // place of Google). STARBASE_TILE_CLEAN=off leaves it out.
+    if (process.env.STARBASE_TILE_CLEAN !== 'off') out.views.push({ ...CLEAN_VIEW, key: 'free', label: 'Free map', fallback: true });
   } else if (t.url === TILE_DEFAULTS.url && process.env.STARBASE_TILE_CLEAN !== 'off') {
     // On the standard OpenStreetMap tiles: Clean, a light, quiet map of the
     // same streets (CARTO's Positron) — no shop icons, parking lots or house
@@ -141,6 +175,19 @@ api.get('/map/config', (c) => {
     out.setup = { source: tileSource(t.url), custom: t.url !== TILE_DEFAULTS.url, ignored: t.ignored, maxZoom: t.maxZoom };
   }
   return c.json(out);
+});
+
+// Google's live credit for the part of the map on screen (lib/gtiles.js
+// creditFor), signed in, every role: ?z&n&s&e&w&t (t: the look). Never a
+// 5xx — anything wrong is the static credit line.
+api.get('/map/credit', async (c) => {
+  if (!googleTilesOn()) return c.json({ text: tileConfig().attribution });
+  const q = c.req.query();
+  try {
+    return c.json(await creditFor({ zoom: q.z, north: q.n, south: q.s, east: q.e, west: q.w }, q.t || undefined));
+  } catch {
+    return c.json({ text: googleCredit() });
+  }
 });
 
 // The Google tiles, for anyone signed in (the map sends the session cookie;

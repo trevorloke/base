@@ -19,6 +19,15 @@
 //            server names (ext/offline), never its whole address
 //   build    the web build this server hands out (lib/build.js); commit
 //
+// GET /api/map/check/services (managers): whether the services behind the
+// map answer, asked live — on its own, so the check above still answers at
+// once while this one waits on Google (8 s at most; each answer kept 30 s):
+//   tiles   { provider, viaServer, probe, last, lastOkAt } — probe only for
+//           Google (through this server); a provider the phones reach
+//           straight is judged by the page's own tile count
+//   lookup  { provider, fallback, probe }
+// Never a key or a tile address.
+//
 // What only the browser knows (whether tiles loaded, the page's own build,
 // the map's size on screen) the page adds itself.
 import { Hono } from 'hono';
@@ -26,6 +35,8 @@ import { geoBox } from '../../lib/org.js';
 import { currentBuild } from '../../lib/build.js';
 import { status as placingStatus } from '../geocoding/index.js';
 import { tileConfig, tileSource, TILE_DEFAULTS } from '../offline/index.js';
+import { googleTilesOn, probeTiles, tilesHealth } from '../../lib/gtiles.js';
+import { probeLookup } from '../../lib/geocode.js';
 
 export const api = new Hono();
 
@@ -62,5 +73,29 @@ api.get('/map/check', async (c) => {
     },
     build: currentBuild(),
     commit: String(process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || '').slice(0, 7) || null,
+  });
+});
+
+const LOOKUP_NAMES = { bc: 'BC Address Geocoder', google: 'Google Geocoding', nominatim: 'Nominatim', off: 'off' };
+const lookupName = (v) => LOOKUP_NAMES[String(v || '').trim().toLowerCase()] || null;
+api.get('/map/check/services', async (c) => {
+  if (c.get('ctx').role !== 'manager') return c.json({ error: 'the map check is for managers' }, 403);
+  const google = googleTilesOn();
+  const [tilesProbe, lookupProbe] = await Promise.all([google ? probeTiles() : null, probeLookup()]);
+  const { last, lastOkAt } = tilesHealth();
+  const recent = (t) => (t ? { at: new Date(t.at).toISOString(), code: t.code, plain: t.plain, said: t.said, fix: t.step || null, status: t.status } : null);
+  return c.json({
+    tiles: {
+      provider: tileSource(tileConfig().url),
+      viaServer: google,
+      probe: tilesProbe,
+      last: google ? recent(last) : null,
+      lastOkAt: google && lastOkAt ? new Date(lastOkAt).toISOString() : null,
+    },
+    lookup: {
+      provider: lookupName(process.env.GEOCODER || 'bc') || 'BC Address Geocoder',
+      fallback: lookupName(process.env.GEOCODER_FALLBACK),
+      probe: lookupProbe,
+    },
   });
 });
