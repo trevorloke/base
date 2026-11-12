@@ -12,10 +12,18 @@
 // else's email or a money tag, and the desk reads stay closed to her. Calls
 // links to My people. Both roles are measured at 390 and 1360 (visible words,
 // one yellow button at most, no sideways scroll, 48px targets). The books
-// still verify.
+// still verify. Then the ties that matter: a desk profile's key line (Priya:
+// her close tie first, "Same address" without the do-not-contact housemate)
+// at 1440 and 390, Close in place, Make a list ("Priya Nair’s circle", as many
+// as she knows), People → Knows a supporter (the server's count), the rule
+// builder, a staff member denied Donations (no "Knows a donor"), the desk
+// Calls card's "Knows …", Most connected's "brought in", and Priya at a
+// walk-list door with no signal: More → "I know them" → Friend — the chip at
+// once, sent once; one refused and dismissed still says "Not saved" — while
+// her browser never gets a desk tie read.
 //
-//   STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4211 node server/index.js &
-//   BASE=http://127.0.0.1:4211 SHOTS=/tmp/relationships node e2e-relationships.mjs
+//   STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=5100 node server/index.js &
+//   BASE=http://127.0.0.1:5100 SHOTS=/tmp/relationships node e2e-relationships.mjs
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
 
@@ -113,6 +121,7 @@ const until = async (fn, ms = 20000) => {
 };
 const PRONOUN = /\b(he|she|his|her|hers|him)\b/i;
 // The words as written (innerText follows CSS uppercase on buttons and chips).
+const it = (p, sel) => p.$eval(sel, (e) => e.innerText.replace(/\s+/g, ' ').trim()).catch(() => '');
 const tc = (p, sel) => p.$eval(sel, (e) => e.textContent.replace(/\s+/g, ' ').trim()).catch(() => '');
 
 // ── 1. A manager at a desk; the Imagine Surrey sample ──
@@ -147,7 +156,7 @@ const shown = await page.$$eval('.ops-row', (els) => els.map((e) => ({
 const plural = (n, one) => `${n} ${n === 1 ? one : `${one}s`}`;
 check('Most connected: Priya Nair first, knows 6', apiConnected[0]?.name === 'Priya Nair' && apiConnected[0].knows === 6, JSON.stringify(apiConnected[0]));
 check('each row says "knows N · M supporters" as the server counts them',
-  shown.length === apiConnected.length && shown.every((s, i) => s.name === apiConnected[i].name && s.fact === `knows ${apiConnected[i].knows} · ${plural(apiConnected[i].supporters, 'supporter')}`),
+  shown.length === apiConnected.length && shown.every((s, i) => s.name === apiConnected[i].name && s.fact === `knows ${apiConnected[i].knows} · ${plural(apiConnected[i].supporters, 'supporter')}${apiConnected[i].brought_in ? ` · brought in ${apiConnected[i].brought_in}` : ''}`),
   `${shown.slice(0, 3).map((s) => `${s.name}: ${s.fact}`).join(' | ')}`);
 let m = await simple(page, 'Most connected (desk 1360)');
 check('Most connected: no yellow button (nothing to do but look)', m.yellow === 0);
@@ -207,9 +216,9 @@ await sleep(800);
 let addText = await tc(page, '.rel-add');
 check('no signal: "+ Someone they know" search says "Adding someone they know needs signal"', /Adding someone they know needs signal/.test(addText) && !/No one matches|Harjit Gill/.test(addText), addText);
 await page.click('.rel-add button:has-text("Cancel")');
-check('…"+ Someone they know" and Remove are off, said once: "Adding and removing need signal"',
+check('…"+ Someone they know", Remove and Close are off, said once: "Adding, removing and Close need signal"',
   await page.locator('button:has-text("+ Someone they know")').isDisabled() && await page.locator('.rel-knows li button:has-text("Remove")').first().isDisabled()
-  && /Adding and removing need signal/.test(await tc(page, '.pf-row-acts')), await tc(page, '.pf-row-acts'));
+  && /Adding, removing and Close need signal/.test(await tc(page, '.pf-row-acts')), await tc(page, '.pf-row-acts'));
 await D.shot('02b-knows-no-signal-desk');
 // Through a reload with no signal: the kept Knows and the nudge, never "Loading…".
 await D.go(`/people/${jasmine.id}`);
@@ -249,6 +258,9 @@ check('Priya invited as a volunteer', /\/join\/[0-9a-f]{48}$/.test(invite.joinUr
 const vctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, timezoneId: 'America/Vancouver' });
 await tiles(vctx);
 const vpage = await vctx.newPage();
+// Her browser never receives anyone else's ties: no answered desk read, ever.
+const leaks = [];
+vpage.on('response', (r) => { if (/\/api\/(relationships\/(key|connected)|persons\/[0-9a-f-]{36}\/knows)/.test(r.url()) && r.status() < 400) leaks.push(`${r.status()} ${r.url()}`); });
 const V = helpers(vpage, 'vol');
 await V.go('/login');
 const joined = await V.api('/auth/join', { token: invite.joinUrl.split('/').pop(), name: 'Priya Nair', password: 'knock-knock-2026' });
@@ -526,6 +538,275 @@ check('Today: "My people · 7"', /^My people · 7/.test(await tc(vpage, 'a[href=
 const conn7 = (await D.api('/relationships/connected')).json.people.filter((p) => p.name === 'Priya Nair');
 check('Most connected: one Priya Nair', conn7.length === 1 && conn7[0].knows === 7, JSON.stringify(conn7));
 check('hash chain still verifies', (await D.api('/audit/verify')).json.ok === true);
+// ── 8. The ties that matter, when we pull someone up ──
+const rankTies = (ties) => ties.filter((t) => !t.person.dnc).sort((x, y) => (Number(Boolean(y.close)) - Number(Boolean(x.close)))
+  || ((['1', '2'].includes(x.person.rating) ? 0 : 1) - (['1', '2'].includes(y.person.rating) ? 0 : 1))
+  || (['family', 'friend', 'neighbour', 'work', 'community', 'other'].indexOf(x.kind) - ['family', 'friend', 'neighbour', 'work', 'community', 'other'].indexOf(y.kind))
+  || (new Date(y.linked_at) - new Date(x.linked_at)) || x.person.name.toLowerCase().localeCompare(y.person.name.toLowerCase()));
+// Two housemates at Priya's address: one asked not to be contacted.
+let pp = (await D.api(`/persons/${priya.id}`)).json.person;
+if (!pp.address) {
+  await D.api('/actions/person.update', { id: priya.id, address: '7301 Example St' });
+  pp = (await D.api(`/persons/${priya.id}`)).json.person;
+}
+const hana = (await D.api('/actions/person.create', { name: 'Hana Example', phone: '604-555-0181', address: pp.address, unit: pp.unit || undefined })).json.person;
+const dee = (await D.api('/actions/person.create', { name: 'Dee Example', phone: '604-555-0182', address: pp.address, unit: pp.unit || undefined })).json.person;
+await D.api('/actions/person.update', { id: dee.id, tags: ['do-not-contact'] });
+const pk = (await D.api(`/persons/${priya.id}/knows`)).json.knows;
+const ranked = rankTies(pk);
+await page.setViewportSize({ width: 1440, height: 900 });
+await D.go(`/people/${priya.id}`);
+await page.waitForSelector('.pf-head .rk-line', { timeout: 8000 }).catch(() => {});
+const line = await it(page, '.pf-head .rk-line');
+const firstTie = await it(page, '.pf-head .rk-tie');
+check('profile: the key line under the chips, "Knows …"', /^Knows /.test(line) && await page.$('.pf-meta + .rk-line'), line);
+check('…her close tie first: "Sofia Petrova Friend · Close"', ranked[0]?.person.name === 'Sofia Petrova' && /^(Knows )?Sofia Petrova Friend · Close/.test(firstTie), `${firstTie} · ranked ${ranked.slice(0, 3).map((t) => t.person.name).join(', ')}`);
+const shownNames = await page.$$eval('.pf-head .rk-tie a', (els) => els.map((e) => e.textContent));
+check('…three, in the server’s order (shared/ties.js)', shownNames.join('|') === ranked.slice(0, 3).map((t) => t.person.name).join('|'), shownNames.join(', '));
+check(`…then "· ${pk.length - 3} more"`, (await tc(page, '.pf-head .rk-more')) === `${pk.length - 3} more`, await tc(page, '.pf-head .rk-more'));
+check('…"· N more · Same address: Hana Example", never the do-not-contact housemate', /\d more · Same address: Hana Example$/.test(line) && !/Dee Example/.test(line), line);
+m = await simple(page, 'profile with the key line (desk 1440)');
+await D.shot('11-profile-key-line-desk');
+await page.click('.pf-head .rk-more');
+await sleep(500);
+check('"N more" opens Knows', (await knowsRows()).length === pk.length, (await knowsRows()).length);
+// Close, in place.
+const notClose = pk.find((t) => !t.close && !t.person.dnc);
+const closeBtn = `.rel-knows li:has-text("${notClose.person.name}") .rk-close`;
+check('Knows: each row has a quiet "Close" (aria-pressed)', (await page.$$('.rel-knows .rk-close[aria-pressed]')).length === pk.length
+  && (await page.getAttribute(closeBtn, 'aria-pressed')) === 'false');
+await page.click(closeBtn);
+const closedNow = await until(async () => (await D.api(`/persons/${priya.id}/knows`)).json.knows.find((t) => t.id === notClose.id)?.close === true, 6000);
+await until(async () => (await page.getAttribute(closeBtn, 'aria-pressed')) === 'true', 4000);
+check(`Close toggles in place: ${notClose.person.name} is close, on the server and on the button`, closedNow && (await page.getAttribute(closeBtn, 'aria-pressed')) === 'true');
+await page.click(closeBtn);
+const unclosed = await until(async () => (await D.api(`/persons/${priya.id}/knows`)).json.knows.find((t) => t.id === notClose.id)?.close === false, 6000);
+check('…and un-marks with a second tap', unclosed && await until(async () => (await page.getAttribute(closeBtn, 'aria-pressed')) === 'false', 4000));
+check('Make a list, with its helper line', (await it(page, '.rk-make')) === 'Make a list Anyone you give this list to sees who is on it.', await it(page, '.rk-make'));
+await page.click('button:has-text("+ Someone they know")');
+await page.fill('.rel-add input[type="search"]', 'Hana');
+await page.waitForSelector('.rel-pick:has-text("Hana Example")', { timeout: 8000 }).catch(() => {});
+await page.click('.rel-pick:has-text("Hana Example")');
+check('the note has its helper line', (await tc(page, '.rel-add .rk-help')) === 'Only what helps the campaign — no health, family or money details.', await tc(page, '.rel-add'));
+await D.shot('12-knows-close-list-note-desk');
+m = await simple(page, 'Knows with Close, Make a list and the note (desk 1440)');
+await page.click('.rel-add button:has-text("Back")');
+await page.click('.rel-add button:has-text("Cancel")');
+await page.setViewportSize({ width: 390, height: 844 });
+await D.go(`/people/${priya.id}`);
+await page.waitForSelector('.pf-head .rk-line', { timeout: 8000 }).catch(() => {});
+const lineBox = await page.$eval('.pf-head .rk-line', (e) => ({ h: e.getBoundingClientRect().height, lh: parseFloat(getComputedStyle(e).lineHeight) || 21 }));
+const phoneTies = (await page.$$('.pf-head .rk-tie')).length;
+const phoneLine = await it(page, '.pf-head .rk-line');
+check('at 390 the line keeps to two lines: her close tie (two ties at most), "· N more · Same address"', lineBox.h <= lineBox.lh * 2 + 8 && phoneTies >= 1 && phoneTies <= 2
+  && (await it(page, '.pf-head .rk-more')) === `${pk.length - phoneTies} more` && /^Knows Sofia Petrova/.test(phoneLine)
+  && /· \d+ more · Same address: Hana Example$/.test(phoneLine), `${JSON.stringify(lineBox)} · ${phoneLine}`);
+m = await simple(page, 'profile with the key line (desk 390)');
+await D.shot('13-profile-key-line-phone');
+// Real-length Surrey names: a close tie rated "4 · Randhawa", a second tie, and
+// a housemate. Still two lines at 390: "Knows" beside the first name, no line
+// opening with a stray "·", and "· N more · Same address: …".
+const keyLayout = () => page.$eval('.pf-head .rk-line', (e) => {
+  const lh = parseFloat(getComputedStyle(e).lineHeight) || 21;
+  const box = e.getBoundingClientRect();
+  const top = (el) => el.getBoundingClientRect().top;
+  const name = e.querySelector('.rk-tie a');
+  // Every separator ends the entry before it: nothing on a line comes before
+  // a dot that starts the line.
+  const dotLeads = [...e.querySelectorAll('.rk-sep')].some((s) => s.getClientRects()[0] && s.getClientRects()[0].left <= box.left + 1);
+  return { lines: Math.round(box.height / lh), h: box.height, lh, sameRow: name ? Math.abs(top(e.querySelector('.rk-word')) - top(name)) < lh / 2 : false, dotLeads, scroll: document.documentElement.scrollWidth > innerWidth };
+});
+const longTie = (await D.api('/actions/person.create', { name: 'Navdeep Kaur Dhaliwal', phone: '604-555-0184' })).json.person;
+await D.api('/actions/contact.log', { person_id: longTie.id, channel: 'door', outcome: 'contacted', rating: '4C' });
+const longTie2 = (await D.api('/actions/person.create', { name: 'Gurpreet Kaur Sandhu-Bains', phone: '604-555-0185' })).json.person;
+await D.api('/actions/contact.log', { person_id: longTie2.id, channel: 'door', outcome: 'contacted', rating: '1' });
+const longLinks = [
+  (await D.api('/actions/relationship.add', { from_id: priya.id, person_id: longTie.id, kind: 'friend', close: true })).json,
+  (await D.api('/actions/relationship.add', { from_id: priya.id, person_id: longTie2.id, kind: 'work' })).json,
+];
+await D.api('/actions/person.update', { id: hana.id, name: 'Harjinder Singh Grewal' });
+await D.go(`/people/${priya.id}`);
+await page.waitForSelector('.pf-head .rk-tie', { timeout: 8000 }).catch(() => {});
+let kl = await keyLayout();
+let klText = await it(page, '.pf-head .rk-line');
+check('long names at 390: two lines at most, "Knows" beside the first name, no line opens with "·"',
+  kl.lines <= 2 && kl.sameRow && !kl.dotLeads && !kl.scroll && /^Knows Navdeep/.test(klText) && /· \d+ more · Same address: Harjinder/.test(klText), `${JSON.stringify(kl)} · ${klText}`);
+await D.shot('13b-profile-key-line-long-names-phone');
+// No housemate to show: two ties on the line, still two lines.
+await D.api('/actions/person.update', { id: hana.id, tags: ['do-not-contact'] });
+await D.go(`/people/${priya.id}`);
+await page.waitForSelector('.pf-head .rk-tie', { timeout: 8000 }).catch(() => {});
+kl = await keyLayout();
+klText = await it(page, '.pf-head .rk-line');
+check('…and with no housemate shown: still two lines at most', kl.lines <= 2 && kl.sameRow && !kl.dotLeads && !kl.scroll && !/Same address/.test(klText) && /\d+ more$/.test(klText), `${JSON.stringify(kl)} · ${klText}`);
+await D.shot('13c-profile-key-line-long-names-no-housemate-phone');
+for (const l of longLinks) await D.api('/actions/relationship.remove', { id: l.relationship?.id || l.id });
+await D.api('/actions/person.update', { id: hana.id, name: 'Hana Example', tags: [] });
+check('…the long-name ties taken off again', (await D.api(`/persons/${priya.id}/knows`)).json.knows.length === pk.length);
+await D.go(`/people/${priya.id}`);
+await page.waitForSelector('.pf-head .rk-more', { timeout: 8000 }).catch(() => {});
+await page.click('.pf-head .rk-more');
+await sleep(400);
+m = await simple(page, 'Knows with Close and Make a list (desk 390)');
+await D.shot('14-knows-close-list-phone');
+// Make a list: "Priya Nair’s circle", as many as she knows.
+await page.click('.rk-make button:has-text("Make a list")');
+await page.waitForURL(/\/lists\/[0-9a-f-]{36}$/, { timeout: 8000 }).catch(() => {});
+await page.waitForSelector('.au-fig__n', { timeout: 8000 }).catch(() => {});
+const listH = await tc(page, 'h1');
+const listTotal = await tc(page, '.au-fig__n');
+check('Make a list opens "Priya Nair’s circle", whose total is her links', listH === 'Priya Nair’s circle' && listTotal === String(pk.length), `${listH} · ${listTotal} vs ${pk.length}`);
+await page.setViewportSize({ width: 1360, height: 900 });
+
+// People → Filter → Knows a supporter: the server's count.
+await D.go('/people');
+await page.click('.pp-filterbtn');
+await page.click('.pp-morefilters').catch(() => {});
+await page.waitForSelector('legend:has-text("Knows")', { timeout: 5000 }).catch(() => {});
+const knowsChips = await page.$$eval('fieldset:has(legend:text-is("Knows")) button', (els) => els.map((e) => e.textContent.trim()));
+check('the filter sheet has Knows: supporter · donor · volunteer · anyone', knowsChips.join('|') === 'Knows a supporter|Knows a donor|Knows a volunteer|Knows anyone', knowsChips.join(', '));
+await page.$eval('fieldset:has(legend:text-is("Knows"))', (e) => e.scrollIntoView({ block: 'center' }));
+await D.shot('15-filter-knows-desk');
+m = await simple(page, 'filter sheet with Knows (desk 1360)');
+await page.click('fieldset:has(legend:text-is("Knows")) button:has-text("Knows a supporter")');
+await page.click('.pp-sheet button:has-text("Done"), button:has-text("Done")').catch(() => {});
+const want = (await D.api('/persons/count?knows=supporter')).json.total;
+const shownCount = await until(async () => { const t = await tc(page, '.pp-count [aria-live]'); return t.startsWith(want.toLocaleString('en-CA')) ? t : null; }, 8000) || await tc(page, '.pp-count [aria-live]');
+check(`People filtered "Knows a supporter": ${want}, as the server counts`, want > 0 && shownCount.startsWith(want.toLocaleString('en-CA')) && /Knows a supporter/.test(await tc(page, '.pp-chips')), `${shownCount} vs ${want}`);
+// The rule builder.
+await D.go('/lists/new');
+await page.click('.au-rules__toggle').catch(() => {});
+await page.waitForSelector('label:text-is("Knows")', { timeout: 5000 }).catch(() => {});
+const ruleOpts = await page.$$eval('label:text-is("Knows") + select option', (els) => els.map((e) => e.textContent.trim()));
+check('the rule builder has Knows with the same four', ruleOpts.join('|') === 'Anyone|Knows a supporter|Knows a donor|Knows a volunteer|Knows anyone', ruleOpts.join(', '));
+await page.$eval('label:text-is("Knows")', (e) => e.scrollIntoView({ block: 'center' }));
+await D.shot('16-rule-builder-knows-desk');
+m = await simple(page, 'rule builder with Knows (desk 1360)', FIELDS.replace('input:not([type=checkbox])', 'input:not([type=checkbox]):not([type=radio])'));
+// The Calls card: "Knows …" under the name.
+await D.go('/calls?knows=any');
+await page.waitForSelector('.cl-who .rk-line', { timeout: 10000 }).catch(() => {});
+const callLine = await it(page, '.cl-who .rk-line');
+check('desk Calls card: "Knows …" under the name', /^Knows \S/.test(callLine) && (await page.$$('.cl-who .rk-tie')).length <= 2, callLine);
+m = await simple(page, 'Calls card with Knows (desk 1360)');
+await D.shot('17-calls-card-knows-desk');
+await page.setViewportSize({ width: 390, height: 844 });
+await D.go('/calls?knows=any');
+await page.waitForSelector('.cl-who .rk-line', { timeout: 10000 }).catch(() => {});
+m = await simple(page, 'Calls card with Knows (desk 390)');
+await D.shot('18-calls-card-knows-phone');
+await D.go('/people/connected');
+await D.shot('19-most-connected-phone');
+await page.setViewportSize({ width: 1440, height: 900 });
+await D.go('/people/connected');
+{
+  const conn = (await D.api('/relationships/connected')).json.people;
+  const credit = conn.find((p) => p.brought_in > 0);
+  check('Most connected: "brought in" as the server counts it', credit && new RegExp(`${credit.name} knows ${credit.knows} · .* · brought in ${credit.brought_in}`).test(await D.text()), JSON.stringify(conn.slice(0, 3)));
+}
+await D.shot('19b-most-connected-desk');
+
+// A staff member denied Donations: no "Knows a donor", still "Knows a supporter".
+{
+  const inv = (await D.api('/actions/member.invite', { email: `sam+${tag}@relationships.example`, role: 'staff' })).json;
+  const sctx = await browser.newContext({ viewport: { width: 1360, height: 900 }, timezoneId: 'America/Vancouver' });
+  const spage = await sctx.newPage();
+  const S = helpers(spage, 'staff');
+  await spage.goto(`${BASE}/login`, { waitUntil: 'domcontentloaded' });
+  const sj = await S.api('/auth/join', { token: inv.joinUrl.split('/').pop(), name: 'Sam Example', password: 'surrey-staff-2026' });
+  const sid = (await S.api('/auth/me')).json.user.id;
+  const denied = await D.api('/actions/permission.member.set', { user_id: sid, grant: [], deny: ['money'] });
+  check('staff Sam joined, Donations denied', sj.status === 200 && denied.status === 200, `${sj.status} ${denied.status}`);
+  await S.go('/people');
+  await spage.click('.pp-filterbtn');
+  await spage.click('.pp-morefilters').catch(() => {});
+  await spage.waitForSelector('legend:has-text("Knows")', { timeout: 5000 }).catch(() => {});
+  const sChips = await spage.$$eval('fieldset:has(legend:text-is("Knows")) button', (els) => els.map((e) => e.textContent.trim()));
+  check('denied Donations: no "Knows a donor", still "Knows a supporter"', !sChips.includes('Knows a donor') && sChips.includes('Knows a supporter'), sChips.join(', '));
+  await sctx.close();
+}
+
+// Priya at a walk-list door, no signal: More → "I know them" → Friend.
+await vpage.setViewportSize({ width: 390, height: 844 });
+const wren = (await D.api('/actions/person.create', { name: 'Wren Example', phone: '604-555-0183', address: '100 Example St', lat: 49.2001, lng: -122.6001 })).json.person;
+const wturf = (await D.api('/actions/turf.create', { name: 'Example Lane', polygon: [[49.199, -122.602], [49.202, -122.602], [49.202, -122.598], [49.199, -122.598]] })).json.turf;
+const priyaUser = (await V.api('/auth/me')).json.user.id;
+check('a turf with Wren on it, walked by Priya', wren?.id && wturf?.id && (await D.api('/actions/turf.assign', { turf_id: wturf.id, user_id: priyaUser })).status === 200);
+await V.go('/my-people'); // her circle, kept on the phone
+await V.go(`/turfs/${wturf.id}`);
+await vpage.waitForSelector('.walk-door', { timeout: 8000 }).catch(() => {});
+if (!(await vpage.$('.walk-door.is-open'))) await vpage.click('.walk-door__head');
+await vpage.waitForSelector('.walk-panel', { timeout: 5000 }).catch(() => {});
+check('Wren’s door: no "You know them" yet', !(await vpage.$('.walk-panel .rk-chip')));
+await vpage.click('.walk-panel .fk-more__btn');
+await vpage.waitForSelector('.walk-panel .rk-know', { timeout: 5000 }).catch(() => {});
+await vctx.setOffline(true);
+await vpage.click('.walk-panel .rk-know');
+const askQ = await tc(vpage, '.rk-ask .rel-add__q');
+const kindBtns = await vpage.$$eval('.rk-ask .rel-kind', (els) => els.map((e) => [e.textContent.trim(), e.getBoundingClientRect().height]));
+check('"How do you know them?" with the six kinds, 48px each', askQ === 'How do you know them?' && kindBtns.length === 6 && kindBtns.every(([, h]) => h >= 47.5), JSON.stringify(kindBtns));
+await vpage.$eval('.rk-ask', (e) => e.scrollIntoView({ block: 'center' }));
+await V.shot('20-how-do-you-know-them-phone');
+m = await simple(vpage, '"How do you know them?" (volunteer 390)');
+await vpage.click('.rk-ask .rel-kind:has-text("Friend")');
+await sleep(500);
+check('offline: the chip shows at once, "You know them · Friend"', (await tc(vpage, '.walk-panel .rk-chip')) === 'You know them · Friend', await tc(vpage, '.walk-panel'));
+check('…and it says it was saved offline', /saved offline/i.test(await tc(vpage, '.rk-said')), await tc(vpage, '.rk-said'));
+check('…nothing on the server yet', (await D.api(`/persons/${wren.id}/knows`)).json.knows.length === 0);
+await vpage.$eval('.walk-panel', (e) => e.scrollIntoView({ block: 'start' }));
+await V.shot('21-walk-door-know-chip-phone');
+m = await simple(vpage, 'walk door with the chip (volunteer 390)');
+await vctx.setOffline(false);
+const sentOnce = await until(async () => (await D.api(`/persons/${wren.id}/knows`)).json.knows.length === 1, 30000);
+const wk = (await D.api(`/persons/${wren.id}/knows`)).json.knows;
+check('back online: sent once — Priya knows Wren (Friend)', sentOnce && wk.length === 1 && wk[0].person.id === priya.id && wk[0].kind === 'friend', JSON.stringify(wk));
+const saidSent = await until(async () => (await tc(vpage, '.rk-said')) === 'Added to My people', 8000);
+check('…and the door now says "Added to My people", not "Saved offline"', saidSent, await tc(vpage, '.rk-said'));
+await sleep(3000);
+const wEvents = (await D.api('/events?limit=1000')).json.events.filter((e) => e.entity_type === 'relationship' && e.entity_id === wk[0]?.id && e.op === 'create');
+check('…one create on the event log', wEvents.length === 1, wEvents.length);
+await V.go('/my-people');
+check('…and Wren is in My people', /Wren Example/.test(await V.text()));
+
+// Refused when it's sent (the desk merged or removed that record meanwhile:
+// the server answers "person not found"; a merged door also leaves the walk
+// list, so the answer is played here to keep the door on screen), then
+// dismissed from the outbox: the door keeps saying "Not saved", never "Added".
+const sky = (await D.api('/actions/person.create', { name: 'Sky Example', phone: '604-555-0191', address: '104 Example St', lat: 49.2003, lng: -122.6003 })).json.person;
+await V.go(`/turfs/${wturf.id}`);
+await vpage.waitForSelector('.walk-door:has-text("Sky Example")', { timeout: 8000 }).catch(() => {});
+const skyDoor = '.walk-door:has-text("Sky Example")';
+if (!(await vpage.$(`${skyDoor}.is-open`))) await vpage.click(`${skyDoor} .walk-door__head`);
+await vpage.click(`${skyDoor} .walk-panel .fk-more__btn`).catch(() => {});
+await vpage.waitForSelector(`${skyDoor} .rk-know`, { timeout: 5000 }).catch(() => {});
+await vctx.setOffline(true);
+await vpage.click(`${skyDoor} .rk-know`);
+await vpage.click('.rk-ask .rel-kind:has-text("Friend")');
+await sleep(500);
+check('Sky’s door, no signal: saved offline', /saved offline/i.test(await tc(vpage, `${skyDoor} .rk-said`)), await tc(vpage, `${skyDoor} .rk-said`));
+await vpage.route('**/actions/relationship.add', (route) => route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ error: 'person not found' }) }));
+await vctx.setOffline(false);
+const skyRefused = await until(async () => /^Not saved/.test(await tc(vpage, `${skyDoor} .rk-said`)), 15000);
+await vpage.unroute('**/actions/relationship.add');
+check('back online, refused: the door says "Not saved — person not found"', skyRefused && sky?.id, await tc(vpage, `${skyDoor} .rk-said`));
+await vpage.click('.offline-strip__chip');
+await vpage.waitForSelector('.obx-sheet .is-refused', { timeout: 3000 }).catch(() => {});
+await vpage.click('.obx-sheet .is-refused button:has-text("Dismiss")');
+await vpage.click('.obx-scrim').catch(() => {});
+await sleep(500);
+const skySaid = await tc(vpage, `${skyDoor} .rk-said`);
+check('dismissed: the door still says "Not saved", not "Added to My people"', /^Not saved/.test(skySaid), skySaid);
+await vpage.$eval(skyDoor, (e) => e.scrollIntoView({ block: 'start' })).catch(() => {});
+await V.shot('22-walk-door-not-saved-phone');
+await vpage.setViewportSize({ width: 1360, height: 900 });
+await V.go(`/turfs/${wturf.id}`);
+const wrenDoor = '.walk-door:has-text("Wren Example")';
+await vpage.waitForSelector(wrenDoor, { timeout: 8000 }).catch(() => {});
+if (!(await vpage.$(`${wrenDoor}.is-open`))) await vpage.click(`${wrenDoor} .walk-door__head`);
+await sleep(500);
+check('the walk door says "You know them · Friend" (volunteer 1360)', (await tc(vpage, `${wrenDoor} .walk-panel .rk-chip`)) === 'You know them · Friend', await tc(vpage, wrenDoor));
+m = await simple(vpage, 'walk door with the chip (volunteer 1360)');
+check('her browser never received a key, Most connected or Knows answer', leaks.length === 0, leaks.join(' | '));
+
 check('no page errors', errors.length === 0, errors.join(' | '));
 
 await browser.close();

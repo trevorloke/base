@@ -13,17 +13,20 @@
 //   useAudienceChoices()  what the rules offer that a screen can't know (this
 //                         year; the survey questions)
 //   RULE_KEYS             the rules People's filter gained: gave, member,
-//                         answer, shift, since (ext/audience), list, notlist (ext/lists)
+//                         answer, shift, since (ext/audience), list, notlist (ext/lists),
+//                         knows (ext/relationships: knows a supporter, a donor…)
+//   useKnowsName(v)       "Knows Priya Nair" for knows=person:<id> (its profile read)
 //   ruleChips(f, lists, choices)  the ones picked, in words: [{ key, label }]
 //   <RuleGroups chip f update />  People's sheet, under More filters
 //   <RuleFields value onChange exclude />  a list's rule builder, under More rules
 //   <SnapshotForm input count defaultName />  "Save these people as they are
 //                         now": a name, then one action (list.snapshot)
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useOutletContext } from 'react-router-dom';
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { action, apiGet } from '../api.js';
 import { useOnline } from './NoSignal.jsx';
+import { hasArea } from '../Shell.jsx';
 import '../pages/shifts.css';
 import './audience.css';
 
@@ -101,7 +104,23 @@ export const useAudienceChoices = (enabled = true) => useQuery({
 });
 
 // ── The rules, in words ──
-export const RULE_KEYS = ['gave', 'member', 'shift', 'answer', 'list', 'notlist', 'since'];
+export const RULE_KEYS = ['gave', 'member', 'shift', 'answer', 'list', 'notlist', 'since', 'knows'];
+// Who they know (ext/relationships). "Knows a donor" only for someone with
+// Donations: the server's own money rule matches nobody for anyone else.
+const KNOWS = [['supporter', 'Knows a supporter'], ['donor', 'Knows a donor'], ['volunteer', 'Knows a volunteer'], ['any', 'Knows anyone']];
+const useKnowsChoices = () => {
+  const me = useOutletContext()?.me;
+  return hasArea(me, 'money') ? KNOWS : KNOWS.filter(([k]) => k !== 'donor');
+};
+const knowsPerson = (v) => /^person:([0-9a-f-]{36})$/i.exec(v || '')?.[1] || null;
+// knows=person:<id> in words: their name from the profile read (kept, or asked
+// once); "Knows someone" while it loads, or if they're gone.
+export function useKnowsName(v) {
+  const id = knowsPerson(v);
+  const q = useQuery({ queryKey: ['person', id], queryFn: () => apiGet(`/persons/${id}`), enabled: Boolean(id), staleTime: 60_000, retry: false });
+  return id ? q.data?.person?.name || null : null;
+}
+const knowsWord = (v, name) => (knowsPerson(v) ? (name ? `Knows ${name}` : 'Knows someone') : KNOWS.find(([k]) => k === v)?.[1] || 'Knows someone');
 const GAVE = [['year', 'Gave this year'], ['lapsed', 'Gave before, not this year'], ['never', 'Never gave']];
 const MEMBER = [['now', 'Member now'], ['lapsed', 'Lapsed member']];
 const SHIFTS = [['came:30', 'Came to a shift · 30 days'], ['came:90', 'Came to a shift · 90 days'], ['missed:30', 'Missed a shift · 30 days'], ['missed:90', 'Missed a shift · 90 days']];
@@ -144,7 +163,7 @@ const answerWord = (v, questions) => {
 };
 const listName = (id, lists) => (lists || []).find((l) => l.id === id)?.name;
 
-export const ruleChips = (f, lists = [], choices = null) => [
+export const ruleChips = (f, lists = [], choices = null, knowsName = null) => [
   f.gave && { key: 'gave', label: gaveWord(f.gave) },
   f.member && { key: 'member', label: MEMBER.find(([k]) => k === f.member)?.[1] || 'Member' },
   f.shift && { key: 'shift', label: shiftWord(f.shift) },
@@ -152,12 +171,14 @@ export const ruleChips = (f, lists = [], choices = null) => [
   f.list && { key: 'list', label: `On “${listName(f.list, lists) || 'a list'}”` },
   f.notlist && { key: 'notlist', label: `Not on “${listName(f.notlist, lists) || 'a list'}”` },
   f.since && { key: 'since', label: `Added since ${dayWord(f.since)}` },
+  f.knows && { key: 'knows', label: knowsWord(f.knows, knowsName) },
 ].filter(Boolean);
 export const rulesPicked = (f) => RULE_KEYS.filter((k) => f[k]).length;
 
 // ── People's sheet: chip rows, and a select where a chip row would be too long ──
 export function RuleGroups({ chip, f, update }) {
   const id = useId();
+  const knows = useKnowsChoices();
   const lists = useListNames().data?.lists ?? [];
   const choices = useAudienceChoices().data;
   const questions = choices?.questions ?? [];
@@ -185,6 +206,10 @@ export function RuleGroups({ chip, f, update }) {
       <fieldset className="pp-group">
         <legend className="eyebrow">Shifts</legend>
         <div className="pp-group__opts">{SHIFTS.map(([k, l]) => chip('shift', k, l))}</div>
+      </fieldset>
+      <fieldset className="pp-group">
+        <legend className="eyebrow">Knows</legend>
+        <div className="pp-group__opts">{knows.map(([k, l]) => chip('knows', k, l))}</div>
       </fieldset>
       {(questions.length > 0 || f.answer) && (
         <fieldset className="pp-group">
@@ -245,6 +270,8 @@ function ListSelect({ id, label, value, lists, onChange, exclude = null }) {
 // ── A list's rule builder: the same rules as selects, under "More rules" ──
 export function RuleFields({ value, onChange, exclude = null }) {
   const id = useId();
+  const knows = useKnowsChoices();
+  const knowsName = useKnowsName(value.knows);
   const picked = rulesPicked(value);
   const [open, setOpen] = useState(picked > 0);
   const lists = useListNames().data?.lists ?? [];
@@ -321,6 +348,15 @@ export function RuleFields({ value, onChange, exclude = null }) {
               )}
             </>
           )}
+          <div className="field">
+            <label htmlFor={`${id}-knows`}>Knows</label>
+            <select id={`${id}-knows`} className="input" value={value.knows || ''} onChange={(e) => set('knows')(e.target.value)}>
+              <option value="">Anyone</option>
+              {/* "Priya Nair’s circle", or a rule this viewer can't pick, still shows as picked. */}
+              {value.knows && !knows.some(([k]) => k === value.knows) && <option value={value.knows}>{knowsWord(value.knows, knowsName)}</option>}
+              {knows.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+            </select>
+          </div>
           <ListSelect id={`${id}-on`} label="On another list" value={value.list} lists={lists} exclude={exclude} onChange={set('list')} />
           <ListSelect id={`${id}-off`} label="Not on another list" value={value.notlist} lists={lists} exclude={exclude} onChange={set('notlist')} />
           <div className="field">

@@ -44,7 +44,7 @@ const personsWhere = async (db, ctx, query, w) => {
 };
 
 // The kept numbers (audience.js) are counted again at once when people
-// change in a way a list can read: an edit or a tag, a gift, a membership,
+// change in a way a list can read: an edit or a tag, a gift, a membership, who they know,
 // the newsletter, a STOP, a shift, an import or a merge — so the desk sees
 // its own changes. The field's steady stream (door and phone logs, voted
 // marks, places on the map) waits for the minute, as Path to win's numbers
@@ -53,7 +53,7 @@ const BULK = /^(import\.|sample\.|person\.merge)/;
 const STREAM = new Set(['contact.log', 'vote.mark', 'person.geocode']);
 const PEOPLE = new Set([
   'person', 'gift', 'membership', 'subscription', 'texting_optout', 'shift_assignment', 'person_field_value',
-  'volunteer_role', 'site_action', 'survey_response', 'turf',
+  'volunteer_role', 'site_action', 'survey_response', 'turf', 'relationship',
 ]);
 const events = async (tx, meta, evs = []) => {
   const action = String(meta.action || '');

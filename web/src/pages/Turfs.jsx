@@ -39,6 +39,7 @@ import RatingButtons, {
   More, OutcomeButtons, OUTCOMES, OUTCOME_LABEL, PersonTabs, RatingChip, focusRating, ratingText, reveal, useScale,
 } from '../components/RatingButtons.jsx';
 import SurveyQuestions, { answersSaid, answersTail, answersWord, useSurvey } from '../components/SurveyQuestions.jsx';
+import { IKnowThem, KnowMeChip } from '../components/RelationshipsBits.jsx';
 import { doorState, inPass } from '@starbase/shared/passes';
 import { noCalls } from '@starbase/shared/canvass';
 import { PassChip, TryAgainChip, WalkShow, overlayPass, waitingTries } from '../components/PassBits.jsx';
@@ -1072,6 +1073,7 @@ function Door({
       {open && sel && (
         <div className="walk-panel" id={panelId}>
           <PersonTabs persons={door.persons} value={sel.id} onPick={onPick} />
+          <KnowMeChip person={sel} />
           {dnc && <p className="walk-dnc"><span className="chip chip-danger">Do not contact</span> Skip {firstName(sel.name)}</p>}
           {!dnc && <ScriptLine context="door" person={sel} />}
           <VotedRow person={sel} source="door" toast={toast} onMarked={onVoted} />
@@ -1112,6 +1114,7 @@ function Door({
               {!sel.pending && <Link className="btn btn-quiet walk-act" to={`/people/${sel.id}`} state={fromHere} onClick={markDoor}>Profile</Link>}
               {!sel.pending && <RequestAsk person={sel} toast={(t, o) => toast(t, o)} />}
             </div>
+            <IKnowThem key={`know-${sel.id}`} person={sel} />
             <SignAsk
               idPrefix={`walk-${index}`}
               signs={door.signs}

@@ -101,15 +101,16 @@ export const joinWhere = (params, { where, params: more }) => {
 // knocked, outcome, turf, postal, notag: the field cuts (ext/cuts); web:
 // did on the website (ext/webdid); gave, member, answer, shift, since: what
 // they gave, joined, answered and came to (ext/audience); list, notlist: on
-// another list or not (ext/lists).
+// another list or not (ext/lists); knows: who they know (ext/relationships).
 export const FILTER_KEYS = [
   'q', 'tag', 'rating', 'role', 'has', 'field', 'knocked', 'outcome', 'turf', 'postal', 'notag', 'voted', 'web',
-  'gave', 'member', 'answer', 'shift', 'since', 'list', 'notlist',
+  'gave', 'member', 'answer', 'shift', 'since', 'list', 'notlist', 'knows',
 ];
 // The rules only the desk sorts people by (ext/audience, ext/lists). For a
 // volunteer they match nobody; a volunteer given the People area may not
-// save one in a list either (ext/lists/actions.js).
-export const DESK_RULES = ['gave', 'member', 'answer', 'shift', 'list', 'notlist'];
+// save one in a list either (ext/lists/actions.js). (knows= enforces the
+// role in its own rule; it is here so a volunteer can't save it.)
+export const DESK_RULES = ['gave', 'member', 'answer', 'shift', 'list', 'notlist', 'knows'];
 export const cleanFilter = (f) => {
   const out = {};
   for (const k of FILTER_KEYS) if (f && typeof f[k] === 'string' && f[k].trim()) out[k] = f[k].trim().slice(0, 400);

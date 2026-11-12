@@ -796,7 +796,25 @@ one tap away under **More**.
   do they know each other?* links them both ways; *Remove? Yes · No* takes
   it off. *Sofia Petrova → Knows* says *Brought in by Priya Nair*. Someone
   tagged *do-not-contact* gets no nudge and is never the one suggested. A
-  long note (a link) wraps in Knows.
+  long note (a link) wraps in Knows. The sample's *Priya Nair ↔ Sofia
+  Petrova* and *Gurpreet ↔ Navdeep Sandhu* are close ties: Priya's profile
+  opens with *Knows Sofia Petrova Friend · Close …* under her chips (a
+  do-not-contact housemate never shows on that line); *Close* in Knows
+  toggles in place; *Make a list* opens *Priya Nair’s circle* with as many
+  people as she knows; People → Filter → *Knows a supporter* counts what the
+  server counts; a staff member denied Donations has no *Knows a donor*; the
+  desk's Calls card says *Knows …*. Priya, at a walk-list door with no
+  signal: More → *I know them* → *Friend* shows *You know them · Friend* at
+  once and sends once when the signal is back, then says *Added to My
+  people*; one the server refuses says *Not saved* and keeps saying it
+  after it is dismissed from the outbox; a profile with long Surrey names, a "4 · Randhawa" tie and a
+  housemate keeps its key line to two lines at 390 (`e2e-relationships.mjs`; her
+  browser never gets a key, Most connected or Knows answer). Server tests:
+  `server/test/relationships.test.js` (close, `relationship.update`, the key
+  read, `knows=` for each role and area, Most connected's *brought in*, a
+  merge, housemates), `server/test/ties-rank.test.js` (which ties come
+  first) and `server/test/audience-scale.test.js` (`knows=` through indexes
+  among 300,000 people).
 - **Desk with no signal** — with wifi, open Today, People, a profile,
   Shifts, Signs, Donations and the Inbox. Turn wifi off and reload: each shows
   what it had and the strip says *No signal · from 2:14 pm*. Search People —

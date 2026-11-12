@@ -47,6 +47,7 @@ import { holdNote, logContact, queueAction, undoQueued, useOutbox } from '../off
 import { isOffline, queuedChip, queuedSaid, queuedText } from './queued.js';
 import { SIGN_KINDS, noCalls, noCallsWord } from '@starbase/shared/canvass';
 import RatingButtons, { More, OutcomeButtons, OUTCOME_LABEL, PersonTabs, focusRating, ratingText, useScale } from './RatingButtons.jsx';
+import { IKnowThem, KnowMeChip } from './RelationshipsBits.jsx';
 import QuickDetails from './QuickDetails.jsx';
 import SurveyQuestions, { answersSaid, answersTail, answersWord, useSurvey } from './SurveyQuestions.jsx';
 import { VotedRow } from './Voted.jsx';
@@ -638,6 +639,7 @@ export default function DoorCard({ door, selectedId, onSelect, onClose, toast, m
           <PersonTabs persons={persons} value={sel.id} onPick={pickPerson} ratingOf={ratingOf} />
           {multi && dnc && <p className="door-dnc-line"><span className="chip chip-danger">Do not contact</span> {firstName(sel.name)}</p>}
           {multi && waitChip && <p className="door-dnc-line"><span className="chip fk-wait">{waitChip}</span> {firstName(sel.name)}</p>}
+          <KnowMeChip person={sel} me={me} />
           {channel !== 'door' && (
             <p className="door-via">
               <span className="chip fk-wait">{CHANNEL_CHIP[channel]}</span>
@@ -744,6 +746,8 @@ export default function DoorCard({ door, selectedId, onSelect, onClose, toast, m
               ))}
             </div>
           </div>
+
+          <IKnowThem key={`know-${sel.id}`} person={sel} me={me} />
 
           <div className="door-more__foot">
             {!sel.pending && <Link className="btn btn-quiet door-act" to={`/people/${sel.id}`} state={fromHere}>Profile</Link>}

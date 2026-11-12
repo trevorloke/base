@@ -29,14 +29,15 @@ import './people.css';
 import {
   TextingCallButton, TextingRepliesLink, noTexts, textingOn, useTextingStatus, useTextQueue, useTextingPerson,
 } from '../components/TextingCard.jsx';
-import { MyPeopleLink } from '../components/RelationshipsBits.jsx';
+import { KeyTies, KnowMeChip, MyPeopleLink, useKeyTies } from '../components/RelationshipsBits.jsx';
+import { hasArea } from '../Shell.jsx';
 import { VotedRow } from '../components/Voted.jsx';
 import AddressField, { lookupAddress } from '../components/AddressField.jsx';
 import { CUT_KEYS, CutGroups, addCuts, cutChips, useTurfs, useWebDid } from '../components/FieldCuts.jsx';
 import ScriptLine, { useScripts } from '../components/ScriptLine.jsx';
 import NameFields from '../components/NameFields.jsx';
 import {
-  LOADING, RULE_KEYS, RuleGroups, SnapshotForm, Unavailable, fmt, ruleChips, rulesPicked, useAudienceChoices, useListNames,
+  LOADING, RULE_KEYS, RuleGroups, SnapshotForm, Unavailable, fmt, ruleChips, rulesPicked, useAudienceChoices, useKnowsName, useListNames,
 } from '../components/AudienceBits.jsx';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -434,6 +435,7 @@ function FilterChips({ f, update, keys = ['rating', 'tag', 'role', 'has'], extra
   const asked = desk && RULE_KEYS.some((k) => f[k]);
   const lists = useListNames(asked && Boolean(f.list || f.notlist)).data?.lists;
   const choices = useAudienceChoices(asked && Boolean(f.answer)).data;
+  const knowsName = useKnowsName(asked ? f.knows : null);
   const roleLabel = VOLUNTEER_ROLES.find((r) => r.code === f.role)?.label || f.role;
   const chips = [
     keys.includes('rating') && f.rating && {
@@ -446,7 +448,7 @@ function FilterChips({ f, update, keys = ['rating', 'tag', 'role', 'has'], extra
     keys.includes('has') && f.has && HAS_LABEL[f.has] && { key: 'has', label: HAS_LABEL[f.has], name: HAS_LABEL[f.has] },
     keys.includes('q') && f.q && { key: 'q', label: `“${f.q}”`, name: `search ${f.q}` },
     ...cutChips(f, turfs, web).map((c) => ({ ...c, name: c.label })),
-    ...ruleChips(f, lists, choices).map((c) => ({ ...c, name: c.label })),
+    ...ruleChips(f, lists, choices, knowsName).map((c) => ({ ...c, name: c.label })),
   ].filter(Boolean);
   if (!chips.length && !extra) return null;
   return (
@@ -1221,6 +1223,14 @@ function CallsScreen() {
     : notLoaded ? (total.data ? queue.length + Math.max(0, total.data.total - (list?.length ?? 0)) : null) : queue.length;
   // The card stays on whoever is up (a reply arriving doesn't swap it).
   useEffect(() => { if (current && current.id !== currentId) setCurrentId(current.id); }, [current?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Their key ties (desk with People): this card and the next four in one
+  // read; a card read before (as someone's "next") is used while this one loads.
+  const tieIds = current ? [current.id, ...queue.filter((p) => p.id !== current.id).slice(Math.max(0, at), Math.max(0, at) + 4).map((p) => p.id)] : [];
+  const tiesOn = desk && hasArea(me, 'people');
+  const tiesQ = useKeyTies(tieIds, tiesOn);
+  const tiesOf = (pid) => tiesQ.data?.ties?.[pid]
+    || queryClient.getQueriesData({ queryKey: ['ties'] }).map(([, d]) => d?.ties?.[pid]).find(Boolean) || null;
+  const myTies = current && tiesOn ? tiesOf(current.id) : null;
   // Opened from a profile or the door card (?person=): that person's card,
   // even when the list would leave them out for now.
   const wantId = params.get('person');
@@ -1470,6 +1480,12 @@ function CallsScreen() {
                     Last time: {ratingLine(scale, current.rating)}{current.rated_at ? ` · ${fmtShort(current.rated_at)}` : ''}
                   </span>
                 )}
+                <KnowMeChip person={current} me={me} />
+                {tiesOn && (myTies ? (
+                  <KeyTies ties={myTies.top} n={myTies.n} max={2} moreTo={`/people/${current.id}#knows`} />
+                ) : (
+                  <KeyTies state={noSignal(tiesQ) ? 'offline' : tiesQ.isError ? 'error' : tiesQ.isSuccess ? 'ok' : 'loading'} onRetry={() => tiesQ.refetch()} />
+                ))}
                 {theirNote && (
                   <span className="cl-note" title={theirNote}>
                     <span className="pp-sr">Their note: </span>“{theirNote.split('\n')[0]}”

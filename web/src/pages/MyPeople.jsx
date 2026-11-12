@@ -18,7 +18,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import RatingButtons, { RatingChip, focusRating, ratingText, useScale } from '../components/RatingButtons.jsx';
 import SurveyQuestions, { answersTail, useSurvey } from '../components/SurveyQuestions.jsx';
 import { TextingCallButton, noTexts } from '../components/TextingCard.jsx';
-import { KINDS, MINE_KEY, linkWords, useMyPeople } from '../components/RelationshipsBits.jsx';
+import { KINDS, MINE_KEY, NOTE_HELP, linkWords, useMyPeople } from '../components/RelationshipsBits.jsx';
 import { NeedsSignal, NoSignal, noSignal, useOnline } from '../components/NoSignal.jsx';
 import { showingCopy } from '../components/OfflineCache.js';
 import { queuedChip, queuedText } from '../components/queued.js';
@@ -120,7 +120,8 @@ function AddForm({ onClose, onAdded }) {
       {more && (
         <div className="field">
           <label htmlFor="rel-note">Note</label>
-          <input id="rel-note" className="input" maxLength={200} autoComplete="off" placeholder="Book club" value={form.note} onChange={set('note')} />
+          <input id="rel-note" className="input" maxLength={200} autoComplete="off" placeholder="Book club" value={form.note} onChange={set('note')} aria-describedby="rel-note-help" />
+          <p className="rk-help" id="rel-note-help">{NOTE_HELP}</p>
         </div>
       )}
       {error && <p className="error" role="alert">{error}</p>}

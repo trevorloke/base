@@ -446,9 +446,27 @@ than a week after they came off is refused. Contacts are door, phone, text or
   Community · Other), *brought in by*, and each volunteer's **My people** —
   add someone you know, call, text, or rate a talk in person. A profile's
   *Knows* nudges the desk ("Ask Priya Nair — they know each other"; never on
-  a do-not-contact profile) and *Most connected* finds the connectors. A
-  volunteer's add never matches on, or takes, an email the campaign holds, so
-  a possible double is flagged to the desk (*May be the same person as …*).
+  a do-not-contact profile) and *Most connected* finds the connectors (and
+  how many each brought in). A tie can be marked **close**
+  (`relationship.update` also changes its kind or note; a blank note clears
+  it). The desk reads the two ties that matter for up to 20 people at once
+  (`GET /api/relationships/key`: close first, then supporters, then family to
+  other — `shared/ties.js`; never someone asked not to be contacted), and
+  People, lists and sends can pick people by who they know (`knows=supporter
+  · donor · volunteer · any · person:<id>`; the desk's with People only —
+  *donor* also needs Donations — and never a volunteer's, even granted
+  People; a list the desk saved is read whole). Most connected and the key
+  read are the People area's; My people is in no area. On screen: a desk
+  profile shows the ties that matter in one line under its chips ("Knows
+  Sofia Petrova Friend · Close · 4 more · Same address: …"; on a phone two
+  lines at most, long names cut with "…"), and the desk's Calls card does too; Knows has *Close* on each row and *Make
+  a list* ("<Name>’s circle"); People's filter and a list's rules have
+  *Knows* (*Knows a donor* only with Donations). Everyone sees *You know them
+  · Friend* on a profile, the Calls card, the map's door and the walk list,
+  and can tap *I know them* (under More at a door) — saved on the phone with
+  no signal, sent once (one refused says *Not saved*, also once dismissed). A volunteer's add
+  never matches on, or takes, an email the campaign holds, so a possible
+  double is flagged to the desk (*May be the same person as …*).
 - **Lit drops**: *Left lit* is its own outcome (`left_lit`) — literature
   left at a door, a visit and not a conversation. The walk list's *Left
   lit* logs it for everyone at the door in one tap (no rating asked; saved

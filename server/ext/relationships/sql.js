@@ -9,7 +9,8 @@
 //                   a short line. brought_in names the person this link
 //                   brought into the campaign (added new through the other's
 //                   circle) — kept when the link is removed, so "Brought in
-//                   by" stays true. from_person: whose circle it was added
+//                   by" stays true. close: a tie that matters more (one
+//                   mark). from_person: whose circle it was added
 //                   from. removed_at: taken off (the row stays, so a late
 //                   replay of the add is still recognised). The Imagine
 //                   Surrey sample's links are recorded by id with the rest
@@ -34,6 +35,8 @@ create table if not exists relationships (
   removed_by uuid references users(id),
   check (person_a < person_b)
 );
+-- A close tie (relationship.update): one mark, "Close", nothing finer.
+alter table relationships add column if not exists close boolean not null default false;
 create unique index if not exists relationships_pair_idx on relationships (workspace_id, person_a, person_b) where removed_at is null;
 create index if not exists relationships_a_idx on relationships (workspace_id, person_a) where removed_at is null;
 create index if not exists relationships_b_idx on relationships (workspace_id, person_b) where removed_at is null;

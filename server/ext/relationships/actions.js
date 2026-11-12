@@ -1,7 +1,7 @@
 // Relationship actions. Every change is one runAction: table writes + events
 // on the hash chain.
 //
-//   relationship.add     { id?, from_id?, person_id? | person: { id?, name, phone?, email? }, kind?, note? }
+//   relationship.add     { id?, from_id?, person_id? | person: { id?, name, phone?, email? }, kind?, note?, close? }
 //       "<from> knows <person>". from is whose people it goes on: the desk
 //       names anyone (a profile's "+ Someone they know"); a volunteer's is
 //       always their own record (made on their first add, like Count me in).
@@ -19,7 +19,13 @@
 //       is. id is the link's, made on the phone (the offline outbox): a
 //       replay is the same link, even after it was removed. The pair either
 //       way round is one link: adding it again answers duplicate (and takes
-//       a new kind or note).
+//       a new kind or note, and close — never un-marked by adding again).
+//   relationship.update  { id, kind?, note?, close? }  what is given changes:
+//       a note of '' (or only spaces) clears it; close true or false marks or
+//       un-marks a close tie. Only what changes is written, as one 'update'
+//       event with that patch; nothing to change answers duplicate. A
+//       volunteer changes only their own links; any other, or a removed one,
+//       is not found.
 //   relationship.remove  { id }   taken off (kept on the books, removed_at);
 //       a volunteer removes only their own links.
 import { z } from 'zod';
@@ -28,6 +34,7 @@ import { forViewer } from '../../lib/viewer.js';
 import { httpError } from '../../actions/util.js';
 import { findKnown, maybeSame, selfPerson } from './match.js';
 
+// A new role (a candidate) is added here, and to TIE_READERS (index.js) if it reads ties.
 const ALL_ROLES = ['manager', 'treasurer', 'staff', 'volunteer'];
 export const KINDS = ['family', 'friend', 'neighbour', 'work', 'community', 'other'];
 
@@ -47,12 +54,36 @@ export const personOut = (ctx) => {
 };
 export const linkOut = (r) => ({
   id: r.id, kind: r.kind, note: r.note ?? null, person_a: r.person_a, person_b: r.person_b,
-  brought_in: r.brought_in ?? null, created_at: r.created_at ?? null, removed: Boolean(r.removed_at),
+  brought_in: r.brought_in ?? null, created_at: r.created_at ?? null, removed: Boolean(r.removed_at), close: Boolean(r.close),
 });
 
 const livePerson = async (tx, ws, id) => (await tx.query(
   `select ${PERSON_COLS} from persons where id = $1 and workspace_id = $2 and deleted_at is null`, [id, ws],
 )).rows[0] || null;
+
+// A link of this campaign, locked to change it. A volunteer's own links only:
+// someone else's is simply not there for them.
+const linkFor = async (tx, ctx, id, emit) => {
+  const cur = (await tx.query(
+    'select * from relationships where id = $1 and workspace_id = $2 for update', [id, ctx.workspaceId],
+  )).rows[0];
+  if (!cur) throw httpError(404, 'not found');
+  if (ctx.role === 'volunteer') {
+    const me = await selfPerson(tx, ctx, emit);
+    if (!me || (cur.person_a !== me.id && cur.person_b !== me.id)) throw httpError(404, 'not found');
+  }
+  return cur;
+};
+
+// Writes only the fields in patch (kind, note, close), and says so on the log.
+const writePatch = async (tx, ws, id, patch, emit) => {
+  const cols = Object.keys(patch);
+  await tx.query(
+    `update relationships set ${cols.map((k, i) => `${k} = $${i + 3}`).join(', ')}, updated_at = now() where id = $1 and workspace_id = $2`,
+    [id, ws, ...cols.map((k) => patch[k])],
+  );
+  emit('relationship', id, 'update', patch);
+};
 
 // The other end of a link, seen from `fromId`.
 const otherEnd = (r, fromId) => (r.person_a === fromId ? r.person_b : r.person_a);
@@ -72,6 +103,7 @@ export const actions = {
       }).nullish(),
       kind: z.enum(KINDS).nullish(),
       note: blank(z.string().trim().max(200).nullish()),
+      close: z.boolean().optional(),
     })
       .refine((v) => Boolean(v.person_id) !== Boolean(v.person), { message: 'pick someone on the list or add someone new', path: ['person'] })
       .refine((v) => !v.person || v.person.phone || v.person.email, { message: 'add a phone or an email', path: ['person'] }),
@@ -153,34 +185,52 @@ export const actions = {
         [ws, a, b],
       )).rows[0];
       if (live) {
-        // The same link: a new kind or note is taken, nothing else changes.
+        // The same link: a new kind or note is taken, and close if it says
+        // so (adding again never un-marks a tie); nothing else changes.
         const patch = {};
         if (input.kind && input.kind !== live.kind) patch.kind = input.kind;
         if (input.note && input.note !== live.note) patch.note = input.note;
-        if (Object.keys(patch).length) {
-          await tx.query(
-            'update relationships set kind = $3, note = $4, updated_at = now() where id = $1 and workspace_id = $2',
-            [live.id, ws, patch.kind ?? live.kind, patch.note ?? live.note],
-          );
-          emit('relationship', live.id, 'update', patch);
-        }
+        if (input.close === true && !live.close) patch.close = true;
+        if (Object.keys(patch).length) await writePatch(tx, ws, live.id, patch, emit);
         return { relationship: linkOut({ ...live, ...patch }), person: view(other), duplicate: true };
       }
 
       const id = input.id || newId();
       const row = {
         id, person_a: a, person_b: b, kind: input.kind || 'other', note: input.note || null,
-        brought_in: created ? other.id : null, from_person: from.id,
+        brought_in: created ? other.id : null, from_person: from.id, close: input.close === true,
       };
       await tx.query(
-        `insert into relationships (id, workspace_id, person_a, person_b, kind, note, brought_in, from_person, created_by)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-        [id, ws, a, b, row.kind, row.note, row.brought_in, row.from_person, ctx.user?.id || null],
+        `insert into relationships (id, workspace_id, person_a, person_b, kind, note, brought_in, from_person, created_by, close)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        [id, ws, a, b, row.kind, row.note, row.brought_in, row.from_person, ctx.user?.id || null, row.close],
       );
       emit('relationship', id, 'create', {
-        id, person_a: a, person_b: b, kind: row.kind, note: row.note, brought_in: row.brought_in, from: from.id,
+        id, person_a: a, person_b: b, kind: row.kind, note: row.note, brought_in: row.brought_in, from: from.id, close: row.close,
       });
       return { relationship: linkOut(row), person: view(other), created_person: created, matched };
+    },
+  },
+
+  'relationship.update': {
+    roles: ALL_ROLES,
+    input: z.object({
+      id: z.string().uuid(),
+      kind: z.enum(KINDS).optional(),
+      note: z.string().trim().max(200).optional(),
+      close: z.boolean().optional(),
+    }),
+    handler: async (tx, ctx, input, emit) => {
+      const cur = await linkFor(tx, ctx, input.id, emit);
+      if (cur.removed_at) throw httpError(404, 'not found');
+      const patch = {};
+      if (input.kind !== undefined && input.kind !== cur.kind) patch.kind = input.kind;
+      // Absent: unchanged. Blank (trimmed to ''): cleared.
+      if (input.note !== undefined && (input.note || null) !== (cur.note ?? null)) patch.note = input.note || null;
+      if (input.close !== undefined && input.close !== Boolean(cur.close)) patch.close = input.close;
+      if (!Object.keys(patch).length) return { duplicate: true };
+      await writePatch(tx, ctx.workspaceId, cur.id, patch, emit);
+      return { relationship: linkOut({ ...cur, ...patch }) };
     },
   },
 
@@ -189,15 +239,7 @@ export const actions = {
     input: z.object({ id: z.uuid() }),
     handler: async (tx, ctx, input, emit) => {
       const ws = ctx.workspaceId;
-      const cur = (await tx.query(
-        'select * from relationships where id = $1 and workspace_id = $2 for update', [input.id, ws],
-      )).rows[0];
-      if (!cur) throw httpError(404, 'not found');
-      if (ctx.role === 'volunteer') {
-        const me = await selfPerson(tx, ctx, emit);
-        // Someone else's link is simply not there for them.
-        if (!me || (cur.person_a !== me.id && cur.person_b !== me.id)) throw httpError(404, 'not found');
-      }
+      const cur = await linkFor(tx, ctx, input.id, emit);
       if (cur.removed_at) return { id: cur.id, removed: true, duplicate: true };
       await tx.query(
         'update relationships set removed_at = now(), removed_by = $3, updated_at = now() where id = $1 and workspace_id = $2',

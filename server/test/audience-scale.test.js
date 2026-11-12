@@ -1,6 +1,7 @@
 // The new People rules on a city's voter file: 300,000 people (Surrey's is
 // about that), with gifts, memberships, survey answers, shifts and lists in
-// the proportions a campaign has them. Each rule is found through an index
+// the proportions a campaign has them, and 30,000 ties between them (who
+// knows whom: knows=). Each rule is found through an index
 // (ext/audience's on gifts, shift assignments and when someone was added;
 // ext/surveys' on a question's answers; memberships' and lists' own): with
 // sequential scans switched off, its count's plan reads every table through
@@ -96,7 +97,22 @@ before(async () => {
      select $2, $1, id from (select id, abs(hashtext(id::text)) as h from persons where workspace_id = $1) p where h % 200 = 0`,
     [ws, ids.picked],
   );
-  for (const t of ['persons', 'gifts', 'member_terms', 'contacts', 'survey_responses', 'shifts', 'shift_assignments', 'list_members']) await db.query(`analyze ${t}`);
+  // One person in ten knows the next one along (30,000 ties among 300,000);
+  // one in five hundred holds a volunteer role.
+  await db.query(
+    `with n as (select id, row_number() over (order by id) as i from persons where workspace_id = $1)
+     insert into relationships (id, workspace_id, person_a, person_b, kind, close)
+     select gen_random_uuid(), $1, least(a.id, b.id), greatest(a.id, b.id), 'friend', a.i % 30 = 0
+       from n a join n b on b.i = a.i + 1 where a.i % 10 = 0`,
+    [ws],
+  );
+  await db.query(
+    `insert into volunteer_roles (id, workspace_id, person_id, role)
+     select gen_random_uuid(), $1, id, 'canvasser' from (select id, abs(hashtext(id::text)) as h from persons where workspace_id = $1) p where h % 500 = 0`,
+    [ws],
+  );
+  ids.knower = (await db.query('select person_a as id from relationships where workspace_id = $1 order by id limit 1', [ws])).rows[0].id;
+  for (const t of ['persons', 'gifts', 'member_terms', 'contacts', 'survey_responses', 'shifts', 'shift_assignments', 'list_members', 'relationships', 'volunteer_roles']) await db.query(`analyze ${t}`);
 });
 
 // Each rule, the table it reads beside persons, and the index that finds it there.
@@ -115,6 +131,11 @@ const RULES = () => [
   ['notlist (a saved filter)', { notlist: ids.ones }, /persons_/],
   ['list (hand-picked)', { list: ids.picked }, /list_members_pkey/],
   ['notlist (hand-picked)', { notlist: ids.picked }, /list_members_pkey/],
+  ['knows=supporter', { knows: 'supporter' }, /relationships_[ab]_idx/],
+  ['knows=donor', { knows: 'donor' }, /relationships_[ab]_idx[\s\S]*gifts_ws(_person_date)?_idx|gifts_ws(_person_date)?_idx[\s\S]*relationships_[ab]_idx/],
+  ['knows=volunteer', { knows: 'volunteer' }, /relationships_[ab]_idx[\s\S]*vroles_ws_\w+_idx|vroles_ws_\w+_idx[\s\S]*relationships_[ab]_idx/],
+  ['knows=any', { knows: 'any' }, /relationships_[ab]_idx/],
+  ['knows=person', { knows: `person:${ids.knower}` }, /relationships_[ab]_idx/],
 ];
 const countSql = async (query) => {
   const { where, params } = await personsWhere(db, ctx, query);
@@ -154,6 +175,15 @@ test(`${PEOPLE.toLocaleString('en-CA')} people: each rule’s count comes back q
   assert.equal(counts['list (hand-picked)'] + counts['notlist (hand-picked)'], PEOPLE);
   assert.equal(counts['list (a saved filter)'], await n(`select count(*) as n from persons where workspace_id = $1 and rating = '1'`));
   assert.ok(counts['shift=came:30'] > 0 && counts['shift=missed:30'] > 0 && counts.since > 0);
+  // Who they know, counted the long way round.
+  const ends = `(select person_a as who, person_b as other from relationships where workspace_id = $1
+                 union all select person_b, person_a from relationships where workspace_id = $1) e`;
+  assert.equal(counts['knows=any'], await n(`select count(distinct who) as n from ${ends}`));
+  assert.equal(counts['knows=supporter'], await n(`select count(distinct who) as n from ${ends} join persons o on o.id = e.other where o.rating in ('1', '2')`));
+  assert.equal(counts['knows=donor'], await n(`select count(distinct who) as n from ${ends} where other in (select person_id from gifts where workspace_id = $1)`));
+  assert.equal(counts['knows=volunteer'], await n(`select count(distinct who) as n from ${ends} where other in (select person_id from volunteer_roles where workspace_id = $1)`));
+  assert.equal(counts['knows=person'], 1);
+  assert.ok(counts['knows=any'] >= Math.floor(PEOPLE / 10) && counts['knows=supporter'] > 0 && counts['knows=donor'] > 0 && counts['knows=volunteer'] > 0);
   // The People total and a list's numbers, over the whole file.
   const t1 = performance.now();
   assert.equal(ok(await mgr.get('/api/persons/count')).total, PEOPLE);

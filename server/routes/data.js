@@ -643,18 +643,18 @@ app.post('/sample', async (c) => {
     }
     // Who knows whom (ext/relationships): each pair kept in order, once — a
     // pair someone used again already has (your link) is left as it is.
-    for (const [a, b, kind, note, broughtIn] of S.relationships) {
+    for (const [a, b, kind, note, broughtIn, close] of S.relationships) {
       const lid = newId();
       const link = (await tx.query(
-        `insert into relationships (id, workspace_id, person_a, person_b, kind, note, brought_in, from_person, created_by)
-         values ($1, $2, least($3::uuid, $4::uuid), greatest($3::uuid, $4::uuid), $5, $6, $7, $3, $8)
+        `insert into relationships (id, workspace_id, person_a, person_b, kind, note, brought_in, from_person, created_by, close)
+         values ($1, $2, least($3::uuid, $4::uuid), greatest($3::uuid, $4::uuid), $5, $6, $7, $3, $8, $9)
          on conflict (workspace_id, person_a, person_b) where removed_at is null do nothing
          returning person_a, person_b`,
-        [lid, W, id[a], id[b], kind, note || null, broughtIn && !reused.has(id[b]) ? id[b] : null, ctx.user.id],
+        [lid, W, id[a], id[b], kind, note || null, broughtIn && !reused.has(id[b]) ? id[b] : null, ctx.user.id, Boolean(close)],
       )).rows[0];
       if (!link) continue;
       ids.relationships.push(lid);
-      emit('relationship', lid, 'create', { ...link, kind, sample: true });
+      emit('relationship', lid, 'create', { ...link, kind, close: Boolean(close), sample: true });
     }
     // Dates relative to today: monthly gifts are current (last week), one-time
     // gifts spread back through the year — never in the future, never before Jan 1.

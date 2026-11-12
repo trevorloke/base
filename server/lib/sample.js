@@ -107,15 +107,15 @@ export const buildSample = () => {
   ];
   // Who knows whom (ext/relationships): Priya Nair, a sample volunteer, and
   // her people; Gurpreet's and Sam's; a few more. [a, b, kind, note, b was
-  // brought in by a].
+  // brought in by a, a close tie].
   const relationships = [
     ['Priya Nair', 'Jasmine Wong', 'neighbour', 'Same block'],
     ['Priya Nair', 'Liam O’Connor', 'neighbour'],
     ['Priya Nair', 'Daniel Kim', 'friend'],
     ['Priya Nair', 'Fatima Rahimi', 'community'],
     ['Priya Nair', 'Maya Chen', 'work'],
-    ['Priya Nair', 'Sofia Petrova', 'friend', null, true],
-    ['Gurpreet Sandhu', 'Navdeep Sandhu', 'family'],
+    ['Priya Nair', 'Sofia Petrova', 'friend', null, true, true],
+    ['Gurpreet Sandhu', 'Navdeep Sandhu', 'family', null, false, true],
     ['Gurpreet Sandhu', 'Harjit Gill', 'community'],
     ['Gurpreet Sandhu', 'Manpreet Dhaliwal', 'family'],
     ['Gurpreet Sandhu', 'Ravi Shankar', 'community'],

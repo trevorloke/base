@@ -78,6 +78,8 @@ const PATH_AREA = [
   [/^\/api\/(banks|lists)(\/|$)/, 'people'],
   [/^\/api\/callhub(\/|$)/, 'people'],
   [/^\/api\/persons(\/|$)/, 'people'],
+  // Other people's ties; My people (/relationships/mine) is in no area on purpose.
+  [/^\/api\/relationships\/(key|connected)(\/|$)/, 'people'],
   [/^\/api\/duplicates$/, 'people'],
   [/^\/api\/passes(\/|$)/, 'map'],
   [/^\/api\/voted(\/|$)/, 'people'],
