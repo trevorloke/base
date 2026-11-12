@@ -458,8 +458,8 @@ than a week after they came off is refused. Contacts are door, phone, text or
   People; a list the desk saved is read whole). Most connected and the key
   read are the People area's; My people is in no area. On screen: a desk
   profile shows the ties that matter in one line under its chips ("Knows
-  Sofia Petrova Friend · Close · 4 more · Same address: …"; two on a phone),
-  and the desk's Calls card does too; Knows has *Close* on each row and *Make
+  Sofia Petrova Friend · Close · 4 more · Same address: …"; on a phone two
+  lines at most, long names cut with "…"), and the desk's Calls card does too; Knows has *Close* on each row and *Make
   a list* ("<Name>’s circle"); People's filter and a list's rules have
   *Knows* (*Knows a donor* only with Donations). Everyone sees *You know them
   · Friend* on a profile, the Calls card, the map's door and the walk list,
