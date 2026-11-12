@@ -50,6 +50,9 @@ test('a volunteer gets 403 on every Website read and write; staff too, until a m
     ['site.post.publish', { id: pageId }], ['site.post.delete', { id: pageId }], ['site.campaign.save', { kind: 'petition', title: 'x' }],
     ['site.campaign.close', { id: camp.id }], ['site.campaign.delete', { id: camp.id }], ['site.picture', { data: 'aGk=' }],
     ['site.page.restore', { id: pageId }], ['site.post.restore', { id: pageId }], ['site.campaign.restore', { id: camp.id }],
+    ['site.microsite.create', { name: 'x' }], ['site.microsite.save', { id: pageId, name: 'x' }], ['site.microsite.domains', { id: pageId, domains: [] }],
+    ['site.microsite.live', { id: pageId, live: true }], ['site.microsite.delete', { id: pageId }], ['site.microsite.restore', { id: pageId }],
+    ['site.microsite.release', { id: pageId }],
     ['shift.public', { id: pageId, public: true }],
   ];
   for (const who of [vol.client, staff.client]) {
