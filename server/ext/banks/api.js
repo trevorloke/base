@@ -4,6 +4,9 @@
 //                       (?limit, ?offset: 2,000 at a time), each done or not, still to call or not
 // GET /banks/:id/mine   anyone: my numbers in this bank that are left, as people (the Calls screen's list) —
 //                       the first 500 to call now; bank.left says how many in all
+// A call-time bank (candidate_id: ext/candidates) is the desk's to see as
+// "Call time · <name>", and its candidate's to work on /call-time alone:
+// it is never on anyone's /banks/mine.
 // "Left" and "still to call" are as things stand (numbers.js): someone who
 // can no longer be called — or, in a bank made from a list, has left the
 // list — is off the caller's list and out of their count at once.
@@ -28,10 +31,12 @@ api.get('/banks', async (c) => {
   const ctx = c.get('ctx'); const db = c.get('db'); const ws = ctx.workspaceId;
   if (!isDesk(ctx)) return c.json({ error: 'desk only' }, 403);
   const banks = (await db.query(
-    `select b.id, b.name, b.script, b.created_at, b.closed_at, b.list_id, l.name as list_name, u.name as created_by, ${COUNTS}
+    `select b.id, b.name, b.script, b.created_at, b.closed_at, b.list_id, l.name as list_name, u.name as created_by,
+            b.candidate_id, b.ask_cents, cd.name as candidate_name, ${COUNTS}
        from call_banks b left join users u on u.id = b.created_by left join call_bank_numbers n on n.bank_id = b.id
        left join lists l on l.id = b.list_id and l.deleted_at is null
-      where b.workspace_id = $1 and b.deleted_at is null group by b.id, u.name, l.name order by b.closed_at nulls first, b.created_at desc`, [ws],
+       left join candidates cd on cd.id = b.candidate_id
+      where b.workspace_id = $1 and b.deleted_at is null group by b.id, u.name, l.name, cd.name order by b.closed_at nulls first, b.created_at desc`, [ws],
   )).rows;
   const callers = (await db.query(
     `select n.bank_id, n.assigned_to as user_id, u.name, count(*)::int as total, count(n.done_at)::int as done
@@ -62,7 +67,7 @@ api.get('/banks/mine', async (c) => {
   const ctx = c.get('ctx'); const db = c.get('db');
   const banks = (await db.query(
     `select b.id, b.name, b.script, b.list_id from call_banks b
-      where b.workspace_id = $1 and b.deleted_at is null and b.closed_at is null
+      where b.workspace_id = $1 and b.deleted_at is null and b.closed_at is null and b.candidate_id is null
         and exists (select 1 from call_bank_numbers n where n.bank_id = b.id and n.assigned_to = $2)
       order by b.created_at desc`, [ctx.workspaceId, ctx.user.id],
   )).rows;
@@ -80,7 +85,8 @@ api.get('/banks/:id', async (c) => {
   if (!UUID.test(id)) return c.json({ error: 'not found' }, 404);
   if (!isDesk(ctx)) return c.json({ error: 'desk only' }, 403);
   const b = (await db.query(
-    `select b.*, l.name as list_name from call_banks b left join lists l on l.id = b.list_id and l.deleted_at is null
+    `select b.*, l.name as list_name, cd.name as candidate_name from call_banks b
+       left join lists l on l.id = b.list_id and l.deleted_at is null left join candidates cd on cd.id = b.candidate_id
       where b.id = $1 and b.workspace_id = $2 and b.deleted_at is null`, [id, ws],
   )).rows[0];
   if (!b) return c.json({ error: 'not found' }, 404);
@@ -106,7 +112,7 @@ api.get('/banks/:id/mine', async (c) => {
   const ctx = c.get('ctx'); const db = c.get('db'); const ws = ctx.workspaceId;
   const id = c.req.param('id');
   if (!UUID.test(id)) return c.json({ error: 'not found' }, 404);
-  const b = (await db.query('select id, name, script, closed_at, retry_hours, max_tries, list_id from call_banks where id = $1 and workspace_id = $2 and deleted_at is null', [id, ws])).rows[0];
+  const b = (await db.query('select id, name, script, closed_at, retry_hours, max_tries, list_id from call_banks where id = $1 and workspace_id = $2 and deleted_at is null and candidate_id is null', [id, ws])).rows[0];
   if (!b) return c.json({ error: 'not found' }, 404);
   const params = [id, ctx.user.id];
   const still = await stillOn(db, ctx, b, params);

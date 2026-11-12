@@ -39,4 +39,9 @@ alter table call_bank_numbers add column if not exists next_at timestamptz;
 -- the list leaves the calls not yet made (numbers.js). No foreign key: the
 -- lists table is a later feature's, and a deleted list is only marked so.
 alter table call_banks add column if not exists list_id uuid;
+-- Call time (ext/candidates): a bank for one candidate to call, every
+-- number theirs, with the ask the desk set. No foreign key: candidates is a
+-- later feature's table, and a removed candidate is only marked so.
+alter table call_banks add column if not exists candidate_id uuid;
+alter table call_banks add column if not exists ask_cents int;
 `;

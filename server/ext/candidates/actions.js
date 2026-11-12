@@ -13,6 +13,7 @@ import { httpError } from '../../actions/util.js';
 import { newId } from '../../lib/events.js';
 import { sendEmail } from '../../lib/notify.js';
 import { writeInvite, linkMember } from './invite.js';
+import { handCallTime } from './hand.js';
 
 const MANAGER = ['manager'];
 const uuid = () => z.uuid();
@@ -106,6 +107,7 @@ export const actions = {
       const cand = await loadCandidate(tx, ctx.workspaceId, input.id, { lock: true });
       if (cand.user_id) {
         await tx.query('update candidates set user_id = null where id = $1', [cand.id]);
+        await handCallTime(tx, ctx.workspaceId, cand.id, null);
         emit('candidate', cand.id, 'update', { unlinked: cand.user_id });
       }
       return { id: cand.id, unlinked: Boolean(cand.user_id) };
@@ -120,6 +122,7 @@ export const actions = {
       const ws = ctx.workspaceId;
       const cand = await loadCandidate(tx, ws, input.id, { lock: true });
       await tx.query('update candidates set removed_at = now(), user_id = null where id = $1', [cand.id]);
+      await handCallTime(tx, ws, cand.id, null);
       // A link still out for this seat stops working.
       const ended = (await tx.query(
         `update invites set expires_at = now()

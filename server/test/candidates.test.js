@@ -298,3 +298,262 @@ test('a removed candidate loses the seat on their very next request', async () =
   assert.ok(!(await seats()).some((c) => c.id === ids.council), 'off the list');
   assert.equal((await mgr.action('candidate.invite', { id: ids.council })).status, 404);
 });
+
+// ── Stage 2: call time and pledges ──
+// A call-time bank is a phone bank for one candidate: made by the desk
+// holding Donations, every number the candidate's, crossed off only by
+// their own call-time log. A pledge is a promise heard, never a gift.
+const ct = {};
+// The campaign's today (B.C.), as the gift form and the room count it.
+const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Vancouver', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+const thisYear = () => Number(today().slice(0, 4));
+const seat = async (name) => {
+  const id = ok(await mgr.action('candidate.save', { name: `${name} Example`, office: 'Council', race: 'council', email: `${name.toLowerCase()}.ct@example.org` })).candidate.id;
+  return id;
+};
+const sit = async (seatId, name) => {
+  const { cl, r } = await join(ok(await mgr.action('candidate.invite', { id: seatId })).joinUrl, `${name} Example`);
+  ok(r);
+  ids[name] = r.json.user.id;
+  return cl;
+};
+const numbersOf = async (bankId) => (await (await getDb()).query(
+  'select person_id, assigned_to, done_at from call_bank_numbers where bank_id = $1 order by position', [bankId],
+)).rows;
+const openFor = async (bankId, personId) => (await numbersOf(bankId)).find((n) => n.person_id === personId).done_at === null;
+
+test('call time: only the desk holding Donations makes one; every number is the candidate’s', async () => {
+  ct.pat = await seat('Pat');
+  ct.patCl = await sit(ct.pat, 'Pat');
+  ct.quinn = await seat('Quinn');
+  ct.tess = await joinAs('treasurer', 'Tess');
+  ct.sid = await joinAs('staff', 'Sid');
+  ct.donors = [];
+  for (const [i, n] of ['Dee', 'Eli', 'Fay'].entries()) {
+    ct.donors.push((await mgr.createPerson(`${n} Example`, { phone: `604-555-01${String(40 + i)}`, email: `${n.toLowerCase()}.ct@example.org`, tags: ['donor'] })).id);
+  }
+  const make = (cl, extra = {}) => cl.action('bank.create', { name: 'Pat’s call time', person_ids: ct.donors, candidate_id: ct.pat, ask_cents: 25000, ...extra });
+  // A volunteer given People makes ordinary banks, never call time.
+  ok(await mgr.action('permission.role.set', { role: 'volunteer', grant: ['people'], deny: [] }));
+  let r = await make(vol);
+  assert.deepEqual([r.status, r.json.error], [403, 'Call time needs the Donations area']);
+  ok(await vol.action('bank.create', { name: 'Vic’s own', person_ids: [] }));
+  ok(await mgr.action('permission.role.set', { role: 'volunteer', grant: [], deny: [] }));
+  // A candidate given People: the same.
+  ok(await mgr.action('permission.role.set', { role: 'candidate', grant: ['people'], deny: [] }));
+  r = await make(ct.patCl);
+  assert.deepEqual([r.status, r.json.error], [403, 'Call time needs the Donations area']);
+  ok(await mgr.action('permission.role.set', { role: 'candidate', grant: [], deny: [] }));
+  // Staff denied Donations.
+  ok(await mgr.action('permission.member.set', { user_id: ids.Sid, grant: [], deny: ['money'] }));
+  r = await make(ct.sid);
+  assert.deepEqual([r.status, r.json.error], [403, 'Call time needs the Donations area']);
+  r = await ct.sid.action('bank.create', { name: 'x', person_ids: [], ask_cents: 1000 });
+  assert.equal(r.status, 403, 'an ask alone is call time too');
+  r = await make(ct.tess, { candidate_id: ids.Vic });
+  assert.deepEqual([r.status, r.json.error], [400, 'Pick a candidate']);
+  // The treasurer: made, and every number Pat’s at once.
+  const made = ok(await make(ct.tess)).bank;
+  ct.patBank = made.id;
+  assert.deepEqual([made.candidate_id, made.candidate_name, made.ask_cents, made.total, made.assigned], [ct.pat, 'Pat Example', 25000, 3, 3]);
+  assert.ok((await numbersOf(ct.patBank)).every((n) => n.assigned_to === ids.Pat));
+  // Quinn hasn't signed in: nobody's numbers until they do.
+  ct.quinnBank = ok(await mgr.action('bank.create', { name: 'Quinn’s call time', person_ids: ct.donors.slice(0, 1), candidate_id: ct.quinn })).bank.id;
+  assert.equal((await numbersOf(ct.quinnBank))[0].assigned_to, null);
+  // The desk can’t hand them out or take them back.
+  for (const [name, input] of [['bank.assign', { id: ct.patBank, user_id: ids.Vic }], ['bank.release', { id: ct.patBank }]]) {
+    r = await mgr.action(name, input);
+    assert.deepEqual([r.status, r.json.error], [409, 'This is Pat Example’s call time'], name);
+  }
+  // Not on anyone's own bank list: worked on /call-time alone.
+  assert.equal(ok(await ct.patCl.get('/api/banks/mine')).banks.length, 0);
+  assert.equal((await ct.patCl.get(`/api/banks/${ct.patBank}/mine`)).status, 404);
+  const desk = ok(await mgr.get('/api/banks')).banks.find((b) => b.id === ct.patBank);
+  assert.deepEqual([desk.candidate_name, desk.ask_cents], ['Pat Example', 25000]);
+  const listed = (await seats()).find((c) => c.id === ct.pat);
+  assert.deepEqual(listed.calltime, { left: 3, pledged_cents: 0 });
+  const home = ok(await ct.patCl.get('/api/candidate/home'));
+  assert.deepEqual([home.calltime.left, home.calltime.banks.map((b) => b.id)], [3, [ct.patBank]]);
+});
+
+test('crossing off: other calls and CallHub never touch call time; a call-time call touches no other bank', async () => {
+  const dee = ct.donors[0];
+  // Quinn's number for Dee is nobody's yet. A volunteer's call to Dee leaves it.
+  ok(await vol.action('contact.log', { person_id: dee, channel: 'phone', outcome: 'contacted' }));
+  assert.ok(await openFor(ct.quinnBank, dee), 'a volunteer’s call');
+  assert.ok(await openFor(ct.patBank, dee));
+  // A call made in CallHub (any caller's) leaves it too.
+  const { crossOff } = await import('../ext/banks/actions.js');
+  const db = await getDb();
+  const ws = (await db.query('select workspace_id from candidates where id = $1', [ct.quinn])).rows[0].workspace_id;
+  ct.ws = ws;
+  await crossOff(db, { workspaceId: ws, user: { id: null } }, { contact: { person_id: dee, channel: 'phone', outcome: 'contacted' }, anyCaller: true });
+  assert.ok(await openFor(ct.quinnBank, dee), 'a CallHub result');
+  assert.ok(await openFor(ct.patBank, dee));
+  // Quinn signs in: the number is theirs now.
+  ct.quinnCl = await sit(ct.quinn, 'Quinn');
+  assert.equal((await numbersOf(ct.quinnBank))[0].assigned_to, ids.Quinn, 'handed over on link');
+  // Dee in a volunteers' bank too. Pat's call-time answer crosses off Pat's number only.
+  ct.volBank = ok(await mgr.action('bank.create', { name: 'Volunteers', person_ids: [dee] })).bank.id;
+  ok(await ct.patCl.action('calltime.log', { client_id: newId(), bank_id: ct.patBank, person_id: dee, result: 'no' }));
+  assert.equal(await openFor(ct.patBank, dee), false, 'Pat’s own');
+  assert.ok(await openFor(ct.volBank, dee), 'the volunteers’ bank');
+  assert.ok(await openFor(ct.quinnBank, dee), 'another candidate’s call time');
+});
+
+test('the call-time card: giving, room and the ask — no email or tags; theirs alone', async () => {
+  const [dee, eli, fay] = ct.donors;
+  ok(await mgr.action('gift.log', { person_id: eli, amount_cents: 50000, date: today(), slate: 'council', method: 'cheque' }));
+  ok(await mgr.action('gift.log', { person_id: fay, amount_cents: 20000, date: `${thisYear() - 1}-06-01`, slate: 'council', method: 'cheque' }));
+  const page = ok(await ct.patCl.get(`/api/calltime/${ct.patBank}`));
+  assert.deepEqual([page.bank.name, page.bank.left], ['Pat’s call time', 2], 'Dee is done');
+  const eliRow = page.numbers.find((n) => n.person_id === eli);
+  assert.deepEqual(
+    [eliRow.name, eliRow.phone, eliRow.given_year_cents, eliRow.given_ever_cents, eliRow.last_gift, eliRow.room_cents, eliRow.ask_cents],
+    ['Eli Example', '604-555-0141', 50000, 50000, { amount_cents: 50000, date: today() }, 142970 - 50000, 25000],
+  );
+  const fayRow = page.numbers.find((n) => n.person_id === fay);
+  assert.deepEqual([fayRow.given_year_cents, fayRow.given_ever_cents, fayRow.room_cents], [0, 20000, 142970]);
+  for (const n of page.numbers) assert.deepEqual(Object.keys(n).filter((k) => ['email', 'tags', 'note', 'attrs'].includes(k)), [], 'no email, tags or notes');
+  assert.equal(page.donate_url, null, 'no live donate page');
+  // Anyone else: not found. A bad id: not found. "pledges" is never a bank id.
+  assert.equal((await ct.quinnCl.get(`/api/calltime/${ct.patBank}`)).status, 404, 'another candidate');
+  assert.equal((await vol.get(`/api/calltime/${ct.patBank}`)).status, 404, 'a volunteer');
+  assert.equal((await mgr.get(`/api/calltime/${ct.patBank}`)).status, 404, 'the desk works it from Phone banks');
+  assert.equal((await ct.patCl.get('/api/calltime/nope')).status, 404);
+  assert.equal((await ct.patCl.get('/api/calltime/pledges')).status, 403, 'the treasurer’s list, not a bank');
+  assert.equal(ok(await ct.tess.get('/api/calltime/pledges')).pledges.length, 0);
+});
+
+test('calltime.log: each answer, a bank call with no words on it, within the room, once', async () => {
+  const [, eli, fay] = ct.donors;
+  const db = await getDb();
+  // Over the room: refused in the server's words.
+  const over = await ct.patCl.action('calltime.log', { client_id: newId(), bank_id: ct.patBank, person_id: eli, result: 'pledged', amount_cents: 100000 });
+  assert.deepEqual([over.status, over.json.error], [400, 'That’s over what they can give this year — up to $929.70']);
+  // No answer: back on the list later, as any bank call.
+  const na = ok(await ct.patCl.action('calltime.log', { client_id: newId(), bank_id: ct.patBank, person_id: fay, result: 'no_answer' }));
+  assert.ok(na.bank?.back_at, 'calls back');
+  assert.ok(await openFor(ct.patBank, fay));
+  ok(await ct.patCl.action('calltime.log', { client_id: newId(), bank_id: ct.patBank, person_id: fay, result: 'left_message' }));
+  // A pledge, with a note: denies on the Candidates row don't stop it.
+  ok(await mgr.action('permission.role.set', { role: 'candidate', grant: [], deny: ['people', 'money'] }));
+  const key = newId();
+  const p = ok(await ct.patCl.action('calltime.log', { client_id: key, bank_id: ct.patBank, person_id: eli, result: 'pledged', amount_cents: 25000, note: 'Wants a lawn sign too' }));
+  ok(await mgr.action('permission.role.set', { role: 'candidate', grant: [], deny: [] }));
+  assert.deepEqual([p.result.result, p.result.amount_cents], ['pledged', 25000]);
+  ct.pledge = p.result.id;
+  const again = ok(await ct.patCl.action('calltime.log', { client_id: key, bank_id: ct.patBank, person_id: eli, result: 'pledged', amount_cents: 25000 }));
+  assert.deepEqual([again.result.id, again.duplicate], [ct.pledge, true], 'a replay is the same answer');
+  assert.equal((await db.query('select count(*)::int as n from calltime_results where client_id = $1', [key])).rows[0].n, 1);
+  // The call is a phone contact with no words; the event names no note.
+  const contact = (await db.query('select channel, outcome, note from contacts where client_id = $1', [key])).rows[0];
+  assert.deepEqual(contact, { channel: 'phone', outcome: 'contacted', note: null });
+  const ev = (await db.query("select payload from events where entity_type = 'calltime_result' and entity_id = $1", [ct.pledge])).rows[0];
+  assert.equal(ev.payload.has_note, true);
+  assert.ok(!JSON.stringify(ev.payload).includes('lawn sign'), 'never the note’s words');
+  // A second candidate's pledge for Eli: refused once the two together go over.
+  ok(await mgr.action('bank.add', { id: ct.quinnBank, person_ids: [eli] }));
+  const together = await ct.quinnCl.action('calltime.log', { client_id: newId(), bank_id: ct.quinnBank, person_id: eli, result: 'pledged', amount_cents: 70000 });
+  assert.deepEqual([together.status, together.json.error], [400, 'That’s over what they can give this year — up to $679.70']);
+  // Who else may not: staff (the desk), a plain volunteer, another candidate's bank, a pledge with no amount.
+  assert.equal((await mgr.action('calltime.log', { client_id: newId(), bank_id: ct.patBank, person_id: eli, result: 'no' })).status, 403);
+  assert.equal((await vol.action('calltime.log', { client_id: newId(), bank_id: ct.patBank, person_id: eli, result: 'no' })).status, 403);
+  const theirs = await ct.quinnCl.action('calltime.log', { client_id: newId(), bank_id: ct.patBank, person_id: fay, result: 'no' });
+  assert.deepEqual([theirs.status, theirs.json.error], [403, 'That’s not on your call time']);
+  assert.equal((await ct.patCl.action('calltime.log', { client_id: newId(), bank_id: ct.patBank, person_id: fay, result: 'pledged' })).status, 400);
+  // The card now: Eli's room counts the pledge.
+  const page = ok(await ct.patCl.get(`/api/calltime/${ct.patBank}`));
+  assert.deepEqual(page.done, { calls: 4, pledged_cents: 25000 });
+  assert.equal(page.numbers.some((n) => n.person_id === eli), false, 'Eli is called');
+});
+
+test('room: roomsFor is roomFor less open pledges, donor by donor', async () => {
+  const { roomFor } = await import('../ext/payments/limits.js');
+  const { roomsFor, pledgedFor } = await import('../ext/candidates/room.js');
+  const db = await getDb();
+  const ws = (await db.query('select id, jurisdiction, settings from workspaces where id = $1', [ct.ws])).rows[0];
+  // Five kinds: nothing given, a gift this year and a pledge (Eli), last
+  // year only (Fay), a monthly gift running, and a gift on the other slate.
+  const monthly = (await mgr.createPerson('Gus Example')).id;
+  await db.query(`insert into gift_pledges (id, workspace_id, person_id, amount_cents, slate, starts_on) values ($1, $2, $3, 5000, 'council', $4)`,
+    [newId(), ct.ws, monthly, `${thisYear()}-01-01`]);
+  const other = (await mgr.createPerson('Hal Example')).id;
+  ok(await mgr.action('gift.log', { person_id: other, amount_cents: 30000, date: today(), slate: 'school_board', method: 'cheque' }));
+  const five = [ct.donors[0], ct.donors[1], ct.donors[2], monthly, other];
+  const many = await roomsFor(db, ws, five, 'council');
+  for (const id of five) {
+    const one = await roomFor(db, ws, id, 'council');
+    const less = Math.max(0, one.roomCents - await pledgedFor(db, ws, id, 'council'));
+    assert.equal(many.get(id).roomCents, less, id);
+  }
+  assert.equal(many.get(ct.donors[1]).roomCents, 142970 - 50000 - 25000);
+});
+
+test('pledges for the treasurer: a gift in, dropped, 60 days, the brief, the export', async () => {
+  const eli = ct.donors[1];
+  let list = ok(await ct.tess.get('/api/calltime/pledges'));
+  assert.equal(list.pledges.length, 1);
+  const p = list.pledges[0];
+  assert.deepEqual([p.person.name, p.candidate, p.amount_cents, p.gift_in, p.note], ['Eli Example', 'Pat Example', 25000, null, 'Wants a lawn sign too']);
+  assert.deepEqual(list.open, { n: 1, cents: 25000 });
+  assert.deepEqual(ok(await ct.tess.get('/api/brief')).calltime_pledges, { n: 1, cents: 25000 });
+  assert.equal(ok(await ct.patCl.get('/api/brief')).calltime_pledges, undefined, 'not a candidate’s');
+  assert.equal((await vol.get('/api/calltime/pledges')).status, 403);
+  // The gift comes in (the treasurer logs it): "Gift in", and no longer open.
+  ok(await ct.tess.action('gift.log', { person_id: eli, amount_cents: 25000, date: today(), slate: 'council', method: 'cheque' }));
+  list = ok(await ct.tess.get('/api/calltime/pledges'));
+  assert.deepEqual(list.pledges[0].gift_in, { amount_cents: 25000, date: today() });
+  assert.deepEqual(list.open, { n: 0, cents: 0 });
+  assert.deepEqual(ok(await ct.tess.get('/api/brief')).calltime_pledges, { n: 0, cents: 0 });
+  // Another pledge, dropped by the treasurer (a candidate may not).
+  const fay = ct.donors[2];
+  const p2 = ok(await ct.patCl.action('calltime.log', { client_id: newId(), bank_id: ct.patBank, person_id: fay, result: 'pledged', amount_cents: 10000 })).result.id;
+  assert.equal((await ct.patCl.action('calltime.drop', { id: p2 })).status, 403);
+  assert.equal((await ct.sid.action('calltime.drop', { id: p2 })).status, 403, 'staff denied Donations');
+  ok(await ct.tess.action('calltime.drop', { id: p2 }));
+  assert.ok(!ok(await ct.tess.get('/api/calltime/pledges')).pledges.some((x) => x.id === p2));
+  // Older than 60 days: off the list (still in the export).
+  const db = await getDb();
+  await db.query("update calltime_results set said_on = said_on - 61, created_at = created_at - interval '61 days' where id = $1", [ct.pledge]);
+  assert.equal(ok(await ct.tess.get('/api/calltime/pledges')).pledges.length, 0);
+  const exp = ok(await mgr.get('/api/export'));
+  const rows = exp.calltime_results || exp.tables?.calltime_results;
+  assert.ok(Array.isArray(rows) && rows.length >= 2, `calltime_results in the export: ${Object.keys(exp).join(',')}`);
+});
+
+test('isolation: two candidates on one slate never see each other’s call time', async () => {
+  assert.equal((await ct.quinnCl.get(`/api/calltime/${ct.patBank}`)).status, 404);
+  assert.equal((await ct.patCl.get(`/api/calltime/${ct.quinnBank}`)).status, 404);
+  const qh = ok(await ct.quinnCl.get('/api/candidate/home'));
+  assert.deepEqual(qh.calltime.banks.map((b) => b.id), [ct.quinnBank]);
+  assert.equal(qh.calltime.pledged_week_cents, 0);
+  assert.equal(ok(await ct.patCl.get('/api/candidate/home')).calltime.pledged_week_cents, 0, 'the old one is past the week; the dropped one isn’t counted');
+});
+
+test('measured: a call-time page of 200 numbers', async () => {
+  const db = await getDb();
+  const people = [];
+  for (let i = 0; i < 200; i++) {
+    const id = newId();
+    people.push(id);
+    await db.query('insert into persons (id, workspace_id, name, phone) values ($1, $2, $3, $4)', [id, ct.ws, `Many Example ${i}`, `604-555-${String(1000 + i).slice(-4)}`]);
+    if (i % 3 === 0) await db.query("insert into gifts (id, workspace_id, person_id, amount_cents, date, slate) values ($1, $2, $3, 10000, $4, 'council')", [newId(), ct.ws, id, today()]);
+  }
+  const bank = ok(await mgr.action('bank.create', { name: 'Big call time', person_ids: people, candidate_id: ct.pat })).bank.id;
+  ok(await ct.patCl.get(`/api/calltime/${bank}`)); // warm
+  let queries = 0;
+  const real = db.query.bind(db);
+  db.query = (...a) => { queries++; return real(...a); };
+  const t0 = performance.now();
+  let page;
+  try {
+    page = ok(await ct.patCl.get(`/api/calltime/${bank}`));
+  } finally {
+    db.query = real;
+  }
+  const ms = performance.now() - t0;
+  console.log(`# call-time page: ${page.numbers.length} numbers in ${ms.toFixed(0)} ms, ${queries} queries (with sign-in)`);
+  assert.equal(page.numbers.length, 200);
+  assert.ok(queries < 30, `a fixed handful of queries, not one per donor: ${queries}`);
+});

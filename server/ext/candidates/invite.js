@@ -9,6 +9,7 @@ import { randomBytes, createHash } from 'node:crypto';
 import { slateLabel } from '@starbase/shared/canvass';
 import { httpError } from '../../actions/util.js';
 import { newId } from '../../lib/events.js';
+import { handCallTime } from './hand.js';
 
 export const ROLE_WORDS = { manager: 'a manager', treasurer: 'a treasurer', staff: 'staff', volunteer: 'a volunteer' };
 
@@ -49,6 +50,7 @@ export const linkMember = async (tx, emit, ws, cand, member) => {
   )).rows[0];
   if (other) throw httpError(409, `${member.name} is already in ${other.name}’s seat`);
   await tx.query('update candidates set user_id = $2 where id = $1', [cand.id, member.user_id]);
+  await handCallTime(tx, ws, cand.id, member.user_id);
   emit('candidate', cand.id, 'update', { linked: member.user_id });
 };
 
@@ -74,5 +76,6 @@ export const linkOnJoin = async (tx, emit, { workspaceId, candidateId, userId })
     return;
   }
   await tx.query('update candidates set user_id = $2 where id = $1', [cand.id, userId]);
+  await handCallTime(tx, workspaceId, cand.id, userId);
   emit('candidate', cand.id, 'update', { linked: userId });
 };
