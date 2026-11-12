@@ -464,7 +464,7 @@ than a week after they came off is refused. Contacts are door, phone, text or
   *Knows* (*Knows a donor* only with Donations). Everyone sees *You know them
   · Friend* on a profile, the Calls card, the map's door and the walk list,
   and can tap *I know them* (under More at a door) — saved on the phone with
-  no signal, sent once. A volunteer's add
+  no signal, sent once (one refused says *Not saved*, also once dismissed). A volunteer's add
   never matches on, or takes, an email the campaign holds, so a possible
   double is flagged to the desk (*May be the same person as …*).
 - **Lit drops**: *Left lit* is its own outcome (`left_lit`) — literature

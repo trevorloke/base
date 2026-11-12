@@ -788,7 +788,8 @@ one tap away under **More**.
   desk's Calls card says *Knows …*. Priya, at a walk-list door with no
   signal: More → *I know them* → *Friend* shows *You know them · Friend* at
   once and sends once when the signal is back, then says *Added to My
-  people*; a profile with long Surrey names, a "4 · Randhawa" tie and a
+  people*; one the server refuses says *Not saved* and keeps saying it
+  after it is dismissed from the outbox; a profile with long Surrey names, a "4 · Randhawa" tie and a
   housemate keeps its key line to two lines at 390 (`e2e-relationships.mjs`; her
   browser never gets a key, Most connected or Knows answer). Server tests:
   `server/test/relationships.test.js` (close, `relationship.update`, the key

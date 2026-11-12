@@ -434,13 +434,17 @@ export function IKnowThem({ person, me = null }) {
   const [said, setSaid] = useState(null); // { text, cid }: cid while it waits in the outbox
   const outbox = useOutbox();
   const labelId = useId();
+  // The last refusal seen while it waited: gone from the outbox after that
+  // (dismissed, or the outbox cleared) is still not saved, never "Added".
+  const refused = useRef(null);
   if (!person?.id || person.pending) return null;
   if (said) {
     // Saved offline, then sent (gone from the outbox) or refused: say so.
     const item = said.cid ? outbox.items.find((i) => i.cid === said.cid) : null;
+    if (item) refused.current = item.state === 'refused' ? `Not saved — ${item.error?.message || 'try again'}` : null;
     const text = !said.cid ? said.text
-      : !item ? 'Added to My people'
-        : item.state === 'refused' ? `Not saved — ${item.error?.message || 'try again'}` : said.text;
+      : item ? refused.current || said.text
+        : refused.current || 'Added to My people';
     return <p className="rk-said" role="status">{text}</p>;
   }
   if (!know.ready || know.link || know.self) return null;

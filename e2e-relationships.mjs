@@ -19,7 +19,8 @@
 // builder, a staff member denied Donations (no "Knows a donor"), the desk
 // Calls card's "Knows …", Most connected's "brought in", and Priya at a
 // walk-list door with no signal: More → "I know them" → Friend — the chip at
-// once, sent once — while her browser never gets a desk tie read.
+// once, sent once; one refused and dismissed still says "Not saved" — while
+// her browser never gets a desk tie read.
 //
 //   STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=5100 node server/index.js &
 //   BASE=http://127.0.0.1:5100 SHOTS=/tmp/relationships node e2e-relationships.mjs
@@ -765,12 +766,44 @@ const wEvents = (await D.api('/events?limit=1000')).json.events.filter((e) => e.
 check('…one create on the event log', wEvents.length === 1, wEvents.length);
 await V.go('/my-people');
 check('…and Wren is in My people', /Wren Example/.test(await V.text()));
+
+// Refused when it's sent (the desk merged or removed that record meanwhile:
+// the server answers "person not found"; a merged door also leaves the walk
+// list, so the answer is played here to keep the door on screen), then
+// dismissed from the outbox: the door keeps saying "Not saved", never "Added".
+const sky = (await D.api('/actions/person.create', { name: 'Sky Example', phone: '604-555-0191', address: '104 Example St', lat: 49.2003, lng: -122.6003 })).json.person;
+await V.go(`/turfs/${wturf.id}`);
+await vpage.waitForSelector('.walk-door:has-text("Sky Example")', { timeout: 8000 }).catch(() => {});
+const skyDoor = '.walk-door:has-text("Sky Example")';
+if (!(await vpage.$(`${skyDoor}.is-open`))) await vpage.click(`${skyDoor} .walk-door__head`);
+await vpage.click(`${skyDoor} .walk-panel .fk-more__btn`).catch(() => {});
+await vpage.waitForSelector(`${skyDoor} .rk-know`, { timeout: 5000 }).catch(() => {});
+await vctx.setOffline(true);
+await vpage.click(`${skyDoor} .rk-know`);
+await vpage.click('.rk-ask .rel-kind:has-text("Friend")');
+await sleep(500);
+check('Sky’s door, no signal: saved offline', /saved offline/i.test(await tc(vpage, `${skyDoor} .rk-said`)), await tc(vpage, `${skyDoor} .rk-said`));
+await vpage.route('**/actions/relationship.add', (route) => route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ error: 'person not found' }) }));
+await vctx.setOffline(false);
+const skyRefused = await until(async () => /^Not saved/.test(await tc(vpage, `${skyDoor} .rk-said`)), 15000);
+await vpage.unroute('**/actions/relationship.add');
+check('back online, refused: the door says "Not saved — person not found"', skyRefused && sky?.id, await tc(vpage, `${skyDoor} .rk-said`));
+await vpage.click('.offline-strip__chip');
+await vpage.waitForSelector('.obx-sheet .is-refused', { timeout: 3000 }).catch(() => {});
+await vpage.click('.obx-sheet .is-refused button:has-text("Dismiss")');
+await vpage.click('.obx-scrim').catch(() => {});
+await sleep(500);
+const skySaid = await tc(vpage, `${skyDoor} .rk-said`);
+check('dismissed: the door still says "Not saved", not "Added to My people"', /^Not saved/.test(skySaid), skySaid);
+await vpage.$eval(skyDoor, (e) => e.scrollIntoView({ block: 'start' })).catch(() => {});
+await V.shot('22-walk-door-not-saved-phone');
 await vpage.setViewportSize({ width: 1360, height: 900 });
 await V.go(`/turfs/${wturf.id}`);
-await vpage.waitForSelector('.walk-door', { timeout: 8000 }).catch(() => {});
-if (!(await vpage.$('.walk-door.is-open'))) await vpage.click('.walk-door__head');
+const wrenDoor = '.walk-door:has-text("Wren Example")';
+await vpage.waitForSelector(wrenDoor, { timeout: 8000 }).catch(() => {});
+if (!(await vpage.$(`${wrenDoor}.is-open`))) await vpage.click(`${wrenDoor} .walk-door__head`);
 await sleep(500);
-check('the walk door says "You know them · Friend" (volunteer 1360)', (await tc(vpage, '.walk-panel .rk-chip')) === 'You know them · Friend');
+check('the walk door says "You know them · Friend" (volunteer 1360)', (await tc(vpage, `${wrenDoor} .walk-panel .rk-chip`)) === 'You know them · Friend', await tc(vpage, wrenDoor));
 m = await simple(vpage, 'walk door with the chip (volunteer 1360)');
 check('her browser never received a key, Most connected or Knows answer', leaks.length === 0, leaks.join(' | '));
 
