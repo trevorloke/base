@@ -296,6 +296,7 @@ await sleep(600);
 const vtabs = await vpage.$$eval('.ot-tab-label', (els) => els.map((e) => e.textContent.trim()));
 check('granted: Outreach opens on Sharing (email and texting stay the desk’s)', vtabs.join(' · ') === 'Sharing' && /\/outreach\/sharing$/.test(new URL(vpage.url()).pathname), `${vtabs.join(' · ')} ${vpage.url()}`);
 check('granted: "New post to share"', await vpage.locator('button.btn-primary:has-text("New post to share")').count() === 1);
+check('granted, without People: Top sharers are names, not links to profiles', await vpage.locator('.sk-top a[href*="/people/"]').count() === 0 && await vpage.locator('.sk-top li').count() > 0);
 await simple(vpage, 'Sharing, a volunteer granted Outreach (390)');
 await vpage.screenshot({ path: `${SHOTS}/13-sharing-granted-volunteer-390.png` });
 check('Outreach taken back', (await D.api('/actions/permission.member.set', { user_id: vicId, grant: [], deny: [] })).status === 200);

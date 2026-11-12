@@ -15,6 +15,7 @@ import { at } from '../base.js';
 import { NeedsSignal, useOnline } from '../components/NoSignal.jsx';
 import { Unavailable } from '../components/AudienceBits.jsx';
 import { uploadImage } from '../components/MarkdownField.jsx';
+import { hasArea } from '../Shell.jsx';
 import './shifts.css';
 import './share.css';
 
@@ -24,6 +25,9 @@ const BODY_MAX = 500;
 const X_MAX = 280;
 const fmt = (n) => Number(n || 0).toLocaleString('en-CA');
 const plural = (n, one, many = `${one}s`) => (n === 1 ? one : many);
+// A sharer's name opens their profile only for someone who may read People
+// (a volunteer granted Outreach alone sees the name).
+const Who = ({ t, linked }) => (linked ? <Link to={`/people/${t.id}`}>{t.name}</Link> : <span>{t.name}</span>);
 const say = (msg) => {
   const s = String(msg || '').replace(/^[a-z_.]+: /i, '').trim();
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : 'Not saved';
@@ -37,7 +41,7 @@ function Nums({ k }) {
   );
 }
 
-function KitEditor({ kit, line, pages, onClose, onSaved }) {
+function KitEditor({ kit, line, pages, people, onClose, onSaved }) {
   const id = useId();
   const online = useOnline();
   const qc = useQueryClient();
@@ -174,7 +178,7 @@ function KitEditor({ kit, line, pages, onClose, onSaved }) {
             : top.data.top.length === 0 ? <p className="muted">No sign-ups through it yet.</p> : (
               <ul className="sk-top">
                 {top.data.top.map((t) => (
-                  <li key={t.id}><Link to={`/people/${t.id}`}>{t.name}</Link><span className="mono">{fmt(t.signups)}</span></li>
+                  <li key={t.id}><Who t={t} linked={people} /><span className="mono">{fmt(t.signups)}</span></li>
                 ))}
               </ul>
             )}
@@ -184,7 +188,8 @@ function KitEditor({ kit, line, pages, onClose, onSaved }) {
   );
 }
 
-export default function SharingTab({ creating, onClose }) {
+export default function SharingTab({ me, creating, onClose }) {
+  const people = hasArea(me, 'people');
   const [params, setParams] = useSearchParams();
   const openId = params.get('kit');
   const q = useQuery({ queryKey: KITS, queryFn: () => apiGet('/share/kits') });
@@ -203,13 +208,13 @@ export default function SharingTab({ creating, onClose }) {
 
   return (
     <div className="sk-page">
-      {creating && <KitEditor key="new" line={d.line} pages={d.pages} onClose={close} onSaved={onSaved} />}
+      {creating && <KitEditor key="new" line={d.line} pages={d.pages} people={people} onClose={close} onSaved={onSaved} />}
       {d.kits.length === 0 && !creating && <p className="muted">Nothing to share yet.</p>}
       <ul className="sk-list">
         {d.kits.map((k) => (
           <li key={k.id}>
             {open?.id === k.id ? (
-              <KitEditor key={k.id} kit={k} line={d.line} pages={d.pages} onClose={close} onSaved={onSaved} />
+              <KitEditor key={k.id} kit={k} line={d.line} pages={d.pages} people={people} onClose={close} onSaved={onSaved} />
             ) : (
               <button type="button" className="sk-row" onClick={() => setParams({ kit: k.id })}>
                 <span className="sk-title">{k.title}</span>
@@ -228,7 +233,7 @@ export default function SharingTab({ creating, onClose }) {
           : top.data.top.length === 0 ? <p className="muted">Nobody has brought anyone in yet.</p> : (
             <ul className="sk-top">
               {top.data.top.map((t) => (
-                <li key={t.id}><Link to={`/people/${t.id}`}>{t.name}</Link><span className="mono">{fmt(t.n)} brought in</span></li>
+                <li key={t.id}><Who t={t} linked={people} /><span className="mono">{fmt(t.n)} brought in</span></li>
               ))}
             </ul>
           )}
