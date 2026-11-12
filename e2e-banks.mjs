@@ -12,7 +12,7 @@
 // bank of 540 handed to one caller comes 500 at a time ("540 to call",
 // "40 more to call · Load them"), the count carries on over the refill and
 // the last call ends on "540 of 540 done · All done"; a list an open bank
-// calls can't be deleted.
+// calls can't be deleted, and a closed bank whose list was deleted stays closed.
 //
 //   STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4132 node server/index.js &
 //   BASE=http://127.0.0.1:4132 SHOTS=/tmp/banks node e2e-banks.mjs
@@ -299,6 +299,19 @@ await page.click('.ls-tools .ops-confirm button:has-text("Yes")');
 await page.waitForSelector('.ls-page p.error', { timeout: 8000 }).catch(() => {});
 const refusedText = await page.innerText('.ls-page p.error').catch(() => '');
 check('Delete a list an open bank calls: refused, in words ("…“Big bank” calls this list — close it first")', /“Big bank” calls this list — close it first/.test(refusedText) && /\/lists\/[0-9a-f-]{36}$/.test(page.url()), refusedText);
+// Closed, the list can go — and then the bank can't reopen (who left the list could no longer be told).
+await api('/actions/bank.update', { id: bigBank.id, closed: true });
+check('the bank closed: the list is deleted', (await api('/actions/list.delete', { id: bigList.id })).status === 200);
+const reopen = await api('/actions/bank.update', { id: bigBank.id, closed: false });
+await page.goto(`${ADMIN}/banks/${bigBank.id}`, { waitUntil: 'domcontentloaded' });
+await page.waitForSelector('.au-banklist', { timeout: 10000 }).catch(() => {});
+const shutText = (await page.innerText('.bk').catch(() => '')).replace(/\s+/g, ' ');
+const shutButtons = await page.$$eval('.bk-head .head-actions button', (els) => els.map((b) => b.innerText.trim()));
+check('…reopening is refused in words, and the bank’s page says it stays closed and offers no Reopen',
+  reopen.status === 409 && /list this bank called is gone/.test(reopen.json?.error || '') && /the numbers stay, and the bank stays closed/.test(shutText)
+    && !shutButtons.includes('Reopen') && shutButtons.includes('Remove') && !/reopen it to hand out/.test(shutText),
+  `${reopen.status} ${reopen.json?.error} · ${shutButtons.join(',')} · ${shutText.slice(0, 160)}`);
+await page.screenshot({ path: `${SHOTS}/07-bank-closed-list-gone.png` });
 check('no page errors', errors.length === 0, errors.join(' | '));
 
 await browser.close();
