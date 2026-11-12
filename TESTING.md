@@ -778,7 +778,13 @@ one tap away under **More**.
   do they know each other?* links them both ways; *Remove? Yes · No* takes
   it off. *Sofia Petrova → Knows* says *Brought in by Priya Nair*. Someone
   tagged *do-not-contact* gets no nudge and is never the one suggested. A
-  long note (a link) wraps in Knows.
+  long note (a link) wraps in Knows. The sample's *Priya Nair ↔ Sofia
+  Petrova* and *Gurpreet ↔ Navdeep Sandhu* are close ties. Server tests:
+  `server/test/relationships.test.js` (close, `relationship.update`, the key
+  read, `knows=` for each role and area, Most connected's *brought in*, a
+  merge, housemates), `server/test/ties-rank.test.js` (which ties come
+  first) and `server/test/audience-scale.test.js` (`knows=` through indexes
+  among 300,000 people).
 - **Desk with no signal** — with wifi, open Today, People, a profile,
   Shifts, Signs, Donations and the Inbox. Turn wifi off and reload: each shows
   what it had and the strip says *No signal · from 2:14 pm*. Search People —
