@@ -267,8 +267,10 @@ w = await words(page.locator('.md-page'));
 check('its page: "Didn’t go" rows and the one yellow button "Try again · 3"', /Didn’t go/.test(w) && (await measure(page)).primary.join('|') === 'Try again · 3', JSON.stringify((await measure(page)).primary));
 await page.getByRole('button', { name: 'Try again · 3' }).click();
 await page.locator('.md-retry .ot-confirm button:has-text("Yes, send")').click();
-await page.locator('.md-retry .ot-test-note').waitFor({ timeout: 10000 }).catch(() => {});
-check('Try again: "Tried again: 3 sent."', /Tried again: 3 sent\./.test(await words(page.locator('.md-retry'))), await words(page.locator('.md-retry')));
+await page.locator('.md-said').waitFor({ timeout: 10000 }).catch(() => {});
+await settle(page);
+check('Try again: "Tried again: 3 sent.", the rows sent, no Try again left', /Tried again: 3 sent\./.test(await words(page.locator('.md-said')))
+  && !(await page.locator('.md-retry').count()) && (await words(page.locator('.md-figs'))).startsWith('Sent 3'), await words(page.locator('.md-page')));
 
 // ── 6. A volunteer granted Media, not Outreach ──
 const inv = (await act('member.invite', { email: 'vic@example.org', role: 'volunteer' })).json;

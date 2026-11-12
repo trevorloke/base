@@ -457,16 +457,16 @@ const chipFor = (r) => {
   return ['chip chip-warn', 'Didn’t go'];
 };
 
-function RetryRelease({ b, n }) {
+// Its outcome is said by the page (onDone): once the rows went, this button goes.
+function RetryRelease({ b, n, onDone }) {
   const qc = useQueryClient();
   const online = useOnline();
   const [confirming, setConfirming] = useState(false);
-  const [said, setSaid] = useState(null);
   const act = useAction(() => qc.invalidateQueries({ queryKey: ['media'] }));
   const go = async () => {
     const r = await act.run('media.resend', { id: b.id });
     setConfirming(false);
-    if (r) setSaid(`Tried again: ${fmt(r.resent?.sent ?? 0)} sent${r.resent?.failed ? `, ${fmt(r.resent.failed)} failed` : ''}.`);
+    if (r) onDone(`Tried again: ${fmt(r.resent?.sent ?? 0)} sent${r.resent?.failed ? `, ${fmt(r.resent.failed)} failed` : ''}.`);
   };
   return (
     <div className="md-retry">
@@ -480,7 +480,6 @@ function RetryRelease({ b, n }) {
           {!online && <NeedsSignal className="ot-confirm-note" />}
         </div>
       )}
-      {said && <p className="ot-test-note" role="status">{said}</p>}
       {act.error && <p className="error" role="alert">{act.error}</p>}
     </div>
   );
@@ -504,6 +503,7 @@ function CopyLinks({ links }) {
 function ReleasePage({ id }) {
   const q = useQuery({ queryKey: ['media', 'release', id], queryFn: () => apiGet(`/media/releases/${id}`) });
   const senders = useSenders();
+  const [said, setSaid] = useState(null);
   if (q.isPending) return <p className="ot-note" role="status">{LOADING}</p>;
   if (q.isError) return <p className="error" role="alert"><Unavailable onRetry={() => q.refetch()} /></p>;
   const b = q.data.release;
@@ -523,9 +523,10 @@ function ReleasePage({ id }) {
         {figures.map(([k, v]) => <div key={k} className="md-fig"><dt>{k}</dt><dd>{fmt(Number(v) || 0)}</dd></div>)}
       </dl>
       <div className="md-acts">
-        {retry > 0 && q.data.emailConfigured !== false && <RetryRelease b={b} n={retry} />}
+        {retry > 0 && q.data.emailConfigured !== false && <RetryRelease b={b} n={retry} onDone={setSaid} />}
         <CopyLinks links={links} />
       </div>
+      {said && <p className="ot-test-note md-said" role="status">{said}</p>}
       {retry > 0 && q.data.emailConfigured === false && <p className="ot-note">Email isn’t connected — nothing more can go yet.</p>}
       <section className="ot-sec" aria-label="Who it went to">
         <h2 className="ot-sec-h">Who it went to <span className="ot-count">{fmt(rows.length)}</span></h2>

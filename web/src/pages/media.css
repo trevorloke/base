@@ -30,7 +30,8 @@
 .md-handles { display: inline-flex; flex-wrap: wrap; gap: 4px 10px; }
 .md-handles a { color: var(--mark-deep); overflow-wrap: anywhere; }
 .md-wrap { overflow-wrap: anywhere; }
-.md-table td { vertical-align: top; font-size: 14px; }
+.md-table td { vertical-align: middle; font-size: 14px; }
+.md-table .md-wont { margin: 0 0 0 var(--s-2); }
 .md-name {
   font: inherit; font-weight: 600; color: var(--text-1); background: none; border: 0; padding: 0; text-align: left;
   min-height: var(--ctl); cursor: pointer; text-decoration: underline; text-decoration-color: var(--rule-2); text-underline-offset: 3px;
