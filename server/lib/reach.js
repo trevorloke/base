@@ -1,9 +1,9 @@
 // Who may be emailed, texted or called — the one place that decides.
 //
 // Every send asks here: an email or a text to a list, the newsletter, a
-// press release, a ladder's steps, a phone bank — and so do a list's own
-// numbers (can be emailed · texted · called). README.md says the same in
-// words ("Who may be emailed, texted or called").
+// press release, a ladder's steps, a shift's text, a phone bank — and so do
+// a list's own numbers (can be emailed · texted · called). README.md says
+// the same in words ("Who may be emailed, texted or called").
 //
 // Each channel is a list of reasons NOT to, in the order they are checked.
 // A reason holds for every sender on its channel unless it says otherwise
@@ -14,7 +14,7 @@
 // do-not-call tag) is one more line in its channel.
 //
 //   senders   email: list · newsletter · press · ladder
-//             text:  list · ladder
+//             text:  list · ladder · shift (a shift's notice or reminder)
 //             call:  bank (and the Call links: shared/canvass.js noCalls)
 //   mayReach(channel, sender, cols)  SQL, true for someone the sender may
 //                                    reach: for a WHERE, a FILTER, a column

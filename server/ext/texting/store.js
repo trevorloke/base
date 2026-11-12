@@ -4,9 +4,10 @@
 import { newId } from '../../lib/events.js';
 import { textConfigured } from '../../lib/notify.js';
 import { DEFAULT_TZ } from '../../lib/org.js';
+import { whyNot } from '../../lib/reach.js';
 import {
   DEFAULT_TEMPLATE, DEFAULT_FROM, DEFAULT_UNTIL, DEFAULT_WEEKEND_FROM, DEFAULT_WEEKEND_UNTIL,
-  NO_TEXT_TAG, NO_CONTACT_TAG, PHONE_DIGITS_SQL, last10, RECENT_DAYS, quietNow, windowWord, now, e164, ASKS_STOP_KEYWORD,
+  NO_TEXT_TAG, PHONE_DIGITS_SQL, last10, RECENT_DAYS, quietNow, windowWord, now, e164, ASKS_STOP_KEYWORD,
 } from './rules.js';
 
 const parseJ = (v, fb) => (typeof v === 'string' ? JSON.parse(v) : (v ?? fb));
@@ -310,8 +311,10 @@ export const textOutRules = async (tx, ctx, { phone, personId }, out) => {
   const person = personId ? (await tx.query(
     'select tags from persons where id = $1 and workspace_id = $2', [personId, ctx.workspaceId],
   )).rows[0] : null;
-  const tags = tagsOf(person);
-  if (tags.includes(NO_TEXT_TAG) || tags.includes(NO_CONTACT_TAG) || await isOptedOut(tx, ctx.workspaceId, to)) {
+  // Who may be texted is decided in one place (lib/reach.js): a do-not tag
+  // whatever its capitals, a STOP, and a reply asking to stop in words —
+  // nobody reads the thread before a week's notice or a reminder goes.
+  if (await whyNot(tx, 'text', 'shift', { workspaceId: ctx.workspaceId, phone: to, tags: tagsOf(person), personId })) {
     out.status = 'opted_out';
     out.detail = 'Opted out of texts';
     return;

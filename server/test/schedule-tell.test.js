@@ -327,6 +327,29 @@ test('the texting rules hold for a week’s notice: quiet hours, opt-outs, do-no
   ok(await mgr.action('person.update', { id: P.eli.id, tags: [] }));
 });
 
+test('a do-not tag typed in capitals, or a reply asking to stop in words, stops a week’s notice by text (lib/reach.js)', async () => {
+  connect();
+  at('2030-05-06T19:00:00Z'); // Monday noon
+  emails.length = 0; texts.length = 0;
+  ok(await mgr.action('person.update', { id: P.dee.id, tags: ['Do-Not-Text'] }));
+  // Eli replied "Please stop texting me" (flagged asks_stop) and never START.
+  const conv = crypto.randomUUID();
+  await db.query('insert into texting_conversations (id, workspace_id, person_id, phone) values ($1, $2, $3, $4)', [conv, ws, P.eli.id, '+16045550155']);
+  await db.query(
+    `insert into texting_messages (id, workspace_id, conversation_id, direction, phone, body, status, keyword) values ($1, $2, $3, 'in', '+16045550155', 'Please stop texting me', 'received', 'asks_stop')`,
+    [crypto.randomUUID(), ws, conv]);
+  // Dee and Eli are on Tuesday's 4–6 pm shift (the test above).
+  const r = ok(await mgr.action('shift.tellWeek', { week: MON }));
+  await runJobs();
+  const got = Object.fromEntries((await noticesOf(r.batch_id)).map((n) => [n.name, n]));
+  assert.deepEqual([got['Dee Example'].email, got['Dee Example'].text], ['sent', 'opted_out'], 'Do-Not-Text: the email, no text');
+  assert.deepEqual([got['Eli Example'].email, got['Eli Example'].text], ['sent', 'opted_out'], 'asked to stop: the email, no text');
+  assert.ok(!texts.some((m) => ['+16045550154', '+16045550155'].includes(m.To)), 'neither number was texted');
+  ok(await mgr.action('person.update', { id: P.dee.id, tags: [] }));
+  await db.query(`delete from texting_messages where workspace_id = $1 and conversation_id = $2`, [ws, conv]);
+  await db.query(`delete from texting_conversations where id = $1`, [conv]);
+});
+
 // The email service's list of addresses nothing may email (ext/mail): one
 // that bounced for good, or whose owner reported an email as spam.
 test('an address that bounced for good or reported spam gets no notice by email (a week’s or a reminder: one sender); the text still goes', async () => {

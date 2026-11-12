@@ -793,7 +793,7 @@ nobody as reminded; with `STARBASE_JOBS=off` notices and reminders wait.
 
 One place decides (`server/lib/reach.js`), and everything asks it: an email
 or a text to a list, the newsletter, a press release, a ladder's steps, a
-phone bank, and a list's own numbers (can be emailed · texted · called ·
+shift's text, a phone bank, and a list's own numbers (can be emailed · texted · called ·
 reachable by any). Each channel is a list of reasons not to. The senders
 differ, as they always have: an email to a list goes to everyone on it who
 hasn't said no; the newsletter and a ladder's emails go only to people who
@@ -807,7 +807,7 @@ may be called or texted (`GET /persons?reach=call|text`).
 | Channel | Never, whoever sends | And for some senders |
 |---|---|---|
 | **Email** | no address; an address that bounced for good or reported spam (the suppression list, until the desk lifts it) | **To a list**: never an address that left the newsletter (its own unsubscribe link, or the desk's *Remove*), do-not-email or do-not-contact — everyone else on it. **A ladder**: the same, and only an address on the newsletter list as subscribed. **The newsletter**: only an address on its list as subscribed (a list of addresses: it reads no tags). **A press release**: anyone tagged media with an address (it reads nothing else) |
-| **Text** | do-not-contact; do-not-text; no number, or one that can't be dialled; a number that replied STOP | As it goes out (a list's text, a ladder's): a number that asked to stop in words ("please stop texting me"), until it texts START. **A ladder**: also someone whose last word on a website form was no to texts, and a number a teammate is texting now |
+| **Text** | do-not-contact; do-not-text; no number, or one that can't be dialled; a number that replied STOP | As it goes out (a list's text, a ladder's, a shift's notice or reminder): a number that asked to stop in words ("please stop texting me"), until it texts START. **A ladder**: also someone whose last word on a website form was no to texts, and a number a teammate is texting now |
 | **Call** (a phone bank, Calls, and every Call link on a screen) | no number; do-not-contact; do-not-call | — |
 
 A do-not tag counts whatever its capitals. An email or a text to a list
