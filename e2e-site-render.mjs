@@ -672,7 +672,7 @@ for (const key of ['is', 'base']) {
   const thanks = page.locator('[data-module="petition"] .success-card');
   await thanks.waitFor({ timeout: 8000 });
   const wa = await thanks.locator('.share-sheet__link--whatsapp').getAttribute('href');
-  check('client path: share links point at the pledge’s page under it', decodeURIComponent(wa).includes(`${ORIGIN}${BASE}/base/act/keep-the-pool-open?source=share-whatsapp`), decodeURIComponent(wa));
+  check('client path: share links point at the pledge’s page under it', decodeURIComponent(wa).includes(`${ORIGIN}${BASE}/base/act/keep-the-pool-open?ref=${NEW_REF}&source=share-whatsapp`), decodeURIComponent(wa));
   await page.context().close();
 }
 
