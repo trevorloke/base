@@ -11,6 +11,7 @@ import { Link, useNavigate, useOutletContext, useParams, useSearchParams } from 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { codesInBand } from '@starbase/shared/scale';
 import { ApiError, action, apiGet } from '../api.js';
+import { fmtBig } from '../components/MoneyWords.js';
 import { RatingChip, useScale } from '../components/RatingButtons.jsx';
 import { useWebDid, webChoices } from '../components/FieldCuts.jsx';
 import SendToCallHub from '../components/SendToCallHub.jsx';
@@ -368,7 +369,7 @@ function Bank({ id }) {
 
       {/* Call time is the candidate's own: no hand-out, no CallHub. */}
       {bank.candidate_id ? (
-        <p className="ops-meta bk-calltime">Every number is {bank.candidate_name || 'the candidate'}’s to call{bank.ask_cents ? ` · ask $${(bank.ask_cents / 100).toLocaleString('en-CA')}` : ''}.</p>
+        <p className="ops-meta bk-calltime">Every number is {bank.candidate_name || 'the candidate'}’s to call{bank.ask_cents ? ` · ask ${fmtBig(bank.ask_cents)}` : ''}.</p>
       ) : (<>
       <SendToCallHub kind="bank" id={id} />
       <section className="bk-sec" aria-labelledby={`${fid}-h`}>
@@ -455,7 +456,7 @@ function Bank({ id }) {
                     : n.next_at && new Date(n.next_at) > new Date() ? `call back ${backAt(n.next_at)}${n.tries ? ` · ${n.tries} ${n.tries === 1 ? 'try' : 'tries'}` : ''}`
                       : n.assigned_to ? 'to call' : <span className="muted">not handed out</span>}</td>
                   <td className="bk-table__acts">
-                    {!n.done_at && n.assigned_to && <button type="button" className="btn btn-quiet" disabled={busy} onClick={() => run('bank.release', { id, person_id: n.person_id })}>Take back</button>}
+                    {!n.done_at && n.assigned_to && !bank.candidate_id && <button type="button" className="btn btn-quiet" disabled={busy} onClick={() => run('bank.release', { id, person_id: n.person_id })}>Take back</button>}
                     {!n.done_at && <button type="button" className="btn btn-quiet" disabled={busy} onClick={() => run('bank.done', { id, person_id: n.person_id, outcome: 'skipped' })}>Skip</button>}
                   </td>
                 </tr>

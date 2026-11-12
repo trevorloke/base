@@ -131,6 +131,13 @@ export default function CallTime() {
       requestAnimationFrame(() => headRef.current?.focus());
     } catch (e) {
       setError(e.message || 'Not saved — try again');
+      // Refused on what the server knows now (another pledge took the room;
+      // answered from another phone): the card reads it afresh.
+      if (e.status === 400 || e.status === 409) queryClient.invalidateQueries({ queryKey: ['calltime', bankId] });
+      if (e.status === 409) {
+        setAnswered((a) => ({ ...a, [current.person_id]: { result: 'elsewhere', amount: 0, queued: false } }));
+        say(`${firstName(current.name)} · already called`);
+      }
     } finally {
       setBusy(false);
     }
@@ -168,6 +175,11 @@ export default function CallTime() {
   const waiting = Object.values(answered).filter((x) => x.queued && x.result !== 'later');
   const calls = page.data.done.calls + waiting.length;
   const pledged = page.data.done.pledged_cents + waiting.reduce((s, x) => s + (x.result === 'pledged' ? x.amount : 0), 0);
+  // Still to call: the server's count, less what this phone has answered
+  // that the server hasn't counted yet (still in its list). The card holds
+  // the first 200; the rest come with the next read.
+  const toCall = Math.max(numbers.length,
+    bank.left - (page.data.numbers ?? []).filter((n) => answered[n.person_id]).length);
   const donate = page.data.donate_url;
   const sms = lastPledge && donate
     ? `sms:${lastPledge.phone.replace(/[^\d+]/g, '')}?&body=${encodeURIComponent(`Thank you! Here’s where to give: ${donate}`)}`
@@ -194,7 +206,7 @@ export default function CallTime() {
 
       {current ? (
         <section className="card ct-card" aria-label={`Call ${current.name}`}>
-          <p className="ct-left ops-meta">{numbers.length.toLocaleString('en-CA')} to call{bank.later > 0 ? ` · ${bank.later.toLocaleString('en-CA')} later` : ''}</p>
+          <p className="ct-left ops-meta">{toCall.toLocaleString('en-CA')} to call{bank.later > 0 ? ` · ${bank.later.toLocaleString('en-CA')} later` : ''}</p>
           <h2 className="ct-name">{current.name}</h2>
           {current.city && <p className="ops-meta ct-city">{current.city}</p>}
           {current.phone && (
@@ -252,6 +264,13 @@ export default function CallTime() {
               {script && <p id="ct-script" className="ct-script">{bank.script}</p>}
             </>
           )}
+        </section>
+      ) : toCall > 0 ? (
+        <section className="card ct-done" aria-live="polite">
+          <h2>{toCall.toLocaleString('en-CA')} more to call</h2>
+          {online
+            ? <button type="button" className="btn btn-quiet ops-tap" disabled={page.isFetching} onClick={() => page.refetch()}>{page.isFetching ? 'Loading…' : 'Load the next numbers'}</button>
+            : <p className="ops-meta">They load once you have signal.</p>}
         </section>
       ) : (
         <section className="card ct-done" aria-live="polite">

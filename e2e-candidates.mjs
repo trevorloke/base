@@ -244,6 +244,7 @@ await page.waitForSelector('.eyebrow:has-text("Call time · Cleo Example")', { t
 const bankId = page.url().split('/banks/')[1];
 const bankText = await page.innerText('main');
 check('the bank: "Call time · Cleo Example", every number hers, no hand-out', /Every number is Cleo Example’s to call · ask \$250/.test(bankText) && !/Hand out numbers/.test(bankText), bankText.replace(/\s+/g, ' ').slice(0, 200));
+check('the bank: no Take back on any of Cleo’s numbers', !/Take back/.test(bankText), (bankText.match(/.{0,60}Take back.{0,20}/) || [''])[0]);
 await page.screenshot({ path: `${SHOTS}/14-calltime-bank-1440.png`, fullPage: true });
 
 // ── 6. Cleo's Today: Start call time ──
