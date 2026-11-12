@@ -93,8 +93,8 @@ Then, as each one is ready:
 | `MAILCHIMP_API_KEY`, `MAILCHIMP_AUDIENCE_ID`, `MAILCHIMP_WEBHOOK_SECRET` | from Mailchimp: the account's key, whole (its ending names the server); the audience's id only when the account has several; the signing secret *Connect* shows, once | only if the campaign builds its emails in Mailchimp: *Send to Mailchimp* on a list, unsubscribes and dead addresses kept in step both ways (INTEGRATIONS.md, *Mailchimp*) |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` | from Twilio; for texts to a list in Canada the number should be a verified toll-free number or a short code (INTEGRATIONS.md) | texting and calling through the campaign's number, SMS shift alerts; without them the phone's own apps are used |
 | `GEOCODER` | leave unset (`bc`, the free BC Address Geocoder); `GEOCODER_FALLBACK=google` to ask Google only for addresses BC can't place | placing people on the map |
-| `GOOGLE_MAPS_SERVER_KEY` | a Google Cloud key restricted to the server's IP with only the APIs used enabled (Geocoding; Map Tiles for `GOOGLE_MAPS_TILES=1`) | Google geocoding and Google Maps tiles |
-| `GOOGLE_MAPS_TILES` | `1` to draw the field map on Google's tiles (`GOOGLE_MAPS_TILE_TYPE` roadmap, satellite or terrain); otherwise the free tiles, which are not for a large team in election week (§5, *The street map*) | the map's background |
+| `GOOGLE_MAPS_SERVER_KEY` | a Google Cloud key with application restriction **None** and API restriction to the APIs used (Map Tiles; Geocoding for Google address lookup) — not a *Websites* key, not an IP restriction on Render (§5, Recipe B) | Google geocoding and Google Maps tiles |
+| `GOOGLE_MAPS_TILES` | `1` (or `true`, `yes`, `on`) to draw the field map on Google's tiles (`GOOGLE_MAPS_TILE_TYPE` roadmap, satellite or terrain); otherwise the free tiles, which are not for a large team in election week (§5, *The street map*) | the map's background |
 | `STARBASE_TILE_URL`, `STARBASE_TILE_ATTRIBUTION`, `STARBASE_TILE_MAX_ZOOM` | a tile provider the campaign has an agreement with: its `https://…/{z}/{x}/{y}.png` address, its credit line, its deepest zoom (§5, *The street map*) | the map's background, instead of the free tiles |
 | `STARBASE_TRUSTED_PROXIES` | leave unset on Render (one proxy). Set to the number of proxies in front if there is a CDN before Render | rate limits reading the right address |
 | `BASE_DOOR_KEY` | behind the base.win door only: the same 32 or more random characters (`openssl rand -base64 32`) as the door's `BASE_DOOR_KEY` (apps/door/README.md) | each visitor through base.win keeping their own address for the sign-in and form limits — without it, everyone who comes through the door counts as one |
@@ -234,20 +234,90 @@ light nor non-commercial. Read OpenStreetMap's *Tile Usage Policy*
 (operations.osmfoundation.org) and CARTO's basemap terms (carto.com) before
 relying on either.
 
-Before election week, choose a provider the campaign has an agreement with
-and set it on both environments:
+Before election week, choose a provider the campaign has an agreement with,
+by one of the two recipes below, and set it on **staging first, then
+production**: each Render service has its own settings, so a key set on
+staging is not on production.
 
-- `STARBASE_TILE_URL` (its `https://…/{z}/{x}/{y}.png` address — a key may
-  ride in it; the phones see it), `STARBASE_TILE_ATTRIBUTION` (its credit
-  line) and `STARBASE_TILE_MAX_ZOOM`. *Clean* is then no longer offered, and
-  every look draws on the campaign's own tiles. Or:
-- Google Maps: `GOOGLE_MAPS_TILES=1` with `GOOGLE_MAPS_SERVER_KEY` (the Map
-  Tiles API enabled). The key stays on the server. Google bills per tile
-  past its free allowance.
+Some facts below (prices, free allowances, plan terms, what counts as
+enough credit) were read only from search snippets of the providers' own
+pages, not the pages in full: their sites could not be reached from where
+this was written. Check them on the provider's site.
 
-To tell it took: **Map → Show → Map check** names the street map in use and
-counts the tiles that loaded and failed, and the foot of the Show sheet says
-*Map tiles: …*. If a provider stops answering, the map says so: it switches
+#### Recipe A — Stadia Maps (a paid provider, straight to the phones)
+
+1. Make an account at stadiamaps.com and choose a paid plan that allows
+   commercial use (the free plan is reported to be non-commercial). Check
+   the current price and credits on its pricing page (reported: Starter,
+   about US$20/month, 1,000,000 credits).
+2. Under billing, **turn on overage, or at least set a usage alert.**
+   Overage is reported to be off by default: past the plan's credits the
+   map would stop with errors in election week, not charge more.
+3. Under *Manage Properties → Authentication Configuration*, add **only the
+   campaign's own hostnames**: its Render address and its own domain. Do
+   not add base.win: it serves other campaigns too, whose maps would then
+   draw on this account. If the campaign is reached only through base.win,
+   use a key instead (step 4, last line).
+4. On each Render service (staging, then production) set
+   `STARBASE_TILE_URL=https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png`,
+   `STARBASE_TILE_ATTRIBUTION` to Stadia's credit line,
+   `STARBASE_TILE_MAX_ZOOM=20`, and save. Only if domain authentication
+   cannot be used, add `?api_key=<key>` to the URL; phones can see that key.
+5. Open **Map → Show → Map check**: the street map line names
+   `tiles.stadiamaps.com` and counts tiles loaded.
+
+Why choose it: no key on the server, no load on the server, and the same
+quiet look as *Clean*. **What it does not settle:** neither Google's nor
+Stadia's terms clearly allow phones to keep tiles for offline canvassing
+(Stadia's general terms are reported to prohibit bulk caching). Phones
+already keep tiles they have drawn. Get that answer from the provider **in
+writing** before relying on offline maps.
+
+#### Recipe B — Google Maps (through the server)
+
+1. Go to console.cloud.google.com and create (or pick) a project.
+2. Under *Billing*, link a billing account. Google asks for a card even for
+   the free allowance.
+3. Under *APIs & Services → Library*, enable **Map Tiles API**. Also enable
+   **Geocoding API** only if `GEOCODER=google` or `GEOCODER_FALLBACK=google`
+   will be used.
+4. Under *APIs & Services → Credentials → Create credentials → API key*,
+   then *Edit*:
+   - **Application restrictions: None.** Not *Websites*: that breaks every
+     server call. Not *IP addresses*: Render's shared outbound addresses
+     change, and fixed ones are a paid add-on.
+   - **API restrictions: Restrict key** to Map Tiles API (and Geocoding API).
+   - Save. The key never leaves the server.
+5. Under *APIs & Services → Map Tiles API → Quotas*, set a daily cap. Under
+   *Billing → Budgets & alerts*, add a budget with an email alert.
+6. On each Render service, set `GOOGLE_MAPS_SERVER_KEY=<the key>` (no
+   spaces) and `GOOGLE_MAPS_TILES=1`, and save.
+7. Run **Settings → Services → Map background → Check**. If it says it isn't
+   working, the line says what failed in plain words, *Google said* gives
+   Google's own words, and *see Going live §5, Recipe B step N* says which
+   of steps 2–6 to redo.
+
+Cost, as far as could be read: 100,000 tile requests a month free, then
+about US$0.60 per 1,000. A phone draws roughly 15–40 tiles per screen, and
+phones keep what they have drawn. Watch the first busy weekend in Google
+Cloud → Metrics.
+
+When Google refuses (a bad key, billing off, the API not turned on, the
+usage limit used up), base.win stops asking it for a minute (30 seconds
+after the usage limit) instead of asking again for every tile on every
+phone, then tries once more. A key pasted with a space or a new line at
+the end, and `GOOGLE_MAPS_TILES` set to `true`, `yes` or `on`, work the
+same as the plain values; `0` or `off` turns Google off quietly.
+
+#### How to tell it works
+
+- **Settings → Services → Map background → Check** says ✓ *Working* (for
+  Google), or names the free map in use.
+- On a phone, at a door: the street map draws, and **Map → Show → Map
+  check** names the street map in use with its tiles loaded.
+- Staging first; then the same settings on production, and the same check.
+
+The foot of the map's Show sheet also says *Map tiles: …*. If a provider stops answering, the map says so: it switches
 once by itself to the other free provider where there is one and it
 answers (with weak signal neither does, and the streets the phone kept stay
 drawn), then shows *The street map isn’t loading* with one tap to try

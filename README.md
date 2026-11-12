@@ -631,7 +631,8 @@ with its receipt; a monthly gift is a pledge, each month its own gift.
 Addresses are looked up with the BC Address Geocoder (`server/lib/geocode.js`;
 `GEOCODER=bc|google|nominatim|off`, `BC_GEOCODER_KEY`, `GEOCODE_MIN_SCORE`).
 Google's Geocoding API is the other option (`GOOGLE_MAPS_SERVER_KEY`, a key
-with only that API enabled and restricted to the server's IP; lookups are
+restricted to the APIs used, with no application restriction — GOING-LIVE.md
+§5, Recipe B; lookups are
 biased to Surrey and limited to BC, and only a rooftop or street-number
 match counts). `GEOCODER_FALLBACK=google` keeps the free BC service first
 and asks Google only for addresses it can't place. A list is placed by a
@@ -926,7 +927,10 @@ draws `/tiles/{z}/{x}/{y}.png` from base.win (signed in), which fetches
 each tile from Google with a session it keeps for everyone and renews
 (`server/lib/gtiles.js`, served by `server/ext/offline`), credited to
 Google, up to zoom 22; the service worker keeps the ones a phone has drawn
-as with any provider. Google bills per tile past its free allowance, and its
+as with any provider. When Google refuses, its words are kept in plain ones
+with the setup step that fixes them (`server/lib/googleerr.js`, shown by
+Settings → Services → Map background → Check), and no call goes to Google
+for a minute (tiles answer 503). Google bills per tile past its free allowance, and its
 terms have their own rules on attribution and caching — check them before
 election week. The service worker
 keeps the tiles a phone has already looked at (about 1,500, oldest out), so a
