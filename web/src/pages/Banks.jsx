@@ -301,6 +301,8 @@ function Bank({ id }) {
     if (r) setCount('');
   };
   const shown = showAll ? numbers : numbers.slice(0, 40);
+  // Closed, and the list it was made from deleted: there is nothing to tell who left by, so it can't reopen.
+  const shut = Boolean(bank.closed && bank.list_id && !bank.list_name);
   return (
     <div className="bk">
       <p className="lu-back"><Link to="/banks">← Phone banks</Link></p>
@@ -308,7 +310,7 @@ function Bank({ id }) {
         <div><span className="eyebrow">Phone bank{bank.closed ? ' · Closed' : ''}</span><h1>{bank.name}</h1></div>
         <div className="head-actions">
           {/* Closed and its list deleted: it stays closed (the server refuses) — the line below says why. */}
-          {!(bank.closed && bank.list_id && !bank.list_name) && <button type="button" className="btn btn-quiet" disabled={busy} onClick={() => run('bank.update', { id, closed: !bank.closed })}>{bank.closed ? 'Reopen' : 'Close'}</button>}
+          {!shut && <button type="button" className="btn btn-quiet" disabled={busy} onClick={() => run('bank.update', { id, closed: !bank.closed })}>{bank.closed ? 'Reopen' : 'Close'}</button>}
           {ask ? (
             <span className="ops-confirm"><span>Remove the bank?</span>
               <button type="button" className="btn ops-danger" disabled={busy} onClick={async () => { if (await run('bank.remove', { id })) navigate('/banks'); }}>Yes</button>
@@ -321,7 +323,7 @@ function Bank({ id }) {
         // Made from a List: who left it since is out of the calls not made yet.
         <div className="ops-actions au-banklist">
           <span>
-            {bank.list_name ? <>From the list <Link className="au-tap" to={`/lists/${bank.list_id}`}>{bank.list_name}</Link></> : bank.closed ? 'From a list that was deleted — the numbers stay, and the bank stays closed' : 'From a list that was deleted — the numbers stay'}
+            {bank.list_name ? <>From the list <Link className="au-tap" to={`/lists/${bank.list_id}`}>{bank.list_name}</Link></> : shut ? 'From a list that was deleted — the numbers stay, and the bank stays closed' : 'From a list that was deleted — the numbers stay'}
             {bank.gone > 0 && <> · <strong className="mono">{num(bank.gone)}</strong> left the list or can’t be called now</>}
           </span>
           {bank.list_name && !bank.closed && <button type="button" className="btn ops-tap" disabled={busy} onClick={topUp}>Add who joined since</button>}
@@ -337,7 +339,7 @@ function Bank({ id }) {
 
       <section className="bk-sec" aria-labelledby={`${fid}-h`}>
         <h2 className="dash-sec__h" id={`${fid}-h`}>Hand out numbers</h2>
-        {bank.closed ? <p className="muted">The bank is closed — reopen it to hand out numbers.</p> : open === 0 ? <p className="muted">Every number is handed out or done.</p> : (
+        {bank.closed ? <p className="muted">{shut ? 'The bank is closed.' : 'The bank is closed — reopen it to hand out numbers.'}</p> : open === 0 ? <p className="muted">Every number is handed out or done.</p> : (
           <form className="bk-hand" onSubmit={handOut}>
             <div className="bk-hand__to">
             <label htmlFor={`${fid}-to`} className="ws-label">To</label>
