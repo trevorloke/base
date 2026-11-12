@@ -1252,6 +1252,18 @@ export default function MapPage() {
     if (doorsQ.isError && !doorsQ.isFetching && answeredAt > doorsQ.errorUpdatedAt) doorsQ.refetch();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [answeredAt]);
+  // On "My turf" no view is asked, so nothing above would ask again: while
+  // the first read stands in error it is asked by itself every half minute
+  // with the page in front, and the line goes once the signal is back.
+  const doorsDown = doorsQ.isError;
+  useEffect(() => {
+    if (!doorsDown) return undefined;
+    const t = setInterval(() => {
+      if (document.visibilityState === 'visible') doorsQ.refetch({ cancelRefetch: false });
+    }, 30_000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doorsDown]);
   // Asked and not answered (the server's refusal, or no answer at all).
   const viewFailed = Boolean(big && !fresh && ((wantsDoors && !viewNow && viewQ.isError) || (wantsPatches && densQ.isError)));
   const outbox = useOutbox();
