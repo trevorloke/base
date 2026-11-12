@@ -418,6 +418,8 @@ test('…and each trouble is flagged in its own line, so one screenshot says whi
   assert.deepEqual([flagged(l), said(l).tiles.value], [['tiles'], 'Muted · OpenStreetMap — isn’t loading: 0 loaded, 18 failed']);
   // A campaign's own provider is named by its host (never its whole address); the server's own tiles by what the server says they are.
   assert.match(said(checkLines({ ...CHECK, tiles: { ...CHECK.tiles, source: 'tiles.example', custom: true } }, { ...PAGE, look: 'Muted', tilesFrom: 'tiles.example' })).tiles.value, /^Muted · tiles\.example — /);
+  // Stadia (STARBASE_TILE_PROVIDER=stadia) by its name, as Going live §5 says.
+  assert.match(said(checkLines({ ...CHECK, tiles: { ...CHECK.tiles, source: 'Stadia Maps', custom: true } }, { ...PAGE, look: 'Standard', tilesFrom: 'tiles.stadiamaps.com' })).tiles.value, /^Standard · Stadia Maps — /);
   assert.match(said(checkLines({ ...CHECK, tiles: { ...CHECK.tiles, source: 'Google Maps', custom: true } }, { ...PAGE, look: 'Standard', tilesFrom: '' })).tiles.value, /^Standard · Google Maps — /);
   // A street map address the server ignored is said on the same line.
   assert.match(said(checkLines({ ...CHECK, tiles: { ...CHECK.tiles, ignored: ['url'] } }, PAGE)).tiles.note, /was ignored/);
@@ -532,4 +534,7 @@ test('the services behind the map: one line each, after the street map — waiti
   const paused = { ...CHECK, placing: { ...CHECK.placing, state: 'paused', remaining: 5, retryAt: null,
     lastError: 'geocoder referrer: This key only works from websites. The server needs a key without a website restriction. · Google said: REQUEST_DENIED' } };
   assert.equal(said(checkLines(paused, PAGE)).placing.note, 'Address lookup isn’t answering (This key only works from websites. The server needs a key without a website restriction. · Google said: REQUEST_DENIED)');
+  // Google's usage limit, the likeliest pause: plain words first too (the "429" stays on the server, for its backoff).
+  const quota = { ...paused, placing: { ...paused.placing, lastError: 'geocoder 429 quota: Google’s usage limit is used up for now. · Google said: RESOURCE_EXHAUSTED' } };
+  assert.equal(said(checkLines(quota, PAGE)).placing.note, 'Address lookup isn’t answering (Google’s usage limit is used up for now. · Google said: RESOURCE_EXHAUSTED)');
 });

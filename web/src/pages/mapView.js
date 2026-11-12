@@ -318,7 +318,7 @@ export const placingPoll = (st, now = Date.now()) => {
 //         undefined: no service lines
 //   → [{ key, label, value, note, warn }]
 const enCA = (n) => Number(n || 0).toLocaleString('en-CA');
-const PROVIDER = { 'basemaps.cartocdn.com': 'CARTO', 'tile.openstreetmap.org': 'OpenStreetMap' };
+const PROVIDER = { 'basemaps.cartocdn.com': 'CARTO', 'tile.openstreetmap.org': 'OpenStreetMap', 'tiles.stadiamaps.com': 'Stadia Maps' };
 // A service's trouble, as the note under its line: the plain words, then
 // Google's own (shown as text, never markup), then the setup step.
 const troubleNote = (p) => [p.plain, p.said ? `Google said: “${p.said}”` : null, p.fix ? `See Going live §5, ${p.fix}.` : null].filter(Boolean).join('\n');
@@ -342,7 +342,7 @@ const serviceLines = (services, clock, now) => {
 };
 // The placing run's last error, in plain words ("geocoder billing: Billing
 // isn’t turned on…" → "Billing isn’t turned on…"; a bare "geocoder 403" stays).
-const plainError = (e) => String(e).replace(/^geocoder [a-z-]+: (?=\S)/, '');
+const plainError = (e) => String(e).replace(/^geocoder (?:\d+ )?[a-z-]+: (?=\S)/, '');
 
 export const checkLines = (c, page, { num = enCA, clock = (iso) => iso, now = Date.now(), services } = {}) => {
   const p = c.people;

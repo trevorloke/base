@@ -643,7 +643,7 @@ try {
     check('the other refuses too: back to their own pick by itself, and “The street map isn’t loading” with one tap to try again — not to the other, which has just not answered',
       /^The street map isn’t loading/.test(ts.note || '') && /Try again/.test(ts.note || '') && ts.look === 'clean' && ts.tiles === 'down' && ts.pick === null, JSON.stringify(ts));
     t.net.up.clean = true;
-    await t.pg.click('.map-tilenote button');
+    await t.pg.click('.map-tilenote button:not(.map-tilenote__why)');
     ts = await tilesUntil(t.pg, (s) => s.look === 'clean' && s.tiles === 'ok' && !s.note);
     check('one tap: their street map is asked again, it loads and the note goes', ts.look === 'clean' && ts.tiles === 'ok' && ts.loaded > 0 && !ts.note && ts.pick === null, JSON.stringify(ts));
     // Their pick refuses again and the other answers: the map has gone
@@ -654,7 +654,7 @@ try {
     await t.pg.click('.leaflet-control-zoom-in');
     ts = await tilesUntil(t.pg, (s) => /isn’t loading/.test(s.note || ''));
     check('their pick refuses again, the other answers: no second switch by itself — one tap to the other', ts.look === 'clean' && /Try Muted/.test(ts.note || ''), JSON.stringify(ts));
-    await t.pg.click('.map-tilenote button');
+    await t.pg.click('.map-tilenote button:not(.map-tilenote__why)');
     ts = await tilesUntil(t.pg, (s) => s.look === 'muted' && s.tiles === 'ok' && s.pick === 'muted' && !s.note);
     check('…tapped: its streets come, and that look is their choice from now on', ts.look === 'muted' && ts.tiles === 'ok' && ts.loaded > 0 && !ts.note && ts.pick === 'muted', JSON.stringify(ts));
     // A look tapped whose streets then don't come (a flicker let the map's
@@ -664,7 +664,7 @@ try {
     await t.pg.click('.leaflet-control-zoom-out');
     ts = await tilesUntil(t.pg, (s) => /Try Clean/.test(s.note || ''));
     t.net.through.clean = 1;
-    await t.pg.click('.map-tilenote button');
+    await t.pg.click('.map-tilenote button:not(.map-tilenote__why)');
     await sleep(1500);
     ts = await tilesUntil(t.pg, (s) => s.look === 'muted' && /isn’t loading/.test(s.note || ''), 15000);
     check('a look tapped whose streets don’t come after all: back to their pick, which stays their choice',
@@ -693,8 +693,13 @@ try {
     ts = await tilesUntil(t.pg, (s) => /isn’t loading/.test(s.note || ''));
     check('a campaign’s own street map isn’t loading: said, with “Try again” (there is no other provider to switch to)',
       /^The street map isn’t loading/.test(ts.note || '') && /Try again/.test(ts.note || '') && t.net.asked.clean === 0 && t.net.asked.base === 0, JSON.stringify({ ...ts, asked: t.net.asked }));
+    // Tiles still on their way when the note came are let fail first, so
+    // allowing tiles again can't clear the note before the tap.
+    await sleep(1200);
+    const again = t.pg.locator('.map-tilenote button:not(.map-tilenote__why)');
+    await again.waitFor({ timeout: 5000 });
     t.net.up.own = true;
-    await t.pg.click('.map-tilenote button');
+    await again.click();
     ts = await tilesUntil(t.pg, (s) => s.tiles === 'ok' && !s.note);
     check('…Try again asks for it again, and it loads', ts.tiles === 'ok' && ts.loaded > 0 && !ts.note, JSON.stringify(ts));
     await t.tctx.close();
@@ -774,7 +779,7 @@ try {
     await t.pg.screenshot({ path: `${SHOTS}/8-weak-signal-away.png` });
     check('weak signal (online, the tile hosts not answering): no switch — the other provider doesn’t answer either — and the map says its street map isn’t loading, one tap to try again',
       t.ruled && ts.look === 'clean' && ts.tiles === 'down' && /^The street map isn’t loading/.test(ts.note || '') && /Try again/.test(ts.note || ''), JSON.stringify({ ruled: t.ruled, ...ts }));
-    await t.pg.click('.map-tilenote button');
+    await t.pg.click('.map-tilenote button:not(.map-tilenote__why)');
     await sleep(1500);
     ts = await tilesUntil(t.pg, (s) => /isn’t loading/.test(s.note || ''), 15000);
     check('…the tap asks this street map again: still Clean, and nothing saved as their look', ts.look === 'clean' && ts.pick === null && /Try again/.test(ts.note || ''), JSON.stringify(ts));
