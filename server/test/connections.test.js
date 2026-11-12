@@ -198,7 +198,7 @@ test('the tiles row reads the map’s own setting: the Stadia preset is named, r
     assert.match(t.detail, /^Stadia Maps, straight to the phones/);
     const c = await check('tiles');
     assert.equal(c.ok, true);
-    assert.match(c.said, /^Stadia Maps’ tiles come straight to each phone/);
+    assert.equal(c.said, 'Stadia Maps’ tiles come straight to each phone');
     assert.doesNotMatch(JSON.stringify([t, c]), /OpenStreetMap|stadiakey/);
     // A name the map doesn't know: said, and the free map meanwhile.
     process.env.STARBASE_TILE_PROVIDER = 'mapbox';

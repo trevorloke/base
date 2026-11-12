@@ -214,7 +214,8 @@ const CHECKS = {
   tiles: async () => {
     if (!googleTiles()) {
       const { source } = freeTiles();
-      return { ok: true, said: `${source}${source.endsWith('s') ? '’' : '’s'} tiles come straight to each phone · to choose a provider, see Going live §5` };
+      // Only the free default needs the pointer to choosing a provider.
+      return { ok: true, said: `${source}${source.endsWith('s') ? '’' : '’s'} tiles come straight to each phone${source === 'OpenStreetMap' ? ' · to choose a provider, see Going live §5' : ''}` };
     }
     if (!googleKey()) return { ok: false, said: 'GOOGLE_MAPS_SERVER_KEY isn’t set', todo: 'see Going live §5, Recipe B step 6' };
     const r = await probeTiles();

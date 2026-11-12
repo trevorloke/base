@@ -328,8 +328,9 @@ same as the plain values; `0` or `off` turns Google off quietly.
 
 #### How to tell it works
 
-- **Settings → Services → Map background → Check** says ✓ *Working* (for
-  Google), or names the free map in use.
+- **Settings → Services → Map background** is named after the map in use
+  (*Google Map Tiles*, *Stadia Maps*, *OpenStreetMap*), and its **Check**
+  says ✓ *Working* for Google, or that the tiles come straight to each phone.
 - On a phone, at a door: the street map draws, and **Map → Show → Map
   check** names the street map in use with its tiles loaded; its *Street
   map service* and *Address lookup* lines say *Working* (or, flagged at the
