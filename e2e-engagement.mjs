@@ -182,6 +182,8 @@ const omar = await form({ first_name: 'Omar', last_name: 'Example', email: `omar
 check('a second volunteer form', omar.status === 200);
 await page.goto(`${ADMIN}/`, { waitUntil: 'domcontentloaded' });
 await page.locator('section.fu .fu-row').first().waitFor({ timeout: 10000 }).catch(() => {});
+// Needs you counts on its own read: wait for it rather than catch it loading.
+await page.waitForFunction(() => /1 follow-up/.test(document.body.innerText), null, { timeout: 10000 }).catch(() => {});
 let dt = await D.text();
 check('the manager’s Today: "Follow up · 1" — Omar, from the office', /Follow up · 1/i.test(dt) && /Omar Example/.test(dt), dt.slice(0, 240));
 check('Needs you: "1 follow-up"', /1 follow-up/.test(dt));
