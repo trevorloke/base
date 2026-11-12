@@ -274,7 +274,7 @@ await page.locator('[data-testid="sender-pick"] .sp-addr').waitFor({ timeout: 10
 const fromLine = await words(page.locator('[data-testid="sender-pick"]'));
 check('Outreach → Email: "From: Pat Example <pat@…> · Change"', fromLine === `From: Pat Example <pat@${DOMAIN}> · Change`, fromLine);
 await page.locator('.sp-change').click();
-check('…Change offers both addresses', (await words(page.locator('.sp-chips'))) === `Sample Campaign Media <media@${DOMAIN}> Pat Example <pat@${DOMAIN}>`, await words(page.locator('.sp-chips')));
+check('…Change offers the campaign’s own address and both added', (await words(page.locator('.sp-chips'))) === `Sample Campaign <team@${DOMAIN}> Sample Campaign Media <media@${DOMAIN}> Pat Example <pat@${DOMAIN}>`, await words(page.locator('.sp-chips')));
 await shot(page.locator('.ot-compose'), '05b-email-from-1440');
 await phone.goto(`${ADMIN}/outreach/email?new=1`, { waitUntil: 'domcontentloaded' });
 await phone.locator('[data-testid="sender-pick"] .sp-addr').waitFor({ timeout: 10000 });

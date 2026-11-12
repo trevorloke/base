@@ -146,6 +146,14 @@ test('sends: the desk’s pick, the kind’s default, a removed one refused; Try
   assert.equal(await fromOf(vol.blast.id), media.raw, 'the press default, not their pick');
   assert.ok(resend.sent.every((m) => m.from === media.raw));
 
+  // The campaign's own address over a default: sender_id null, the desk only.
+  resend.sent.length = 0;
+  const sys = ok(await mgr.action('blast.send', { kind: 'press', subject: 'System', body: 'News', sender_id: null }));
+  assert.equal(await fromOf(sys.blast.id), null, 'null: MAIL_FROM, not the press default');
+  assert.ok(resend.sent.length === 2 && resend.sent.every((m) => m.from === process.env.MAIL_FROM));
+  const volSys = ok(await val.action('blast.send', { kind: 'press', subject: 'Vol system', body: 'News', sender_id: null }));
+  assert.equal(await fromOf(volSys.blast.id), media.raw, 'a volunteer’s null is ignored too');
+
   // None named: the kind's default (email for a newsletter).
   const news = ok(await mgr.action('blast.send', { kind: 'newsletter', subject: 'News', body: 'Hi' }));
   assert.equal(await fromOf(news.blast.id), ob.raw);

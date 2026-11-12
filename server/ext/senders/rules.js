@@ -28,8 +28,11 @@ export const defaultsOf = (settings) => {
 
 // The From a send goes from, as typed ('"Name" <addr>'), or null for
 // MAIL_FROM. Only the desk chooses: anyone else's sender_id is ignored and
-// the kind's default is used. An id no longer on the list is refused.
+// the kind's default is used. sender_id null is the campaign's own address
+// (MAIL_FROM), always a choice; left out, the kind's default. An id no
+// longer on the list is refused.
 export const resolveFrom = async (tx, ctx, kind, senderId) => {
+  if (isDesk(ctx) && senderId === null) return null;
   const settings = settingsOf((await tx.query('select settings from workspaces where id = $1', [ctx.workspaceId])).rows[0]);
   const list = sendersOf(settings);
   let id = isDesk(ctx) ? senderId ?? null : null;

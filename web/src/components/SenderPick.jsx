@@ -17,15 +17,15 @@ export const useSenders = (enabled = true) => useQuery({ queryKey: SENDERS_KEY, 
 export const fromWords = (s) => (s ? (s.name ? `${s.name} <${s.email}>` : s.email) : '');
 
 // What a send of this kind goes from, and what the desk may pick instead.
-// The system address (MAIL_FROM) is a choice only while it is the default:
-// a send can't ask for it over a default the manager set.
+// The system address (MAIL_FROM) is always a choice: picked, it is sent as
+// sender_id null (left out means the default).
 export const fromChoices = (data, use) => {
   if (!data) return { current: null, choices: [] };
   const def = data.defaults?.[use] || null;
   const list = data.senders || [];
-  const current = (def && list.find((s) => s.id === def)) || data.system;
-  const choices = [...(!def || !list.some((s) => s.id === def) ? (data.system ? [{ id: null, ...data.system }] : []) : []), ...list];
-  return { current, choices };
+  const system = data.system ? { id: null, ...data.system } : null;
+  const current = (def && list.find((s) => s.id === def)) || system;
+  return { current, choices: [...(system ? [system] : []), ...list] };
 };
 
 export default function SenderPick({ use, value, onChange }) {
@@ -35,6 +35,7 @@ export default function SenderPick({ use, value, onChange }) {
   if (q.isPending) return <p className="sp-line" role="status">From: {LOADING}</p>;
   if (q.isError) return <p className="sp-line" role="status">From: <Unavailable onRetry={() => q.refetch()} /></p>;
   const { current, choices } = fromChoices(q.data, use);
+  // value: undefined is the default; null the campaign's own address.
   const picked = value !== undefined ? choices.find((c) => c.id === value) || current : current;
   const canChange = q.data.canChoose && choices.length >= 2;
   return (
@@ -48,10 +49,10 @@ export default function SenderPick({ use, value, onChange }) {
       {canChange && open && (
         <div id={id} className="sp-chips" role="radiogroup" aria-label="Send from">
           {choices.map((c) => {
-            const on = (picked?.email || '') === c.email;
+            const on = picked?.id === c.id && (picked?.email || '') === c.email;
             return (
               <button key={c.id || 'system'} type="button" role="radio" aria-checked={on} className={`chip sp-chip${on ? ' is-on' : ''}`}
-                onClick={() => { onChange?.(c.id ?? undefined); setOpen(false); }}>
+                onClick={() => { onChange?.(c.id); setOpen(false); }}>
                 {fromWords(c)}
               </button>
             );

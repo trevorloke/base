@@ -480,7 +480,8 @@ export function ComposeCard({
   const acts = { ...BLAST_ACTIONS, ...names };
   const key = listKey || scope.listKey;
   const isText = kind === 'text';
-  // The From the desk picked (undefined: the kind's default, said by the server).
+  // The From the desk picked (undefined: the kind's default, said by the
+  // server; null: the campaign's own address).
   const [senderId, setSenderId] = useState(undefined);
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
@@ -497,10 +498,10 @@ export function ComposeCard({
   const act = useAction(() => {
     queryClient.invalidateQueries({ queryKey: key });
   });
-  const from = senderId ? { sender_id: senderId } : {};
+  const from = senderId !== undefined ? { sender_id: senderId } : {};
   const senders = useSenders(!!(confirmFrom && senderUse));
   const { current: fromNow, choices: fromAll } = fromChoices(senders.data, senderUse);
-  const fromAddr = (senderId && fromAll.find((c) => c.id === senderId)) || fromNow;
+  const fromAddr = (senderId !== undefined && fromAll.find((c) => c.id === senderId)) || fromNow;
   const confirmWho = confirmFrom && fromAddr?.email ? ` from ${fromAddr.email}` : '';
 
   const testing = ab != null && audienceCount != null && audienceCount >= AB_MIN;
