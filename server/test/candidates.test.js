@@ -269,9 +269,10 @@ test('what a candidate may never do: money, records, sends, the team, permission
   for (const [name, input] of Object.entries(refused)) {
     assert.equal((await cand.action(name, input)).status, 403, name);
   }
-  for (const path of ['/api/gifts', '/api/stewardship', '/api/pathtowin', '/api/banks', '/api/candidates']) {
+  // The gifts list is /records/gift (there's no /api/gifts read).
+  for (const path of ['/api/records/gift', '/api/gifts/imports', '/api/receipts/needs', '/api/stewardship', '/api/pathtowin', '/api/banks', '/api/candidates']) {
     const r = await cand.get(path);
-    assert.ok([403, 404].includes(r.status), `${path}: ${r.status}`);
+    assert.ok([403, 404].includes(r.status), `${path}: ${r.status} ${JSON.stringify(r.json)?.slice(0, 200)}`);
   }
   // People granted on the Candidates row: still none of the desk's ties.
   ok(await mgr.action('permission.role.set', { role: 'candidate', grant: ['people'], deny: [] }));
