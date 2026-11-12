@@ -239,28 +239,9 @@ test('the chips: each group alone, in order, and All holds them all', async () =
   assert.equal((await all(mgr, S.dev.id, '&group=bogus')).status, 400);
 });
 
-test('bounced and marked as spam: shown once the email service’s columns exist, quiet without them', async () => {
-  const { forgetEmailColumns } = await import('../ext/timeline/sources.js');
-  const cols = async () => (await db.query(
-    `select column_name from information_schema.columns
-      where table_schema = current_schema() and table_name = 'blast_recipients' and column_name in ('bounced_at', 'complained_at')`,
-  )).rows.length;
+test('bounced and marked as spam: shown once the email service reports one, quiet until then', async () => {
   const emailKinds = async () => kinds(ok(await all(mgr, S.dev.id, '&group=messages'))).filter((k) => k.startsWith('email'));
-  // Without the columns (a campaign whose email service doesn't report back;
-  // where that feature adds them at boot, they are taken away for this part).
-  await db.exec(`alter table blast_recipients drop column if exists bounced_at;
-                 alter table blast_recipients drop column if exists bounce_detail;
-                 alter table blast_recipients drop column if exists complained_at;`);
-  forgetEmailColumns();
-  assert.equal(await cols(), 0);
-  assert.deepEqual(await emailKinds(), ['email', 'email_click', 'email_open'], 'the history reads as it did');
-  // With them, as the email service's feature adds them.
-  await db.exec(`alter table blast_recipients add column if not exists bounced_at timestamptz;
-                 alter table blast_recipients add column if not exists bounce_detail text;
-                 alter table blast_recipients add column if not exists complained_at timestamptz;`);
-  forgetEmailColumns();
-  assert.equal(await cols(), 2);
-  // The columns are there and empty: nothing new to say.
+  // The email service's columns (ext/mail) are there and empty: nothing new to say.
   assert.deepEqual(await emailKinds(), ['email', 'email_click', 'email_open']);
   await db.query(
     `update blast_recipients set bounced_at = sent_at + interval '5 minutes', bounce_detail = 'Mailbox full' where id = $1`, [S.listRow.id],

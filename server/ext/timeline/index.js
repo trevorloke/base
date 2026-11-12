@@ -28,7 +28,7 @@
 // Read from: contacts (a call an outside dialer logged says which, from
 // contacts.source) · texts through the campaign's number · emails sent to
 // them with the first open and click (and a bounce or a spam complaint,
-// where the email service's columns exist) · a ladder's emails (each run's
+// once the email service reports one) · a ladder's emails (each run's
 // log) · website forms · gifts with their voids and card refunds ·
 // memberships · shifts · survey answers · signs · voted marks · yes and no
 // to email and texts · a merge. Each through an index on the one person

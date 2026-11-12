@@ -129,21 +129,9 @@ const texts = async (db, q) => (await rowsOf(db, `
     detail: clean(r.body) || null, by: r.direction === 'in' ? null : r.by_name || null, link: `/inbox/${r.conversation_id}`,
   }));
 
-// ── Emails sent to them, with the first open and click ──
-// Whether the email service's delivery columns are on blast_recipients
-// (another feature adds bounced_at, bounce_detail and complained_at): asked
-// of the database once, then remembered. Tests that add the columns
-// part-way forget the answer (forgetEmailColumns).
-let emailCols = null;
-export const forgetEmailColumns = () => { emailCols = null; };
-const emailColumns = (db) => {
-  emailCols ||= db.query(
-    `select column_name from information_schema.columns
-      where table_schema = current_schema() and table_name = 'blast_recipients'
-        and column_name in ('bounced_at', 'bounce_detail', 'complained_at')`,
-  ).then((r) => new Set(r.rows.map((c) => c.column_name)), (e) => { emailCols = null; throw e; });
-  return emailCols;
-};
+// ── Emails sent to them, with the first open and click — and a bounce or
+// a spam complaint once the email service reports one (ext/mail keeps
+// bounced_at, bounce_detail and complained_at on the row) ──
 const EMAIL = {
   sent: ['email', 'Sent'], failed: ['email_failed', 'Not sent'], unsure: ['email_unsure', 'Not sure it went'],
   open: ['email_open', 'Opened'], click: ['email_click', 'Clicked a link'],
@@ -152,11 +140,8 @@ const EMAIL = {
 const shortUrl = (u) => clean(String(u || '').replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, ''), 60);
 // A send to a list or a filter carries the person; the newsletter's goes
 // to an address (no person on the row), found by the email they have now.
-const emails = async (db, q) => {
-  const cols = await emailColumns(db);
-  return (await rowsOf(db, `
-    select ${ms('x.at')} as at, 'email:' || r.id::text || ':' || x.what as key, x.what, b.subject, l.url,
-           ${cols.has('bounce_detail') ? 'r.bounce_detail' : 'null::text'} as bounce_detail
+const emails = async (db, q) => (await rowsOf(db, `
+    select ${ms('x.at')} as at, 'email:' || r.id::text || ':' || x.what as key, x.what, b.subject, l.url, r.bounce_detail
       from (
         select * from blast_recipients where workspace_id = $1 and person_id = $2
         union all
@@ -169,16 +154,15 @@ const emails = async (db, q) => {
         ('failed', case when r.status = 'failed' then coalesce(r.sending_at, r.created_at) end),
         ('unsure', case when r.status = 'sending' then coalesce(r.sending_at, r.created_at) end),
         ('open', r.first_open_at),
-        ('click', r.first_click_at)${cols.has('bounced_at') ? `,
-        ('bounce', r.bounced_at)` : ''}${cols.has('complained_at') ? `,
-        ('spam', r.complained_at)` : ''}
+        ('click', r.first_click_at),
+        ('bounce', r.bounced_at),
+        ('spam', r.complained_at)
       ) x(what, at)`,
   q, String(q.person.email || '').trim().toLowerCase(),
-  )).map((r) => entry(r, 'messages', EMAIL[r.what][0], 'Email', EMAIL[r.what][1], {
-    detail: line(clean(r.subject, 200), r.what === 'click' && shortUrl(r.url), r.what === 'bounce' && clean(r.bounce_detail, 120)),
-    link: '/outreach/email',
-  }));
-};
+)).map((r) => entry(r, 'messages', EMAIL[r.what][0], 'Email', EMAIL[r.what][1], {
+  detail: line(clean(r.subject, 200), r.what === 'click' && shortUrl(r.url), r.what === 'bounce' && clean(r.bounce_detail, 120)),
+  link: '/outreach/email',
+}));
 
 // ── A ladder's emails, from each run's own log ──
 const LADDER = { sent: ['email', 'Sent'], unsure: ['email_unsure', 'Not sure it went'], failed: ['email_failed', 'Not sent'] };
