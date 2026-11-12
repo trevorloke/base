@@ -279,7 +279,7 @@ function AccountMenu({ me, mode, signingOut, confirmLeft, onSignOut, onCancelSig
         {/* Name and role beside the avatar in the desktop sidebar (hidden on phones). */}
         <span className="acct-btn__who" aria-hidden="true">
           <span className="acct-btn__name">{me.user.name}</span>
-          <span className="acct-btn__role">{me.admin_role ? `${me.admin_role} · field` : me.role}</span>
+          <span className="acct-btn__role">{me.candidate ? 'Candidate' : me.admin_role ? `${me.admin_role} · field` : me.role}</span>
         </span>
       </button>
       <div className="acct-panel" id={panelId} hidden={!open}>

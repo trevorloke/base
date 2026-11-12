@@ -14,6 +14,7 @@ import { apiGet, action, fmtDate } from '../api.js';
 import { NoSignal, noSignal, useOnline, NeedsSignalLine } from '../components/NoSignal.jsx';
 import './outreach.css';
 import '../components/two-step.css';
+import './candidates.css';
 
 const ROLES = [
   { code: 'volunteer', label: 'Volunteer', hint: 'Map, doors, calls, texts, signs' },
@@ -42,7 +43,7 @@ const Email = ({ value }) => {
 };
 
 // The join link, once: who it's for, Copy link, and the link itself.
-function JoinLink({ sent, testId }) {
+export function JoinLink({ sent, testId }) {
   const [copied, setCopied] = useState(false);
   const timer = useRef(null);
   const linkRef = useRef(null);
@@ -211,10 +212,15 @@ function MemberRow({ m, isMe, online, onRole, onChanged, twoStep = null, onTwoSt
           </span>
         </span>
         <span className="ot-actions ot-row__acts">
-          <select className="input ot-role" aria-label={`Role for ${m.name}`} value={m.role}
-            disabled={isMe || !online || busy} onChange={(e) => onRole(m.id, e.target.value)}>
-            {ROLES.map((r) => <option key={r.code} value={r.code}>{r.label}</option>)}
-          </select>
+          {/* A candidate's seat (Settings → Candidates): their role stays volunteer until they're unlinked there. */}
+          {m.candidate ? (
+            <span className="ot-role tm-candidate">Candidate{m.candidate_office ? ` · ${m.candidate_office}` : ''}</span>
+          ) : (
+            <select className="input ot-role" aria-label={`Role for ${m.name}`} value={m.role}
+              disabled={isMe || !online || busy} onChange={(e) => onRole(m.id, e.target.value)}>
+              {ROLES.map((r) => <option key={r.code} value={r.code}>{r.label}</option>)}
+            </select>
+          )}
           {/* In another campaign here too: that's reset from the server's shell. */}
           {!isMe && twoStep?.on && !twoStep.elsewhere && !confirming && !resetting && (
             <button type="button" className="btn btn-quiet ot-btn-tap" disabled={busy || !online}

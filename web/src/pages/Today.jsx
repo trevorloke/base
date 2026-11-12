@@ -25,6 +25,11 @@
 //     and only while the campaign is new. Walk lists, team (managers),
 //     providers, "Verify the records", the export and "Clear sample data" sit
 //     under a quiet "More" at the bottom.
+//   Candidate (a volunteer with a seat, me.candidate): "Your day" — one
+//     button, "Met someone →" (Mainstreeting), then only the rows that have
+//     something (their next booked shift, "Your week · 4", "My people · 6"),
+//     then Your race (supporters, needed, days left, from Path to win), and
+//     canvassing, calls and signs under "More".
 //   Both: "Follow up" at the top when someone's been handed to them — a new
 //     volunteer, a website message, an RSVP from someone new — with what
 //     they did and the 24-hour clock, opening in place to call or text and
@@ -49,6 +54,7 @@ import { turfNames } from '../components/ShiftTurfs.jsx';
 import { whenText, zoneOf } from '../components/shiftTime.js';
 import { daysLeft, filingDay, filingSoon } from '../components/FilingWords.js';
 import './today.css';
+import './candidate.css';
 import { at } from '../base.js';
 import { NS } from '../base.js';
 import { BRAND } from '../brand.js';
@@ -781,6 +787,96 @@ function VolunteerToday({ b, me }) {
   );
 }
 
+// ── Candidate Today (me.candidate: a volunteer with a seat, ext/candidates) ──
+// Their day: what they're booked on, "Met someone" (Mainstreeting), the
+// people they know, and how their race stands. A row shows only when it has
+// something; the race says Loading… or Unavailable, never a made-up 0.
+const firstName = (name) => String(name || '').trim().split(/\s+/)[0] || '';
+const WEEK = 7 * DAY;
+function YourRace({ home }) {
+  if (home.isPending) return <p className="muted cand-race">Loading…</p>;
+  const race = home.data?.race;
+  if (home.isError || race?.unavailable) {
+    return (
+      <p className="cand-race cand-race__fail" role="status">
+        <span className="muted">Your race: Unavailable</span>
+        <button type="button" className="btn today-tap" onClick={() => home.refetch()} disabled={home.isFetching}>Try again</button>
+      </p>
+    );
+  }
+  if (!race) return null;
+  const tiles = [
+    ['Supporters', race.supporters],
+    ['Needed', race.supporters_needed],
+    ...(race.days_left != null ? [['Days left', race.days_left]] : []),
+  ];
+  return (
+    <section className="cand-race" aria-label={`Your race: ${race.label}`}>
+      <p className="cand-race__cap">Your race · {race.label}</p>
+      <div className="today-nums">
+        {tiles.map(([label, n]) => (
+          <div key={label} className="today-num">
+            <span className="today-num__n">{num(n)}</span>
+            <span className="today-num__label">{label}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function CandidateToday({ b, me }) {
+  const home = useQuery({ queryKey: ['candidate-home'], queryFn: () => apiGet('/candidate/home') });
+  const { ready, next } = useMyNextShift(me);
+  const shiftsQ = useQuery({ queryKey: ['shifts'], queryFn: () => apiGet('/shifts') });
+  const now = Date.now();
+  const week = (shiftsQ.data?.shifts ?? []).filter((s) => s.mine && new Date(s.starts_at).getTime() >= now
+    && new Date(s.starts_at).getTime() < now + WEEK).length;
+  const tz = zoneOf(me);
+  const myTurfs = b.myTurfs ?? [];
+  const first = firstName(me.user?.name);
+  return (
+    <div className="today today--field today--candidate">
+      <span className="eyebrow">{greeting()}{first ? `, ${first}` : ''}</span>
+      <h1>Your day</h1>
+      {b.sampleLoaded && <SampleLine />}
+      {b.voted?.on && <GotvCard v={b.voted} />}
+      <FollowupsToday me={me} />
+
+      <section className="today-go" aria-label="Met someone">
+        <Link to="/mainstreet" className="btn btn-primary today-start">
+          Met someone <span aria-hidden="true">→</span>
+        </Link>
+      </section>
+
+      <ul className="today-rows today-next">
+        {!ready && <li className="today-need today-row--wait" aria-hidden="true" />}
+        {ready && next && (
+          <WhenRow to={`/shifts/${next.id}`} kicker="Your next shift" title={next.title} when={next.starts_at} tz={tz}
+            extra={turfNames(b.shiftTurfs?.[next.id] || []) || undefined} />
+        )}
+        {week > 0 && (
+          <LinkRow to="/shifts" main={<>Your week · <strong className="mono">{num(week)}</strong></>} />
+        )}
+        {Number(b.myPeople) > 0 && (
+          <LinkRow to="/my-people" state={FROM_TODAY}
+            main={<>My people · <strong className="mono">{num(b.myPeople)}</strong></>} />
+        )}
+      </ul>
+
+      <YourRace home={home} />
+
+      <More>
+        <ul className="today-rows">
+          <LinkRow to={myTurfs.length === 1 ? `/turfs/${myTurfs[0].id}` : myTurfs.length ? '/turfs' : '/map'} main="Start canvassing" />
+          <LinkRow to="/calls" main="Calls" />
+          <LinkRow to="/signs" main="Signs" />
+        </ul>
+      </More>
+    </div>
+  );
+}
+
 // ── Desk Today ──
 function DeskToday({ b, me, toast }) {
   const navigate = useNavigate();
@@ -916,7 +1012,8 @@ export default function Today() {
 
   return (
     <>
-      {desk ? <DeskToday b={b} me={me} toast={toast} /> : <VolunteerToday b={b} me={me} />}
+      {desk ? <DeskToday b={b} me={me} toast={toast} />
+        : me?.candidate ? <CandidateToday b={b} me={me} /> : <VolunteerToday b={b} me={me} />}
       {toast.msg && (
         <div className="toast today-toast" role="status">
           <span>{toast.msg}</span>

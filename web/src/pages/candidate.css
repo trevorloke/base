@@ -1,0 +1,7 @@
+/* A candidate's Today (Today.jsx CandidateToday): Your race's three numbers,
+   in the Today numbers' shape, with the race as their caption. */
+.cand-race { margin: var(--s-4, 16px) 0 0; }
+.cand-race__cap { margin: 0 0 6px; font-size: 14px; color: var(--text-3); }
+.cand-race .today-num { cursor: default; }
+.cand-race__fail { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; }
+.cand-race__fail .btn { min-height: 48px; }
