@@ -1,0 +1,57 @@
+/* A profile's History (components/PersonTimeline.jsx): the chips that
+   narrow it, its links and its states. The rows themselves are the
+   profile's .timeline (pages/people.css). Built from the shared chip and
+   the shared tokens only. Every tap here is 48px, at a desk too, like the
+   rest of the profile. */
+
+/* All · Doors & calls · Messages · Website · Money · Shifts */
+.ptl-chips { display: flex; flex-wrap: wrap; gap: var(--s-2); margin: 0 0 var(--s-3); }
+.chip.ptl-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 48px;
+  padding: 0 var(--s-4);
+  font-size: 14px;
+  color: var(--text-2);
+  background: var(--paper-0);
+  border-color: var(--rule-2);
+  cursor: pointer;
+}
+@media (hover: hover) { .chip.ptl-chip:hover { border-color: var(--ink); color: var(--text-1); } }
+.chip.ptl-chip[aria-pressed='true'] { background: var(--mark); border-color: var(--mark); color: var(--mark-ink); }
+.chip.ptl-chip:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
+
+/* An entry that leads somewhere (a shift, a thread, this profile's Gifts)
+   reads as a link, whether it is one or a button. Its 48px reach above and
+   below the words, so a row with a link is no taller than one without; the
+   focus ring hugs the words. */
+.ptl-link {
+  padding: 13px 0;
+  padding-block: max(0px, calc((48px - 1lh) / 2));
+  margin: -13px 0;
+  margin-block: min(0px, calc((1lh - 48px) / 2));
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.ptl-link:focus-visible {
+  outline: 2px solid var(--mark-deep);
+  outline-offset: -11px;
+  outline-offset: min(2px, calc((1lh - 48px) / 2 + 2px));
+}
+
+/* Long words (a subject, what someone wrote) wrap inside the row. */
+.timeline.ptl .what { min-width: 0; }
+.timeline.ptl .what > span:not(.chip), .timeline.ptl .note { overflow-wrap: anywhere; }
+
+/* Loading… · Unavailable — Try again */
+.ptl-state { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2); margin: var(--s-2) 0; font-size: 15px; }
+
+/* Said to a screen reader when the list changes; nothing to see. */
+.ptl-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }

@@ -175,6 +175,49 @@ test('money stays in the tab whatever role the tab thinks it has; a desk’s Peo
   qc.clear();
 });
 
+test('a profile’s History is kept beside the profile: a desk’s in this tab only (it holds gifts), shown when there is no answer', async () => {
+  local.clear(); session.clear();
+  OC.forgetPhoneCopies();
+  const qc = new QueryClient({ defaultOptions: { queries: { persister: KC.keptPersister, retry: false, networkMode: 'online' } } });
+  KC.watchKeptCopies(qc);
+  const staff = me('staff', 'u7');
+  qc.setQueryData(['me'], staff);
+  // The list as components/PersonTimeline.jsx reads it: pages, one key per chip.
+  const pages = (key) => ({ queryKey: key, initialPageParam: null, getNextPageParam: (last) => last.next ?? undefined });
+  const all = ['person', 'p1', 'timeline', 'all'];
+  const page = { entries: [{ id: 'gift:1', group: 'money', kind: 'gift', title: '$100.00 · Cheque' }], next: null, groups: ['field', 'money'] };
+  await qc.fetchInfiniteQuery({ ...pages(all), queryFn: async () => page });
+  await sleep(900);
+  assert.ok(has(session, staff, 'q:staff:person:p1:timeline:all'), 'kept for this tab only');
+  assert.ok(!has(local, staff, 'q:staff:person:p1:timeline:all'), 'never in the browser’s lasting storage');
+  // The server restarting: the history as it was last loaded, not an error.
+  const down = async () => { throw new api.ApiError(502, 'request failed (502)'); };
+  qc.removeQueries({ queryKey: all });
+  const got = await qc.fetchInfiniteQuery({ ...pages(all), queryFn: down });
+  assert.equal(got.pages[0].entries[0].title, '$100.00 · Cheque');
+  // A chip never opened has no copy: it fails (the screen says so), never an empty history.
+  await assert.rejects(qc.fetchInfiniteQuery({ ...pages(['person', 'p1', 'timeline', 'money']), queryFn: down }), /502/);
+  // No longer theirs to see: the copy goes.
+  qc.removeQueries({ queryKey: all });
+  await assert.rejects(qc.fetchInfiniteQuery({ ...pages(all), queryFn: async () => { throw new api.ApiError(403, 'not for you'); } }), /not for you/);
+  assert.ok(!has(session, staff, 'q:staff:person:p1:timeline:all'), 'refused: the copy goes');
+  // A volunteer's (the server sends them no money) stays in this browser, like their profiles.
+  const vol = me('volunteer', 'u8');
+  qc.clear();
+  qc.setQueryData(['me'], vol);
+  await qc.fetchInfiniteQuery({ ...pages(all), queryFn: async () => ({ entries: [{ id: 'contact:1', group: 'field', kind: 'door', title: 'No answer' }], next: null, groups: ['field'] }) });
+  await sleep(900);
+  assert.ok(has(local, vol, 'q:volunteer:person:p1:timeline:all'));
+  assert.ok(!has(session, vol, 'q:volunteer:person:p1:timeline:all'));
+  // Made treasurer before this tab knows: the answer has money in it — this tab only.
+  qc.removeQueries({ queryKey: all });
+  await qc.fetchInfiniteQuery({ ...pages(all), queryFn: async () => page });
+  await sleep(900);
+  assert.ok(has(session, vol, 'q:volunteer:person:p1:timeline:all'), 'money in it: this tab only');
+  assert.ok(!has(local, vol, 'q:volunteer:person:p1:timeline:all'), 'never left in the browser beside it');
+  qc.clear();
+});
+
 test('the strip’s time is what the screen draws: only Today and Money draw the brief; every other read is a side read', async () => {
   const { readdir, readFile } = await import('node:fs/promises');
   const { join } = await import('node:path');

@@ -566,6 +566,17 @@ one tap away under **More**.
   role (incl. *Hi-rise building captain*); open a profile; add tags, roles,
   social handles. **More → Call list / Text list** opens Calls with the same
   filter; **More → Inbox** has every text conversation.
+- **A profile → History** — everything with them on one list, newest first:
+  knocks and calls (*CallHub* beside a call a dialer logged), texts, emails
+  (*Sent · Opened · Clicked a link*, and *Bounced* or *Marked as spam* once
+  the email service reports them), website forms, gifts, memberships,
+  shifts, answers, signs, voted, *Unsubscribed from email*, *Replied STOP*.
+  The chips narrow it (*Doors & calls · Messages · Website · Money ·
+  Shifts*); a gift on the books or an answer opens its section here, a
+  shift or a text its own screen (a voided or refunded gift, or an answer
+  with no signal, is plain words: nothing here to open); *Load more* brings
+  the next 50. Staff denied Donations see no Money chip; a slow or failed
+  read says *Loading…* or *Unavailable — Try again*, never an empty history.
 - **Shifts → Week** — next week (**›**). **+** on Monday: tap *Burma
   Shave*; *Pick on the map*, tap a corner, *Use this place*; *Weekdays*;
   **Add 5 shifts** — five cards under *Early*, 6:30–8:30 am, named for the
