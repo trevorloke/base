@@ -1153,7 +1153,11 @@ function CallsScreen() {
   const queue = rows.filter((p) => !done[p.id]);
   const current = queue.find((p) => p.id === currentId) || (held?.id === currentId ? held : null) || queue[0] || null;
   const at = current ? queue.indexOf(current) : -1; // -1: a held person outside the list
-  const calledHere = rows.length - queue.length;
+  // Called and still on the list as loaded; and called in this sitting. A
+  // phone bank's list is asked for again as it runs low and the calls
+  // logged drop off it, so its sitting is counted from the calls themselves.
+  const calledLoaded = rows.length - queue.length;
+  const calledHere = bankId ? Object.values(done).filter((d) => d?.bank === bankId).length : calledLoaded;
   const mine = (current && picked[current.id]) || null;
   // The newest part is on its way (or didn't come); the list on screen runs
   // low: the next part is asked for, starting after the last name loaded.
@@ -1180,10 +1184,22 @@ function CallsScreen() {
     bankAsked.current = key;
     refetchBank();
   }, [bankMore, queue.length, persons.isFetching, bankId, rows, refetchBank]);
+  // The last number loaded is called and no more are waiting: the bank is
+  // read once more, so "N of N done" and "All done" are the server's word
+  // (a call still waiting to send keeps its number on the list).
+  const bankEnd = Boolean(bankId && bank && !persons.isPlaceholderData && !bankMore && rows.length > 0 && !current);
+  const endKey = `${bankId}:${calledHere}`;
+  const bankEnded = useRef('');
+  useEffect(() => {
+    if (!bankEnd || persons.isFetching || noSignalNow() || bankEnded.current === endKey) return;
+    bankEnded.current = endKey;
+    refetchBank();
+  }, [bankEnd, endKey, persons.isFetching, refetchBank]);
+  const bankEnding = bankEnd && !noSignalNow() && (persons.isFetching || bankEnded.current !== endKey);
   // How many are left: the ones loaded and not done yet, and everyone not
   // loaded yet (the server's count, by the same rule) — or Loading….
   const notLoaded = more || pending;
-  const toCall = bankId ? Math.max(queue.length, (bank?.left ?? 0) - calledHere)
+  const toCall = bankId ? Math.max(queue.length, (bank?.left ?? 0) - calledLoaded)
     : notLoaded ? (total.data ? queue.length + Math.max(0, total.data.total - (list?.length ?? 0)) : null) : queue.length;
   // The card stays on whoever is up (a reply arriving doesn't swap it).
   useEffect(() => { if (current && current.id !== currentId) setCurrentId(current.id); }, [current?.id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1255,7 +1271,7 @@ function CallsScreen() {
     survey.logged(res, { channel, outcome, rating, answers, visitOf });
     const next = after(at);
     refocus.current = inCard;
-    markDone(p.id, { rating: rating || null, outcome, queued: !!res.queued });
+    markDone(p.id, { rating: rating || null, outcome, queued: !!res.queued, ...(bankId ? { bank: bankId } : {}) });
     if (rating) setPicked((m) => ({ ...m, [p.id]: rating }));
     setHeld(null);
     setCurrentId(next?.id ?? null);
@@ -1384,6 +1400,8 @@ function CallsScreen() {
             <strong className="mono">{fmt(toCall)}</strong> more to call · <button type="button" className="btn au-retry" onClick={() => persons.refetch()}>Load them</button>
           </p>
         )
+      ) : !current && bankEnding ? (
+        <p className="muted" role="status">{LOADING}</p>
       ) : rows.length === 0 && !current ? (
         <div className="pp-empty">
           {/* Everyone here has a text from the campaign: replies come to the Inbox. */}

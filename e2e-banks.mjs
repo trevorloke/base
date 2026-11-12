@@ -10,7 +10,9 @@
 // numbers three at a time, also coming back once they've gone stale; Calls
 // on a list of 305 says "305 to call" and goes on past its first 300; a
 // bank of 540 handed to one caller comes 500 at a time ("540 to call",
-// "40 more to call · Load them"); a list an open bank calls can't be deleted.
+// "40 more to call · Load them"), the count carries on over the refill and
+// the last call ends on "540 of 540 done · All done"; a list an open bank
+// calls can't be deleted.
 //
 //   STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4132 node server/index.js &
 //   BASE=http://127.0.0.1:4132 SHOTS=/tmp/banks node e2e-banks.mjs
@@ -110,6 +112,12 @@ const t3 = await toast();
 check(`Left message on ${third.split(' ')[0]}: "Left message", no call back`, /Left message/.test(t3) && !/back on your list/.test(t3), t3);
 mine = (await vp.evaluate(async (b) => (await fetch(`/api/banks/${b}/mine`)).json(), bankId));
 check('the server: done, nobody left to call now', mine.bank.done === 1 && mine.persons.length === 0, JSON.stringify(mine.bank));
+// The last number on the list: the screen reads the bank again and says so in the server's words.
+await vp.waitForFunction(() => /All done/.test(document.querySelector('main')?.innerText || ''), null, { timeout: 8000 }).catch(() => {});
+const endText = (await vp.innerText('main')).replace(/\s+/g, ' ');
+check('the list runs out: "1 of 3 done · 2 to call back", "All done — every number on your list is called", no "Start over"',
+  /1 of 3 done/.test(await line()) && /2 to call back/.test(await line()) && /All done — every number on your list is called/.test(endText) && !/Start over/.test(endText),
+  `${await line()} · ${endText.slice(-140)}`);
 
 // ── The desk's bank page ──
 await page.reload({ waitUntil: 'domcontentloaded' });
@@ -245,7 +253,7 @@ check('Calls on the bank: "540 to call" and "0 of 540 done" — the whole bank, 
 // Every number loaded is called on this phone, and none has reached the
 // server yet: the screen says how many are still waiting, and asks once.
 const loaded = (await api(`/banks/${bigBank.id}/mine`)).json.persons;
-await page.evaluate((ids) => sessionStorage.setItem('starbase.calls.done', JSON.stringify(Object.fromEntries(ids.map((id) => [id, { outcome: 'contacted' }])))), loaded.map((p) => p.id));
+await page.evaluate(({ ids, bank }) => sessionStorage.setItem('starbase.calls.done', JSON.stringify(Object.fromEntries(ids.map((id) => [id, { outcome: 'contacted', bank }])))), { ids: loaded.map((p) => p.id), bank: bigBank.id });
 mineAsked = 0;
 await page.reload({ waitUntil: 'domcontentloaded' });
 await page.waitForFunction(() => /40 more to call/.test(document.querySelector('main')?.innerText || ''), null, { timeout: 10000 }).catch(() => {});
@@ -265,6 +273,23 @@ check('…Load them: the next 40 come in — "40 to call", "500 of 540 done", Bi
   /\b40 to call/.test(await page.innerText('.cl-progress').catch(() => '')) && /500 of 540 done/.test(await page.innerText('.cl-bank__line'))
     && (await page.innerText('.cl-card .cl-name').catch(() => '')).trim() === 'Big 501 Example',
   `${await page.innerText('.cl-progress').catch(() => '')} · ${await page.innerText('.cl-bank__line')} · ${await page.innerText('.cl-card .cl-name').catch(() => '')}`);
+// The sitting's count carries on over the refill (it used to start again from zero)…
+const barAt = () => page.getAttribute('.cl-bar', 'aria-label').catch(() => '');
+check('…and the bar carries on: "500 of 540 done", not "0 of 40"', (await barAt()) === '500 of 540 done', await barAt());
+// …and the last 40, tapped through, end on the server's word.
+for (let i = 0; i < 40; i += 1) {
+  const who = (await page.innerText('.cl-card .cl-name').catch(() => '')).trim();
+  if (!who) break;
+  await page.click('section.cl-card .cl-out:has-text("Left message")');
+  await page.waitForFunction((w) => (document.querySelector('.cl-card .cl-name')?.innerText || '').trim() !== w, who, { timeout: 8000 }).catch(() => {});
+  if (i === 9) check('ten more calls: "30 to call", the bar "510 of 540 done"', /\b30 to call/.test(await page.innerText('.cl-progress').catch(() => '')) && (await barAt()) === '510 of 540 done', `${await page.innerText('.cl-progress').catch(() => '')} · ${await barAt()}`);
+}
+await page.waitForFunction(() => /All done/.test(document.querySelector('main')?.innerText || ''), null, { timeout: 10000 }).catch(() => {});
+const bigEnd = (await page.innerText('main')).replace(/\s+/g, ' ');
+check('the last number called: "540 of 540 done" and "All done — every number on your list is called", never "Start over"',
+  /540 of 540 done/.test(await page.innerText('.cl-bank__line')) && /All done — every number on your list is called/.test(bigEnd) && !/Start over/.test(bigEnd),
+  `${await page.innerText('.cl-bank__line')} · ${bigEnd.slice(-120)}`);
+await page.screenshot({ path: `${SHOTS}/06-bank-all-done.png` });
 await page.evaluate(() => sessionStorage.removeItem('starbase.calls.done'));
 // The list can't be deleted from under an open bank: the screen says which bank.
 await page.goto(`${ADMIN}/lists/${bigList.id}`, { waitUntil: 'domcontentloaded' });
