@@ -29,6 +29,7 @@
   cursor: pointer;
 }
 .rk-more:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
+@media (max-width: 480px) { .rk-line { font-size: 14px; gap: 0 6px; } }
 /* The Calls card: the line sits in the name block, a little tighter */
 .cl-who__main .rk-line { margin-top: var(--s-1); font-size: 14px; }
 

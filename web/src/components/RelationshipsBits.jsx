@@ -27,7 +27,7 @@
 //   <KnowMeChip />, <IKnowThem /> "You know them · Friend", and the one-tap
 //                                "I know them" (every role; saved offline)
 // No pronouns are guessed from names: the words never need one.
-import { Fragment, useId, useState } from 'react';
+import { Fragment, useEffect, useId, useState } from 'react';
 import { Link, useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { rankTies } from '@starbase/shared/ties';
@@ -424,11 +424,30 @@ export function IKnowThem({ person, me = null }) {
   );
 }
 
+// A phone's width: the line keeps to two lines there, so it names two ties
+// (one beside "Same address"); the rest are in "N more".
+const NARROW = '(max-width: 480px)';
+const useNarrow = () => {
+  const [narrow, setNarrow] = useState(() => Boolean(globalThis.matchMedia?.(NARROW).matches));
+  useEffect(() => {
+    const mq = globalThis.matchMedia?.(NARROW);
+    if (!mq) return undefined;
+    const on = () => setNarrow(mq.matches);
+    mq.addEventListener?.('change', on);
+    return () => mq.removeEventListener?.('change', on);
+  }, []);
+  return narrow;
+};
+
 // The profile's line, from its own Knows read and housemates (no new read).
 export function ProfileKeyTies({ query, household = [], onMore }) {
+  const narrow = useNarrow();
   if (noSignal(query)) return <KeyTies state="offline" />;
   if (query.isPending) return <KeyTies state="loading" />;
   if (query.isError) return <KeyTies state="error" onRetry={() => query.refetch()} />;
   const knows = query.data?.knows || [];
-  return <KeyTies ties={rankTies(knows)} n={knows.length} max={3} housemates={household} onMore={onMore} />;
+  // On a phone a "Same address" entry takes the second tie's place.
+  const linked = new Set(knows.map((k) => k.person.id));
+  const homes = household.some((h) => !h.dnc && !linked.has(h.id));
+  return <KeyTies ties={rankTies(knows)} n={knows.length} max={narrow ? (homes ? 1 : 2) : 3} housemates={household} onMore={onMore} />;
 }
