@@ -240,5 +240,8 @@ test('a provider of the campaign’s own (the preset or an address) offers no fr
   assert.equal(pre.views, undefined, 'no fallback for a direct provider');
   setEnv({ STARBASE_TILE_PROVIDER: null, STARBASE_TILE_URL: 'https://tiles.example/{z}/{x}/{y}.png' });
   assert.equal((await vol.get('/api/map/config')).json.views, undefined);
+  // The credit line is every role's (with Google off: the provider's own).
+  const credit = await vol.get('/api/map/credit?z=12&n=49.2&s=49.1&e=-122.8&w=-122.9');
+  assert.deepEqual([credit.status, credit.json.text], [200, '']);
   setEnv({ STARBASE_TILE_URL: null });
 });
