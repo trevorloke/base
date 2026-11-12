@@ -209,6 +209,17 @@ test('columns are matched by what their headings mean; rows are read; the check 
     ['name', 'amount', 'date', ''], 'a Result of 3 is still not a payment status');
   assert.deepEqual(guessGiftMapping(['Donor', 'Amount', 'Date', 'Membership status'], recs([['Ana Example', '20', '2026-03-01', 'Active'], ['Ben Example', '30', '2026-03-02', 'Lapsed']]), {}),
     ['name', 'amount', 'date', ''], 'a heading that only ends in status still needs words it knows');
+  // Two status-like columns: the one whose words are payment statuses is
+  // it, wherever it sits — a bare Status of "Active" beside it is not, and
+  // must not let the refunded row in.
+  const twoCols = recs([...Array.from({ length: 3 }, (_, i) => [`Donor ${i} Example`, '$50.00', '2026-03-01', 'Active', 'Completed']), ['Ben Example', '$50.00', '2026-03-01', 'Active', 'Refunded']]);
+  const twoColsMap = guessGiftMapping(['Donor', 'Amount', 'Date', 'Status', 'Payment Status'], twoCols, {});
+  assert.deepEqual(twoColsMap, ['name', 'amount', 'date', '', 'status'], 'the column that reads as payment statuses wins over a bare Status');
+  assert.deepEqual([fileRows(twoCols, twoColsMap, {}).rows.length, fileRows(twoCols, twoColsMap, {}).unpaid], [3, [{ row: 5, status: 'Refunded' }]], 'the refunded row stays out');
+  assert.deepEqual(guessGiftMapping(['Donor', 'Amount', 'Date', 'Status', 'Transaction Status'], recs([['Ana Example', '$20.00', '2026-03-01', 'Receipted', 'Paid'], ['Ben Example', '$30.00', '2026-03-02', 'Receipted', 'Refunded']]), {}),
+    ['name', 'amount', 'date', '', 'status'], 'the same beside Transaction Status');
+  assert.deepEqual(guessGiftMapping(['Donor', 'Amount', 'Date', 'Status', 'Result'], recs([['Ana Example', '$20.00', '2026-03-01', 'Active', 'Completed'], ['Ben Example', '$30.00', '2026-03-02', 'Active', 'Refunded']]), {}),
+    ['name', 'amount', 'date', '', 'status'], 'a Result of Completed and Refunded beside a Status of Active');
 
   // Calls stay small: by rows, and by size.
   const many = Array.from({ length: 450 }, (_, i) => ({ row: i, name: 'Ana Example', amount_cents: 100 }));

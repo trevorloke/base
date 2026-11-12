@@ -13,7 +13,7 @@
 // share a name ("Put 2 gifts on Dee Twin (2 Main St · V3S 1A1)? Yes · No").
 // The gifts then go through the one gift path: the year's limit is checked,
 // and one that takes the donor over is said here and listed under Needs you.
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, Navigate, useLocation, useOutletContext } from 'react-router-dom';
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { action, apiGet, fmtMoney } from '../api.js';
@@ -196,7 +196,16 @@ function LeftOut({ out, online, onBack, startOpen }) {
   const [open, setOpen] = useState(startOpen);
   const [busy, setBusy] = useState(null); // the gift being brought back
   const [error, setError] = useState(null);
-  if (!out?.gifts) return null;
+  // Arrived from "N imported gifts left out": the list is at the pile's foot,
+  // screens below when gifts wait — go to it once, focus on its heading.
+  const headRef = useRef(null);
+  const has = !!out?.gifts;
+  useEffect(() => {
+    if (!startOpen || !has || !headRef.current) return;
+    headRef.current.scrollIntoView({ block: 'start' });
+    headRef.current.focus({ preventScroll: true });
+  }, [startOpen, has]);
+  if (!has) return null;
   const back = async (g) => {
     setBusy(g.id);
     setError(null);
@@ -211,7 +220,7 @@ function LeftOut({ out, online, onBack, startOpen }) {
   };
   return (
     <section className="gw-out">
-      <button type="button" className="disclose" aria-expanded={open} aria-controls="gw-out-list" onClick={() => setOpen((v) => !v)}>
+      <button ref={headRef} type="button" className="disclose" aria-expanded={open} aria-controls="gw-out-list" onClick={() => setOpen((v) => !v)}>
         Left out · {out.gifts.toLocaleString('en-CA')}
       </button>
       {open && (

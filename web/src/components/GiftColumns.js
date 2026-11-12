@@ -114,10 +114,10 @@ const LOOKS = {
   // A "State" of BC, a "Result" of 3: not a payment's.
   status: (vals) => share(vals, (v) => statusWord(v) !== null) >= 0.6,
 };
-// A heading that says payment status outright: the column is that whatever
-// its words. No export was seen, so the other tool's word for a good payment
-// ("Posted") may be one not known here — it is asked about, and a refunded
-// row still stays out.
+// A heading that says payment status outright: when no column's values read
+// as payment statuses, the column is that whatever its words. No export was
+// seen, so the other tool's word for a good payment ("Posted") may be one not
+// known here — it is asked about, and a refunded row still stays out.
 const STATUS_SAID = /^(status|paymentstatus|donationstatus|giftstatus|transactionstatus|chargestatus|orderstatus|paymentstate)$/;
 // Money written as money ("$50.00", "49.99"): a column of bare whole numbers
 // could as well be an id or a count.
@@ -141,10 +141,9 @@ export const guessGiftMapping = (headers, records, { slates = [], noHeader = fal
     // A whole name beside first and last names is someone else's: a campaign's, a form's.
     if (key === 'name' && loose && (taken.has('first') || taken.has('last'))) return;
     const looks = LOOKS[key];
-    // Amounts and dates must read as such even under the plainest heading —
-    // and a status under one that could mean something else ("State"); the
-    // rest only when the heading merely hints.
-    const mustLook = loose || key === 'amount' || key === 'date' || (key === 'status' && !STATUS_SAID.test(norm[i]));
+    // Amounts, dates and a status must read as such even under the plainest
+    // heading; the rest only when the heading merely hints.
+    const mustLook = loose || key === 'amount' || key === 'date' || key === 'status';
     if (looks && values[i].length && mustLook && !looks(values[i])) return;
     out[i] = key;
     taken.add(key);
@@ -152,6 +151,14 @@ export const guessGiftMapping = (headers, records, { slates = [], noHeader = fal
   if (!noHeader) {
     for (const [key, re] of EXACT) norm.forEach((n, i) => { if (n && re.test(n)) claim(i, key, false); });
     for (const [key, re] of CONTAINS) norm.forEach((n, i) => { if (n && re.test(n)) claim(i, key, true); });
+    // No column read as payment statuses: the first heading that says status
+    // outright is it, whatever its words. Only now — beside a "Payment
+    // Status" of Completed and Refunded, a bare "Status" of Active is
+    // something else, and taking it would let the refunded row in.
+    if (!taken.has('status')) {
+      const i = norm.findIndex((n, j) => n && out[j] === SKIP && STATUS_SAID.test(n) && values[j].length);
+      if (i >= 0) { out[i] = 'status'; taken.add('status'); }
+    }
   }
   // What no heading named, from the values alone.
   headers.forEach((_, i) => {
