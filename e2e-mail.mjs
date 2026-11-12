@@ -7,6 +7,9 @@
 //     in (Verified, no yellow button), base.win's own DMARC line in each
 //     state, a sending-only key said plainly, a sender that doesn't answer
 //     ("Unavailable — … Try again");
+//   · From addresses: the campaign's own first, the one-tap media@ offer
+//     (saved as the press default), another domain refused in the server's
+//     words, Make default for email; Outreach → Email's From line;
 //   · Check on Email: every shortfall a sentence, then "✓ … · DMARC is in ·
 //     bounces and complaints come back here";
 //   · Outreach → Email: a newsletter goes out, the sender's signed events
@@ -225,6 +228,60 @@ await shot(prow, '05-all-in-390');
 const calls = JSON.parse(await post('/calls'));
 const writes = calls.filter((c) => !c.startsWith('GET')).join(' | ');
 check('the panel and Check only read at the sender — two writes in all: the domain added, one "check again"', writes === 'POST /domains | POST /domains/d-e2e/verify', writes);
+
+// ── 5b. From addresses: media@ offered for press, another domain refused, defaults ──
+const FROMS = `${EMAIL} section[aria-label="From addresses"]`;
+row = await openServices(page);
+await page.locator(`${FROMS} [data-testid="sender-row"]`).first().waitFor({ timeout: 8000 });
+w = await words(page.locator(FROMS));
+check('From addresses: the campaign’s own address first, "Always available", and the one-tap media@ offer', /Sample Campaign team@campaign\.example\.org Always available/.test(w)
+  && w.includes(`Add media@${DOMAIN} for press`), w.slice(0, 260));
+await page.locator(`${FROMS} button:has-text("Add media@")`).click();
+check('…the offer fills in media@ and says which domain', (await page.inputValue('#sa-email')) === `media@${DOMAIN}` && (await words(page.locator(FROMS))).includes(`Addresses at ${DOMAIN} only.`));
+await page.locator(`${FROMS} button:has-text("Save")`).click();
+await page.locator(`${FROMS} .sa-said`).waitFor({ timeout: 8000 }).catch(() => {});
+w = await words(page.locator(FROMS));
+check('saved: media@ is the default for press, the offer gone', w.includes(`Added media@${DOMAIN} — the default for press`) && /media@campaign\.example\.org Default for press/.test(w) && !/for press Add media@/.test(w), w.slice(0, 400));
+await page.locator(`${FROMS} button:has-text("Add an address")`).click();
+await page.fill('#sa-name', 'Elsewhere');
+await page.fill('#sa-email', 'someone@elsewhere.example.org');
+await page.locator(`${FROMS} button:has-text("Save")`).click();
+await page.locator(`${FROMS} .sa-said.is-bad`).waitFor({ timeout: 8000 }).catch(() => {});
+check('another domain: the server’s own sentence, in place', (await words(page.locator(`${FROMS} .sa-said`))) === `Use an address at ${DOMAIN}`, await words(page.locator(`${FROMS} .sa-said`)));
+await page.fill('#sa-name', 'Pat Example');
+await page.fill('#sa-email', `pat@${DOMAIN}`);
+await page.locator(`${FROMS} button:has-text("Save")`).click();
+await page.locator(`${FROMS} [data-testid="sender-row"]:has-text("pat@")`).waitFor({ timeout: 8000 });
+await page.locator(`${FROMS} [data-testid="sender-row"]:has-text("pat@") .disclose`).click();
+await page.locator(`${FROMS} [data-testid="sender-row"]:has-text("pat@") button:has-text("Make default for email")`).click();
+await page.locator(`${FROMS} [data-testid="sender-row"]:has-text("pat@") .chip:has-text("Default for email")`).waitFor({ timeout: 8000 }).catch(() => {});
+const senders = (await api('/senders')).json;
+check('Make default for email: Pat’s row says so, and the API agrees', (await words(page.locator(`${FROMS} [data-testid="sender-row"]:has-text("pat@")`))).includes('Default for email')
+  && senders.defaults.email === senders.senders.find((s) => s.email === `pat@${DOMAIN}`)?.id && senders.defaults.press === senders.senders.find((s) => s.email === `media@${DOMAIN}`)?.id, JSON.stringify(senders.defaults));
+check('the defaults are on the log', ((await api('/events?since=0&limit=1000')).json?.events || []).filter((e) => e.action?.startsWith('sender.')).length === 4, 'media@ saved and made the press default, Pat saved and made the email default');
+await shot(page.locator(FROMS), '05b-from-addresses-1440');
+prow = await openServices(phone);
+await phone.locator(`${FROMS} [data-testid="sender-row"]`).first().waitFor({ timeout: 8000 });
+pm = await phone.evaluate((sel) => {
+  const el = document.querySelector(sel);
+  const btns = [...el.querySelectorAll('button')].filter((b) => b.getBoundingClientRect().height > 0);
+  return { overflow: document.documentElement.scrollWidth - window.innerWidth, minTap: Math.min(...btns.map((b) => Math.round(b.getBoundingClientRect().height))) };
+}, FROMS);
+check('From addresses at 390: no sideways scroll, every button ≥ 48px', pm.overflow <= 0 && pm.minTap >= 48, JSON.stringify(pm));
+await shot(phone.locator(FROMS), '05b-from-addresses-390');
+// Outreach → Email's compose: the From line, Pat by default, Change to media@.
+await page.goto(`${ADMIN}/outreach/email?new=1`, { waitUntil: 'domcontentloaded' });
+await page.locator('[data-testid="sender-pick"] .sp-addr').waitFor({ timeout: 10000 });
+const fromLine = await words(page.locator('[data-testid="sender-pick"]'));
+check('Outreach → Email: "From: Pat Example <pat@…> · Change"', fromLine === `From: Pat Example <pat@${DOMAIN}> · Change`, fromLine);
+await page.locator('.sp-change').click();
+check('…Change offers both addresses', (await words(page.locator('.sp-chips'))) === `Sample Campaign Media <media@${DOMAIN}> Pat Example <pat@${DOMAIN}>`, await words(page.locator('.sp-chips')));
+await shot(page.locator('.ot-compose'), '05b-email-from-1440');
+await phone.goto(`${ADMIN}/outreach/email?new=1`, { waitUntil: 'domcontentloaded' });
+await phone.locator('[data-testid="sender-pick"] .sp-addr').waitFor({ timeout: 10000 });
+await shot(phone.locator('.ot-compose'), '05b-email-from-390');
+// Back to the campaign's own address for the sends below (their checks count on it).
+for (const s of senders.senders) await act('sender.remove', { id: s.id });
 
 // ── 6. A sending-only key, a DMARC lookup that fails, a sender that doesn't answer ──
 await set({ sendingOnly: true, txt: {} });

@@ -449,7 +449,11 @@ one tap away under **More**.
   `server/test/media.test.js` (contacts, sends to each kind, Media without
   Outreach, the press opt-out, the A/B winner, a merge) and
   `server/test/senders.test.js` (the From list, who picks, Try again and the
-  winner keep the From, invites and ladders stay on MAIL_FROM).
+  winner keep the From, invites and ladders stay on MAIL_FROM). In a
+  browser: `node e2e-media.mjs` (PORT, SHOTS; the stand-in sender on
+  PORT+1) — contacts, Write a release, a release's page with an open, Try
+  again and Copy links, and a volunteer granted Media; `e2e-mail.mjs` runs
+  *From addresses* and Outreach → Email's From line.
 
 - **The campaign's brand** (Settings → Brand) — a manager's
   saved brand is what every page wears: the app's page signed in or out,

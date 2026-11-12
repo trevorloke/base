@@ -712,6 +712,12 @@ it, and anyone denied Outreach keeps it until a manager denies it too. A
 volunteer granted Media writes, tests and sends releases and sees names,
 outlets, beats, notes and socials — never an email or a phone — and can't
 add or edit contacts. Video is a link (YouTube, Vimeo, Drive), never a file.
+The **Media** tab (after Outreach) has Releases — the contacts, the last
+release and how many opened it, Write a release (To, From, pictures,
+files) — Contacts (why someone won't get releases; a contact's handles open
+their profile, to message them) and each release's page: who got it,
+opened it or bounced, Try again, and Copy links (the video, the Drive
+folder) to paste into a message to an influencer.
 
 **From addresses.** Settings → Services → Email → *From addresses*: a
 manager adds up to ten addresses at MAIL_FROM's own domain (a name and an
