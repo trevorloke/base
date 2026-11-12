@@ -15,9 +15,9 @@ import { useQueries, useQuery, useQueryClient, keepPreviousData } from '@tanstac
 import { VOLUNTEER_ROLES, SUGGESTED_TAGS } from '@starbase/shared/canvass';
 import { bandOf, codesInBand, offTail, ratingByCode } from '@starbase/shared/scale';
 import RatingButtons, { RatingChip, ratingSay, ratingText, useScale } from '../components/RatingButtons.jsx';
-import { queueAction } from '../offline.js';
+import { queueAction, useOutbox } from '../offline.js';
 import SurveyQuestions, { answersSaid, answersTail, useSurvey } from '../components/SurveyQuestions.jsx';
-import { queuedText } from '../components/queued.js';
+import { queuedText, useThisDevice } from '../components/queued.js';
 import { phoneCopy, showingCopy, useKeepCopy } from '../components/OfflineCache.js';
 import { ApiError, apiGet, action, noAnswer } from '../api.js';
 import { noSignal, useOnline, NeedsSignalLine } from '../components/NoSignal.jsx';
@@ -1158,6 +1158,10 @@ function CallsScreen() {
   // logged drop off it, so its sitting is counted from the calls themselves.
   const calledLoaded = rows.length - queue.length;
   const calledHere = bankId ? Object.values(done).filter((d) => d?.bank === bankId).length : calledLoaded;
+  // A bank's "N of M done" is the server's count when the list was last
+  // read, and the calls logged since that finished a number (one coming
+  // back on the list later is not done).
+  const doneSince = bankId ? rows.filter((p) => done[p.id]?.bank === bankId && !done[p.id].back).length : 0;
   const mine = (current && picked[current.id]) || null;
   // The newest part is on its way (or didn't come); the list on screen runs
   // low: the next part is asked for, starting after the last name loaded.
@@ -1185,17 +1189,28 @@ function CallsScreen() {
     refetchBank();
   }, [bankMore, queue.length, persons.isFetching, bankId, rows, refetchBank]);
   // The last number loaded is called and no more are waiting: the bank is
-  // read once more, so "N of N done" and "All done" are the server's word
-  // (a call still waiting to send keeps its number on the list).
+  // read once more, so "N of N done" and "All done" are the server's word.
+  // A call still on this phone (made with no signal) keeps its number on
+  // the server's list, so the read waits until every call has been sent
+  // and the signal is back — and the screen says that, not "Loading…".
   const bankEnd = Boolean(bankId && bank && !persons.isPlaceholderData && !bankMore && rows.length > 0 && !current);
   const endKey = `${bankId}:${calledHere}`;
   const bankEnded = useRef('');
+  const outbox = useOutbox();
+  const unsent = useMemo(() => {
+    if (!bankId) return 0;
+    const ids = new Set(rows.map((p) => p.id));
+    return outbox.items.filter((i) => i.state === 'pending' && i.name === 'contact.log' && ids.has(i.input?.person_id)).length;
+  }, [bankId, rows, outbox.items]);
+  const online = useOnline();
   useEffect(() => {
-    if (!bankEnd || persons.isFetching || noSignalNow() || bankEnded.current === endKey) return;
+    if (!bankEnd || unsent || !online || persons.isFetching || bankEnded.current === endKey) return;
     bankEnded.current = endKey;
     refetchBank();
-  }, [bankEnd, endKey, persons.isFetching, refetchBank]);
-  const bankEnding = bankEnd && !noSignalNow() && (persons.isFetching || bankEnded.current !== endKey);
+  }, [bankEnd, endKey, unsent, online, persons.isFetching, refetchBank]);
+  const bankWaiting = bankEnd && (unsent > 0 || (!online && bankEnded.current !== endKey));
+  const bankEnding = bankEnd && !bankWaiting && (persons.isFetching || bankEnded.current !== endKey);
+  const device = useThisDevice();
   // How many are left: the ones loaded and not done yet, and everyone not
   // loaded yet (the server's count, by the same rule) — or Loading….
   const notLoaded = more || pending;
@@ -1271,11 +1286,11 @@ function CallsScreen() {
     survey.logged(res, { channel, outcome, rating, answers, visitOf });
     const next = after(at);
     refocus.current = inCard;
-    markDone(p.id, { rating: rating || null, outcome, queued: !!res.queued, ...(bankId ? { bank: bankId } : {}) });
+    const back = res.result?.bank?.back_at;
+    markDone(p.id, { rating: rating || null, outcome, queued: !!res.queued, ...(bankId ? { bank: bankId } : {}), ...(back ? { back: true } : {}) });
     if (rating) setPicked((m) => ({ ...m, [p.id]: rating }));
     setHeld(null);
     setCurrentId(next?.id ?? null);
-    const back = res.result?.bank?.back_at;
     const what = rating ? `Rated ${ratingText(scale, rating)}${answersTail(answers, res.result)}`
       : answers.length ? answersSaid(answers, res.result)
         : `${outcomeWord(outcome, channel)}${back ? ` — back on your list ${backWord(back)}` : ''}`;
@@ -1358,7 +1373,7 @@ function CallsScreen() {
         <div className="cl-bank">
           <p className="cl-bank__line">
             <Link to={desk ? '/banks' : '/banks'}>← {desk ? 'Phone banks' : 'Your call lists'}</Link>
-            {bank && <span className="muted"> · {fmt(bank.done)} of {fmt(bank.total)} done</span>}
+            {bank && <span className="muted"> · {fmt(bank.done + (persons.isPlaceholderData ? 0 : doneSince))} of {fmt(bank.total)} done</span>}
             {bank?.later > 0 && <span className="muted"> · {fmt(bank.later)} to call back{bank.next_at ? ` (next ${backWord(bank.next_at)})` : ''}</span>}
           </p>
           {bank?.script && (
@@ -1400,6 +1415,16 @@ function CallsScreen() {
             <strong className="mono">{fmt(toCall)}</strong> more to call · <button type="button" className="btn au-retry" onClick={() => persons.refetch()}>Load them</button>
           </p>
         )
+      ) : !current && bankWaiting ? (
+        // The last calls are on this phone, or the bank can't be read yet:
+        // what is done, and what the list is waiting for — never "Start over".
+        <div className="pp-empty cl-alldone">
+          <p className="cl-big"><strong className="mono">{fmt(calledHere)}</strong> done</p>
+          <p className="muted" role="status">
+            {unsent > 0 && <>{fmt(unsent)} {unsent === 1 ? 'call' : 'calls'} saved on {device} — </>}
+            {unsent > 0 ? 'your' : 'No signal — your'} list finishes {online ? `once ${unsent === 1 ? 'it’s' : 'they’re'} sent` : 'when you’re back online'}.
+          </p>
+        </div>
       ) : !current && bankEnding ? (
         <p className="muted" role="status">{LOADING}</p>
       ) : rows.length === 0 && !current ? (

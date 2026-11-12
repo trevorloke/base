@@ -11,7 +11,9 @@
 // on a list of 305 says "305 to call" and goes on past its first 300; a
 // bank of 540 handed to one caller comes 500 at a time ("540 to call",
 // "40 more to call · Load them"), the count carries on over the refill and
-// the last call ends on "540 of 540 done · All done"; a list an open bank
+// the last call ends on "540 of 540 done · All done" — a last call made
+// with no signal waits ("1 call saved on this phone"), then ends the same
+// way once it has sent; a list an open bank
 // calls can't be deleted, and a closed bank whose list was deleted stays closed.
 //
 //   STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4132 node server/index.js &
@@ -234,6 +236,41 @@ check('290 done: "15 to call", and the list goes on past 300 (Many 301–305 are
   `${await page.innerText('.cl-progress')} · ${upNext.join(', ')}`);
 await page.screenshot({ path: `${SHOTS}/04-calls-past-300.png` });
 await page.evaluate(() => sessionStorage.removeItem('starbase.calls.done'));
+
+// ── The last call made with no signal: the list waits for it to send, then ends on the server's word ──
+const six = Array.from({ length: 6 }, (_, i) => ({ name: `Six ${i + 1} Example`, phone: `604-555-017${i}` }));
+check('six more people come in', (await api('/data/import', { rows: six, tag: 'six' })).json?.created === 6);
+const sixList = (await api('/actions/list.create', { name: 'Six to call', kind: 'filter', filter: { tag: 'six' } })).json.list;
+const sixBank = (await api('/actions/bank.create', { name: 'Six bank', list_id: sixList.id })).json.bank;
+await api('/actions/bank.assign', { id: sixBank.id, user_id: joined.user.id });
+await vp.goto(`${BASE}/calls?bank=${sixBank.id}`, { waitUntil: 'domcontentloaded' });
+await vp.waitForSelector('section.cl-card', { timeout: 10000 });
+const leftMessage = async () => {
+  const who = await cardName();
+  await vp.tap('section.cl-card .cl-out:has-text("Left message")');
+  await vp.waitForFunction((w) => (document.querySelector('.cl-card .cl-name')?.innerText || '').trim() !== w, who, { timeout: 8000 }).catch(() => {});
+};
+for (let i = 0; i < 5; i += 1) await leftMessage();
+await vctx.setOffline(true);
+await leftMessage();
+await sleep(1500);
+const heldEnd = (await vp.innerText('main')).replace(/\s+/g, ' ');
+check('the last call with no signal: "6 done", "1 call saved on this phone — your list finishes when you’re back online", no "Start over"',
+  /6 done/.test(heldEnd) && /1 call saved on this (phone|device) — your list finishes when you’re back online/.test(heldEnd) && !/Start over|Loading…/.test(heldEnd),
+  heldEnd.slice(-160));
+await vp.screenshot({ path: `${SHOTS}/04-last-call-no-signal.png` });
+let sixAsked = 0;
+vp.on('request', (r) => { if (r.url().includes(`/api/banks/${sixBank.id}/mine`)) sixAsked += 1; });
+await vctx.setOffline(false);
+await vp.waitForFunction(() => /All done/.test(document.querySelector('main')?.innerText || ''), null, { timeout: 20000 }).catch(() => {});
+await sleep(1000);
+const backEnd = (await vp.innerText('main')).replace(/\s+/g, ' ');
+const sixAskedByScreen = sixAsked;
+const sixMine = (await vp.evaluate(async (b) => (await fetch(`/api/banks/${b}/mine`)).json(), sixBank.id)).bank;
+check('…signal back: the call is sent, the bank is read again, and it ends "6 of 6 done · All done" — no "Loading…" that stays, no "Start over"',
+  sixMine.done === 6 && sixAskedByScreen >= 1 && /6 of 6 done/.test(await line()) && /All done — every number on your list is called/.test(backEnd) && !/Loading…|Start over/.test(backEnd),
+  `server ${sixMine.done} of ${sixMine.total} · asked ${sixAskedByScreen} · ${await line()} · ${backEnd.slice(-120)}`);
+await vp.screenshot({ path: `${SHOTS}/04-last-call-signal-back.png` });
 
 // ── A big bank handed to one caller: their list comes 500 at a time ──
 const big = Array.from({ length: 540 }, (_, i) => ({ name: `Big ${String(i + 1).padStart(3, '0')} Example`, phone: `604-555-01${String(i % 100).padStart(2, '0')}` }));

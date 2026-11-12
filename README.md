@@ -330,7 +330,10 @@ than a week after they came off is refused. Contacts are door, phone, text or
   caller's *Your call lists* (on Calls) opens each bank on the Calls card,
   script and all — 500 numbers at a time, the next coming in as these are
   called, *N to call* the whole of what is theirs; a phone call they log
-  crosses the number off, *Skip* crosses one off without a call.
+  crosses the number off, *Skip* crosses one off without a call. The list
+  ends on the server's word (*N of N done · All done*); a last call made
+  with no signal waits (*1 call saved on this phone — your list finishes
+  when you’re back online*) and ends the same way once it has sent.
 - **ImagineU** (a tab for every role): the campaign's training. **Courses**
   of **modules**; a module opens with words (Markdown) and a file or link —
   a note, a document (PDF, Word, PowerPoint, Excel), a video (a YouTube or
