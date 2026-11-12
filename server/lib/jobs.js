@@ -6,12 +6,18 @@
 // write. Failures retry with backoff, then park as 'failed' with the error.
 //
 //   registerJob(kind, async (db, job) => {...})
+//       A handler with slow work outside any transaction (a call to
+//       another tool) may hand it back instead of waiting for it: return
+//       { later: <promise> }. The next job starts at once; this one is
+//       done — or failed, and tried again — when the promise settles.
 //   enqueueJob(tx, { workspaceId, kind, runAt?, payload?, key? })
 //       inside an action's transaction, so scheduling commits with the
 //       event that caused it; `key` makes it idempotent per workspace.
 //   runDueJobs(db, { limit, workspaceId }) → { ran, failed }
 //       tests call this directly, scoped to their own workspace (under
-//       test:pg every test file shares one database).
+//       test:pg every test file shares one database). It answers once
+//       handed-back work has ended too; the runner's own passes
+//       (settle: false) don't wait for it.
 //   startJobRunner(db, { everyMs }) / stopJobRunner()
 //   runJobsSoon()  run due jobs now (once the runner has started)
 //   jobRunnerOn()  whether it has
@@ -49,7 +55,7 @@ export const cancelJobs = async (tx, { workspaceId, kind, where = {} }) => {
 
 const parse = (row) => ({ ...row, payload: typeof row.payload === 'string' ? JSON.parse(row.payload) : row.payload });
 
-export const runDueJobs = async (db, { limit = 25, workspaceId = null } = {}) => {
+export const runDueJobs = async (db, { limit = 25, workspaceId = null, settle = true } = {}) => {
   // A runner that died mid-job leaves it 'running'; give it back after 10 min.
   await db.query(
     `update jobs set status = 'pending' where status = 'running' and started_at < now() - interval '10 minutes'`,
@@ -63,25 +69,43 @@ export const runDueJobs = async (db, { limit = 25, workspaceId = null } = {}) =>
     [limit, workspaceId],
   )).rows.map(parse);
   let ran = 0; let failed = 0;
+  const done = async (job) => {
+    await db.query(`update jobs set status = 'done', done_at = now(), last_error = null where id = $1`, [job.id]);
+    ran += 1;
+  };
+  const fail = async (job, e) => {
+    failed += 1;
+    const last = job.attempts >= MAX_ATTEMPTS;
+    await db.query(
+      `update jobs set status = $2, last_error = $3,
+         run_at = case when $2 = 'pending' then now() + ($4 || ' seconds')::interval else run_at end,
+         done_at = case when $2 = 'failed' then now() else null end
+       where id = $1`,
+      [job.id, last ? 'failed' : 'pending', String(e?.message || e).slice(0, 1000), String(30 * 2 ** job.attempts)],
+    );
+  };
+  // Work handed back by a handler ({ later }): the jobs behind it start now.
+  const later = [];
   for (const job of claimed) {
     const fn = handlers.get(job.kind);
     try {
       if (!fn) throw new Error(`no handler for job kind ${job.kind}`);
-      await fn(db, job);
-      await db.query(`update jobs set status = 'done', done_at = now(), last_error = null where id = $1`, [job.id]);
-      ran += 1;
+      const out = await fn(db, job);
+      if (out?.later) later.push(Promise.resolve(out.later).then(() => done(job)).catch((e) => fail(job, e)));
+      else await done(job);
     } catch (e) {
-      failed += 1;
-      const last = job.attempts >= MAX_ATTEMPTS;
-      await db.query(
-        `update jobs set status = $2, last_error = $3,
-           run_at = case when $2 = 'pending' then now() + ($4 || ' seconds')::interval else run_at end,
-           done_at = case when $2 = 'failed' then now() else null end
-         where id = $1`,
-        [job.id, last ? 'failed' : 'pending', String(e?.message || e).slice(0, 1000), String(30 * 2 ** job.attempts)],
-      );
+      await fail(job, e);
     }
   }
+  // The runner goes on without it: each such job is noted when its work
+  // ends. Anyone else who asked is answered once everything has.
+  if (!settle) {
+    for (const end of later) end.catch((e) => console.error('jobs:', e.message));
+    return { ran, failed };
+  }
+  const ends = await Promise.allSettled(later);
+  const lost = ends.find((x) => x.status === 'rejected');
+  if (lost) throw lost.reason;
   return { ran, failed };
 };
 
@@ -98,7 +122,7 @@ const tick = async () => {
   if (r.busy) { r.again = true; return; }
   r.busy = true;
   try {
-    do { r.again = false; await runDueJobs(r.db); } while (r.again && runner === r);
+    do { r.again = false; await runDueJobs(r.db, { settle: false }); } while (r.again && runner === r);
   } catch (e) {
     console.error('jobs:', e.message);
   } finally {

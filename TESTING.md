@@ -176,6 +176,28 @@ one tap away under **More**.
   to stop in a reply (*No thanks, stop* — skipped, *asked to stop in a
   reply*, until they text START), and "Reply STOP to opt out" is added;
   replies land in the Inbox.
+  *Other steps* → *+ Send to a web address*: an `https://` address another
+  tool gave (a Zapier catch hook, a Slack incoming webhook) and a label
+  (*Zapier*). `http://` and an address inside a private network
+  (`https://192.168.1.20/…`) are refused in the step. *More details* →
+  *Send a test* sends the address one message about a made-up person (Sam
+  Example) and says what it answered, in place (*Sent · 200*); *Show
+  secret* is the campaign's signing secret, and *Make a new secret* →
+  *Yes* replaces it at once. Tag someone on a "Got a tag" ladder with the
+  step: the other tool gets one message (their email only if they said
+  yes to email), and their log on the ladder says *Zapier: Sent · 200* —
+  or, with the address down, *Didn't go (500) — trying again* (after a
+  minute, then five), then *Failed · 500 after 3 tries*, and the ladder
+  carries on. Someone marked do-not-contact is
+  never sent: their row says *not sent to Zapier (do not contact)*. An
+  address that answers with a redirect is handed the message once
+  (*Answered with a redirect (302) — not followed*); one that gives no
+  answer three times running is left alone for five minutes, and whoever
+  reaches the step meanwhile waits for them to end with no try used up
+  (*Waiting — the web address isn't answering*). Take someone off while
+  the address is being called: their row still says *Taken off*
+  (INTEGRATIONS.md, *Connect anything*).
+  Settings → Services → *Going out* leads here.
 - **Follow-ups (speed to lead)** — every new volunteer (the website's form,
   the door's or Mainstreeting's *Wants to volunteer*, the membership form's
   *I'd like to volunteer*), every website message and every RSVP from
@@ -329,7 +351,9 @@ one tap away under **More**.
   Texting whether
   the number is on the Twilio account and its replies come here; Address
   lookup, the map background, the public address and the database answer
-  too. *Coming in* lists the address to give Twilio. Staff can't open it.
+  too. *Coming in* lists the address to give Twilio; *Going out* names the
+  way out to any other tool (a ladder's *Send to a web address* step) and
+  opens Ladders. Staff can't open it.
 - **Phone dialer (CallHub)** (optional — `CALLHUB_API_KEY`; INTEGRATIONS.md)
   — Settings → Services: **Check** says the key works but CallHub isn't
   sending results here yet; **Connect**, then **Check** passes. On a list

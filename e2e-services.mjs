@@ -4,7 +4,9 @@
 // needed to launch, Check on the database answers, Check on email says the
 // key isn't set (no call goes out without one), Online payments (Stripe)
 // names its two keys and the webhook address and events to give Stripe,
-// and Twilio's address is listed under "Coming in"; at 390 nothing scrolls
+// and Twilio's address is listed under "Coming in"; "Going out" names the
+// one way out to any other tool (a ladder's "Send to a web address" step)
+// and leads to Ladders; at 390 nothing scrolls
 // sideways and the Check
 // buttons are 48px. A website key: made, shown once, used to send a person
 // in (a volunteer lands under Requests), listed with when it was last used,
@@ -81,6 +83,9 @@ check('Coming in: the address to give Twilio', (await text(page, '.sv2-in')).inc
 check('Stripe’s webhook block says where to paste the address', /Webhook address — in Stripe: Developers → Webhooks → Add endpoint:/.test(stripeRow), stripeRow.slice(0, 200));
 check('Coming in: where the email sender posts delivered, bounced and spam complaints', (await text(page, '.sv2-in')).includes(`${BASE}/hooks/mail/resend`), await text(page, '.sv2-in'));
 check('Email not set up: no Sending domain panel yet', !(await page.$(`${emailRow} .sd`)));
+const out = await text(page, '.sv2-out');
+check('Going out: any other tool, by a ladder’s "Send to a web address" step', /Any other tool — Zapier, Make, a Slack channel/.test(out)
+  && /A ladder’s “Send to a web address” step sends it each person who reaches the step\./.test(out), out);
 const m = await page.evaluate(() => {
   const vis = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
   const taps = [...document.querySelectorAll('.sv2-check')].filter(vis).map((el) => el.getBoundingClientRect().height);
@@ -116,6 +121,9 @@ await page.tap('.sv2-keys .sv2-row button:has-text("Revoke")');
 await sleep(800);
 const after = await page.request.get(`${BASE}/in/v1/ping`, { headers: { authorization: `Bearer ${shown}` } });
 check('Revoke: the key stops at once', after.status() === 401 && !(await page.$('.sv2-keys .sv2-row')), after.status());
+await page.tap('.sv2-out a');
+await page.waitForURL(/\/admin\/ladders$/, { timeout: 8000 }).catch(() => {});
+check('Going out: "Open Ladders" opens Ladders', /\/admin\/ladders$/.test(page.url()) && /Ladders/.test(await text(page)), page.url());
 
 // Staff: not theirs.
 const inv = await ctx.request.post(`${BASE}/api/actions/member.invite`, { data: { email: `sam+${tag}@services.example`, role: 'staff' } });

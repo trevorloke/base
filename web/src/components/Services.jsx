@@ -9,7 +9,11 @@
 // Website keys: the keys the campaign's website (its server) uses to send
 // people in (ext/intake). A new key is shown once, to copy; after that only
 // its first characters, when it was last used, and Revoke.
+// Going out: the one way out to any other tool — a ladder's "Send to a web
+// address" step (ext/ladders) — said here, where integrations are looked
+// for, with the way to Ladders.
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { action, apiGet, apiPost } from '../api.js';
 import SendingDomain from './SendingDomain.jsx';
@@ -110,6 +114,15 @@ export default function Services() {
             </div>
           </li>
         ))}
+      </ul>
+      <h2 className="sv2-h">Going out</h2>
+      <ul className="sv2-list sv2-out">
+        <li className="sv2-row">
+          <div className="sv2-row__main">
+            <strong>Any other tool — Zapier, Make, a Slack channel</strong>
+            <p className="sv2-for">A ladder’s “Send to a web address” step sends it each person who reaches the step. <Link to="/ladders">Open Ladders</Link></p>
+          </div>
+        </li>
       </ul>
     </div>
   );

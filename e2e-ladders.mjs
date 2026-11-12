@@ -18,13 +18,34 @@
 // say where they go ("← Today" from Today, "← Ladders", "← Ana Souza" from her
 // profile). The books still verify. New screens are measured (visible words,
 // yellow buttons, sideways scroll, 48px targets).
+// "Send to a web address" (under Other steps): the step asks for an https
+// address and a label; http is refused on the page and an address inside a
+// private network by the server, both said in the step; More details sends
+// a test and shows the campaign's signing secret only when asked, with
+// "Make a new secret" beside it; the keyboard's place follows each tap;
+// measured at both sizes. A step kind the page doesn't know says so and is
+// saved as it is.
 //
 //   STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4103 STARBASE_JOBS_EVERY_MS=1000 node server/index.js &
 //   BASE=http://127.0.0.1:4103 SHOTS=/tmp/ladders node e2e-ladders.mjs
+//
+// To also watch the step deliver — a test about a made-up person, one
+// signed message each, an email only for who said yes, "Zapier: Sent · 200"
+// on the run's log, do-not-contact never sent, a redirect handed it once,
+// someone taken off mid-send, a failing address tried again, one that has
+// stopped answering left alone while whoever reaches it waits — run a
+// stand-in receiver and point both at it:
+//
+//   PORT=4104 node server/test/fake-receiver.js &
+//   … LADDER_WEBHOOK_API_BASE=http://127.0.0.1:4104 node server/index.js &
+//   HOOKS=http://127.0.0.1:4104 BASE=http://127.0.0.1:4103 node e2e-ladders.mjs
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
+import { verifySignature } from './server/lib/signature.js';
 
 const BASE = process.env.BASE || 'http://localhost:3200';
+// The stand-in receiver the server sends to (fake-receiver.js), if one is running.
+const HOOKS = (process.env.HOOKS || '').replace(/\/$/, '');
 const ADMIN = { toString() { return `${BASE}/admin`; } }; // the desk's pages live in the admin (web/src/mode.js)
 const SHOTS = process.env.SHOTS || '/tmp/starbase-ladders';
 mkdirSync(SHOTS, { recursive: true });
@@ -466,6 +487,289 @@ await D.api('/actions/gift.log', { person_id: gil.id, amount_cents: 5000, date: 
 await D.go(`/people/${gil.id}`);
 const metaChips = (await page.locator('.pf-meta .chip').allInnerTexts()).map((x) => x.trim().toLowerCase());
 check('donor profile: one Donor chip, not two', metaChips.filter((x) => x === 'donor').length === 1 && !(await page.locator('.pf-meta .lad-level').count()), metaChips.join(' | '));
+
+// ── 12d. Send to a web address: the step, its refusals, a test, the signing secret ──
+const PRIVATE = 'That address points inside a private network — it can’t be used';
+const told = (await D.api('/actions/ladder.create', { name: 'Tell the team', trigger: { kind: 'tag', ref: 'new-signer' }, steps: [{ kind: 'tag', tag: 'told' }] })).json.ladder;
+const hookSteps = async () => (await D.api(`/ladders/${told.id}`)).json.ladder.steps.filter((x) => x.kind === 'webhook');
+const stepAlert = async () => ((await page.locator('.lad-new-step .lad-step-form > .error').innerText().catch(() => '')) || '').trim();
+// Where the keyboard is: the focused element's words.
+const focused = () => page.evaluate(() => (document.activeElement?.innerText || '').replace(/\s+/g, ' ').trim());
+await D.go(`/ladders/${told.id}`);
+check('"Send to a web address" waits under Other steps', (await page.getByRole('button', { name: '+ Send to a web address' }).count()) === 0);
+await page.getByRole('button', { name: 'Other steps' }).click();
+await sleep(200);
+check('Other steps: the keyboard is on the first of them', (await focused()) === '+ Send to a web address', await focused());
+await page.setViewportSize({ width: 390, height: 844 });
+await sleep(200);
+const oneLine = await page.evaluate(() => {
+  const b = [...document.querySelectorAll('.lad-add--other button')].find((x) => x.innerText.trim() === '+ Send to a web address');
+  const r = document.createRange();
+  r.selectNodeContents(b);
+  return { lines: new Set([...r.getClientRects()].map((x) => Math.round(x.top))).size, height: Math.round(b.getBoundingClientRect().height) };
+});
+check('on a phone "+ Send to a web address" reads on one line', oneLine.lines === 1 && oneLine.height >= 48, JSON.stringify(oneLine));
+await page.setViewportSize({ width: 1360, height: 900 });
+await page.getByRole('button', { name: '+ Send to a web address' }).click();
+await sleep(300);
+check('the new step takes the keyboard’s place (its name; Tab goes on to its first field)', /^New step · Send to a web address$/i.test(await focused()), await focused());
+check('the step asks for a web address and a label', (await page.getByLabel('Web address').count()) === 1 && (await page.getByLabel('Label').count()) === 1);
+check('the label says what it is for', (await page.locator('.lad-new-step label', { hasText: 'Label' }).innerText()).trim() === 'Label — what to call the other tool');
+await simple(page, 'builder, web address step open (desktop)');
+await page.getByLabel('Web address').fill('http://hooks.example.org/catch/e2e');
+await page.getByLabel('Label').fill('Zapier');
+await page.getByRole('button', { name: 'Add step' }).click();
+await sleep(300);
+check('http is refused on the page', (await stepAlert()) === 'The address must start with https://', await stepAlert());
+await page.getByLabel('Web address').fill('https://192.168.1.20/hook');
+await page.getByRole('button', { name: 'Add step' }).click();
+await until(async () => (await stepAlert()) === PRIVATE, 5000);
+check('an address inside a private network is refused by the server, said in the step', (await stepAlert()) === PRIVATE && (await hookSteps()).length === 0, await stepAlert());
+await page.getByLabel('Web address').fill('https://hooks.example.org/catch/e2e?from=base');
+check('the refusal goes once the address is changed', (await page.locator('.lad-new-step .lad-step-form > .error').count()) === 0);
+await page.getByRole('button', { name: 'More details' }).click();
+await sleep(200);
+check('the signing secret is not on the page until asked for', !/sbw_[0-9a-f]{8}/.test(await page.content()));
+// Send a test: one message about a made-up person to the address as typed, before the step is saved.
+const testSaid = async () => ((await page.locator('.lad-hook-more .lad-hook-said').first().innerText().catch(() => '')) || '').trim();
+const hooksGot = async () => (HOOKS ? (await (await fetch(`${HOOKS}/__received`)).json()).filter((x) => x.path === '/catch/e2e?from=base' && x.body?.campaign === me.workspace.name) : []);
+await page.getByRole('button', { name: 'Send a test' }).click();
+await until(testSaid, 12000);
+check('Send a test keeps the keyboard’s place while it sends and after', (await focused()) === 'Send a test', await focused());
+if (!HOOKS) {
+  // No stand-in receiver: the name is looked up, and hooks.example.org is no one's.
+  check('Send a test answers in place (no stand-in: the address is looked up first)', /^(We couldn’t find hooks\.example\.org — check the address|Sent · \d+|Failed · .+|Answered with a redirect .+)$/.test(await testSaid()), await testSaid());
+} else {
+  check('Send a test: "Sent · 200", in place', (await testSaid()) === 'Sent · 200', await testSaid());
+  const tests = await hooksGot();
+  check('the address got one message about a made-up person, marked a test', tests.length === 1 && tests[0].body.test === true && tests[0].body.person.first_name === 'Sam'
+    && tests[0].body.person.email === 'sam@example.org' && tests[0].body.step === 'Zapier' && /^Test · Tell the team: Sam Example — /.test(tests[0].body.text), JSON.stringify(tests[0]?.body).slice(0, 200));
+  await fetch(`${HOOKS}/__answer`, { method: 'POST', body: JSON.stringify({ status: 500, times: 1 }) });
+  await page.getByRole('button', { name: 'Send a test' }).click();
+  await until(async () => (await testSaid()) === 'Failed · 500', 8000);
+  check('an address that is down: "Failed · 500"', (await testSaid()) === 'Failed · 500', await testSaid());
+  check('a test puts no one on the ladder and saves no step', (await D.api(`/ladders/${told.id}`)).json.people.length === 0 && (await hookSteps()).length === 0);
+}
+await page.getByRole('button', { name: 'Show secret' }).click();
+await page.waitForSelector('.lad-hook-secret__code', { timeout: 8000 }).catch(() => {});
+await sleep(150);
+const shown = ((await page.locator('.lad-hook-secret__code').innerText().catch(() => '')) || '').trim();
+check('Show secret: the campaign’s own (= server), the keyboard on Copy', /^sbw_[0-9a-f]{64}$/.test(shown) && shown === (await D.api('/actions/ladder.signingSecret', {})).json.secret
+  && (await focused()) === 'Copy', `${shown.slice(0, 12)} · ${await focused()}`);
+await simple(page, 'builder, signing secret shown (desktop)');
+await D.shot('13-web-address-step');
+await page.setViewportSize({ width: 390, height: 844 });
+await sleep(300);
+await simple(page, 'builder, signing secret shown (phone)');
+await page.locator('.lad-new-step').scrollIntoViewIfNeeded();
+await D.shot('13b-web-address-step-phone');
+await page.setViewportSize({ width: 1360, height: 900 });
+// Make a new secret: asked once more in place, then the old one is gone.
+await page.getByRole('button', { name: 'Make a new secret' }).click();
+await sleep(200);
+check('Make a new secret asks first, in place', /Make a new secret\? The old one stops working\./.test(await page.locator('.lad-hook-secret').innerText()) && (await focused()) === 'No', await focused());
+await page.locator('.lad-hook-secret').getByRole('button', { name: 'Yes' }).click();
+await until(async () => ((await page.locator('.lad-hook-secret__code').innerText().catch(() => '')) || '').trim() !== shown, 8000);
+const secret = ((await page.locator('.lad-hook-secret__code').innerText().catch(() => '')) || '').trim();
+check('Yes: a new secret, the campaign’s own from now on (= server)', /^sbw_[0-9a-f]{64}$/.test(secret) && secret !== shown
+  && secret === (await D.api('/actions/ladder.signingSecret', {})).json.secret && /New secret — the old one no longer works\./.test(await page.locator('.lad-hook-secret').innerText()), secret.slice(0, 12));
+await D.shot('13e-new-secret');
+await page.getByRole('button', { name: 'Hide' }).click();
+await sleep(150);
+check('Hide takes it off the page, the keyboard back on Show secret', !/sbw_[0-9a-f]{8}/.test(await page.content()) && (await focused()) === 'Show secret', await focused());
+await page.getByRole('button', { name: 'Add step' }).click();
+// Saved, or said why not: the server may look the name up for a few seconds first.
+const NOT_FOUND = 'We couldn’t find hooks.example.org — check the address';
+await until(async () => (await hookSteps()).length === 1 || (await stepAlert()) !== '', 8000);
+if (!HOOKS) {
+  // No stand-in receiver: the server looks the name up, and hooks.example.org is no one's.
+  const said = await stepAlert();
+  const kept = await hookSteps();
+  check('with no stand-in the name is looked up: saved, or "We couldn’t find …" in the step',
+    (kept.length === 1 && !said) || (kept.length === 0 && said === NOT_FOUND), `${kept.length} saved · ${said}`);
+} else {
+  const kept = await hookSteps();
+  check('saved: the address and its label', kept.length === 1 && kept[0].url === 'https://hooks.example.org/catch/e2e?from=base' && kept[0].label === 'Zapier', JSON.stringify(kept));
+  await sleep(400);
+  const card = page.locator('.lad-step', { hasText: 'Send to a web address' });
+  const who = ((await card.locator('.lad-step__who').innerText().catch(() => '')) || '').trim();
+  check('the card: "Send to a web address · Zapier", where it goes by the site’s name only, in one short line',
+    (await card.locator('.lad-step__line').innerText()).trim() === 'Send to a web address · Zapier'
+    && who === 'To hooks.example.org · no ratings, notes or money', who);
+  // In the saved card too, a refusal is said in the step, clear of the button under it.
+  await card.locator('.ops-row').click();
+  await card.getByLabel('Web address').fill('https://10.1.2.3/x');
+  await card.getByRole('button', { name: 'Save step' }).click();
+  await until(async () => (await card.locator('.lad-step-form > .error').count()) === 1, 5000);
+  const gap = await card.evaluate((el) => {
+    const e = el.querySelector('.lad-step-form > .error');
+    const b = [...el.querySelectorAll('.ops-actions button')].find((x) => x.innerText.trim() === 'Save step');
+    return e && b ? Math.round(b.getBoundingClientRect().top - e.getBoundingClientRect().bottom) : null;
+  });
+  check('an open card: the refusal is in the card, clear of Save step', ((await card.locator('.lad-step-form > .error').innerText().catch(() => '')) || '').trim() === PRIVATE && gap >= 8, `${gap}px`);
+  await card.getByRole('button', { name: 'Cancel' }).click();
+  await page.getByRole('button', { name: 'Turn on' }).click();
+  await sleep(800);
+  // Hana said yes to email; Ivo never did.
+  await D.api('/actions/subscription.add', { email: `hana.${tag}@example.org`, name: 'Hana Example' });
+  const hana = (await D.api('/actions/person.create', { name: 'Hana Example', email: `hana.${tag}@example.org`, phone: '604-555-0171', postal: 'V3T 1V8', tags: ['new-signer'] })).json.person;
+  const ivo = (await D.api('/actions/person.create', { name: 'Ivo Example', email: `ivo.${tag}@example.org`, tags: ['new-signer'] })).json.person;
+  const received = async () => (await hooksGot()).filter((x) => !x.body.test);
+  const got = await until(async () => { const all = await received(); return all.length >= 2 ? all : null; });
+  const of = (p) => (got || []).find((x) => x.body.person.id === p.id);
+  check('the address got one message for each', got?.length === 2 && !!of(hana) && !!of(ivo), `${got?.length}`);
+  check('signed with the new secret the screen showed, over the bytes received — not with the one before', !!of(hana) && verifySignature(of(hana).raw, of(hana).headers['base-signature'], [secret]).ok
+    && !verifySignature(`${of(hana).raw} `, of(hana).headers['base-signature'], [secret]).ok && !verifySignature(of(hana).raw, of(hana).headers['base-signature'], [shown]).ok);
+  check('what it says: what started the ladder, the ladder, the label, the person', of(hana)?.body.event === 'tag' && of(hana).body.ladder === 'Tell the team'
+    && of(hana).body.step === 'Zapier' && of(hana).body.person.first_name === 'Hana' && of(hana).body.person.postal === 'V3T 1V8', JSON.stringify(of(hana)?.body).slice(0, 200));
+  check('Hana said yes to email: her email and mobile; Ivo never did: no email', of(hana)?.body.person.email === `hana.${tag}@example.org` && of(hana).body.person.phone === '+16045550171'
+    && of(ivo)?.body.person.email === null && !of(ivo).raw.includes(`ivo.${tag}`), JSON.stringify([of(hana)?.body.person.email, of(ivo)?.body.person.email]));
+  const doneRuns = async () => (await D.api(`/ladders/${told.id}`)).json.people.filter((p) => p.status === 'done');
+  await until(async () => (await doneRuns()).length === 2);
+  await D.go(`/ladders/${told.id}`);
+  await page.getByRole('button', { name: /^Finished · / }).click().catch(() => {});
+  await sleep(300);
+  await page.locator('.lad-sec .ops-row', { hasText: 'Hana Example' }).click();
+  await sleep(300);
+  const hlog = (await page.locator('.lad-log li').allInnerTexts()).map((x) => x.replace(/\s+/g, ' '));
+  check('her log: "Zapier: Sent · 200"', hlog.some((x) => /^Zapier: Sent · 200/.test(x)), hlog.join(' | '));
+  await D.shot('13c-web-address-sent');
+  // Someone marked do-not-contact is never sent; an address that answers with a redirect is handed it once.
+  await D.api('/actions/person.create', { name: 'Kai Example', tags: ['new-signer', 'do-not-contact'] });
+  await until(async () => (await doneRuns()).length === 3);
+  await fetch(`${HOOKS}/__answer`, { method: 'POST', body: JSON.stringify({ status: 302, times: 1 }) });
+  await D.api('/actions/person.create', { name: 'Lia Example', tags: ['new-signer'] });
+  await until(async () => (await doneRuns()).length === 4);
+  // Taken off while the address is being called: the row says so, and the late answer promises no other try.
+  await fetch(`${HOOKS}/__hold`, { method: 'POST', body: JSON.stringify({ times: 1 }) });
+  const moe = (await D.api('/actions/person.create', { name: 'Moe Example', tags: ['new-signer'] })).json.person;
+  await until(async () => (await received()).some((x) => x.body.person.id === moe.id));
+  const moeRun = (await D.api(`/ladders/${told.id}`)).json.people.find((p) => p.person.id === moe.id);
+  await D.api('/actions/ladder.stopRun', { id: moeRun.id });
+  await fetch(`${HOOKS}/__release`, { method: 'POST', body: JSON.stringify({ status: 500 }) });
+  await until(async () => (await D.api(`/ladders/${told.id}`)).json.people.find((p) => p.person.id === moe.id)?.log.some((e) => e.kind === 'webhook' && e.result === 'failed'));
+  await D.go(`/ladders/${told.id}`);
+  await page.getByRole('button', { name: /^Finished · / }).click().catch(() => {});
+  await sleep(300);
+  const rowOf = async (who) => ((await page.locator('#lad-done .ops-row', { hasText: who }).innerText().catch(() => '')) || '').replace(/\s+/g, ' ').trim();
+  check('do-not-contact: the row says they were not sent, and why', (await rowOf('Kai Example')) === 'Kai Example Finished · not sent to Zapier (do not contact)', await rowOf('Kai Example'));
+  check('a redirect: the row says so', (await rowOf('Lia Example')) === 'Lia Example Finished · Zapier answered with a redirect', await rowOf('Lia Example'));
+  check('taken off mid-send: the row says "Taken off"', (await rowOf('Moe Example')) === 'Moe Example Taken off · not sent to Zapier', await rowOf('Moe Example'));
+  await page.locator('#lad-done .ops-row', { hasText: 'Lia Example' }).click();
+  await sleep(300);
+  let llog = (await page.locator('.lad-log li').allInnerTexts()).map((x) => x.replace(/\s+/g, ' '));
+  check('a redirect is not followed and not tried again: one line on her log, one copy at the address',
+    llog.filter((x) => /^Zapier: /.test(x)).length === 1 && /^Zapier: Answered with a redirect \(302\) — not followed/.test(llog.find((x) => /^Zapier: /.test(x)) || '')
+    && (await received()).filter((x) => x.body.person.first_name === 'Lia').length === 1, llog.join(' | '));
+  await page.locator('#lad-done .ops-row', { hasText: 'Lia Example' }).click();
+  await page.locator('#lad-done .ops-row', { hasText: 'Moe Example' }).click();
+  await sleep(300);
+  llog = (await page.locator('.lad-log li').allInnerTexts()).map((x) => x.replace(/\s+/g, ' '));
+  check('his log: "Taken off", then what the address answered — no "trying again"', llog.some((x) => /^Taken off/.test(x)) && llog.some((x) => /^Zapier: Failed · 500/.test(x)) && !llog.some((x) => /trying again/.test(x)), llog.join(' | '));
+  await D.shot('13f-web-address-rows');
+  // An address that is slow to answer holds nothing behind it: while it is
+  // being called, another ladder's step runs (the job runner isn't made to wait).
+  const quick = (await D.api('/actions/ladder.create', { name: 'Quick tag', trigger: { kind: 'tag', ref: 'quick-one' }, steps: [{ kind: 'tag', tag: 'quick-done' }] })).json.ladder;
+  await D.api('/actions/ladder.setActive', { id: quick.id, active: true });
+  await fetch(`${HOOKS}/__hold`, { method: 'POST', body: JSON.stringify({ times: 1 }) });
+  const ned = (await D.api('/actions/person.create', { name: 'Ned Example', tags: ['new-signer'] })).json.person;
+  await until(async () => (await received()).some((x) => x.body.person.id === ned.id)); // the address has it, and says nothing yet
+  const olaAt = Date.now();
+  const ola = (await D.api('/actions/person.create', { name: 'Ola Example', tags: ['quick-one'] })).json.person;
+  const olaDone = await until(async () => (await D.api(`/persons/${ola.id}`)).json.person.tags.includes('quick-done'), 3500);
+  const nedNow = (await D.api(`/ladders/${told.id}`)).json.people.find((p) => p.person.id === ned.id);
+  check('while a slow address is being called, another ladder’s step runs — the runner doesn’t wait for the answer', !!olaDone && nedNow?.wait === 'sending',
+    `${olaDone ? `ran after ${Date.now() - olaAt} ms` : 'not within 3.5 s'} · Ned: ${nedNow?.wait}`);
+  await fetch(`${HOOKS}/__release`, { method: 'POST', body: JSON.stringify({ status: 200 }) });
+  await until(async () => (await D.api(`/ladders/${told.id}`)).json.people.find((p) => p.person.id === ned.id)?.status === 'done');
+  await D.api('/actions/ladder.setActive', { id: quick.id, active: false });
+  // An address that is down: the first failure is said at once (the next tries are a minute, then five, away).
+  await fetch(`${HOOKS}/__answer`, { method: 'POST', body: JSON.stringify({ status: 500, times: 1 }) });
+  const jun = (await D.api('/actions/person.create', { name: 'Jun Example', tags: ['new-signer'] })).json.person;
+  const waiting = await until(async () => (await D.api(`/ladders/${told.id}`)).json.people.find((p) => p.person.id === jun.id && p.wait === 'retry'));
+  await D.go(`/ladders/${told.id}`);
+  t = await D.text();
+  check('a failing address: "The web address didn’t take it — trying again" (server and screen)', !!waiting && /Jun Example The web address didn’t take it — trying again/.test(t), t.slice(t.indexOf('People'), t.indexOf('People') + 160));
+  await page.locator('.lad-sec .ops-row', { hasText: 'Jun Example' }).click();
+  await sleep(300);
+  const jlog = (await page.locator('.lad-log li').allInnerTexts()).map((x) => x.replace(/\s+/g, ' '));
+  check('his log: "Zapier: Didn’t go (500) — trying again"', jlog.some((x) => /^Zapier: Didn’t go \(500\) — trying again/.test(x)), jlog.join(' | '));
+  await D.shot('13d-web-address-retry');
+  // An address that stops answering (three calls in a row, five seconds
+  // each) is left alone for five minutes: whoever reaches the step
+  // meanwhile isn't called and loses no try — the row and the log say they wait.
+  await fetch(`${HOOKS}/__hang`, { method: 'POST', body: JSON.stringify({ times: 3 }) });
+  const hung = [];
+  for (const n of ['Pia', 'Quin', 'Rae']) hung.push((await D.api('/actions/person.create', { name: `${n} Example`, tags: ['new-signer'] })).json.person);
+  const peopleNow = async () => (await D.api(`/ladders/${told.id}`)).json.people;
+  await until(async () => (await peopleNow()).filter((p) => hung.some((h) => h.id === p.person.id) && p.wait === 'retry').length === 3, 30000);
+  const sol = (await D.api('/actions/person.create', { name: 'Sol Example', tags: ['new-signer'] })).json.person;
+  const solHeld = await until(async () => (await peopleNow()).find((p) => p.person.id === sol.id && p.wait === 'quiet'), 8000);
+  check('an address that stopped answering isn’t called for whoever reaches the step meanwhile, and none of their tries is used up',
+    !!solHeld && solHeld.log.filter((e) => e.kind === 'webhook').map((e) => `${e.result}/${e.reason}`).join() === 'waiting/not_answering'
+    && !(await received()).some((x) => x.body.person.id === sol.id), JSON.stringify(solHeld?.log));
+  await D.go(`/ladders/${told.id}`);
+  t = await D.text();
+  check('his row: "Waiting — the web address isn’t answering"', /Sol Example Waiting — the web address isn’t answering/.test(t), t.slice(t.indexOf('Sol Example'), t.indexOf('Sol Example') + 80));
+  await page.locator('.lad-sec .ops-row', { hasText: 'Sol Example' }).click();
+  await sleep(300);
+  const slog = (await page.locator('.lad-log li').allInnerTexts()).map((x) => x.replace(/\s+/g, ' '));
+  check('his log: "Zapier: Waiting — the address isn’t answering"', slog.some((x) => /^Zapier: Waiting — the address isn’t answering/.test(x)), slog.join(' | '));
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await sleep(300);
+  await page.locator('.lad-sec .ops-row', { hasText: 'Sol Example' }).scrollIntoViewIfNeeded();
+  await D.shot('13g-web-address-waiting');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await sleep(300);
+  await simple(page, 'a ladder’s people, one waiting for a quiet address (phone)');
+  // Centred: at 390 px the row starts just inside the window, under the tab bar.
+  await page.locator('.lad-sec .ops-row', { hasText: 'Sol Example' }).evaluate((el) => el.scrollIntoView({ block: 'center' }));
+  await sleep(200);
+  await D.shot('13h-web-address-waiting-phone');
+  await page.setViewportSize({ width: 1360, height: 900 });
+  await D.api('/actions/ladder.setActive', { id: told.id, active: false });
+}
+
+// A tab left open from before this step shows it as a Stop. What its "Save
+// step" and "Remove step" on that card would send (a Stop in the step's
+// place, or the steps without it, and no word on which kinds it knows) is
+// refused, in words that page shows as they are.
+const RELOAD = 'Reload this page — it’s out of date and shows this step wrongly';
+const asSaved = (await D.api(`/ladders/${told.id}`)).json.ladder.steps;
+const hookAt = asSaved.findIndex((x) => x.kind === 'webhook');
+if (hookAt >= 0) {
+  const stopOver = await D.api('/actions/ladder.update', { id: told.id, steps: asSaved.map((x, i) => (i === hookAt ? { kind: 'stop' } : x)) });
+  const takenOut = await D.api('/actions/ladder.update', { id: told.id, steps: asSaved.filter((_, i) => i !== hookAt) });
+  const still = (await D.api(`/ladders/${told.id}`)).json.ladder.steps;
+  check('a page from before this step can’t save a Stop over it or take it away: it is told to reload',
+    stopOver.status === 409 && stopOver.json.error === RELOAD && takenOut.status === 409 && takenOut.json.error === RELOAD
+    && JSON.stringify(still) === JSON.stringify(asSaved), `${stopOver.status} ${takenOut.status} ${stopOver.json?.error || ''}`);
+}
+
+// A step kind this page doesn't know (a tab left open from before a release
+// that added one): the card says so, and saving it hands the step back as
+// it is — never as a Stop.
+const later = { kind: 'call', number: '604-555-0100', after: 2 };
+await page.route(`**/api/ladders/${told.id}`, async (route) => {
+  const res = await route.fetch();
+  const body = await res.json();
+  body.ladder.steps = [...body.ladder.steps, later];
+  await route.fulfill({ response: res, json: body });
+});
+await D.go(`/ladders/${told.id}`);
+const odd = page.locator('.lad-step', { hasText: 'A step this page doesn’t know — reload' });
+check('a step kind the page doesn’t know says so (not "Stop")', (await odd.count()) === 1 && (await page.locator('.lad-step', { hasText: /^\d+\s*Stop$/ }).count()) === 0);
+await odd.locator('.ops-row').click();
+await sleep(300);
+const [saving] = await Promise.all([
+  page.waitForRequest((r) => r.url().endsWith('/api/actions/ladder.update') && r.method() === 'POST', { timeout: 8000 }).catch(() => null),
+  odd.getByRole('button', { name: 'Save step' }).click(),
+]);
+const savedSteps = saving?.postDataJSON()?.steps || [];
+check('saving its card hands it back exactly as it is', JSON.stringify(savedSteps.at(-1)) === JSON.stringify(later) && !savedSteps.some((x) => x.kind === 'stop'), JSON.stringify(savedSteps.at(-1)));
+const knows = saving?.postDataJSON()?.knows || [];
+check('each save names the step kinds the page has words for (not the one it doesn’t know)', knows.includes('webhook') && knows.includes('stop') && !knows.includes('call'), JSON.stringify(knows));
+await page.unroute(`**/api/ladders/${told.id}`);
 
 // ── 13. The books still verify ──
 const v = (await D.api('/audit/verify')).json;

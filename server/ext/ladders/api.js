@@ -74,12 +74,15 @@ const ladderOut = (l, opts) => ({
 });
 
 // In progress (on it, paused included) · finished (reached: by the goal) ·
-// waiting on email or texting, per ladder.
+// waiting on email or texting, per ladder. Reached is how the run ended —
+// not always its latest entry: an answer that came in after the end (a
+// goal reached while an email or a web address was being called) is logged
+// after it.
 const runCounts = async (db, ws, ladderId = null) => Object.fromEntries((await db.query(
   `select ladder_id,
      (count(*) filter (where status <> 'done'))::int as in_progress,
      (count(*) filter (where status = 'done'))::int as finished,
-     (count(*) filter (where status = 'done' and r.log -> -1 ->> 'result' = 'goal'))::int as reached,
+     (count(*) filter (where status = 'done' and r.log @> '[{"kind":"end","result":"goal"}]'::jsonb))::int as reached,
      (count(*) filter (where status <> 'done' and wait = 'email'))::int as waiting_email,
      (count(*) filter (where status <> 'done' and wait = 'text'))::int as waiting_text
    from ladder_runs r join persons p on p.id = r.person_id and p.deleted_at is null
@@ -208,6 +211,9 @@ api.get('/ladders/followups', async (c) => {
 // Where a run is, from its row and log: what the screens need to say it.
 const runOut = (r, steps) => {
   const log = parseJson(r.log, []);
+  // How a run that is over ended: its last word, even when an answer came
+  // in after it (someone taken off while an address was being called).
+  const end = r.status === 'done' ? log.findLast((e) => e.kind === 'end') : null;
   return {
     id: r.id,
     status: r.status,
@@ -216,11 +222,16 @@ const runOut = (r, steps) => {
     stepKind: steps[r.step]?.kind || null,
     wait: r.wait || null,
     next_at: r.next_at || null,
-    last: log.length ? log[log.length - 1] : null,
+    last: end || (log.length ? log[log.length - 1] : null),
     skipped: log.filter((e) => e.result === 'skipped').map((e) => ({ step: e.step, kind: e.kind, reason: e.reason })),
     // What each step did (kind, result, reason, when) — no addresses, no
-    // message text. 'Sending' shows only while it's the latest word.
-    log: log.filter((e, i) => e.result !== 'sending' || i === log.length - 1).slice(-20).map((e) => ({ step: e.step, kind: e.kind, result: e.result, reason: e.reason || null, tag: e.tag || null, until: e.until || null, goal: e.goal || null, at: e.at })),
+    // message text. 'Sending' shows only while it's the latest word. A
+    // "Send to a web address" step: its label, the answer's number ("Sent ·
+    // 200") or why there was none, and how many tries.
+    log: log.filter((e, i) => e.result !== 'sending' || i === log.length - 1).slice(-20).map((e) => ({
+      step: e.step, kind: e.kind, result: e.result, reason: e.reason || null, tag: e.tag || null, until: e.until || null, goal: e.goal || null, at: e.at,
+      ...(e.kind === 'webhook' ? { label: e.label || null, status: e.status ?? null, why: e.why || null, tries: e.tries ?? null } : {}),
+    })),
     started_at: r.started_at,
     finished_at: r.finished_at || null,
   };

@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiGet, action } from '../api.js';
+import { HOOK_STEP, UNKNOWN_STEP, hookLogLine, hookRowNote } from './LaddersWords.js';
 import '../pages/ladders.css';
 
 // What starts a ladder, grouped as the picker shows them (server:
@@ -51,12 +52,13 @@ export const STEP_KINDS = [
   { kind: 'text', label: 'Text' },
   { kind: 'tag', label: 'Tag' },
   { kind: 'followup', label: 'Follow-up' },
+  { kind: 'webhook', label: HOOK_STEP, more: true },
   { kind: 'untag', label: 'Remove a tag', more: true },
   { kind: 'stop', label: 'Stop', more: true },
 ];
 // The step button that shows the rest (not "More": the page has its own).
 export const OTHER_STEPS = 'Other steps';
-export const STEP_WORD = { wait: 'Wait', email: 'Email', text: 'Text', tag: 'Tag', untag: 'Remove tag', followup: 'Follow-up', stop: 'Stop' };
+export const STEP_WORD = { wait: 'Wait', email: 'Email', text: 'Text', tag: 'Tag', untag: 'Remove tag', followup: 'Follow-up', stop: 'Stop', webhook: HOOK_STEP };
 
 // One step as one line ("Email · Thanks, [first name]") and the rest of the
 // words a step is shown in: LaddersWords.js (plain JS, tested on the server).
@@ -78,21 +80,28 @@ const END = { finished: 'Finished', stopped: 'Stopped', taken_off: 'Taken off', 
 
 // Where a person is on a ladder, in a few words. Literally what the server
 // knows: a waiting email or text says whether it's connected right now.
+// Over: how it ended (run.last — the server's word, even when an answer
+// came in after), and what never reached them or another tool.
 export const whereLine = (run, emailConfigured, textConfigured) => {
   if (!run) return '';
   if (run.status === 'done') {
     const end = END[run.last?.kind === 'end' ? run.last.result : 'finished'] || 'Finished';
     const skip = (run.skipped || []).find((s) => s.kind === 'email' || s.kind === 'text');
-    return skip ? `${end} · ${STEP_WORD[skip.kind].toLowerCase()} skipped (${REASON[skip.reason] || skip.reason})` : end;
+    if (skip) return `${end} · ${STEP_WORD[skip.kind].toLowerCase()} skipped (${REASON[skip.reason] || skip.reason})`;
+    // A web address that never got them ("not sent to Zapier").
+    const missed = hookRowNote(run.log);
+    return missed ? `${end} · ${missed}` : end;
   }
   if (run.status === 'paused') return `Paused · step ${run.step + 1} of ${run.steps}`;
   if (run.wait === 'email') return emailConfigured ? 'Email connected — sends within the hour' : 'Waiting — email isn’t connected';
   if (run.wait === 'text') return textConfigured ? 'Texting connected — sends within the hour' : 'Waiting — texting isn’t connected';
+  // Held until it may go: a web address that has stopped answering, or a text outside texting hours.
+  if (run.wait === 'quiet' && run.stepKind === 'webhook') return 'Waiting — the web address isn’t answering';
   if (run.wait === 'quiet') return run.next_at ? `Waiting for texting hours · ${fmtWhen(run.next_at)}` : 'Waiting for texting hours';
-  if (run.wait === 'retry') return 'Email didn’t go — trying again';
-  if (run.wait === 'sending') return run.stepKind === 'text' ? 'Sending text' : 'Sending email';
+  if (run.wait === 'retry') return run.stepKind === 'webhook' ? 'The web address didn’t take it — trying again' : 'Email didn’t go — trying again';
+  if (run.wait === 'sending') return run.stepKind === 'text' ? 'Sending text' : run.stepKind === 'webhook' ? 'Sending to the web address' : 'Sending email';
   if (run.wait === 'time' && run.next_at) return `Waiting until ${fmtWhen(run.next_at)}`;
-  return `Step ${Math.min(run.step + 1, run.steps)} of ${run.steps}${run.stepKind ? ` · ${STEP_WORD[run.stepKind]}` : ''}`;
+  return `Step ${Math.min(run.step + 1, run.steps)} of ${run.steps}${STEP_WORD[run.stepKind] ? ` · ${STEP_WORD[run.stepKind]}` : ''}`;
 };
 
 // "3 in progress · 12 finished (5 reached the goal)" — while a ladder is
@@ -100,11 +109,14 @@ export const whereLine = (run, emailConfigured, textConfigured) => {
 export const countsLine = (l) => `${l.inProgress} ${l.active ? 'in progress' : 'paused'} · ${l.finished} finished${
   l.reached ? ` (${l.reached} reached the goal)` : ''}`;
 
-// What one log entry says ("Email sent", "Text skipped — replied STOP").
+// What one log entry says ("Email sent", "Text skipped — replied STOP",
+// "Zapier: Sent · 200").
 export const logLine = (e) => {
   const what = STEP_WORD[e.kind] || '';
   if (e.kind === 'end') return END[e.result] || 'Finished';
+  if (!what) return UNKNOWN_STEP;
   if (e.kind === 'wait') return e.until ? `Waited until ${fmtWhen(e.until)}` : 'Wait';
+  if (e.kind === 'webhook') return hookLogLine(e);
   if (e.result === 'skipped') return `${what} skipped — ${REASON[e.reason] || e.reason}`;
   if (e.kind === 'email') {
     if (e.result === 'sent') return 'Email sent';

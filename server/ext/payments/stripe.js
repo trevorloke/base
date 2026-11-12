@@ -9,7 +9,7 @@
 //   STRIPE_API_BASE        tests only: a stand-in for api.stripe.com
 //
 // A test key is test mode: Stripe moves no real money, and the desk says so.
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { TOLERANCE_S, signPayload, verifySignature as verifyTimed } from '../../lib/signature.js';
 
 const env = (k) => String(process.env[k] || '').trim();
 export const secretKey = () => env('STRIPE_SECRET_KEY');
@@ -98,39 +98,10 @@ export const stripeRequest = async (method, path, { params, query, idempotencyKe
 
 // ── The webhook's signature ──
 // Stripe-Signature: t=<seconds>,v1=<hex HMAC-SHA256 of "<t>.<raw body>">[,v1=…].
-// Compared in constant time against every secret given; a timestamp more
-// than five minutes from now (either way) is refused, so a captured request
-// can't be replayed later.
-export const TOLERANCE_S = 300;
-const hmacHex = (secret, t, raw) => createHmac('sha256', secret).update(`${t}.`).update(raw).digest('hex');
-
-export const verifySignature = (raw, header, secrets = webhookSecrets(), { toleranceS = TOLERANCE_S, nowS = Date.now() / 1000 } = {}) => {
-  if (!secrets.length) return { ok: false, why: 'no webhook secret is set' };
-  if (!header) return { ok: false, why: 'no signature' };
-  let t = null;
-  const sigs = [];
-  for (const part of String(header).split(',')) {
-    const i = part.indexOf('=');
-    if (i < 1) continue;
-    const k = part.slice(0, i).trim();
-    const v = part.slice(i + 1).trim();
-    if (k === 't' && t === null) t = v;
-    else if (k === 'v1' && /^[0-9a-f]{64}$/i.test(v)) sigs.push(Buffer.from(v, 'hex'));
-  }
-  if (!t || !/^\d{1,12}$/.test(t)) return { ok: false, why: 'no timestamp' };
-  if (!sigs.length) return { ok: false, why: 'no v1 signature' };
-  if (Math.abs(nowS - Number(t)) > toleranceS) return { ok: false, why: 'too old (or the server clock is wrong)' };
-  const body = Buffer.isBuffer(raw) ? raw : Buffer.from(String(raw), 'utf8');
-  for (const secret of secrets) {
-    const want = Buffer.from(hmacHex(secret, t, body), 'hex');
-    if (sigs.some((s) => s.length === want.length && timingSafeEqual(s, want))) return { ok: true, t: Number(t) };
-  }
-  return { ok: false, why: 'signature doesn’t match' };
-};
-
-// The header Stripe would send (tests and the stand-in Stripe sign with it).
-export const signPayload = (raw, secret, t = Math.floor(Date.now() / 1000)) =>
-  `t=${t},v1=${hmacHex(secret, t, Buffer.isBuffer(raw) ? raw : Buffer.from(String(raw), 'utf8'))}`;
+// The check itself is lib/signature.js (a ladder's "Send to a web address"
+// signs the same way); here it is asked with Stripe's secrets.
+export { TOLERANCE_S, signPayload };
+export const verifySignature = (raw, header, secrets = webhookSecrets(), opts) => verifyTimed(raw, header, secrets, opts);
 
 // ── Reading what Stripe sends, in either API-version shape ──
 export const idOf = (v) => (typeof v === 'string' ? v : (v && typeof v === 'object' && typeof v.id === 'string' ? v.id : null));
