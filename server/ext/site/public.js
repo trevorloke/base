@@ -266,7 +266,7 @@ const NEWS_PAGE = { id: null, slug: 'news', title: 'News', description: '', modu
 // Every one carries "Authorized by …"; another website's (coming soon) its
 // own name and look and the link back; closed: the main site's, home is
 // the main site.
-const plainPage = (site, settings, { title, body, status = 200, closed = false }) => {
+const plainPage = (site, settings, { title, body, status = 200, closed = false, back = true }) => {
   const parentUrl = site.micro || closed ? parentUrlOf(site, settings) : null;
   const s = siteOf(settings, [], site.ws, site.micro && !closed ? { microsite: site.micro, home: null, parentUrl } : null);
   const mainName = settings.org.name || site.ws.name;
@@ -304,7 +304,7 @@ footer p{margin:8px 0 0}
 </style></head><body>
 <header class="top"><a href="${esc(home)}">${esc(org)}</a></header>
 <main id="main">${body}
-<footer>${closed ? '' : `<a href="${esc(home)}">Back to ${esc(org)}</a>`}${parentUrl ? `<p class="by">A website by <a href="${esc(parentUrl)}">${esc(mainName)}</a></p>` : ''}${auth ? `<p class="auth">${esc(auth)}</p>` : ''}</footer></main></body></html>`;
+<footer>${closed || !back ? '' : `<a href="${esc(home)}">Back to ${esc(org)}</a>`}${parentUrl ? `<p class="by">A website by <a href="${esc(parentUrl)}">${esc(mainName)}</a></p>` : ''}${auth ? `<p class="auth">${esc(auth)}</p>` : ''}</footer></main></body></html>`;
   return { html, status };
 };
 const sendPlain = (c, site, settings, page, { preview = false } = {}) => {
@@ -416,6 +416,7 @@ export const makeSiteApp = (at) => {
         return sendPlain(c, site, settings, {
           title: 'Coming soon',
           body: `<h1>Coming soon</h1><p>${esc(m.name)} isn’t open yet. Please come back soon.</p>`,
+          back: false,
         });
       }
       // The main site's own: news, the list of petitions, a supporter's
