@@ -11,13 +11,22 @@
 // can see (sign-in, Today, the menu, training, Settings); Imagine Surrey's
 // wears Surrey Navy and its wordmark. A manager renames the campaign in
 // Settings → Campaign, and the sign-in page then says the new name.
+// Then the brand a manager saves (Settings → Brand, through the screen): on
+// base.win's own campaign a logo given as an SVG (kept as a PNG), a version
+// for dark backgrounds, a square mark, a colour, the brand-coloured sidebar,
+// what training is called and the name under the icon — a logo that can't
+// be seen is warned about, never refused; the sample follows each change;
+// after Save the screen, the signed-out sign-in page, the icons and the
+// manifest all wear it; "Back to base.win's look" takes it off. On Imagine
+// Surrey's, a save that changes only the sidebar keeps its wordmark (now the
+// campaign's own upload) and leaves its live website's look alone.
 // Screenshots of sign-in and Today, desktop and phone, light and dark, for
 // each.
 //
 //   PORT=4180 SHOTS=/tmp/brand node e2e-brand.mjs     (uses PORT and PORT+1)
 import { chromium } from 'playwright-core';
 import { spawn } from 'node:child_process';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 
 const PORT = Number(process.env.PORT) || 4180;
 const SHOTS = process.env.SHOTS || '/tmp/starbase-brand';
@@ -53,6 +62,41 @@ const tokens = (page) => page.evaluate(() => {
   const v = (k) => cs.getPropertyValue(k).trim().toLowerCase();
   return { brand: document.documentElement.dataset.brand || null, accent: v('--accent'), second: v('--second'), mark: v('--mark'), words: v('--accent-words'), page: v('--page'), side: v('--side'), gold: v('--gold'), display: v('--font-display') };
 });
+
+// A campaign's pictures for the brand screen, as a designer would send
+// them: SVGs with no size of their own (the browser draws them to PNGs).
+const svg = (ink) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 80"><rect x="4" y="16" width="48" height="48" rx="10" fill="${ink}"/><rect x="66" y="24" width="240" height="14" rx="4" fill="${ink}"/><rect x="66" y="46" width="150" height="12" rx="4" fill="${ink}"/></svg>`;
+const LOGO = `${SHOTS}/riverside-logo.svg`;
+const LOGO_LIGHT = `${SHOTS}/riverside-logo-light.svg`;
+const MARK = `${SHOTS}/riverside-mark.svg`;
+writeFileSync(LOGO, svg('#0f766e'));
+writeFileSync(LOGO_LIGHT, svg('#ffffff'));
+writeFileSync(MARK, '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" rx="22" fill="#0f766e"/><circle cx="50" cy="50" r="24" fill="#ffffff"/></svg>');
+// A picture is in once its button says Replace.
+const upload = async (page, field, file) => {
+  await page.setInputFiles(`#${field}`, file);
+  await page.locator(`[aria-labelledby="${field}-label"]`).getByRole('button', { name: /^Replace/ }).waitFor({ timeout: 20000 });
+  await sleep(500);
+};
+const notes = (page) => page.evaluate(() => [...document.querySelectorAll('.bs-note')].map((n) => `${n.className.includes('--warn') ? 'WARN ' : ''}${n.innerText.trim()}`).join(' | '));
+const signinOf = async (base) => {
+  const out = await browser.newContext({ viewport: { width: 1360, height: 900 } });
+  const op = await out.newPage();
+  op.on('pageerror', (e) => errors.push(`[signed out] ${e.message}`));
+  await op.goto(`${base}/login`, { waitUntil: 'networkidle' });
+  await op.waitForSelector('.auth-page .btn-primary', { timeout: 8000 });
+  const seen = await op.evaluate(() => {
+    const i = document.querySelector('.auth-head img.brand-mark');
+    return {
+      logo: i ? { src: i.getAttribute('src'), alt: i.alt, drawn: i.complete && i.naturalWidth > 0, w: i.naturalWidth, h: i.naturalHeight } : null,
+      initials: document.querySelector('.auth-head .brand-mono')?.innerText.trim() || null,
+      button: getComputedStyle(document.querySelector('.auth-page .btn-primary')).backgroundColor,
+      icon: document.querySelector('link[rel="icon"]')?.getAttribute('href'),
+      title: document.title,
+    };
+  });
+  return { out, op, seen };
+};
 
 const signUp = async (page, base, campaign) => {
   await page.goto(`${base}/signup`, { waitUntil: 'domcontentloaded' });
@@ -173,6 +217,99 @@ const BASE = await start(PORT, { STARBASE_BRAND: 'base', STARBASE_ENV: 'staging'
   await dp.screenshot({ path: `${SHOTS}/base-today-desktop-dark.png` });
   await shoot(BASE, 'base', 'dark');
   await shoot(BASE, 'base', 'light');
+
+  // ── Settings → Brand: the campaign's own look, through the screen ──
+  const api = async (path, body) => {
+    const r = body === undefined ? await ctx.request.get(`${BASE}/api${path}`) : await ctx.request.post(`${BASE}/api${path}`, { data: body });
+    return { status: r.status(), json: await r.json().catch(() => null) };
+  };
+  await page.goto(`${BASE}/admin/settings/brand`, { waitUntil: 'networkidle' });
+  await page.waitForSelector('.bs', { timeout: 8000 });
+  const opens = await page.evaluate(() => ({
+    tabs: [...document.querySelectorAll('.ws-tabs a')].map((a) => a.innerText.trim()).slice(-2).join(' · '),
+    primaries: [...document.querySelectorAll('.btn-primary')].filter((b) => b.offsetParent).map((b) => b.innerText.trim()),
+    colour: document.querySelector('#bs-color').value, wells: [...document.querySelectorAll('.bs-pic__well')].map((w) => w.innerText.trim()).join(','),
+    frames: document.querySelectorAll('.bs-sample .bs-s').length, back: /Back to/.test(document.querySelector('.bs-acts').innerText),
+  }));
+  check('Settings → Brand sits beside Campaign: the look it started in, no pictures yet, a sample of desk and phone in light and dark, and Save the one primary',
+    opens.tabs === 'Campaign · Brand' && opens.primaries.join() === 'Save' && opens.colour === '#4f46e5' && opens.wells === 'None,None,None' && opens.frames === 4 && !opens.back, JSON.stringify(opens));
+
+  // A white logo given as the standard one: said, not refused.
+  await upload(page, 'bs-logo', LOGO_LIGHT);
+  const hidden = await notes(page);
+  check('a logo that can’t be seen on a light background is warned about, and can still be saved', /WARN [^|]*too light to see on a light background/.test(hidden) && await page.locator('.bs-acts .btn-primary').isEnabled(), hidden);
+  await upload(page, 'bs-logo', LOGO);
+  const seenNow = await notes(page);
+  check('the right logo: the warning goes; a version for dark backgrounds is offered', !/WARN/.test(seenNow) && /sits on a white chip\. Add a version for dark backgrounds/.test(seenNow), seenNow);
+  await upload(page, 'bs-logo-dark', LOGO_LIGHT);
+  await upload(page, 'bs-mark', MARK);
+  const withDark = await notes(page);
+  check('with a version for dark backgrounds, nothing more is asked', !/WARN|white chip/.test(withDark), withDark);
+
+  // One colour in: the sample wears it as it is typed; a pale one gets dark text, by rule.
+  await page.fill('#bs-color', '#fff100');
+  await sleep(300);
+  const pale = { notes: await notes(page), sample: await page.evaluate(() => { const b = document.querySelector('.bs-s[data-scheme="light"] .bs-s__btn'); const c = getComputedStyle(b); return `${c.backgroundColor} ${c.color}`; }) };
+  check('a yellow brand colour: the sample’s button is yellow with dark text, and the screen says so', pale.sample === 'rgb(255, 241, 0) rgb(20, 22, 26)' && /buttons have dark text/.test(pale.notes) && /As words, your colour becomes #/.test(pale.notes), JSON.stringify(pale));
+  await page.fill('#bs-color', '#0f766e');
+  await page.getByRole('group', { name: 'Sidebar' }).getByRole('button', { name: 'Brand colour' }).click();
+  await page.getByRole('group', { name: 'Corners' }).getByRole('button', { name: 'Round' }).click();
+  await page.getByRole('button', { name: 'More', exact: true }).click();
+  await page.fill('#bs-learn', 'Academy');
+  await page.fill('#bs-short', 'Riverside');
+  await sleep(300);
+  const sample = await page.evaluate(() => {
+    const f = document.querySelector('.bs-s--desk[data-scheme="light"]');
+    const side = f.querySelector('.bs-s__side'); const img = side.querySelector('img');
+    return { side: getComputedStyle(side).backgroundColor, logo: img?.getAttribute('src') || null, drawn: Boolean(img?.complete && img.naturalWidth > 0), radius: getComputedStyle(f.querySelector('.bs-s__btn')).borderRadius };
+  });
+  check('the sample follows: a teal sidebar with the logo for dark backgrounds on it, round corners', sample.side === 'rgb(15, 118, 110)' && /^\/brand\/[0-9a-f-]{36}\.png$/.test(sample.logo || '') && sample.drawn && sample.radius === '12px', JSON.stringify(sample));
+  await page.screenshot({ path: `${SHOTS}/base-settings-brand.png`, fullPage: true });
+
+  await page.locator('.bs-acts .btn-primary').click();
+  await page.waitForSelector('.bs-said', { timeout: 20000 });
+  await sleep(600);
+  const worn = { said: await page.innerText('.bs-said'), t: await tokens(page), nav: await page.evaluate(() => { const i = document.querySelector('.nav img.brand-mark'); return { src: i?.getAttribute('src') || null, drawn: Boolean(i?.complete && i.naturalWidth > 0), alt: i?.alt, text: document.querySelector('header.nav').innerText }; }) };
+  check('saved: this screen wears it at once — teal the accent and the sidebar, the light logo on it, training called Academy',
+    /Saved/.test(worn.said) && worn.t.accent === '#0f766e' && worn.t.side === '#0f766e' && /^\/brand\/[0-9a-f-]{36}\.png$/.test(worn.nav.src || '') && worn.nav.drawn && worn.nav.alt === 'Riverside Demo' && /Academy/.test(worn.nav.text), JSON.stringify(worn).slice(0, 400));
+  const kept = (await api('/auth/me')).json.workspace.settings.brand;
+  check('kept: the SVG logo is a PNG 1,024 px wide, the mark is square, four app icons were made from it — ids, never an address',
+    kept.logo?.type === 'png' && kept.logo.w === 1024 && kept.logo.h === 256 && kept.logoDark?.type === 'png' && kept.mark?.w === kept.mark?.h && kept.mark.w === 512
+    && ['i192', 'i512', 'maskable', 'touch'].every((k) => /^[0-9a-f-]{36}$/.test(kept.icons?.[k] || '')) && kept.shortName === 'Riverside' && kept.learn === 'Academy', JSON.stringify(kept).slice(0, 300));
+  await page.screenshot({ path: `${SHOTS}/base-settings-brand-saved.png`, fullPage: true });
+
+  // Signed out: the sign-in page wears it, before it paints.
+  const branded = await signinOf(BASE);
+  const rawPage = await (await fetch(`${BASE}/login`)).text();
+  const man = await (await fetch(`${BASE}/manifest.webmanifest`)).json();
+  const icon = await fetch(`${BASE}${man.icons[0].src}`);
+  check('signed out: sign-in shows the campaign’s logo (alt: its name) and a teal button; the shades are in the page before the stylesheets',
+    /^\/brand\/[0-9a-f-]{36}\.png$/.test(branded.seen.logo?.src || '') && branded.seen.logo.drawn && branded.seen.logo.alt === 'Riverside Demo' && branded.seen.button === 'rgb(15, 118, 110)'
+    && /<style id="brand">:root\{[^<]*--accent:#0f766e;/.test(rawPage) && rawPage.indexOf('<style id="brand">') < rawPage.indexOf('<link rel="stylesheet"'), JSON.stringify(branded.seen));
+  check('the tab and the installed app: the mark as the icon, Riverside under it', /^\/brand\/[0-9a-f-]{36}\.png$/.test(branded.seen.icon || '') && /^Riverside/.test(branded.seen.title)
+    && man.short_name === 'Riverside' && /^\/brand\//.test(man.icons[0].src) && man.icons.length === 3 && icon.status === 200 && /image\/png/.test(icon.headers.get('content-type') || ''), JSON.stringify({ icon: branded.seen.icon, title: branded.seen.title, man: man.short_name, src: man.icons[0].src, status: icon.status }));
+  await branded.op.screenshot({ path: `${SHOTS}/base-signin-branded.png` });
+  await branded.out.close();
+
+  // On a phone: nothing off the side, a thumb-sized Save.
+  await pp.goto(`${BASE}/admin/settings/brand`, { waitUntil: 'networkidle' });
+  await pp.waitForSelector('.bs', { timeout: 8000 });
+  await sleep(500);
+  const small = await pp.evaluate(() => ({ overflow: document.documentElement.scrollWidth - window.innerWidth, save: Math.round(document.querySelector('.bs-acts .btn-primary').getBoundingClientRect().height),
+    primaries: [...document.querySelectorAll('.btn-primary')].filter((b) => b.offsetParent).length, top: getComputedStyle(document.querySelector('header.nav')).backgroundColor }));
+  check('Settings → Brand on a phone: no sideways scroll, one primary 48px tall, the top bar in the brand colour', small.overflow <= 0 && small.save >= 48 && small.primaries === 1 && small.top === 'rgb(15, 118, 110)', JSON.stringify(small));
+  await pp.screenshot({ path: `${SHOTS}/base-settings-brand-phone.png`, fullPage: true });
+
+  // And back.
+  await page.getByRole('button', { name: 'Back to base.win’s look' }).click();
+  await page.getByRole('button', { name: 'Yes, go back' }).click();
+  await page.waitForSelector('.bs-said', { timeout: 20000 });
+  await sleep(600);
+  const back = { said: await page.innerText('.bs-said'), t: await tokens(page), brand: (await api('/auth/me')).json.workspace.settings.brand ?? null };
+  const plain = await signinOf(BASE);
+  check('“Back to base.win’s look”: indigo and the campaign’s initials again, here and on sign-in', /Back to base\.win’s look/.test(back.said) && back.t.accent === '#4f46e5' && back.brand === null
+    && plain.seen.logo === null && plain.seen.initials === 'RD' && plain.seen.button === 'rgb(79, 70, 229)', JSON.stringify({ back, plain: plain.seen }).slice(0, 300));
+  await plain.out.close();
   await ctx.close(); await phone.close(); await dark.close();
 }
 
@@ -221,6 +358,34 @@ const IS = await start(PORT + 1, { STARBASE_ENV: 'production', STARBASE_ORG_NAME
   await dp.screenshot({ path: `${SHOTS}/is-today-desktop-dark.png` });
   await shoot(IS, 'is', 'light');
   await shoot(IS, 'is', 'dark');
+
+  // ── Imagine Surrey saves a brand: only the sidebar changes ──
+  const api = async (path, body) => {
+    const r = body === undefined ? await ctx.request.get(`${IS}/api${path}`) : await ctx.request.post(`${IS}/api${path}`, { data: body });
+    return { status: r.status(), json: await r.json().catch(() => null) };
+  };
+  const siteBefore = (await api('/site')).json.settings.theme;
+  await page.goto(`${IS}/admin/settings/brand`, { waitUntil: 'networkidle' });
+  await page.waitForSelector('.bs', { timeout: 8000 });
+  await sleep(800);
+  const starts = await page.evaluate(() => ({ colour: document.querySelector('#bs-color').value, second: document.querySelector('#bs-second').value,
+    wells: [...document.querySelectorAll('.bs-pic__well img')].map((i) => i.getAttribute('src')), drawn: [...document.querySelectorAll('.bs-pic__well img')].every((i) => i.complete && i.naturalWidth > 0),
+    warn: document.querySelectorAll('.bs-note--warn').length, site: /Use the website’s colours and logo/.test(document.querySelector('.bs-acts').innerText) }));
+  check('imagine-surrey: Settings → Brand opens on its own look — navy, marigold, both wordmarks, nothing to warn about — and offers the website’s colours and logo',
+    starts.colour === '#003979' && starts.second === '#ffc72c' && starts.wells.length === 2 && /logo\.webp$/.test(starts.wells[0]) && /logo-light\.png$/.test(starts.wells[1]) && starts.drawn && starts.warn === 0 && starts.site, JSON.stringify(starts));
+  await page.getByRole('group', { name: 'Sidebar' }).getByRole('button', { name: 'Brand colour' }).click();
+  await page.screenshot({ path: `${SHOTS}/is-settings-brand.png`, fullPage: true });
+  await page.locator('.bs-acts .btn-primary').click();
+  await page.waitForSelector('.bs-said', { timeout: 30000 });
+  await sleep(600);
+  const navy = { t: await tokens(page), nav: await page.evaluate(() => { const i = document.querySelector('.nav img.brand-mark'); return { src: i?.getAttribute('src') || null, drawn: Boolean(i?.complete && i.naturalWidth > 0), alt: i?.alt, text: document.querySelector('header.nav').innerText }; }) };
+  const isKept = (await api('/auth/me')).json.workspace.settings.brand;
+  check('imagine-surrey, saved with a navy sidebar: its wordmark stays (now the campaign’s own upload, the light one on the navy), ImagineU stays, the star stays its icon',
+    navy.t.side === '#003979' && /^\/brand\/[0-9a-f-]{36}\.png$/.test(navy.nav.src || '') && navy.nav.src.includes(isKept.logoDark?.id) && navy.nav.drawn && navy.nav.alt === 'Imagine Surrey' && /ImagineU/.test(navy.nav.text)
+    && isKept.logo?.id && isKept.learn === 'ImagineU' && /href="\/star\.png"/.test(await (await fetch(`${IS}/`)).text()), JSON.stringify({ navy, isKept }).slice(0, 400));
+  const siteAfter = (await api('/site')).json.settings.theme;
+  check('imagine-surrey: its website keeps its own look — it does not follow the brand', siteAfter.follow !== true && JSON.stringify(siteAfter.colors) === JSON.stringify(siteBefore.colors) && siteAfter.logo?.url === siteBefore.logo?.url, JSON.stringify(siteAfter).slice(0, 200));
+  await page.screenshot({ path: `${SHOTS}/is-today-navy-sidebar.png` });
   await ctx.close(); await phone.close(); await dark.close();
 }
 
