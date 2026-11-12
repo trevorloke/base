@@ -546,9 +546,58 @@ one tap away under **More**.
   door with a sign gets a little flag, and close in a household's size is
   on its dot; at street zoom the dots become pins. Tap a dot to open that
   door. With your whole voter file loaded (more than 5,000 people placed),
-  the city view shows patches of people instead — grey for how many live
-  there, colour for the share rated — and **Show** counts people in view
-  (*300,049*); zoom in and it loads the doors where you're looking.
+  the map opens on your list as a picture — shaded squares, darker where
+  more people live, coloured as far as they've been rated — with a key and
+  *Each square is a block — zoom in for doors* under the count, and **Show**
+  counts what is on screen (*300,049 people*); from zoom 14 every door is a
+  dot (*1,211 doors*), and a tap on one opens it. Zooming never empties the
+  map: what was drawn stays until the next answer is in. **Whole list** goes
+  back; over open water — and as soon as the list's last squares leave the
+  screen — it says *Nobody on file here · Back to your list*. (Pick one
+  rating, such as *Strong yes (1)*, over streets where nobody has it: *0
+  doors*, and no such note.)
+  (`node e2e-map.mjs` runs a big list in miniature through all of this in a
+  browser, and through the next four; `ONLY=tiles,check node e2e-map.mjs`
+  runs parts of it.)
+- **Map, the street map not loading** — block `basemaps.cartocdn.com` in
+  the browser's network tools and reload: within a moment a line says *The
+  street map wasn’t loading — switched to Muted* and the streets are there.
+  Block `tile.openstreetmap.org` too and move the map: it goes back to
+  *Clean* by itself and *The street map isn’t loading · Try again* stays
+  under the count; unblock CARTO, tap it, the streets load and the line
+  goes. Weak signal: on a phone that has looked at a turf, block both hosts
+  and pan away — *The street map isn’t loading · Try again*, and no switch
+  (the other doesn't answer either); tap it, pan back, and the turf's
+  streets are still there, and in airplane mode too (and the look is still
+  *Clean*). (Hosts that never answer, rather than refuse, are said the same
+  way, six seconds after the map last moved over blank streets, or zoomed
+  in over the blurred streets of the zoom before — and the line goes by
+  itself back over the streets the phone kept, or a second after slow tiles
+  have come after all.)
+- **Map, many turfs** — outlines and names show at once however many turfs
+  there are; tap one and its sheet opens with *Loading…* where *64 doors
+  left* then appears.
+- **Map, reopened with no signal** — as a volunteer on a phone, open the map
+  on your turf with signal, then go into airplane mode and reopen the app:
+  your doors are there, *No signal — showing the doors already loaded* sits
+  above *My turf* and the zoom buttons (each still a tap away), and there is
+  no *Unavailable — Try again* on *My turf*. A manager's whole voter file
+  keeps no doors on the phone: there *Unavailable — Try again* says it
+  alone, and once it answers again the doors it draws carry no line about
+  kept ones.
+- **Map → filter button → Map check** (managers) — one sheet: on file, on
+  the map, not on map (and why), the placing run, outside your area, turfs,
+  the street map and its tiles, this page against the server, the map's
+  size. Whatever is wrong is flagged, and comes first; send a screenshot of
+  it with any report that the map looks empty (on a phone it fits one
+  screen).
+- **Map on an older or odder screen** — a phone held sideways: nothing to
+  scroll past the map. A laptop: the Show sheet scrolls inside the map to
+  its last line.
+- **A tab left open across a deploy** — its next answer from the server says
+  so: *A new version is ready · Reload* under the nav, and the next link you
+  tap loads the new page. It never shows an empty map or a blank screen
+  (`node e2e-deploy.mjs`: two builds take turns on one server).
 - **Map → filter button → Draw turf** — tap the corners, name it, assign a
   canvasser.
 - **A profile → More details** — tap Yes/No or a choice, type the rest,
@@ -706,13 +755,21 @@ not marked voted.
   three columns (*Punjabi; Hindi*). Their volunteer roles offer *Candidate
   aide*, *Social media team* and *Photography / videography*. A Sign (Yes/No) column shows ticked as *Sign 2022*: they
 get that tag, and their Sign profile field stays empty.
-Then **Place on map** looks the addresses up with the BC Address
-Geocoder (needs internet). It runs on the server: you can close the page and
-it keeps going (come back to Import or the map to see how far it's got, or
-**Stop** it). Everyone at one address is one lookup, and an address already
+Then the addresses are looked up with the BC Address Geocoder (needs
+internet) — by themselves: an import that leaves addresses without a pin
+starts placing them, and the import page shows it going (**Place on map** is
+there where it didn't start: no background jobs, or lookups turned off). It
+runs on the server: you can close the page and it keeps going. The map says
+*Placing addresses · 12,400 of 150,000* where *Not on map* was, and the new
+doors appear as it goes (tap it for **Stop**, or come back to Import). Everyone at one address is one lookup, and an address already
 on the map is copied without a lookup. If the geocoder stops answering, the
-run pauses with the reason; **Carry on** resumes it. Addresses it can't find
-end up under **Not on map** for a pin by hand.
+run pauses with the reason and tries again by itself (after 15 minutes, then
+less and less often) — the map says *Placing addresses paused*, and tapping
+it says when the next try is; **Try now** does it at once. (A minute past
+that time and still paused, it says the try *was due* at that time: it
+didn't run — **Try now**.) Addresses it
+can't find end up under **Not on map** for a pin by hand. Someone with no
+address at all is never put on the map; the Map check counts them.
 
 A full voter list (hundreds of thousands of people) takes a few hours. Set
 `BC_GEOCODER_KEY` (a free key from the BC government's API gateway) for
@@ -743,10 +800,14 @@ latest).
 
 ## 4 · Known limits in this build
 
-- Map tiles come from OpenStreetMap; very large teams should switch to a paid
-  tile provider before election week: Google Maps (`GOOGLE_MAPS_TILES=1` and
-  a `GOOGLE_MAPS_SERVER_KEY` with the Map Tiles API enabled) or any
-  `{z}/{x}/{y}` provider (`STARBASE_TILE_URL`) — see the README.
+- Map tiles come from CARTO (the *Clean* look the map opens on) and
+  OpenStreetMap, both free and neither for heavy use; choose a provider the
+  campaign has an agreement with before election week: Google Maps
+  (`GOOGLE_MAPS_TILES=1` and a `GOOGLE_MAPS_SERVER_KEY` with the Map Tiles
+  API enabled) or any `{z}/{x}/{y}` provider (`STARBASE_TILE_URL`) —
+  GOING-LIVE.md, section 5. The browser tests run where neither host can be
+  reached, on stand-in tiles: nothing here has checked the real street map.
+  If it stops loading, the map says so.
 - Offline covers **field work** (knocks, new people and doors, pins, sign
   requests, shift sign-ups, *My people*) and **reading the desk**; on a
   profile, ratings, notes and tags save offline. Gifts, imports, outreach

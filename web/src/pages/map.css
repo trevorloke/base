@@ -4,11 +4,18 @@
    Field rule: every tap target here is at least 48px.
    Everything leans on the ink-on-paper tokens in app.css. */
 
-/* ── Page frame: full-bleed on phones, tall within the column on desktop ── */
+/* ── Page frame: full-bleed on phones, tall within the column on desktop ──
+   Every dvh height has the same in vh before it: a browser that doesn't know
+   dvh (Safari before 15.4, Chrome before 108) drops that line, and without
+   the one before it the map was 0 px tall on a phone.
+   On a desktop the map takes the window less the page's own padding (32 px
+   above; 48 below, of which the margin here takes 24 back), so nothing is
+   left to scroll; the floor is low enough for a phone held sideways. */
 .map-page {
   position: relative;
-  height: calc(100dvh - var(--nav-h, 49px) - var(--s-5) - var(--s-5));
-  min-height: 440px;
+  height: calc(100vh - var(--nav-h, 49px) - var(--s-6) - var(--s-5));
+  height: calc(100dvh - var(--nav-h, 49px) - var(--s-6) - var(--s-5));
+  min-height: 240px;
   margin-bottom: calc(var(--s-5) - var(--s-7));
   border: 1px solid var(--rule-2);
   border-radius: var(--r-card);
@@ -18,6 +25,7 @@
 @media (max-width: 720px) {
   .map-page {
     margin: calc(-1 * var(--s-5)) calc(-1 * var(--s-4)) -64px;
+    height: calc(100vh - var(--nav-h, 49px) - var(--tabbar-h, 34px));
     height: calc(100dvh - var(--nav-h, 49px) - var(--tabbar-h, 34px));
     min-height: 0;
     border: 0;
@@ -26,13 +34,19 @@
 }
 
 /* The Leaflet canvas. z-index:0 makes a stacking context so Leaflet's own
-   z-indexes (controls at 1000) stay underneath our overlays and the tabbar. */
-.map-canvas {
+   z-indexes (controls at 1000) stay underneath our overlays and the tabbar.
+   The ground behind the tiles — what shows while they load, and where one
+   fails — is the app's paper, not Leaflet's grey: said with the page's own
+   class, because Leaflet's rule for its container is as strong as a plain
+   .map-canvas one and comes later. The marks are drawn for a light map
+   whatever the scheme, and for a dark one on the Dark look: so is the ground. */
+.map-page .map-canvas {
   position: absolute;
   inset: 0;
   z-index: 0;
   background: #e8ebf3; /* tiles are always light, whatever the scheme */
 }
+.map-page.map-view--dark .map-canvas { background: rgb(26, 28, 34); }
 .map-canvas .leaflet-control-attribution { font: 10px/1.4 var(--font-mono); background: rgba(255, 255, 255, 0.85); color: #2c3250; }
 .map-canvas .leaflet-control-attribution a { color: #161a2e; }
 .map-page .map-canvas .leaflet-bar a { width: 48px; height: 48px; line-height: 48px; font-size: 20px; font-family: var(--font-serif); color: #161a2e; background: #ffffff; border-bottom-color: #dde0ec; }
@@ -46,11 +60,14 @@
    people badge on its corner, and a group of nearby doors is a white bubble
    with a house, the door count and a band ring.
    Pin colors are literal (not tokens): the OSM basemap is light in both
-   schemes, so the dark-mode pastel status tokens would wash out on it. ── */
+   schemes, so the dark-mode pastel status tokens would wash out on it.
+   "Not asked yet" (--door-unrated) and undecided's darker edge
+   (--door-undecided-edge) come from mapView.js, the same as the canvas
+   dots': both read at 3 to 1 or better on any base map. ── */
 .map-pin-wrap, .map-sign-wrap, .map-me-wrap, .map-cluster-wrap { background: transparent; border: 0; }
 .map-pin-wrap, .map-sign-wrap, .map-cluster-wrap { cursor: pointer; }
 .map-pin {
-  --pin-bg: #8a90a6;
+  --pin-bg: var(--door-unrated, #8a90a6);
   --pin-fg: #ffffff;
   position: absolute;
   left: 9px;
@@ -79,9 +96,9 @@
 }
 .map-pin__dot { display: block; width: 9px; height: 9px; border-radius: 50%; background: var(--pin-fg); }
 .map-pin--support   { --pin-bg: #138a52; }
-.map-pin--undecided { --pin-bg: #f5a524; --pin-fg: #161a2e; }
+.map-pin--undecided { --pin-bg: #f5a524; --pin-fg: #161a2e; box-shadow: 0 0 0 1.5px var(--door-undecided-edge, transparent), 0 1px 3px rgba(0, 0, 0, 0.45); }
 .map-pin--opposed   { --pin-bg: #d43c3c; }
-.map-pin--unrated   { --pin-bg: #8a90a6; }
+.map-pin--unrated   { --pin-bg: var(--door-unrated, #8a90a6); }
 /* Household head-count: people glyph + number in a white badge */
 .map-pin__hh {
   position: absolute;
@@ -119,7 +136,7 @@
   width: var(--size, 42px);
   height: var(--size, 42px);
   border-radius: 50%;
-  background: conic-gradient(#138a52 0 var(--a), #f5a524 0 var(--b), #d43c3c 0 var(--c), #8a90a6 0);
+  background: conic-gradient(#138a52 0 var(--a), #f5a524 0 var(--b), #d43c3c 0 var(--c), var(--door-unrated, #8a90a6) 0);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
   display: flex;
   align-items: center;
@@ -293,7 +310,7 @@
 .map-filter-btn[data-band='support'], .map-fopt[data-band='support']     { --dot: #138a52; }
 .map-filter-btn[data-band='undecided'], .map-fopt[data-band='undecided'] { --dot: #f5a524; }
 .map-filter-btn[data-band='opposed'], .map-fopt[data-band='opposed']     { --dot: #d43c3c; }
-.map-filter-btn[data-band='unrated'], .map-fopt[data-band='unrated']     { --dot: #8a90a6; }
+.map-filter-btn[data-band='unrated'], .map-fopt[data-band='unrated']     { --dot: var(--door-unrated, #8a90a6); }
 
 .map-unloc { display: inline-flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
 /* "Not on map 4": the same quiet pill (not yellow), saying what the 4 is */
@@ -340,7 +357,9 @@
 }
 @media (hover: hover) { .btn.map-hint__x:hover { background: color-mix(in srgb, currentColor 14%, transparent); border-color: transparent; } }
 
-/* Filter sheet: popover under the button on desktop, bottom sheet on phones */
+/* Filter sheet: popover under the button on desktop, bottom sheet on phones.
+   It is taller than a laptop's map, so it scrolls inside it (it was cut off
+   at the map's edge, its last lines out of reach); its title and ✕ stay. */
 .map-scrim { position: absolute; inset: 0; z-index: 4; border: 0; padding: 0; margin: 0; background: rgba(15, 23, 51, 0.12); cursor: default; }
 .map-fsheet {
   position: absolute;
@@ -349,6 +368,9 @@
   z-index: 5;
   width: 340px;
   max-width: calc(100% - 16px);
+  max-height: calc(100% - 56px - 3 * var(--s-2));
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 0 var(--s-4) var(--s-4);
   background: var(--paper-0);
   color: var(--text-1);
@@ -356,14 +378,16 @@
   border-radius: var(--r-card);
   box-shadow: var(--shadow-2);
 }
-.map-fsheet__head { display: flex; align-items: center; justify-content: space-between; min-height: 56px; }
+.map-fsheet__head { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; min-height: 56px; background: var(--paper-0); }
 .map-fsheet__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-2); }
 .map-fopt {
   display: flex;
   align-items: center;
-  gap: 10px;
+  flex-wrap: wrap;
+  align-content: center;
+  gap: 2px 10px;
   min-height: 52px;
-  padding: 0 var(--s-3);
+  padding: 6px var(--s-3);
   font-family: var(--font-serif);
   font-size: 16px;
   text-align: left;
@@ -381,9 +405,15 @@
 .map-fopt[data-band='undecided'] { --dot-ring: #b87400; }
 .map-fopt[data-band='mine'] .map-fopt__dot { background: transparent; border: 2px solid currentColor; }
 .map-fopt[data-band='signs'] .map-fopt__dot { border-radius: 2px; background: #ffffff; border: 2px solid #161a2e; }
-.map-fopt__label { flex: 1; min-width: 0; overflow-wrap: anywhere; line-height: 1.2; } /* field rule: words wrap, never cut */
+/* Field rule: words wrap, never cut — and never in the middle of one
+   ("Unra-ted" beside a whole voter list's count): the name keeps its line,
+   and a count too long to sit beside it goes under it. The dot and the name
+   are one piece, so a name that needs its own line takes its dot with it
+   (the dot sat alone on a line above "Strong yes (1)"). */
+.map-fopt__name { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 10px; }
+.map-fopt__label { flex: 1 1 auto; min-width: 0; overflow-wrap: break-word; line-height: 1.2; }
 .map-fsheet__grid + .map-fsheet__sub { margin-top: var(--s-3); }
-.map-fopt__n { font-size: 13px; color: var(--text-3); }
+.map-fopt__n { margin-left: auto; font-size: 13px; color: var(--text-3); }
 .map-fopt.is-on { background: var(--ink); color: var(--paper-0); border-color: var(--ink); }
 .map-fopt.is-on .map-fopt__n { color: var(--paper-0); }
 /* "On the map" (desk): layer switches, plainly not one of the Show choices */
@@ -483,7 +513,7 @@
 @media (hover: hover) { .map-fab:hover { background: var(--paper-1); } }
 /* "+ Door" (desk roles): a labelled pill, quiet even while active — the
    mode bar on top already says "Tap the new door". */
-.map-fab--add {
+.map-fab--add, .map-fab--list {
   width: auto;
   min-width: 56px;
   padding: 0 18px 0 14px;
@@ -497,11 +527,18 @@
 }
 .map-fab__plus { font-size: 22px; line-height: 1; font-weight: 400; }
 .map-fab--add.is-on { background: var(--paper-1); border: 2px solid var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+/* "Whole list" beside Locate me: back to the campaign's own list. */
+.map-fabs__row { display: flex; align-items: center; gap: var(--s-2); }
+.map-fab--list { padding: 0 16px; }
 .map-fabs { align-items: flex-end; }
 .map-fab:disabled { opacity: 0.6; cursor: default; }
 .map-fab:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
 
-.error.map-error { position: absolute; left: var(--s-3); bottom: var(--s-6); z-index: 2; background: var(--paper-0); padding: var(--s-2) var(--s-3); border: 1px solid var(--danger); border-radius: var(--r-ctrl); }
+/* The doors didn't come (no signal: the ones already loaded): one line along
+   the bottom beside the zoom buttons, not over them, and short of the buttons
+   in the other corner — on a phone above both corners (below). A tap on a
+   door under it goes through, as through the notes further down. */
+.error.map-error { position: absolute; left: calc(var(--s-3) + 60px); bottom: var(--s-6); max-width: calc(100% - 288px); margin: 0; z-index: 2; background: var(--paper-0); padding: var(--s-2) var(--s-3); border: 1px solid var(--danger); border-radius: var(--r-ctrl); pointer-events: none; }
 /* No signal, no doors loaded: one line + the walk list kept on the phone */
 .card.map-offline { top: 40%; }
 .card.map-empty {
@@ -539,6 +576,9 @@
 @media (min-width: 721px) {
   .map-page.has-sheet .map-top { right: calc(var(--s-2) + 388px); }
   .map-page.has-sheet .map-fabs { right: calc(var(--s-3) + 388px); }
+  /* (The buttons beside the sheet can reach the zoom buttons' side: the
+     doors' line goes above them, short of the sheet.) */
+  .map-page.has-sheet .error.map-error { bottom: 164px; max-width: calc(100% - 472px); }
 }
 @media (max-width: 720px) {
   .map-sheet, .map-fsheet {
@@ -549,6 +589,7 @@
     bottom: var(--tabbar-h, 0px);
     width: auto;
     max-width: none;
+    max-height: 66vh;
     max-height: 66dvh;
     border-left: 0;
     border-right: 0;
@@ -855,7 +896,7 @@
 
 /* The turf sheet */
 .turf-sheet { --turf: #2b6cb0; }
-@media (max-width: 720px) { .turf-sheet { max-height: 70dvh; } }
+@media (max-width: 720px) { .turf-sheet { max-height: 70vh; max-height: 70dvh; } }
 .turf-swatch { display: inline-block; width: 10px; height: 10px; margin-right: 8px; border-radius: 2px; background: var(--turf); vertical-align: 1px; }
 .turf-sheet__body { display: flex; flex-direction: column; gap: var(--s-3); padding: var(--s-3) 0 var(--s-3); }
 .turf-sheet__body > :not(.fk-more) { margin-left: var(--s-4); margin-right: var(--s-4); }
@@ -950,7 +991,7 @@
 .map-dot--support   { --dot: #138a52; }
 .map-dot--undecided { --dot: #f5a524; }
 .map-dot--opposed   { --dot: #d43c3c; }
-.map-dot--unrated   { --dot: #8a90a6; }
+.map-dot--unrated   { --dot: var(--door-unrated, #8a90a6); }
 .map-dot--selected  { transform: scale(1.4); box-shadow: 0 0 0 3px #161a2e; }
 @media (hover: hover) { .leaflet-marker-icon:hover .map-dot { transform: scale(1.3); } }
 
@@ -963,3 +1004,111 @@
   background: var(--paper-0); color: var(--text-2); box-shadow: var(--shadow-2); font-size: 14px; font-weight: 600;
   pointer-events: none; white-space: nowrap;
 }
+
+/* ── What the map is showing: the count's words, the key, "nobody here" ── */
+/* A map request out for more than a moment: "Loading…" beside the count
+   (what was drawn stays until the answer is in). */
+.map-filter-btn__busy { font-size: 12px; font-weight: 500; color: var(--text-3); white-space: nowrap; }
+/* Nothing to count from this far out (signs, votes): no empty chip beside
+   the filter's name — the note along the bottom says to zoom in. */
+.map-filter-btn__n:empty { display: none; }
+/* The part of the map on screen was asked for and not answered. */
+.map-chip.map-retry { color: var(--danger); }
+
+/* The key under the count: what the colours mean and, where the marks
+   aren't doors you can read off, what a mark is. It never takes a tap — the
+   map under it still drags. Its marks are the map's own (colours from
+   mapView.js), squares while the far-out picture shows. */
+.map-top > .map-key {
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 6px 10px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--text-2);
+  background: var(--paper-0);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-ctrl);
+  box-shadow: var(--shadow-1);
+  pointer-events: none;
+}
+.map-key__marks { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 2px 12px; }
+.map-key__marks li { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.map-key__mark { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+.map-key--squares .map-key__mark { border-radius: 2px; }
+.map-key__words { margin: 4px 0 0; font-size: 13px; font-weight: 600; color: var(--text-1); }
+
+/* A big list, and nobody in this part of the map: one line and the way back. */
+.map-nobody {
+  position: absolute; left: 50%; bottom: calc(var(--tabbar-h, 0px) + 24px); transform: translateX(-50%);
+  z-index: 3; display: flex; align-items: center; flex-wrap: wrap; justify-content: center; gap: var(--s-1) var(--s-3);
+  max-width: calc(100% - 32px); padding: 4px 4px 4px 16px;
+  background: var(--paper-0); color: var(--text-1); border: 1px solid var(--rule-2); border-radius: var(--r-card);
+  box-shadow: var(--shadow-2); font-size: 14px; font-weight: 600;
+}
+.btn.map-nobody__btn { min-height: 48px; padding: 0 16px; display: inline-flex; align-items: center; white-space: nowrap; }
+/* With the doors' line there too, these sit above it. */
+.error.map-error ~ .map-zoomnote, .error.map-error ~ .map-nobody { bottom: calc(var(--tabbar-h, 0px) + 80px); }
+/* Phones: the notes along the bottom sit above the buttons in the corner
+   ("Whole list" reaches the middle of a narrow screen) — the doors' line
+   too, in the middle (it lay over "−" and "My turf"). */
+@media (max-width: 720px) {
+  .map-zoomnote, .map-nobody { bottom: 164px; }
+  .error.map-error { left: 50%; bottom: 164px; transform: translateX(-50%); width: max-content; max-width: calc(100% - 32px); }
+  .error.map-error ~ .map-zoomnote, .error.map-error ~ .map-nobody { bottom: 212px; }
+}
+
+/* The street map isn't loading: one line and one tap (the other provider,
+   or Try again). It sits under the count, like the key. */
+.map-top > .map-tilenote {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-1) var(--s-3);
+  max-width: 100%;
+  padding: 4px 4px 4px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-1);
+  background: var(--paper-0);
+  border: 1px solid var(--danger);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow-2);
+}
+.btn.map-tilenote__btn { min-height: 48px; padding: 0 16px; display: inline-flex; align-items: center; white-space: nowrap; }
+/* It has switched provider by itself: the same line for a few seconds, with
+   nothing to tap (and nothing wrong any more: no red edge). It never takes a
+   tap — the map under it still drags. */
+.map-top > .map-tilenote--done { padding: 8px 14px; border-color: var(--rule-2); font-weight: 500; color: var(--text-2); pointer-events: none; }
+
+/* ── The map's check (managers): what the map is drawn from, line by line.
+   The line that applies is flagged with a mark and words, not colour alone. ── */
+/* (Over its scrim, as the Show sheet is over its own.) On a phone it may
+   take the map's whole height — a screenshot of it is the point, and its
+   last lines were a scroll away — and the lines that apply come first. */
+.map-sheet.map-check { z-index: 5; }
+@media (max-width: 720px) {
+  .map-sheet.map-check {
+    z-index: 950;
+    max-height: calc(100vh - var(--nav-h, 49px) - var(--tabbar-h, 34px) - var(--s-2));
+    max-height: calc(100dvh - var(--nav-h, 49px) - var(--tabbar-h, 34px) - var(--s-2));
+  }
+}
+.btn.map-fsheet__check { display: inline-flex; align-items: center; min-height: 48px; margin: var(--s-2) 0 0 calc(-1 * var(--s-3)); padding: 0 var(--s-3); }
+.map-check__body { padding: var(--s-3) var(--s-4) var(--s-4); }
+.map-check__lead { margin: 0 0 var(--s-3); font-size: 13px; line-height: 1.4; color: var(--text-3); }
+.map-check__list { margin: 0; }
+.map-check__row { display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: 2px var(--s-3); padding: 10px 0; border-top: 1px solid var(--rule); }
+.map-check__row dt { display: flex; align-items: flex-start; gap: 6px; font-size: 13px; line-height: 1.4; color: var(--text-3); }
+.map-check__row dd { margin: 0; font-size: 15px; line-height: 1.35; color: var(--text-1); overflow-wrap: anywhere; }
+.map-check__row dd.map-check__note { grid-column: 2; font-size: 13px; color: var(--text-2); }
+.map-check__row.is-warn dt { color: var(--danger); font-weight: 600; }
+.map-check__row.is-warn .map-check__value { font-weight: 600; }
+.map-check__flag {
+  flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px;
+  border-radius: 50%; background: var(--danger); color: var(--paper-0); font-size: 12px; font-weight: 700; line-height: 1;
+}
+.map-check__when { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); margin: var(--s-2) 0 0; padding-top: var(--s-2); border-top: 1px solid var(--rule); font-size: 13px; color: var(--text-3); }
+.btn.map-check__again, .btn.map-check__retry { display: inline-flex; align-items: center; min-height: 48px; padding: 0 var(--s-3); }
+.map-check__wait { margin: 0; font-size: 15px; color: var(--text-2); }

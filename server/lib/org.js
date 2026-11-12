@@ -42,6 +42,12 @@ export const city = () => str('STARBASE_CITY') || 'Surrey';
 export const province = () => (str('STARBASE_PROVINCE') || 'BC').toUpperCase().slice(0, 2);
 export const geoBounds = () => (/^-?\d+(\.\d+)?,-?\d+(\.\d+)?\|-?\d+(\.\d+)?,-?\d+(\.\d+)?$/.test(str('STARBASE_GEO_BOUNDS'))
   ? str('STARBASE_GEO_BOUNDS') : '49.002,-122.92|49.222,-122.67');
+// The same box as numbers, [south, west, north, east], whichever corner was
+// typed first: the campaign's own area (where the map opens; its check).
+export const geoBox = () => {
+  const [a, b] = geoBounds().split('|').map((pt) => pt.split(',').map(Number));
+  return [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1])];
+};
 export const envName = () => (['production', 'staging'].includes(str('STARBASE_ENV')) ? str('STARBASE_ENV')
   : process.env.NODE_ENV === 'production' ? 'production' : 'local');
 

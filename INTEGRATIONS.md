@@ -132,7 +132,8 @@ messages come to this base.win (if they go elsewhere, it names both).
 
 Suggests addresses as someone types (the map's *+ Door*, Add person, a
 profile's Edit, Add a sign), places a person saved with an address and no
-pin, and runs the desk's background *Place on map* over a whole list.
+pin, and places a whole list in the background — started by an import that
+leaves addresses without a pin, or by hand (*Place on map*).
 
 | `GEOCODER` | Service | Key |
 |---|---|---|
@@ -155,6 +156,7 @@ sees it.
 | `GEOCODE_MIN_SCORE` | `75` | BC's match score a pin needs |
 | `GEOCODE_ON_SAVE` | on | `off`: no lookup when a person is saved (the background run still places them) |
 | `GEOCODE_CONCURRENCY`, `GEOCODE_BACKOFF_MS` | `6`, `30000` | the background run's pace |
+| `GEOCODE_RETRY_MS` | `900000` | how long a paused run waits before it tries again by itself (doubling, up to six hours) |
 | `BC_GEOCODER_URL` | the official service | a self-hosted mirror |
 
 **Check:** Services → Address lookup asks for a few addresses in the
@@ -162,9 +164,18 @@ campaign's box.
 
 ## Map background
 
-OpenStreetMap's free tiles by default, straight to each phone. Their servers
-are run by volunteers and are not for a large team in election week; before
-then, either:
+Free tiles by default, straight to each phone: CARTO's light map for the
+*Clean* look the map opens on (`STARBASE_TILE_CLEAN=off` leaves it out), and
+OpenStreetMap's own servers for *Standard*, *Muted* and *Dark*. Neither is
+for a large team in election week — OpenStreetMap's servers are run by
+volunteers, CARTO's free basemaps are not meant for heavy or commercial use
+— and their current terms could not be read from where this was written:
+read them before relying on either (GOING-LIVE.md, section 5). When one
+stops answering, the map switches to the other once by itself — if the
+other answers — and then says *The street map isn’t loading*; with a
+provider of the campaign's own there is no second one to switch to. The
+service worker keeps both free providers' tiles as they are looked at
+(never ahead). Before election week, either:
 
 - **Google Maps:** `GOOGLE_MAPS_TILES=1` with `GOOGLE_MAPS_SERVER_KEY` (Map
   Tiles API enabled, above); `GOOGLE_MAPS_TILE_TYPE` roadmap | satellite |

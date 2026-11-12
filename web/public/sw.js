@@ -5,14 +5,20 @@
  *               the cached index.html; hashed assets are cache-first. On
  *               install, and whenever a newer index.html arrives, the whole
  *               build graph is fetched so lazy screens (Map, People…) open
- *               offline too, and files from older builds are dropped.
+ *               offline too. The files of the build before stay one more day
+ *               (a tab opened before a deploy can still open its screens),
+ *               then go. A kept page is only ever a stand-in for the
+ *               network's: the newest one kept, never an older one.
  *   Map tiles   Tiles you've already looked at, in their own capped cache
  *               (~1500 tiles, oldest out first), so a turf seen with signal
- *               still draws offline. OpenStreetMap by default; the map tells
- *               this worker its provider (GET /api/map/config →
- *               postMessage { type: 'starbase:tiles', url }), kept across
- *               restarts. Only tiles the map itself asked for are kept —
- *               nothing is ever fetched ahead (tile servers' usage rules).
+ *               still draws offline. OpenStreetMap's and CARTO's (the Clean
+ *               look) always; the map tells this worker any other provider
+ *               (GET /api/map/config → postMessage { type: 'starbase:tiles',
+ *               url }), kept across restarts. Only tiles the map itself
+ *               asked for are kept — nothing is ever fetched ahead (tile
+ *               servers' usage rules).
+ *               A tile that can't be fetched and was never kept is a failed
+ *               tile, as it is without this worker (the map counts them).
  *   Never       /api/* (live data and every write — the outbox in
  *               src/offline.js handles knocks), public form pages
  *               (/p /n /v /u /e /d), feature pages served to people
@@ -49,11 +55,19 @@ const TILE_TIMEOUT_MS = 5000;
 const TILE_MAX = 1500;
 const TILE_FRESH_MS = 7 * 24 * 3600 * 1000; // re-check a cached tile after a week
 const TILE_AT = 'x-starbase-cached-at';
+// When each file stopped being part of the build (path → ms), and how long
+// it stays after that.
+const OLD_FILES_KEY = '/__starbase/old-files';
+const OLD_KEEP_MS = 24 * 3600 * 1000;
 
 // The server's own pages (unsubscribe, receipts, public lessons, tracking,
 // pictures): straight to the network, never the app shell.
 const NEVER = /^\/(?:api|u|bu|r|lu|o|c|join|media|learn|learn-files)(?:\/|$)/;
-const isTileHost = (host) => host === 'tile.openstreetmap.org' || host.endsWith('.tile.openstreetmap.org');
+// OpenStreetMap's tiles and CARTO's (the map's Clean look, the one it opens
+// on): kept from the first tile, without waiting for the map to say which it
+// draws — a worker just installed hears that a moment after its first tiles.
+const isTileHost = (host) => host === 'tile.openstreetmap.org' || host.endsWith('.tile.openstreetmap.org')
+  || host === 'basemaps.cartocdn.com' || host.endsWith('.basemaps.cartocdn.com');
 
 // The configured provider, from a template like
 // https://{s}.tiles.example/streets/{z}/{x}/{y}.png?key=… → its host ({s} any
@@ -67,13 +81,16 @@ const matcherFor = (template) => {
   return { host, path: m[2] };
 };
 let tileMatcher; // undefined: not read yet; null: OpenStreetMap only
+// (What the map says while the note is being read wins: the note may be
+// older, or not written yet.)
 const loadMatcher = () => {
   if (tileMatcher !== undefined) return Promise.resolve(tileMatcher);
+  const read = (m) => { if (tileMatcher === undefined) tileMatcher = m; return tileMatcher; };
   return caches.open(META)
     .then((c) => c.match(TILE_CONFIG_KEY))
     .then((r) => (r ? r.json() : null))
-    .then((cfg) => { tileMatcher = cfg?.url ? matcherFor(cfg.url) : null; return tileMatcher; })
-    .catch(() => { tileMatcher = null; return null; });
+    .then((cfg) => read(cfg?.url ? matcherFor(cfg.url) : null))
+    .catch(() => read(null));
 };
 const isConfiguredTile = (url, m) => Boolean(m && m.host.test(url.hostname) && url.pathname.startsWith(m.path));
 
@@ -123,6 +140,11 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(req.url);
 
   if (isTileHost(url.hostname)) {
+    // (The map asking whether the provider answers at all asks from a
+    // script, not as a picture, and with no-store: the network's answer,
+    // never a tile kept here. Either says so: a browser whose cache is
+    // switched off — developer tools — hands this worker 'reload' instead.)
+    if (req.cache === 'no-store' || req.destination === '') return;
     event.respondWith(tile(event, url));
     return;
   }
@@ -177,9 +199,11 @@ async function navigate(event) {
   if (!cached) return network.catch(() => offlinePage());
   // Network first, but don't leave a volunteer on a blank screen in a dead
   // zone, and don't show a server error page when the app itself is cached.
+  // Out of time: the page kept by now — a newer one may have arrived for
+  // another tab (or an earlier try) while this one waited.
   return Promise.race([
     network.then((res) => (res.status >= 500 ? cached : res), () => cached),
-    delay(NAV_TIMEOUT_MS).then(() => cached),
+    delay(NAV_TIMEOUT_MS).then(() => shell.match(INDEX)).then((newest) => newest || cached, () => cached),
   ]);
 }
 
@@ -210,7 +234,8 @@ async function adoptIndex(res, previous) {
   const html = await res.clone().text();
   if (previous) {
     const old = await previous.clone().text().catch(() => '');
-    if (old === html) return; // same build — nothing to do
+    // Same build: nothing to fetch — only files whose extra day is up go.
+    if (old === html) { await retireOld(null); return; }
   }
   const shell = await caches.open(SHELL);
   await shell.put(INDEX, res);
@@ -252,13 +277,32 @@ async function syncAssets(html) {
       for (const ref of refsIn(text, true)) if (!want.has(ref)) queue.push(ref);
     }
   }
-  // Drop files from older builds — but only once the new build is fully in,
+  // Files from older builds go — but only once the new build is fully in,
   // so a failed sync never leaves the app with nothing.
-  if (!complete) return;
-  const keys = await cache.keys();
-  await Promise.all(keys
-    .filter((k) => !want.has(new URL(k.url).pathname))
-    .map((k) => cache.delete(k)));
+  if (complete) await retireOld(want);
+}
+
+// A file that is no longer part of the build stays one more day — a tab
+// opened before a deploy still finds the screens it has not opened yet —
+// and then goes. want: the build's own files (a new build has just come
+// in), or null to only let go of the ones whose day is up.
+async function retireOld(want) {
+  try {
+    const meta = await caches.open(META);
+    const since = await meta.match(OLD_FILES_KEY).then((r) => (r ? r.json() : {})).catch(() => ({}));
+    if (!want && !Object.keys(since).length) return;
+    const cache = await caches.open(ASSETS);
+    const now = Date.now();
+    const still = {};
+    for (const k of await cache.keys()) {
+      const path = new URL(k.url).pathname;
+      if (want ? want.has(path) : !(path in since)) continue;
+      const at = Number(since[path]) || now;
+      if (now - at > OLD_KEEP_MS) await cache.delete(k);
+      else still[path] = at;
+    }
+    await meta.put(OLD_FILES_KEY, new Response(JSON.stringify(still), { headers: { 'content-type': 'application/json' } }));
+  } catch { /* a closed cache or no room: tried again with the next page */ }
 }
 
 function offlinePage() {
@@ -295,10 +339,13 @@ async function tile(event, url, own = false) {
   if (res) return res; // the tile server's own answer (404 past the edge, 429…)
   // No CORS answer and nothing cached: try the plain request once, so a tile
   // server without CORS headers still draws online (it just isn't kept).
+  // No answer that way either is a failed tile, and is handed on as one: the
+  // map counts them and says when the street map isn't loading (a blank
+  // square in its place read as a tile that had come).
   try {
     return await fetch(event.request);
   } catch {
-    return blankTile();
+    return Response.error();
   }
 }
 
@@ -330,13 +377,6 @@ async function trimTiles(cache) {
   const extra = keys.length - TILE_MAX;
   if (extra <= 0) return;
   await Promise.all(keys.slice(0, extra).map((k) => cache.delete(k)));
-}
-
-// Paper-coloured stand-in for a street we've never loaded: pins still sit on
-// it, and it isn't a broken image.
-function blankTile() {
-  const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><rect width="256" height="256" fill="#e8ebf3"/><path d="M0 .5H256M.5 0V256" stroke="#d3d8e6" stroke-width="1"/></svg>';
-  return new Response(svg, { status: 200, headers: { 'content-type': 'image/svg+xml', 'cache-control': 'no-store' } });
 }
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));

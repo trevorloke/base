@@ -1,6 +1,7 @@
 // Thin fetch layer over the v2 API. Cookie session auth; money is always
 // integer cents on the wire and dollars on screen.
 import { NS, at } from './base.js';
+import { sawServerBuild } from './build.js';
 
 export class ApiError extends Error {
   constructor(status, message, body = {}) {
@@ -16,6 +17,9 @@ export class ApiError extends Error {
 export const TWO_STEP_EVENT = 'basewin:two-step-set-up';
 
 async function handle(res) {
+  // Which web build the server hands out now: a page from before a deploy
+  // learns here that it is the older one (build.js).
+  sawServerBuild(res.headers.get('X-Build'));
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
     if (res.status === 401 && body.two_step === 'set_up' && typeof window !== 'undefined') window.dispatchEvent(new Event(TWO_STEP_EVENT));

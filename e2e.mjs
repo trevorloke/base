@@ -18,7 +18,8 @@ const check = (name, ok, extra = '') => {
 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// OSM tiles are unreachable from the test sandbox; serve a stylized street
+// The tile hosts (OpenStreetMap's, and CARTO's for the Clean look the map
+// opens on) are unreachable from the test sandbox; serve a stylized street
 // grid so screenshots read as a map. Real deployments load real tiles.
 const tileSvg = (z, x, y) => {
   const lines = [];
@@ -33,12 +34,16 @@ const tileSvg = (z, x, y) => {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><rect width="256" height="256" fill="#e7e3d6"/>${lines.join('')}</svg>`;
 };
 
+// The stand-in tiles also answer what the service worker fetches (once it
+// controls the page, every tile goes through it): a tile it can't fetch is a
+// failed tile now, and the map says when its street map isn't loading.
+process.env.PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS = '1';
 const browser = await chromium.launch({
   executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
   args: ['--no-sandbox', '--disable-dev-shm-usage'],
 });
 const ctx = await browser.newContext({ viewport: { width: 1360, height: 900 }, timezoneId: 'America/Vancouver' });
-await ctx.route(/tile\.openstreetmap\.org\/(\d+)\/(\d+)\/(\d+)\.png/, (route) => {
+await ctx.route(/(?:tile\.openstreetmap\.org|basemaps\.cartocdn\.com\/light_all)\/(\d+)\/(\d+)\/(\d+)\.png/, (route) => {
   const [, z, x, y] = route.request().url().match(/\/(\d+)\/(\d+)\/(\d+)\.png/);
   route.fulfill({ status: 200, contentType: 'image/svg+xml', body: tileSvg(+z, +x, +y) });
 });
@@ -336,7 +341,7 @@ await shot('9-today');
 
 // ── 9. Volunteer view: field yes, money no ──
 const vctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, timezoneId: 'America/Vancouver' });
-await vctx.route(/tile\.openstreetmap\.org/, (route) => {
+await vctx.route(/tile\.openstreetmap\.org|basemaps\.cartocdn\.com/, (route) => {
   const [, z, x, y] = route.request().url().match(/\/(\d+)\/(\d+)\/(\d+)\.png/);
   route.fulfill({ status: 200, contentType: 'image/svg+xml', body: tileSvg(+z, +x, +y) });
 });

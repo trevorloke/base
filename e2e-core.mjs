@@ -46,8 +46,12 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const tag = Math.random().toString(36).slice(2, 8);
 
 const tileSvg = () => '<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><rect width="256" height="256" fill="#e7e3d6"/></svg>';
-const routeTiles = (c) => c.route(/tile\.openstreetmap\.org/, (route) => route.fulfill({ status: 200, contentType: 'image/svg+xml', body: tileSvg() }));
+const routeTiles = (c) => c.route(/tile\.openstreetmap\.org|basemaps\.cartocdn\.com/, (route) => route.fulfill({ status: 200, contentType: 'image/svg+xml', body: tileSvg() }));
 
+// The stand-in tiles also answer what the service worker fetches (once it
+// controls the page, every tile goes through it): a tile it can't fetch is a
+// failed tile now, and the map says when its street map isn't loading.
+process.env.PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS = '1';
 const browser = await chromium.launch({
   executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
   args: ['--no-sandbox', '--disable-dev-shm-usage'],

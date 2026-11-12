@@ -37,11 +37,15 @@ const tileSvg = (z, x, y) => {
   }
   return `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><rect width="256" height="256" fill="#e7e3d6"/>${lines.join('')}</svg>`;
 };
-const tiles = (ctx) => ctx.route(/tile\.openstreetmap\.org\/(\d+)\/(\d+)\/(\d+)\.png/, (route) => {
+const tiles = (ctx) => ctx.route(/(?:tile\.openstreetmap\.org|basemaps\.cartocdn\.com\/light_all)\/(\d+)\/(\d+)\/(\d+)\.png/, (route) => {
   const [, z, x, y] = route.request().url().match(/\/(\d+)\/(\d+)\/(\d+)\.png/);
   route.fulfill({ status: 200, contentType: 'image/svg+xml', headers: { 'access-control-allow-origin': '*' }, body: tileSvg(+z, +x, +y) });
 });
 
+// The stand-in tiles also answer what the service worker fetches (once it
+// controls the page, every tile goes through it): a tile it can't fetch is a
+// failed tile now, and the map says when its street map isn't loading.
+process.env.PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS = '1';
 const browser = await chromium.launch({
   executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
   args: ['--no-sandbox', '--disable-dev-shm-usage'],
