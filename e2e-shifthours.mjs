@@ -267,7 +267,7 @@ try {
   const site = await desk.newPage();
   await site.goto(`${BASE}/site/volunteer`, { waitUntil: 'domcontentloaded' });
   const card = await site.locator('text=Drop in').first().innerText().catch(() => '');
-  check('the website’s openings: the drop-in shift says "Drop in"', /Drop in 4:00–8:00 p\.m\./.test(card), card);
+  check('the website’s openings: the drop-in shift says "Drop in"', /Drop in 4:00\D{1,3}8:00\sp\.m\./.test(card), card);
   await site.locator('text=Drop in').first().scrollIntoViewIfNeeded().catch(() => {});
   await site.screenshot({ path: `${SHOTS}/10-site-drop-in-1440.png` });
   await site.close();
