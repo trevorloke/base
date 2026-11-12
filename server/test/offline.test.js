@@ -213,3 +213,35 @@ test('a mistyped STARBASE_TILE_* is shown to desk roles, not only logged', async
   assert.equal(tileSource('https://a.tiles.example:8443/{z}/{x}/{y}.png'), 'a.tiles.example');
   setEnv({ STARBASE_TILE_URL: null });
 });
+
+test('STARBASE_TILE_PROVIDER=stadia: Stadia Maps’ address, credit and zoom in one setting; the address beats it; an unknown one is said', () => {
+  const stadia = tileConfig({ STARBASE_TILE_PROVIDER: ' Stadia ' });
+  assert.equal(stadia.url, 'https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png');
+  assert.match(stadia.attribution, /Stadia Maps.*OpenMapTiles.*OpenStreetMap/);
+  assert.equal(stadia.maxZoom, 20);
+  assert.deepEqual(stadia.ignored, []);
+  assert.equal(tileSource(stadia.url), 'Stadia Maps');
+  // A key, where the provider can't be told the campaign's own address.
+  const keyed = tileConfig({ STARBASE_TILE_PROVIDER: 'stadia', STARBASE_TILE_KEY: 'stadia-key ' });
+  assert.equal(keyed.url, 'https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png?api_key=stadia-key');
+  assert.match(keyed.attribution, /Stadia Maps/);
+  // STARBASE_TILE_URL wins over the preset.
+  const own = tileConfig({ STARBASE_TILE_PROVIDER: 'stadia', STARBASE_TILE_URL: 'https://tiles.example/{z}/{x}/{y}.png' });
+  assert.deepEqual([own.url, own.attribution, own.maxZoom], ['https://tiles.example/{z}/{x}/{y}.png', '', 19]);
+  const unknown = tileConfig({ STARBASE_TILE_PROVIDER: 'mapbox' });
+  assert.deepEqual([unknown.url, unknown.ignored], [TILE_DEFAULTS.url, ['provider']]);
+  assert.equal(tileSource('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'), 'CARTO');
+});
+
+test('a provider of the campaign’s own (the preset or an address) offers no free map and no Clean', async () => {
+  setEnv({ STARBASE_TILE_PROVIDER: 'stadia', STARBASE_TILE_URL: null });
+  const pre = (await vol.get('/api/map/config')).json;
+  assert.match(pre.tiles.url, /stadiamaps/);
+  assert.equal(pre.views, undefined, 'no fallback for a direct provider');
+  setEnv({ STARBASE_TILE_PROVIDER: null, STARBASE_TILE_URL: 'https://tiles.example/{z}/{x}/{y}.png' });
+  assert.equal((await vol.get('/api/map/config')).json.views, undefined);
+  // The credit line is every role's (with Google off: the provider's own).
+  const credit = await vol.get('/api/map/credit?z=12&n=49.2&s=49.1&e=-122.8&w=-122.9');
+  assert.deepEqual([credit.status, credit.json.text], [200, '']);
+  setEnv({ STARBASE_TILE_URL: null });
+});

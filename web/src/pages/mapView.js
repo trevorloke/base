@@ -243,6 +243,36 @@ export const streetMove = ({ down, onAuto, other, asked, switched }) => {
   return 'try-again';
 };
 
+// Where a tile address points, in a word a person (or a screenshot) can
+// read: its host — never the whole address, which may carry a key. '' for
+// the server's own tiles (Google's, through the server).
+export const tileHost = (url) => {
+  try { return /^https?:/i.test(url || '') ? new URL(url.replace(/\{s\}\./g, '').replace(/\{[^}]*\}/g, 'x')).hostname : ''; } catch { return ''; }
+};
+
+// Which provider look is drawn, and which one the map turns to when its
+// street map isn't loading (Map.jsx), from:
+//   views     /api/map/config's looks; one may be a fallback (with Google
+//             on: the free map, for while Google isn't answering)
+//   viewPick  the person's saved pick ('clean' on nearly every phone)
+//   drawnAuto the look the map went to by itself, or null
+//   baseUrl   the campaign's standard tiles; muted: the Muted look
+// A fallback is never a pick (nor found from one, nor offered in Show →
+// Map): it is drawn only when the map went there by itself, and it is the
+// first look turned to — Google's own looks share its server, so they are
+// no way round it failing.
+// → { providerView, otherLook }
+export const pickLook = ({ views = [], viewPick, drawnAuto = null, baseUrl = null, muted = null }) => {
+  const look = drawnAuto || viewPick;
+  const providerView = views.find((v) => v.key === look && (!v.fallback || v.key === drawnAuto)) || null;
+  const fallback = views.find((v) => v.fallback) || null;
+  if (fallback && providerView !== fallback) return { providerView, otherLook: fallback };
+  const here = tileHost(providerView ? providerView.url : baseUrl);
+  if (!here || !baseUrl) return { providerView, otherLook: null };
+  if (providerView) return { providerView, otherLook: tileHost(baseUrl) && tileHost(baseUrl) !== here ? muted : null };
+  return { providerView, otherLook: views.find((v) => !v.fallback && tileHost(v.url) && tileHost(v.url) !== here) || null };
+};
+
 // "3:40 pm", on the reader's own clock: when a paused placing run tries
 // again (always a time of day — it may be after midnight).
 export const timeOfDay = (iso) => {
@@ -283,10 +313,38 @@ export const placingPoll = (st, now = Date.now()) => {
 //   page  { build, look, tilesFrom, tiles: { loaded, failed, down }, size: { x, y }, zoom }
 //         tilesFrom: the host the street map's tiles come from ('' for the
 //         server's own) — said by the provider's name where it has one
+//   services  GET /api/map/check/services, asked apart (it waits on Google):
+//         { state: 'pending' | 'error' | 'offline' | 'ok', data } — or
+//         undefined: no service lines
 //   → [{ key, label, value, note, warn }]
 const enCA = (n) => Number(n || 0).toLocaleString('en-CA');
-const PROVIDER = { 'basemaps.cartocdn.com': 'CARTO', 'tile.openstreetmap.org': 'OpenStreetMap' };
-export const checkLines = (c, page, { num = enCA, clock = (iso) => iso, now = Date.now() } = {}) => {
+const PROVIDER = { 'basemaps.cartocdn.com': 'CARTO', 'tile.openstreetmap.org': 'OpenStreetMap', 'tiles.stadiamaps.com': 'Stadia Maps' };
+// A service's trouble, as the note under its line: the plain words, then
+// Google's own (shown as text, never markup), then the setup step.
+const troubleNote = (p) => [p.plain, p.said ? `Google said: “${p.said}”` : null, p.fix ? `See Going live §5, ${p.fix}.` : null].filter(Boolean).join('\n');
+const HOUR = 3_600_000;
+const serviceLines = (services, clock, now) => {
+  const waiting = { pending: 'Checking…', error: 'Unavailable — Try again', offline: 'No signal — the check needs it' }[services.state];
+  if (waiting) return [['tilesvc', 'Street map service', waiting, {}], ['lookupsvc', 'Address lookup', waiting, {}]];
+  const { tiles: t, lookup: l } = services.data;
+  let tiles;
+  if (!t.viaServer) tiles = [`${t.provider} · straight to the phones`, {}];
+  else if (!t.probe?.ok) tiles = [`Not working · ${t.provider}`, { note: t.probe ? troubleNote(t.probe) : null, warn: true }];
+  else {
+    const at = t.last ? Date.parse(t.last.at) : NaN;
+    tiles = [`Working · ${t.provider}`, { note: now - at < HOUR ? `Failed at ${clock(t.last.at)}: ${t.last.plain}` : null }];
+  }
+  let lookup;
+  if (l.provider === 'off') lookup = ['Turned off', {}];
+  else if (l.probe?.ok) lookup = [`Working · ${l.provider}`, {}];
+  else lookup = [`Not working · ${l.provider}`, { note: l.probe ? troubleNote(l.probe) : null, warn: true }];
+  return [['tilesvc', 'Street map service', ...tiles], ['lookupsvc', 'Address lookup', ...lookup]];
+};
+// The placing run's last error, in plain words ("geocoder billing: Billing
+// isn’t turned on…" → "Billing isn’t turned on…"; a bare "geocoder 403" stays).
+const plainError = (e) => String(e).replace(/^geocoder (?:\d+ )?[a-z-]+: (?=\S)/, '');
+
+export const checkLines = (c, page, { num = enCA, clock = (iso) => iso, now = Date.now(), services } = {}) => {
   const p = c.people;
   const g = c.placing;
   const lines = [];
@@ -306,7 +364,7 @@ export const checkLines = (c, page, { num = enCA, clock = (iso) => iso, now = Da
   else if (g.state === 'paused') {
     // When it tries again by itself — or, long past that time, that it didn't
     // (and with no job runner on this server, nothing will).
-    const why = `Address lookup isn’t answering${g.lastError ? ` (${g.lastError})` : ''}`;
+    const why = `Address lookup isn’t answering${g.lastError ? ` (${plainError(g.lastError)})` : ''}`;
     if (!g.jobs) run = ['Paused', { note: `${why} — background jobs are off on this server; “Look up addresses” works while its page stays open`, warn: true }];
     else if (g.retryAt && retryLate(g.retryAt, now)) run = [`Paused — was due to try again at ${clock(g.retryAt)}`, { note: `${why} — its try didn’t run: tap “Not on map”, then “Try now”`, warn: true }];
     else run = [`Paused${g.retryAt ? ` — tries again at ${clock(g.retryAt)}` : ''}`, { note: why, warn: true }];
@@ -328,6 +386,7 @@ export const checkLines = (c, page, { num = enCA, clock = (iso) => iso, now = Da
   add('tiles', 'Street map', `${from} — ${t.down ? 'isn’t loading: ' : ''}${num(t.loaded)} loaded, ${num(t.failed)} failed`, {
     note: (c.tiles.ignored || []).includes('url') ? 'The street map address set on the server was ignored' : null, warn: t.down,
   });
+  if (services) for (const [key, label, value, o] of serviceLines(services, clock, now)) add(key, label, value, o);
 
   const known = Boolean(page.build && c.build);
   add('build', 'This page', !known ? 'Not compared' : page.build === c.build ? 'Up to date' : 'Older than the server — reload it', {

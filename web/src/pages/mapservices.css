@@ -1,0 +1,6 @@
+/* The map check's service lines (MapCheck.jsx): a note may run to three
+   lines — the plain words, what Google said, the setup step. */
+.map-check__row dd.map-check__note { white-space: pre-line; overflow-wrap: anywhere; }
+/* "Why?" on the line that says the map switched by itself: that line takes
+   no tap (the map under it still drags), its button does. */
+.map-tilenote--done .map-tilenote__why { pointer-events: auto; }

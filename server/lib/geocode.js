@@ -8,11 +8,26 @@
 //   BC_GEOCODER_URL   base URL (default the official service; set for a self-hosted mirror)
 //   GEOCODE_MIN_SCORE minimum BC match score to accept (default 75)
 //   GOOGLE_MAPS_SERVER_KEY  a Google Cloud key with the Geocoding API enabled
-//                     (restrict it to that API and the server's IP — not the
-//                     browser key). Lookups are biased to the campaign's box and only a
+//                     (API restriction: Geocoding (+ Map Tiles); application
+//                     restriction: None — not a Websites key, and not an IP
+//                     on Render, whose outgoing addresses are shared and
+//                     change). Lookups are biased to the campaign's box and only a
 //                     rooftop or street-number match counts as a door.
+// When Google refuses, its own words are kept with plain ones beside them
+// (lib/googleerr.js): `geocoder <code>: <plain> · Google said: <said>`.
 
 import { city as defaultCity, province, geoBounds } from './org.js';
+import { googleKey } from './gtiles.js';
+import { googleTrouble } from './googleerr.js';
+
+// Google said no: plain words, its own words, and the step that fixes it
+// (`trouble`, for the Services check). Quota keeps "429" in the words, which
+// the placing run reads as "busy" and backs off.
+const googleRefused = (status, body) => {
+  const t = googleTrouble(status, body);
+  const code = t.code === 'quota' ? '429 quota' : t.code;
+  return { error: `geocoder ${code}: ${t.plain}${t.said ? ` · Google said: ${t.said}` : ''}`, trouble: t };
+};
 
 const formatAddress = ({ address, unit, city, postal }) => {
   const street = [unit ? `${unit} -` : null, address].filter(Boolean).join(' ');
@@ -44,7 +59,7 @@ const bc = async (q) => {
 // Results are biased to the campaign's box (STARBASE_GEO_BOUNDS) and limited
 // to Canada and the province.
 const google = async (q) => {
-  const key = process.env.GOOGLE_MAPS_SERVER_KEY;
+  const key = googleKey();
   if (!key) return { error: 'GOOGLE_MAPS_SERVER_KEY is not set' };
   const url = new URL('https://maps.googleapis.com/maps/api/geocode/json');
   url.searchParams.set('address', q);
@@ -53,12 +68,11 @@ const google = async (q) => {
   url.searchParams.set('bounds', geoBounds());
   url.searchParams.set('key', key);
   const res = await fetch(url);
-  if (!res.ok) return { error: `geocoder ${res.status}` };
+  if (!res.ok) return googleRefused(res.status, await res.text().catch(() => ''));
   const body = await res.json();
   if (body.status === 'ZERO_RESULTS') return null;
   // OVER_QUERY_LIMIT reads as "busy" to the background run, which then backs off.
-  if (body.status === 'OVER_QUERY_LIMIT') return { error: 'geocoder 429 too many requests (Google quota)' };
-  if (body.status !== 'OK') return { error: `geocoder ${body.status}${body.error_message ? `: ${String(body.error_message).slice(0, 120)}` : ''}` };
+  if (body.status !== 'OK') return googleRefused(res.status, body);
   const hit = body.results?.[0];
   if (!hit) return null;
   const loc = hit.geometry?.location;
@@ -138,7 +152,7 @@ const bcSuggest = async (q, limit) => {
   url.searchParams.set('bbox', `${box.w},${box.s},${box.e},${box.n}`);
   const headers = process.env.BC_GEOCODER_KEY ? { apikey: process.env.BC_GEOCODER_KEY } : {};
   const res = await fetch(url, { headers });
-  if (!res.ok) return { error: `geocoder ${res.status}` };
+  if (!res.ok) return { error: `geocoder ${res.status}`, status: res.status };
   const body = await res.json();
   return (body?.features || [])
     .filter((f) => f?.properties?.matchPrecision === 'CIVIC_NUMBER' && clean(f.properties.civicNumber))
@@ -159,7 +173,7 @@ const bcSuggest = async (q, limit) => {
 };
 
 const googleSuggest = async (q) => {
-  const key = process.env.GOOGLE_MAPS_SERVER_KEY;
+  const key = googleKey();
   if (!key) return { error: 'GOOGLE_MAPS_SERVER_KEY is not set' };
   const url = new URL('https://maps.googleapis.com/maps/api/geocode/json');
   url.searchParams.set('address', q);
@@ -168,10 +182,10 @@ const googleSuggest = async (q) => {
   url.searchParams.set('bounds', geoBounds());
   url.searchParams.set('key', key);
   const res = await fetch(url);
-  if (!res.ok) return { error: `geocoder ${res.status}` };
+  if (!res.ok) return googleRefused(res.status, await res.text().catch(() => ''));
   const body = await res.json();
   if (body.status === 'ZERO_RESULTS') return [];
-  if (body.status !== 'OK') return { error: `geocoder ${body.status}` };
+  if (body.status !== 'OK') return googleRefused(res.status, body);
   const part = (hit, type) => hit.address_components?.find((c) => c.types?.includes(type))?.long_name || '';
   return (body.results || [])
     .filter((hit) => (hit.types || []).some((t) => ['street_address', 'premise', 'subpremise'].includes(t)) && part(hit, 'street_number'))
@@ -277,3 +291,38 @@ export const suggestAddresses = async (q, { limit = 5 } = {}) => {
     return { error: String(e.message).slice(0, 200) };
   }
 };
+
+// ── One live check (Settings → Services; the Map check) ──
+// Asks for "100" as someone typing would. → { ok, provider, code, plain,
+// said, fix, example }: Google's own words when it refuses, or the B.C.
+// service's state in plain words. Cached 30 s per server, so repeated
+// Checks spend one call at most every 30 s.
+const LOOKUP_MS = 8000;
+let looked = null; // { at, result } | { at, pending }
+const lookupOnce = async () => {
+  const provider = (process.env.GEOCODER || 'bc').toLowerCase();
+  if (provider === 'off') return { ok: false, provider, code: 'off', plain: 'Turned off (GEOCODER=off)', said: '', fix: null };
+  let timer;
+  const r = await Promise.race([
+    suggestAddresses('100', { limit: 3 }),
+    new Promise((resolve) => { timer = setTimeout(() => resolve({ error: 'no answer in 8 s', slow: true }), LOOKUP_MS); }),
+  ]).finally(() => clearTimeout(timer));
+  if (Array.isArray(r)) return { ok: true, provider, code: null, plain: 'Answering', said: '', fix: null, example: r[0]?.label || null };
+  if (r.trouble) return { ok: false, provider, code: r.trouble.code, plain: r.trouble.plain, said: r.trouble.said, fix: r.trouble.step };
+  if (provider === 'bc' || !SUGGESTERS[provider]) {
+    const plain = r.status === 429 ? 'The B.C. address service is busy. It tries again by itself; a BC_GEOCODER_KEY raises the limit.'
+      : !r.status || r.status >= 500 ? 'The B.C. address service isn’t answering.'
+        : `The B.C. address service refused (${r.status}).`;
+    return { ok: false, provider, code: r.status === 429 ? 'busy' : 'no-answer', plain, said: '', fix: null };
+  }
+  return { ok: false, provider, code: 'no-answer', plain: `The address service didn’t answer: ${r.error}`, said: '', fix: null };
+};
+export const probeLookup = async () => {
+  if (looked && Date.now() - looked.at < 30_000) return looked.result ?? looked.pending;
+  const pending = lookupOnce();
+  looked = { at: Date.now(), pending };
+  const result = await pending;
+  if (looked?.pending === pending) looked = { at: looked.at, result };
+  return result;
+};
+export const _resetLookupForTest = () => { looked = null; };

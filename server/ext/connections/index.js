@@ -15,7 +15,9 @@
 //
 // Keys and tokens are never in an answer: only which settings are present.
 import { Hono } from 'hono';
-import { suggestAddresses } from '../../lib/geocode.js';
+import { probeLookup } from '../../lib/geocode.js';
+import { googleKey, googleTilesSetting, mapType, probeTiles } from '../../lib/gtiles.js';
+import { tileConfig, tileSource } from '../offline/index.js';
 import { jobRunnerOn } from '../../lib/jobs.js';
 import { KEY_ENV, KEY_MIN, keyStatus } from '../../lib/twostep.js';
 import { basePath } from '../../lib/mount.js';
@@ -50,7 +52,34 @@ const numberKind = (number) => {
   if (/^1?[2-9]\d{9}$/.test(digits)) return ' · a local number — for a text to a list in Canada, Twilio asks for a verified toll-free number or a short code';
   return '';
 };
-const googleTiles = () => env('GOOGLE_MAPS_TILES') === '1';
+// One reading of GOOGLE_MAPS_TILES, the same as the map's (lib/gtiles.js).
+const googleTiles = () => googleTilesSetting() === 'on';
+// A failed check: what went wrong in plain words, then Google's own words and
+// the setup step that fixes it (GOING-LIVE.md §5) — said apart, as a todo.
+const refusedBy = (r) => {
+  const todo = [r.said ? `Google said: ${r.said}` : '', r.fix ? `see Going live §5, ${r.fix}` : ''].filter(Boolean).join(' · ');
+  return { ok: false, said: r.plain, ...(todo ? { todo } : {}) };
+};
+
+// The map's own reading of its settings (offline's tileConfig), so this row
+// and the map never disagree about where the tiles come from.
+const freeTiles = () => {
+  const cfg = tileConfig();
+  return { cfg, source: tileSource(cfg.url) };
+};
+const freeTilesRow = () => {
+  const { cfg, source } = freeTiles();
+  const own = source !== 'OpenStreetMap';
+  const why = googleTilesSetting() === 'unknown' ? `GOOGLE_MAPS_TILES=${env('GOOGLE_MAPS_TILES').slice(0, 40)} isn’t understood — use 1`
+    : cfg.ignored.includes('provider') ? `STARBASE_TILE_PROVIDER=${env('STARBASE_TILE_PROVIDER').toLowerCase().slice(0, 40)} isn’t known — use stadia`
+      : cfg.ignored.includes('url') ? 'STARBASE_TILE_URL needs http(s) and {z}/{x}/{y}' : '';
+  return row('tiles', `Map background (${source})`, 'The map volunteers walk', false, [], {
+    detail: why ? `${why} · ${source} meanwhile`
+      : own ? `${source}, straight to the phones`
+        : 'OpenStreetMap’s free tiles — not for a large team in election week (see Going live §5)',
+    state: why ? 'missing' : own ? 'ready' : 'default',
+  });
+};
 
 const row = (key, name, purpose, launch, needs, extra = {}) => {
   const missing = needs.filter((k) => !has(k));
@@ -81,16 +110,13 @@ export const services = (base = publicUrl()) => {
         detail: geo === 'off' ? 'Turned off (GEOCODER=off): pins by hand only'
           : geo === 'bc' ? `Free, no key needed${has('BC_GEOCODER_KEY') ? ' · key set for higher limits' : ''}${env('GEOCODER_FALLBACK') ? ` · then ${env('GEOCODER_FALLBACK')} for what it can’t place` : ''}`
             : geo === 'nominatim' ? 'Free, no key; light use only' : 'Google Cloud key with the Geocoding API',
-        state: geo === 'off' ? 'missing' : (geo === 'google' && !has('GOOGLE_MAPS_SERVER_KEY')) ? 'missing' : 'ready',
+        state: geo === 'off' ? 'missing' : (geo === 'google' && !googleKey()) ? 'missing' : 'ready',
         ...(geo === 'off' ? { missing: ['GEOCODER'] } : {}),
       }),
-    row('tiles', googleTiles() ? 'Map background (Google Map Tiles)' : 'Map background (OpenStreetMap)', 'The map volunteers walk', false,
-      googleTiles() ? ['GOOGLE_MAPS_SERVER_KEY'] : [], {
-        detail: googleTiles() ? `Google ${env('GOOGLE_MAPS_TILE_TYPE') || 'roadmap'} tiles, through this server`
-          : has('STARBASE_TILE_URL') ? `Tiles from ${env('STARBASE_TILE_URL').replace(/^https?:\/\//, '').split('/')[0]}`
-            : 'OpenStreetMap’s free tiles — not for a large team in election week (GOOGLE_MAPS_TILES=1 or STARBASE_TILE_URL)',
-        state: googleTiles() ? (has('GOOGLE_MAPS_SERVER_KEY') ? 'ready' : 'missing') : has('STARBASE_TILE_URL') ? 'ready' : 'default',
-      }),
+    googleTiles() ? row('tiles', 'Map background (Google Map Tiles)', 'The map volunteers walk', false, ['GOOGLE_MAPS_SERVER_KEY'], {
+      detail: `Google ${mapType()} tiles, through this server`,
+      state: googleKey() ? 'ready' : 'missing',
+    }) : freeTilesRow(),
     row('jobs', 'Background work', 'Sends that go out later, ladder steps, receipts, the address run', true, [], {
       detail: jobRunnerOn() ? 'Running on this server' : 'Off on this server (STARBASE_JOBS=off — take that setting away): scheduled sends wait',
       state: jobRunnerOn() ? 'ready' : 'missing',
@@ -179,25 +205,21 @@ const CHECKS = {
     return { ok: true, said: `${env('TWILIO_FROM')} is on the account and its replies come here` };
   },
   geocoder: async () => {
-    if (provider() === 'off') return { ok: false, said: 'Turned off (GEOCODER=off)' };
-    const r = await suggestAddresses('100', { limit: 3 });
-    if (!Array.isArray(r)) return { ok: false, said: `The address service didn’t answer: ${r.error}` };
-    return { ok: true, said: `Answering${r.length ? ` · e.g. ${r[0].label}` : ''}` };
+    const r = await probeLookup();
+    if (r.ok) return { ok: true, said: `Answering${r.example ? ` · e.g. ${r.example}` : ''}` };
+    return refusedBy(r);
   },
+  // Google: one live session and tile (lib/gtiles.js), its own words when it
+  // refuses. The free maps come straight to each phone: nothing to ask here.
   tiles: async () => {
     if (!googleTiles()) {
-      const url = env('STARBASE_TILE_URL');
-      return { ok: true, said: url ? 'Tiles come straight from that host to each phone' : 'OpenStreetMap’s tiles come straight to each phone' };
+      const { source } = freeTiles();
+      // Only the free default needs the pointer to choosing a provider.
+      return { ok: true, said: `${source}${source.endsWith('s') ? '’' : '’s'} tiles come straight to each phone${source === 'OpenStreetMap' ? ' · to choose a provider, see Going live §5' : ''}` };
     }
-    if (!has('GOOGLE_MAPS_SERVER_KEY')) return { ok: false, said: 'GOOGLE_MAPS_SERVER_KEY isn’t set' };
-    const api = (env('GOOGLE_MAPS_TILES_URL') || 'https://tile.googleapis.com/v1').replace(/\/$/, '');
-    const res = await fetch(`${api}/createSession?key=${encodeURIComponent(env('GOOGLE_MAPS_SERVER_KEY'))}`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mapType: env('GOOGLE_MAPS_TILE_TYPE') || 'roadmap', language: 'en-CA', region: 'CA' }),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-    });
-    if (!res.ok) return { ok: false, said: `Google refused the tiles session (${res.status}) — is the Map Tiles API on for this key?` };
-    return { ok: true, said: 'Google Map Tiles answering' };
+    if (!googleKey()) return { ok: false, said: 'GOOGLE_MAPS_SERVER_KEY isn’t set', todo: 'see Going live §5, Recipe B step 6' };
+    const r = await probeTiles();
+    return r.ok ? { ok: true, said: 'Working · Google Map Tiles answering' } : refusedBy(r);
   },
 };
 

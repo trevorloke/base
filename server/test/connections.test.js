@@ -7,12 +7,19 @@ import { freshDb, Client } from './helpers.js';
 import { app } from '../index.js';
 import { mountAt } from '../lib/mount.js';
 import { _setResolverForTest } from '../lib/mail/dns.js';
+import { _resetForTest as resetTiles } from '../lib/gtiles.js';
+import { _resetLookupForTest } from '../lib/geocode.js';
+
+// Google's answer when the key's project has no billing (Map Tiles' shape).
+const BILLING_OFF = { error: { code: 403, status: 'PERMISSION_DENIED',
+  message: 'This API method requires billing to be enabled. Please enable billing on project #1 by visiting https://console.developers.google.com/billing/enable?project=1 then retry.',
+  details: [{ '@type': 'type.googleapis.com/google.rpc.ErrorInfo', reason: 'BILLING_DISABLED', domain: 'googleapis.com' }] } };
 
 const tag = Math.random().toString(36).slice(2, 8);
 const realFetch = globalThis.fetch;
 const saved = { ...process.env };
 const KEYS = ['RESEND_API_KEY', 'MAIL_FROM', 'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM', 'STARBASE_PUBLIC_URL',
-  'GEOCODER', 'GOOGLE_MAPS_TILES', 'GOOGLE_MAPS_SERVER_KEY', 'DATABASE_URL', 'TWILIO_VOICE', 'STARBASE_TILE_URL',
+  'GEOCODER', 'GOOGLE_MAPS_TILES', 'GOOGLE_MAPS_SERVER_KEY', 'DATABASE_URL', 'TWILIO_VOICE', 'STARBASE_TILE_URL', 'STARBASE_TILE_PROVIDER', 'STARBASE_TILE_KEY',
   'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'BASE_PATH', 'CALLHUB_API_KEY', 'CALLHUB_API_BASE'];
 let mgr, staff;
 let resendDomains = [];
@@ -44,7 +51,9 @@ before(async () => {
         civicNumber: 100, streetName: '104', streetType: 'Ave', localityName: 'Surrey', fullAddress: '100 104 Ave, Surrey, BC', matchPrecision: 'CIVIC_NUMBER' } }] }));
     }
     if (u.hostname === 'starbase.example.org') return new Response(JSON.stringify({ ok: true, service: 'starbase', env: 'production' }));
-    if (u.hostname === 'tile.googleapis.com') return new Response(JSON.stringify({ session: 's', expiry: '9999999999' }), { status: refuse ? 403 : 200 });
+    if (u.hostname === 'tile.googleapis.com') {
+      return refuse ? new Response(JSON.stringify(BILLING_OFF), { status: 403 }) : new Response(JSON.stringify({ session: 's', expiry: '9999999999' }));
+    }
     return realFetch(url, opts);
   };
   mgr = new Client();
@@ -140,15 +149,70 @@ test('the public address, the address service, the database and Google tiles ans
   assert.match((await check('database')).said, /^Answering · \d+ people on file$/);
   process.env.GOOGLE_MAPS_TILES = '1';
   assert.equal(byKey(await list()).tiles.state, 'missing');
-  process.env.GOOGLE_MAPS_SERVER_KEY = 'gkey';
-  assert.equal((await check('tiles')).ok, true);
+  // Pasted with a newline: read the same here as on the map.
+  process.env.GOOGLE_MAPS_TILES = '1\n';
+  process.env.GOOGLE_MAPS_SERVER_KEY = ' gkey\n';
+  resetTiles();
+  const toGoogle = () => seen.filter((s) => s.host === 'tile.googleapis.com').length;
+  const before = toGoogle();
+  const good = await check('tiles');
+  assert.deepEqual([good.ok, good.said], [true, 'Working · Google Map Tiles answering']);
+  assert.equal(byKey(await list()).tiles.name, 'Map background (Google Map Tiles)');
+  assert.equal(toGoogle() - before, 2, 'one session and one tile');
+  // Refused: plain words, Google's own words and the step that fixes it.
   refuse = true;
-  assert.match((await check('tiles')).said, /Google refused the tiles session \(403\)/);
+  resetTiles();
+  const bad = await check('tiles');
+  assert.equal(bad.ok, false);
+  assert.equal(bad.said, 'Billing isn’t turned on for this Google Cloud project.');
+  assert.match(bad.todo, /^Google said: This API method requires billing to be enabled\..* · see Going live §5, Recipe B step 2$/);
+  assert.match(bad.todo, /https:\/\/console\.developers\.google\.com\/billing\/enable\?project=1/);
+  assert.doesNotMatch(JSON.stringify(bad), /gkey/);
+  // Checked again within 30 s: the same answer, no second call to Google.
+  const calls = toGoogle();
   refuse = false;
+  assert.equal((await check('tiles')).ok, false);
+  assert.equal(toGoogle(), calls);
+  resetTiles();
+  process.env.GOOGLE_MAPS_TILES = 'off';
+  assert.equal(byKey(await list()).tiles.name, 'Map background (OpenStreetMap)');
+  assert.match((await check('tiles')).said, /Going live §5/);
+  process.env.GOOGLE_MAPS_TILES = '1';
   process.env.GEOCODER = 'off';
+  _resetLookupForTest();
   assert.equal(byKey(await list()).geocoder.state, 'missing');
   assert.equal((await check('geocoder')).ok, false);
+  _resetLookupForTest();
   delete process.env.GEOCODER;
+});
+
+test('the tiles row reads the map’s own setting: the Stadia preset is named, ready, and never called OpenStreetMap', async () => {
+  const google = process.env.GOOGLE_MAPS_TILES;
+  delete process.env.GOOGLE_MAPS_TILES;
+  process.env.STARBASE_TILE_PROVIDER = 'stadia';
+  process.env.STARBASE_TILE_KEY = 'stadiakey';
+  try {
+    const t = byKey(await list()).tiles;
+    assert.equal(t.name, 'Map background (Stadia Maps)');
+    assert.equal(t.state, 'ready');
+    assert.match(t.detail, /^Stadia Maps, straight to the phones/);
+    const c = await check('tiles');
+    assert.equal(c.ok, true);
+    assert.equal(c.said, 'Stadia Maps’ tiles come straight to each phone');
+    assert.doesNotMatch(JSON.stringify([t, c]), /OpenStreetMap|stadiakey/);
+    // A name the map doesn't know: said, and the free map meanwhile.
+    process.env.STARBASE_TILE_PROVIDER = 'mapbox';
+    const u = byKey(await list()).tiles;
+    assert.equal(u.state, 'missing');
+    assert.match(u.detail, /STARBASE_TILE_PROVIDER=mapbox isn’t known — use stadia/);
+    delete process.env.STARBASE_TILE_PROVIDER;
+    const d = byKey(await list()).tiles;
+    assert.deepEqual([d.name, d.state], ['Map background (OpenStreetMap)', 'default']);
+  } finally {
+    delete process.env.STARBASE_TILE_PROVIDER;
+    delete process.env.STARBASE_TILE_KEY;
+    if (google != null) process.env.GOOGLE_MAPS_TILES = google;
+  }
 });
 
 test('files in: the desk’s own address — /desk under the client’s path on base.win, /admin at a server’s root', async () => {

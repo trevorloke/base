@@ -1,7 +1,7 @@
 // lib/geocode.js: the Google provider and the fallback chain, with fetch mocked.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { geocodeAddress } from '../lib/geocode.js';
+import { geocodeAddress, suggestAddresses, probeLookup, _resetLookupForTest } from '../lib/geocode.js';
 
 const realFetch = globalThis.fetch;
 const env = { ...process.env };
@@ -95,4 +95,40 @@ test('fallback: Google is asked only for what the BC geocoder cannot place; a BC
   calls.length = 0;
   assert.match((await geocodeAddress({ address: '3 Down St' })).error, /503/);
   assert.ok(calls.every((u) => u.hostname === 'geocoder.api.gov.bc.ca'));
+});
+
+test('google refuses: plain words, Google’s own words and the step, from a lookup, a suggestion and the check', async () => {
+  process.env.GEOCODER = 'google';
+  delete process.env.GEOCODER_FALLBACK;
+  process.env.GOOGLE_MAPS_SERVER_KEY = ' server-key\n';
+  googleBody = { status: 'REQUEST_DENIED', error_message: 'API keys with referer restrictions cannot be used with this API.', results: [] };
+  calls.length = 0;
+  const words = 'geocoder referrer: This key only works from websites. The server needs a key without a website restriction. · Google said: REQUEST_DENIED: API keys with referer restrictions cannot be used with this API.';
+  assert.equal((await geocodeAddress({ address: '1 Denied St' })).error, words);
+  assert.equal(calls[0].searchParams.get('key'), 'server-key', 'the key is sent trimmed');
+  assert.equal((await suggestAddresses('100')).error, words);
+  _resetLookupForTest();
+  const p = await probeLookup();
+  assert.deepEqual({ ok: p.ok, code: p.code, fix: p.fix }, { ok: false, code: 'referrer', fix: 'Recipe B step 4' });
+  assert.match(p.said, /^REQUEST_DENIED: API keys with referer restrictions/);
+  // Quota still reads as busy to the placing run (it backs off).
+  googleBody = { status: 'OVER_QUERY_LIMIT', error_message: 'You have exceeded your daily request quota for this API.', results: [] };
+  assert.match((await geocodeAddress({ address: '1 Busy St' })).error, /^geocoder 429 quota: Google’s usage limit is used up/);
+  _resetLookupForTest();
+});
+
+test('the B.C. service in plain words: busy, or not answering', async () => {
+  process.env.GEOCODER = 'bc';
+  const real = globalThis.fetch;
+  try {
+    globalThis.fetch = async () => new Response('slow down', { status: 429 });
+    _resetLookupForTest();
+    assert.equal((await probeLookup()).plain, 'The B.C. address service is busy. It tries again by itself; a BC_GEOCODER_KEY raises the limit.');
+    globalThis.fetch = async () => { throw new Error('fetch failed'); };
+    _resetLookupForTest();
+    assert.equal((await probeLookup()).plain, 'The B.C. address service isn’t answering.');
+    globalThis.fetch = async () => new Response('down', { status: 503 });
+    _resetLookupForTest();
+    assert.equal((await probeLookup()).plain, 'The B.C. address service isn’t answering.');
+  } finally { globalThis.fetch = real; _resetLookupForTest(); }
 });

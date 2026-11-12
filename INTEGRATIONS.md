@@ -466,9 +466,12 @@ come back as coordinates, that is why.
 `GEOCODER_FALLBACK=google` keeps the free BC service first and asks Google
 only for what BC can't place. A Google key: Google Cloud → **APIs &
 Services** → enable the **Geocoding API** (and the **Map Tiles API** for
-Google tiles) → **Credentials** → an API key **restricted** to those APIs
-and to the server's outgoing IP. It is the server's key; the browser never
-sees it.
+Google tiles) → **Credentials** → an API key with **API restrictions** to
+those APIs and **Application restrictions: None** (GOING-LIVE.md §5, Recipe
+B). Not a *Websites* key: Google refuses it to a server ("API keys with
+referer restrictions cannot be used with this API"). Not an IP restriction
+on Render: its outgoing addresses are shared and change, and fixed ones are
+a paid add-on. It is the server's key; the browser never sees it.
 
 | Setting | Default | Notes |
 |---|---|---|
@@ -481,7 +484,9 @@ sees it.
 | `BC_GEOCODER_URL` | the official service | a self-hosted mirror |
 
 **Check:** Services → Address lookup asks for a few addresses in the
-campaign's box.
+campaign's box (one ask every 30 seconds at most). When Google refuses, it
+says why in plain words, with *Google said* and the setup step that fixes
+it; a busy or silent B.C. service is said in plain words too.
 
 ## Map background
 
@@ -503,12 +508,28 @@ service worker keeps both free providers' tiles as they are looked at
   terrain (the standard look; each person can switch to the others under
   Show → Map). base.win fetches them for signed-in phones (`/tiles/…`), so
   the key stays on the server.
-- **Another provider:** `STARBASE_TILE_URL` (`https://…/{z}/{x}/{y}.png`, a
-  key may ride in the query string — the phones see it),
+- **Another provider:** `STARBASE_TILE_PROVIDER=stadia` (Stadia Maps,
+  everything filled in; `STARBASE_TILE_KEY` only if it can't be told the
+  campaign's web address — the phones see it), or `STARBASE_TILE_URL`
+  (`https://…/{z}/{x}/{y}.png`, a key may ride in the query string),
   `STARBASE_TILE_ATTRIBUTION`, `STARBASE_TILE_MAX_ZOOM`.
 
-**Check:** Services → Map background opens a Google tiles session when
-Google is on.
+Google key: as under Address lookup — API restriction to Map Tiles (and
+Geocoding), application restriction **None** (GOING-LIVE.md §5, Recipe B).
+When Google refuses, base.win stops asking it for a minute (30 seconds
+after quota) and the tiles answer *503* with *Retry-After*; the phones turn
+to CARTO's free map by itself until Google answers (`STARBASE_TILE_CLEAN=off`
+leaves that out). The credit line is *Google Maps ·* and Google's own words
+for the view (`GET /api/map/credit`, asked with the phones' session, kept an
+hour per patch of map).
+
+**Check:** Services → Map background, with Google on, opens a session of
+its own and fetches one tile over the campaign's area (one ask every 30
+seconds at most). When Google refuses it says what failed in plain words,
+*Google said* with Google's own words, and the step of Recipe B that fixes
+it. The same live check is on the map, for managers: **Map → Show → Map
+check** (or *Why?* when the street map isn't loading) has *Street map
+service* and *Address lookup* lines (`GET /api/map/check/services`).
 
 ## Two-step sign-in key
 

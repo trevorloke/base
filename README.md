@@ -654,7 +654,8 @@ with its receipt; a monthly gift is a pledge, each month its own gift.
 Addresses are looked up with the BC Address Geocoder (`server/lib/geocode.js`;
 `GEOCODER=bc|google|nominatim|off`, `BC_GEOCODER_KEY`, `GEOCODE_MIN_SCORE`).
 Google's Geocoding API is the other option (`GOOGLE_MAPS_SERVER_KEY`, a key
-with only that API enabled and restricted to the server's IP; lookups are
+restricted to the APIs used, with no application restriction — GOING-LIVE.md
+§5, Recipe B; lookups are
 biased to Surrey and limited to BC, and only a rooftop or street-number
 match counts). `GEOCODER_FALLBACK=google` keeps the free BC service first
 and asks Google only for addresses it can't place. A list is placed by a
@@ -852,6 +853,8 @@ election week should switch to a paid provider.
 | `STARBASE_TILE_URL` | tile template, `https://…/{z}/{x}/{y}.png` (`{s}` optional; an API key can ride in the query string) | `https://tile.openstreetmap.org/{z}/{x}/{y}.png` |
 | `STARBASE_TILE_ATTRIBUTION` | the provider's credit line (text and links) | the OpenStreetMap credit (none for another provider unless set) |
 | `STARBASE_TILE_MAX_ZOOM` | deepest zoom the provider serves, 1–22 | `19` |
+| `STARBASE_TILE_PROVIDER` | a provider by name: `stadia` (Stadia Maps' Alidade Smooth — its address, credit and zoom 20 filled in; `STARBASE_TILE_URL` wins over it) | — |
+| `STARBASE_TILE_KEY` | the named provider's key, added as `?api_key=` (phones can see it — use only where the provider can't be told the campaign's own web address) | — |
 
 A bad value falls back to the default (and logs once); desk roles see which
 tiles took on the map's filter sheet (*Map tiles: OpenStreetMap — custom
@@ -869,9 +872,16 @@ saying it did (*The street map wasn’t loading — switched to Muted*), but
 only if that provider answers (one tile asked of it first): with weak
 signal neither does, and the street map the phone kept stays drawn. If the
 other doesn't answer, or there is no second provider (a campaign's own,
-Google's), *The street map isn’t loading* stays under the count with one
-tap: *Try again*, or *Try Clean* / *Try Muted* only when that provider has
-just answered. The person's own choice of look is only changed by their
+Google's has the free map: below), *The street map isn’t loading* stays
+under the count with one tap: *Try again*, or *Try Clean* / *Try Muted*
+only when that provider has just answered. A manager also gets a quiet
+*Why?* there, which opens the Map check.
+**With Google Maps on, volunteers keep streets while Google is down:** the
+map turns to CARTO's free map by itself (*Google Maps isn’t loading —
+showing the free map*) and back once Google answers. The free map is never
+a look to pick, and `STARBASE_TILE_CLEAN=off` leaves it out. A provider of
+the campaign's own has none: election-week traffic is never sent back to
+the free tiles. The person's own choice of look is only changed by their
 tap, and a look tapped there only once its streets come. The streets a
 phone keeps are its pick's, so the pick is what the map draws with no
 signal, and what it goes back to when the look it switched to stops
@@ -949,7 +959,10 @@ draws `/tiles/{z}/{x}/{y}.png` from base.win (signed in), which fetches
 each tile from Google with a session it keeps for everyone and renews
 (`server/lib/gtiles.js`, served by `server/ext/offline`), credited to
 Google, up to zoom 22; the service worker keeps the ones a phone has drawn
-as with any provider. Google bills per tile past its free allowance, and its
+as with any provider. When Google refuses, its words are kept in plain ones
+with the setup step that fixes them (`server/lib/googleerr.js`, shown by
+Settings → Services → Map background → Check), and no call goes to Google
+for a minute (tiles answer 503). Google bills per tile past its free allowance, and its
 terms have their own rules on attribution and caching — check them before
 election week. The service worker
 keeps the tiles a phone has already looked at (about 1,500, oldest out), so a
