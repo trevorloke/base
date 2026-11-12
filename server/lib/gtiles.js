@@ -52,8 +52,10 @@ export const mapType = () => {
 };
 
 // The last refusal, one per server (not per look): { at, until, code,
-// plain, said, step, status }. Cleared by the first good tile.
+// plain, said, step, status }. Cleared by the first good tile (that ends the
+// pause); lastTrouble keeps it for the Map check's "Failed at …".
 let trouble = null;
+let lastTrouble = null;
 let lastOkAt = null;
 const pauseMs = (code) => (code === 'quota' ? 30_000 : 60_000);
 const refused = (status, said) => {
@@ -61,12 +63,13 @@ const refused = (status, said) => {
   const at = Date.now();
   const already = pausedFor() > 0; // (tiles already on their way when it began: said once)
   trouble = { at, until: at + pauseMs(t.code), status, ...t };
+  lastTrouble = trouble;
   if (!already) console.warn(`map tiles: Google refused (${status} ${t.code}) — no calls to Google for ${pauseMs(t.code) / 1000} s`);
   return trouble;
 };
 const pausedFor = () => (trouble && Date.now() < trouble.until ? trouble.until - Date.now() : 0);
 // What the Map check shows (Stage 2) — never the key.
-export const tilesHealth = () => ({ last: trouble ? { ...trouble } : null, lastOkAt });
+export const tilesHealth = () => ({ last: lastTrouble ? { ...lastTrouble } : null, lastOkAt });
 
 const keyParam = () => encodeURIComponent(googleKey());
 const sessionBody = (type) => JSON.stringify({ mapType: type, language: 'en-CA', region: 'CA', ...(type === 'terrain' ? { layerTypes: ['layerRoadmap'] } : {}) });
@@ -224,4 +227,4 @@ export const creditFor = async (box, look = mapType()) => {
 };
 
 // Tests: forget the sessions, the refusal, the probe and the credits between cases.
-export const _resetForTest = () => { sessions.clear(); creating.clear(); trouble = null; lastOkAt = null; probed = null; credits.clear(); };
+export const _resetForTest = () => { sessions.clear(); creating.clear(); trouble = null; lastTrouble = null; lastOkAt = null; probed = null; credits.clear(); };

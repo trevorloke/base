@@ -259,7 +259,7 @@ test('the live check: its own session, never kept; a good answer lifts the pause
   sessionAnswer = null;
   const good = await probeTiles();
   assert.equal(good.ok, true);
-  assert.equal(tilesHealth().last, null, 'the pause is lifted');
+  assert.equal(tilesHealth().last.code, 'billing', 'kept for the Map check’s “Failed at …” (the next tile shows the pause is lifted)');
   const probeTile = log.find((l) => l.path.startsWith('/v1/2dtiles/12/'));
   assert.ok(probeTile, 'one tile at zoom 12 over the campaign');
   // The phones' own session is made fresh: the check's was thrown away.

@@ -110,6 +110,18 @@ test('the services check: managers only; which street map and address service, w
     assert.equal(good.tiles.probe.ok, true);
     assert.equal(good.tiles.last, null);
     assert.ok(good.tiles.lastOkAt);
+    // Google refused the phones' tiles a little while ago, and answers again
+    // now: the check says Working, and when it failed and why.
+    _resetForTest();
+    billing = true;
+    const { fetchTile } = await import('../lib/gtiles.js');
+    await fetchTile(12, 650, 1400);
+    billing = false;
+    const after = ok(await mgr.get('/api/map/check/services'));
+    assert.equal(after.tiles.probe.ok, true);
+    assert.equal(after.tiles.last?.code, 'billing', 'the earlier failure is kept after a good answer');
+    assert.match(after.tiles.last.plain, /^Billing isn’t turned on/);
+    assert.ok(Date.parse(after.tiles.last.at) <= Date.parse(after.tiles.lastOkAt));
     // A provider the phones reach straight: named, not probed.
     delete process.env.GOOGLE_MAPS_TILES;
     const direct = ok(await mgr.get('/api/map/check/services'));
