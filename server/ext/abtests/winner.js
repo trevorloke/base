@@ -127,6 +127,7 @@ export const pickWinner = async (db, job) => {
     for (const r of claim.go) {
       run.claimed += 1;
       const res = await sendEmail({
+        from: blast.from_addr || undefined,
         to: r.email,
         subject,
         ...composeBlast(ctx, { kind: blast.kind, body: blast.body, unsubscribeUrl: unsubFor(r), token: r.token, links, attachments }),

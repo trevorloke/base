@@ -12,16 +12,19 @@ export const timeoutMs = () => Number(process.env.STARBASE_EMAIL_TIMEOUT_MS) || 
 // A read for a screen (the domain's records, Check): 8 s, as every Check.
 export const READ_MS = 8000;
 
-// MAIL_FROM as typed — "Imagine Surrey <team@imaginesurrey.ca>" or the
-// address alone — as its name, its address and the address's domain.
-export const mailFrom = () => {
-  const raw = env('MAIL_FROM');
+// A From as typed — "Imagine Surrey <team@imaginesurrey.ca>", a quoted
+// name ("Surrey, BC Media" <media@…>) or the address alone — as its name,
+// its address and the address's domain.
+export const parseFrom = (typed) => {
+  const raw = String(typed ?? '').trim();
   const m = /^(.*)<([^<>]+)>$/.exec(raw);
   const email = (m ? m[2] : raw).trim();
   const name = m ? m[1].trim().replace(/^"(.*)"$/, '$1').trim() : '';
   const domain = (/@([^@\s]+)$/.exec(email)?.[1] || '').toLowerCase().replace(/\.$/, '');
   return { raw, name, email, domain };
 };
+// MAIL_FROM: the campaign's own From, used by every email that names none.
+export const mailFrom = () => parseFrom(env('MAIL_FROM'));
 
 // What a send answers when the sender said no (the next try is a new send)…
 export const refused = async (res) => ({

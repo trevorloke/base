@@ -502,6 +502,8 @@ export const deliver = async (db, ctx, blast, { actorId = null, budgetMs = Infin
     for (const r of go.rows) {
       run.claimed += 1;
       const res = await sendEmail({
+        // The From the send recorded (ext/senders): a send keeps it for life.
+        from: blast.from_addr || undefined,
         to: r.email,
         subject: subjectFor(blast, r.ab_group),
         ...composeBlast(ctx, { kind: blast.kind, body: blast.body, unsubscribeUrl: r.unsubscribeUrl, token: r.token, links, attachments }),
@@ -620,7 +622,7 @@ export const runSendJob = async (db, job) => {
   const { blast_id: blastId, base = '', actor_id: actorId = null, action = 'blast.send' } = job.payload || {};
   const workspaceId = job.workspace_id;
   const blast = (await db.query(
-    'select id, kind, subject, body, ab_subject_b, ab_winner from blasts where id = $1 and workspace_id = $2',
+    'select id, kind, subject, body, ab_subject_b, ab_winner, from_addr from blasts where id = $1 and workspace_id = $2',
     [blastId, workspaceId],
   )).rows[0];
   if (!blast) return;
