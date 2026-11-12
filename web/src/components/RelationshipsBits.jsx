@@ -217,7 +217,9 @@ function MakeList({ person }) {
   const act = useRun();
   const online = useOnline();
   const make = async () => {
-    const res = await act.run('list.create', { name: `${person.name}’s circle`, kind: 'filter', filter: { knows: `person:${person.id}` } });
+    // A list's name is at most 120 characters; a person's can be longer.
+    const who = person.name.length > 110 ? `${person.name.slice(0, 109)}…` : person.name;
+    const res = await act.run('list.create', { name: `${who}’s circle`, kind: 'filter', filter: { knows: `person:${person.id}` } });
     if (res?.list?.id) navigate(`/lists/${res.list.id}`);
   };
   return (

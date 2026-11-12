@@ -779,7 +779,16 @@ one tap away under **More**.
   it off. *Sofia Petrova → Knows* says *Brought in by Priya Nair*. Someone
   tagged *do-not-contact* gets no nudge and is never the one suggested. A
   long note (a link) wraps in Knows. The sample's *Priya Nair ↔ Sofia
-  Petrova* and *Gurpreet ↔ Navdeep Sandhu* are close ties. Server tests:
+  Petrova* and *Gurpreet ↔ Navdeep Sandhu* are close ties: Priya's profile
+  opens with *Knows Sofia Petrova Friend · Close …* under her chips (a
+  do-not-contact housemate never shows on that line); *Close* in Knows
+  toggles in place; *Make a list* opens *Priya Nair’s circle* with as many
+  people as she knows; People → Filter → *Knows a supporter* counts what the
+  server counts; a staff member denied Donations has no *Knows a donor*; the
+  desk's Calls card says *Knows …*. Priya, at a walk-list door with no
+  signal: More → *I know them* → *Friend* shows *You know them · Friend* at
+  once and sends once when the signal is back (`e2e-relationships.mjs`; her
+  browser never gets a key, Most connected or Knows answer). Server tests:
   `server/test/relationships.test.js` (close, `relationship.update`, the key
   read, `knows=` for each role and area, Most connected's *brought in*, a
   merge, housemates), `server/test/ties-rank.test.js` (which ties come

@@ -456,7 +456,15 @@ than a week after they came off is refused. Contacts are door, phone, text or
   · donor · volunteer · any · person:<id>`; the desk's with People only —
   *donor* also needs Donations — and never a volunteer's, even granted
   People; a list the desk saved is read whole). Most connected and the key
-  read are the People area's; My people is in no area. A volunteer's add
+  read are the People area's; My people is in no area. On screen: a desk
+  profile shows the ties that matter in one line under its chips ("Knows
+  Sofia Petrova Friend · Close · 4 more · Same address: …"; two on a phone),
+  and the desk's Calls card does too; Knows has *Close* on each row and *Make
+  a list* ("<Name>’s circle"); People's filter and a list's rules have
+  *Knows* (*Knows a donor* only with Donations). Everyone sees *You know them
+  · Friend* on a profile, the Calls card, the map's door and the walk list,
+  and can tap *I know them* (under More at a door) — saved on the phone with
+  no signal, sent once. A volunteer's add
   never matches on, or takes, an email the campaign holds, so a possible
   double is flagged to the desk (*May be the same person as …*).
 - **Lit drops**: *Left lit* is its own outcome (`left_lit`) — literature
