@@ -68,7 +68,8 @@ import { Link, useLocation, useNavigate, useOutletContext, useParams, useSearchP
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { VOLUNTEER_ROLES, SHIFT_STATUSES, noCalls, noCallsWord } from '@starbase/shared/canvass';
 import { dayOf, fromInput, toInput } from '@starbase/shared/dayparts';
-import { isPinName, kindOf, mapUrl, pinPoint, placeLabel, shortBy } from '@starbase/shared/shiftkinds';
+import { isPinName, kindOf, pinPoint, placeLabel, shortBy } from '@starbase/shared/shiftkinds';
+import { directionsUrl } from '@starbase/shared/maps';
 import { apiGet, action } from '../api.js';
 import { queueAction, undoQueued, useOutbox } from '../offline.js';
 import { phoneCopy, showingCopy, useKeepCopy } from '../components/OfflineCache.js';
@@ -1135,10 +1136,13 @@ function ShiftDetail({ id, canDesk, me }) {
   const checkedIn = onIt && active.some((a) => isMine(a) && a.status === 'completed');
   const over = new Date(shift.ends_at || shift.starts_at) < new Date();
   const kind = kindOf(shift);
-  // Its pin (its saved place's, else the words of a pin nobody has named):
-  // the place opens the phone's own maps app — the link Signs uses too.
+  // Its pin (its saved place's, else the words of a pin nobody has named).
   const pin = shift.place_lat != null && shift.place_lng != null ? { lat: shift.place_lat, lng: shift.place_lng } : pinPoint(shift.location);
   const unnamed = isPinName(shift.location);
+  // "Directions" in the phone's Google Maps: to the pin, else to the words
+  // (with the campaign's city when they have none). Texts, emails and
+  // calendar files keep the search link (shiftkinds.js mapUrl).
+  const directions = shift.location ? directionsUrl(pin || { address: shift.location, city: me?.org?.city, province: me?.org?.province }) : null;
   // Another shift of theirs at the same time (booked, or waiting on this phone).
   const clash = canDesk ? null : (mineQ.data?.shifts ?? []).map((x) => myHours(x, asBooking(waitingHours(outbox.items, x.id))))
     .find((x) => x.id !== shift.id
@@ -1507,9 +1511,11 @@ function ShiftDetail({ id, canDesk, me }) {
         )}
         {/* "Drop in" for everyone, before booking too: the same words as the list's row. */}
         <span className="when">{shift.drop_in ? 'Drop in · ' : ''}{longDay(shift.starts_at, tz)} · {timeRange(shift.starts_at, shift.ends_at, tz)}</span>
-        {shift.location && (pin
-          ? <a className="sch-maplink" href={mapUrl(pin)} target="_blank" rel="noopener noreferrer" aria-label={`${placeLabel(shift.location)} — open the map`}>{placeLabel(shift.location)} <span aria-hidden="true">· Map ↗</span></a>
-          : <span>{shift.location}</span>)}
+        {shift.location && <span>{pin ? placeLabel(shift.location) : shift.location}</span>}
+        {directions && (
+          <a className="sch-maplink" href={directions} target="_blank" rel="noopener noreferrer"
+            aria-label={`Directions to ${pin ? placeLabel(shift.location) : shift.location} in Google Maps`}>Directions</a>
+        )}
         {canDesk && unnamed && shift.place_id && !over && (
           <NameIt bare key={shift.place_id} place={{ id: shift.place_id, name: shift.location }} onNamed={refresh} />
         )}

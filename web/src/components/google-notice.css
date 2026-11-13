@@ -1,0 +1,4 @@
+/* GoogleNotice — one small muted line, not a card. */
+.google-notice { margin: var(--s-4) 0 0; font-size: 13px; line-height: 1.5; color: var(--text-3); }
+.google-notice a { color: var(--text-2); display: inline-flex; align-items: center; min-height: 48px; }
+@media (pointer: fine) { .google-notice a { min-height: 0; } }

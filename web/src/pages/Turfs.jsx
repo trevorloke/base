@@ -34,7 +34,7 @@ import { apiGet, ApiError } from '../api.js';
 import { logContact, pendingKnocks, pendingPeopleIn, queueAction, undoQueued, useOutbox } from '../offline.js';
 import { queuedChip, queuedSaid, queuedText, thisDevice } from '../components/queued.js';
 import { useOnline } from '../components/NoSignal.jsx';
-import { AddPersonInline, SIGN_LABEL, SignAsk, signCancelOffered } from '../components/DoorCard.jsx';
+import { AddPersonInline, Directions, SIGN_LABEL, SignAsk, signCancelOffered, doorTitle } from '../components/DoorCard.jsx';
 import RatingButtons, {
   More, OutcomeButtons, OUTCOMES, OUTCOME_LABEL, PersonTabs, RatingChip, focusRating, ratingText, reveal, useScale,
 } from '../components/RatingButtons.jsx';
@@ -1112,6 +1112,7 @@ function Door({
               )}
               {sel.phone && !noCalls(sel) && <a className="btn walk-act" href={`tel:${dialable(sel.phone)}`}>Call</a>}
               {!sel.pending && <Link className="btn btn-quiet walk-act" to={`/people/${sel.id}`} state={fromHere} onClick={markDoor}>Profile</Link>}
+              <Directions to={{ lat: door.lat, lng: door.lng, address: door.address, city: sel.city }} words={door.address ? doorTitle(door) : null} mode="walking" className="btn btn-quiet walk-act" />
               {!sel.pending && <RequestAsk person={sel} toast={(t, o) => toast(t, o)} />}
             </div>
             <IKnowThem key={`know-${sel.id}`} person={sel} />

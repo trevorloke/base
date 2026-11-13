@@ -46,6 +46,7 @@ import { apiGet, ApiError } from '../api.js';
 import { holdNote, logContact, queueAction, undoQueued, useOutbox } from '../offline.js';
 import { isOffline, queuedChip, queuedSaid, queuedText } from './queued.js';
 import { SIGN_KINDS, noCalls, noCallsWord } from '@starbase/shared/canvass';
+import { directionsUrl } from '@starbase/shared/maps';
 import RatingButtons, { More, OutcomeButtons, OUTCOME_LABEL, PersonTabs, focusRating, ratingText, useScale } from './RatingButtons.jsx';
 import { IKnowThem, KnowMeChip } from './RelationshipsBits.jsx';
 import QuickDetails from './QuickDetails.jsx';
@@ -290,7 +291,7 @@ export function AddPersonInline({ door, onDone, onCancel, toast, toastQueued = t
 // goes to it (onPlace); a tap on the map drops or moves the pin by hand
 // (latlng). A typed address nobody picked is looked up when it's saved;
 // with no signal, the pin is a tap.
-export function AddDoorForm({ latlng, onPlace, onDone, onCancel, toast }) {
+export function AddDoorForm({ latlng, onPlace, onDone, onCancel, toast, allowGoogle = false }) {
   const queryClient = useQueryClient();
   const refresh = useRefresh();
   const online = useOnline();
@@ -306,6 +307,11 @@ export function AddDoorForm({ latlng, onPlace, onDone, onCancel, toast }) {
   };
   const picked = (s) => {
     setForm((f) => ({ ...f, address: s.address, unit: s.unit || f.unit, city: s.city || '', postal: s.postal || '' }));
+    // Google's words the B.C. service couldn't place: the door needs a tap.
+    if (!Number.isFinite(s.lat) || !Number.isFinite(s.lng)) {
+      setError('Couldn’t find that door on the map — tap the map where it is');
+      return;
+    }
     setPinFrom('address');
     setError(null);
     onPlace?.({ lat: s.lat, lng: s.lng });
@@ -373,6 +379,7 @@ export function AddDoorForm({ latlng, onPlace, onDone, onCancel, toast }) {
         <div className="form-row">
           <div style={{ flex: '3 1 200px' }}>
             <AddressField id="nd-address" value={form.address} onChange={typeAddress} onPick={picked} placed={Boolean(latlng)} required autoFocus
+              allowGoogle={allowGoogle}
               placedText="Pinned on the map — tap the map to move it"
               hint={online ? 'Pick it from the list, or tap the map where it is' : 'tap the map where the door is'} />
           </div>
@@ -389,6 +396,17 @@ export function AddDoorForm({ latlng, onPlace, onDone, onCancel, toast }) {
         </div>
       </div>
     </form>
+  );
+}
+
+// "Directions": the phone's Google Maps, from where it is to a place (a quiet
+// link; no key, nothing from base.win goes to Google but the place).
+export function Directions({ to, words, mode, className = 'btn btn-quiet door-act' }) {
+  const href = directionsUrl(to, { mode });
+  if (!href) return null;
+  return (
+    <a className={`${className} directions`} href={href} target="_blank" rel="noopener noreferrer"
+      aria-label={`Directions to ${words || to.address || 'this place'} in Google Maps`}>Directions</a>
   );
 }
 
@@ -694,6 +712,7 @@ export default function DoorCard({ door, selectedId, onSelect, onClose, toast, m
             ) : (
               <span className="muted door-more__phone">No phone</span>
             )}
+            <Directions to={{ lat: door.lat, lng: door.lng, address: door.address, city: sel.city }} words={doorTitle(door)} mode="walking" />
           </div>
           {!sel.pending && (
             <QuickDetails key={`qd-${sel.id}`} person={sel} me={me} toast={toast}

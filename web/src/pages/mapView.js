@@ -358,11 +358,12 @@ const serviceLines = (services, clock, now, page) => {
   // A failed read isn't "nothing wrong": flagged, with the one way to ask again.
   if (services.state === 'error') {
     const o = { warn: true };
-    return [['tilesvc', 'Street map service', 'Unavailable — tap Check again', o], ['lookupsvc', 'Address lookup', 'Unavailable — tap Check again', o]];
+    return [['tilesvc', 'Street map service', 'Unavailable — tap Check again', o], ['lookupsvc', 'Map pins', 'Unavailable — tap Check again', o],
+      ['suggestsvc', 'Address suggestions', 'Unavailable — tap Check again', o]];
   }
   const waiting = { pending: 'Checking…', offline: 'No signal — the check needs it' }[services.state];
-  if (waiting) return [['tilesvc', 'Street map service', waiting, {}], ['lookupsvc', 'Address lookup', waiting, {}]];
-  const { tiles: t, lookup: l } = services.data;
+  if (waiting) return [['tilesvc', 'Street map service', waiting, {}], ['lookupsvc', 'Map pins', waiting, {}], ['suggestsvc', 'Address suggestions', waiting, {}]];
+  const { tiles: t, lookup: l, suggest: g } = services.data;
   let tiles;
   if (!t.viaServer) {
     // The phones reach it straight: name the service the map actually drew
@@ -380,7 +381,15 @@ const serviceLines = (services, clock, now, page) => {
   if (l.provider === 'off') lookup = ['Turned off', {}];
   else if (l.probe?.ok) lookup = [`Working · ${l.provider}`, {}];
   else lookup = [`Not working · ${l.provider}`, { note: l.probe ? troubleNote(l.probe) : null, warn: true }];
-  return [['tilesvc', 'Street map service', ...tiles], ['lookupsvc', 'Address lookup', ...lookup]];
+  // Who suggests addresses as people type (Google Places once turned on;
+  // paused after Google refused: its words and the step). An older server: no line.
+  let suggest = null;
+  if (!g) suggest = null;
+  else if (g.provider === 'off') suggest = ['Turned off', {}];
+  else if (g.paused) suggest = [`Not working · ${g.provider}`, { note: troubleNote(g.paused), warn: true }];
+  else if (g.probe?.ok) suggest = [`Working · ${g.provider}`, {}];
+  else suggest = [`Not working · ${g.provider}`, { note: g.probe ? troubleNote(g.probe) : null, warn: true }];
+  return [['tilesvc', 'Street map service', ...tiles], ['lookupsvc', 'Map pins', ...lookup], ...(suggest ? [['suggestsvc', 'Address suggestions', ...suggest]] : [])];
 };
 // The placing run's last error, in plain words ("geocoder billing: Billing
 // isn’t turned on…" → "Billing isn’t turned on…"; a bare "geocoder 403" stays).

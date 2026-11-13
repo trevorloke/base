@@ -39,11 +39,12 @@ import { queuedText } from '../components/queued.js';
 import { bandOf, offTail, ratingByCode } from '@starbase/shared/scale';
 import { SIGN_KINDS } from '@starbase/shared/canvass';
 import DoorCard, { AddDoorForm, SIGN_LABEL, doorTitle, patchDoors } from '../components/DoorCard.jsx';
+import GoogleNotice from '../components/GoogleNotice.jsx';
 import { More, useScale } from '../components/RatingButtons.jsx';
 import GeocodeButton from '../components/GeocodeButton.jsx';
 import { DEFAULT_TILES, safeAttribution } from '../components/tiles.js';
 import { DotLayer, DensityLayer, cellAt, nearest } from './mapDots.js';
-import { DOT_ZOOM, LONE_PIN_ZOOM, PIN_ZOOM, MARK, TILE_WAIT_MS, css, cellOf, cellsFrom, dotsFrom, drawnFor, inBox, pickLook, placingPoll, rowsBudget, streetMove, tileAt, tileHealth, tileHost, viewBox } from './mapView.js';
+import { DOT_ZOOM, LONE_PIN_ZOOM, PIN_ZOOM, MARK, TILE_WAIT_MS, css, cellOf, cellsFrom, dotsFrom, drawnFor, inBox, mapLooks, pickLook, placingPoll, rowsBudget, streetMove, tileAt, tileHealth, tileHost, viewBox } from './mapView.js';
 import { useSharePref } from '../components/ShareLocation.js';
 import { cachedWalkLists, useOnline } from './Turfs.jsx';
 import './map.css';
@@ -131,7 +132,7 @@ const PROBE_MS = 4000;
 // On a look the map went to by itself, how often it asks again whether the
 // person's own pick answers (a provider's hiccup is often over in a minute).
 const PICK_AGAIN_MS = 60_000;
-const NOT_SEEN = { url: null, down: false, any: false, settled: false }; // a tile layer that hasn't said yet
+const NOT_SEEN = { url: null, down: false, offlineDown: false, any: false, settled: false }; // a tile layer that hasn't said yet
 // (The server's own tiles — Google's, through it — need the sign-in cookie.)
 const answers = (url) => {
   const stop = typeof AbortController === 'function' ? new AbortController() : null;
@@ -976,7 +977,7 @@ function SignChips({ signShow, onSigns, signCounts }) {
 function FilterSheet({
   filters, filter, onFilter, counts, showTurfs, onTurfs, turfCount, desk, onDraw, unlocated, onPlace, onClose, tilesNote = null, countsNote = null,
   sharing = false, onShare = null, signShow = null, onSigns = null, signCounts = {},
-  views = [], view = 'standard', onView = null, onCheck = null,
+  looks = SHADES, view = 'standard', onView = null, onCheck = null, google = null,
 }) {
   const main = filters.filter((f) => !f.group);
   const opponents = filters.filter((f) => f.group === 'Voting for');
@@ -1005,7 +1006,7 @@ function FilterSheet({
           <div className="map-fsheet__layers">
             <h3 className="map-fsheet__sub" id="map-fsheet-view">Map</h3>
             <div className="map-schips" role="radiogroup" aria-labelledby="map-fsheet-view">
-              {[...SHADES, ...views.filter((v) => !v.fallback)].map((v) => (
+              {looks.map((v) => (
                 <button key={v.key} type="button" role="radio" aria-checked={view === v.key}
                   className={`map-schip map-vchip map-vchip--${v.key}${view === v.key ? ' is-on' : ''}`} onClick={() => onView(v.key)}>
                   <i className="map-vchip__swatch" aria-hidden="true" />{v.label}
@@ -1062,6 +1063,7 @@ function FilterSheet({
         {desk && tilesNote && <p className="map-fsheet__tiles">{tilesNote}</p>}
         {/* Managers: what the map is drawn from, on one sheet (MapCheck.jsx). */}
         {onCheck && <button type="button" className="btn btn-quiet map-fsheet__check" onClick={onCheck}>Map check</button>}
+        <GoogleNotice google={google} />
       </div>
     </>
   );
@@ -1356,13 +1358,19 @@ export default function MapPage() {
   // provider's look such as Clean; with Google, the free map), or null: a
   // campaign's own provider has no second one (mapView.js pickLook).
   const baseUrl = baseTiles?.url;
-  const { providerView, otherLook } = useMemo(
+  const { providerView, otherLook, shadeAllowed, look } = useMemo(
     () => pickLook({ views, viewPick, drawnAuto, baseUrl, muted: SHADES.find((x) => x.key === 'muted') }),
     [views, viewPick, drawnAuto, baseUrl],
   );
-  // Clean comes from the server; where it isn't offered (Google tiles, the
-  // campaign's own provider), Muted.
-  const view = providerView || SHADES.some((s) => s.key === lookPick) ? lookPick : lookPick === 'clean' ? 'muted' : 'standard';
+  // Clean comes from the server; where it isn't offered (the campaign's own
+  // provider), Muted. Over Google's tiles no shade at all: its Streets.
+  const lookWant = drawnAuto ? lookPick : look;
+  const view = providerView || SHADES.some((s) => s.key === lookWant) ? lookWant : lookWant === 'clean' ? 'muted' : 'standard';
+  // Show → Map: with Google drawn, Streets · Satellite · Terrain (mapView.js mapLooks).
+  const looks = useMemo(
+    () => mapLooks({ shades: SHADES, views, standardLabel: tilesQ.data?.standardLabel, shadeAllowed }),
+    [views, tilesQ.data?.standardLabel, shadeAllowed],
+  );
   const tiles = providerView ? { url: providerView.url, attribution: providerView.attribution, maxZoom: providerView.maxZoom } : baseTiles;
   // Is the street map loading? (The tile layer's own events, below — the
   // layer drawn now: what the one before it said is no answer.)
@@ -2087,9 +2095,12 @@ export default function MapPage() {
     const tell = () => {
       const h = health.get();
       const down = h.down && navigator.onLine !== false;
+      // Offline, failing tiles are the phone's, not the provider's: said
+      // only over Google's map, which phones don't keep (its terms).
+      const offlineDown = h.down && navigator.onLine === false;
       streetRef.current = { ...h, down };
-      const next = `${down}|${h.loaded > 0}|${settled}`;
-      if (next !== shown) { shown = next; setStreet({ url: tileUrl, down, any: h.loaded > 0, settled }); }
+      const next = `${down}|${offlineDown}|${h.loaded > 0}|${settled}`;
+      if (next !== shown) { shown = next; setStreet({ url: tileUrl, down, offlineDown, any: h.loaded > 0, settled }); }
     };
     tell();
     layer.on('loading', () => {
@@ -2350,7 +2361,7 @@ export default function MapPage() {
   const hasSheet = Boolean(pickerOpen || addAt || mode === 'add' || naming || (selectedDoor && !mode) || turfSheetOpen || signSheetOpen || checkSheetOpen);
   // What only this page knows, for the check: its build, the street map in
   // use and whether its tiles came, the map's size on screen.
-  const lookLabel = [...SHADES, ...views].find((v) => v.key === view)?.label || view;
+  const lookLabel = [...looks, ...views].find((v) => v.key === view)?.label || view;
   const checkFacts = useCallback(() => {
     const map = mapRef.current;
     const size = map?.getSize();
@@ -2406,7 +2417,8 @@ export default function MapPage() {
   // Opening any door counts as having started.
   useEffect(() => { if (selectedKey && !hintSeen) hideHint(); }, [selectedKey, hintSeen, hideHint]);
   // The street-map note, if any: 'down' (one tap to fix) or 'switched' (said a few seconds).
-  const tileNote = mode ? null : (move === 'try-other' || move === 'try-again') ? 'down' : switchedTo && drawnAuto ? 'switched' : null;
+  const tileNote = mode ? null : (move === 'try-other' || move === 'try-again') ? 'down' : switchedTo && drawnAuto ? 'switched'
+    : !online && street.offlineDown && isGoogleLook(tiles?.url) ? 'offline' : null;
   const showHint = !canCreate && !hintSeen && !hasSheet && !mode && !filterOpen && !noSignal
     && !personParam && !turfParam && visible.length > 0;
 
@@ -2681,6 +2693,10 @@ export default function MapPage() {
               {mayCheck && <button type="button" className="btn btn-quiet map-tilenote__btn map-tilenote__why" onClick={openCheck}>Why?</button>}
             </span>
           </div>
+        ) : tileNote === 'offline' ? (
+          <div className="map-tilenote map-tilenote--done" role="status">
+            <span>No signal — the street map is back when you are. Your doors are all here.</span>
+          </div>
         ) : tileNote === 'switched' ? (
           <div className="map-tilenote map-tilenote--done" role="status">
             <span>{providerView?.fallback ? 'Google Maps isn’t loading — showing the free map' : `The street map wasn’t loading — switched to ${switchedTo}`}</span>
@@ -2711,9 +2727,10 @@ export default function MapPage() {
           signShow={signShow}
           onSigns={setSignShow}
           signCounts={signCounts}
-          views={views}
+          looks={looks}
           view={view}
           onView={setView}
+          google={tilesQ.data?.google}
           onCheck={mayCheck ? openCheck : null}
         />
       )}
@@ -2791,6 +2808,7 @@ export default function MapPage() {
         <div className="map-sheet">
           <AddDoorForm
             latlng={addAt}
+            allowGoogle={isGoogleLook(tiles?.url)}
             onPlace={placeNew}
             toast={toast}
             onCancel={cancelMode}
