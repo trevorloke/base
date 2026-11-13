@@ -358,11 +358,10 @@ const serviceLines = (services, clock, now, page) => {
   // A failed read isn't "nothing wrong": flagged, with the one way to ask again.
   if (services.state === 'error') {
     const o = { warn: true };
-    return [['tilesvc', 'Street map service', 'Unavailable — tap Check again', o], ['lookupsvc', 'Map pins', 'Unavailable — tap Check again', o],
-      ['suggestsvc', 'Address suggestions', 'Unavailable — tap Check again', o]];
+    return [['tilesvc', 'Street map service', 'Unavailable — tap Check again', o], ['lookupsvc', 'Map pins', 'Unavailable — tap Check again', o]];
   }
   const waiting = { pending: 'Checking…', offline: 'No signal — the check needs it' }[services.state];
-  if (waiting) return [['tilesvc', 'Street map service', waiting, {}], ['lookupsvc', 'Map pins', waiting, {}], ['suggestsvc', 'Address suggestions', waiting, {}]];
+  if (waiting) return [['tilesvc', 'Street map service', waiting, {}], ['lookupsvc', 'Map pins', waiting, {}]];
   const { tiles: t, lookup: l, suggest: g } = services.data;
   let tiles;
   if (!t.viaServer) {
@@ -381,10 +380,12 @@ const serviceLines = (services, clock, now, page) => {
   if (l.provider === 'off') lookup = ['Turned off', {}];
   else if (l.probe?.ok) lookup = [`Working · ${l.provider}`, {}];
   else lookup = [`Not working · ${l.provider}`, { note: l.probe ? troubleNote(l.probe) : null, warn: true }];
-  // Who suggests addresses as people type (Google Places once turned on;
-  // paused after Google refused: its words and the step). An older server: no line.
+  // Who suggests addresses as people type, when it isn't the service that
+  // places the pins (Google Places once turned on; paused after Google
+  // refused: its words and the step) — the sheet stays one screen otherwise.
+  // An older server: no line.
   let suggest = null;
-  if (!g) suggest = null;
+  if (!g || (g.provider === l.provider && !g.paused)) suggest = null;
   else if (g.provider === 'off') suggest = ['Turned off', {}];
   else if (g.paused) suggest = [`Not working · ${g.provider}`, { note: troubleNote(g.paused), warn: true }];
   else if (g.probe?.ok) suggest = [`Working · ${g.provider}`, {}];

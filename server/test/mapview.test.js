@@ -503,13 +503,13 @@ test('the services behind the map: one line each, after the street map — waiti
   // While it waits on Google, after it failed, with no signal.
   for (const [state, words] of [['pending', 'Checking…'], ['offline', 'No signal — the check needs it']]) {
     const l = checkLines(CHECK, PAGE, { services: { state } });
-    assert.deepEqual(keys(l).slice(6, 10), ['tiles', 'tilesvc', 'lookupsvc', 'suggestsvc']);
-    assert.deepEqual([said(l).tilesvc.value, said(l).lookupsvc.value, said(l).suggestsvc.value, flagged(l)], [words, words, words, []]);
-    assert.deepEqual(l.filter((x) => x.key.endsWith('svc')).map((x) => x.label), ['Street map service', 'Map pins', 'Address suggestions']);
+    assert.deepEqual(keys(l).slice(6, 9), ['tiles', 'tilesvc', 'lookupsvc']);
+    assert.deepEqual([said(l).tilesvc.value, said(l).lookupsvc.value, flagged(l)], [words, words, []]);
+    assert.deepEqual(l.filter((x) => x.key.endsWith('svc')).map((x) => x.label), ['Street map service', 'Map pins']);
   }
   // The read failed: flagged, and says the one way to ask again.
   const failed = checkLines(CHECK, PAGE, { services: { state: 'error' } });
-  assert.deepEqual([said(failed).tilesvc.value, flagged(failed)], ['Unavailable — tap Check again', ['lookupsvc', 'suggestsvc', 'tilesvc']]);
+  assert.deepEqual([said(failed).tilesvc.value, flagged(failed)], ['Unavailable — tap Check again', ['lookupsvc', 'tilesvc']]);
   const GOOD = { tiles: { provider: 'Google Maps', viaServer: true, probe: { ok: true }, last: null, lastOkAt: '2026-11-10T23:44:00.000Z' },
     lookup: { provider: 'BC Address Geocoder', fallback: null, probe: { ok: true } } };
   let l = checkLines(CHECK, PAGE, { clock, now, services: { state: 'ok', data: GOOD } });
@@ -550,7 +550,9 @@ test('the services behind the map: one line each, after the street map — waiti
   // Places working; paused after Google refused (its words and the step).
   assert.ok(!keys(checkLines(CHECK, PAGE, { services: { state: 'ok', data: GOOD } })).includes('suggestsvc'));
   l = checkLines(CHECK, PAGE, { services: { state: 'ok', data: { ...GOOD, suggest: { provider: 'BC Address Geocoder', probe: { ok: true }, paused: null } } } });
-  assert.deepEqual([said(l).suggestsvc.value, flagged(l)], ['Working · BC Address Geocoder', []]);
+  assert.ok(!keys(l).includes('suggestsvc'), 'the service that places the pins suggests too: one line says it');
+  l = checkLines(CHECK, PAGE, { services: { state: 'ok', data: { ...GOOD, suggest: { provider: 'off', probe: null, paused: null } } } });
+  assert.deepEqual([said(l).suggestsvc.label, said(l).suggestsvc.value, flagged(l)], ['Address suggestions', 'Turned off', []]);
   l = checkLines(CHECK, PAGE, { services: { state: 'ok', data: { ...GOOD, suggest: { provider: 'Google Places', probe: { ok: true, example: '13450 104 Ave' }, paused: null } } } });
   assert.equal(said(l).suggestsvc.value, 'Working · Google Places');
   const blocked = { code: 'api-blocked', plain: 'This key isn’t allowed to use that Google API. Add Map Tiles API and Places API (New) to it.', said: 'Requests to this API are blocked.', fix: 'Recipe B step 4' };
