@@ -1,6 +1,7 @@
 // Core DDL. One place, executed idempotently at boot. Record-type tables are
 // generated from the shared registry — the registry IS the migration source.
 import { ddlFor, recordTypeKeys } from '@starbase/shared/registry';
+import { FOLD_FROM, FOLD_TO } from '@starbase/shared/names';
 
 const CORE = `
 create table if not exists workspaces (
@@ -272,6 +273,25 @@ create table if not exists cap_rules (
 );
 `;
 
+// A name folded for finding and A–Z (shared/names.js foldName says the same
+// in the browser): accents off, ' ’ ʼ and full stops dropped, ASCII lower
+// case only (collate "C", so it's the same on every database), spaces
+// squeezed. person_fold_tail is a surname's last word ("Van Der Berg" →
+// berg, "Sandhu-Gill" → gill); it names public.person_fold because
+// Postgres 17 builds indexes with only pg_catalog on the search path. No
+// SET search_path on either: they must stay inlinable, or the indexes on
+// them (ext/search) stop matching the queries. Never change these bodies —
+// a different fold is a new function with new indexes.
+const sqlText = (s) => `'${s.replace(/'/g, "''")}'`;
+const FOLD = `
+create or replace function person_fold(t text) returns text language sql immutable parallel safe as $fold$
+  select btrim(regexp_replace(lower(translate(t, ${sqlText(FOLD_FROM)}, ${sqlText(FOLD_TO)}) collate "C"), '[ \\t\\n\\r]+', ' ', 'g'))
+$fold$;
+create or replace function person_fold_tail(t text) returns text language sql immutable parallel safe as $fold$
+  select regexp_replace(public.person_fold(t), '^.*[ -]', '')
+$fold$;
+`;
+
 const SEED = `
 insert into cap_rules (jurisdiction, year, cap_cents, source_note) values
   ('bc-provincial', 2024, 145082, 'Elections BC 2024 indexed annual limit — verify before filing'),
@@ -332,6 +352,7 @@ export const bootstrap = async (db) => {
   if (lock) await db.query('select pg_advisory_lock(7271989)');
   try {
     await db.exec(CORE);
+    await db.exec(FOLD);
     for (const key of recordTypeKeys()) await db.exec(ddlFor(key));
     await db.exec(ALTERS);
     // Feature modules' tables (server/ext/*). Imported here, not at the top,
