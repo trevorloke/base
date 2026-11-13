@@ -45,7 +45,7 @@ import SocialsBlock, { SocialsTyped } from '../components/SocialsBlock.jsx';
 import { PersonTimeline, timelineCount, usePersonTimeline } from '../components/PersonTimeline.jsx';
 import EmailSheet, { gmailNotReadyLine, gmailReady, notReadySaid, takeDraft, useGmail, useToast } from '../components/EmailSheet.jsx';
 import { useGoogleReturn } from '../components/GoogleConnect.jsx';
-import { googleWords } from '../components/google.js';
+import { connectWords } from '../components/gmailWords.js';
 
 const TIER_LABEL = {
   superstar: DONOR_TIERS.superstar.label,
@@ -144,7 +144,7 @@ function BackLink({ desk, className = 'eyebrow pf-back' }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Header: name, rating, donor tier, Call · Text · Email · Map
 // ─────────────────────────────────────────────────────────────────────────────
-function Header({ person, donor, me, desk, onLog, onEmail, contacted, level, onEdit, keyLine = null }) {
+function Header({ person, donor, me, desk, onLog, onEmail, emailing = false, contacted, level, onEdit, keyLine = null }) {
   const texting = useTextingStatus(me);
   // true / false, or null while nobody knows (no signal, nothing kept): then
   // the Calls card, which says so — never a guess at the phone's own apps.
@@ -165,7 +165,8 @@ function Header({ person, donor, me, desk, onLog, onEmail, contacted, level, onE
   // phone's own mail app, which presets "Reached by: Email".
   const gmail = useGmail(emailTile);
   const viaGmail = emailTile && gmailReady(gmail.data);
-  const gmailLine = emailTile ? gmailNotReadyLine(gmail.data) : null;
+  // Not while the Email sheet is open: it says what's in the way itself.
+  const gmailLine = emailTile && !emailing ? gmailNotReadyLine(gmail.data) : null;
   const tiles = Boolean(person.phone || emailTile);
   const located = person.lat != null && person.lng != null;
   // The donor tier chip already says Donor: the level chip never repeats it
@@ -855,8 +856,8 @@ export default function Person() {
   const googleCode = useGoogleReturn();
   const gmail = useGmail(desk);
   useEffect(() => {
-    // GSI's word for Cancel is sign-in's; here it was connecting Gmail.
-    if (googleCode) toast.show(googleCode === 'cancelled' ? 'Connecting Gmail was cancelled.' : googleWords(googleCode, { where: 'profile' }));
+    // Connecting Gmail's words, not sign-in's ("…or use your password").
+    if (googleCode) toast.show(connectWords(googleCode));
   }, [googleCode]); // eslint-disable-line react-hooks/exhaustive-deps
   // Back with a draft, connected or not (Cancel at Google, Google said no):
   // the message is on screen again, with what's in the way and the way back,
@@ -944,7 +945,7 @@ export default function Person() {
 
   return (
     <div className="pf-page">
-      <Header person={person} donor={donor} me={me} desk={desk} onLog={onLog} onEmail={() => setEmailing({ draft: null })} contacted={contacts.length > 0} level={ladders.data?.level}
+      <Header person={person} donor={donor} me={me} desk={desk} onLog={onLog} onEmail={() => setEmailing({ draft: null })} emailing={Boolean(emailing)} contacted={contacts.length > 0} level={ladders.data?.level}
         onEdit={() => { setOpen((o) => ({ ...o, details: true })); setEditing('name'); }}
         keyLine={desk ? <ProfileKeyTies query={knows} household={household} onMore={() => openSection('knows')} /> : null} />
       {waiting > 0 && (

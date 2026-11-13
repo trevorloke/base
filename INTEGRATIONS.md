@@ -710,7 +710,9 @@ bounces and spam complaints the way Google asks bulk senders to.
   Gmail is on (connect it on Your profile, or wait until a time). *Connect
   again* mid-send keeps what was written for the trip to Google, in that
   browser tab only; back on the page the sheet opens with it, even after
-  Cancel on Google's page (with *Connect again* still there). Times
+  Cancel on Google's page (with *Connect again* still there, and Google's
+  refusal said in connecting's words, never sign-in's "use your
+  password"). Times
   ("wait until 3:40 pm") are on the campaign's clock. A Gmail send needs
   signal: it never waits in the
   outbox.

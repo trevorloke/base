@@ -355,7 +355,21 @@ try {
     && (await s.locator('.gm-said a:has-text("Connect again")').count()) === 1
     && (await text(s, '.toast')) === 'Connecting Gmail was cancelled.', `${s.url()} ${await text(s, '.toast')} ${await text(s, '.gm-sheet')}`);
   check('…and nothing kept in this tab to pop up later', (await s.evaluate((id) => sessionStorage.getItem(`gmail-draft:${id}`), jane)) === null);
+  check('…the sheet says what’s in the way; the line under the tiles doesn’t say it again', (await s.locator('.gm-tileline').count()) === 0);
   await shot(s, '14b-sheet-cancelled-at-google-1440');
+  // Their Workspace admin hasn't allowed base.win: connecting words, not sign-in's.
+  fake.next('auth', 'admin_policy_enforced');
+  await s.locator('.gm-said a:has-text("Connect again")').click();
+  await pickGoogle(s, 'sam');
+  await s.locator('.gm-sheet').waitFor({ timeout: 10000 }).catch(() => {});
+  await s.locator('.toast').waitFor({ timeout: 10000 }).catch(() => {});
+  check('…blocked by their admin: the draft back, and no "use your password" to someone signed in',
+    (await s.locator('.gm-sheet textarea').inputValue().catch(() => '')) === 'Hi Jane — still keen on a sign?'
+    && (await text(s, '.toast')) === 'Your Google Workspace admin hasn’t allowed base.win — ask them to mark it Trusted.', await text(s, '.toast'));
+  await shot(s, '14c-sheet-blocked-at-google-1440');
+  await s.setViewportSize({ width: 390, height: 844 });
+  await s.screenshot({ path: `${SHOTS}/14d-sheet-blocked-at-google-390.png` });
+  await s.setViewportSize({ width: 1440, height: 900 });
   await s.locator('.gm-said a:has-text("Connect again")').click();
   await pickGoogle(s, 'sam');
   await s.locator('.gm-sheet').waitFor({ timeout: 10000 }).catch(() => {});
