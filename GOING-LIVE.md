@@ -123,6 +123,7 @@ Then, as each one is ready:
 | `GOOGLE_PLACES_DAILY_MAX`, `GOOGLE_PLACES_PER_PERSON` | leave unset (300 Google asks a day, 50 a person), or whole numbers | keeping Google's suggestions inside its free use |
 | `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` | the campaign's OAuth client (Google Cloud → Google Auth Platform → Clients → *Web application*, redirect address from **Settings → Services → Google**); staging gets its own project and client, never production's (INTEGRATIONS.md, *Google sign-in and connections*) | Sign in with Google, and every Google connection |
 | `GOOGLE_TOKEN_KEY` | 32 or more random characters (`openssl rand -base64 48`), a different one per environment; keep a copy in the campaign's password manager | Gmail, Drive and Calendar connections (lost: everyone connects again) |
+| `GMAIL_DAILY_MAX` | leave unset (100), or a whole number from 1 to 400 | emails a person may send from their own Gmail in 24 hours, every campaign on this server counted |
 | `STARBASE_TILE_PROVIDER`, `STARBASE_TILE_KEY` | `stadia` for Stadia Maps (address, credit and zoom filled in), and its key only if it can't be told the campaign's web address (§5, Recipe A) | the map's background, instead of the free tiles |
 | `STARBASE_TILE_URL`, `STARBASE_TILE_ATTRIBUTION`, `STARBASE_TILE_MAX_ZOOM` | a tile provider the campaign has an agreement with: its `https://…/{z}/{x}/{y}.png` address, its credit line, its deepest zoom (§5, *The street map*) | the map's background, instead of the free tiles |
 | `STARBASE_TRUSTED_PROXIES` | leave unset on Render (one proxy). Set to the number of proxies in front if there is a CDN before Render | rate limits reading the right address |
@@ -173,6 +174,24 @@ gives CallHub the address results come back to, built from
 documentation and has not been run against a real account: before the
 first calling night, make one test call and see its result arrive on the
 person (INTEGRATIONS.md has the steps and what is not confirmed).
+
+Gmail (one email to one person, from a staff member's own Gmail), after
+the Google client above, in the same Google Cloud project:
+1. APIs & Services → Library → enable **Gmail API**. (Skipped, every send
+   fails and Services says *Gmail API is off in Google Cloud*.)
+2. Google Auth Platform → **Data access**: add `.../auth/gmail.send`, next
+   to `openid`, `.../auth/userinfo.email` and `.../auth/userinfo.profile`.
+   Nothing else for Gmail. The audience is the one the whole Google setup
+   shares (INTEGRATIONS.md, *Gmail*): Workspace + Internal needs no Google
+   review; External and published but not reviewed shows staff Google's
+   warning and lets no more than 100 people ever connect Gmail; reviewed
+   by Google, neither.
+3. **Settings → Services → Google → Check** must pass first. Then
+   **Services → Gmail**: say how Google is set up, and turn on *Let the
+   desk send from their own Gmail*.
+4. Each staff member: **Your profile → Google → Connect Gmail**, then
+   **Send me a test**. On Workspace, *Your Google Workspace admin hasn't
+   allowed base.win* means the admin marks the client **Trusted**.
 
 **Check them.** After the first sign-in (below): **Settings → Services** in
 the admin lists every service, says which settings are missing, and

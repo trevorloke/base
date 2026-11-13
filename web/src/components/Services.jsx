@@ -20,6 +20,7 @@ import SendingDomain from './SendingDomain.jsx';
 import SenderAddresses from './SenderAddresses.jsx';
 import MailchimpPanel from './MailchimpPanel.jsx';
 import GooglePanel from './GooglePanel.jsx';
+import GmailPanel from './GmailPanel.jsx';
 import { NoSignal, noSignal, useOnline } from './NoSignal.jsx';
 import ServiceConnect from './ServiceConnect.jsx';
 import './services.css';
@@ -48,7 +49,7 @@ function Row({ s, online }) {
             : <span className={`chip sv2-state sv2-state--${s.state}`}>{STATE_WORD[s.state]}{s.launch && s.state === 'missing' ? ' · needed to launch' : ''}</span>}
         </div>
         <p className="sv2-for">{s.for}</p>
-        {s.detail && !(s.panel === 'google' && s.lines) && <p className="sv2-detail">{s.detail}</p>}
+        {s.detail && !(s.panel === 'google' && s.lines) && !(s.panel === 'gmail' && s.state === 'missing') && <p className="sv2-detail">{s.detail}</p>}
         {s.missing.length > 0 && (
           <p className="sv2-missing">Set in the hosting’s environment: {s.missing.map((k) => <code key={k}>{k}</code>).reduce((a, b) => [a, ' · ', b])}</p>
         )}
@@ -56,6 +57,7 @@ function Row({ s, online }) {
         {s.domainPanel && <SenderAddresses online={online} />}
         {s.panel === 'mailchimp' && <MailchimpPanel online={online} onChanged={() => setRes(null)} />}
         {s.panel === 'google' && s.lines && <GooglePanel s={s} online={online} />}
+        {s.panel === 'gmail' && <GmailPanel online={online} />}
         {/* The email sender's block comes as `hook`: a page cached from before it existed prints Stripe's sentence over any `webhook`. */}
         {s.hook && <Webhook w={s.hook} />}
         {s.webhook && <Webhook w={s.webhook} />}

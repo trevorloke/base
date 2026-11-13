@@ -533,7 +533,7 @@ const tagChangeText = (i) => {
   if (off.length) parts.push(`${off.length > 1 ? 'Tags off' : 'Tag off'} · ${off.join(', ')}`);
   return parts.join(' · ') || 'Tags';
 };
-const CHANNEL_WORD = { door: 'Knock', phone: 'Call', text: 'Text', in_person: 'Talk', mainstreet: 'Mainstreeting' };
+const CHANNEL_WORD = { door: 'Knock', phone: 'Call', text: 'Text', in_person: 'Talk', mainstreet: 'Mainstreeting', email: 'Email' };
 // "2:14 pm" today, "Oct 18" before that — the phone's own clock.
 export const clockText = (iso) => {
   const d = new Date(iso);

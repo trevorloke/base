@@ -4,7 +4,7 @@
 // events emitted for the log.
 import { z } from 'zod';
 import {
-  CHANNELS, OUTCOMES, SIGN_KIND_CODES, SIGN_STATUSES,
+  CHANNELS, OUTCOMES, EMAIL_OUTCOMES, SIGN_KIND_CODES, SIGN_STATUSES,
   VOLUNTEER_ROLE_CODES, SOCIAL_PLATFORMS, SHIFT_STATUSES,
 } from '@starbase/shared/canvass';
 import { RATING_CODE_RE } from '@starbase/shared/scale';
@@ -136,6 +136,12 @@ export const FIELD_ACTIONS = {
       visit_of: uuid().nullish(),
     }),
     handler: async (tx, ctx, input, emit) => {
+      // Email is logged at the desk, with its own few outcomes. Never
+      // refused for the person's reach: it records what already happened.
+      if (input.channel === 'email') {
+        if (ctx.role === 'volunteer') throw httpError(403, 'Email is logged at the desk');
+        if (!EMAIL_OUTCOMES.includes(input.outcome)) throw httpError(400, 'That outcome isn’t for email');
+      }
       await requirePerson(tx, ctx.workspaceId, input.person_id);
       if (input.answers?.length && !hasHook('contactLogged')) throw httpError(400, 'surveys are not available');
       if (input.client_id) {

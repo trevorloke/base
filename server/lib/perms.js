@@ -50,6 +50,7 @@ const ACTION_AREA = {
   sign: 'signs',
   blast: 'outreach', survey: 'outreach',
   ladder: 'outreach', text: 'outreach', texting: 'outreach', subscription: 'outreach', script: 'outreach',
+  gmail: 'outreach', // one email from your own Gmail (ext/gmail); gmail.settings is manager-only, so Admin
   member: 'admin', team: 'admin', permission: 'admin', workspace: 'admin', scale: 'admin', field: 'admin',
   bank: 'people', list: 'people',
   pass: 'map',
@@ -77,6 +78,7 @@ const PATH_AREA = [
   [/^\/api\/payments(\/|$)/, 'money'],
   [/^\/api\/persons\/[^/]+\/membership$/, 'money'],
   [/^\/api\/(blasts|surveys|ladders|subscriptions|texting|inbox)(\/|$)/, 'outreach'],
+  [/^\/api\/gmail(\/|$)/, 'outreach'],
   [/^\/api\/share\/(kits|top)(\/|$)/, 'outreach'], // GET /api/share (your own link) is no area
   [/^\/api\/shifts(\/|$)/, 'shifts'],
   [/^\/api\/signs(\/|$)/, 'signs'],

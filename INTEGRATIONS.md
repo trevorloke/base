@@ -18,6 +18,7 @@ is written) and says exactly what is wrong if anything is.
 | [Address lookup](#address-lookup) | suggestions as you type, placing people on the map | yes (free default, no key) | `GEOCODER`, `GEOCODER_FALLBACK`, `BC_GEOCODER_KEY`, `GOOGLE_MAPS_SERVER_KEY` |
 | [Map background](#map-background) | the map volunteers walk | no (free default; change before election week) | `GOOGLE_MAPS_TILES`, `GOOGLE_MAPS_SERVER_KEY`, or `STARBASE_TILE_URL` |
 | [Google sign-in and connections](#google-sign-in-and-connections) | Sign in with Google; the one Google connection Gmail, Drive and Calendar use | no (passwords always work) | `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_TOKEN_KEY` |
+| [Gmail](#gmail) | One email to one person, from a staff member's own Gmail | no (Email from a person's page opens the mail app) | none of its own (the Google row's); `GMAIL_DAILY_MAX` optional |
 | [Two-step sign-in key](#two-step-sign-in-key) | seals everyone's authenticator key | before the public link goes out (works without, with a warning) | `STARBASE_TWO_STEP_KEY` |
 | [Hosting — Render](#hosting--render) | the two environments | yes | `render.yaml` |
 | [GitHub Actions](#github-actions) | tests, and promoting staging to production | yes | none |
@@ -667,6 +668,68 @@ is missing.
   person has nothing else connected and nobody else here uses that Google
   account. With `STARBASE_JOBS=off` nothing can tell Google: people remove
   base.win in their Google Account themselves.
+
+## Gmail
+
+Gmail is for one person writing to one person: a coordinator on Jane's
+page writes a few lines, and it goes from their own Gmail, lands in their
+Sent folder, and shows on Jane's History. Nothing else goes through Gmail:
+newsletters, emails to a list, press releases, ladders, shift notices,
+receipts and invites stay on Resend or SendGrid, which handle unsubscribes,
+bounces and spam complaints the way Google asks bulk senders to.
+
+- **One permission:** `https://www.googleapis.com/auth/gmail.send` ("send
+  email on your behalf"; Google calls it sensitive, not restricted).
+  base.win never asks to read anyone's mail, so there is no paid security
+  assessment.
+- **It rides on the Google row** (`ext/gmail` is one purpose on the Google
+  connection): the same client, key and redirect address; nothing of its
+  own to set. Turned on per campaign by a manager (**Settings → Services →
+  Gmail**), connected per person on **Your profile**.
+- **The audience** is one for the whole Google setup (sign-in, Gmail,
+  Drive, Calendar): (a) Workspace + Internal — no Google review, only
+  accounts at the campaign's domain; (b) External, published, Gmail not
+  reviewed — staff see Google's "unverified app" warning and **no more than
+  100 people can ever grant Gmail**, for the life of the project; (c)
+  External, reviewed by Google — neither (it needs the domain verified in
+  Search Console, a privacy policy on it that names Gmail sending and
+  Google's Limited Use rules, a reason for the scope and a short video).
+  Never Testing on production. The panel's *How is Google set up* only
+  chooses the words staff see; base.win can't read it from Google.
+- **Who may be written to:** the reach rule's `direct` sender — no address,
+  a bounced address, do-not-email and do-not-contact stop it; leaving the
+  newsletter doesn't. Checked before the Email button is offered and again
+  as the send goes, with the stored address checked to be one bare address.
+- **The cap:** `GMAIL_DAILY_MAX` (100, at most 400) a person in 24 hours,
+  every campaign on this server counted, and ten a minute — far below
+  Gmail's own limits, so a mistake never gets a staff mailbox suspended.
+- **On screen:** a person's page offers *Email* (the "Email Jane
+  Example" sheet: Subject, Message, Send) only when Gmail is on and the
+  staff member's connection is fine; otherwise *Email* opens their mail
+  app and presets *Reached by: Email*, with one line saying why when
+  Gmail is on (connect it on Your profile, or wait until a time). *Connect
+  again* mid-send keeps what was written for the trip to Google, in that
+  browser tab only; back on the page the sheet opens with it, even after
+  Cancel on Google's page (with *Connect again* still there, and Google's
+  refusal said in connecting's words, never sign-in's "use your
+  password"). Times
+  ("wait until 3:40 pm") are on the campaign's clock. A Gmail send needs
+  signal: it never waits in the
+  outbox.
+- **What base.win keeps:** each send (`gmail_sends`, in the export), never
+  on the event log beyond who and whether it went. A send is not a
+  contact: when the person replies, log it as *Reached by: Email*.
+- **Answers:** sent; *Not sure it went* (Google got the request but didn't
+  answer in 10 s — check the Sent folder, never tried again by base.win,
+  since Gmail takes no idempotency key); *nothing was sent*; connect again;
+  Gmail asked us to wait (the person's grant waits, an hour for a day's
+  limit); the Gmail API off in Google Cloud (every send waits 60 s and
+  Services says so).
+- **Bounces of Gmail-sent mail** come back to the sender's own Gmail, never
+  to base.win's suppression list: fix the address or tag the person
+  do-not-email by hand.
+- `GMAIL_API_BASE`: tests only (`server/test/fake-google.js`); ignored in
+  production, and Services says when it is honoured.
 
 ## Online payments — Stripe
 

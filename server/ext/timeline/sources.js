@@ -58,7 +58,7 @@ const dayWord = (ts, tz) => fmtIn(ts, tz, { weekday: 'short', month: 'short', da
 const years = (n) => `${n} year${Number(n) === 1 ? '' : 's'}`;
 
 // ── Knocks, calls and talks: History as it always read ──
-const CHANNEL = { door: 'Door', phone: 'Phone', text: 'Text', in_person: 'In person', mainstreet: 'Mainstreeting' };
+const CHANNEL = { door: 'Door', phone: 'Phone', text: 'Text', in_person: 'In person', mainstreet: 'Mainstreeting', email: 'Email' };
 const OUTCOME = {
   contacted: 'Talked', no_answer: 'No answer', refused: 'Refused', moved: 'Moved', inaccessible: 'No access',
   left_lit: 'Left lit', left_message: 'Left message',
@@ -368,6 +368,16 @@ const leftMedia = async (db, q) => (await rowsOf(db, `
    where m.workspace_id = $1 and m.person_id = $2 and m.left_at is not null`, q,
 )).map((r) => entry(r, 'other', 'media', 'Media', 'Left the media list', { detail: LEFT_MEDIA[r.left_how] || null }));
 
+// ── One email from a staff member's own Gmail (ext/gmail; never a test) ──
+const GMAIL = { sent: 'Sent from Gmail', unsure: 'Not sure it went', failed: 'Not sent', sending: 'Sending…' };
+const gmailSends = async (db, q) => (await rowsOf(db, `
+  select ${ms('g.created_at')} as at, 'gmail:' || g.id::text as key, g.status, g.subject, g.body, u.name as by_name
+    from gmail_sends g left join users u on u.id = g.user_id
+   where g.workspace_id = $1 and g.person_id = $2 and g.kind = 'person'`, q,
+)).map((r) => entry(r, 'messages', `gmail_${r.status}`, 'Email', GMAIL[r.status] || r.status, {
+  detail: line(clean(r.subject, 200), clean(r.body, 140)), by: r.by_name || null,
+}));
+
 const anyone = () => true;
 const desk = (v) => v.desk;
 const outreach = (v) => v.desk && v.outreach;
@@ -381,6 +391,7 @@ export const SOURCES = [
   { key: 'emails', group: 'messages', can: outreach, read: emails },
   { key: 'ladders', group: 'messages', can: outreach, read: ladderEmails },
   { key: 'consent', group: 'messages', can: outreach, read: consent },
+  { key: 'gmail', group: 'messages', can: outreach, read: gmailSends },
   { key: 'web', group: 'website', can: desk, read: web },
   { key: 'gifts', group: 'money', can: moneyRoles, read: gifts },
   { key: 'payments', group: 'money', can: moneyRoles, read: payments },

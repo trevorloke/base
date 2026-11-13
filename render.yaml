@@ -30,6 +30,7 @@
 #   STARBASE_TILE_URL, _ATTRIBUTION, _MAX_ZOOM          another tile provider
 #   STARBASE_TILE_PROVIDER (stadia), STARBASE_TILE_KEY  a tile provider by name (and its key)
 #   TWILIO_VOICE=off                                    texting without calls
+#   GMAIL_DAILY_MAX                                     emails a person may send from their Gmail in 24 h (100)
 #   CALLHUB_API_KEY, CALLHUB_API_BASE                   the phone dialer (CallHub): call lists out, results back
 #   STARBASE_CANDIDATES, STARBASE_PROVINCE, STARBASE_GEO_BOUNDS   the campaign
 #   APP_HOSTS                                           the app's other addresses, never the website's

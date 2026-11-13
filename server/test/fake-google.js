@@ -22,6 +22,9 @@
 //   GET  /.well-known/openid-configuration
 //   ANY  /test-api/*              an API host stand-in: needs a live access
 //                                 token (Authorization: Bearer)
+//   POST /gmail/v1/users/me/messages/send   Gmail's send (GMAIL_API_BASE):
+//                                 needs a live token carrying gmail.send;
+//                                 keeps each message, decoded (gmailSent)
 //
 // In code, for tests (or over HTTP: POST /__name with JSON):
 //   authorize(authUrl, sub | { cancel }) → the back address Google would
@@ -33,10 +36,16 @@
 //                                 (403 userRateLimitExceeded), 401,
 //                                 partial_scope, no_refresh, wrong_aud,
 //                                 wrong_nonce, wrong_iss, expired
+//                                 'gmail': 401, invalidArgument (400),
+//                                 insufficientPermissions, rateLimitExceeded,
+//                                 dailyLimitExceeded (403s), 429
+//                                 ({ retryAfter }), accessNotConfigured (403,
+//                                 PERMISSION_DENIED, SERVICE_DISABLED), 500,
+//                                 hang (answers only after slowMs)
 //   revokeAll(sub)                as if the person removed base.win in
 //                                 their Google Account
 //   account({ sub, email, hd, name })   add a test account
-//   counts { auth, token, refresh, revoke, api, discovery } · revoked
+//   counts { auth, token, refresh, revoke, api, discovery, gmail } · revoked
 //   (tokens revoked, each with its count) · tokens() (every token issued)
 import http from 'node:http';
 import { createHash, randomBytes } from 'node:crypto';
@@ -58,8 +67,9 @@ export const startFakeGoogle = async ({ port = 0, clientId, secret, redirectUris
   const grants = new Map(); // sub → { scopes:Set, alive:true }
   const refreshTokens = new Map(); // token → { sub, alive }
   const accessTokens = new Map(); // token → { sub, scopes, expiresAt, alive }
-  const knobs = { auth: [], token: [], refresh: [], revoke: [], api: [] };
-  const counts = { auth: 0, token: 0, refresh: 0, revoke: 0, api: 0, discovery: 0 };
+  const knobs = { auth: [], token: [], refresh: [], revoke: [], api: [], gmail: [] };
+  const counts = { auth: 0, token: 0, refresh: 0, revoke: 0, api: 0, discovery: 0, gmail: 0 };
+  const gmailSent = []; // { raw (the message, decoded), headers, body, token sub }
   const revoked = new Map(); // token → times
   const apiCalls = [];
   let base = '';
@@ -221,6 +231,38 @@ ${[...people.values()].map((p) => `<p><a class="acct" data-sub="${esc(p.sub)}" h
         if (knob?.kind === '401' || !t || !t.alive || t.expiresAt < Date.now()) return json(res, 401, { error: { code: 401, message: 'Invalid Credentials' } });
         return json(res, 200, { ok: true, path: u.pathname, scopes: t.scopes });
       }
+      if (u.pathname === '/gmail/v1/users/me/messages/send' && req.method === 'POST') {
+        counts.gmail += 1;
+        const knob = take('gmail');
+        const gerr = (status, reason, message, extra = {}) => json(res, status, { error: { code: status, message, errors: [{ message, domain: 'global', reason }], ...extra } });
+        if (knob?.kind === 'hang') { await later(slowMs); return json(res, 200, { id: rand('late-'), threadId: 't' }); }
+        if (knob?.kind === '500') return json(res, 500, { error: { code: 500, message: 'Backend Error', status: 'INTERNAL' } });
+        if (knob?.kind === '401') return json(res, 401, { error: { code: 401, message: 'Request had invalid authentication credentials.', status: 'UNAUTHENTICATED' } });
+        if (knob?.kind === 'invalidArgument') return gerr(400, 'invalidArgument', 'Invalid To header');
+        if (knob?.kind === 'insufficientPermissions') return gerr(403, 'insufficientPermissions', 'Request had insufficient authentication scopes.', { status: 'PERMISSION_DENIED', details: [{ '@type': 'type.googleapis.com/google.rpc.ErrorInfo', reason: 'ACCESS_TOKEN_SCOPE_INSUFFICIENT' }] });
+        if (knob?.kind === 'rateLimitExceeded') return gerr(403, 'rateLimitExceeded', 'Rate Limit Exceeded');
+        if (knob?.kind === 'dailyLimitExceeded') return gerr(403, 'dailyLimitExceeded', 'Daily Limit Exceeded');
+        if (knob?.kind === '429') return json(res, 429, { error: { code: 429, message: 'Too many requests', status: 'RESOURCE_EXHAUSTED' } }, knob.retryAfter ? { 'retry-after': String(knob.retryAfter) } : {});
+        if (knob?.kind === 'accessNotConfigured') {
+          return gerr(403, 'accessNotConfigured', 'Gmail API has not been used in project 0 before or it is disabled.', {
+            status: 'PERMISSION_DENIED', details: [{ '@type': 'type.googleapis.com/google.rpc.ErrorInfo', reason: 'SERVICE_DISABLED' }],
+          });
+        }
+        const bearer = String(req.headers.authorization || '').replace(/^Bearer /, '');
+        const t = accessTokens.get(bearer);
+        if (!t || !t.alive || t.expiresAt < Date.now()) return json(res, 401, { error: { code: 401, message: 'Invalid Credentials', status: 'UNAUTHENTICATED' } });
+        if (!t.scopes.includes('https://www.googleapis.com/auth/gmail.send')) return gerr(403, 'insufficientPermissions', 'Request had insufficient authentication scopes.');
+        let msg;
+        try { msg = JSON.parse(raw); } catch { return gerr(400, 'invalidArgument', 'Invalid JSON payload'); }
+        if (!msg?.raw) return gerr(400, 'invalidArgument', "'raw' RFC822 payload message string or uploading message via /upload/* URL required");
+        const text = Buffer.from(String(msg.raw), 'base64url').toString('utf8');
+        const [head] = text.split('\r\n\r\n');
+        const headers = Object.fromEntries(head.split('\r\n').map((l) => [l.slice(0, l.indexOf(':')).toLowerCase(), l.slice(l.indexOf(':') + 1).trim()]));
+        const body = Buffer.from(text.slice(head.length + 4).replace(/\r\n/g, ''), 'base64').toString('utf8');
+        const id = rand('18f').slice(0, 16);
+        gmailSent.push({ id, raw: text, headers, body, sub: t.sub });
+        return json(res, 200, { id, threadId: id, labelIds: ['SENT'] });
+      }
       if (u.pathname.startsWith('/__') && req.method === 'POST') {
         const body = raw ? JSON.parse(raw) : {};
         const name = u.pathname.slice(3);
@@ -238,13 +280,13 @@ ${[...people.values()].map((p) => `<p><a class="acct" data-sub="${esc(p.sub)}" h
   base = `http://127.0.0.1:${server.address().port}`;
 
   const api = {
-    base, server, counts, revoked, apiCalls,
+    base, server, counts, revoked, apiCalls, gmailSent,
     authorize,
     next: (endpoint, kind, opts = {}) => { knobs[endpoint].push({ kind: String(kind), ...opts }); },
     clearKnobs: () => { for (const k of Object.keys(knobs)) knobs[k].length = 0; },
     revokeAll: (sub) => revokeGrant(sub),
     account: (a) => people.set(a.sub, { hd: null, ...a }),
-    resetCounts: () => { for (const k of Object.keys(counts)) counts[k] = 0; revoked.clear(); apiCalls.length = 0; },
+    resetCounts: () => { for (const k of Object.keys(counts)) counts[k] = 0; revoked.clear(); apiCalls.length = 0; gmailSent.length = 0; },
     tokens: () => [...refreshTokens.keys(), ...accessTokens.keys()],
     close: () => new Promise((r) => server.close(r)),
   };

@@ -113,7 +113,7 @@ const localDate = (iso) => {
 };
 const telHref = (phone) => `tel:${dialable(phone)}`;
 const smsHref = (phone, body) => `sms:${dialable(phone)}?&body=${encodeURIComponent(body)}`;
-const isDnc = (p) => Array.isArray(p?.tags) && p.tags.includes('do-not-contact');
+const isDnc = (p) => Array.isArray(p?.tags) && p.tags.some((t) => String(t).toLowerCase() === 'do-not-contact');
 
 export function doorTitle(door) {
   if (!door?.address) return 'Unaddressed pin';

@@ -187,3 +187,27 @@ test('a dead address (the suppression list) and do-not-call: every reader follow
     ok(await mgr.action('person.update', { id: P.ana.id, tags: P.ana.tags }));
   }
 });
+
+test('direct (one person, from a staff member’s own mail): every no but leaving the newsletter', async () => {
+  const pp = person('p', '$1');
+  const before = Object.fromEntries(await Promise.all(['list', 'newsletter', 'press', 'ladder', 'shift', 'self'].map(async (s) => [s, await names(mayReach('email', s, pp))])));
+  // Leaving the newsletter (Cy) is not "don't write to me"; never asking for
+  // it (Ben, Hal) isn't either. Do-not-email (Dee) and do-not-contact (Eli,
+  // with capitals) are.
+  assert.deepEqual(await names(mayReach('email', 'direct', pp)), ['Ana', 'Ben', 'Cy', 'Fay', 'Hal', 'Ivy']);
+  const one = (key, extra = {}) => whyNot(db, 'email', 'direct', { workspaceId: ws, email: P[key].email, tags: P[key].tags, personId: P[key].id, ...extra });
+  assert.equal(await one('cy'), null, 'unsubscribed from the newsletter: may still be written to');
+  assert.equal(await one('dee'), 'do_not_email');
+  assert.equal(await one('eli'), 'do_not_contact');
+  assert.equal(await one('ana', { tags: ['DO-NOT-CONTACT'] }), 'do_not_contact', 'any capitals');
+  assert.equal(await one('ana', { email: ' ' }), 'no_email');
+  const sup = randomUUID();
+  await db.query(`insert into email_suppressions (id, workspace_id, email, reason, source) values ($1, $2, $3, 'bounce', 'test')`, [sup, ws, mail('ana')]);
+  try {
+    assert.equal(await one('ana'), 'suppressed');
+  } finally {
+    await db.query('delete from email_suppressions where id = $1', [sup]);
+  }
+  // Every other sender as it was.
+  for (const [s, was] of Object.entries(before)) assert.deepEqual(await names(mayReach('email', s, pp)), was, s);
+});
