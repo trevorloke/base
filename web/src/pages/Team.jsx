@@ -131,15 +131,21 @@ function InvitedRow({ inv, ids, canCancel, onChanged, onLinkGone, online = true 
         <span className="ot-row__main">
           <span className="ot-row__name ot-email"><Email value={inv.email} /></span>
           <span className="ot-row__sub">
-            <span>{roleLabel(inv.role)}</span>
+            <span>{inv.candidate_id ? `Candidate${inv.candidate_office ? ` · ${inv.candidate_office}` : ''}` : roleLabel(inv.role)}</span>
             <span>until {fmtDay(inv.expires_at)}</span>
           </span>
         </span>
         {!confirming && (
           <span className="ot-actions ot-row__acts">
-            <button type="button" className="btn ot-btn-tap" disabled={busy || !online} onClick={newLink}>
-              {busy ? 'Making…' : 'New link'}
-            </button>
+            {/* A seat's invite is made again under Candidates: a plain New link
+                here would drop the seat (the server refuses it too). */}
+            {inv.candidate_id ? (
+              <Link className="btn ot-btn-tap" to="/settings/candidates">New link in Candidates</Link>
+            ) : (
+              <button type="button" className="btn ot-btn-tap" disabled={busy || !online} onClick={newLink}>
+                {busy ? 'Making…' : 'New link'}
+              </button>
+            )}
             {canCancel && (
               <button type="button" className="btn btn-quiet ot-btn-tap" disabled={busy || !online}
                 onClick={() => { setConfirming(true); setSent(null); }}>Cancel</button>

@@ -749,8 +749,10 @@ app.get('/team', async (c) => {
     [ctx.workspaceId],
   )).rows;
   const invites = (await db.query(
-    `select id, email, role, created_at, expires_at from invites
-     where workspace_id = $1 and accepted_at is null and expires_at > now() order by created_at desc`,
+    // A candidate's invite says whose seat it is (Team sends its New link to Candidates).
+    `select i.id, i.email, i.role, i.created_at, i.expires_at, c.id as candidate_id, c.name as candidate_name, c.office as candidate_office
+     from invites i left join candidates c on c.id = i.candidate_id and c.workspace_id = i.workspace_id and c.removed_at is null
+     where i.workspace_id = $1 and i.accepted_at is null and i.expires_at > now() order by i.created_at desc`,
     [ctx.workspaceId],
   )).rows;
   return c.json({ members, invites });

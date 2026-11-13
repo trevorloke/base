@@ -212,7 +212,13 @@ export default function CallTime() {
           <h2 className="ct-name">{current.name}</h2>
           {current.city && <p className="ops-meta ct-city">{current.city}</p>}
           {current.phone && (
-            <a className="btn btn-quiet ct-call" href={`tel:${current.phone.replace(/[^\d+]/g, '')}`}>Call <span className="mono">{current.phone}</span></a>
+            // The first thing to tap: a real button (not primary — the answers are), with a phone mark.
+            <a className="btn ct-call" href={`tel:${current.phone.replace(/[^\d+]/g, '')}`}>
+              <svg className="ct-call__icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z" />
+              </svg>
+              Call <span className="mono">{current.phone}</span>
+            </a>
           )}
           <p className="ct-facts">{factsOf(current)}</p>
           {current.ask_cents ? <p className="ct-ask">Ask {fmtBig(current.ask_cents)}</p> : null}
@@ -249,7 +255,7 @@ export default function CallTime() {
           )}
 
           <div className="ct-row">
-            <button type="button" className="btn btn-quiet ops-tap" aria-expanded={open === 'callback'} disabled={busy || !online}
+            <button type="button" className="btn ops-tap" aria-expanded={open === 'callback'} disabled={busy || !online}
               onClick={() => setOpen((v) => (v === 'callback' ? null : 'callback'))}>Call back…</button>
             {!online && <span className="ops-meta">Needs signal</span>}
           </div>

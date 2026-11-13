@@ -800,6 +800,11 @@ function VolunteerToday({ b, me }) {
 // something; the race says Loading… or Unavailable, never a made-up 0.
 const firstName = (name) => String(name || '').trim().split(/\s+/)[0] || '';
 const WEEK = 7 * DAY;
+// A race's number fits its tile on a phone: 100,000 and up reads "123K" or
+// "1.2M" (the whole number is the tile's label and title).
+const raceNum = (n) => (Number(n) >= 100_000
+  ? Number(n).toLocaleString('en-CA', { notation: 'compact', maximumFractionDigits: 1 })
+  : num(n));
 function YourRace({ home }) {
   if (home.isPending) return <p className="muted cand-race">Loading…</p>;
   const race = home.data?.race;
@@ -823,7 +828,7 @@ function YourRace({ home }) {
       <div className="today-nums">
         {tiles.map(([label, n]) => (
           <div key={label} className="today-num">
-            <span className="today-num__n">{num(n)}</span>
+            <span className="today-num__n" title={num(n)}><span aria-hidden="true">{raceNum(n)}</span><span className="cand-sr">{num(n)}</span></span>
             <span className="today-num__label">{label}</span>
           </div>
         ))}
@@ -845,6 +850,8 @@ function CandidateToday({ b, me }) {
   // Call time (ext/candidates): while there are donors to call, it's the day's one button.
   const ct = home.data?.calltime;
   const calling = Number(ct?.left) > 0;
+  // "5 to call · 2 lists": the first list's card counts only its own.
+  const lists = (ct?.banks ?? []).filter((x) => Number(x.left) > 0).length;
   const money = (c) => fmtMoney(c).replace(/\.00$/, '');
   return (
     <div className="today today--field today--candidate">
@@ -854,13 +861,19 @@ function CandidateToday({ b, me }) {
       {b.voted?.on && <GotvCard v={b.voted} />}
       <FollowupsToday me={me} />
 
-      {calling ? (
+      {home.isPending ? (
+        // Not "Met someone" first and call time a moment later: a quick tap
+        // would go to the wrong place.
+        <section className="today-go" aria-label="Loading">
+          <button type="button" className="btn btn-primary today-start" disabled>Loading…</button>
+        </section>
+      ) : calling ? (
         <section className="today-go" aria-label="Call time">
           <Link to="/call-time" className="btn btn-primary today-start">
             Start call time <span aria-hidden="true">→</span>
           </Link>
           <p className="today-go__meta cand-go__meta">
-            {num(ct.left)} to call{Number(ct.pledged_week_cents) > 0 ? ` · ${money(ct.pledged_week_cents)} pledged this week` : ''}
+            {num(ct.left)} to call{lists > 1 ? ` · ${num(lists)} lists` : ''}{Number(ct.pledged_week_cents) > 0 ? ` · ${money(ct.pledged_week_cents)} pledged this week` : ''}
           </p>
         </section>
       ) : (
@@ -868,13 +881,20 @@ function CandidateToday({ b, me }) {
           <Link to="/mainstreet" className="btn btn-primary today-start">
             Met someone <span aria-hidden="true">→</span>
           </Link>
+          {/* Call time couldn't be read: said, never silently gone. */}
+          {home.isError && (
+            <p className="today-go__meta cand-race__fail" role="status">
+              <span className="muted">Call time: Unavailable</span>
+              <button type="button" className="btn today-tap" onClick={() => home.refetch()} disabled={home.isFetching}>Try again</button>
+            </p>
+          )}
         </section>
       )}
 
       {/* No rows at all: no empty box either. */}
       {(calling || !ready || next || week > 0 || Number(b.myPeople) > 0) && <ul className="today-rows today-next">
         {calling && <LinkRow to="/mainstreet" main="Met someone" />}
-        {!ready && <li className="today-need today-row--wait" aria-hidden="true" />}
+        {!ready && <li className="today-need today-row--wait muted" role="status">Loading…</li>}
         {ready && next && (
           <WhenRow to={`/shifts/${next.id}`} kicker="Your next shift" title={next.title} when={next.starts_at} tz={tz}
             extra={turfNames(b.shiftTurfs?.[next.id] || []) || undefined} />

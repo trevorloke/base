@@ -118,6 +118,15 @@ test('invite: the row is written, the email goes only after the write commits; j
   assert.ok(!JSON.stringify(ev.payload).includes(tokenOf(inv.joinUrl)), 'the token never enters the event log');
   const listed = (await seats()).find((c) => c.id === ids.council);
   assert.ok(listed.invited_until, 'Invited');
+  // Members lists the invite as the seat's, and its New link can't turn it
+  // into a plain volunteer invite (nor can any other role's invite).
+  const pending = ok(await mgr.get('/api/team')).invites.find((i) => i.email === 'cleo.can@example.org');
+  assert.deepEqual([pending.candidate_id, pending.candidate_office], [ids.council, 'Council']);
+  for (const role of ['volunteer', 'staff']) {
+    const plain = await mgr.action('member.invite', { email: 'cleo.can@example.org', role });
+    assert.deepEqual([plain.status, plain.json.error], [409, 'Cleo Example has a candidate invite — use Settings → Candidates, or cancel it first']);
+  }
+  assert.equal((await db.query('select candidate_id from invites where email = $1 and accepted_at is null and expires_at > now()', ['cleo.can@example.org'])).rows[0].candidate_id, ids.council);
 
   const { cl, r: j } = await join(inv.joinUrl, 'Cleo Example');
   ok(j);

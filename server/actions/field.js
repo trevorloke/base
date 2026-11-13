@@ -1099,6 +1099,14 @@ export const FIELD_ACTIONS = {
         [ctx.workspaceId, email],
       )).rows[0];
       if (already) throw httpError(409, `${email} is already on the team`);
+      // A live candidate invite isn't replaced from here: the new link would
+      // carry no seat, and the candidate would join with the volunteer app.
+      const seat = (await tx.query(
+        `select c.name from invites i join candidates c on c.id = i.candidate_id and c.workspace_id = i.workspace_id and c.removed_at is null
+         where i.workspace_id = $1 and i.email = $2 and i.accepted_at is null and i.expires_at > now() limit 1`,
+        [ctx.workspaceId, email],
+      )).rows[0];
+      if (seat) throw httpError(409, `${seat.name} has a candidate invite — use Settings → Candidates, or cancel it first`);
       const token = randomBytes(24).toString('hex');
       const id = newId();
       // One live link per email: a new invite ("New link") kills the old one.

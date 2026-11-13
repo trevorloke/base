@@ -5,3 +5,7 @@
 .cand-race .today-num { cursor: default; }
 .cand-race__fail { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; }
 .cand-race__fail .btn { min-height: 48px; }
+/* Three tiles in a phone's width: the number shrinks to fit, never cut off. */
+.cand-race .today-num { min-width: 0; }
+.cand-race .today-num__n { font-size: clamp(20px, 6vw, 40px); max-width: 100%; overflow-wrap: anywhere; white-space: normal; }
+.cand-sr { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
