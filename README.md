@@ -830,7 +830,11 @@ welcome, the two voting-day reminders last, and a press release. They state
 no fact about any campaign: what is specific to it is a placeholder in
 [square brackets], and an email started from a template can't go out with
 one of that template's placeholders (or any ready-made one's) still in it:
-*Fill in the [ ] parts first*. A link with no address is refused too. A
+*Fill in the [ ] parts first*. A link with no address is refused too. They are
+reached from "Start from" at the top of every email and release, the
+**Templates** row under Lists (Media: beside Write a release) and the
+command bar; "Save as template" sits under the message, and a past email has
+**Use again**. A
 manager can hide a ready-made template. **[first name]** and
 **[campaign]** fill themselves in on every newsletter, email and release:
 the subscriber's or person's first name ("JOHN" is greeted "John"; none:

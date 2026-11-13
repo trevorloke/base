@@ -509,6 +509,15 @@ each refused until filled), [first name] and [campaign] filled per
 subscriber, person, A/B winner and test (a name typed as a link or in bold
 stays words), what stops a send and what only asks, the footer lines
 escaped in both parts (and as before with none set), Use again.
+`e2e-templates.mjs` (ports 5400–5402, `PORT`/`SHOTS` optional) drives it on
+screen as a manager, staff and a volunteer granted Media, at 1440 and 390:
+Start from, the one line under the Message, Link on a `[link: …]`
+placeholder and "Link to…", + First name, the confirm's "Still has [sic]",
+the mail as sent ("Hi Sam", "Hi friend", "Hi John", a name typed as a link
+only words), "No mailing address yet" and the Preview footer, Save as
+template and Update twice, the Templates page (a stale save in a second tab,
+copy, Remove → Undo, Hide → Show), Use again, the command bar, Media's
+release templates and no signal.
 
 - **Candidates** (Settings → Candidates) — a manager adds and invites
   candidates; each joins as a volunteer with a seat; their phone opens on

@@ -423,7 +423,7 @@ export function TemplatesScreen({ use }) {
               {shownStarters(data).map((s) => {
                 const ref = `starter:${s.key}`;
                 return (
-                  <Row key={s.key} name={s.name} chip="Ready-made" sub={[s.subject]} open={open === ref} onToggle={() => toggle(ref)}>
+                  <Row key={s.key} name={s.name} chip="Ready-made" sub={[toWords(s.subject)]} open={open === ref} onToggle={() => toggle(ref)}>
                     <Opened use={use} refKey={ref} data={data} mine={false} onDone={() => setOpen(null)} toast={toast} />
                   </Row>
                 );
