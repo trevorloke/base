@@ -2417,12 +2417,14 @@ export default function MapPage() {
       picture: map && tileUrl ? tileAt(drawnAs(tileUrl), map.getCenter(), map.getZoom(), tileMax) : null,
     };
   }, [lookLabel, tileUrl, tileMax, drawnAuto, pickTiles, pickLabel]);
-  // Check again: the notice probe asks the drawn look afresh (a new layer).
+  // Check again: the notice probe asks the drawn look afresh (a new layer),
+  // and the pick's too (asked again when the map next looks at the pick).
   const checkAgain = useCallback(() => {
     if (!tileUrl) return;
     forgetNotice(drawnAs(tileUrl));
+    if (pickTiles?.url) forgetNotice(drawnAs(pickTiles.url));
     setTilesTry((n) => n + 1);
-  }, [tileUrl]);
+  }, [tileUrl, pickTiles]);
   const showEmpty = doorsQ.data && !big && doors.length === 0 && !hasSheet && !mode;
   // A big list's number is what is on screen, so it says what it counts:
   // people from further out, doors closer in. A list loaded whole — or a
