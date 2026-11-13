@@ -483,7 +483,7 @@ function EditDetailsForm({ person, refresh, onClose, focus = 'name' }) {
 
 // editing: null, or the field the form opens on (the header's Edit, a tap on
 // a line, or "Edit details" — the page holds it so the header can open it).
-function Details({ person, household, refresh, desk, me, editing, setEditing, move = null, moveOpen = false, contacts = [] }) {
+function Details({ person, household, refresh, desk, me, editing, setEditing, move = null }) {
   const [saved, setSaved] = useState(null);
   // The number dials from your own phone only when calls through the campaign are off.
   const ownDialler = textingOn(useTextingStatus(me)).voice === false;
@@ -531,7 +531,6 @@ function Details({ person, household, refresh, desk, me, editing, setEditing, mo
           )}
         </li>
       </ul>
-      {desk && <ProfileMove person={person} move={move} open={moveOpen} contacts={contacts} household={household} refresh={refresh} />}
 
       {person.note && (
         <div className="pf-their-note">
@@ -914,6 +913,11 @@ export default function Person() {
         <p className="ds-waiting" role="status">Saved on {device} — {online ? 'sends soon' : 'sends when you’re back online'}</p>
       )}
 
+      {/* Moved: Needs an address, Address unknown, Moved here — the desk's lines and their Undo. */}
+      {desk && (
+        <ProfileMove person={person} move={profile.data.latest_move || null} open={Boolean(profile.data.move_open)}
+          contacts={contacts} household={household} refresh={refresh} />
+      )}
       <RatingCard key={person.id} person={person} refresh={refresh} channel={channel} setChannel={setChannel} cardRef={ratingRef}
         canMove={desk || profile.data.may_move === true} desk={desk} household={household} />
       {/* Undecided or not rated: a supporter who knows them (desk). */}
@@ -929,7 +933,7 @@ export default function Person() {
       <div className="pf-sections">
         <Section title="Details" open={!!open.details} onToggle={toggle('details')}>
           <Details person={person} household={household} refresh={refresh} desk={desk} me={me} editing={editing} setEditing={setEditing}
-            move={profile.data.latest_move || null} moveOpen={Boolean(profile.data.move_open)} contacts={contacts} />
+            move={profile.data.latest_move || null} />
         </Section>
         {/* The campaign's own fields (People → More → Profile fields); with no signal and no copy, it says so.
             The desk always has it: the voter number lives here (ext/voternumber). */}

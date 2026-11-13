@@ -731,14 +731,15 @@ function WalkList({ id }) {
   // The panel closed (Save with nothing to show, Done, Later, or the
   // office's line): settled again from what's on the phone; on to the next
   // door if it is, and the list loads again once if anything went with signal.
-  const release = ({ sent }) => {
+  const release = ({ sent, moved: gone = [] }) => {
     const m = moving;
     setMoving(null);
     setHeld(null);
     if (!m) return;
     const door = doorsRef.current.find((d) => d.key === m.key);
     const now = localRef.current;
-    const settled = Boolean(door) && door.persons.every((p) => p.rating || now[p.id]);
+    // Someone who moved too ("Did anyone else move?") is off this door as well.
+    const settled = Boolean(door) && door.persons.every((p) => p.rating || now[p.id] || gone.includes(p.id));
     if (settled && openRef.current === m.key) advanceFrom(m.key);
     if (sent || !m.queued) refresh();
   };

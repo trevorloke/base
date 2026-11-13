@@ -1,4 +1,4 @@
-// The profile's lines about a move (the desk's; server/ext/moves, GET
+// The profile's lines about a move, under its header (the desk's; server/ext/moves, GET
 // /persons/:id's address_status, latest_move and move_open):
 //   Needs an address   "Marked moved 12 Nov by Dana — where to?" · Where to?
 //   Address unknown    "Address unknown · since 12 Nov · was 13450 104 Ave"
@@ -69,7 +69,7 @@ export default function ProfileMove({ person, move, open, contacts = [], househo
       </div>
     );
   }
-  if (!open && !undoable && !said) return null;
+  if (!open && !undoable && !unknown && !said) return null;
   return (
     <div className="mv-profile" aria-live="polite">
       {open && (
@@ -78,11 +78,12 @@ export default function ProfileMove({ person, move, open, contacts = [], househo
           <button type="button" className="btn btn-quiet pp-btn" onClick={() => { setSaid(null); setPanel('whereTo'); }}>Where to?</button>
         </p>
       )}
-      {undoable && !asking && (
+      {(undoable || unknown) && !asking && (
         <p className="mv-pline">
-          {!unknown && <span>Moved here {dayWords(live.created_at)}{was ? ` · from ${was}` : ''}</span>}
+          {unknown ? <span>{addressWords(person, move, true)}</span>
+            : <span>Moved here {dayWords(live.created_at)}{was ? ` · from ${was}` : ''}</span>}
           {unknown && <button type="button" className="btn btn-quiet pp-btn" onClick={() => { setSaid(null); setPanel('add'); }}>Add new address</button>}
-          <button type="button" className="btn btn-quiet pp-btn" onClick={() => { setSaid(null); setError(null); setAsking(true); }}>Undo</button>
+          {undoable && <button type="button" className="btn btn-quiet pp-btn" onClick={() => { setSaid(null); setError(null); setAsking(true); }}>Undo</button>}
         </p>
       )}
       {undoable && asking && (

@@ -13,7 +13,8 @@
 //              at the old address when there's no signal to ask
 //     where    'door' ("— off this door" in the toast) or 'profile'
 //     toast(text, tone)   tone: 'ok' | 'queued' | 'error'
-//     onClose({ sent })   sent: something reached the server with signal
+//     onClose({ sent, moved })   sent: something reached the server with
+//              signal; moved: the ids of others moved from here meanwhile
 //
 // After Save: who lives at the new address now (Still here · Moved out, +
 // Someone else lives here, and at the desk Someone on file lives here), and
@@ -159,6 +160,7 @@ export default function MovePanel({
   const [saved, setSaved] = useState(null); // { input, result | null, cid, queued }
   const [rowOpen, setRowOpen] = useState(null); // the row whose "Moved out" is open
   const sent = useRef(false);
+  const movedIds = useRef([]); // others who moved too (Moved out, Moved too)
   const closed = useRef(false);
   const timer = useRef(null);
   useEffect(() => () => clearTimeout(timer.current), []);
@@ -166,7 +168,7 @@ export default function MovePanel({
     if (closed.current) return;
     closed.current = true;
     clearTimeout(timer.current);
-    onClose?.({ sent: sent.current });
+    onClose?.({ sent: sent.current, moved: movedIds.current });
   };
   const first = firstName(person.name);
   const was = lineOf(person);
@@ -208,7 +210,8 @@ export default function MovePanel({
       {phase === 'office' && <p className="mv-office" role="status">{OFFICE}</p>}
       {phase === 'lists' && saved && (
         <Lists person={person} desk={desk} saved={saved} was={was} mode={mode}
-          rowOpen={rowOpen} setRowOpen={setRowOpen} onSent={() => { sent.current = true; }} toast={toast} />
+          rowOpen={rowOpen} setRowOpen={setRowOpen} onSent={() => { sent.current = true; }} toast={toast}
+          onMoved={(id) => { movedIds.current = [...movedIds.current, id]; }} />
       )}
       {phase === 'lists' && rowOpen == null && (
         <div className="mv-acts">
@@ -220,7 +223,7 @@ export default function MovePanel({
 }
 
 // "Who lives at 9800 King George Blvd now?" and "Did anyone else move from …?"
-function Lists({ person, desk, saved, was, mode, rowOpen, setRowOpen, onSent, toast }) {
+function Lists({ person, desk, saved, was, mode, rowOpen, setRowOpen, onSent, onMoved, toast }) {
   const { input } = saved;
   const unknown = Boolean(input.unknown);
   // Saved with no signal: the lists come once the outbox has sent it.
@@ -234,7 +237,7 @@ function Lists({ person, desk, saved, was, mode, rowOpen, setRowOpen, onSent, to
           rowOpen={rowOpen} setRowOpen={setRowOpen} onSent={onSent} toast={toast} />
       )}
       {left.length > 0 && (
-        <Left rows={left} was={was} input={input} onSent={onSent} />
+        <Left rows={left} was={was} input={input} onSent={onSent} onMoved={onMoved} />
       )}
     </div>
   );
@@ -433,13 +436,14 @@ function OnFile({ person, to, taken, onCancel, onDone }) {
 
 // "Did anyone else move from 13450 104 Ave?" — Still here · Moved too, one
 // tap each: the same new address (or Address unknown).
-function Left({ rows: people, was, input, onSent }) {
+function Left({ rows: people, was, input, onSent, onMoved }) {
   const [rows, patch] = useRows();
   const too = async (p) => {
     patch(p.id, { busy: true, error: null });
     const r = await sendMove({ person_id: p.id, ...(input.unknown ? { unknown: true } : { to: input.to }) }, p.name);
     if (!r.ok) { patch(p.id, { busy: false, error: r.error }); return; }
     if (!r.queued) onSent();
+    onMoved(p.id);
     patch(p.id, { busy: false, said: input.unknown ? 'moved · Address unknown' : 'moved too' });
   };
   return (
