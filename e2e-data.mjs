@@ -538,6 +538,8 @@ await page.waitForSelector('.ops-empty', { timeout: 8000 }).catch(() => {});
 await page.goto(`${ADMIN}/money`, { waitUntil: 'domcontentloaded' });
 await page.getByRole('button', { name: 'More', exact: true }).click();
 const outLink = page.getByRole('link', { name: '1 imported gift left out' });
+// The link rides on the brief, which loads after the screen: wait for it (count() does not).
+await outLink.waitFor({ timeout: 8000 }).catch(() => {});
 check('a gift left out, nothing waiting: Donations → More says "1 imported gift left out"',
   leftRow.json?.results?.[0]?.state === 'waiting' && (await outLink.count()) === 1 && (await page.locator('.ops-needs a:has-text("need a donor"), .ops-needs a:has-text("needs a donor")').count()) === 0,
   JSON.stringify(leftRow.json?.results));
