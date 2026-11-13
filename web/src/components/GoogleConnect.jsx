@@ -25,7 +25,7 @@ export const useGoogle = () => useQuery({ queryKey: ['google'], queryFn: () => a
 export function GoogleLoading({ q }) {
   if (q.isError) {
     return (
-      <p className="gg-line-main">Unavailable — <button type="button" className="btn-link" onClick={() => q.refetch()}>Try again</button></p>
+      <p className="gg-line-main">Unavailable — <button type="button" className="btn btn-quiet" onClick={() => q.refetch()}>Try again</button></p>
     );
   }
   return <p className="gg-line-main muted">Loading…</p>;

@@ -452,8 +452,9 @@ try {
   }
 
   // ── Your profile when /api/google fails and Google sign-in is off (connections may still be on) ──
-  {
-    const { page } = await newPage(DESKTOP, 'google read fails');
+  for (const vp of [DESKTOP, PHONE]) {
+    const phone = vp === PHONE;
+    const { page } = await newPage(vp, 'google read fails');
     await page.context().addCookies(await mctx.cookies());
     await page.route('**/api/auth/me', async (r) => {
       const res = await r.fetch();
@@ -464,8 +465,12 @@ try {
     await page.route('**/api/google', (r) => r.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"stand-in failure"}' }));
     await page.goto(`${BASE}/admin/profile`, { waitUntil: 'domcontentloaded' });
     const said = await page.locator('.gg-card', { hasText: 'Unavailable' }).waitFor({ timeout: 10000 }).then(() => true, () => false);
-    check('Your profile: a failed Google read says “Unavailable — Try again”, even with sign-in off', said, await text(page, 'main'));
-    await shot(page, '18c-profile-google-unavailable-desktop');
+    check(`Your profile${phone ? ' (phone)' : ''}: a failed Google read says “Unavailable — Try again”, even with sign-in off`, said, await text(page, 'main'));
+    if (phone) {
+      const small = await tapTargets(page, '.gg-card button');
+      check('Your profile (phone): “Try again” is a 48 px target', small.length === 0 && (await page.locator('.gg-card button', { hasText: 'Try again' }).count()) === 1, JSON.stringify(small));
+    }
+    await shot(page, `18c-profile-google-unavailable-${phone ? 'phone' : 'desktop'}`);
     await page.close();
   }
 
