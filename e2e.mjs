@@ -18,8 +18,8 @@ const check = (name, ok, extra = '') => {
 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// The tile hosts (OpenStreetMap's, and CARTO's for the Clean look the map
-// opens on) are unreachable from the test sandbox; serve a stylized street
+// The tile hosts (OpenStreetMap's, which the map opens on with no CARTO key,
+// and CARTO's for Clean with one) are unreachable from the test sandbox; serve a stylized street
 // grid so screenshots read as a map. Real deployments load real tiles.
 const tileSvg = (z, x, y) => {
   const lines = [];
@@ -223,7 +223,9 @@ await page.waitForSelector('.map-canvas .leaflet-tile-pane', { timeout: 8000 }).
 lk = await look();
 check('…and stays Muted after a reload (this browser)', /map-view--muted/.test(lk[0]), lk[0]);
 await page.click('.map-filter-btn');
-check('the looks offered here: Standard, Muted, Dark and Clean (no Google key: no Satellite)', (await page.$$eval('.map-vchip', (els) => els.map((e) => e.innerText.trim()))).join('|') === 'Standard|Muted|Dark|Clean');
+// No CARTO key: no Clean (CARTO sends a notice, not streets, without one).
+const offered = (await page.$$eval('.map-vchip', (els) => els.map((e) => e.innerText.trim()))).join('|');
+check('the looks offered here: Standard, Muted, Dark (no CARTO key: no Clean; no Google key: no Satellite)', offered === 'Standard|Muted|Dark', offered);
 await page.click('.map-fsheet .map-vchip:has-text("Standard")');
 await page.click('.map-fsheet .mapsheet-close').catch(() => {});
 await sleep(300);
