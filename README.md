@@ -224,6 +224,15 @@ after the last one shown; each way in reads its own index, so a
 300,000-person file answers in under 50 ms (TESTING.md). People's own box
 still reads every row (any part of a name, address, phone, email or
 handle); two words or more of a name now match in any order there too.
+When there are more than six, the bar's last row is *See all people
+matching “smith”*, which opens People with that search.
+
+**Who do they know?** (a profile's **+ Someone they know**) uses the same
+search, asked once typing pauses: a list that says how many (*2,363
+people*), scrolls and loads more by itself, with each person's street, city
+and phone, and *Already linked* on whoever is linked already
+(`web/src/components/PersonResults.jsx`, `usePersonSearch.js`). People's
+**Show more** goes past the first 300, from the server.
 
 **A–Z by last name.** Every list of people — People, a list and its CSV,
 the call list, Knows, who lives at an address, a shift's people, volunteers

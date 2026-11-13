@@ -39,7 +39,9 @@ export function usePersonSearch(term, { limit = 25, role, not, list, enabled = t
     getNextPageParam: (last, pages) => (last.more && last.persons?.length && pages.length < MAX_PAGES ? last.persons.at(-1).id : undefined),
     enabled: on,
     staleTime: 0,
-    gcTime: 60_000,
+    // Dropped once no box shows it: coming back to a term starts again
+    // from its first page (one ask), not a refetch of every page held.
+    gcTime: 0,
     refetchOnMount: 'always',
     refetchOnWindowFocus: false,
     placeholderData: keepPreviousData,

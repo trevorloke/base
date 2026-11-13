@@ -936,7 +936,9 @@ one tap away under **More**.
 - **Who knows whom** — **People → More → Most connected**: the sample's
   *Priya Nair* is first (*knows 6 · 1 supporter*). Open *Jasmine Wong*
   (undecided): under the rating, *Ask Priya Nair — they know each other*.
-  **Knows** lists who someone knows; **+ Someone they know** → search → *how
+  **Knows** lists who someone knows; **+ Someone they know** → search (a
+  count, A–Z with the surname in bold, more as you scroll, *Already linked*
+  on whoever is linked; `e2e-search.mjs`) → *how
   do they know each other?* links them both ways; *Remove? Yes · No* takes
   it off. *Sofia Petrova → Knows* says *Brought in by Priya Nair*. Someone
   tagged *do-not-contact* gets no nudge and is never the one suggested. A
