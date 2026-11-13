@@ -948,7 +948,7 @@ export default function Person() {
       )}
 
       {desk && emailing && (
-        <EmailSheet key={person.id} person={person} gmail={gmail.data} draft={emailing.draft}
+        <EmailSheet key={`email-${person.id}`} person={person} gmail={gmail.data} draft={emailing.draft}
           onClose={(how) => emailDone(how)} onSent={() => { emailDone('sent'); refresh(); }} />
       )}
       <RatingCard key={person.id} person={person} refresh={refresh} channel={channel} setChannel={setChannel} cardRef={ratingRef} desk={desk} />

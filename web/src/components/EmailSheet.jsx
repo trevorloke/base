@@ -18,8 +18,9 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { action, apiGet } from '../api.js';
 import { newClientId } from '../offline.js';
 import { NeedsSignal, useOnline } from './NoSignal.jsx';
-import GoogleConnect from './GoogleConnect.jsx';
-import { clockTime, herePath } from './google.js';
+import { StartLink, googleBlocked, useGoogle } from './GoogleConnect.jsx';
+import { appName, clockTime, googleStart, herePath } from './google.js';
+import { appMode } from '../mode.js';
 import './gmail.css';
 
 export const useGmail = (enabled = true) => useQuery({
@@ -66,6 +67,7 @@ const needsConnect = (e) => e?.status === 409 && /^(Connect your Gmail|Gmail nee
 export default function EmailSheet({ person, gmail, draft, onClose, onSent }) {
   const qc = useQueryClient();
   const online = useOnline();
+  const google = useGoogle();
   const id = useId();
   const [subject, setSubject] = useState(draft?.subject || '');
   const [body, setBody] = useState(draft?.body || '');
@@ -92,10 +94,15 @@ export default function EmailSheet({ person, gmail, draft, onClose, onSent }) {
         onSent();
       } else if (r.status === 'unsure' || r.status === 'sending') {
         setRes({ kind: 'unsure', said: r.said || 'Not sure it went — check your Gmail’s Sent folder before sending again.' });
-      } else if (r.code === 'reconnect' || r.code === 'connect') {
-        setRes({ kind: 'reconnect', said: r.said });
       } else {
-        setRes({ kind: 'said', said: r.said || 'Gmail didn’t send it' });
+        // Nothing went: the next Send is a new send (this key's row says "Not sent").
+        setKey(newClientId());
+        if (r.code === 'reconnect' || r.code === 'connect') {
+          setRes({ kind: 'reconnect', said: r.said });
+          qc.invalidateQueries({ queryKey: ['google'] });
+        } else {
+          setRes({ kind: 'said', said: r.said || 'Gmail didn’t send it' });
+        }
       }
     } catch (e) {
       setRes({ kind: needsConnect(e) ? 'reconnect' : 'said', said: e.message });
@@ -145,10 +152,15 @@ export default function EmailSheet({ person, gmail, draft, onClose, onSent }) {
           {res?.kind === 'reconnect' && (
             <div className="gm-said">
               <p role="alert">{res.said}</p>
-              {/* Kept for the trip to Google and back: this page reopens the sheet with it. */}
-              <div onClickCapture={() => saveDraft(person.id, { subject, body })}>
-                <GoogleConnect purpose="gmail.send" label="Connect again" back={herePath()} />
-              </div>
+              {/* GSI's connect link, back to this page, which reopens the sheet
+                  with what was written (kept for the trip in this tab only). */}
+              {googleBlocked(google.data) ? <p className="muted">{googleBlocked(google.data)}</p> : (
+                <div onClickCapture={() => saveDraft(person.id, { subject, body })}>
+                  <StartLink href={googleStart('connect', { app: appName(appMode()), purpose: 'gmail.send', back: herePath() })} online={online}>
+                    Connect again
+                  </StartLink>
+                </div>
+              )}
             </div>
           )}
         </div>

@@ -7,7 +7,7 @@
 //       paused: until when. Needs reconnecting: GSI's card says it.
 //   <GmailLine />  in the card otherwise: what it's for, and Connect Gmail
 //       (GSI's start link: never a primary — Profile's is Two-step's).
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { action } from '../api.js';
 import { appMode } from '../mode.js';
@@ -42,9 +42,15 @@ function SendTest({ online }) {
 }
 
 export default function GmailLine({ purpose }) {
+  const qc = useQueryClient();
   const q = useGmail();
   const g = useGoogle();
   const online = useOnline();
+  // GSI's card changed the connection (Disconnect, Reconnect): read Gmail's side again.
+  const seen = useRef(g.dataUpdatedAt);
+  useEffect(() => {
+    if (seen.current !== g.dataUpdatedAt) { seen.current = g.dataUpdatedAt; qc.invalidateQueries({ queryKey: ['gmail'] }); }
+  }, [g.dataUpdatedAt]); // eslint-disable-line react-hooks/exhaustive-deps
   if (q.error?.status === 403) return null;
   const d = q.data;
   if (!d) {
