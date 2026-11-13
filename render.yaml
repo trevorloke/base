@@ -92,6 +92,10 @@ services:
         sync: false
       - key: GOOGLE_TOKEN_KEY  # 32+ random characters, a different one per environment
         sync: false
+      - key: GOOGLE_PICKER_KEY  # optional: Google Drive and Sheets — a browser key limited to this site, docs.google.com and the Picker API (GOING-LIVE §7)
+        sync: false
+      - key: GOOGLE_CLOUD_PROJECT_NUMBER  # the project number (digits) of the project holding the OAuth client
+        sync: false
 
   - type: web
     name: starbase
@@ -145,6 +149,10 @@ services:
       - key: GOOGLE_OAUTH_CLIENT_SECRET
         sync: false
       - key: GOOGLE_TOKEN_KEY
+        sync: false
+      - key: GOOGLE_PICKER_KEY
+        sync: false
+      - key: GOOGLE_CLOUD_PROJECT_NUMBER
         sync: false
 
 databases:

@@ -61,6 +61,7 @@ INTEGRATIONS.md.
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` | SMS shift alerts; texting and calling from the app through the campaign's number | optional — without it, Calls opens the phone's own Messages and dialer |
 | `GOOGLE_MAPS_SERVER_KEY` | Google Maps tiles (on whenever it is set, unless `GOOGLE_MAPS_TILES=off`) and, with `ADDRESS_SUGGEST=google`, Google's address suggestions; pins always come from the B.C. service | optional — the free BC geocoder and OpenStreetMap tiles work without it |
 | `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_TOKEN_KEY` | Sign in with Google, and the one Google connection Gmail, Drive and Calendar use (INTEGRATIONS.md); in tests a stand-in Google (`server/test/fake-google.js`, pointed at with `GOOGLE_ACCOUNTS_BASE` and `GOOGLE_OAUTH_BASE`) — never real Google | optional — without them no Google button shows, and passwords work as always |
+| `GOOGLE_PICKER_KEY`, `GOOGLE_CLOUD_PROJECT_NUMBER` | Google Drive and Sheets, on top of the Google client (INTEGRATIONS.md); in tests the same stand-in Google answers Drive and Sheets (`server/test/fake-google-drive.js`, pointed at with `GOOGLE_DRIVE_API_BASE` and `GOOGLE_SHEETS_API_BASE`) | optional — without them no Drive button shows; Download CSV works as always |
 | `STARBASE_TWO_STEP_KEY` | seals everyone's two-step sign-in key (INTEGRATIONS.md) | optional to test — without it a key kept in the database is used, and Settings → Services says so |
 
 The whole order of things, from deploy to the public link, is in
@@ -311,6 +312,12 @@ one tap away under **More**.
   `/admin/e2e-google-connect` by the suite's server only) and drives
   Connect, *Connected as … · Disconnect*, *Reconnect* and the paused line,
   the way Gmail, Drive and Calendar will use it.
+- **Google Drive and Sheets** (server side so far) — `server/test/drive.test.js`
+  runs the switches, who may use Drive, the Picker's narrowed token and
+  *Send to Google Sheets* against the stand-in Google: three parts as three
+  jobs, one Sheet, exact RAW ranges, Google not answering, asking to wait,
+  a full Drive, someone leaving mid-export. `server/test/export-rows.test.js`
+  pins a list's, a report's and the people table's CSV byte for byte.
 - **Command bar** — on the desk press **Ctrl+K** (⌘K on a Mac), or *Search*
   under the name: *don* + Enter opens Donations, *gift* opens Log a gift
   with its form, a name or a phone (*604 555 0142*) finds the person; ↑ ↓

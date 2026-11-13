@@ -200,6 +200,25 @@ a Google feature puts on its own screen), the Services panel
 shows *Open base.win in your browser to use Google.* instead of any Google
 button until the phone check in TESTING.md §4 passes.
 
+### Google Drive and Sheets
+
+With the Google client and two settings of Drive's own
+(`GOOGLE_PICKER_KEY`, `GOOGLE_CLOUD_PROJECT_NUMBER`; INTEGRATIONS.md), a
+manager turns Drive on for the campaign (`drive.settings`; Services shows
+the row and its Check, and the Drive screens follow in the next stage).
+base.win asks each person for one Google permission, only the
+Drive files they use with base.win (`drive.file`), and only the desk
+(managers, treasurers, staff) may connect it. **Send to Google Sheets**
+makes a new Sheet from a list, a report or a table, the same columns as
+Download CSV, in the background (`drive.export`, one part per job, exact
+ranges so a part tried again never writes a row twice), into each person's
+own *base.win exports* folder (Google Workspace accounts only) or the
+campaign's shared-drive folder. Sheets stay **off** until a manager chooses
+who may send (*No one*, *Managers*, *Anyone at the desk*, the last only with
+a shared-drive folder). Each export is on the event log with no Drive
+address and no cells, and `drive_exports` is in the full export. The how:
+`server/ext/drive/`.
+
 ### The command bar
 
 On the desk, **Ctrl+K** (⌘K on a Mac) or **Search** in the header opens one
