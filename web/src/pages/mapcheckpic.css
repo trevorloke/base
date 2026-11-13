@@ -6,3 +6,6 @@
   border: 1px solid var(--rule-2); border-radius: var(--r-sm); background: var(--paper-1);
 }
 .map-check__nopic { font-size: 13px; color: var(--danger); }
+/* Nothing wrong with the street map: a small one beside its value. */
+.map-check__picture--small { float: right; margin: 0 0 0 var(--s-2); line-height: 0; }
+.map-check__picture--small img { width: 36px; height: 36px; }

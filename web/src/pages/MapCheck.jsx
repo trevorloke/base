@@ -24,6 +24,13 @@ import './mapcheckpic.css';
 function TilePicture({ picture }) {
   const [failed, setFailed] = useState(false);
   useEffect(() => { setFailed(false); }, [picture.src]);
+  if (picture.small) {
+    return failed ? null : (
+      <span className="map-check__picture map-check__picture--small">
+        <img src={picture.src} alt={picture.alt} title={picture.label} width="36" height="36" onError={() => setFailed(true)} />
+      </span>
+    );
+  }
   return (
     <dd className="map-check__picture">
       <span>{picture.label}</span>
@@ -68,9 +75,9 @@ export default function MapCheck({ facts, onClose, onAgain }) {
               {lines.map((l) => (
                 <div key={l.key} data-key={l.key} className={`map-check__row${l.warn ? ' is-warn' : ''}`}>
                   <dt>{l.warn && <span className="map-check__flag" role="img" aria-label="Look here">!</span>}<span>{l.label}</span></dt>
-                  <dd className="map-check__value">{l.value}</dd>
+                  <dd className="map-check__value">{l.picture?.small && <TilePicture picture={l.picture} />}{l.value}</dd>
                   {l.note && <dd className="map-check__note">{l.note}</dd>}
-                  {l.picture && <TilePicture picture={l.picture} />}
+                  {l.picture && !l.picture.small && <TilePicture picture={l.picture} />}
                 </div>
               ))}
             </dl>

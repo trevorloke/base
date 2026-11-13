@@ -659,7 +659,7 @@ test('the map’s check names a notice, flags its service line, and carries the 
   const t = said(l).tiles;
   assert.deepEqual([t.value, t.note, t.warn], ['Clean · CARTO — sends a notice, not streets', NOTICE_CARTO, true]);
   assert.match(NOTICE_CARTO, /STARBASE_TILE_CARTO_KEY in Render, or STARBASE_TILE_CLEAN=off/);
-  assert.deepEqual(t.picture, { src: pic, label: 'What this phone gets for the middle of the map:', alt: 'A piece of the street map, as this phone gets it', failed: 'No picture came back.' });
+  assert.deepEqual(t.picture, { src: pic, label: 'What this phone gets for the middle of the map:', alt: 'A piece of the street map, as this phone gets it', failed: 'No picture came back.', small: false });
   assert.equal(PICTURE.failed, 'No picture came back.');
   assert.deepEqual([said(l).tilesvc.value, said(l).tilesvc.warn], ['CARTO (Clean) · straight to the phones', true], 'its service line flagged too');
   // Another provider's notice: the other note.
@@ -668,7 +668,7 @@ test('the map’s check names a notice, flags its service line, and carries the 
   assert.match(NOTICE_OTHER, /The picture is below\.$/);
   // Streets: the line as before, still with its picture.
   const ok = said(checkLines(CHECK, { ...PAGE, picture: pic })).tiles;
-  assert.deepEqual([ok.value, ok.warn, ok.picture.src], ['Clean · CARTO — 24 loaded, 0 failed', false, pic]);
+  assert.deepEqual([ok.value, ok.warn, ok.picture.src, ok.picture.small], ['Clean · CARTO — 24 loaded, 0 failed', false, pic, true], 'nothing wrong: a small one (the check stays one screen)');
   assert.equal(said(checkLines(CHECK, PAGE)).tiles.picture, undefined, 'no map yet: no picture');
   // An operator's keyless CARTO address: said where the service is named.
   const keyless = checkLines({ ...CHECK, tiles: { ...CHECK.tiles, ignored: ['carto-key'] } }, PAGE, { services: { state: 'ok', data: FREE } });

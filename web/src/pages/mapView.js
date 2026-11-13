@@ -484,7 +484,9 @@ export const checkLines = (c, page, { num = enCA, clock = (iso) => iso, now = Da
       warn: t.down || (!svc && Boolean(ignored)),
     });
   }
-  if (picture) lines[lines.length - 1].picture = picture;
+  // Full size, with its words, when the street map line is flagged; else a
+  // small one beside the value (the check stays one screen on a phone).
+  if (picture) { const line = lines[lines.length - 1]; line.picture = { ...picture, small: !line.warn }; }
   if (svc) {
     for (const [key, label, value, o] of svc) {
       // A setting the map couldn't use: flagged on the service line, with what to set.
