@@ -268,6 +268,11 @@ await control('/fail', { code: 500 });
 const failed = await act('media.send', { subject: 'Debate night', body: 'Join us.', to: { kinds: ['media', 'influencer'] } });
 await control('/fail', { code: false });
 check('a release while the sender refuses: kept, three failed', failed.status === 200 && failed.json.counts?.failed === 3, JSON.stringify(failed.json?.counts));
+// The first look says it didn't go (never only the last release that did).
+await go(page, '/media');
+w = await words(page.locator('section[aria-label="Didn’t go"]'));
+check('Releases, first look: "Didn’t go · 1" with Debate night and its Try again', /^Didn’t go 1/.test(w) && /Debate night/.test(w) && /Try again · 3/.test(w), w);
+await page.screenshot({ path: `${SHOTS}/P5-releases-didnt-go-${page.viewportSize().width}.png`, fullPage: true });
 await go(page, `/media/releases/${failed.json.blast.id}`);
 w = await words(page.locator('.md-page'));
 check('its page: "Didn’t go" rows and the one yellow button "Try again · 3"', /Didn’t go/.test(w) && (await measure(page)).primary.join('|') === 'Try again · 3', JSON.stringify((await measure(page)).primary));

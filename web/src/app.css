@@ -136,7 +136,9 @@ html, body {
   background: var(--page);
   font-size: 15px;
   line-height: 1.5;
-  font-variant-numeric: tabular-nums;
+  /* Running text keeps Inter's own figures: its tabular set draws a hyphen
+     at figure width ("Now - Leader", "604 - 555"). Numbers that line up
+     (.mono, a table's .num and the big counts) ask for tabular-nums themselves. */
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
