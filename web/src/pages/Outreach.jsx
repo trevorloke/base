@@ -546,21 +546,32 @@ export function ComposeCard({
     setConfirming(false);
     setTried(false);
   };
+  // A pick's words land only if it is still the last pick and nothing was
+  // typed while they were on their way; typed words get the question again.
+  const picks = useRef(0);
+  const typed = useRef({ subject, body });
+  typed.current = { subject, body };
   const startFrom = async (ref) => {
+    const n = (picks.current += 1);
     setPending(null);
     setStartNote(null);
     if (!ref) { fillWith({}, null); setStartRef(''); return; }
+    const was = typed.current;
     try {
       const t = await loadTemplate(queryClient, ref);
+      if (n !== picks.current) return;
+      const now = typed.current;
+      if (now.subject !== was.subject || now.body !== was.body) {
+        if (now.subject.trim() || now.body.trim()) { setPending(ref); return; }
+      }
       fillWith(t, { ref, name: t.name, mine: !ref.startsWith('starter:'), version: t.version, placeholders: t.placeholders || [] });
       setStartRef(ref);
     } catch (err) {
-      setStartNote(err.message);
+      if (n === picks.current) setStartNote(err.message);
     }
   };
   const pickStart = (ref) => {
-    if (subject.trim() || body.trim()) setPending(ref);
-    else startFrom(ref);
+    if (subject.trim() || body.trim()) { picks.current += 1; setPending(ref); } else startFrom(ref);
   };
   // ?template=<ref> (the Templates screen) or ?again=<send> ("Use again"):
   // filled once on open, then dropped from the address.
@@ -673,7 +684,8 @@ export function ComposeCard({
     setTried(true);
     try {
       const r = await action(acts.test, {
-        kind, subject: subject.trim(), body: body.trim(), ...(files.length ? { attachment_ids: files.map((f) => f.id) } : {}), ...from,
+        kind, subject: subject.trim(), body: body.trim(), ...(fromList.length ? { placeholders_from: fromList } : {}),
+        ...(files.length ? { attachment_ids: files.map((f) => f.id) } : {}), ...from,
       });
       const parts = Number(r.placeholders) || 0;
       setTest(r.sent

@@ -4,23 +4,23 @@
 //   useTemplates(use)   GET /templates?use=… — the lists, canSave, canHide,
 //                       foot (the lines under every email) and links (the
 //                       website's pages, for "Link to…")
-//   loadTemplate()      one template's words (GET /templates/:ref), from the
-//                       cache when it's there — no signal and not cached:
-//                       "Needs signal"
+//   loadTemplate()      one template's words (GET /templates/:ref): current
+//                       with signal; without, the copy held, or "Needs signal"
 //   StartFrom           the compose's first field: a blank email, or one of them
 //   SaveAsTemplate      the compose's "Save as template" row (and "Update …")
 //   FootBlock           the email's bottom lines, ending the Preview
 //   TemplatesScreen     /outreach/templates and /media/templates: look after them
 // Words are shown as words ("[first name]") and saved as codes.
 import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link, useNavigate, useOutletContext } from 'react-router-dom';
+import { onlineManager, useQuery, useQueryClient } from '@tanstack/react-query';
 import { EMAIL_FILLS, toCodes, toWords } from '@starbase/shared/email/words';
 import { renderMarkdown } from '@starbase/shared/markdown';
 import { ApiError, action, apiGet } from '../api.js';
 import { LOADING, Unavailable, fmt } from './AudienceBits.jsx';
 import { NeedsSignal, useOnline } from './NoSignal.jsx';
 import { MarkdownField, uploadImage } from './MarkdownField.jsx';
+import { monthDay, zoneOf } from './shiftTime.js';
 import { More } from '../pages/Outreach.jsx';
 import './templates.css';
 
@@ -41,13 +41,22 @@ export const useTemplates = (use, enabled = true) => useQuery({
   enabled,
 });
 const oneKey = (ref) => ['templates', 'one', ref];
+// With signal it always reads the current words (someone may have saved a
+// newer version since this screen read it). With none, the copy this screen
+// already holds, if any — else "Needs signal" at once, never a fetch that
+// waits for signal and lands later over what was typed meanwhile. `fresh`:
+// never the held copy (Reload).
 export async function loadTemplate(qc, ref, { fresh = false } = {}) {
-  const kept = !fresh && qc.getQueryData(oneKey(ref));
-  if (kept) return kept;
+  const held = () => {
+    const kept = !fresh && qc.getQueryData(oneKey(ref));
+    if (kept) return kept;
+    throw new Error(NEEDS_SIGNAL);
+  };
+  if (!onlineManager.isOnline() || (typeof navigator !== 'undefined' && navigator.onLine === false)) return held();
   try {
     return await qc.fetchQuery({ queryKey: oneKey(ref), queryFn: () => apiGet(`/templates/${encodeURIComponent(ref)}`), staleTime: 0 });
   } catch (err) {
-    if (!(err instanceof ApiError)) throw new Error(NEEDS_SIGNAL);
+    if (!(err instanceof ApiError)) return held();
     throw err;
   }
 }
@@ -349,15 +358,14 @@ function Row({ name, sub, chip, open, onToggle, children }) {
   );
 }
 
-const dayOf = (ts) => {
-  const d = new Date(ts);
-  return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-CA', { day: 'numeric', month: 'short' });
-};
+// "Nov 13", on the campaign's clock (as the server's "changed at" says it).
+const dayOf = (ts, tz) => (ts && !Number.isNaN(new Date(ts).getTime()) ? monthDay(ts, tz) : '');
 
 export function TemplatesScreen({ use }) {
   const q = useTemplates(use);
   const qc = useQueryClient();
   const online = useOnline();
+  const tz = zoneOf(useOutletContext()?.me);
   const [open, setOpen] = useState(null);
   const [making, setMaking] = useState(false);
   const [note, setNote] = useState(null);
@@ -402,7 +410,8 @@ export function TemplatesScreen({ use }) {
       )}
       {data && (
         <>
-          <section className="ot-sec" aria-label="Your templates">
+          {/* Someone who may not save sees no empty "Your templates". */}
+          {(data.canSave || data.mine.length > 0) && <section className="ot-sec" aria-label="Your templates">
             <h2 className="ot-sec-h">Your templates <span className="ot-count">{fmt(data.mine.length)}</span></h2>
             {data.mine.length === 0 ? (
               <p className="ot-empty">No templates of your own yet. <span className="ops-meta">Save one from any email, or copy a ready-made one.</span></p>
@@ -410,13 +419,13 @@ export function TemplatesScreen({ use }) {
               <ul className="ot-list">
                 {data.mine.map((t) => (
                   <Row key={t.id} name={t.name} open={open === t.id} onToggle={() => toggle(t.id)}
-                    sub={[toWords(t.subject), `Changed ${dayOf(t.updated_at)}${t.updated_by_name ? ` by ${t.updated_by_name}` : ''}`]}>
+                    sub={[toWords(t.subject), `Changed ${dayOf(t.updated_at, tz)}${t.updated_by_name ? ` by ${t.updated_by_name}` : ''}`]}>
                     <Opened use={use} refKey={t.id} data={data} mine onDone={() => setOpen(null)} toast={toast} />
                   </Row>
                 ))}
               </ul>
             )}
-          </section>
+          </section>}
           <section className="ot-sec" aria-label="Ready-made">
             <h2 className="ot-sec-h">Ready-made <span className="ot-count">{fmt(shownStarters(data).length)}</span></h2>
             <ul className="ot-list">

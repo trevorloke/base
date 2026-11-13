@@ -341,6 +341,9 @@ test('a test send fills the writer’s name, goes with placeholders and says how
   assert.equal(t.placeholders, 1);
   assert.equal(resend.sent.at(-1).subject, '[Test] Hi Avery');
   assert.match(textOf(resend.sent.at(-1)), /^Hi Avery, \[Headline one\]/);
+  // The template's own placeholders count too, as the compose sends them.
+  const own = ok(await mgr.action('blast.test', { kind: 'newsletter', subject: 'S', body: '[Our own words] and [Headline one]', placeholders_from: ['[Our own words]'] }));
+  assert.equal(own.placeholders, 2);
   no(await mgr.action('blast.test', { kind: 'newsletter', subject: 's', body: '[Read more](https://)' }), 400, 'Add the address for the link “Read more”');
   no(await mgr.action('blast.test', { kind: 'newsletter', subject: 's', body: 'Hi {first}' }), 400, '{first} won’t fill in — use + First name');
 });

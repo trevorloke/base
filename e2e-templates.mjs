@@ -263,6 +263,18 @@ const u2 = await words(page.locator('.tp-keep'));
 check('4. Update twice in a row: both save', u1 === 'Updated “My update”' && /Updated “My update”/.test(u2) && !/changed this template/.test(u2), `${u1} · ${u2}`);
 const saved = (await api(page, `/templates/${myId}`)).json;
 check('4. the template holds the last words, in codes', saved?.body === 'Hi {{first_name}},\n\nSee you Monday.' && saved.version === 3, JSON.stringify(saved).slice(0, 160));
+// Picked (so this compose holds a copy), then someone else saves a new
+// version: picking it again with signal brings the current words.
+await page.selectOption('#newsletter-start', '');
+await page.locator('.tp-ask button:has-text("Yes")').click();
+await page.selectOption('#newsletter-start', myId);
+await page.waitForFunction(() => document.querySelector('#newsletter-body')?.value.includes('Monday'), null, { timeout: 8000 }).catch(() => {});
+await act('template.save', { id: myId, use: 'email', name: 'My update', subject: 'A quick note', body: 'Hi {{first_name}},\n\nSee you Tuesday.', seen: 3 });
+await page.selectOption('#newsletter-start', '');
+await page.locator('.tp-ask button:has-text("Yes")').click();
+await page.selectOption('#newsletter-start', myId);
+await page.waitForFunction(() => document.querySelector('#newsletter-body')?.value.includes('Tuesday'), null, { timeout: 8000 }).catch(() => {});
+check('4. picking it again with signal reads its current words', (await page.inputValue('#newsletter-body')).includes('See you Tuesday.'), await page.inputValue('#newsletter-body'));
 
 // ── 5. The Templates screen ──
 await go(page, '/outreach/email');
@@ -401,6 +413,8 @@ await phoneOk(vol, 'Media releases');
 await shot(vol, '11-media-header-390');
 await go(vol, '/media/templates', 'h1');
 check('8. Release templates: no New template', (await words(vol.locator('h1'))) === 'Release templates' && (await vol.getByRole('button', { name: 'New template' }).count()) === 0);
+check('8. … and no empty "Your templates" telling them to save one', (await vol.locator('section[aria-label="Your templates"]').count()) === 0
+  && !/Save one from any email/.test(await words(vol.locator('.ot-page'))));
 await vol.locator('section[aria-label="Ready-made"] .ot-row:has-text("Press release")').tap();
 await vol.locator('.tp-view').waitFor({ timeout: 8000 });
 check('8. a ready-made release: Write a release from this, no Copy, no Hide', (await vol.locator('.tp-view .btn-primary:has-text("Write a release from this")').count()) === 1
@@ -432,6 +446,23 @@ await desk.setOffline(true);
 await sleep(300);
 check('9. no signal: Save as template is off, with Needs signal', await page.getByRole('button', { name: 'Save as template' }).isDisabled()
   && /Needs signal/.test(await words(page.locator('.tp-keep'))));
+// A pick this compose never read, with no signal: said at once, and the
+// words typed after it are never replaced when signal comes back.
+await page.fill('#newsletter-subject', '');
+await page.fill('#newsletter-body', '');
+await page.selectOption('#newsletter-start', 'starter:thanks');
+await page.locator('.ot-compose .error:has-text("Needs signal")').waitFor({ timeout: 3000 }).catch(() => {});
+check('9. no signal: a pick not read before says "Needs signal"', /Needs signal/.test(await words(page.locator('.ot-compose .error'))), await words(page.locator('.ot-compose .error')));
+await shot(page, '13-no-signal-pick-1440');
+check('9. … and Start from goes back to a blank email', (await page.locator('#newsletter-start option:checked').innerText()) === 'A blank email');
+await page.fill('#newsletter-subject', 'My own careful subject');
+await page.fill('#newsletter-body', 'My own careful words.');
+await desk.setOffline(false);
+await sleep(2000);
+check('9. signal back: what was typed is still there', (await page.inputValue('#newsletter-subject')) === 'My own careful subject'
+  && (await page.inputValue('#newsletter-body')) === 'My own careful words.', await page.inputValue('#newsletter-subject'));
+await desk.setOffline(true);
+await sleep(300);
 await desk.setOffline(false);
 await go(page, '/outreach/templates', 'h1');
 await page.locator('section[aria-label="Your templates"] .ot-row:has-text("My update")').first().click();
