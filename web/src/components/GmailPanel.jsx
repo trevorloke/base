@@ -10,7 +10,7 @@ import './google.css';
 import './gmail.css';
 
 const REVIEWS = [
-  { key: 'internal', label: 'Workspace only (Internal)', hint: (domain) => `Only @${domain || 'your domain'} Google accounts can connect. No Google review.` },
+  { key: 'internal', label: 'Workspace only (Internal)', hint: (domain) => (domain ? `Only @${domain} Google accounts can connect. No Google review.` : 'Only your Workspace’s Google accounts can connect. No Google review.') },
   { key: 'unreviewed', label: 'Not reviewed by Google yet', hint: () => 'Google hasn’t reviewed base.win: staff will see a warning, and no more than 100 people can ever connect.' },
   { key: 'reviewed', label: 'Reviewed by Google', hint: () => 'Anyone on the desk can connect.' },
 ];

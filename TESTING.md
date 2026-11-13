@@ -312,7 +312,16 @@ one tap away under **More**.
   `/admin/e2e-google-connect` by the suite's server only) and drives
   Connect, *Connected as … · Disconnect*, *Reconnect* and the paused line,
   the way Gmail, Drive and Calendar will use it.
-- **Gmail** (server; the screens come next) — `server/test/gmail.test.js`
+- **Gmail** — on a person's page (desk), *Email* opens *Email Jane
+  Example* once you've connected Gmail on Your profile; before that it
+  opens your mail app and presets *Reached by: Email*. Someone tagged
+  do-not-email (or Do-Not-Contact, any case) gets a chip and no Email.
+  `e2e-gmail.mjs` drives all of it against the stand-in Google (ports
+  5240–5243): Services → Gmail, Connect Gmail, *Send me a test*, a send
+  in History, *Not sure it went* and *Send again*, *Connect again* with
+  the draft kept, the paused and blocked words, Disconnect, staff denied
+  Outreach and a volunteer seeing no Gmail, and the round trip under
+  `BASE_PATH`. `server/test/gmail.test.js`
   runs every send against the stand-in Google's Gmail route
   (`GMAIL_API_BASE`): the message as written (From, To, an encoded subject,
   no unsubscribe line, no pixel), a replay sending nothing, one bare

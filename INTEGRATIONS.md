@@ -703,6 +703,14 @@ bounces and spam complaints the way Google asks bulk senders to.
 - **The cap:** `GMAIL_DAILY_MAX` (100, at most 400) a person in 24 hours,
   every campaign on this server counted, and ten a minute — far below
   Gmail's own limits, so a mistake never gets a staff mailbox suspended.
+- **On screen:** a person's page offers *Email* (the "Email Jane
+  Example" sheet: Subject, Message, Send) only when Gmail is on and the
+  staff member's connection is fine; otherwise *Email* opens their mail
+  app and presets *Reached by: Email*, with one line saying why when
+  Gmail is on (connect it on Your profile, or wait until a time). *Connect
+  again* mid-send keeps what was written for the trip to Google, in that
+  browser tab only. A Gmail send needs signal: it never waits in the
+  outbox.
 - **What base.win keeps:** each send (`gmail_sends`, in the export), never
   on the event log beyond who and whether it went. A send is not a
   contact: when the person replies, log it as *Reached by: Email*.
