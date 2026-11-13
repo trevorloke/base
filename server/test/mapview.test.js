@@ -500,11 +500,14 @@ test('the services behind the map: one line each, after the street map — waiti
   // Not asked (an old caller): no service lines.
   assert.ok(!keys(checkLines(CHECK, PAGE)).includes('tilesvc'));
   // While it waits on Google, after it failed, with no signal.
-  for (const [state, words] of [['pending', 'Checking…'], ['error', 'Unavailable — Try again'], ['offline', 'No signal — the check needs it']]) {
+  for (const [state, words] of [['pending', 'Checking…'], ['offline', 'No signal — the check needs it']]) {
     const l = checkLines(CHECK, PAGE, { services: { state } });
     assert.deepEqual(keys(l).slice(6, 9), ['tiles', 'tilesvc', 'lookupsvc']);
     assert.deepEqual([said(l).tilesvc.value, said(l).lookupsvc.value, flagged(l)], [words, words, []]);
   }
+  // The read failed: flagged, and says the one way to ask again.
+  const failed = checkLines(CHECK, PAGE, { services: { state: 'error' } });
+  assert.deepEqual([said(failed).tilesvc.value, flagged(failed)], ['Unavailable — tap Check again', ['lookupsvc', 'tilesvc']]);
   const GOOD = { tiles: { provider: 'Google Maps', viaServer: true, probe: { ok: true }, last: null, lastOkAt: '2026-11-10T23:44:00.000Z' },
     lookup: { provider: 'BC Address Geocoder', fallback: null, probe: { ok: true } } };
   let l = checkLines(CHECK, PAGE, { clock, now, services: { state: 'ok', data: GOOD } });
@@ -522,8 +525,19 @@ test('the services behind the map: one line each, after the street map — waiti
   l = checkLines(CHECK, PAGE, { clock, now: now + 2 * 3_600_000, services: { state: 'ok', data: { ...GOOD, tiles: { ...GOOD.tiles, last } } } });
   assert.equal(said(l).tilesvc.note, null, 'an hour on, no longer said');
   // A provider the phones reach straight: named, nothing asked.
-  l = checkLines(CHECK, PAGE, { services: { state: 'ok', data: { ...GOOD, tiles: { provider: 'Stadia Maps', viaServer: false, probe: null, last: null } } } });
+  const STADIA = { ...PAGE, look: 'Standard', tilesFrom: 'tiles.stadiamaps.com' };
+  l = checkLines(CHECK, STADIA, { services: { state: 'ok', data: { ...GOOD, tiles: { provider: 'Stadia Maps', viaServer: false, probe: null, last: null } } } });
   assert.deepEqual([said(l).tilesvc.value, said(l).tilesvc.warn], ['Stadia Maps · straight to the phones', false]);
+  // The free default, drawn by CARTO's Clean look: the line names CARTO, as
+  // the Street map line does — and is flagged with it when it isn't loading.
+  const FREE = { ...GOOD, tiles: { provider: 'OpenStreetMap', viaServer: false, probe: null, last: null } };
+  l = checkLines(CHECK, PAGE, { services: { state: 'ok', data: FREE } });
+  assert.deepEqual([said(l).tilesvc.value, said(l).tilesvc.warn], ['CARTO (Clean) · straight to the phones', false]);
+  l = checkLines(CHECK, { ...PAGE, tiles: { loaded: 0, failed: 9, down: true } }, { services: { state: 'ok', data: FREE } });
+  assert.deepEqual(flagged(l), ['tiles', 'tilesvc']);
+  // A Google or provider setting the map couldn't use: flagged, with what to set.
+  l = checkLines({ ...CHECK, tiles: { ...CHECK.tiles, ignored: ['google', 'provider'] } }, PAGE, { services: { state: 'ok', data: FREE } });
+  assert.deepEqual([said(l).tilesvc.warn, said(l).tilesvc.note], [true, 'GOOGLE_MAPS_TILES can’t be used — set it to 1, with GOOGLE_MAPS_SERVER_KEY\nSTARBASE_TILE_PROVIDER isn’t known — use stadia']);
   // Address lookup: the B.C. service busy (no Google words), Google's refused, or turned off.
   const busy = { ok: false, code: 'busy', plain: 'The B.C. address service is busy. It tries again by itself; a BC_GEOCODER_KEY raises the limit.', said: '', fix: null };
   l = checkLines(CHECK, PAGE, { services: { state: 'ok', data: { ...GOOD, lookup: { ...GOOD.lookup, probe: busy } } } });

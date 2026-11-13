@@ -45,13 +45,17 @@
   position: absolute;
   inset: 0;
   z-index: 0;
-  background: #e8ebf3; /* tiles are always light, whatever the scheme */
+  /* The ground before tiles come (or when they fail): the app's own paper,
+     so in dark mode an empty map isn't a bright slab. */
+  background: var(--paper-2);
 }
 .map-page.map-view--dark .map-canvas { background: rgb(26, 28, 34); }
-.map-canvas .leaflet-control-attribution { font: 10px/1.4 var(--font-mono); background: rgba(255, 255, 255, 0.85); color: #2c3250; }
-.map-canvas .leaflet-control-attribution a { color: #161a2e; }
-.map-page .map-canvas .leaflet-bar a { width: 48px; height: 48px; line-height: 48px; font-size: 20px; font-family: var(--font-serif); color: #161a2e; background: #ffffff; border-bottom-color: #dde0ec; }
-@media (hover: hover) { .map-page .map-canvas .leaflet-bar a:hover { background: #eef0f7; } }
+/* The zoom buttons and the credit follow the app's light or dark paper. */
+.map-canvas .leaflet-control-attribution { font: 10px/1.4 var(--font-mono); background: color-mix(in srgb, var(--paper-0) 85%, transparent); color: var(--text-2); }
+.map-canvas .leaflet-control-attribution a { color: var(--text-1); }
+.map-page .map-canvas .leaflet-bar { border-color: var(--rule); }
+.map-page .map-canvas .leaflet-bar a { width: 48px; height: 48px; line-height: 48px; font-size: 20px; font-family: var(--font-serif); color: var(--text-1); background: var(--paper-0); border-bottom-color: var(--rule); }
+@media (hover: hover) { .map-page .map-canvas .leaflet-bar a:hover { background: var(--paper-1); } }
 .map-canvas .leaflet-marker-icon:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; border-radius: 50%; }
 
 /* ── Pins (L.divIcon): a circle with a tail, colored by the household band.
@@ -918,7 +922,7 @@
 /* Signs in the Show sheet: on/off chips by status (with their flag) and by kind. */
 .map-schips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
 .map-schip {
-  display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 12px;
+  display: inline-flex; align-items: center; gap: 6px; min-height: var(--ctl); padding: 0 12px;
   border: 1px solid var(--rule-2); border-radius: 999px; background: var(--paper-0); color: var(--text-2);
   font: inherit; font-size: 14px; cursor: pointer; touch-action: manipulation;
 }
@@ -1040,6 +1044,8 @@
   border-radius: var(--r-card);
   box-shadow: var(--shadow-2);
 }
+/* Try again and Why? stay side by side, at the right, on a row of their own if the words need the width. */
+.map-tilenote__acts { display: inline-flex; flex-wrap: nowrap; gap: var(--s-2); margin-left: auto; }
 .btn.map-tilenote__btn { min-height: 48px; padding: 0 16px; display: inline-flex; align-items: center; white-space: nowrap; }
 /* It has switched provider by itself: the same line for a few seconds, with
    nothing to tap (and nothing wrong any more: no red edge). It never takes a
@@ -1076,3 +1082,4 @@
 .map-check__when { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); margin: var(--s-2) 0 0; padding-top: var(--s-2); border-top: 1px solid var(--rule); font-size: 13px; color: var(--text-3); }
 .btn.map-check__again, .btn.map-check__retry { display: inline-flex; align-items: center; min-height: 48px; padding: 0 var(--s-3); }
 .map-check__wait { margin: 0; font-size: 15px; color: var(--text-2); }
+.map-page .map-canvas .leaflet-bar a.leaflet-disabled { background: var(--paper-1); color: var(--text-4); }

@@ -39,7 +39,11 @@ function Row({ s, online }) {
       <div className="sv2-row__main">
         <div className="sv2-row__head">
           <span className="sv2-name">{s.name}</span>
-          <span className={`chip sv2-state sv2-state--${s.state}`}>{STATE_WORD[s.state]}{s.launch && s.state === 'missing' ? ' · needed to launch' : ''}</span>
+          {/* After a Check, the badge follows what the check found: never a
+              green "Set up" over a red ✕. */}
+          {res && !res.ok && s.state !== 'missing'
+            ? <span className="chip sv2-state sv2-state--broken">{STATE_WORD[s.state]} · not working</span>
+            : <span className={`chip sv2-state sv2-state--${s.state}`}>{STATE_WORD[s.state]}{s.launch && s.state === 'missing' ? ' · needed to launch' : ''}</span>}
         </div>
         <p className="sv2-for">{s.for}</p>
         {s.detail && <p className="sv2-detail">{s.detail}</p>}

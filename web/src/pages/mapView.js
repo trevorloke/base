@@ -323,12 +323,30 @@ const PROVIDER = { 'basemaps.cartocdn.com': 'CARTO', 'tile.openstreetmap.org': '
 // Google's own (shown as text, never markup), then the setup step.
 const troubleNote = (p) => [p.plain, p.said ? `Google said: “${p.said}”` : null, p.fix ? `See Going live §5, ${p.fix}.` : null].filter(Boolean).join('\n');
 const HOUR = 3_600_000;
-const serviceLines = (services, clock, now) => {
-  const waiting = { pending: 'Checking…', error: 'Unavailable — Try again', offline: 'No signal — the check needs it' }[services.state];
+// Settings on the server the map couldn't use, said where the street map
+// service is named (the map draws the free tiles meanwhile).
+const IGNORED = {
+  google: 'GOOGLE_MAPS_TILES can’t be used — set it to 1, with GOOGLE_MAPS_SERVER_KEY',
+  provider: 'STARBASE_TILE_PROVIDER isn’t known — use stadia',
+};
+const ignoredNote = (c) => (c.tiles.ignored || []).map((k) => IGNORED[k]).filter(Boolean).join('\n') || null;
+const serviceLines = (services, clock, now, page) => {
+  // A failed read isn't "nothing wrong": flagged, with the one way to ask again.
+  if (services.state === 'error') {
+    const o = { warn: true };
+    return [['tilesvc', 'Street map service', 'Unavailable — tap Check again', o], ['lookupsvc', 'Address lookup', 'Unavailable — tap Check again', o]];
+  }
+  const waiting = { pending: 'Checking…', offline: 'No signal — the check needs it' }[services.state];
   if (waiting) return [['tilesvc', 'Street map service', waiting, {}], ['lookupsvc', 'Address lookup', waiting, {}]];
   const { tiles: t, lookup: l } = services.data;
   let tiles;
-  if (!t.viaServer) tiles = [`${t.provider} · straight to the phones`, {}];
+  if (!t.viaServer) {
+    // The phones reach it straight: name the service the map actually drew
+    // from ("CARTO (Clean)"), so a failing look and its service agree.
+    const drawn = PROVIDER[page?.tilesFrom];
+    const name = drawn && drawn !== t.provider ? `${drawn}${page.look ? ` (${page.look})` : ''}` : t.provider;
+    tiles = [`${name} · straight to the phones`, { warn: Boolean(page?.tiles?.down) }];
+  }
   else if (!t.probe?.ok) tiles = [`Not working · ${t.provider}`, { note: t.probe ? troubleNote(t.probe) : null, warn: true }];
   else {
     const at = t.last ? Date.parse(t.last.at) : NaN;
@@ -383,10 +401,19 @@ export const checkLines = (c, page, { num = enCA, clock = (iso) => iso, now = Da
 
   const t = page.tiles || { loaded: 0, failed: 0, down: false };
   const from = [page.look, PROVIDER[page.tilesFrom] || page.tilesFrom || c.tiles.source].filter(Boolean).join(' · ');
+  const ignored = ignoredNote(c);
+  const svc = services ? serviceLines(services, clock, now, page) : null;
   add('tiles', 'Street map', `${from} — ${t.down ? 'isn’t loading: ' : ''}${num(t.loaded)} loaded, ${num(t.failed)} failed`, {
-    note: (c.tiles.ignored || []).includes('url') ? 'The street map address set on the server was ignored' : null, warn: t.down,
+    note: [(c.tiles.ignored || []).includes('url') ? 'The street map address set on the server was ignored' : null, svc ? null : ignored].filter(Boolean).join('\n') || null,
+    warn: t.down || (!svc && Boolean(ignored)),
   });
-  if (services) for (const [key, label, value, o] of serviceLines(services, clock, now)) add(key, label, value, o);
+  if (svc) {
+    for (const [key, label, value, o] of svc) {
+      // A setting the map couldn't use: flagged on the service line, with what to set.
+      if (key === 'tilesvc' && ignored) add(key, label, value, { note: [o.note, ignored].filter(Boolean).join('\n'), warn: true });
+      else add(key, label, value, o);
+    }
+  }
 
   const known = Boolean(page.build && c.build);
   add('build', 'This page', !known ? 'Not compared' : page.build === c.build ? 'Up to date' : 'Older than the server — reload it', {

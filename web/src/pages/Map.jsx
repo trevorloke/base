@@ -2405,6 +2405,8 @@ export default function MapPage() {
   // the plain map with houses to tap — never over a card, sheet or mode bar.
   // Opening any door counts as having started.
   useEffect(() => { if (selectedKey && !hintSeen) hideHint(); }, [selectedKey, hintSeen, hideHint]);
+  // The street-map note, if any: 'down' (one tap to fix) or 'switched' (said a few seconds).
+  const tileNote = mode ? null : (move === 'try-other' || move === 'try-again') ? 'down' : switchedTo && drawnAuto ? 'switched' : null;
   const showHint = !canCreate && !hintSeen && !hasSheet && !mode && !filterOpen && !noSignal
     && !personParam && !turfParam && visible.length > 0;
 
@@ -2654,7 +2656,8 @@ export default function MapPage() {
         )}
         {/* No signal: these are the doors this phone kept, not live ones. */}
         {doorsCopy && !mode && <span className="chip obx-copy map-copy" role="status">Offline copy</span>}
-        {showHint && (
+        {/* Not while a street-map note shows: two layers over the doors at most. */}
+        {showHint && !tileNote && (
           <div className="map-hint" role="status">
             <span className="map-hint__text">Tap a house to start</span>
             <button type="button" className="btn map-hint__x" onClick={hideHint} aria-label="Dismiss" title="Dismiss">✕</button>
@@ -2667,18 +2670,21 @@ export default function MapPage() {
             is the one drawn (not while the pick is, with no signal). */}
         {/* Managers also get a quiet "Why?": the map's check, which names
             the service that failed and what it said. */}
-        {(move === 'try-other' || move === 'try-again') && !mode ? (
+        {tileNote === 'down' ? (
           <div className="map-tilenote" role="status">
             <span>The street map isn’t loading</span>
-            {move === 'try-other'
-              ? <button type="button" className="btn map-tilenote__btn" onClick={() => { setSwitchedTo(null); setAutoView(otherLook.key); setTapped(true); }}>Try {otherLook.label}</button>
-              : <button type="button" className="btn map-tilenote__btn" onClick={() => setTilesTry((n) => n + 1)}>Try again</button>}
-            {mayCheck && <button type="button" className="btn btn-quiet map-tilenote__btn map-tilenote__why" onClick={openCheck}>Why?</button>}
+            {/* The taps stay together on one row: never "Why?" alone below. */}
+            <span className="map-tilenote__acts">
+              {move === 'try-other'
+                ? <button type="button" className="btn map-tilenote__btn" onClick={() => { setSwitchedTo(null); setAutoView(otherLook.key); setTapped(true); }}>Try {otherLook.label}</button>
+                : <button type="button" className="btn map-tilenote__btn" onClick={() => setTilesTry((n) => n + 1)}>Try again</button>}
+              {mayCheck && <button type="button" className="btn btn-quiet map-tilenote__btn map-tilenote__why" onClick={openCheck}>Why?</button>}
+            </span>
           </div>
-        ) : switchedTo && drawnAuto && !mode ? (
+        ) : tileNote === 'switched' ? (
           <div className="map-tilenote map-tilenote--done" role="status">
             <span>{providerView?.fallback ? 'Google Maps isn’t loading — showing the free map' : `The street map wasn’t loading — switched to ${switchedTo}`}</span>
-            {mayCheck && <button type="button" className="btn btn-quiet map-tilenote__btn map-tilenote__why" onClick={openCheck}>Why?</button>}
+            {mayCheck && <span className="map-tilenote__acts"><button type="button" className="btn btn-quiet map-tilenote__btn map-tilenote__why" onClick={openCheck}>Why?</button></span>}
           </div>
         ) : null}
         {showKey && !mode && <MapKey squares={patches} dark={view === 'dark'} words={keyWords} />}

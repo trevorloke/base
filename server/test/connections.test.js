@@ -165,7 +165,7 @@ test('the public address, the address service, the database and Google tiles ans
   const bad = await check('tiles');
   assert.equal(bad.ok, false);
   assert.equal(bad.said, 'Billing isn’t turned on for this Google Cloud project.');
-  assert.match(bad.todo, /^Google said: This API method requires billing to be enabled\..* · see Going live §5, Recipe B step 2$/);
+  assert.match(bad.todo, /^Google said: “This API method requires billing to be enabled\..*”\nSee Going live §5, Recipe B step 2\.$/s);
   assert.match(bad.todo, /https:\/\/console\.developers\.google\.com\/billing\/enable\?project=1/);
   assert.doesNotMatch(JSON.stringify(bad), /gkey/);
   // Checked again within 30 s: the same answer, no second call to Google.
@@ -202,8 +202,12 @@ test('the tiles row reads the map’s own setting: the Stadia preset is named, r
     assert.doesNotMatch(JSON.stringify([t, c]), /OpenStreetMap|stadiakey/);
     // A name the map doesn't know: said, and the free map meanwhile.
     process.env.STARBASE_TILE_PROVIDER = 'mapbox';
+    process.env.GOOGLE_MAPS_TILES = 'yes please';
     const u = byKey(await list()).tiles;
-    assert.equal(u.state, 'missing');
+    // The free map draws meanwhile; every setting it couldn't use is named.
+    assert.equal(u.state, 'default');
+    assert.match(u.detail, /GOOGLE_MAPS_TILES=yes please isn’t understood — use 1 · /);
+    delete process.env.GOOGLE_MAPS_TILES;
     assert.match(u.detail, /STARBASE_TILE_PROVIDER=mapbox isn’t known — use stadia/);
     delete process.env.STARBASE_TILE_PROVIDER;
     const d = byKey(await list()).tiles;

@@ -31,3 +31,7 @@
 .sv2-events { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 6px; }
 .sv2-events code { font-size: 13px; }
 .sv2-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+/* Set up, but the Check just failed */
+.sv2-state--broken { color: var(--danger); }
+/* Google's words on their own line, then the step that fixes it */
+.sv2-todo { white-space: pre-line; }

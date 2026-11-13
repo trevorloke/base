@@ -57,7 +57,9 @@ const googleTiles = () => googleTilesSetting() === 'on';
 // A failed check: what went wrong in plain words, then Google's own words and
 // the setup step that fixes it (GOING-LIVE.md §5) — said apart, as a todo.
 const refusedBy = (r) => {
-  const todo = [r.said ? `Google said: ${r.said}` : '', r.fix ? `see Going live §5, ${r.fix}` : ''].filter(Boolean).join(' · ');
+  // Google's words quoted on a line of their own, then the step as a sentence
+  // (as the map's check says them).
+  const todo = [r.said ? `Google said: “${r.said}”` : '', r.fix ? `See Going live §5, ${r.fix}.` : ''].filter(Boolean).join('\n');
   return { ok: false, said: r.plain, ...(todo ? { todo } : {}) };
 };
 
@@ -70,14 +72,18 @@ const freeTiles = () => {
 const freeTilesRow = () => {
   const { cfg, source } = freeTiles();
   const own = source !== 'OpenStreetMap';
-  const why = googleTilesSetting() === 'unknown' ? `GOOGLE_MAPS_TILES=${env('GOOGLE_MAPS_TILES').slice(0, 40)} isn’t understood — use 1`
-    : cfg.ignored.includes('provider') ? `STARBASE_TILE_PROVIDER=${env('STARBASE_TILE_PROVIDER').toLowerCase().slice(0, 40)} isn’t known — use stadia`
-      : cfg.ignored.includes('url') ? 'STARBASE_TILE_URL needs http(s) and {z}/{x}/{y}' : '';
+  // Every setting the map couldn't use, not only the first.
+  const why = [
+    googleTilesSetting() === 'unknown' && `GOOGLE_MAPS_TILES=${env('GOOGLE_MAPS_TILES').slice(0, 40)} isn’t understood — use 1`,
+    cfg.ignored.includes('provider') && `STARBASE_TILE_PROVIDER=${env('STARBASE_TILE_PROVIDER').toLowerCase().slice(0, 40)} isn’t known — use stadia`,
+    cfg.ignored.includes('url') && 'STARBASE_TILE_URL needs http(s) and {z}/{x}/{y}',
+  ].filter(Boolean).join(' · ');
   return row('tiles', `Map background (${source})`, 'The map volunteers walk', false, [], {
     detail: why ? `${why} · ${source} meanwhile`
       : own ? `${source}, straight to the phones`
         : 'OpenStreetMap’s free tiles — not for a large team in election week (see Going live §5)',
-    state: why ? 'missing' : own ? 'ready' : 'default',
+    // A setting it couldn't use leaves the free map drawing: that is what the badge says.
+    state: own && !why ? 'ready' : 'default',
   });
 };
 
@@ -217,7 +223,7 @@ const CHECKS = {
       // Only the free default needs the pointer to choosing a provider.
       return { ok: true, said: `${source}${source.endsWith('s') ? '’' : '’s'} tiles come straight to each phone${source === 'OpenStreetMap' ? ' · to choose a provider, see Going live §5' : ''}` };
     }
-    if (!googleKey()) return { ok: false, said: 'GOOGLE_MAPS_SERVER_KEY isn’t set', todo: 'see Going live §5, Recipe B step 6' };
+    if (!googleKey()) return { ok: false, said: 'GOOGLE_MAPS_SERVER_KEY isn’t set', todo: 'See Going live §5, Recipe B step 6.' };
     const r = await probeTiles();
     return r.ok ? { ok: true, said: 'Working · Google Map Tiles answering' } : refusedBy(r);
   },

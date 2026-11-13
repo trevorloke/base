@@ -443,7 +443,7 @@ h3 { font-size: 16px; line-height: 1.35; }
 .acct { position: relative; }
 .acct-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 10px;
-  min-width: 44px; height: 44px; padding: 0; margin: 0 calc(-1 * var(--s-2));
+  min-width: 48px; height: 48px; padding: 0; margin: 0 calc(-1 * var(--s-2)); /* a 48px tap; the circle stays 34px */
   background: none; border: 0; border-radius: 999px; cursor: pointer; color: inherit;
   font: inherit;
 }
