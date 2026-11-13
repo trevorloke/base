@@ -1,9 +1,13 @@
 // Sign in: email, password, one button. With two-step sign-in on, a second
 // step: the code from the authenticator app (or a recovery code). The
 // first-run setup link shows only until the campaign is set up (after
-// that, people join by invite).
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+// that, people join by invite). Sign in with Google, under the one
+// primary "Sign in", when the server and the campaign have it on: a plain
+// link to the server's start route (components/google.js). Google's return
+// lands here with ?google=<why> when it didn't sign anyone in, or with
+// ?step=code when two-step sign-in asks for the code next.
+import { useEffect, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiGet, apiPost, ApiError, noAnswer } from '../api.js'; // no signal at all keeps its own words
 import { landing } from '../mode.js';
@@ -55,7 +59,8 @@ export default function Login({ mode = 'field' }) {
     if (search.has('google')) setSearch((q) => { q.delete('google'); return q; }, { replace: true });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const googleOn = Boolean(setup.data?.google);
-  const shownError = error || (googleCode && step === 'password' ? googleWords(googleCode, { domain: setup.data?.googleDomain }) : null);
+  // Said once /auth/setup has answered: the domain rule's words name the domain.
+  const shownError = error || (googleCode && step === 'password' && !setup.isPending ? googleWords(googleCode, { domain: setup.data?.googleDomain }) : null);
   const startAgain = () => {
     setStep('password'); setError(null); setPassword('');
     if (search.has('step')) setSearch((q) => { q.delete('step'); return q; }, { replace: true });
