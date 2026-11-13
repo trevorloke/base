@@ -351,14 +351,19 @@ const reconcile = async (db, ws, c, link, st, grant) => {
     }
     const made = !calId;
     if (made) calId = String(r.body.id);
-    // Stopped (or forgotten) while Google was answering: a calendar made
-    // just now is deleted again, never left in their Google account.
-    const n = await db.query(`update gcal_links set calendar_id = $3, cal_hash = $4, updated_at = now() where workspace_id = $1 and user_id = $2 and state = 'ok'`,
-      [ws, userId, calId, calHash]);
-    if (!n.affectedRows) {
+    // Stopped while Google was answering (Stop, the switch, Disconnect,
+    // Forget, leaving the team): the id is kept on the link whatever its
+    // state, so gcal.stop or cleanUp (with the token GSI holds back for it)
+    // deletes the calendar. Only with the link gone entirely is it deleted
+    // here, through the grant if it is still there.
+    const row = (await db.query(
+      `update gcal_links set calendar_id = $3, cal_hash = $4, updated_at = now() where workspace_id = $1 and user_id = $2 returning state`,
+      [ws, userId, calId, calHash])).rows[0];
+    if (!row) {
       if (made) await googleFetch(db, grant, `${calBase()}/calendars/${enc(calId)}`, { method: 'DELETE' }, { retry: 'auth-only' });
       throw new Stop('stopped');
     }
+    if (row.state !== 'ok') throw new Stop('stopped');
   }
 
   const want = await desiredFor(db, ws, userId);

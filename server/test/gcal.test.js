@@ -653,6 +653,36 @@ test('Stop, or the switch going off, while the first push is making the calendar
   }
 });
 
+test('Disconnect, Forget or removal from the team while the first push is making the calendar: it is deleted before the revoke', async () => {
+  // A campaign of its own: Forget and removal change who is on the team.
+  const F = await signup(`Gcal Race ${tag}`, `fay.${tag}@example.org`);
+  ok(await F.b.action('gcal.settings', { on: true }));
+  const dueAll = () => db.query(`update jobs set run_at = now() where status = 'pending' and kind in ('gcal.push', 'gcal.stop', 'google.revoke')`);
+  const all = () => { _resetGcalForTest(); return runDueJobs(db, {}).catch(() => {}); };
+  const cases = [
+    ['disconnect', 8, (who) => who.b.action('google.disconnect', { purpose: 'calendar.mine' })],
+    ['forget', 9, () => F.b.action('google.forget', {})],
+    ['remove', 10, (who) => F.b.action('member.remove', { user_id: who.id })],
+  ];
+  for (const [name, n, off] of cases) {
+    const who = await join(F.b, `race${n}.${tag}@example.org`, 'volunteer', `Race${n} Example`);
+    fake.resetCounts();
+    assert.equal((await connect(who, n)).google, 'connected');
+    fake.cal.next('slow', { route: 'calendars.insert', ms: 800 });
+    const pushing = all();
+    await new Promise((r) => setTimeout(r, 200));
+    assert.ok((await linkRow(who.id, F.ws))?.busy_until, `${name}: the push holds the link`);
+    ok(await off(who));
+    await dueAll();
+    await all();
+    await pushing;
+    for (let i = 0; i < 6; i += 1) { await new Promise((r) => setTimeout(r, 300)); await dueAll(); await all(); }
+    assert.deepEqual(calOf(n), [], `${name}: no base.win calendar left in Google`);
+    assert.deepEqual(fake.orderOf(A[n].sub).filter((x) => /calendars|revoke/.test(x)), ['calendars.insert', 'calendars.delete', 'revoke'], name);
+    assert.equal(await linkRow(who.id, F.ws), null, name);
+  }
+});
+
 test('leaving the team: deleted for a one-campaign user then revoked; through the other campaign for a two-campaign user; a paid membership touches nothing', async () => {
   // A paid membership's void (payments' "dues refunded") is no team change.
   assert.equal((await connect(W, 3)).google, 'connected');
