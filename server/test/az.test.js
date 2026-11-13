@@ -146,3 +146,63 @@ test('the people report, volunteers: A–Z; walk lists keep street order', async
     { address: '100 Example St', lat: 49.1, lng: -122.8, people: [{ name: 'Zed Abbott' }] }];
   assert.deepEqual(walkOrder(doors).map((d) => d.address), walkOrder([...doors].reverse()).map((d) => d.address));
 });
+
+// Over a real Postgres (DATABASE_URL), this whole file runs once more against
+// a database whose collation is en_US — libc en_US.UTF-8 where the server
+// has it, else ICU's — the case collate "C" is there for: the server's
+// order must still be azSort's. PGlite (and a server with neither locale)
+// can't make such a database: the test says so and is skipped.
+// ICU's en-US keeps spaces and hyphens by default; "-u-ka-shifted" skips
+// them at the first level, as glibc's en_US does ("vanberg" < "van der berg").
+const EN_US = [
+  ['libc en_US.UTF-8', "lc_collate 'en_US.UTF-8' lc_ctype 'en_US.UTF-8'"],
+  ['ICU en-US, spaces and hyphens skipped', "locale_provider icu icu_locale 'en-US-u-ka-shifted'"],
+  ['ICU en-US', "locale_provider icu icu_locale 'en-US'"],
+];
+test('the same order under an en_US collation', { timeout: 300_000 }, async (t) => {
+  if (process.env.AZ_COLLATION) {
+    // This is the run inside that database: say which collation it really has.
+    // (pg_database's ICU column is daticulocale on 15–16, datlocale from 17.)
+    const { rows: [{ d }] } = await db.query('select to_jsonb(x) as d from pg_database x where datname = current_database()');
+    const icu = d.datlocale || d.daticulocale || '';
+    const here = d.datlocprovider === 'i' ? `ICU ${icu}` : d.datcollate;
+    // test:pg's PGlite takes "create database" but serves its one C database
+    // under every name: that run proves nothing, and says so.
+    if (!(d.datlocprovider === 'i' ? /^en/.test(icu) : /^en_US/i.test(d.datcollate))) t.diagnostic(`AZ_NOT_EN_US ${here}`);
+    else t.diagnostic(`collation: ${here}`);
+    return;
+  }
+  if (!process.env.DATABASE_URL) { t.skip('PGlite: the en_US collation runs only over a real Postgres (DATABASE_URL)'); return; }
+  // Through the file's own connection (test:pg's socket server takes one at a time).
+  const name = `az_en_us_${tag}`;
+  let made = null;
+  for (const [label, how] of EN_US) {
+    try { await db.query(`create database ${name} template template0 ${how}`); made = label; break; } catch { /* not on this server */ }
+  }
+  if (!made) {
+    t.skip('this server has neither an en_US.UTF-8 nor an ICU en-US collation');
+    return;
+  }
+  t.diagnostic(`running az.test.js again in a database collated ${made}`);
+  try {
+    const url = new URL(process.env.DATABASE_URL);
+    url.pathname = `/${name}`;
+    const { spawn } = await import('node:child_process');
+    const out = [];
+    // A runner of its own (NODE_TEST_CONTEXT would make it report into this one).
+    const { NODE_TEST_CONTEXT, ...env } = process.env;
+    const child = spawn(process.execPath, ['--test', new URL(import.meta.url).pathname], {
+      env: { ...env, DATABASE_URL: url.toString(), AZ_COLLATION: made },
+    });
+    child.stdout.on('data', (b) => out.push(b));
+    child.stderr.on('data', (b) => out.push(b));
+    const code = await new Promise((r) => child.on('exit', r));
+    const said = Buffer.concat(out).toString();
+    const other = said.match(/AZ_NOT_EN_US (.*)/);
+    if (other) { t.skip(`the server made the database but serves it collated ${other[1]} (PGlite): no en_US run`); return; }
+    assert.equal(code, 0, `under ${made}:\n${said.slice(-4000)}`);
+    t.diagnostic(said.match(/collation: .*/)?.[0] ?? '');
+  } finally {
+    await db.query(`drop database if exists ${name} with (force)`).catch(() => {});
+  }
+});

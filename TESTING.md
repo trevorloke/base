@@ -971,7 +971,11 @@ one tap away under **More**.
   a lowered cap; `role=`, `not=`, `list=`; the fold the same in the server
   and the browser; each way's index), `server/test/az.test.js` (every list
   of people in last-name order, the browser's `azSort` agreeing; parts of
-  People meeting with no overlap or gap), `server/test/people-search.test.js`
+  People meeting with no overlap or gap; over a real Postgres —
+  `DATABASE_URL=postgres://…/scratch node --test server/test/az.test.js` —
+  it runs again in a database collated en_US, libc's where the server has
+  it, else ICU's with spaces and hyphens skipped, and must agree there too;
+  PGlite and `test:pg` skip that part and say so), `server/test/people-search.test.js`
   (People's box, online and offline), `server/test/search-scale.test.js`
   (300,000 made-up people in PGlite: no search reads the table end to end;
   `SEARCH_PEOPLE` for a smaller file). The speed check is
