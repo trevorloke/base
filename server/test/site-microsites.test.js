@@ -132,6 +132,22 @@ test('going live is refused with the first thing missing, in the checklist’s o
   assert.equal(ok(await live()).microsite.status, 'live');
 });
 
+test('while it is live, a save can’t take away who authorized it or the privacy link', async () => {
+  for (const patch of [{ agentName: '' }, { agentContact: '' }, { agentName: '', agentContact: '', authorizationLine: '' }]) {
+    settings = ok(await mgr.get('/api/site')).settings;
+    const r = await act(mgr, 'site.settings.save', { org: { ...settings.org, ...patch } });
+    assert.equal(r.status, 400);
+    assert.equal(r.json.error, 'Take your other websites offline first, or keep who authorized them');
+  }
+  const r = await act(mgr, 'site.settings.save', { org: { ...settings.org, privacyUrl: '' } });
+  assert.equal(r.status, 400);
+  assert.equal(r.json.error, 'Take your other websites offline first, or keep your privacy policy link');
+  const org = ok(await mgr.get('/api/site')).settings.org;
+  assert.deepEqual([org.agentName, org.agentContact, org.privacyUrl], ['Ada Example', '604-555-0100', '/privacy']);
+  // Other changes still save.
+  await saveOrg({ phone: '604-555-0142' });
+});
+
 test('routing: its domain is its home; the main domain the main home; an unknown host the app; /site/sites/<key>/ on the app address', async () => {
   fresh();
   const d = await hit('/', { host: DOUG });

@@ -219,6 +219,14 @@ export const actions = {
       sets.push(`${key} = $${params.length}`);
       changed[key] = r.data;
     }
+    // A live other website draws "Authorized by …" and the privacy link on
+    // every page (B.C. election advertising): going live checks them
+    // (microsites.js liveChecklist), and a later save can't take them away.
+    if (changed.org) {
+      const live = (await tx.query("select 1 from microsites where workspace_id = $1 and status = 'live' and deleted_at is null limit 1", [ws])).rows[0];
+      if (live && !(changed.org.agentName && changed.org.agentContact)) throw httpError(400, 'Take your other websites offline first, or keep who authorized them');
+      if (live && !changed.org.privacyUrl) throw httpError(400, 'Take your other websites offline first, or keep your privacy policy link');
+    }
     if (input.theme !== undefined) {
       // Following the campaign's brand, or not, changes only when a save says
       // so (Website → Theme: "Use the campaign's brand" / "Give the website
