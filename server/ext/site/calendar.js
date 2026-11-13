@@ -2,7 +2,7 @@
 //   <root>/events.ics           the upcoming public shifts of the Events list
 //   <root>/events/<id>.ics      one public, upcoming shift from either list
 // Only where this site lists them: a published page of THIS site (the main
-// site; a microsite by site_pages.site_id once that column exists) has an
+// site, or the other website being served: site.micro) has an
 // Events or Volunteer openings section that isn't hidden. Elsewhere both
 // are the site's 404, so a microsite with no such section never serves the
 // campaign's events.
@@ -14,7 +14,6 @@ import { pinPoint } from '@starbase/shared/shiftkinds';
 import { icsFileName, ICS_TYPE } from '../../lib/calendar.js';
 import { loadEvents } from './loaders.js';
 
-// SW's column read through to_jsonb, so this works before and after it:
 // null is the main site.
 export const siteListsEvents = async (q, ws, siteId = null) => (await q.query(
   `select 1 from site_pages p
@@ -52,7 +51,7 @@ const publicEvent = (e, { tz, org, home, address }) => {
 
 // The two routes' answers, or null for the site's 404.
 export const eventsCalendar = async (site, org, { id = null } = {}) => {
-  if (!await siteListsEvents(site.db, site.ws, site.siteId ?? null)) return null;
+  if (!await siteListsEvents(site.db, site.ws, site.micro?.id ?? null)) return null;
   const tz = site.ws.settings?.tz || 'America/Vancouver';
   const home = `${site.address}${site.root}/`;
   const at = { tz, org, home, address: `${site.address}${site.root}` };

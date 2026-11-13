@@ -171,6 +171,23 @@ test('routing: its domain is its home; the main domain the main home; an unknown
   assert.equal((await hit(`/site/sites/no-such-site/`)).status, 404);
 });
 
+test('its calendar: /events.ics answers only when its own pages list events, never the main site’s list', async () => {
+  const { siteListsEvents } = await import('../ext/site/calendar.js');
+  assert.ok(await siteListsEvents(db, { id: ws }, null), 'the main site lists events');
+  assert.equal((await hit('/events.ics', { host: DOUG })).status, 404);
+  assert.equal((await hit(`/site/sites/${site.key}/events.ics`)).status, 404);
+  const cur = (await db.query('select draft, updated_at from site_pages where id = $1', [home.id])).rows[0];
+  const mods = cur.draft.modules;
+  ok(await act(mgr, 'site.page.save', { id: home.id, modules: [...mods, { id: 'events', kind: 'events', props: { title: 'Come and meet us', limit: 3 } }] }));
+  ok(await act(mgr, 'site.page.publish', { id: home.id }));
+  const r = await hit('/events.ics', { host: DOUG });
+  assert.equal(r.status, 200);
+  assert.match(r.text, /BEGIN:VCALENDAR/);
+  ok(await act(mgr, 'site.page.save', { id: home.id, modules: mods }));
+  ok(await act(mgr, 'site.page.publish', { id: home.id }));
+  assert.equal((await hit('/events.ics', { host: DOUG })).status, 404);
+});
+
 test('every page of it names the main organization, links back, and draws the authorization line; every form one privacy line', async () => {
   const petition = ok(await act(mgr, 'site.campaign.save', { kind: 'petition', title: 'Fix the Example Bridge', statement: 'Fix it.' })).campaign;
   for (const path of ['/', '/no-such-page', `/act/${petition.slug}`]) {
