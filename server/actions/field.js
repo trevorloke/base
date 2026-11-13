@@ -884,8 +884,8 @@ export const FIELD_ACTIONS = {
       if (!isText && !input.subject) throw httpError(400, 'a subject is required');
       // An email: "[first name]" and "[campaign]" as typed (an older screen)
       // are stored as the codes each copy fills in.
-      if (!isText) input = emailCodes(input);
       if (!isText) {
+        input = emailCodes(input);
         const problem = emailProblem(subjectsOf(input), input.body, { from: input.placeholders_from });
         if (problem) throw httpError(400, problem);
       }
