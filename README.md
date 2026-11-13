@@ -943,7 +943,19 @@ leaves the sign-off out; the sign-off is read from the writer's own record
 and kept on a letter only where they changed it, and the address and phone
 typed for it go 30 days after it closes (at once when withdrawn).
 Talking points for writers: `letter.points`; the wait before another paper
-(10 days by default): `letter.settings`, managers.
+(10 days by default): `letter.settings`, managers. A writer whose letter
+repeats eight words in a row (twenty Chinese characters) of the talking
+points or a press release of the last 60 days is told "These words are the
+campaign's — say it your way" (`campaign_words`; never a block); the desk
+also sees other writers' letters of the last 60 days that share such a run
+(the same paper or newsroom first), and how much of a letter is the
+campaign's suggested words (`campaign_share`; kept on the letter when the
+writer agrees, never on the log). After the desk suggests, writes, declines
+or marks it published, the writer gets one email, "The campaign replied
+about your letter" — the link, never the letter's words, a note or a
+paper's name — at most one an hour, unless they turned it off on the
+letter; with no email connected nothing is sent. Counting, the comparison
+and the email link are `shared/letters.js`, shared with the field app.
 
 **From addresses.** Settings → Services → Email → *From addresses*: a
 manager adds up to ten addresses at MAIL_FROM's own domain (a name and an

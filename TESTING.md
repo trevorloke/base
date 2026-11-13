@@ -486,6 +486,14 @@ one tap away under **More**.
   writer's letter is 404, a volunteer granted Media 403 on the queue, staff
   denied Media still write), no words in the log, no sign-off in the
   export, the 30-day purge and Today's counts.
+  `server/test/letters-checks.test.js`: the campaign's share of an agreed
+  letter (a rewrite taken in full ≥ 0.9, Keep mine 0, never on the log),
+  repeats of the talking points or a release of the last 60 days shown to
+  the writer, other writers' shared runs to the desk only (same newsroom
+  first), and the reply email (once an hour, with the link and none of the
+  letter; not when turned off or bounced). `server/test/letters-shared.test.js`:
+  shared/letters.js — counting (Punjabi, Chinese), the change-by-change
+  round trip, the share, the 8-word / 20-character runs and the mailto: link.
   `server/test/media-lists.test.js`: outlets (rename carries contacts,
   name taken 409, checked), the three lists, Copy emails, a release to one
   list, the merge's union and the migration run twice.

@@ -26,6 +26,9 @@
 //   letter.told_sent { id, outlet_id } — "They told us they sent it": a record, nothing sent
 //   letter.published · letter.not_published · letter.decline { id, note } · letter.reopen { id }
 //   letter.points { text } — talking points for writers · letter.settings { wait_days } (managers)
+// After a desk suggestion, note, decline or published, the writer gets one
+// email (their choice, per letter; at most one an hour) saying the campaign
+// replied, with the link — never the letter's words, a note or a paper's name.
 // No desk action sets Ready, changes the writer's text or sends to an outlet.
 //
 // The log never holds a letter's words: events carry ids, sides, statuses
@@ -38,6 +41,11 @@ import { enqueueJob } from '../../lib/jobs.js';
 import { campaignDay } from '../../lib/gifts.js';
 import { DEFAULT_TZ } from '../../lib/org.js';
 import { selfPerson } from '../relationships/match.js';
+import { campaignShare } from '@starbase/shared/letters';
+import { emailConfigured, sendEmail } from '../../lib/notify.js';
+import { whyNot } from '../../lib/reach.js';
+import { basePath } from '../../lib/mount.js';
+import { configuredUrl } from '../../lib/calendar.js';
 
 const WRITERS = ['manager', 'treasurer', 'staff', 'volunteer'];
 const DESK = ['manager', 'treasurer', 'staff'];
@@ -200,6 +208,61 @@ const answer = async (tx, ctx, l, { sendId, outcome, url = null, on = null }, si
   return { send };
 };
 
+// The campaign's share of a text: against the writer's first draft and
+// every suggestion the campaign made on this letter.
+export const shareOf = async (db, letterId, body) => {
+  const drafts = (await db.query('select side, body from letter_versions where letter_id = $1 order by n', [letterId])).rows;
+  const first = drafts.find((d) => d.side === 'writer');
+  return campaignShare(first?.body || '', drafts.filter((d) => d.side === 'campaign').map((d) => d.body), body);
+};
+
+// ── "The campaign replied about your letter" ──
+// Claimed in the desk's write (emailed_at, so two replies in the hour send
+// one), sent once it has committed, under a key a retry can't double.
+// Nothing is claimed when the writer said no, when no email is connected
+// (nothing sent, nothing queued), or when their address can't be emailed —
+// it bounced for good; a do-not-email tag doesn't stop it: it's their own
+// letter, answered (lib/reach.js sender 'self').
+const REPLY = Symbol('letters.reply');
+const REPLY_GAP_MS = 3600000;
+const claimReply = async (tx, ctx, l) => {
+  if (!l.email_me || !l.writer_user || !emailConfigured()) return null;
+  if (l.emailed_at && Date.now() - new Date(l.emailed_at).getTime() < REPLY_GAP_MS) return null;
+  const to = (await tx.query('select email, name from users where id = $1', [l.writer_user])).rows[0];
+  if (!to?.email) return null;
+  if (await whyNot(tx, 'email', 'self', { workspaceId: ctx.workspaceId, email: to.email })) return null;
+  const at = (await tx.query('update letters set emailed_at = now() where id = $1 and workspace_id = $2 returning emailed_at', [l.id, ctx.workspaceId])).rows[0].emailed_at;
+  return { to: to.email, name: to.name, letterId: l.id, key: `letters.reply:${l.id}:${new Date(at).getTime()}` };
+};
+// The letter in the field app (under a client's path, /field).
+export const letterLink = (publicUrl, id) => `${String(publicUrl || '').replace(/\/+$/, '')}${basePath() ? '/field' : ''}/letters/${id}`;
+// The fixed words (no template registry for system mail yet; a later one
+// would take { first_name, link } and nothing of the letter).
+export const replyEmail = ({ name, link }) => {
+  const first = String(name || '').trim().split(/\s+/)[0];
+  return {
+    subject: 'The campaign replied about your letter',
+    text: [
+      `${first ? `Hi ${first}, the` : 'The'} campaign replied about your letter. Have a look: ${link}`,
+      'To stop these emails, turn off “Email me when the campaign replies” on the letter.',
+    ].join('\n\n'),
+  };
+};
+const sendReply = async (db, ctx, result) => {
+  const mail = result?.[REPLY];
+  if (!mail) return { result };
+  const words = replyEmail({ name: mail.name, link: letterLink(configuredUrl() || ctx.publicUrl, mail.letterId) });
+  const sent = await sendEmail({ to: mail.to, ...words, idempotencyKey: mail.key });
+  return { result: { ...result, email: sent.status } };
+};
+// A desk answer: the handler's result, with the email to send after it.
+const replied = (handler) => async (tx, ctx, input, emit) => {
+  const result = await handler(tx, ctx, input, emit);
+  const l = (await tx.query('select * from letters where id = $1 and workspace_id = $2', [input.id, ctx.workspaceId])).rows[0];
+  const mail = result?.duplicate || !l ? null : await claimReply(tx, ctx, l);
+  return mail ? { ...result, [REPLY]: mail } : result;
+};
+
 const signSet = (s) => Object.fromEntries(Object.entries(s || {}).filter(([, v]) => v !== undefined).map(([k, v]) => [SIGN_COLS[k], v || null]));
 
 export const actions = {
@@ -292,9 +355,12 @@ export const actions = {
       const last = await newestDraft(tx, l.id);
       if (!last || last.id !== input.version_id || last.side !== 'writer') throw httpError(409, 'There’s a newer draft — have a look');
       const hash = sha(last.body);
-      // agreed_campaign_share: how much of it is the campaign's words — set
-      // by shared/letters.js campaignShare (LTE stage 2).
-      const next = await touch(tx, l, 'writer', { agreed_version: last.id, agreed_hash: hash, agreed_at: new Date().toISOString(), status: 'ready' });
+      // How much of it is the campaign's words: on the letter for the desk's
+      // chip and reports, never on the log.
+      const share = await shareOf(tx, l.id, last.body);
+      const next = await touch(tx, l, 'writer', {
+        agreed_version: last.id, agreed_hash: hash, agreed_at: new Date().toISOString(), agreed_campaign_share: share, status: 'ready',
+      });
       emit('letter_agreement', l.id, 'create', { letter_id: l.id, version_id: last.id, hash });
       if (l.status !== 'ready') emit('letter', l.id, 'update', letterEvent(next));
       return { letter: { id: l.id, status: 'ready', agreed_version: last.id, agreed_hash: hash } };
@@ -419,7 +485,8 @@ export const actions = {
   'letter.suggest': {
     roles: DESK,
     input: z.object({ id: z.uuid(), body: body(BODY_MAX), note: z.string().trim().max(2000).optional() }),
-    handler: async (tx, ctx, input, emit) => {
+    after: sendReply,
+    handler: replied(async (tx, ctx, input, emit) => {
       deskOnly(ctx);
       const l = await load(tx, ctx, input.id, { mine: false });
       if (OUT.includes(l.status)) throw httpError(409, 'It’s already out');
@@ -436,13 +503,14 @@ export const actions = {
       const next = await touch(tx, l, 'campaign', { ...UNAGREE, status: 'working', desk_seen_at: new Date().toISOString() });
       if (l.status !== 'working') emit('letter', l.id, 'update', letterEvent(next));
       return { version, letter: { id: l.id, status: 'working' } };
-    },
+    }),
   },
 
   'letter.note': {
     roles: DESK,
     input: z.object({ id: z.uuid(), body: z.string().trim().min(1).max(2000) }),
-    handler: async (tx, ctx, input, emit) => {
+    after: sendReply,
+    handler: replied(async (tx, ctx, input, emit) => {
       deskOnly(ctx);
       const l = await load(tx, ctx, input.id, { mine: false });
       const id = newId();
@@ -454,7 +522,7 @@ export const actions = {
       const next = await touch(tx, l, 'campaign', { status: l.status === 'new' ? 'working' : l.status, desk_seen_at: new Date().toISOString() });
       if (next.status !== l.status) emit('letter', l.id, 'update', letterEvent(next));
       return { note: { id } };
-    },
+    }),
   },
 
   'letter.told_sent': {
@@ -470,11 +538,12 @@ export const actions = {
   'letter.published': {
     roles: DESK,
     input: z.object({ id: z.uuid(), send_id: z.uuid(), url: web, on: day }),
-    handler: async (tx, ctx, input, emit) => {
+    after: sendReply,
+    handler: replied(async (tx, ctx, input, emit) => {
       deskOnly(ctx);
       return answer(tx, ctx, await load(tx, ctx, input.id, { mine: false }),
         { sendId: input.send_id, outcome: 'published', url: input.url, on: input.on }, 'campaign', emit);
-    },
+    }),
   },
 
   'letter.not_published': {
@@ -490,7 +559,8 @@ export const actions = {
   'letter.decline': {
     roles: DESK,
     input: z.object({ id: z.uuid(), note: z.string().trim().min(1).max(500) }),
-    handler: async (tx, ctx, input, emit) => {
+    after: sendReply,
+    handler: replied(async (tx, ctx, input, emit) => {
       deskOnly(ctx);
       const l = await load(tx, ctx, input.id, { mine: false });
       if (!['new', 'working', 'ready'].includes(l.status)) throw httpError(409, l.status === 'declined' ? 'Already declined' : 'It’s already out');
@@ -500,7 +570,7 @@ export const actions = {
       emit('letter', l.id, 'update', letterEvent(next));
       await purgeLater(tx, next);
       return { letter: { id: l.id, status: 'declined' } };
-    },
+    }),
   },
 
   'letter.reopen': {

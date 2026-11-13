@@ -9,6 +9,10 @@
 //                               cards, dropped_outlets and blocked (an
 //                               exclusive paper still has it). Reading it is
 //                               "seen" (writer_seen_at; a stamp, no event).
+//                               campaign_words: where their newest draft
+//                               repeats the talking points or a press release
+//                               of the last 60 days (8 words in a row; 20
+//                               Chinese characters) — a nudge, never a block
 //   GET /letters/outlets?kind=  outlets that take that kind, with only what a
 //                               writer needs (published address or form,
 //                               limit, rules), the talking points, the
@@ -20,11 +24,17 @@
 //   GET /media/letters?status=  the queue, newest activity first (500)
 //   GET /media/letters/count    { new, waiting } for Today's "Needs you"
 //   GET /media/letters/:id      everything the writer's read has, plus the
-//                               full sign-off, each outlet's rules check and
-//                               Editors here. Reading it sets desk_seen_at.
+//                               full sign-off, each outlet's rules check,
+//                               Editors here, campaign_share (how much of the
+//                               newest writer draft is the campaign's words)
+//                               and overlaps: other writers' letters of the
+//                               last 60 days sharing a run with it, the same
+//                               paper or newsroom first (5 at most). Reading
+//                               it sets desk_seen_at.
 import { Hono } from 'hono';
 import { onMedia } from '../media/rules.js';
 import { selfPerson } from '../relationships/match.js';
+import { campaignShare, sharedRuns, size } from '@starbase/shared/letters';
 import { outAt, waitDays } from './actions.js';
 
 export const api = new Hono();
@@ -35,8 +45,8 @@ const isDesk = (ctx) => ctx.role !== 'volunteer';
 const refuse = (c) => c.json({ error: 'volunteers cannot view this' }, 403);
 const notFound = (c) => c.json({ error: 'letter not found' }, 404);
 const STATUSES = ['new', 'working', 'ready', 'sent', 'published', 'declined', 'withdrawn'];
-// Spaced words; shared/letters.js size() counts by each outlet's unit (stage 2).
-const words = (t) => (String(t || '').trim() ? String(t).trim().split(/\s+/).length : 0);
+// What is checked against: 60 days of releases and letters.
+const CHECK_DAYS = 60;
 const firstName = (n) => String(n || '').trim().split(/\s+/)[0] || null;
 
 // An outlet as a writer sees it for one kind: its published address or
@@ -72,6 +82,65 @@ const personOf = async (db, ws, id) => (id ? (await db.query(
 const NOT_PRINTED = `(select o.name from letter_sends s left join media_outlets o on o.id = s.outlet_id
   where s.letter_id = l.id and s.outcome = 'not_published' order by s.outcome_at desc limit 1)`;
 
+const newestWriter = (drafts) => [...drafts].reverse().find((d) => d.side === 'writer') || null;
+// A release's words as read: no tags, no entities.
+const plain = (html) => String(html || '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&')
+  .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;|&rsquo;/g, '’');
+const runOut = (r) => ({ run: r.text, length: r.length, start: r.start, end: r.end });
+
+// Where the writer's text repeats the campaign's own words: the talking
+// points and press releases sent in the last 60 days. Names no other writer.
+const campaignWords = async (db, ctx, text) => {
+  if (!text) return [];
+  const found = [];
+  const points = ctx.workspace?.settings?.letters?.points;
+  const p = points ? sharedRuns(text, points) : null;
+  if (p) found.push({ source: 'points', ...runOut(p) });
+  const releases = (await db.query(
+    `select id, subject, body, sent_at from blasts where workspace_id = $1 and kind = 'press' and status = 'sent'
+       and sent_at > now() - make_interval(days => $2) order by sent_at desc limit 100`,
+    [ctx.workspaceId, CHECK_DAYS],
+  )).rows;
+  for (const b of releases) {
+    const r = sharedRuns(text, plain(b.body));
+    if (r) found.push({ source: 'release', release: { id: b.id, subject: b.subject, sent_at: b.sent_at }, ...runOut(r) });
+  }
+  return found;
+};
+
+// Other writers' letters of the last 60 days sharing a run with this one,
+// whatever paper: the same paper or newsroom first (an editor sees both),
+// then the longest. The desk's alone: it names another writer.
+const sameRoom = (a, b) => a.id === b.id || Boolean(a.newsroom && b.newsroom && a.newsroom.trim().toLowerCase() === b.newsroom.trim().toLowerCase());
+const overlapsOf = async (db, ctx, l, text) => {
+  if (!text) return [];
+  const others = (await db.query(
+    `select o.id, o.outlet_ids, coalesce(o.sign_name, p.name, u.name) as writer_name,
+            (select v.body from letter_versions v where v.letter_id = o.id and v.side = 'writer' order by v.n desc limit 1) as body
+     from letters o
+     left join persons p on p.id = o.person_id and p.workspace_id = o.workspace_id
+     left join users u on u.id = o.writer_user
+     where o.workspace_id = $1 and o.id <> $2 and o.created_at > now() - make_interval(days => $3)
+       and ($4::uuid is null or o.writer_user is null or o.writer_user <> $4)
+       and ($5::uuid is null or o.person_id is null or o.person_id <> $5)
+     order by o.created_at desc limit 500`,
+    [ctx.workspaceId, l.id, CHECK_DAYS, l.writer_user || null, l.person_id || null],
+  )).rows;
+  const hits = others.map((o) => ({ o, run: o.body ? sharedRuns(text, o.body) : null })).filter((h) => h.run);
+  if (!hits.length) return [];
+  const ids = [...new Set([...parseJ(l.outlet_ids, []), ...hits.flatMap((h) => parseJ(h.o.outlet_ids, []))])];
+  const by = new Map((await outletsOf(db, ctx.workspaceId, ids)).map((o) => [o.id, o]));
+  const mine = parseJ(l.outlet_ids, []).map((id) => by.get(id)).filter(Boolean);
+  return hits.map(({ o, run }) => {
+    const theirs = parseJ(o.outlet_ids, []).map((id) => by.get(id)).filter(Boolean);
+    const near = theirs.find((t) => mine.some((m) => sameRoom(m, t)));
+    return {
+      letter_id: o.id, writer_name: o.writer_name || null, outlet_name: (near || theirs[0])?.name || null,
+      same_newsroom: Boolean(near), ...runOut(run),
+    };
+  }).sort((a, b) => Number(b.same_newsroom) - Number(a.same_newsroom) || b.length - a.length).slice(0, 5);
+};
+
 // One letter, as both sides read it (the desk adds its own on top).
 const letterOut = async (db, ctx, l) => {
   const ws = ctx.workspaceId;
@@ -103,6 +172,7 @@ const letterOut = async (db, ctx, l) => {
     if (out) blocked.push({ outlet_id: o.id, by: out.name, until: new Date(new Date(out.sent_at).getTime() + days * 86400000).toISOString() });
   }
   const person = await personOf(db, ws, l.person_id);
+  const newest = newestWriter(drafts);
   return {
     id: l.id, kind: l.kind, title: l.title, status: l.status, created_at: l.created_at, updated_at: l.updated_at,
     agreed_version: l.agreed_version, agreed_at: l.agreed_at, disclose_line: l.disclose_line, email_me: l.email_me,
@@ -110,6 +180,7 @@ const letterOut = async (db, ctx, l) => {
     outlets: live.map((o) => cardFor(o, l.kind)),
     dropped_outlets: ids.filter((id) => !by.get(id) || by.get(id).deleted_at).map((id) => ({ id, name: by.get(id)?.name || null })),
     blocked,
+    campaign_words: await campaignWords(db, ctx, newest?.body),
     drafts: drafts.map((d) => ({
       id: d.id, n: d.n, side: d.side, body: d.body, from_version: d.from_version, created_at: d.created_at,
       ...(d.side === 'campaign' ? { by: firstName(d.by_name) } : {}),
@@ -228,7 +299,7 @@ api.get('/media/letters', async (c) => {
       status: r.status, writer: { name: r.writer_name || null, person_id: r.person_id },
       outlets: parseJ(r.outlet_ids, []).filter((id) => names.has(id)).map((id) => ({ id, name: names.get(id) })),
       assigned_to_name: r.assigned_to_name || null, last_side: r.last_side, last_at: r.last_at, waiting: Boolean(r.waiting),
-      size: words(r.body), not_printed_at: r.not_printed_at || null, sent_while_out: Boolean(r.sent_while_out),
+      size: size(r.body || ''), not_printed_at: r.not_printed_at || null, sent_while_out: Boolean(r.sent_while_out),
       mostly_campaign: r.agreed_campaign_share != null && Number(r.agreed_campaign_share) > 0.5,
     })),
   });
@@ -258,12 +329,17 @@ api.get('/media/letters/:id', async (c) => {
     [ctx.workspaceId, list, names],
   )).rows : [];
   const writer = l.writer_user ? (await db.query('select name from users where id = $1', [l.writer_user])).rows[0] : null;
+  const newest = newestWriter(out.drafts);
+  const first = out.drafts.find((d) => d.side === 'writer');
+  const suggestions = out.drafts.filter((d) => d.side === 'campaign').map((d) => d.body);
   return c.json({
     letter: {
       ...out,
       writer: { name: out.sign.name || writer?.name || null, person_id: l.person_id, user_name: writer?.name || null },
       assigned_to: l.assigned_to,
       agreed_campaign_share: l.agreed_campaign_share,
+      campaign_share: newest ? campaignShare(first.body, suggestions, newest.body) : 0,
+      overlaps: await overlapsOf(db, ctx, l, newest?.body),
       outlets: out.outlets.map((o) => ({ ...o, confirmed_on: checked.get(o.id) || null })),
       editors,
     },
