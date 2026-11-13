@@ -263,8 +263,9 @@ const bboxParam = (v) => {
 const DOOR_COLS = 'id, name, phone, email, address, house_number, unit, lat, lng, rating, rated_at, voted_at, tags';
 
 // The doors inside the turfs someone walks (and their own record): read by
-// the turfs' corners, then kept to the outlines.
-const turfDoors = async (db, ctx) => {
+// the turfs' corners, then kept to the outlines. { signs: false } skips the
+// signs (the front page's map draws none).
+const turfDoors = async (db, ctx, { signs: withSigns = true } = {}) => {
   const rings = (await db.query(
     `select t.polygon from turfs t join turf_members m on m.turf_id = t.id and m.user_id = $2
      where t.workspace_id = $1 and t.deleted_at is null`,
@@ -292,6 +293,7 @@ const turfDoors = async (db, ctx) => {
     .sort(byAddress).slice(0, 20000);
   // A sign is theirs if it stands in a turf, or belongs to someone who
   // lives there (a sign asked for before its person had a pin has none).
+  if (!withSigns) return { rings, persons, signs: [] };
   const ids = new Set(persons.map((p) => p.id));
   const signs = (await db.query(
     `select id, person_id, address, lat, lng, kind, status from signs where workspace_id = $1 and status <> 'removed'`,
@@ -396,6 +398,14 @@ app.use('/map/doors', (c, next) => (c.req.query('bbox') ? gzip(c, next) : next()
 app.get('/map/doors', async (c) => {
   const ctx = c.get('ctx');
   const db = c.get('db');
+  // ?mine=1 — the front page's map window: the doors of the caller's own
+  // turfs (and their own record), for any role. Read by the turfs' boxes
+  // and the email index only: never the counts over the whole list below,
+  // which at 300,000 people would run on every visit to Today.
+  if (c.req.query('mine') === '1') {
+    const { rings, persons } = await turfDoors(db, ctx, { signs: false });
+    return c.json({ persons: persons.map(forViewer(ctx)), unlocated: 0, scope: 'mine', turfs: rings.length });
+  }
   if (turfsOnly(ctx)) {
     // Only the turfs they walk (and their own record).
     const { rings, persons, signs } = await turfDoors(db, ctx);
