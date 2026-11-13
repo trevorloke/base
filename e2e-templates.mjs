@@ -18,9 +18,10 @@
 //   5. Templates (from the row under Lists): edit and Save twice, a second
 //      tab's stale Save with Reload, Make a copy, Remove → Undo, Hide → Show
 //      (managers only), the ready-made order;
-//   6. Use again on a past send; 7. the command bar; 8. Media as the
-//      volunteer: Templates beside Write a release, Press release in Start
-//      from, nothing to save or remove, a release sent; 9. no signal;
+//   6. Use again on a past send (words typed while it loads are asked
+//      about); 7. the command bar; 8. Media as the volunteer: Templates
+//      beside Write a release, Press release in Start from, nothing to
+//      save or remove, a release sent; 9. no signal;
 //   10. every screen: one yellow button at most; at 390 no sideways scroll
 //      and every button at least 48 px.
 //
@@ -374,7 +375,20 @@ check('5. staff see no Hide', (await staff.locator('.tp-view button:has-text("Hi
 // ── 6. Use again ──
 await go(page, '/outreach/email');
 await page.locator('.ot-more:has-text("More")').first().click();
+// A slow connection: words typed while the past email loads are asked about,
+// never replaced; Yes brings the past email's words.
+let releaseAgain;
+const againHeld = new Promise((r) => { releaseAgain = r; });
+await page.route('**/blasts/*/message', async (route) => { await againHeld; await route.continue(); });
 await page.locator('.ot-item:has-text("November update from [campaign]") a:has-text("Use again")').first().click();
+await page.locator('#newsletter-subject').waitFor({ timeout: 8000 });
+await page.fill('#newsletter-subject', 'Typed while it loads');
+releaseAgain();
+await page.locator('.tp-ask:has-text("Replace what you’ve written?")').waitFor({ timeout: 8000 }).catch(() => {});
+check('6. typing while Use again loads: asked, words kept', (await page.locator('.tp-ask:has-text("Replace what you’ve written?")').count()) === 1
+  && (await page.inputValue('#newsletter-subject')) === 'Typed while it loads', await page.inputValue('#newsletter-subject'));
+await page.unroute('**/blasts/*/message');
+await page.locator('.tp-ask button:has-text("Yes")').click();
 await page.waitForFunction(() => document.querySelector('#newsletter-subject')?.value === 'November update from [campaign]', null, { timeout: 8000 }).catch(() => {});
 check('6. Use again fills the compose with the past email’s words', (await page.inputValue('#newsletter-subject')) === 'November update from [campaign]'
   && (await page.inputValue('#newsletter-body')).startsWith('Hi [first name],'));
@@ -461,6 +475,7 @@ await desk.setOffline(false);
 await sleep(2000);
 check('9. signal back: what was typed is still there', (await page.inputValue('#newsletter-subject')) === 'My own careful subject'
   && (await page.inputValue('#newsletter-body')) === 'My own careful words.', await page.inputValue('#newsletter-subject'));
+check('9. signal back: the "Needs signal" line goes', (await page.locator('.ot-compose .error:has-text("Needs signal")').count()) === 0, await words(page.locator('.ot-compose .error')));
 await desk.setOffline(true);
 await sleep(300);
 await desk.setOffline(false);

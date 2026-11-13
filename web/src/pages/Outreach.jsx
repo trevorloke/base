@@ -573,8 +573,19 @@ export function ComposeCard({
   const pickStart = (ref) => {
     if (subject.trim() || body.trim()) { picks.current += 1; setPending(ref); } else startFrom(ref);
   };
+  // Yes on "Replace?": a template's ref is read again; a past send's words
+  // (held while the question was asked) go straight in.
+  const replaceWith = () => {
+    if (typeof pending === 'string') { startFrom(pending); return; }
+    picks.current += 1;
+    setPending(null);
+    fillWith(pending.again, null);
+    setStartRef('');
+  };
   // ?template=<ref> (the Templates screen) or ?again=<send> ("Use again"):
-  // filled once on open, then dropped from the address.
+  // filled once on open, then dropped from the address. A past send's words
+  // get the same guard as a pick: dropped if Start from changed meanwhile,
+  // asked about if words were typed meanwhile.
   const seeded = useRef(false);
   useEffect(() => {
     if (isText || seeded.current) return;
@@ -584,9 +595,19 @@ export function ComposeCard({
     seeded.current = true;
     setParams((p) => { const n = new URLSearchParams(p); n.delete('template'); n.delete('again'); return n; }, { replace: true });
     if (tpl) { startFrom(tpl); return; }
+    const n = (picks.current += 1);
+    const was = typed.current;
     (kind === 'press' ? apiGet(`/media/releases/${encodeURIComponent(again)}`).then((r) => r.release) : apiGet(`/blasts/${encodeURIComponent(again)}/message`))
-      .then((m) => fillWith(m, null))
-      .catch((err) => setStartNote(err instanceof ApiError ? err.message : 'Needs signal'));
+      .then((m) => {
+        if (n !== picks.current) return;
+        const now = typed.current;
+        if ((now.subject !== was.subject || now.body !== was.body) && (now.subject.trim() || now.body.trim())) {
+          setPending({ again: m });
+          return;
+        }
+        fillWith(m, null);
+      })
+      .catch((err) => { if (n === picks.current) setStartNote(err instanceof ApiError ? err.message : 'Needs signal'); });
   // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on open
   }, []);
   // What still stops it (the server says the same), and the writer's own
@@ -613,6 +634,8 @@ export function ComposeCard({
   const offline = emailConfigured === false;
   // No signal: nothing can go now (or be saved) — Yes is off, and says so.
   const online = useOnline();
+  // "Needs signal" under Start from goes when signal comes back.
+  useEffect(() => { if (online) setStartNote((n) => (n === 'Needs signal' ? null : n)); }, [online]);
 
   // A tap that got no answer (the server went down mid-send) may still be on
   // record, partly sent: look for it — a new send of this kind and subject —
@@ -698,11 +721,11 @@ export function ComposeCard({
 
   return (
     <form className="card ot-compose" onSubmit={(e) => { e.preventDefault(); setTried(true); if (ready && !empty && !confirming) setConfirming(true); }}>
-      {!isText && <StartFrom kind={kind} value={pending ?? startRef} onChange={pickStart} />}
+      {!isText && <StartFrom kind={kind} value={typeof pending === 'string' ? pending : startRef} onChange={pickStart} />}
       {pending != null && (
         <p className="tp-ask ot-note" role="group" aria-label="Replace what you’ve written">
           Replace what you’ve written?
-          <button type="button" className="btn btn-quiet ot-btn-tap" onClick={() => startFrom(pending)}>Yes</button>
+          <button type="button" className="btn btn-quiet ot-btn-tap" onClick={replaceWith}>Yes</button>
           <button type="button" className="btn btn-quiet ot-btn-tap" onClick={() => setPending(null)}>No</button>
         </p>
       )}
