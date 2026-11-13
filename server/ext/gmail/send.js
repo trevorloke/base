@@ -15,13 +15,13 @@
 import { runAction } from '../../lib/events.js';
 import { clockAt } from '../../lib/org.js';
 import { scrubbed } from '../../lib/google/flow.js';
+import { testBase } from '../../lib/google/config.js';
 import { googleFetch, grantFor, markReconnect } from '../../lib/google/tokens.js';
 
 export const GMAIL_API = 'https://gmail.googleapis.com';
 const env = (k) => String(process.env[k] || '').trim();
-const testBase = () => (process.env.NODE_ENV === 'production' ? '' : env('GMAIL_API_BASE').replace(/\/+$/, ''));
-export const gmailBase = () => testBase() || GMAIL_API;
-export const gmailTestBaseInUse = () => Boolean(testBase());
+export const gmailBase = () => testBase('GMAIL_API_BASE') || GMAIL_API;
+export const gmailTestBaseInUse = () => Boolean(testBase('GMAIL_API_BASE'));
 export const sendUrl = () => `${gmailBase()}/gmail/v1/users/me/messages/send`;
 
 export const dailyMax = () => {

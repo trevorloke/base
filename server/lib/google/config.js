@@ -28,7 +28,10 @@ export const TOKEN_PATH = '/token';
 export const REVOKE_PATH = '/revoke';
 export const DISCOVERY_PATH = '/.well-known/openid-configuration';
 
-const testBase = (k) => (production() ? '' : env(k).replace(/\/+$/, ''));
+// A *_BASE test address (the stand-in Google): ignored in production, so a
+// token or the client secret can never be sent anywhere but Google. Every
+// Google feature reads its own test address through this.
+export const testBase = (k) => (production() ? '' : env(k).replace(/\/+$/, ''));
 export const accountsBase = () => testBase('GOOGLE_ACCOUNTS_BASE') || GOOGLE_ACCOUNTS;
 export const oauthBase = () => testBase('GOOGLE_OAUTH_BASE') || GOOGLE_OAUTH;
 // Whether a test address is being honoured (Services says so).

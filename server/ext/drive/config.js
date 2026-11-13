@@ -13,14 +13,12 @@
 //
 // And the campaign's own switches, in workspace settings.drive:
 //   { on: false, sheets: 'off' | 'managers' | 'desk', folder: { id, name, shared } | null }
-import { googleSetup } from '../../lib/google/config.js';
+import { googleSetup, testBase } from '../../lib/google/config.js';
 
 export const DRIVE_FILE = 'https://www.googleapis.com/auth/drive.file';
 export const DESK = ['manager', 'treasurer', 'staff'];
 
 const env = (k) => String(process.env[k] || '').trim();
-const production = () => process.env.NODE_ENV === 'production';
-const testBase = (k) => (production() ? '' : env(k).replace(/\/+$/, ''));
 
 export const driveBase = () => testBase('GOOGLE_DRIVE_API_BASE') || 'https://www.googleapis.com';
 export const sheetsBase = () => testBase('GOOGLE_SHEETS_API_BASE') || 'https://sheets.googleapis.com';

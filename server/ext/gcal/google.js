@@ -7,12 +7,10 @@
 //                              ignored in production
 import { createHash } from 'node:crypto';
 import { canonical } from '../../lib/events.js';
+import { testBase } from '../../lib/google/config.js';
 
 export const CALENDAR_API = 'https://www.googleapis.com/calendar/v3';
-export const calBase = () => {
-  const test = process.env.NODE_ENV === 'production' ? '' : String(process.env.GOOGLE_CALENDAR_API_BASE || '').trim().replace(/\/+$/, '');
-  return test || CALENDAR_API;
-};
+export const calBase = () => testBase('GOOGLE_CALENDAR_API_BASE') || CALENDAR_API;
 
 export const ID_RE = /^[0-9a-v]{5,1024}$/;
 const ymd = (day) => String(day).replace(/-/g, '');
