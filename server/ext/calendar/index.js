@@ -19,7 +19,7 @@
 //   calendar.feed.email   emails the link to the login's own address — the
 //       phone's way (Google adds links only on a computer). A job sends it,
 //       outside the write; 3 an hour.
-//   GET /api/calendar/feed   → { feed: { url, webcal, google, created_at } | null }
+//   GET /api/calendar/feed   → { feed: { url, webcal, google, created_at } | null, canEmail }
 //   GET /cal/<43>.ics   no cookie: their shifts (no instructions, no
 //       Details link — the link lives in another company's calendar and may
 //       be forwarded), the voting days, and for money roles the filing
@@ -175,7 +175,8 @@ export const api = new Hono();
 api.get('/calendar/feed', async (c) => {
   const ctx = c.get('ctx');
   const live = await liveFeed(c.get('db'), ctx);
-  return c.json({ feed: live ? feedOut(live, ctx.publicUrl) : null });
+  // canEmail: whether "Email me the link" can send (a phone hides it when not).
+  return c.json({ feed: live ? feedOut(live, ctx.publicUrl) : null, canEmail: emailConfigured() });
 });
 
 const fileAnswer = (c, ctx, { name, events, title }) => {

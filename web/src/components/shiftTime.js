@@ -22,11 +22,16 @@ export const dayName = (iso, tz, { long = false } = {}) => {
 };
 // "6:30 am"
 export const clockText = (iso, tz) => spanWords(clockOf(iso, tz));
-// "6:30–8:30 am", "10 am" with no end, "10 pm – Sun, Nov 15 2 am" past midnight.
+// "6:30–8:30 am", "10 am" with no end; past midnight the way the week board
+// says it, "8 pm–1 am next day" (ending at midnight is that evening's); a
+// span of more than a day keeps its end's date: "10 am – Tue, Nov 17, 2 pm".
 export const timeRange = (starts, ends, tz) => {
   if (!ends) return clockText(starts, tz);
-  if (dayOf(starts, tz) === dayOf(ends, tz)) return spanWords(clockOf(starts, tz), clockOf(ends, tz));
-  return `${clockText(starts, tz)} – ${shortDay(ends, tz)} ${clockText(ends, tz)}`;
+  const from = dayOf(starts, tz);
+  const to = dayOf(new Date(Date.parse(ends) - 60e3).toISOString(), tz);
+  if (to <= from) return spanWords(clockOf(starts, tz), clockOf(ends, tz));
+  if (to === addDays(from, 1)) return `${spanWords(clockOf(starts, tz), clockOf(ends, tz))} next day`;
+  return `${clockText(starts, tz)} – ${shortDay(ends, tz)}, ${clockText(ends, tz)}`;
 };
 // "Sat, Nov 14, 6:30 a.m." — a shift on one of Today's lines.
 export const whenText = (iso, tz) => fmtIn(iso, tz, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });

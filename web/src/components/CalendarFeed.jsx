@@ -117,6 +117,8 @@ export default function CalendarFeedCard({ me }) {
   }
 
   const device = deviceOf();
+  // An older server doesn't say: offer it, as before (it answers if it can't).
+  const canEmail = q.data.canEmail !== false;
   const email = me?.user?.email || 'your email';
   return (
     <section className="ts-card cal-card" id="calendar" ref={cardRef} aria-label="Your shifts in your calendar">
@@ -128,7 +130,7 @@ export default function CalendarFeedCard({ me }) {
         {!device.phone && (online
           ? <a className="btn ts-btn" href={feed.google} target="_blank" rel="noopener noreferrer">Add to Google</a>
           : <button type="button" className="btn ts-btn" disabled>Add to Google</button>)}
-        {device.phone && (
+        {device.phone && canEmail && (
           <button type="button" className="btn ts-btn" disabled={off}
             onClick={() => run('calendar.feed.email', () => tell(`Sent to ${email}`))}>
             Email me the link
@@ -143,7 +145,10 @@ export default function CalendarFeedCard({ me }) {
           Copy link
         </button>
       </div>
-      {device.phone && <p className="cal-help">Google adds calendar links on a computer — we’ll email it to you.</p>}
+      {device.phone && (
+        <p className="cal-help">{canEmail ? 'Google adds calendar links on a computer — we’ll email it to you.'
+          : 'Google adds calendar links on a computer — open this page there, or Copy link.'}</p>
+      )}
       <p className="cal-said" role="status" aria-live="polite">{note}</p>
       {error && <p className="error" role="alert">{error}</p>}
       <p className="cal-help">Calendars check for changes every few hours, not instantly.</p>

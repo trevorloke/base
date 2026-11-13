@@ -75,7 +75,8 @@ export default function AddToCalendar({ kind, id, event = null, disabled = false
             )}
           </div>
           {off ? <NeedsSignalLine>Needs signal</NeedsSignalLine>
-            : <p className="cal-help">Apple &amp; others opens a file your calendar adds.</p>}
+            : file.state === 'failed' ? <p className="cal-help">The file for Apple &amp; others didn’t load — Try again.</p>
+              : <p className="cal-help">Apple &amp; others opens a file your calendar adds.</p>}
         </div>
       )}
     </div>

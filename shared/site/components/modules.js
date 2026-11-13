@@ -528,7 +528,8 @@ function openingItems(rc, list, limit) {
       day: w?.day || '',
       mon: w?.mon || '',
       date: w?.date || '',
-      time: w?.time ? `${e.drop_in ? 'Drop in ' : ''}${w.time}` : '',
+      // After the date, lower case: "Sunday, November 15, drop in 4:00–8:00 p.m."
+      time: w?.time ? `${e.drop_in ? 'drop in ' : ''}${w.time}` : '',
       where: str(e.location).trim(),
       map,
       full: left === 0,

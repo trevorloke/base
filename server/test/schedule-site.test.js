@@ -153,6 +153,6 @@ test('a drop-in shift: the loader marks it and its card says "Drop in"; any othe
   assert.equal(rows.find((e) => e.id === made.drop.id).drop_in, true);
   assert.ok(rows.filter((e) => e.id !== made.drop.id).every((e) => !('drop_in' in e)), 'only a drop-in row carries the mark');
   const volunteer = (await hit('/site/volunteer')).text;
-  assert.match(volunteer, /Drop in 5:00[^<]*9:00/);
-  assert.doesNotMatch(volunteer, /Drop in (6:30|7:00|11:00)/, 'no other shift says it');
+  assert.match(volunteer, /drop in 5:00[^<]*9:00/, 'after the date, in lower case');
+  assert.doesNotMatch(volunteer, /[Dd]rop in (6:30|7:00|11:00)/, 'no other shift says it');
 });

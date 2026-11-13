@@ -1019,6 +1019,7 @@ function ShiftDetail({ id, canDesk, me }) {
   // "Change my hours": the picker open in place, and what it says so far.
   const [hoursOpen, setHoursOpen] = useState(false);
   const [hoursDraft, setHoursDraft] = useState({ from: null, to: null });
+  const hoursFoot = useRef(null);
   const [hoursBusy, setHoursBusy] = useState(false);
   const [hoursError, setHoursError] = useState(null);
   // A volunteer's other shifts (the list's own read and kept copy): one at
@@ -1247,8 +1248,10 @@ function ShiftDetail({ id, canDesk, me }) {
         </p>
       ) : (
         <>
-          <HoursPicker shift={shift} tz={tz} value={hoursDraft} onChange={setHoursDraft} disabled={hoursBusy} />
-          <div className="shh-pick__foot">
+          {/* After a pick, Save my hours comes into view (clear of the phone's tab bar). */}
+          <HoursPicker shift={shift} tz={tz} value={hoursDraft} disabled={hoursBusy}
+            onChange={(v) => { setHoursDraft(v); requestAnimationFrame(() => hoursFoot.current?.scrollIntoView({ block: 'nearest' })); }} />
+          <div className="shh-pick__foot" ref={hoursFoot}>
             <button type="button" className="btn btn-primary ops-tap" disabled={hoursBusy} onClick={saveHours}>
               {hoursBusy ? 'Saving…' : 'Save my hours'}
             </button>
@@ -1502,7 +1505,8 @@ function ShiftDetail({ id, canDesk, me }) {
             {canDesk && shift.public && <span className="chip">On the website</span>}
           </span>
         )}
-        <span className="when">{longDay(shift.starts_at, tz)} · {timeRange(shift.starts_at, shift.ends_at, tz)}</span>
+        {/* "Drop in" for everyone, before booking too: the same words as the list's row. */}
+        <span className="when">{shift.drop_in ? 'Drop in · ' : ''}{longDay(shift.starts_at, tz)} · {timeRange(shift.starts_at, shift.ends_at, tz)}</span>
         {shift.location && (pin
           ? <a className="sch-maplink" href={mapUrl(pin)} target="_blank" rel="noopener noreferrer" aria-label={`${placeLabel(shift.location)} — open the map`}>{placeLabel(shift.location)} <span aria-hidden="true">· Map ↗</span></a>
           : <span>{shift.location}</span>)}

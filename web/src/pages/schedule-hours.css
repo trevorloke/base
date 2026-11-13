@@ -20,7 +20,9 @@
 .shh-line .btn { min-height: var(--ctl); }
 .shh-pick { display: grid; gap: var(--s-3); margin-top: var(--s-3); }
 .shh-pick__label { margin: 0; font-size: 14px; font-weight: 600; color: var(--text-2); }
-.shh-pick__foot { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
+.shh-pick__foot { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); margin-top: var(--s-3); }
+/* A phone: scrolled into view above the fixed tab bar, not under it. */
+@media (max-width: 720px) { .shh-pick__foot { scroll-margin-bottom: calc(92px + env(safe-area-inset-bottom)); } }
 .shh-pick__foot .btn { min-height: var(--ctl); }
 
 /* A card's "8 pm–1 am next day": the words may break before "next day",

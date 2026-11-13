@@ -50,6 +50,7 @@ export default function Voted() {
   const saved = { on: Boolean(s.manual), election_day: s.election_day || '', advance_days: s.advance_days || [], auto: s.auto !== false };
   const cur = draft || saved;
   const changed = Boolean(draft) && JSON.stringify(cur) !== JSON.stringify(saved);
+  const daysChanged = changed && (cur.election_day !== saved.election_day || JSON.stringify(cur.advance_days) !== JSON.stringify(saved.advance_days));
   const patch = (p) => setDraft({ ...cur, ...p });
   const setOn = (on) => patch({ on });
   const addDay = () => {
@@ -123,7 +124,6 @@ export default function Voted() {
             </div>
           )}
         </div>
-        {savedDays.length > 0 && <AddToCalendar kind="vote" id="all" event={nextEvent} />}
         <label className="ot-check vt-auto">
           <input type="checkbox" checked={cur.auto} disabled={!isManager || busy} onChange={(e) => patch({ auto: e.target.checked })} />
           <span>Turn on by itself on these days (in the campaign’s time)</span>
@@ -146,6 +146,10 @@ export default function Voted() {
           <p className="ops-meta">A manager turns this on.</p>
         )}
         {error && <p className="error" role="alert">{error}</p>}
+        {/* The calendar holds the saved days: while the days on screen aren't
+            saved, it says so rather than leave one out. */}
+        {daysChanged ? <p className="ops-meta">Save first to add these days to a calendar</p>
+          : savedDays.length > 0 && <AddToCalendar kind="vote" id="all" event={nextEvent} />}
       </section>
 
       <section className="vt-sec" aria-labelledby="vt-sofar-h">

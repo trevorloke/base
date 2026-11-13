@@ -199,12 +199,15 @@ test('routes: only <43 characters>.ics is a calendar link', async () => {
 
 test('Email me the link: one job sends it, outside the write; 3 an hour; nothing pretends when email isn’t set up', async () => {
   ok(await vol2.action('calendar.feed.make', {}));
-  // Email not connected: refused, nothing queued.
+  // Email not connected: the read says so (the phone hides the button)…
+  assert.equal(ok(await vol2.get('/api/calendar/feed')).canEmail, false);
+  // …and the action is refused, nothing queued.
   const off = await vol2.action('calendar.feed.email', {});
   assert.equal(off.status, 409);
   assert.equal(off.json.error, 'Email isn’t set up for this campaign — use Copy link');
   assert.equal((await rows(`select count(*)::int as n from jobs where workspace_id = $1 and kind = 'calendar.feed.email'`, [ws]))[0].n, 0);
   Object.assign(process.env, { RESEND_API_KEY: 're_test_key', RESEND_API_BASE: mail.url, MAIL_FROM: 'Calendar Example <team@example.org>' });
+  assert.equal(ok(await vol2.get('/api/calendar/feed')).canEmail, true);
   // No live link: refused.
   const { client: none } = await join('volunteer', 'Nia');
   assert.equal((await none.action('calendar.feed.email', {})).status, 409);

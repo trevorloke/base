@@ -30,11 +30,14 @@ export function FilingCountdown({ dates }) {
             <span className="fl-count__what">
               <span className="fl-count__name">{d.name}</span>
               <span className="fl-count__day">{filingDay(d.due_on)}</span>
-              {d.days >= 0 && (
+            </span>
+            {/* Under the row on a phone, the card's whole width (not a column beside the number). */}
+            {d.days >= 0 && (
+              <div className="fl-count__cal">
                 <AddToCalendar kind="filing" id={d.slot}
                   event={dayEvent({ uid: `filing-${d.slot}-${d.due_on}@base.win`, title: d.name, day: String(d.due_on).slice(0, 10) })} />
-              )}
-            </span>
+              </div>
+            )}
           </li>
         );
       })}
