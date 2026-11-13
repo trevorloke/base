@@ -266,7 +266,10 @@ try {
   check('Stop confirms in place', /Stop\? base\.win’s calendar is removed from your Google Calendar\./.test(await text(v, '#gcal')));
   await shot(v, '08-profile-stop-confirm-phone', false);
   await v.locator('#gcal .gg-confirm').getByRole('button', { name: 'Stop' }).click();
+  const revokes = fake.counts.revoke;
   check('…gone from the fake', Boolean(await until(() => cals().length === 0)));
+  // Nothing else used the account: Google is told to forget base.win (after the delete).
+  check('…then the account is revoked at Google', Boolean(await until(() => fake.counts.revoke > revokes, 10000)));
   check('…and the card offers Connect again', Boolean(await cardSays(v, /Connect Google Calendar/)), await text(v, '#gcal'));
 
   // ── The manager turns it off → everyone's calendar goes ──

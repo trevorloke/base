@@ -109,7 +109,15 @@ export const stopJobs = { 'gcal.stop': (db, job) => ({ later: stopRun(db, job) }
 // link, on the log — so there is nothing to do here.
 export const cleanUp = async (db, { userId, fetch }) => {
   if (typeof db.transaction !== 'function') return;
-  const links = (await db.query('select workspace_id, calendar_id from gcal_links where user_id = $1', [userId])).rows;
+  // Connected again since the removal (the purpose is back on the grant):
+  // a live link is that new connection's, not this clean-up's. Links the
+  // removal stopped (or left) are still cleaned up.
+  const back = Boolean((await db.query(
+    'select 1 from google_grants where user_id = $1 and $2 = any(purposes)', [userId, PURPOSE],
+  )).rows[0]);
+  const links = (await db.query(
+    `select workspace_id, calendar_id from gcal_links where user_id = $1 and (not $2::boolean or state in ('stopping', 'left'))`, [userId, back],
+  )).rows;
   for (const link of links) {
     const ws = link.workspace_id;
     if (link.calendar_id && fetch) {

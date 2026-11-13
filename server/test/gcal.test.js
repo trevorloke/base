@@ -18,6 +18,7 @@ import { areaOfAction } from '../lib/perms.js';
 import { ACTIONS } from '../actions/index.js';
 import { _resetGcalForTest, _setGcalForTest, desiredFor, nextSweepAt } from '../ext/gcal/push.js';
 import { ID_RE } from '../ext/gcal/google.js';
+import { cleanUp } from '../ext/gcal/stop.js';
 import { Browser, TOKEN_KEY, acct, join, restoreEnv, signup, startGoogle, tag } from './google-helpers.js';
 
 // Another feature's purpose on the same grant (Gmail's, say).
@@ -522,6 +523,16 @@ test('stop: the calendar goes with its rows; the Calendar permission goes; revok
   assert.equal(fake.counts.revoke, 1);
   assert.deepEqual(fake.order.filter((x) => x === 'calendars.delete' || x === 'revoke'), ['calendars.delete', 'revoke']);
   assert.equal((await db.query('select 1 from google_grants where user_id = $1', [W.id])).rows.length, 0);
+  // Connected again before a late clean-up (GSI's job) for the old removal
+  // runs: the new link and its calendar are left alone.
+  assert.equal((await connect(W, 3)).google, 'connected');
+  await jobs();
+  assert.equal(calOf(3).length, 1);
+  let called = 0;
+  await cleanUp(db, { userId: W.id, fetch: async () => { called += 1; return { status: 204 }; } });
+  assert.equal(called, 0, 'no Google call for the new connection’s calendar');
+  assert.equal((await linkRow(W.id)).state, 'ok');
+  assert.equal(calOf(3).length, 1);
 });
 
 test('stop while reconnecting: no Google call, left; OK forgets it', async () => {
