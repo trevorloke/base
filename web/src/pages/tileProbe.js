@@ -20,6 +20,7 @@ import { noticeTiles, sameBytes, tileHost } from './mapView.js';
 
 export const PROBE_MS = 4000;
 const asked = new Map();
+const found = new Map(); // what each settled ask found, read without waiting
 
 const bytes = (url) => {
   const stop = typeof AbortController === 'function' ? new AbortController() : null;
@@ -35,9 +36,14 @@ export const askNotice = (url, center, maxZoom) => {
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return Promise.resolve(null);
   const [far, near] = noticeTiles(url, center, maxZoom);
   const answer = Promise.all([bytes(far), bytes(near)])
-    .then(([a, b]) => (a && b ? sameBytes(a, b) : null), () => null);
+    .then(([a, b]) => (a && b ? sameBytes(a, b) : null), () => null)
+    .then((v) => { if (asked.get(url) === answer) found.set(url, v); return v; });
   asked.set(url, answer);
   return answer;
 };
 
-export const forgetNotice = (url) => { asked.delete(url); };
+// Found a notice at this address this page life? (The Map check, after the
+// map has switched away from it by itself.)
+export const knownNotice = (url) => found.get(url) === true;
+
+export const forgetNotice = (url) => { asked.delete(url); found.delete(url); };

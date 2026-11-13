@@ -45,7 +45,7 @@ import GeocodeButton from '../components/GeocodeButton.jsx';
 import { DEFAULT_TILES, safeAttribution } from '../components/tiles.js';
 import { DotLayer, DensityLayer, cellAt, nearest } from './mapDots.js';
 import { DOT_ZOOM, LONE_PIN_ZOOM, PIN_ZOOM, MARK, TILE_WAIT_MS, css, cellOf, cellsFrom, defaultLook, dotsFrom, drawnFor, inBox, mapLooks, pickLook, placingPoll, rowsBudget, streetMove, tileAt, tileHealth, tileHost, viewBox } from './mapView.js';
-import { askNotice, forgetNotice } from './tileProbe.js';
+import { askNotice, forgetNotice, knownNotice } from './tileProbe.js';
 import { useSharePref } from '../components/ShareLocation.js';
 import { cachedWalkLists, useOnline } from './Turfs.jsx';
 import './map.css';
@@ -2397,16 +2397,26 @@ export default function MapPage() {
   // What only this page knows, for the check: its build, the street map in
   // use and whether its tiles came, the map's size on screen.
   const lookLabel = [...looks, ...views].find((v) => v.key === view)?.label || view;
+  const pickLabel = [...looks, ...views].find((v) => v.key === viewPick)?.label || viewPick;
   const checkFacts = useCallback(() => {
     const map = mapRef.current;
     const size = map?.getSize();
+    const base = { build: OWN_BUILD, size: { x: size?.x || 0, y: size?.y || 0 }, zoom: map ? map.getZoom() : null };
+    // The map went to another look by itself because the pick sends a
+    // notice: the check is about the pick — what it sends, and its picture.
+    const pickUrl = pickTiles?.url;
+    if (drawnAuto && pickUrl && map && knownNotice(drawnAs(pickUrl))) {
+      return {
+        ...base, look: pickLabel, tilesFrom: tileHost(pickUrl), tiles: { ...streetRef.current, down: true, why: 'notice' },
+        picture: tileAt(drawnAs(pickUrl), map.getCenter(), map.getZoom(), pickTiles.maxZoom),
+      };
+    }
     return {
-      build: OWN_BUILD, look: lookLabel, tilesFrom: tileHost(tileUrl), tiles: streetRef.current,
-      size: { x: size?.x || 0, y: size?.y || 0 }, zoom: map ? map.getZoom() : null,
+      ...base, look: lookLabel, tilesFrom: tileHost(tileUrl), tiles: streetRef.current,
       // The tile under the map's middle, at the address the map drew it from.
       picture: map && tileUrl ? tileAt(drawnAs(tileUrl), map.getCenter(), map.getZoom(), tileMax) : null,
     };
-  }, [lookLabel, tileUrl, tileMax]);
+  }, [lookLabel, tileUrl, tileMax, drawnAuto, pickTiles, pickLabel]);
   // Check again: the notice probe asks the drawn look afresh (a new layer).
   const checkAgain = useCallback(() => {
     if (!tileUrl) return;
