@@ -79,6 +79,12 @@ services:
         sync: false
       - key: GOOGLE_MAPS_SERVER_KEY  # optional: Google geocoding and map tiles (INTEGRATIONS.md)
         sync: false
+      - key: GOOGLE_OAUTH_CLIENT_ID  # optional: Sign in with Google and Google connections (INTEGRATIONS.md); staging's own client
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_TOKEN_KEY  # 32+ random characters, a different one per environment
+        sync: false
 
   - type: web
     name: starbase
@@ -126,6 +132,12 @@ services:
       - key: TWILIO_FROM
         sync: false
       - key: GOOGLE_MAPS_SERVER_KEY
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_ID
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_TOKEN_KEY
         sync: false
 
 databases:

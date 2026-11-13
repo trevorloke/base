@@ -60,6 +60,7 @@ INTEGRATIONS.md.
 | `MAILCHIMP_API_KEY` | *Send to Mailchimp* on a list, unsubscribes kept in step both ways (INTEGRATIONS.md; `MAILCHIMP_AUDIENCE_ID` for an account with several audiences, `MAILCHIMP_WEBHOOK_SECRET` to check its webhook's signature) | optional — without it the button is not there |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` | SMS shift alerts; texting and calling from the app through the campaign's number | optional — without it, Calls opens the phone's own Messages and dialer |
 | `GOOGLE_MAPS_SERVER_KEY` | Google geocoding (`GEOCODER=google` or `GEOCODER_FALLBACK=google`) and Google Maps tiles (`GOOGLE_MAPS_TILES=1`) | optional — the free BC geocoder and OpenStreetMap tiles work without it |
+| `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_TOKEN_KEY` | Sign in with Google, and the one Google connection Gmail, Drive and Calendar use (INTEGRATIONS.md); in tests a stand-in Google (`server/test/fake-google.js`, pointed at with `GOOGLE_ACCOUNTS_BASE` and `GOOGLE_OAUTH_BASE`) — never real Google | optional — without them no Google button shows, and passwords work as always |
 | `STARBASE_TWO_STEP_KEY` | seals everyone's two-step sign-in key (INTEGRATIONS.md) | optional to test — without it a key kept in the database is used, and Settings → Services says so |
 
 The whole order of things, from deploy to the public link, is in
