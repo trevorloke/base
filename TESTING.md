@@ -312,7 +312,7 @@ one tap away under **More**.
   `/admin/e2e-google-connect` by the suite's server only) and drives
   Connect, *Connected as … · Disconnect*, *Reconnect* and the paused line,
   the way Gmail, Drive and Calendar will use it.
-- **Google Drive and Sheets** (server side so far) — `server/test/drive.test.js`
+- **Google Drive and Sheets** — `server/test/drive.test.js`
   runs the switches, who may use Drive, the Picker's narrowed token and
   *Send to Google Sheets* against the stand-in Google: three parts as three
   jobs, one Sheet, exact RAW ranges, Google not answering, asking to wait,
@@ -322,6 +322,13 @@ one tap away under **More**.
   as CSV (whole-row pages, a blank gap, a quoted title), a stalled or
   silent download ended by its limits, a Doc attached as PDF, a too-big
   file offered as a link, "anyone with the link" opened and closed.
+  `e2e-drive.mjs` (PORT 5320; the stand-in Google, with a stand-in Picker
+  loader at `/picker.js`, on PORT+1) drives the screens as a manager, a
+  staffer and a volunteer at 1440x900 and 390x844: the Services panel,
+  import from a two-tab Sheet and an .xlsx, the compose's Drive files and
+  a link instead, Send to Google Sheets with its progress and Open, too big,
+  a failed export tried again, a staffer choosing the campaign folder, Sent
+  to Google Drive with Make private again, and no signal.
 - **Command bar** — on the desk press **Ctrl+K** (⌘K on a Mac), or *Search*
   under the name: *don* + Enter opens Donations, *gift* opens Log a gift
   with its form, a name or a phone (*604 555 0142*) finds the person; ↑ ↓

@@ -179,7 +179,7 @@ export function TakeItOut({ csvHref, csvLabel = 'Download CSV', ...sheet }) {
   if (!d.data?.canSend) return <a className="btn btn-quiet ops-tap" href={csvHref}>{csvLabel}</a>;
   return (
     <span className={`drv-take${open ? ' is-open' : ''}`}>
-      <button type="button" className="btn btn-quiet disclose ops-tap" aria-expanded={open} onClick={() => setOpen((v) => !v)}>Take it out</button>
+      <button type="button" className="btn btn-quiet disclose disclose--inline ops-tap" aria-expanded={open} onClick={() => setOpen((v) => !v)}>Take it out</button>
       {/* Kept while closed, so a Sheet on its way keeps its progress line. */}
       <span className="drv-take__menu" hidden={!open}>
         <a className="btn btn-quiet ops-tap" href={csvHref}>Download CSV</a>

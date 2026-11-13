@@ -56,8 +56,9 @@
 .drv-said { font-weight: 600; }
 
 /* The two export screens: each table's CSV, and Google Sheets beside it. */
-.drv-export { display: contents; }
-.drv-export:has(.drv-panel) { display: flex; flex-wrap: wrap; gap: var(--s-2); flex: 1 1 100%; }
+/* Each table's two buttons stay together, so "Google Sheets" never reads as the next table's. */
+.drv-export { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0 var(--s-1); }
+.drv-export:has(.drv-panel) { gap: var(--s-2); flex: 1 1 100%; }
 
 /* Import & export → Sent to Google Drive. */
 .drv-h3 { font-family: var(--font-sans); font-size: 15px; font-weight: 700; margin: var(--s-4) 0 var(--s-2); }
@@ -74,3 +75,8 @@
 /* Settings → Services → the Drive panel. */
 .drv-panel-s h3 { font-family: var(--font-sans); font-size: 15px; font-weight: 700; margin: 0; }
 .drv-more { margin-top: var(--s-2); }
+
+/* Reports: a report's head opens onto a second line, its title kept whole. */
+.drv-take .btn { white-space: nowrap; }
+.rp-sec__head:has(.drv-take.is-open) { flex-wrap: wrap; justify-content: flex-start; gap: var(--s-2); }
+.rp-sec__head:has(.drv-take.is-open) h2 { flex: 1 1 auto; }

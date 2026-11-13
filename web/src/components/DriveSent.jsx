@@ -103,7 +103,7 @@ export default function DriveSent() {
           <h3 className="drv-h3">Sheets</h3>
           <ul className="drv-rows">{ex.map((e) => <SheetRow key={e.id} e={e} d={d.data} manager={manager} online={online} />)}</ul>
           {manager && !more && (sheets.data?.exports?.length || 0) >= 10 && (
-            <button type="button" className="btn btn-quiet disclose" aria-expanded={false} onClick={() => setMore(true)}>More</button>
+            <button type="button" className="btn btn-quiet disclose disclose--inline" aria-expanded={false} onClick={() => setMore(true)}>More</button>
           )}
           {more && older.isPending && <p className="ops-meta" role="status">Loading…</p>}
         </>

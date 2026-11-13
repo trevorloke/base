@@ -115,7 +115,7 @@ export default function DriveImport({ busy, setReading, setLoadError, loadText, 
               </button>
             ))}
             {!more && sheet.tabs.length > CHIPS && (
-              <button type="button" className="btn btn-quiet disclose" aria-expanded={false} onClick={() => setMore(true)}>More</button>
+              <button type="button" className="btn btn-quiet disclose disclose--inline" aria-expanded={false} onClick={() => setMore(true)}>More</button>
             )}
           </div>
         </div>

@@ -204,8 +204,13 @@ button until the phone check in TESTING.md §4 passes.
 
 With the Google client and two settings of Drive's own
 (`GOOGLE_PICKER_KEY`, `GOOGLE_CLOUD_PROJECT_NUMBER`; INTEGRATIONS.md), a
-manager turns Drive on for the campaign (`drive.settings`; Services shows
-the row and its Check, and the Drive screens follow in the next stage).
+manager turns Drive on for the campaign (Settings → Services → Google Drive
+and Sheets: the switch, who may send to Google Sheets, where new Sheets go,
+*Try opening Google Drive*). Every Drive button is quiet and drawn only once
+Drive is on: *From Google Drive* on People → Import and on the compose,
+*Take it out* (Download CSV and Send to Google Sheets) on a list and each
+report, *Google Sheets* beside each table on the export screens, and *Sent to
+Google Drive* at the end of Import & export.
 base.win asks each person for one Google permission, only the
 Drive files they use with base.win (`drive.file`), and only the desk
 (managers, treasurers, staff) may connect it. **Send to Google Sheets**

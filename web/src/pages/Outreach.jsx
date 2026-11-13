@@ -660,7 +660,7 @@ export function ComposeCard({
           </button>
           {drive.button}
           <span className="ot-attach__hint" aria-live="polite">{drive.adding ? `Adding ${drive.adding}…` : (
-            <>{filesHint || <>PDF, pictures, Word, Excel, PowerPoint, .ics, .txt or .csv — {fmtBytes(ATTACH_MAX)} each, {ATTACH_COUNT} files</>}{drive.on && ' Google Docs, Sheets and Slides go as PDF.'}</>
+            <>{filesHint || <>PDF, pictures, Word, Excel, PowerPoint, .ics, .txt or .csv — {fmtBytes(ATTACH_MAX)} each, {ATTACH_COUNT} files</>}{drive.on && `${filesHint ? ' ' : '. '}Google Docs, Sheets and Slides go as PDF.`}</>
           )}</span>
         </div>
         {drive.error && <p className="error" role="alert">{drive.error}</p>}
