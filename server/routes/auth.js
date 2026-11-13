@@ -96,11 +96,13 @@ const meOut = (ctx) => ({
   // A volunteer with a candidate's seat (ext/candidates), else null.
   candidate: candidateOut(ctx.candidate),
 });
-// …and their Google sign-in link (ext/google): linked, and to which Google
-// address — their own, shown only to them.
+// …and their Google sign-in link (ext/google): whether Google sign-in is on
+// here for their campaign, linked, and to which Google address — their
+// own, shown only to them.
 const meFor = async (db, ctx) => {
   const login = await loginOf(db, ctx.user.id);
-  return { ...meOut(ctx), google: { linked: Boolean(login), email: login?.email || null } };
+  const on = googleSetup().signin && signinRules(ctx.workspace?.settings).signin;
+  return { ...meOut(ctx), google: { on, linked: Boolean(login), email: login?.email || null } };
 };
 
 // Two-step sign-in: the code after the password. The ticket for it is a

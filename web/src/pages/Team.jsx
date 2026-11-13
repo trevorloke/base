@@ -14,6 +14,7 @@ import { apiGet, action, fmtDate } from '../api.js';
 import { NoSignal, noSignal, useOnline, NeedsSignalLine } from '../components/NoSignal.jsx';
 import './outreach.css';
 import '../components/two-step.css';
+import '../components/google.css';
 import './candidates.css';
 
 const ROLES = [
@@ -174,9 +175,10 @@ function InvitedRow({ inv, ids, canCancel, onChanged, onLinkGone, online = true 
 
 // A member: role picker, and Remove (never for yourself). Removing someone
 // signs them out everywhere at once; a new invite lets them back in.
-function MemberRow({ m, isMe, online, onRole, onChanged, twoStep = null, onTwoStep }) {
+function MemberRow({ m, isMe, online, onRole, onChanged, twoStep = null, onTwoStep, google = null, onGoogle }) {
   const [confirming, setConfirming] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [unlinking, setUnlinking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [said, setSaid] = useState(null);
@@ -189,6 +191,21 @@ function MemberRow({ m, isMe, online, onRole, onChanged, twoStep = null, onTwoSt
       setResetting(false);
       setSaid(`Two-step sign-in reset — ${m.name} is signed out.`);
       onTwoStep?.();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  // A lost or taken-over Google account: their link goes and they're
+  // signed out; they sign in with their password.
+  const unlinkGoogle = async () => {
+    setBusy(true); setError(null);
+    try {
+      await action('google.unlinkMember', { user_id: m.id });
+      setUnlinking(false);
+      setSaid(`Google unlinked — ${m.name} is signed out.`);
+      onGoogle?.();
     } catch (err) {
       setError(err.message);
     } finally {
@@ -214,7 +231,8 @@ function MemberRow({ m, isMe, online, onRole, onChanged, twoStep = null, onTwoSt
             <span className="ot-email"><Email value={m.email} /></span>
             <span>since {fmtDay(m.created_at)}{twoStep?.on && (twoStep.locked
               ? <span className="chip chip-warn tm-2step" title="Too many wrong codes in a row: codes from their app are locked until they use a recovery code or you reset it">Two-step locked</span>
-              : <span className="chip chip-ok tm-2step">Two-step on</span>)}</span>
+              : <span className="chip chip-ok tm-2step">Two-step on</span>)}
+            {google && <span className="chip tm-google">Google</span>}</span>
           </span>
         </span>
         <span className="ot-actions ot-row__acts">
@@ -232,14 +250,28 @@ function MemberRow({ m, isMe, online, onRole, onChanged, twoStep = null, onTwoSt
             <button type="button" className="btn btn-quiet ot-btn-tap" disabled={busy || !online}
               onClick={() => { setResetting(true); setSaid(null); }}>Reset two-step</button>
           )}
-          {!isMe && !confirming && !resetting && (
+          {/* In another campaign here too: they unlink it themselves on Your profile. */}
+          {!isMe && google && !google.elsewhere && !confirming && !resetting && !unlinking && (
+            <button type="button" className="btn btn-quiet ot-btn-tap" disabled={busy || !online}
+              onClick={() => { setUnlinking(true); setSaid(null); setError(null); }}>Unlink Google</button>
+          )}
+          {!isMe && !confirming && !resetting && !unlinking && (
             <button type="button" className="btn btn-quiet ot-btn-tap" disabled={busy || !online}
               onClick={() => setConfirming(true)}>Remove</button>
           )}
         </span>
       </div>
-      {(resetting || said) && (
+      {(resetting || unlinking || said) && (
         <div className="ot-body">
+          {unlinking && (
+            <div className="ot-confirm ot-confirm-danger" role="group" aria-label={`Unlink Google for ${m.name}`}>
+              <span>Unlink Google for {m.name}? They’re signed out and sign in with their password.</span>
+              <button type="button" className="btn ot-btn-tap ot-btn-danger" disabled={busy} onClick={unlinkGoogle}>
+                {busy ? 'Unlinking…' : 'Unlink'}
+              </button>
+              <button type="button" className="btn btn-quiet ot-btn-tap" disabled={busy} onClick={() => { setUnlinking(false); setError(null); }}>Cancel</button>
+            </div>
+          )}
           {resetting && (
             <div className="ot-confirm ot-confirm-danger" role="group" aria-label={`Reset two-step sign-in for ${m.name}`}>
               <span>Reset {m.name}’s two-step sign-in? They’re signed out and sign in with their password.</span>
@@ -329,6 +361,10 @@ export default function Team({ embedded = false }) {
   const twoStep = useQuery({ queryKey: ['two-step-team'], queryFn: () => apiGet('/two-step/team'), enabled: isManager });
   const twoStepOf = new Map((twoStep.data?.members || []).map((x) => [x.id, x]));
   const twoStepChanged = () => queryClient.invalidateQueries({ queryKey: ['two-step-team'] });
+  // Who signs in with Google (ext/google); nothing when it isn't set up.
+  const googleTeam = useQuery({ queryKey: ['google-members'], queryFn: () => apiGet('/google/members'), enabled: isManager });
+  const googleOf = new Map((Array.isArray(googleTeam.data) ? googleTeam.data : []).map((x) => [x.user_id, x]));
+  const googleChanged = () => queryClient.invalidateQueries({ queryKey: ['google-members'] });
   // Is email connected? (Same read Today and Shifts use; only that, so the
   // strip never says this screen is from Today's kept copy.)
   const brief = useQuery({ queryKey: ['brief'], queryFn: () => apiGet('/brief'), enabled: isManager, staleTime: Infinity, meta: { side: true } });
@@ -418,7 +454,8 @@ export default function Team({ embedded = false }) {
       <ul className="ot-list">
         {members.map((m) => (
           <MemberRow key={m.id} m={m} isMe={m.id === me.user.id} online={online} onRole={setMemberRole} onChanged={refresh}
-            twoStep={twoStepOf.get(m.id) || null} onTwoStep={twoStepChanged} />
+            twoStep={twoStepOf.get(m.id) || null} onTwoStep={twoStepChanged}
+            google={googleOf.get(m.id) || null} onGoogle={googleChanged} />
         ))}
       </ul>
 

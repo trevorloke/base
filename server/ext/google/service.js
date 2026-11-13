@@ -39,6 +39,10 @@ export const googleService = () => {
     set: [...NEEDS, 'GOOGLE_TOKEN_KEY'].filter(has),
     state: !s.signin ? 'missing' : s.connect ? 'ready' : 'default',
     detail: detail.join(' · '),
+    // The same, one item a line (the panel draws these; detail stays for
+    // pages cached from before), and the redirect address for its Copy.
+    lines: detail,
+    redirect: s.redirectUri,
     checkable: client,
     panel: 'google',
   };
@@ -53,9 +57,9 @@ export const googleCounts = async (db, workspaceId, row) => {
     [workspaceId],
   )).rows[0];
   const people = `${n.logins.toLocaleString('en-CA')} ${n.logins === 1 ? 'person signs' : 'people sign'} in with Google · ${n.grants.toLocaleString('en-CA')} connected ${n.grants === 1 ? 'account' : 'accounts'}`;
-  const parts = row.detail.split(' · ');
+  const parts = [...row.lines];
   parts.splice(2, 0, people); // after the redirect address and the connections line
-  return { ...row, detail: parts.join(' · ') };
+  return { ...row, detail: parts.join(' · '), lines: parts };
 };
 
 const get = (url, init = {}) => fetch(url, { ...init, signal: AbortSignal.timeout(TIMEOUT_MS) });

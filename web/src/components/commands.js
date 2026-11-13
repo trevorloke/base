@@ -14,6 +14,8 @@ export const allowed = (me, item) => {
   if (item.manager && me?.role !== 'manager') return false;
   if (item.roles && !item.roles.includes(me?.role)) return false;
   if (item.desk && !isDesk(me)) return false;
+  // Google sign-in on here and this person hasn't linked theirs (/auth/me).
+  if (item.google && !(me?.google?.on && !me.google.linked)) return false;
   return !item.area || me?.role === 'manager' || areasOf(me).includes(item.area);
 };
 
@@ -26,6 +28,7 @@ export const ACTIONS = [
   { label: 'New shift', to: '/shifts?add=1', area: 'shifts', desk: true, words: 'schedule event canvass shift' },
   { label: 'Write an email', to: '/outreach/email?new=1', area: 'outreach', desk: true, words: 'email newsletter blast send' },
   { label: 'Write a text', to: '/outreach/texting?new=1', area: 'outreach', desk: true, words: 'text sms blast message' },
+  { label: 'Link Google account', to: '/profile', google: true, words: 'google sign in link' },
 ];
 
 // Screens past the tab bar (the tabs themselves come from the Shell's nav,
@@ -60,7 +63,7 @@ export const SCREENS = [
   { label: 'Members', to: '/settings', hint: 'Settings', area: 'admin', manager: true, words: 'settings invite team roles remove two-step' },
   { label: 'Teams', to: '/settings/teams', hint: 'Settings', area: 'admin', manager: true, words: 'settings crews groups' },
   { label: 'Permissions', to: '/settings/permissions', hint: 'Settings', area: 'admin', manager: true, words: 'settings areas access' },
-  { label: 'Services', to: '/settings/services', hint: 'Settings', area: 'admin', manager: true, words: 'settings email texting keys integrations' },
+  { label: 'Services', to: '/settings/services', hint: 'Settings', area: 'admin', manager: true, words: 'settings email texting keys integrations google' },
   { label: 'Campaign name', to: '/settings/campaign', hint: 'Settings', area: 'admin', manager: true, words: 'settings rename' },
   { label: 'Brand', to: '/settings/brand', hint: 'Settings', area: 'admin', manager: true, words: 'settings logo colour color look theme icon' },
   { label: 'Profile fields', to: '/people/fields', area: 'admin', manager: true, words: 'custom fields profile' },

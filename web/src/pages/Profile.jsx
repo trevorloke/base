@@ -1,10 +1,12 @@
 // Your profile (anyone, in either app; the account menu's first item): who
 // you are here — name, email, role, campaign — and two-step sign-in, which
 // anyone can turn on for themselves (components/TwoStep.jsx), and their
-// shifts in their own calendar (components/CalendarFeed.jsx).
+// shifts in their own calendar (components/CalendarFeed.jsx), and Google
+// (components/GoogleCard.jsx), when this server has it.
 import { useOutletContext } from 'react-router-dom';
 import TwoStepCard from '../components/TwoStep.jsx';
 import CalendarFeedCard from '../components/CalendarFeed.jsx';
+import GoogleCard from '../components/GoogleCard.jsx';
 import '../components/two-step.css';
 
 const ROLE_WORD = { manager: 'Manager', treasurer: 'Treasurer', staff: 'Staff', volunteer: 'Volunteer' };
@@ -23,6 +25,7 @@ export default function Profile() {
       </dl>
       <TwoStepCard me={me} />
       <CalendarFeedCard me={me} />
+      <GoogleCard />
     </div>
   );
 }

@@ -220,6 +220,10 @@ test('still allowed in another campaign: the purpose stays, but grantFor here sa
   assert.deepEqual((await grantRow(w.id)).purposes, ['test.purpose']);
   const here = await grantFor(db, { userId: w.id, workspaceId: M.ws }, 'test.purpose');
   assert.equal(here.state, 'not-allowed');
+  // Still listed on their card here, so its Disconnect shows.
+  const listed = (await w.b.get('/api/google')).json.purposes.find((p) => p.key === 'test.purpose');
+  assert.equal(listed.mine, true);
+  assert.equal(listed.state, 'not-allowed');
   fake.resetCounts();
   const r = await googleFetch(db, here, api());
   assert.equal(r.trouble.code, 'not-allowed');

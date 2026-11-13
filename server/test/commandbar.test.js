@@ -22,6 +22,14 @@ test('a manager is offered every job and the settings', () => {
   assert.equal(screens.filter((s) => s.to === '/people').length, 1, 'a tab is offered once');
 });
 
+test('Link Google account: only while Google sign-in is on and theirs isn’t linked', () => {
+  const offered = (google) => labels(commandsFor({ role: 'volunteer', areas: [], google }, []).actions).includes('Link Google account');
+  assert.equal(offered(undefined), false, 'an old server says nothing');
+  assert.equal(offered({ on: false, linked: false }), false);
+  assert.equal(offered({ on: true, linked: true }), false);
+  assert.equal(offered({ on: true, linked: false }), true);
+});
+
 test('staff without Donations: no gift, no form, no money screens; no settings', () => {
   const staff = { role: 'staff', areas: ['people', 'map', 'shifts', 'signs', 'outreach', 'data', 'learn'] };
   const { actions, screens } = commandsFor(staff, NAV.filter((n) => n.to !== '/money'));

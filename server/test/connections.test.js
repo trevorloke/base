@@ -255,6 +255,10 @@ test('Google (sign-in and connections): missing, default, ready — never a valu
     assert.match(row.detail, /^Redirect address for Google Cloud: https:\/\/base\.example\.org\/api\/auth\/google\/back · Connections need GOOGLE_TOKEN_KEY/);
     assert.match(row.detail, /0 people sign in with Google · 0 connected accounts/);
     assert.match(row.detail, /Test address in use/);
+    // The panel's own: one item a line, and the address for its Copy.
+    assert.equal(row.redirect, 'https://base.example.org/api/auth/google/back');
+    assert.equal(row.lines[2], '0 people sign in with Google · 0 connected accounts');
+    assert.equal(row.lines.join(' · '), row.detail);
     process.env.GOOGLE_TOKEN_KEY = key;
     row = byKey(await list()).google;
     assert.equal(row.state, 'ready');

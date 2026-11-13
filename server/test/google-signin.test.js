@@ -142,7 +142,7 @@ test('link on Your profile, then sign in with Google: the desk for a manager, th
   assert.equal(r.location, '/admin/profile?google=linked');
   assert.equal(new URL(r.at).searchParams.get('login_hint'), M.email);
   const me = await M.b.get('/api/auth/me');
-  assert.deepEqual(me.json.google, { linked: true, email: A[0].email });
+  assert.deepEqual(me.json.google, { on: true, linked: true, email: A[0].email });
   // A different email from the account's is fine.
   assert.equal((await go(V.b, { do: 'link', back: '/profile' }, A[1].sub)).google, 'linked');
 
@@ -248,6 +248,12 @@ test('unlink ends your other sessions; a manager’s unlink signs them out, mana
 
   const k = await join(M.b, `kai.${tag}@example.org`, 'volunteer');
   assert.equal((await go(k.b, { do: 'link' }, A[9].sub)).google, 'linked');
+  // Team's chip: who signs in with Google, and who is in another campaign here too.
+  const members = (await M.b.get('/api/google/members')).json;
+  assert.deepEqual(members.find((x) => x.user_id === k.id), { user_id: k.id, elsewhere: false });
+  assert.deepEqual(members.find((x) => x.user_id === V.id), { user_id: V.id, elsewhere: true });
+  assert.ok(members.every((x) => Object.keys(x).join() === 'user_id,elsewhere'), 'no Google email');
+  assert.equal((await S.b.get('/api/google/members')).status, 403);
   assert.equal((await S.b.action('google.unlinkMember', { user_id: k.id })).status, 403);
   assert.equal((await M.b.action('google.unlinkMember', { user_id: k.id })).status, 200);
   assert.equal((await k.b.get('/api/auth/me')).status, 401);
