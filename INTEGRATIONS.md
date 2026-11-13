@@ -466,7 +466,6 @@ leaves addresses without a pin, or by hand (*Place on map*).
 | `GEOCODER` | Service | Key |
 |---|---|---|
 | `bc` (default) | [BC Address Geocoder](https://www2.gov.bc.ca/gov/content/data/geographic-data-services/location-services/geocoder) — the B.C. government's, built for B.C. civic addresses | none; `BC_GEOCODER_KEY` (from the BC API gateway) for higher limits |
-| `google` | Google Geocoding API | `GOOGLE_MAPS_SERVER_KEY` |
 | `nominatim` | OpenStreetMap's Nominatim — light use only | none |
 | `off` | no lookups; pins by hand | — |
 
@@ -484,15 +483,52 @@ of it stops a save. These two calls have not been tried against the live
 service yet (it couldn't be reached from where they were built): if names
 come back as coordinates, that is why.
 
-`GEOCODER_FALLBACK=google` keeps the free BC service first and asks Google
-only for what BC can't place. A Google key: Google Cloud → **APIs &
-Services** → enable the **Geocoding API** (and the **Map Tiles API** for
-Google tiles) → **Credentials** → an API key with **API restrictions** to
-those APIs and **Application restrictions: None** (GOING-LIVE.md §5, Recipe
-B). Not a *Websites* key: Google refuses it to a server ("API keys with
-referer restrictions cannot be used with this API"). Not an IP restriction
-on Render: its outgoing addresses are shared and change, and fixed ones are
-a paid add-on. It is the server's key; the browser never sees it.
+**Google no longer places pins.** Google's terms let its geocodes be kept
+30 days only, not shared between users and not drawn on another map;
+base.win's pins are kept, shared, on the event log and drawn on the free
+map. `GEOCODER=google` now places with the B.C. service and
+`GEOCODER_FALLBACK=google` is ignored (each said once in the log and on
+Settings → Services *Map pins*: take them away in Render). Pins placed by
+Google before this can't be told apart (nothing recorded the provider).
+
+**Google's address suggestions (Google Places)**, only when turned on:
+
+| `ADDRESS_SUGGEST` | Who suggests |
+|---|---|
+| unset (default) | the suggester `GEOCODER` names (B.C.); **Google is never asked**, with or without a key |
+| `google` | Google Places Autocomplete (New), through the server, then the B.C. service when Google is paused, busy, past today's ceiling or offers no door |
+| `bc`, `nominatim` | that service, never Google |
+| `off` | no outside service (the doors on file still come) |
+
+Off by default because the words a person picks are saved as the record
+(kept, shared, on the event log), and whether Google's terms allow that is
+for counsel or Google to confirm in writing first (GOING-LIVE.md §5, Recipe
+B). Also needed: Google's logo, unaltered, at
+`web/public/google/google-maps-logo.svg` — without it in the build Google's
+rows never show, and Services says *Google’s logo file is missing*. With
+`GEOCODER=off`, Google is asked only if `ADDRESS_SUGGEST=google` is set, and
+nothing falls back to B.C.
+
+A pick (`GET /api/address/place`) asks Google for the address words only
+(Place Details with `addressComponents,formattedAddress`, never its
+location), which ends Google's session, then places it with the B.C.
+service; Google's pin never goes on the map. Google and B.C. are asked
+together, within 4 seconds for suggestions and for a pick. Typed addresses
+go to Google from the server; the browser never sees the key.
+
+| Setting | Default | Notes |
+|---|---|---|
+| `GOOGLE_PLACES_DAILY_MAX` | `300` | Google asks a day (autocomplete or details), the campaign's day; then the B.C. service until midnight. Kept in the database across restarts |
+| `GOOGLE_PLACES_PER_PERSON` | `50` | Google asks a person a day; then that person's box gets B.C.'s rows |
+| `GOOGLE_PLACES_URL` | Google's | a stand-in for tests only |
+
+A Google key: Google Cloud → **APIs & Services** → enable the **Map Tiles
+API** and **Places API (New)** → **Credentials** → an API key with **API
+restrictions** to those APIs and **Application restrictions: None**
+(GOING-LIVE.md §5, Recipe B). Not a *Websites* key: Google refuses it to a
+server. Not an IP restriction on Render: its outgoing addresses are shared
+and change, and fixed ones are a paid add-on. It is the server's key; the
+browser never sees it.
 
 | Setting | Default | Notes |
 |---|---|---|
@@ -504,10 +540,13 @@ a paid add-on. It is the server's key; the browser never sees it.
 | `GEOCODE_RETRY_MS` | `900000` | how long a paused run waits before it tries again by itself (doubling, up to six hours) |
 | `BC_GEOCODER_URL` | the official service | a self-hosted mirror |
 
-**Check:** Services → Address lookup asks for a few addresses in the
-campaign's box (one ask every 30 seconds at most). When Google refuses, it
-says why in plain words, with *Google said* and the setup step that fixes
-it; a busy or silent B.C. service is said in plain words too.
+**Check:** Services → Map pins asks for a few addresses in the campaign's
+box (one ask every 30 seconds at most); a busy or silent B.C. service is
+said in plain words. Services → Address suggestions (Google Places) asks
+Google once for "100" whenever a key is set, even while suggestions are off,
+so the key can be tested first; when Google refuses it says why in plain
+words, with *Google said* and the setup step that fixes it. Its row shows
+today's asks against the ceiling.
 
 ## Map background
 
@@ -524,11 +563,20 @@ provider of the campaign's own there is no second one to switch to. The
 service worker keeps both free providers' tiles as they are looked at
 (never ahead). Before election week, either:
 
-- **Google Maps:** `GOOGLE_MAPS_TILES=1` with `GOOGLE_MAPS_SERVER_KEY` (Map
-  Tiles API enabled, above); `GOOGLE_MAPS_TILE_TYPE` roadmap | satellite |
-  terrain (the standard look; each person can switch to the others under
-  Show → Map). base.win fetches them for signed-in phones (`/tiles/…`), so
-  the key stays on the server.
+- **Google Maps:** on whenever `GOOGLE_MAPS_SERVER_KEY` is set (Map Tiles
+  API enabled, above); `GOOGLE_MAPS_TILES=off` keeps the free map.
+  **Before this goes to staging, tell us Google or the free map for
+  canvassing. With a key already set, Google becomes the map and phones
+  stop keeping street maps offline.** `GOOGLE_MAPS_TILE_TYPE` roadmap |
+  satellite | terrain (the standard look; each person can switch to the
+  others under Show → Map — no Muted or Dark over Google's tiles, whose
+  imagery may not be altered). base.win fetches them for signed-in phones
+  (`/tiles/…`), so the key stays on the server. Google allows no offline use
+  of its tiles: they carry Google's own cache header (made private) and the
+  service worker doesn't keep them, so with no signal a Google map shows
+  the doors on a blank background. `GOOGLE_TILES_DAILY_MAX` (default none)
+  stops tiles for the rest of the campaign's day once reached (*503*, the
+  phones turn to the free map); Services shows today's tiles.
 - **Another provider:** `STARBASE_TILE_PROVIDER=stadia` (Stadia Maps,
   everything filled in; `STARBASE_TILE_KEY` only if it can't be told the
   campaign's web address — the phones see it), or `STARBASE_TILE_URL`
@@ -536,7 +584,9 @@ service worker keeps both free providers' tiles as they are looked at
   `STARBASE_TILE_ATTRIBUTION`, `STARBASE_TILE_MAX_ZOOM`.
 
 Google key: as under Address lookup — API restriction to Map Tiles (and
-Geocoding), application restriction **None** (GOING-LIVE.md §5, Recipe B).
+Places API (New)), application restriction **None** (GOING-LIVE.md §5,
+Recipe B). Each call to Google has a limit (a session 8 s, a tile 6 s); a
+slow answer is *504* for that tile and is not a refusal.
 When Google refuses, base.win stops asking it for a minute (30 seconds
 after quota) and the tiles answer *503* with *Retry-After*; the phones turn
 to CARTO's free map by itself until Google answers (`STARBASE_TILE_CLEAN=off`

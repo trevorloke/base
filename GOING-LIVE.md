@@ -22,6 +22,13 @@ and never rewrites production; Render then deploys it. Staging and
 production share nothing: test on staging with sample data or a copy, then
 promote the code — the production database is the campaign's alone.
 
+**Before a release goes to staging,** check each service's Environment for
+anything the release notes ask. For Google Maps: **Before this goes to
+staging, tell us Google or the free map for canvassing. With a key already
+set, Google becomes the map and phones stop keeping street maps offline.**
+Until the owner answers, a service with `GOOGLE_MAPS_SERVER_KEY` set must
+also have `GOOGLE_MAPS_TILES=off` before the release is pushed (§5, Recipe B).
+
 ## 1 · Deploy
 
 1. Render → **New → Blueprint** → this repo, `main`. `render.yaml` creates
@@ -108,9 +115,12 @@ Then, as each one is ready:
 | `RESEND_REGION` | leave unset (`us-east-1`) unless the domain should be made in another Resend region | *Add domain* in Settings → Services |
 | `MAILCHIMP_API_KEY`, `MAILCHIMP_AUDIENCE_ID`, `MAILCHIMP_WEBHOOK_SECRET` | from Mailchimp: the account's key, whole (its ending names the server); the audience's id only when the account has several; the signing secret *Connect* shows, once | only if the campaign builds its emails in Mailchimp: *Send to Mailchimp* on a list, unsubscribes and dead addresses kept in step both ways (INTEGRATIONS.md, *Mailchimp*) |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` | from Twilio; for texts to a list in Canada the number should be a verified toll-free number or a short code (INTEGRATIONS.md) | texting and calling through the campaign's number, SMS shift alerts; without them the phone's own apps are used |
-| `GEOCODER` | leave unset (`bc`, the free BC Address Geocoder); `GEOCODER_FALLBACK=google` to ask Google only for addresses BC can't place | placing people on the map |
-| `GOOGLE_MAPS_SERVER_KEY` | a Google Cloud key with application restriction **None** and API restriction to the APIs used (Map Tiles; Geocoding for Google address lookup) — not a *Websites* key, not an IP restriction on Render (§5, Recipe B) | Google geocoding and Google Maps tiles |
-| `GOOGLE_MAPS_TILES` | `1` (or `true`, `yes`, `on`) to draw the field map on Google's tiles (`GOOGLE_MAPS_TILE_TYPE` roadmap, satellite or terrain); otherwise the free tiles, which are not for a large team in election week (§5, *The street map*) | the map's background |
+| `GEOCODER` | leave unset (`bc`, the free BC Address Geocoder). `google` is no longer used for pins (Google's terms): take `GEOCODER=google` and `GEOCODER_FALLBACK=google` away | placing people on the map |
+| `GOOGLE_MAPS_SERVER_KEY` | a Google Cloud key with application restriction **None** and API restriction to Map Tiles API and Places API (New) — not a *Websites* key, not an IP restriction on Render (§5, Recipe B). **Before this goes to staging, tell us Google or the free map for canvassing. With a key already set, Google becomes the map and phones stop keeping street maps offline.** | Google Maps tiles; Google's address suggestions when turned on |
+| `GOOGLE_MAPS_TILES` | `off` keeps the free map with a key set (set it on staging and production until the owner chooses); unset, Google is the map whenever the key is set (`GOOGLE_MAPS_TILE_TYPE` roadmap, satellite or terrain). Google's tiles are not kept on phones for no-signal areas (Google's terms) | the map's background |
+| `GOOGLE_TILES_DAILY_MAX` | leave unset (no ceiling), or tiles a day after which phones turn to the free map until the campaign's midnight | a cap on Google's map costs |
+| `ADDRESS_SUGGEST` | leave unset (the B.C. service suggests addresses, never Google). `google` only after counsel's or Google's written yes and with Google's logo in the build (§5, Recipe B) | Google's address suggestions as you type |
+| `GOOGLE_PLACES_DAILY_MAX`, `GOOGLE_PLACES_PER_PERSON` | leave unset (300 Google asks a day, 50 a person), or whole numbers | keeping Google's suggestions inside its free use |
 | `STARBASE_TILE_PROVIDER`, `STARBASE_TILE_KEY` | `stadia` for Stadia Maps (address, credit and zoom filled in), and its key only if it can't be told the campaign's web address (§5, Recipe A) | the map's background, instead of the free tiles |
 | `STARBASE_TILE_URL`, `STARBASE_TILE_ATTRIBUTION`, `STARBASE_TILE_MAX_ZOOM` | a tile provider the campaign has an agreement with: its `https://…/{z}/{x}/{y}.png` address, its credit line, its deepest zoom (§5, *The street map*) | the map's background, instead of the free tiles |
 | `STARBASE_TRUSTED_PROXIES` | leave unset on Render (one proxy). Set to the number of proxies in front if there is a CDN before Render | rate limits reading the right address |
@@ -308,27 +318,75 @@ writing** before relying on offline maps.
 
 #### Recipe B — Google Maps (through the server)
 
-1. Go to console.cloud.google.com and create (or pick) a project.
+**Before this goes to staging, tell us Google or the free map for
+canvassing. With a key already set, Google becomes the map and phones stop
+keeping street maps offline.** Google is the map whenever
+`GOOGLE_MAPS_SERVER_KEY` is set; `GOOGLE_MAPS_TILES=off` keeps the free map
+for as long as the campaign wants. Until the owner answers, staging and
+production carry `GOOGLE_MAPS_TILES=off` in Render, and a release is not
+pushed to staging while either service has the key without that setting.
+
+1. Go to console.cloud.google.com and create (or pick) the project. If the
+   campaign's domain is on Google Workspace, create it inside that
+   organization so it belongs to the campaign, not to one person. It can be
+   the same project as Google sign-in's.
 2. Under *Billing*, link a billing account. Google asks for a card even for
-   the free allowance.
-3. Under *APIs & Services → Library*, enable **Map Tiles API**. Also enable
-   **Geocoding API** only if `GEOCODER=google` or `GEOCODER_FALLBACK=google`
-   will be used.
-4. Under *APIs & Services → Credentials → Create credentials → API key*,
-   then *Edit*:
+   the free use; without billing, Maps answers 1 request a day.
+3. Under *APIs & Services → Library*, enable **Map Tiles API** and, if
+   Google's address suggestions are planned, **Places API (New)**. The
+   **Geocoding API** is no longer used: turn it off if nothing else uses it.
+4. Under *APIs & Services → Credentials*, the server key (or *Create
+   credentials → API key*), then *Edit*:
    - **Application restrictions: None.** Not *Websites*: that breaks every
      server call. Not *IP addresses*: Render's shared outbound addresses
      change, and fixed ones are a paid add-on.
-   - **API restrictions: Restrict key** to Map Tiles API (and Geocoding API).
+   - **API restrictions: Restrict key** to Map Tiles API and Places API (New).
    - Save. The key never leaves the server.
-5. Under *APIs & Services → Map Tiles API → Quotas*, set a daily cap. Under
-   *Billing → Budgets & alerts*, add a budget with an email alert.
-6. On each Render service, set `GOOGLE_MAPS_SERVER_KEY=<the key>` (no
-   spaces) and `GOOGLE_MAPS_TILES=1`, and save.
-7. Run **Settings → Services → Map background → Check**. If it says it isn't
-   working, the line says what failed in plain words, *Google said* gives
-   Google's own words, and *see Going live §5, Recipe B step N* says which
-   of steps 2–6 to redo.
+5. **Quotas** (*APIs & Services → each API → Quotas*). Map Tiles API *2D
+   tiles per day*: the campaign's choice (3,225 a day is the free 100,000 ÷
+   31, too low for a canvassing day; 20,000 a day caps tiles at about
+   US$300 a month). Places API (New): if it offers per-day quotas, 322 a day
+   each for Autocomplete and Place Details (the free 10,000 ÷ 31) unless
+   the campaign pays for more; if it offers only per-minute quotas,
+   Autocomplete 60 a minute, and base.win's own `GOOGLE_PLACES_DAILY_MAX`
+   (300 a day by default, kept across restarts) is the daily stop. Under
+   *Billing → Budgets & alerts*, a monthly budget with emails at 50%, 90%
+   and 100% (a budget warns; only quotas and base.win's ceilings stop
+   spending).
+6. On each Render service (staging, then production), set
+   `GOOGLE_MAPS_SERVER_KEY=<the key>` (no spaces) and save; keep
+   `GOOGLE_MAPS_TILES=off` if the free map was chosen. Optional:
+   `GOOGLE_PLACES_DAILY_MAX` (default 300), `GOOGLE_PLACES_PER_PERSON`
+   (default 50), `GOOGLE_TILES_DAILY_MAX` (default none; past it phones turn
+   to the free map until midnight). Do not set `ADDRESS_SUGGEST=google` yet
+   (below).
+7. Run **Settings → Services → Map background → Check** and **Address
+   suggestions (Google Places) → Check** (it tests the key even while
+   suggestions are off). If one says it isn't working, the line says what
+   failed in plain words, *Google said* gives Google's own words, and *see
+   Going live §5, Recipe B step N* says which of steps 2–6 to redo.
+
+No Google verification or review is needed for Maps: it is a key, not a
+Google sign-in.
+
+**What Google's terms change.**
+- *No offline Google tiles.* Google allows no offline use of its tiles, so
+  phones no longer keep them: with no signal a Google map shows the doors
+  on a blank background (the free map is still kept where it is in use).
+  Tiles carry Google's own cache rules.
+- *No Google pins.* Google's geocodes may be kept 30 days only, not shared
+  and not drawn on another map; base.win's pins are kept, shared and drawn
+  on the free map. Pins come from the free B.C. Address Geocoder:
+  `GEOCODER=google` now places with B.C. and `GEOCODER_FALLBACK=google` is
+  ignored (both said on Services; take them away in Render).
+- *Google's address suggestions only once confirmed.* With
+  `ADDRESS_SUGGEST=google`, the address box offers Google Places' rows (the
+  pin still comes from B.C.). It stays off until counsel or Google confirm
+  in writing that saving the words a person picks is allowed, and that
+  sending typed addresses (often a voter's) to Google fits the rules on the
+  list of electors; and Google's logo file is in the build
+  (`web/public/google/google-maps-logo.svg`, unaltered from Google's
+  attribution page): without it Google's rows never show.
 
 The map's credit reads *Google Maps · Map data ©… Google*, Google's own
 words for the part of the map on screen (Google's policy, as read from
@@ -345,16 +403,20 @@ could not be checked from here (its FAQ now mentions a free key and a
 the fallback off.
 
 Cost, as far as could be read: 100,000 tile requests a month free, then
-about US$0.60 per 1,000. A phone draws roughly 15–40 tiles per screen, and
-phones keep what they have drawn. Watch the first busy weekend in Google
-Cloud → Metrics.
+about US$0.60 per 1,000; Places Autocomplete 10,000 free, then US$2.83 per
+1,000, and Place Details 10,000 free, then US$5.00 per 1,000. A phone draws
+roughly 12–20 tiles per screen. Settings → Services shows today's tiles and
+asks; watch the first busy weekend in Google Cloud → Metrics too.
 
 When Google refuses (a bad key, billing off, the API not turned on, the
 usage limit used up), base.win stops asking it for a minute (30 seconds
 after the usage limit) instead of asking again for every tile on every
 phone, then tries once more. A key pasted with a space or a new line at
 the end, and `GOOGLE_MAPS_TILES` set to `true`, `yes` or `on`, work the
-same as the plain values; `0` or `off` turns Google off quietly.
+same as the plain values; `0` or `off` turns Google off quietly. A Google
+answer slower than its limit is not a refusal: that tile fails and the next
+is asked. Places is paused 10 minutes after a key, API or billing refusal
+(60 seconds after the usage limit), and the B.C. service suggests meanwhile.
 
 #### How to tell it works
 

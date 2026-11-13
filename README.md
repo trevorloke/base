@@ -734,13 +734,13 @@ with its receipt; a monthly gift is a pledge, each month its own gift.
 ## Placing people on the map (geocoding)
 
 Addresses are looked up with the BC Address Geocoder (`server/lib/geocode.js`;
-`GEOCODER=bc|google|nominatim|off`, `BC_GEOCODER_KEY`, `GEOCODE_MIN_SCORE`).
-Google's Geocoding API is the other option (`GOOGLE_MAPS_SERVER_KEY`, a key
-restricted to the APIs used, with no application restriction — GOING-LIVE.md
-§5, Recipe B; lookups are
-biased to Surrey and limited to BC, and only a rooftop or street-number
-match counts). `GEOCODER_FALLBACK=google` keeps the free BC service first
-and asks Google only for addresses it can't place. A list is placed by a
+`GEOCODER=bc|nominatim|off`, `BC_GEOCODER_KEY`, `GEOCODE_MIN_SCORE`).
+Google no longer places pins (its terms let a Google pin be kept 30 days
+only and not on another map): `GEOCODER=google` places with B.C. and
+`GEOCODER_FALLBACK=google` is ignored, each said once and on Settings →
+Services. Google's address suggestions (`server/lib/places.js`) only with
+`ADDRESS_SUGGEST=google`: the words a person picks, placed by B.C.
+(INTEGRATIONS.md, *Address lookup*). A list is placed by a
 background run (`server/ext/geocoding`, a job like ladder emails). An import
 that leaves addresses without a pin starts it by itself, in the import's own
 write; **Place on map** and the map's *Look up addresses* start it by hand.
@@ -967,6 +967,11 @@ election week should switch to a paid provider.
 | `STARBASE_TILE_MAX_ZOOM` | deepest zoom the provider serves, 1–22 | `19` |
 | `STARBASE_TILE_PROVIDER` | a provider by name: `stadia` (Stadia Maps' Alidade Smooth — its address, credit and zoom 20 filled in; `STARBASE_TILE_URL` wins over it) | — |
 | `STARBASE_TILE_KEY` | the named provider's key, added as `?api_key=` (phones can see it — use only where the provider can't be told the campaign's own web address) | — |
+| `GOOGLE_MAPS_SERVER_KEY` | Google's key (Map Tiles API, Places API (New)): Google is the map whenever it is set. **Before this goes to staging, tell us Google or the free map for canvassing. With a key already set, Google becomes the map and phones stop keeping street maps offline.** | — |
+| `GOOGLE_MAPS_TILES` | `off` keeps the free map with a key set (`1` also turns Google on) | unset: on with a key |
+| `GOOGLE_TILES_DAILY_MAX` | Google tiles a day (the campaign's day); then the free map until midnight | none |
+| `ADDRESS_SUGGEST` | `google` (only after counsel's written yes and with Google's logo in the build), `bc`, `nominatim`, `off` | unset: `GEOCODER`'s suggester, never Google |
+| `GOOGLE_PLACES_DAILY_MAX`, `GOOGLE_PLACES_PER_PERSON` | Google address asks a day, and per person | `300`, `50` |
 
 A bad value falls back to the default (and logs once); desk roles see which
 tiles took on the map's filter sheet (*Map tiles: OpenStreetMap — custom
@@ -1064,19 +1069,26 @@ Older browsers: every `dvh` height in the map's sheet has the same in `vh`
 before it, and the sidebar's room and the map's width come from classes the
 shell sets (`web/src/layout.js`) as well as `:has()`.
 
-**Google Maps** instead: `GOOGLE_MAPS_TILES=1` with a `GOOGLE_MAPS_SERVER_KEY`
-that has the **Map Tiles API** enabled (`GOOGLE_MAPS_TILE_TYPE` roadmap |
-satellite | terrain). Google hands tiles out against a session, so the map
+**Google Maps** instead: whenever a `GOOGLE_MAPS_SERVER_KEY` with the **Map
+Tiles API** enabled is set, unless `GOOGLE_MAPS_TILES=off`
+(`GOOGLE_MAPS_TILE_TYPE` roadmap | satellite | terrain). Before this goes to
+staging, tell us Google or the free map for canvassing. With a key already
+set, Google becomes the map and phones stop keeping street maps offline;
+set `GOOGLE_MAPS_TILES=off` to keep the free map. Google hands tiles out against a session, so the map
 draws `/tiles/{z}/{x}/{y}.png` from base.win (signed in), which fetches
 each tile from Google with a session it keeps for everyone and renews
 (`server/lib/gtiles.js`, served by `server/ext/offline`), credited to
-Google, up to zoom 22; the service worker keeps the ones a phone has drawn
-as with any provider. When Google refuses, its words are kept in plain ones
+Google, up to zoom 22, with Google's own cache header (made private). The
+service worker does not keep them (Google's terms allow no offline use), so
+with no signal a Google map shows the doors on a blank background. Today's
+Google calls are counted in `google_usage` (`server/lib/gusage.js`: a date,
+a kind, a number; kept across restarts) for the daily ceilings and
+Settings → Services. When Google refuses, its words are kept in plain ones
 with the setup step that fixes them (`server/lib/googleerr.js`, shown by
 Settings → Services → Map background → Check), and no call goes to Google
 for a minute (tiles answer 503). Google bills per tile past its free allowance, and its
 terms have their own rules on attribution and caching — check them before
-election week. The service worker
+election week. For the free providers, the service worker
 keeps the tiles a phone has already looked at (about 1,500, oldest out), so a
 turf viewed with signal still draws offline; it never fetches tiles ahead. A
 tile it can't fetch and never kept is a failed tile, as without the worker —

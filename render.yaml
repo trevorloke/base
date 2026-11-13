@@ -18,8 +18,15 @@
 #   RESEND_WEBHOOK_SECRET, RESEND_REGION                email: bounces and complaints back; where Add domain makes the domain
 #   MAIL_PROVIDER, SENDGRID_API_KEY, SENDGRID_WEBHOOK_PUBLIC_KEY   email through SendGrid instead of Resend
 #   MAILCHIMP_API_KEY, MAILCHIMP_AUDIENCE_ID, MAILCHIMP_WEBHOOK_SECRET   Mailchimp: a list out as a tag, unsubscribes back
-#   GEOCODER (bc), GEOCODER_FALLBACK, BC_GEOCODER_KEY   address lookup
-#   GOOGLE_MAPS_TILES=1, GOOGLE_MAPS_TILE_TYPE          Google map tiles
+#   GEOCODER (bc), GEOCODER_FALLBACK, BC_GEOCODER_KEY   map pins (google is no longer used for pins)
+#   GOOGLE_MAPS_TILES=off, GOOGLE_MAPS_TILE_TYPE        Google is the map whenever its key is set; =off keeps
+#                                                       the free map. Before this goes to staging, tell us Google
+#                                                       or the free map for canvassing. With a key already set,
+#                                                       Google becomes the map and phones stop keeping street
+#                                                       maps offline. Set GOOGLE_MAPS_TILES=off to keep the free map.
+#   GOOGLE_TILES_DAILY_MAX                              Google tiles a day, then the free map until midnight
+#   ADDRESS_SUGGEST                                     google: Google's address suggestions (only after counsel's yes)
+#   GOOGLE_PLACES_DAILY_MAX, GOOGLE_PLACES_PER_PERSON   Google asks a day (300) and per person (50)
 #   STARBASE_TILE_URL, _ATTRIBUTION, _MAX_ZOOM          another tile provider
 #   STARBASE_TILE_PROVIDER (stadia), STARBASE_TILE_KEY  a tile provider by name (and its key)
 #   TWILIO_VOICE=off                                    texting without calls
@@ -77,7 +84,7 @@ services:
         sync: false
       - key: TWILIO_FROM
         sync: false
-      - key: GOOGLE_MAPS_SERVER_KEY  # optional: Google geocoding and map tiles (INTEGRATIONS.md)
+      - key: GOOGLE_MAPS_SERVER_KEY  # optional: Google map tiles and (when ADDRESS_SUGGEST=google) address suggestions (INTEGRATIONS.md)
         sync: false
 
   - type: web
