@@ -59,6 +59,19 @@ test('notify records per-assignee channel outcomes and timestamps', async () => 
   assert.equal(detail.json.assignees.find((a) => a.name === 'Vol A').notify_email, 'queued');
 });
 
+test('Notify asks the one place (lib/reach.js): someone marked do not email gets the text, not the email', async () => {
+  const s = (await c.action('shift.create', {
+    title: 'Notify reach check', starts_at: `${SOON}T15:00:00-07:00`, ends_at: `${SOON}T16:00:00-07:00`,
+  })).json.shift;
+  const e = await c.createPerson('Vol E', { email: 'vol-e@example.org', phone: '604-555-0005', tags: ['Do-Not-Email'] });
+  assert.equal((await c.action('shift.assign', { shift_id: s.id, person_id: e.id })).status, 200);
+  const n = await c.action('shift.notify', { shift_id: s.id });
+  assert.equal(n.status, 200);
+  const row = n.json.notified.find((r) => r.name === 'Vol E');
+  assert.equal(row.email, 'opted_out', 'a do-not-email tag, whatever its capitals');
+  assert.equal(row.text, 'queued', 'the text still goes');
+});
+
 test('declining frees a capacity slot; status changes are recorded', async () => {
   const list = await c.get('/api/shifts');
   const shift = list.json.shifts[0];

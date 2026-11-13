@@ -38,6 +38,7 @@ import { newId } from '../../lib/events.js';
 import { clientIp, makeLimiter } from '../../lib/guard.js';
 import { enqueueJob, runJobsSoon } from '../../lib/jobs.js';
 import { emailConfigured, sendEmail } from '../../lib/notify.js';
+import { whyNot } from '../../lib/reach.js';
 import { DEFAULT_TZ } from '../../lib/org.js';
 import { decide, permsOf } from '../../lib/perms.js';
 import { loginEmail } from '../../lib/viewer.js';
@@ -147,6 +148,9 @@ const emailFeed = async (db, job) => {
     [job.payload?.feed_id, job.workspace_id],
   )).rows[0];
   if (!f || f.stopped_at || !f.email || !emailConfigured()) return;
+  // Asked for by them, to their own address, so no do-not tag stops it; an
+  // address that bounced for good still does (lib/reach.js, sender self).
+  if (await whyNot(db, 'email', 'self', { workspaceId: job.workspace_id, email: f.email })) return;
   const at = String(job.payload?.at || configuredUrl() || '').replace(/\/+$/, '');
   const url = `${at}/cal/${f.token}.ics`;
   const res = await sendEmail({

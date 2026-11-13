@@ -61,6 +61,13 @@ test('each sender, as it was: a list send goes to everyone who hasn’t said no;
   assert.deepEqual(await names(mayReach('text', 'list', pp)), ['Ana', 'Ben', 'Cy', 'Dee'],
     'a number that can be texted: not do-not-contact (Eli), do-not-text (Fay), seven digits (Gus), STOP (Hal), none (Ivy)');
   assert.deepEqual(await names(mayReach('call', 'bank', pp)), ['Ana', 'Ben', 'Cy', 'Dee', 'Fay', 'Gus', 'Hal'], 'a phone, not do-not-contact');
+  // A shift's email (notice, reminder, Notify) to someone booked on it: not
+  // the newsletter, so leaving it (Cy) doesn't stop it; a do-not tag does.
+  assert.deepEqual(await names(mayReach('email', 'shift', pp)), ['Ana', 'Ben', 'Cy', 'Fay', 'Hal', 'Ivy'],
+    'a shift: an address, not do-not-email (Dee), not do-not-contact (Eli)');
+  // A link someone asked for, to their own address: no tag stops it.
+  assert.deepEqual(await names(mayReach('email', 'self', pp)), ['Ana', 'Ben', 'Cy', 'Dee', 'Eli', 'Fay', 'Hal', 'Ivy'],
+    'their own ask: anyone with an address');
   // The newsletter is asked about addresses, not people.
   const subs = (await db.query(
     `select n.email from subscriptions n where n.workspace_id = $1 and ${mayReach('email', 'newsletter', address('n.email'))} order by n.email`, [ws],

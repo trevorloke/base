@@ -53,7 +53,7 @@ import { runHooks } from '../../lib/hooks.js';
 import { enqueueJob, jobRunnerOn, runJobsSoon } from '../../lib/jobs.js';
 import { emailConfigured, sendEmail, sendText, shiftWhen, shiftWhenShort, textConfigured } from '../../lib/notify.js';
 import { shiftsAttachment, withCalendarLine } from '../../lib/calendar.js';
-import { notSuppressed } from '../../lib/mail/index.js';
+import { person as personCols, whyNotSql } from '../../lib/reach.js';
 import { DEFAULT_TZ } from '../../lib/org.js';
 import { mayRun } from '../../lib/perms.js';
 // One clock for "when is it" in a send: the texting rules' own (their quiet
@@ -72,7 +72,6 @@ const DESK = ['manager', 'treasurer', 'staff'];
 const HOLD = ['assigned', 'confirmed', 'completed'];
 const BOOKED = ['assigned', 'confirmed'];
 const onIt = (kind) => (kind === 'reminder' ? BOOKED : HOLD);
-const NO_EMAIL_TAGS = ['do-not-email', 'do-not-contact'];
 const parseJ = (v, d) => (typeof v === 'string' ? JSON.parse(v) : (v ?? d));
 const iso = (v) => (v instanceof Date ? v.toISOString() : v);
 const dateOnly = (v) => (v instanceof Date ? v.toISOString().slice(0, 10) : v ? String(v).slice(0, 10) : null);
@@ -214,7 +213,7 @@ const deliver = async (db, ctx, batchId, { actorId = null, action = TELL_ACTION,
       const out = [];
       for (const n of asked) {
         const person = (await tx.query(
-          `select p.id, p.name, p.email, p.phone, p.tags, ${notSuppressed('p.workspace_id', 'p.email')} as can_email
+          `select p.id, p.name, p.email, p.phone, p.tags, ${whyNotSql('email', 'shift', personCols('p', '$2'))} as email_not
              from persons p where p.id = $1 and p.workspace_id = $2 and p.deleted_at is null`, [n.person_id, ws],
         )).rows[0];
         // What to say, as things stand now: their shifts of these that are
@@ -251,13 +250,13 @@ const deliver = async (db, ctx, batchId, { actorId = null, action = TELL_ACTION,
       const words = noticeWords({
         kind: n.kind, shifts: n.shifts, workspaceName: ctx.workspace.name, tz, week: n.week, thisWeek: n.week === weekStart(today),
       });
-      // A do-not tag whatever its capitals, as every send reads it (lib/reach.js).
-      const tags = (parseJ(n.person.tags, []) || []).map((t) => String(t).toLowerCase());
+      // Who may get it is decided in one place (lib/reach.js), read at the
+      // claim a moment ago: a do-not tag, or an address on the suppression list.
+      const not = n.person.email_not;
       let email = { status: 'skipped' };
       if (n.person.email) {
-        email = NO_EMAIL_TAGS.some((x) => tags.includes(x)) ? { status: 'opted_out' }
-          // Read at the claim, a moment ago: an address on the suppression list.
-          : !n.person.can_email ? { status: 'suppressed' }
+        email = not === 'suppressed' ? { status: 'suppressed' }
+          : not ? { status: 'opted_out' }
           // The email carries the person's shifts in this message as one
           // calendar file, and says so before its sign-off.
           : await sendEmail({

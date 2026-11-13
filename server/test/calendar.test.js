@@ -239,9 +239,7 @@ test('the 121st fetch of a link in an hour is refused', async () => {
 });
 
 test('Add to calendar: the file link checks the reader, carries their own hours and the instructions, needs no cookie', async () => {
-  // SH's columns (a booking's own hours), as SH adds them: nullable.
-  await db.query('alter table shift_assignments add column if not exists arrive_at timestamptz');
-  await db.query('alter table shift_assignments add column if not exists leave_at timestamptz');
+  // A booking's own hours (flexible shift hours, ext/schedule).
   await db.query(
     `update shift_assignments a set arrive_at = '2030-05-06T14:00:00Z', leave_at = '2030-05-06T15:00:00Z'
        from persons p where p.id = a.person_id and a.shift_id = $1 and lower(p.email) = $2`, [S.mine.id, `cal-vik+${tag}@example.org`]);

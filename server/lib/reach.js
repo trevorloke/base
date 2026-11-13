@@ -13,7 +13,9 @@
 // its counsel's), not the code's. A new reason (an address that bounced, a
 // do-not-call tag) is one more line in its channel.
 //
-//   senders   email: list · newsletter · press · ladder
+//   senders   email: list · newsletter · press · ladder · shift (a shift's
+//                    notice, reminder or Notify, to someone booked on it) ·
+//                    self (a link someone asked for, to their own address)
 //             text:  list · ladder · shift (a shift's notice or reminder)
 //             call:  bank (and the Call links: shared/canvass.js noCalls)
 //   mayReach(channel, sender, cols)  SQL, true for someone the sender may
@@ -67,11 +69,14 @@ export const RULES = {
     // sender: no email can reach it.
     { code: 'suppressed', sql: (c) => `not ${notSuppressed(c.ws, c.email)}` },
     // They left the newsletter list (their own link, or the desk's Remove).
-    { code: 'unsubscribed', skip: ['press'], sql: (c) => onNewsletter(c, 'unsubscribed') },
+    // Not for a shift they booked, or a link they asked for: neither is
+    // the newsletter.
+    { code: 'unsubscribed', skip: ['press', 'shift', 'self'], sql: (c) => onNewsletter(c, 'unsubscribed') },
     // A press release honours both (a reporter who left the newsletter
-    // still gets releases: they leave the media list by its own link).
-    { code: 'do_not_email', skip: ['newsletter'], sql: (c) => tagged(c, NO_EMAIL) },
-    { code: 'do_not_contact', skip: ['newsletter'], sql: (c) => tagged(c, NO_CONTACT) },
+    // still gets releases: they leave the media list by its own link). A
+    // link someone asked for themselves goes whatever their tags.
+    { code: 'do_not_email', skip: ['newsletter', 'self'], sql: (c) => tagged(c, NO_EMAIL) },
+    { code: 'do_not_contact', skip: ['newsletter', 'self'], sql: (c) => tagged(c, NO_CONTACT) },
     // Only to people who said yes: an address on the newsletter list.
     { code: 'no_consent', only: ['newsletter', 'ladder'], sql: (c) => `not (${onNewsletter(c, 'subscribed')})` },
   ],

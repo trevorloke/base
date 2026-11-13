@@ -28,8 +28,7 @@ import { audienceOf, recipientsOf } from '../ext/lists/audience.js';
 import { resolveFrom } from '../ext/senders/rules.js';
 // Who is on the media list (ext/media): tagged media or influencer, any capitals.
 import { onMedia } from '../ext/media/rules.js';
-import { mayReach, person, address } from '../lib/reach.js';
-import { notSuppressed } from '../lib/mail/index.js';
+import { mayReach, person, address, whyNotSql } from '../lib/reach.js';
 import { e164, namesCampaign, MAX_BODY as TEXT_MAX } from '../ext/texting/rules.js';
 import { textConfigured } from '../lib/notify.js';
 import { DEFAULT_TZ } from '../lib/org.js';
@@ -702,7 +701,7 @@ export const FIELD_ACTIONS = {
       // into their calendar file.
       const assignees = (await tx.query(
         `select a.id as assignment_id, a.arrive_at, a.leave_at, p.id, p.name, p.email, p.phone,
-                ${notSuppressed('p.workspace_id', 'p.email')} as can_email
+                ${whyNotSql('email', 'shift', person('p', '$2'))} as email_not
          from shift_assignments a join persons p on p.id = a.person_id
          where a.shift_id = $1 and a.workspace_id = $2 and a.status = any($3::text[])`,
         [input.shift_id, ctx.workspaceId, HOLD_SHIFT_STATUSES],
@@ -723,10 +722,13 @@ export const FIELD_ACTIONS = {
         // The email carries the shift as a calendar file and says so before
         // its sign-off; the text stays the message as it was.
         const emailText = withCalendarLine(message);
-        // Never an address that bounced for good or reported spam (the
-        // suppression list, ext/mail), as a week's notice and a reminder.
-        const emailRes = a.email && !a.can_email
+        // Who may get it is decided in one place (lib/reach.js), as for a
+        // week's notice and a reminder: never an address that bounced for
+        // good or reported spam, never someone asked not to be emailed.
+        const emailRes = a.email && a.email_not === 'suppressed'
           ? { status: 'suppressed', detail: 'the address bounced or reported spam' }
+          : a.email && a.email_not
+          ? { status: 'opted_out', detail: 'asked not to be emailed' }
           : a.email
           ? await sendEmail({
             to: a.email, subject: `Your shift: ${shift.title}`, text: emailText,
