@@ -11,7 +11,7 @@
 import { httpError } from '../../actions/util.js';
 import { grantFor } from '../../lib/google/tokens.js';
 import { purposeOf } from '../../lib/google/purposes.js';
-import { timeZone } from '../../lib/org.js';
+import { clockAt } from '../../lib/org.js';
 import { DESK, driveRules, driveSetup } from './config.js';
 
 export const FOR_THE_DESK = 'Google Drive is for the desk';
@@ -54,7 +54,7 @@ const PICK_AGAIN = ['notFound', 'appNotAuthorizedToFile'];
 export const refused = (r, { picked = false } = {}) => {
   if (picked && (r.status === 404 || PICK_AGAIN.includes(r.reason))) return httpError(404, NOT_PICKED);
   if (r.trouble?.code === 'paused') {
-    const at = r.trouble.until ? new Date(r.trouble.until).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', timeZone: timeZone() }).replace(/\./g, '') : 'a minute';
+    const at = r.trouble.until ? clockAt(r.trouble.until) : 'a minute';
     return httpError(429, `Google asked us to wait — try after ${at}`);
   }
   if (r.trouble?.code === 'reconnect') return httpError(409, 'Connect Google Drive again');

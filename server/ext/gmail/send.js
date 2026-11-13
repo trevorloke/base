@@ -13,7 +13,7 @@
 // Gmail's messages.send takes no idempotency key: a send that may have gone
 // is "Not sure it went", never tried again by base.win.
 import { runAction } from '../../lib/events.js';
-import { timeZone } from '../../lib/org.js';
+import { clockAt } from '../../lib/org.js';
 import { scrubbed } from '../../lib/google/flow.js';
 import { googleFetch, grantFor, markReconnect } from '../../lib/google/tokens.js';
 
@@ -50,8 +50,7 @@ export const _resetGmailForTest = () => { apiOff = null; };
 
 // ── Words ──
 // "3:40 pm", in the campaign's own time zone.
-export const clock = (iso) => new Date(iso).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', timeZone: timeZone() })
-  .replace(/\./g, '').replace(/\s+/g, ' ');
+export const clock = clockAt;
 export const WORDS = {
   notSetUp: 'Gmail isn’t set up on this server — see Settings → Services',
   off: 'Sending from Gmail is off for this campaign',

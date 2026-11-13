@@ -4,7 +4,7 @@
 import { basePath } from '../../lib/mount.js';
 import { doorKeySet } from '../../lib/guard.js';
 import { jobRunnerOn } from '../../lib/jobs.js';
-import { timeZone } from '../../lib/org.js';
+import { clockAt } from '../../lib/org.js';
 import {
   accountsBase, oauthBase, AUTH_PATH, TOKEN_PATH, REVOKE_PATH, DISCOVERY_PATH, GOOGLE_ACCOUNTS, GOOGLE_OAUTH,
   clientId, clientSecret, googleSetup, redirectUri, testBaseInUse,
@@ -15,8 +15,7 @@ const NEEDS = ['GOOGLE_OAUTH_CLIENT_ID', 'GOOGLE_OAUTH_CLIENT_SECRET'];
 const has = (k) => Boolean(String(process.env[k] || '').trim());
 const TIMEOUT_MS = 8000;
 
-const clock = (ms) => new Date(ms).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', timeZone: timeZone() })
-  .replace(/\./g, '').replace(/\s+/g, ' ');
+const clock = clockAt;
 
 // The row, without the counts (googleCounts adds them: they need the database).
 export const googleService = () => {

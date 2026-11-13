@@ -38,6 +38,10 @@ export const timeZone = () => {
   const tz = str('STARBASE_TZ') || DEFAULT_TZ;
   try { new Intl.DateTimeFormat('en-CA', { timeZone: tz }); return tz; } catch { return DEFAULT_TZ; }
 };
+// "3:40 pm" on the campaign's clock (not the server's or the device's): the
+// one way a Google pause's end time is said (ext/google, gmail, drive).
+export const clockAt = (t) => new Date(t).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', timeZone: timeZone() })
+  .replace(/\./g, '').replace(/\s+/g, ' ');
 export const city = () => str('STARBASE_CITY') || 'Surrey';
 export const province = () => (str('STARBASE_PROVINCE') || 'BC').toUpperCase().slice(0, 2);
 export const geoBounds = () => (/^-?\d+(\.\d+)?,-?\d+(\.\d+)?\|-?\d+(\.\d+)?,-?\d+(\.\d+)?$/.test(str('STARBASE_GEO_BOUNDS'))
