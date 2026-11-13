@@ -543,8 +543,9 @@ your counsel first whether voter data may go to Google Drive.
    campaign's domain.
 8. Before staff may send to Sheets: a **shared drive** (Workspace only) with
    the managers and staff as members, and a folder in it.
-9. In base.win: **Settings → Services → Google Drive and Sheets → Check**;
-   turn Drive on; pick the shared-drive folder; leave *Who can send to Google
+9. In base.win: **Settings → Services → Google Drive and Sheets → Check**,
+   then under More **Try opening Google Drive** (it works while Drive is
+   still off, for managers only); turn Drive on; pick the shared-drive folder; leave *Who can send to Google
    Sheets* on **No one** until counsel has answered.
 
 ## What base.win does on its own
