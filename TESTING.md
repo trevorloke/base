@@ -908,7 +908,10 @@ one tap away under **More**.
   says *No signal*; the doors unreadable, or its chunk failing to load, it
   says *Unavailable — Try again* in the box and the rest of Today stays.
   (`ONLY=stage2 node e2e-maplive.mjs`, and `ONLY=basepath2` under
-  `BASE_PATH`; the desk band's steps run once Today carries it.)
+  `BASE_PATH`; the desk band's steps run once Today carries it: they say
+  SKIP before HOME's desk Today is there, and fail if it is there without
+  the band, or with `REQUIRE_BAND=1`.) The window asks for no street tiles
+  until it knows where it looks, so no city-wide tiles are thrown away.
 - **Map, the street map not loading** — block `basemaps.cartocdn.com` in
   the browser's network tools and reload: within a moment a line says *The
   street map wasn’t loading — switched to Muted* and the streets are there.
