@@ -60,6 +60,11 @@ test('what’s typed: the label’s start first, then a word in it, then its oth
   // Once something is typed the bar lists the screens that fit before the jobs (CommandBar.jsx): were a
   // screen to answer to "gift", Enter would open it instead of the gift form.
   assert.deepEqual(labels(rank(screens, 'gift')), [], 'no screen answers to “gift”');
+  // The same for email: "newsletter" or "email" + Enter writes one; "templates" opens Templates.
+  assert.equal(rank(all, 'newsletter')[0].label, 'Write an email');
+  assert.equal(rank(all, 'email')[0].label, 'Write an email');
+  assert.deepEqual(labels(rank(screens, 'newsletter')), [], 'no screen answers to “newsletter”');
+  assert.equal(rank(all, 'templates')[0].label, 'Templates');
   assert.ok(labels(rank(screens, 'import')).includes('Import donations') && labels(rank(screens, 'donations file')).includes('Import donations'));
   assert.equal(rank(all, 'turf')[0].label, 'Turfs and walk lists');
   assert.ok(labels(rank(all, 'turf')).includes('Draw a turf'));

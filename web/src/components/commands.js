@@ -56,6 +56,8 @@ export const SCREENS = [
   { label: 'Import donations', to: '/money/import', area: 'money', roles: ['manager', 'treasurer'], words: 'file csv spreadsheet excel another tool upload' },
   { label: 'Stewardship', to: '/money/stewardship', area: 'money', words: 'thank donors lapsed top donors' },
   { label: 'Ladders', to: '/ladders', area: 'outreach', words: 'automatic emails automation engagement' },
+  // Never "email" or "newsletter" here: typed, the bar lists screens before jobs, and "newsletter" + Enter must stay Write an email.
+  { label: 'Templates', to: '/outreach/templates', area: 'outreach', desk: true, words: 'template starter saved' },
   { label: 'Follow-ups', to: '/follow-ups', area: 'outreach', words: 'follow up ladder' },
   { label: 'Surveys', to: '/surveys', area: 'outreach', words: 'questions survey' },
   { label: 'Scripts', to: '/scripts', area: 'outreach', words: 'door phone what to say script' },

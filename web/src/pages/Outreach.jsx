@@ -14,7 +14,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link, Navigate, useNavigate, useOutletContext, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiGet, action } from '../api.js';
+import { ApiError, apiGet, action } from '../api.js';
 import {
   AB_MIN, AbFields, OpensNote, SendStats, TestingList, abAsk, abPlan, abPlanLine, abState, hasLinks,
   useBlastStat, useBlastStats,
@@ -27,6 +27,11 @@ import { LOADING, Unavailable, fmt, useListCounts, useListNames } from '../compo
 import { MarkdownField, toDataUrl, uploadImage } from '../components/MarkdownField.jsx';
 import SharingTab from './SharingTab.jsx';
 import SenderPick, { fromChoices, useSenders } from '../components/SenderPick.jsx';
+import {
+  FootBlock, SaveAsTemplate, StartFrom, TemplatesRow, TemplatesScreen, loadTemplate, useOf, useTemplates,
+} from '../components/EmailTemplates.jsx';
+import { EMAIL_FILLS, NO_ADDRESS, placeholders, toCodes, toWords } from '@starbase/shared/email/words';
+import { emailProblem, stillToFill } from '@starbase/shared/email/check';
 import { useSendScope } from '../components/SendScope.js';
 import './outreach.css';
 import { BRAND } from '../brand.js';
@@ -481,6 +486,8 @@ export function ComposeCard({
 }) {
   const queryClient = useQueryClient();
   const scope = useSendScope();
+  const { me } = useOutletContext() || {};
+  const [params, setParams] = useSearchParams();
   const acts = { ...BLAST_ACTIONS, ...names };
   const key = listKey || scope.listKey;
   const isText = kind === 'text';
@@ -499,6 +506,17 @@ export function ComposeCard({
   const [test, setTest] = useState(null);
   // Two subject lines (components/AbTests.jsx): null = one; a list under 50 sends normally.
   const [ab, setAb] = useState(null);
+  // Templates (components/EmailTemplates.jsx): what it was started from
+  // ({ ref, name, mine, version, placeholders } — its placeholders stop a
+  // send), the select's value, a pick waiting on "Replace?", and whether
+  // Send or a test was tried (the "still to fill in" line shows from then).
+  const use = useOf(kind);
+  const tq = useTemplates(use, !isText);
+  const [startedFrom, setStartedFrom] = useState(null);
+  const [startRef, setStartRef] = useState('');
+  const [pending, setPending] = useState(null);
+  const [startNote, setStartNote] = useState(null);
+  const [tried, setTried] = useState(false);
   const act = useAction(() => {
     queryClient.invalidateQueries({ queryKey: key });
   });
@@ -518,6 +536,68 @@ export function ComposeCard({
     && (ab == null || audienceCount != null) && (!testing || ab.subject_b.trim().length > 0) && (!audience || audienceCount != null);
   const empty = audienceCount === 0;
   const noun = (n) => plural(n, audienceNoun.one, audienceNoun.many);
+
+  // Put a template's (or a past send's) words in; files, From and To stay.
+  const fillWith = (t, from) => {
+    setSubject(toWords(t.subject || ''));
+    setBody(toWords(t.body || '').slice(0, 50000));
+    if (ab) setAb({ ...ab, subject_b: '' });
+    setStartedFrom(from);
+    setConfirming(false);
+    setTried(false);
+  };
+  const startFrom = async (ref) => {
+    setPending(null);
+    setStartNote(null);
+    if (!ref) { fillWith({}, null); setStartRef(''); return; }
+    try {
+      const t = await loadTemplate(queryClient, ref);
+      fillWith(t, { ref, name: t.name, mine: !ref.startsWith('starter:'), version: t.version, placeholders: t.placeholders || [] });
+      setStartRef(ref);
+    } catch (err) {
+      setStartNote(err.message);
+    }
+  };
+  const pickStart = (ref) => {
+    if (subject.trim() || body.trim()) setPending(ref);
+    else startFrom(ref);
+  };
+  // ?template=<ref> (the Templates screen) or ?again=<send> ("Use again"):
+  // filled once on open, then dropped from the address.
+  const seeded = useRef(false);
+  useEffect(() => {
+    if (isText || seeded.current) return;
+    const tpl = params.get('template');
+    const again = params.get('again');
+    if (!tpl && !again) return;
+    seeded.current = true;
+    setParams((p) => { const n = new URLSearchParams(p); n.delete('template'); n.delete('again'); return n; }, { replace: true });
+    if (tpl) { startFrom(tpl); return; }
+    (kind === 'press' ? apiGet(`/media/releases/${encodeURIComponent(again)}`).then((r) => r.release) : apiGet(`/blasts/${encodeURIComponent(again)}/message`))
+      .then((m) => fillWith(m, null))
+      .catch((err) => setStartNote(err instanceof ApiError ? err.message : 'Needs signal'));
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on open
+  }, []);
+  // What still stops it (the server says the same), and the writer's own
+  // brackets ("[sic]"), which only get a question.
+  const codesSubject = toCodes(`${subject.trim()}${testing && ab?.subject_b ? `\n${ab.subject_b.trim()}` : ''}`);
+  const codesBody = toCodes(body.trim());
+  const fromList = startedFrom?.placeholders || [];
+  const problem = isText ? null : emailProblem(codesSubject, codesBody, { from: fromList });
+  const left = isText ? [] : stillToFill(codesSubject, codesBody, { from: fromList });
+  const own = isText ? [] : placeholders(`${codesSubject}\n${codesBody}`).filter((p) => !p.startsWith(NO_ADDRESS) && !left.includes(p));
+  const named = (list) => `${list.slice(0, 3).join(', ')}${list.length > 3 ? ' …' : ''}`;
+  const foot = tq.data?.foot;
+  const mayWebsite = me?.role === 'manager' || (Array.isArray(me?.areas) && me.areas.includes('site'));
+  let warn = null;
+  if ((startedFrom || tried) && left.length) {
+    warn = <><strong>{fmt(left.length)}</strong> {plural(left.length, 'part', 'parts')} still to fill in: {named(left)}</>;
+  } else if ((startedFrom || tried) && problem) {
+    warn = problem;
+  } else if (!isText && foot?.missing?.includes('address')) {
+    warn = <><strong>No mailing address yet</strong> — the law asks for one at the bottom of every email.{' '}
+      {mayWebsite ? <Link to="/website/settings#org">Add it</Link> : 'Ask a manager to add it in Website → Settings.'}</>;
+  }
   // Without email connected nothing goes out — say so before, not after.
   const offline = emailConfigured === false;
   // No signal: nothing can go now (or be saved) — Yes is off, and says so.
@@ -542,6 +622,7 @@ export function ComposeCard({
     if (kept) { setConfirming(false); onSent?.(kept); return; }
     const res = await act.run(acts.send, {
       kind, subject: isText ? '' : subject.trim(), body: body.trim(),
+      ...(!isText && fromList.length ? { placeholders_from: fromList } : {}),
       ...(audience ? { audience } : {}),
       ...(extra || {}), ...(isText ? {} : from),
       ...(testing && !isText ? { ab: { ...ab, subject_b: ab.subject_b.trim(), metric: links ? ab.metric : 'opens' } } : {}),
@@ -589,18 +670,31 @@ export function ComposeCard({
   };
   const sendTest = async () => {
     setTest({ busy: true });
+    setTried(true);
     try {
       const r = await action(acts.test, {
         kind, subject: subject.trim(), body: body.trim(), ...(files.length ? { attachment_ids: files.map((f) => f.id) } : {}), ...from,
       });
-      setTest(r.sent ? { ok: true, line: `Test sent to ${r.to}` } : { line: r.detail || 'The test didn’t go' });
+      const parts = Number(r.placeholders) || 0;
+      setTest(r.sent
+        ? { ok: true, line: `Test sent to ${r.to}${parts ? ` · ${fmt(parts)} ${plural(parts, 'part', 'parts')} still to fill in` : ''}` }
+        : { line: r.detail || 'The test didn’t go' });
     } catch (err) {
       setTest({ line: err.message });
     }
   };
 
   return (
-    <form className="card ot-compose" onSubmit={(e) => { e.preventDefault(); if (ready && !empty && !confirming) setConfirming(true); }}>
+    <form className="card ot-compose" onSubmit={(e) => { e.preventDefault(); setTried(true); if (ready && !empty && !confirming) setConfirming(true); }}>
+      {!isText && <StartFrom kind={kind} value={pending ?? startRef} onChange={pickStart} />}
+      {pending != null && (
+        <p className="tp-ask ot-note" role="group" aria-label="Replace what you’ve written">
+          Replace what you’ve written?
+          <button type="button" className="btn btn-quiet ot-btn-tap" onClick={() => startFrom(pending)}>Yes</button>
+          <button type="button" className="btn btn-quiet ot-btn-tap" onClick={() => setPending(null)}>No</button>
+        </p>
+      )}
+      {startNote && <p className="error" role="alert">{startNote}</p>}
       {!isText && senderUse && <SenderPick use={senderUse} value={senderId} onChange={(v) => { setSenderId(v); setConfirming(false); }} />}
       {isText ? (
         <div className="field">
@@ -626,7 +720,9 @@ export function ComposeCard({
       {!isText && <MarkdownField id={`${kind}-body`} label="Message" value={body} rows={10}
         onChange={(v) => { setBody(v.slice(0, 50000)); setConfirming(false); }}
         upload={(file) => uploadMessagePicture(file, acts.picture)}
+        fills={EMAIL_FILLS} links={tq.data?.links} footer={<FootBlock foot={foot} kind={kind} />}
         placeholder={kind === 'press' ? 'FOR IMMEDIATE RELEASE …' : 'Hello friends,'} />}
+      {warn && <p className="tp-warn" role="status">{warn}</p>}
       {!isText && <div className="ot-attach">
         <input ref={fileRef} type="file" multiple hidden accept={ATTACH_ACCEPT} onChange={pickFiles} />
         {files.length > 0 && (
@@ -649,11 +745,14 @@ export function ComposeCard({
         </div>
         {fileNote && <p className="error" role="alert">{fileNote}</p>}
       </div>}
+      {!isText && <SaveAsTemplate kind={kind} subject={subject} body={body} startedFrom={startedFrom}
+        onUpdated={(version) => setStartedFrom((s) => (s ? { ...s, version } : s))} />}
       {act.error && <p className="error">{act.error}</p>}
       {empty && emptyReason && <p className="ot-note">{emptyReason}</p>}
       <div className="ot-foot">
         {confirming ? (
           <div className="ot-confirm" role="group" aria-label="Confirm send">
+            {own.length > 0 && <span className="tp-own">Still has {named(own)} — send as written?</span>}
             <span>{testing && !offline ? abAsk(plan, ab.wait_hours)
               : <>{offline ? 'Save for' : 'Send to'} <strong>{audienceCount}</strong> {noun(audienceCount)}{confirmWho || ''}?</>}</span>
             <button type="button" className="btn btn-primary ot-btn-tap" disabled={act.busy || !online} onClick={send}>
@@ -713,6 +812,8 @@ function PastRow({ b, showKind, emailConfigured, canWrite, linkTo }) {
   const going = c.going > 0;
   if (going) { reach = `${c.sent} of ${c.total} sent so far`; chip = { status: 'queued', label: 'Sending' }; }
   const retry = retryCount(c) - held;
+  // "Use again": a newsletter's or list email's words in a new compose.
+  const again = canWrite && (b.kind === 'newsletter' || b.kind === 'eblast');
   const canRetry = canWrite && emailConfigured === true && !allSent && !going && retry > 0 && !result;
   let why = null;
   if (going) why = null;
@@ -742,6 +843,11 @@ function PastRow({ b, showKind, emailConfigured, canWrite, linkTo }) {
         </span>
         <StatusChip status={chip.status} label={chip.label} />
       </div>
+      {again && (
+        <div className="ot-body tp-again">
+          <Link className="btn btn-quiet ot-btn-tap" to={`/outreach/email?new=1&again=${b.id}`}>Use again</Link>
+        </div>
+      )}
       {(canRetry || result) && (
         <div className="ot-body">
           {canRetry && (
@@ -1063,6 +1169,7 @@ function EmailTab({ me, canWrite, creating, onClose, toast }) {
           <Big n={subscribed} q={subs} one="subscriber" many="subscribers" />
           <ul className="ot-list">
             <li className="ot-item"><Link className="ot-row" to="/lists"><span className="ot-row__main"><span className="ot-row__name">Lists</span><span className="ot-row__sub"><span>{lists.data ? `${fmt(all.length)} ${plural(all.length, 'list', 'lists')}` : lists.isError ? 'Unavailable' : LOADING} — who else an email can go to</span></span></span></Link></li>
+            <TemplatesRow />
           </ul>
           <UnsentList blasts={blasts.data?.blasts} kind={EMAIL_KINDS} emailConfigured={emailConfigured} canWrite={canWrite} onResent={setResult} />
           <TestingList blasts={blasts.data?.blasts} kind={EMAIL_KINDS} skip={result?.id} />
@@ -1314,6 +1421,11 @@ export default function Outreach() {
         <ConnectTab me={me} canWrite={canWrite} toast={toast.show} />
       </div>
     );
+  }
+  // The campaign's email templates: their own page, like connect.
+  if (tab === 'templates') {
+    if (!canWrite) return <Navigate to={home} replace />;
+    return <TemplatesScreen use="email" />;
   }
   if (!tabs.some((t) => t.key === tab)) return <Navigate to={home} replace />;
 

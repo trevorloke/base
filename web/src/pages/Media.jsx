@@ -8,7 +8,9 @@
 //                          releases, a contact's sheet (socials open their
 //                          profile, to message them), Add a contact (desk)
 //   /media/releases/:id    one release: who got it, opened it, bounced;
-//                          Try again; Copy links (the video, the Drive folder)
+//                          Try again; Copy links (the video, the Drive folder);
+//                          Use again (its words in a new release)
+//   /media/templates       release templates (components/EmailTemplates.jsx)
 // Everything reads /api/media (server/ext/media) and writes media.* — so
 // someone given Media but not Outreach can do the whole job. Only the desk
 // (manager, staff, treasurer) sees contacts' emails and phones, and adds or
@@ -28,6 +30,7 @@ import { useSenders } from '../components/SenderPick.jsx';
 import {
   BlastResult, Big, ComposeCard, FailedList, More, PastList, UnsentList, copyText, fmtWhen, useAction, useBlastList,
 } from './Outreach.jsx';
+import { TemplatesScreen } from '../components/EmailTemplates.jsx';
 import '../editor.css';
 import './media.css';
 
@@ -534,6 +537,7 @@ function ReleasePage({ id }) {
         {figures.map(([k, v]) => <div key={k} className="md-fig"><dt>{k}</dt><dd>{fmt(Number(v) || 0)}</dd></div>)}
       </dl>
       <div className="md-acts">
+        <Link className="btn btn-quiet ot-btn-tap" to={`/media?new=1&again=${b.id}`}>Use again</Link>
         {retry > 0 && q.data.emailConfigured !== false && <RetryRelease b={b} n={retry} onDone={setSaid} />}
         <CopyLinks links={links} />
       </div>
@@ -586,17 +590,19 @@ export default function Media() {
   useEffect(() => () => clearTimeout(timer.current), []);
   const toast = (m) => { clearTimeout(timer.current); setToastMsg(m); timer.current = setTimeout(() => setToastMsg(null), 3500); };
   const desk = DESK_ROLES.includes(me.role);
-  const tab = id ? 'release' : /\/media\/contacts/.test(pathname) ? 'contacts' : 'releases';
+  const tab = id ? 'release' : /\/media\/contacts/.test(pathname) ? 'contacts' : /\/media\/templates/.test(pathname) ? 'templates' : 'releases';
   const creating = params.get('new') === '1';
   const openNew = () => setParams({ new: '1' });
   const closeNew = () => setParams({}, { replace: true });
   const primary = tab === 'releases' && !creating ? 'Write a release' : tab === 'contacts' && desk && !creating ? 'Add a contact' : null;
+  if (tab === 'templates') return <TemplatesScreen use="press" />;
   return (
     <SendScope.Provider value={MEDIA_SCOPE}>
       <div className="ot-page md-page">
         <div className="ot-top">
           <h1>Media</h1>
           {primary && <button type="button" className="btn btn-primary ot-btn-tap" onClick={openNew}>{primary}</button>}
+          {tab === 'releases' && !creating && <Link className="btn btn-quiet ot-btn-tap md-templates" to="/media/templates">Templates</Link>}
         </div>
         <nav className="ot-tabs md-tabs" aria-label="Media: releases and contacts" style={{ '--ot-tabs': 2 }}>
           {[['releases', 'Releases', '/media'], ['contacts', 'Contacts', '/media/contacts']].map(([k, label, to]) => {
