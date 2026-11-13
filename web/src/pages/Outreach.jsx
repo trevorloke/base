@@ -585,8 +585,30 @@ export function ComposeCard({
   // ?template=<ref> (the Templates screen) or ?again=<send> ("Use again"):
   // filled once on open, then dropped from the address. A past send's words
   // get the same guard as a pick: dropped if Start from changed meanwhile,
-  // asked about if words were typed meanwhile.
+  // asked about if words were typed meanwhile. With no signal the send is
+  // kept (againLater) and read again when signal comes back.
   const seeded = useRef(false);
+  const againLater = useRef(null);
+  const loadAgain = (again, was) => {
+    const n = (picks.current += 1);
+    againLater.current = null;
+    (kind === 'press' ? apiGet(`/media/releases/${encodeURIComponent(again)}`).then((r) => r.release) : apiGet(`/blasts/${encodeURIComponent(again)}/message`))
+      .then((m) => {
+        if (n !== picks.current) return;
+        setStartNote((x) => (x === 'Needs signal' ? null : x));
+        const now = typed.current;
+        if ((now.subject !== was.subject || now.body !== was.body) && (now.subject.trim() || now.body.trim())) {
+          setPending({ again: m });
+          return;
+        }
+        fillWith(m, null);
+      })
+      .catch((err) => {
+        if (n !== picks.current) return;
+        if (!(err instanceof ApiError)) againLater.current = { again, n };
+        setStartNote(err instanceof ApiError ? err.message : 'Needs signal');
+      });
+  };
   useEffect(() => {
     if (isText || seeded.current) return;
     const tpl = params.get('template');
@@ -595,19 +617,7 @@ export function ComposeCard({
     seeded.current = true;
     setParams((p) => { const n = new URLSearchParams(p); n.delete('template'); n.delete('again'); return n; }, { replace: true });
     if (tpl) { startFrom(tpl); return; }
-    const n = (picks.current += 1);
-    const was = typed.current;
-    (kind === 'press' ? apiGet(`/media/releases/${encodeURIComponent(again)}`).then((r) => r.release) : apiGet(`/blasts/${encodeURIComponent(again)}/message`))
-      .then((m) => {
-        if (n !== picks.current) return;
-        const now = typed.current;
-        if ((now.subject !== was.subject || now.body !== was.body) && (now.subject.trim() || now.body.trim())) {
-          setPending({ again: m });
-          return;
-        }
-        fillWith(m, null);
-      })
-      .catch((err) => { if (n === picks.current) setStartNote(err instanceof ApiError ? err.message : 'Needs signal'); });
+    loadAgain(again, typed.current);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on open
   }, []);
   // What still stops it (the server says the same), and the writer's own
@@ -634,8 +644,17 @@ export function ComposeCard({
   const offline = emailConfigured === false;
   // No signal: nothing can go now (or be saved) — Yes is off, and says so.
   const online = useOnline();
-  // "Needs signal" under Start from goes when signal comes back.
-  useEffect(() => { if (online) setStartNote((n) => (n === 'Needs signal' ? null : n)); }, [online]);
+  // Signal back: a past email that didn't load is read again (unless Start
+  // from changed since; any words in the form are asked about, never
+  // replaced); otherwise the "Needs signal" line under Start from just goes.
+  useEffect(() => {
+    if (!online) return;
+    const later = againLater.current;
+    if (later && later.n === picks.current) { loadAgain(later.again, { subject: null, body: null }); return; }
+    againLater.current = null;
+    setStartNote((n) => (n === 'Needs signal' ? null : n));
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- on signal only
+  }, [online]);
 
   // A tap that got no answer (the server went down mid-send) may still be on
   // record, partly sent: look for it — a new send of this kind and subject —

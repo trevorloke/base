@@ -21,7 +21,8 @@
 //   6. Use again on a past send (words typed while it loads are asked
 //      about); 7. the command bar; 8. Media as the volunteer: Templates
 //      beside Write a release, Press release in Start from, nothing to
-//      save or remove, a release sent; 9. no signal;
+//      save or remove, a release sent; 9. no signal (Use again loads
+//      once signal is back, or asks about words typed meanwhile);
 //   10. every screen: one yellow button at most; at 390 no sideways scroll
 //      and every button at least 48 px.
 //
@@ -487,6 +488,39 @@ await sleep(300);
 check('9. no signal: the Templates Save is off, with Needs signal', await page.locator('.tp-edit .btn-primary:has-text("Save")').isDisabled()
   && /Needs signal/.test(await words(page.locator('.tp-edit .tp-acts'))));
 await desk.setOffline(false);
+// Use again with no signal: "Needs signal", then the past email loads by
+// itself when signal comes back.
+await go(page, '/outreach/email');
+await page.locator('.ot-more:has-text("More")').first().click();
+await desk.setOffline(true);
+await sleep(300);
+await page.locator('.ot-item:has-text("November update from [campaign]") a:has-text("Use again")').first().click();
+await page.locator('.ot-compose .error:has-text("Needs signal")').waitFor({ timeout: 5000 }).catch(() => {});
+check('9. Use again with no signal: says "Needs signal"', /Needs signal/.test(await words(page.locator('.ot-compose .error')))
+  && (await page.inputValue('#newsletter-subject')) === '', await words(page.locator('.ot-compose .error')));
+await desk.setOffline(false);
+await page.waitForFunction(() => document.querySelector('#newsletter-subject')?.value === 'November update from [campaign]', null, { timeout: 8000 }).catch(() => {});
+check('9. signal back: the past email loads, the line goes', (await page.inputValue('#newsletter-subject')) === 'November update from [campaign]'
+  && (await page.locator('.ot-compose .error:has-text("Needs signal")').count()) === 0, await page.inputValue('#newsletter-subject'));
+await shot(page, '14-use-again-signal-back-1440');
+// … and words typed before signal came back are asked about, never replaced.
+await go(page, '/outreach/email');
+await page.setViewportSize({ width: 390, height: 844 });
+await page.locator('.ot-more:has-text("More")').first().click();
+await desk.setOffline(true);
+await sleep(300);
+await page.locator('.ot-item:has-text("November update from [campaign]") a:has-text("Use again")').first().click();
+await page.locator('.ot-compose .error:has-text("Needs signal")').waitFor({ timeout: 5000 }).catch(() => {});
+await page.fill('#newsletter-subject', 'Typed with no signal');
+await desk.setOffline(false);
+await page.locator('.tp-ask:has-text("Replace what you’ve written?")').waitFor({ timeout: 8000 }).catch(() => {});
+check('9. signal back after typing: asked, words kept', (await page.locator('.tp-ask').count()) === 1
+  && (await page.inputValue('#newsletter-subject')) === 'Typed with no signal', await page.inputValue('#newsletter-subject'));
+await shot(page, '15-use-again-ask-after-signal-390');
+await page.locator('.tp-ask button:has-text("No")').click();
+check('9. … No keeps them, and no "Needs signal"', (await page.inputValue('#newsletter-subject')) === 'Typed with no signal'
+  && (await page.locator('.ot-compose .error').count()) === 0, await words(page.locator('.ot-compose .error')));
+await page.setViewportSize({ width: 1440, height: 900 });
 
 // ── 10. The phone ──
 const phoneCtx = await browser.newContext({ ...PHONE, storageState: await desk.storageState() });

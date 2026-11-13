@@ -834,7 +834,7 @@ one of that template's placeholders (or any ready-made one's) still in it:
 reached from "Start from" at the top of every email and release, the
 **Templates** row under Lists (Media: beside Write a release) and the
 command bar; "Save as template" sits under the message, and a past email has
-**Use again**. A
+**Use again** (tapped with no signal, it loads once signal is back). A
 manager can hide a ready-made template. **[first name]** and
 **[campaign]** fill themselves in on every newsletter, email and release:
 the subscriber's or person's first name ("JOHN" is greeted "John"; none:

@@ -519,7 +519,8 @@ template and Update twice, the Templates page (a stale save in a second tab,
 copy, Remove → Undo, Hide → Show), Use again, the command bar, Media's
 release templates, a pick reading a template's current words, and no signal
 (an unread pick says "Needs signal" at once and never lands later over
-what was typed).
+what was typed; Use again with no signal loads the past email when signal
+comes back, or asks if words were typed meanwhile).
 
 - **Candidates** (Settings → Candidates) — a manager adds and invites
   candidates; each joins as a volunteer with a seat; their phone opens on
