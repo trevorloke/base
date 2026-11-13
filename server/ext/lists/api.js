@@ -12,6 +12,7 @@ import { Hono } from 'hono';
 import { csvResponse } from '../../lib/csv.js';
 import { cleanFilter } from '../../lib/audience.js';
 import { countsOf, keptCounts, listCounts, loadList, parseJ, peopleOf, REACHES } from './audience.js';
+import { listRows } from './rows.js';
 
 export const api = new Hono();
 const DESK = ['manager', 'treasurer', 'staff'];
@@ -75,8 +76,6 @@ api.get('/lists/:id/export.csv', async (c) => {
   if (!DESK.includes(ctx.role)) return refuse(c);
   const list = await loadList(db, ctx.workspaceId, c.req.param('id'));
   if (!list) return c.json({ error: 'not found' }, 404);
-  const { people } = await peopleOf(db, ctx, { list });
-  return csvResponse(c, `list-${list.name}`,
-    ['Name', 'Email', 'Phone', 'Address', 'Unit', 'City', 'Postal code', 'Rating', 'Tags', 'Added'],
-    people.map((p) => [p.name, p.email, p.phone, p.address, p.unit, p.city, p.postal, p.rating, p.tags.join('; '), p.created_at]));
+  const { head, rows } = await listRows(db, ctx, list);
+  return csvResponse(c, `list-${list.name}`, head, rows);
 });

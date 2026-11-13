@@ -6,6 +6,8 @@
 //   blast.attach     { data (base64), name } → { attachment: { id, filename, bytes } }
 //                    an upload of the person's own, not yet on any send
 //   blast.unattach   { id } — takes one of those back
+//   storeAttachment  the insert every attach shares (an upload, or a file
+//                    from Google Drive: ext/drive/attach.js)
 //   blast.picture    { data, name?, width?, height? } → { media: { id, url } }
 //                    a picture for the message's body (/media/:id serves it
 //                    to every mail app), for anyone who may send
@@ -32,8 +34,11 @@ const TYPES = {
   xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   txt: 'text/plain', csv: 'text/csv', ics: 'text/calendar',
 };
+// A type → the extension to add to a name that has none (a Drive file).
+export const extFor = (type) => Object.keys(TYPES).find((k) => TYPES[k] === type && k !== 'jpeg') || null;
+export const typeOf = (filename) => TYPES[String(filename).toLowerCase().split('.').pop()] || null;
 export const ATTACH_KINDS = 'a PDF, a picture (JPG, PNG, WebP, GIF), a Word, PowerPoint or Excel file, a calendar invite (.ics), or a plain-text or CSV file';
-const mb = (n) => `${Math.round(n / 1024 / 1024)} MB`;
+export const mb = (n) => `${Math.round(n / 1024 / 1024)} MB`;
 
 export const readAttachment = (data, name) => {
   const filename = String(name || '').trim().replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').slice(0, 200);
@@ -47,6 +52,25 @@ export const readAttachment = (data, name) => {
   return { buf, filename, type: TYPES[ext] };
 };
 
+// The upload, kept until it goes with a send (or a day passes). from:
+// 'drive' says where it came from in the event; never a Drive id or link.
+export const storeAttachment = async (tx, ctx, emit, { buf, filename, type, from = null }) => {
+  // Uploads nobody ever sent go after a day.
+  await tx.query(
+    `delete from blast_attachments where workspace_id = $1 and blast_id is null and created_at < now() - interval '1 day'`,
+    [ctx.workspaceId],
+  );
+  const id = newId();
+  await tx.query(
+    `insert into blast_attachments (id, workspace_id, filename, content_type, bytes, data, created_by)
+     values ($1, $2, $3, $4, $5, $6, $7)`,
+    [id, ctx.workspaceId, filename, type, buf.length, buf, ctx.user.id],
+  );
+  const attachment = { id, filename, bytes: buf.length };
+  emit('blast_attachment', id, 'create', from ? { ...attachment, from } : attachment);
+  return attachment;
+};
+
 export const actions = {
   'blast.attach': {
     roles: DESK,
@@ -54,19 +78,7 @@ export const actions = {
     handler: async (tx, ctx, input, emit) => {
       const f = readAttachment(input.data, input.name);
       if (f.error) throw httpError(400, f.error);
-      // Uploads nobody ever sent go after a day.
-      await tx.query(
-        `delete from blast_attachments where workspace_id = $1 and blast_id is null and created_at < now() - interval '1 day'`,
-        [ctx.workspaceId],
-      );
-      const id = newId();
-      await tx.query(
-        `insert into blast_attachments (id, workspace_id, filename, content_type, bytes, data, created_by)
-         values ($1, $2, $3, $4, $5, $6, $7)`,
-        [id, ctx.workspaceId, f.filename, f.type, f.buf.length, f.buf, ctx.user.id],
-      );
-      const attachment = { id, filename: f.filename, bytes: f.buf.length };
-      emit('blast_attachment', id, 'create', attachment);
+      const attachment = await storeAttachment(tx, ctx, emit, f);
       return { attachment };
     },
   },

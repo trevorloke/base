@@ -62,6 +62,7 @@ INTEGRATIONS.md.
 | `GOOGLE_MAPS_SERVER_KEY` | Google Maps tiles (on whenever it is set, unless `GOOGLE_MAPS_TILES=off`) and, with `ADDRESS_SUGGEST=google`, Google's address suggestions; pins always come from the B.C. service | optional — the free BC geocoder and OpenStreetMap tiles work without it |
 | `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_TOKEN_KEY` | Sign in with Google, and the one Google connection Gmail, Drive and Calendar use (INTEGRATIONS.md); in tests a stand-in Google (`server/test/fake-google.js`, pointed at with `GOOGLE_ACCOUNTS_BASE` and `GOOGLE_OAUTH_BASE`) — never real Google | optional — without them no Google button shows, and passwords work as always |
 | `GMAIL_DAILY_MAX` | emails a person may send from their own Gmail in 24 hours (INTEGRATIONS.md, *Gmail*); in tests Gmail is the stand-in Google too (`GMAIL_API_BASE`) | optional — 100 |
+| `GOOGLE_PICKER_KEY`, `GOOGLE_CLOUD_PROJECT_NUMBER` | Google Drive and Sheets, on top of the Google client (INTEGRATIONS.md); in tests the same stand-in Google answers Drive and Sheets (`server/test/fake-google-drive.js`, pointed at with `GOOGLE_DRIVE_API_BASE` and `GOOGLE_SHEETS_API_BASE`) | optional — without them no Drive button shows; Download CSV works as always |
 | `STARBASE_TWO_STEP_KEY` | seals everyone's two-step sign-in key (INTEGRATIONS.md) | optional to test — without it a key kept in the database is used, and Settings → Services says so |
 
 The whole order of things, from deploy to the public link, is in
@@ -345,6 +346,23 @@ one tap away under **More**.
   *Reached by: Email* logged by hand, and `email_why` for the desk only.
   `reach.test.js`, `timeline.test.js`, `connections.test.js` and
   `privacy.test.js` hold the rest.
+- **Google Drive and Sheets** — `server/test/drive.test.js`
+  runs the switches, who may use Drive, the Picker's narrowed token and
+  *Send to Google Sheets* against the stand-in Google: three parts as three
+  jobs, one Sheet, exact RAW ranges, Google not answering, asking to wait,
+  a full Drive, someone leaving mid-export. `server/test/export-rows.test.js`
+  pins a list's, a report's and the people table's CSV byte for byte.
+  `server/test/drive-files.test.js` reads a picked Sheet's tabs and a tab
+  as CSV (whole-row pages, a blank gap, a quoted title), a stalled or
+  silent download ended by its limits, a Doc attached as PDF, a too-big
+  file offered as a link, "anyone with the link" opened and closed.
+  `e2e-drive.mjs` (PORT 5320; the stand-in Google, with a stand-in Picker
+  loader at `/picker.js`, on PORT+1) drives the screens as a manager, a
+  staffer and a volunteer at 1440x900 and 390x844: the Services panel,
+  import from a two-tab Sheet and an .xlsx, the compose's Drive files and
+  a link instead, Send to Google Sheets with its progress and Open, too big,
+  a failed export tried again, a staffer choosing the campaign folder, Sent
+  to Google Drive with Make private again, and no signal.
 - **Command bar** — on the desk press **Ctrl+K** (⌘K on a Mac), or *Search*
   under the name: *don* + Enter opens Donations, *gift* opens Log a gift
   with its form, a name or a phone (*604 555 0142*) finds the person; ↑ ↓

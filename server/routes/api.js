@@ -154,7 +154,7 @@ app.post('/actions/:name', async (c) => {
     const done = await action.after(c.get('db'), ctx, result);
     return c.json({ ...done.result, seq: done.lastSeq ?? lastSeq });
   } catch (e) {
-    if (e.status) return c.json({ error: e.message, ...(e.field ? { field: e.field } : {}) }, e.status);
+    if (e.status) return c.json({ error: e.message, ...(e.field ? { field: e.field } : {}), ...(e.link !== undefined ? { link: e.link } : {}) }, e.status);
     throw e;
   }
 });

@@ -27,7 +27,7 @@
 import { newId } from './events.js';
 
 const handlers = new Map();
-const MAX_ATTEMPTS = 5;
+export const MAX_ATTEMPTS = 5;
 
 export const registerJob = (kind, fn) => {
   if (handlers.has(kind)) throw new Error(`job kind ${kind} registered twice`);

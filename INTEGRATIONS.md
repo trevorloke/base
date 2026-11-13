@@ -19,6 +19,7 @@ is written) and says exactly what is wrong if anything is.
 | [Map background](#map-background) | the map volunteers walk | no (free default; change before election week) | `GOOGLE_MAPS_TILES`, `GOOGLE_MAPS_SERVER_KEY`, or `STARBASE_TILE_URL` |
 | [Google sign-in and connections](#google-sign-in-and-connections) | Sign in with Google; the one Google connection Gmail, Drive and Calendar use | no (passwords always work) | `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_TOKEN_KEY` |
 | [Gmail](#gmail) | One email to one person, from a staff member's own Gmail | no (Email from a person's page opens the mail app) | none of its own (the Google row's); `GMAIL_DAILY_MAX` optional |
+| [Google Drive and Sheets](#google-drive-and-sheets) | lists, reports and tables sent to a new Google Sheet; files attached from Drive (or linked when too big); a Sheet or file read for the importer | no (Download CSV always works) | `GOOGLE_PICKER_KEY`, `GOOGLE_CLOUD_PROJECT_NUMBER` (+ Google sign-in's three) |
 | [Two-step sign-in key](#two-step-sign-in-key) | seals everyone's authenticator key | before the public link goes out (works without, with a warning) | `STARBASE_TWO_STEP_KEY` |
 | [Hosting — Render](#hosting--render) | the two environments | yes | `render.yaml` |
 | [GitHub Actions](#github-actions) | tests, and promoting staging to production | yes | none |
@@ -756,6 +757,69 @@ bounces and spam complaints the way Google asks bulk senders to.
   do-not-email by hand.
 - `GMAIL_API_BASE`: tests only (`server/test/fake-google.js`); ignored in
   production, and Services says when it is honoured.
+
+## Google Drive and Sheets
+
+Built on the Google client above: same project, same client, same
+`GOOGLE_TOKEN_KEY`. Until both settings are right, **Settings → Services →
+Google Drive and Sheets** says what is missing and nothing Drive shows.
+
+| Setting | Default | Notes |
+|---|---|---|
+| `GOOGLE_PICKER_KEY` | — | a browser API key: Websites `https://base.win/*` (or the public address), the staging address and `https://docs.google.com/*`; API restriction **Google Picker API** only. Not a secret (the Picker needs it in the page), but never in the repo |
+| `GOOGLE_CLOUD_PROJECT_NUMBER` | — | digits (IAM & Admin → Settings), the project that holds the OAuth client: the Picker's app ID |
+| `GOOGLE_DRIVE_API_BASE`, `GOOGLE_SHEETS_API_BASE`, `GOOGLE_PICKER_SCRIPT` | Google's | tests only (`server/test/fake-google-drive.js`); ignored in production |
+
+- **One permission.** Each person connects their own Google account and is
+  asked only for *the specific Google Drive files you use with this app*
+  (`drive.file`), which Google counts as non-sensitive: no review, no yearly
+  assessment. base.win never sees the rest of anyone's Drive. Only the desk
+  (managers, treasurers, staff) may connect it; a volunteer granted an area
+  never reaches Google.
+- **Off until a manager chooses.** Drive itself is off for a campaign until
+  a manager turns it on, and **Send to Google Sheets** stays off (*No one*)
+  until a manager chooses *Managers* or *Anyone at the desk*. Decide with
+  your counsel first whether voter data may go to Google (GOING-LIVE §7).
+- **Where Sheets land.** In each person's own *base.win exports* folder
+  (made the first time), or in one campaign folder a manager picks. A Sheet
+  never goes to a personal Google account: outside a shared drive the
+  person's account must be Google Workspace (and at the campaign's Google
+  domain when one is set). *Anyone at the desk* needs a folder in a
+  **shared drive**, so staff Sheets stay with the campaign when they leave.
+  Each person picks the campaign folder once in Google's Picker (`drive.file`
+  only reaches folders picked with base.win).
+- **How it is sent.** In the background, a part at a time: the same columns
+  as Download CSV, with no 100,000 cap; nothing in a cell is ever run as a
+  formula; a part tried again lands on the same rows. A Sheet holds at most
+  10 million cells: bigger is refused before anything is sent (use Download
+  CSV). Google asking to wait hands the work back; Google not answering is
+  tried five times a part, then *Try again* carries on in the same Sheet.
+  Lists include people tagged do-not-contact, as Download CSV does.
+- **The Picker's token** is narrowed to `drive.file` before the browser gets
+  it, and Google's own tokeninfo must agree: a person who also connected
+  Gmail never hands the browser a Gmail-capable token. If Google won't
+  narrow it, the Picker is off (*Google Drive can’t open safely on this
+  server — tell us*) and the log says so once.
+- **Attaching from Drive.** A file someone picks goes with an email or a
+  release as an ordinary attachment, with the same limits (5 MB each, 10 MB
+  a send, the same kinds of file). Google Docs, Sheets, Slides and Drawings
+  go as PDF. A file over 5 MB isn't copied: the screen offers its link
+  instead, for the people it's already shared with in Drive, or, as a
+  separate choice, for **anyone with the link**. Anyone is refused for a
+  Sheet base.win made, a folder and a Google Sheet; each link opened to
+  anyone is recorded (`drive_links`, in the full export) and the person who
+  opened it can *Make private again* (or change it in Drive).
+- **Importing from Drive.** The importer reads a picked Google Sheet's tab
+  (as the person sees it, blank rows in the middle kept) or a picked CSV or
+  Excel file (300 MB at most, streamed) and does the rest as for a file
+  from the computer. Nothing about the read is stored.
+- **Check** (needs your own Drive connection): one Drive call and one Sheets
+  read of a made-up file; *Working · Drive and Sheets answer*, or which API
+  to turn on. A connection Google ended within a week of connecting is
+  almost always the app left in Testing: publish it.
+- base.win never moves, shares or deletes a Sheet after making it. Someone
+  who leaves keeps the Sheets in their own Drive; *Sent to Google Drive*
+  lists what exists.
 
 ## Online payments — Stripe
 

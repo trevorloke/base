@@ -15,3 +15,11 @@ export const csvResponse = (c, name, head, rows) => {
   c.header('Cache-Control', 'no-store');
   return c.body(csvText(head, rows));
 };
+// CSV for the importer to read (a Google Sheet's tab from Drive): quoting
+// only — no formula apostrophe (it would be imported as part of the cell)
+// and no byte-order mark. One line per row, each ending in CRLF.
+export const csvPlainRow = (r) => `${r.map((v) => {
+  const s = String(v ?? '');
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}).join(',')}\r\n`;
+export const csvPlain = (rows) => rows.map(csvPlainRow).join('');

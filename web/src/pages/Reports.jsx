@@ -1,9 +1,11 @@
 // Reports — the campaign in numbers, each table downloadable as CSV, and
 // the exports: any table as a spreadsheet, or everything as JSON.
-import { Link } from 'react-router-dom';
+import { Link, useOutletContext } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { apiGet, fmtMoney } from '../api.js';
 import { NoSignal, noSignal } from '../components/NoSignal.jsx';
+import { SendToSheet, TakeItOut } from '../components/SendToSheet.jsx';
+import { hasArea } from '../Shell.jsx';
 import './shifts.css'; // the ops-* pieces (the head, the page column, the buttons)
 import './reports.css';
 import { at } from '../base.js';
@@ -17,6 +19,28 @@ export const EXPORTS = [
   ['volunteers', 'Volunteers and their roles'], ['signs', 'Signs'], ['shifts', 'Shifts'],
   ['subscribers', 'Newsletter subscribers'], ['lists', 'Lists (hand-picked)'],
 ];
+// The columns that say a table holds ways to reach people (the Sheets
+// confirm's do-not-contact line); the server's DATASETS have the rest.
+const CONTACT_COLS = {
+  people: ['email', 'phone'], members: ['email', 'phone'], volunteers: ['email', 'phone'], signs: ['phone'],
+  gifts: ['email'], subscribers: ['email'], lists: ['email', 'phone'],
+};
+// Money's tables go to Google only for those who hold Donations (the server checks too).
+const MONEY = ['gifts', 'members'];
+
+// One table in the exports: its CSV, and a quiet "Google Sheets" beside it when Sheets may be sent.
+export function ExportItem({ k, label, me, csvClass = 'btn ops-tap', download = false }) {
+  const href = at(`/api/export/${k}.csv`);
+  return (
+    <li className="drv-export">
+      <a className={csvClass} href={href} download={download || undefined}>{label}</a>
+      {(!MONEY.includes(k) || hasArea(me, 'money')) && (
+        <SendToSheet source="dataset" of={k} name={label} head={CONTACT_COLS[k] || []} label={<>Google Sheets<span className="drv-sr"> for {label}</span></>} csvHref={href} />
+      )}
+    </li>
+  );
+}
+
 const cell = (v) => (v instanceof Date || /^\d{4}-\d{2}-\d{2}T/.test(String(v)) ? String(v).slice(0, 10) : typeof v === 'number' && !Number.isInteger(v) ? v.toFixed(2) : String(v ?? ''));
 
 function Report({ name, r }) {
@@ -24,7 +48,8 @@ function Report({ name, r }) {
     <section className="rp-sec" aria-labelledby={`rp-${name}`}>
       <div className="rp-sec__head">
         <h2 id={`rp-${name}`}>{TITLES[name] || name}</h2>
-        <a className="btn btn-quiet ops-tap" href={at(`/api/reports/${name}.csv`)}>CSV</a>
+        <TakeItOut csvHref={at(`/api/reports/${name}.csv`)} csvLabel="CSV" source="report" of={name} name={TITLES[name] || name}
+          count={r.rows.length} noun={r.rows.length === 1 ? 'row' : 'rows'} head={r.head} />
       </div>
       {!r.rows.length ? <p className="ops-empty">Nothing yet.</p> : (
         <div className="rp-table-wrap">
@@ -39,6 +64,7 @@ function Report({ name, r }) {
 }
 
 export default function Reports() {
+  const { me } = useOutletContext() ?? {};
   const q = useQuery({ queryKey: ['reports'], queryFn: () => apiGet('/reports') });
   const t = q.data?.totals;
   return (
@@ -60,7 +86,7 @@ export default function Reports() {
         <div className="rp-sec__head"><h2 id="rp-exports">Exports</h2></div>
         <p className="ops-meta">A whole table as a spreadsheet. Bringing data in, and the full backup, are on <Link to="/data">Import &amp; export</Link>.</p>
         <ul className="rp-exports">
-          {EXPORTS.map(([k, label]) => <li key={k}><a className="btn ops-tap" href={at(`/api/export/${k}.csv`)}>{label}</a></li>)}
+          {EXPORTS.map(([k, label]) => <ExportItem key={k} k={k} label={label} me={me} />)}
           <li><a className="btn btn-quiet ops-tap" href={at('/api/export')}>Everything (JSON)</a></li>
         </ul>
       </section>

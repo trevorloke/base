@@ -38,6 +38,9 @@ import { callhubService, callhubInbound, checkCallHub } from '../callhub/service
 import { googleService, googleCounts, checkGoogle } from '../google/service.js';
 // Gmail (ext/gmail): this campaign's switch and who connected; no Check.
 import { gmailService } from '../gmail/service.js';
+// Google Drive and Sheets (ext/drive): a panel (the campaign's switches), and
+// a Check with the manager's own Drive connection.
+import { driveService, checkDrive } from '../drive/service.js';
 
 const MANAGER = 'manager';
 const TIMEOUT_MS = 8000;
@@ -188,6 +191,7 @@ export const services = (base = publicUrl()) => {
     stripeService(base),
     callhubService(),
     googleService(),
+    driveService(),
     // Two-step sign-in's key (lib/twostep.js): without it base.win keeps
     // one in the database — it works, but a copy of the database would
     // give the authenticator keys away.
@@ -236,6 +240,7 @@ const CHECKS = {
   stripe: (db, ws, base) => checkStripe(base),
   callhub: checkCallHub,
   google: checkGoogle,
+  drive: checkDrive,
   database: async (db, ws) => {
     await db.query('select 1');
     const n = (await db.query('select count(*)::int as n from persons where workspace_id = $1 and deleted_at is null', [ws])).rows[0].n;
@@ -317,7 +322,7 @@ api.post('/connections/check', async (c) => {
   const fn = CHECKS[key];
   if (!fn) return c.json({ error: 'no such service' }, 404);
   try {
-    return c.json({ key, ...(await within(fn(c.get('db'), c.get('ctx').workspaceId, baseOf(c)))) });
+    return c.json({ key, ...(await within(fn(c.get('db'), c.get('ctx').workspaceId, baseOf(c), c.get('ctx')))) });
   } catch (e) {
     // Never a key in the words: a failed URL carries its query string.
     return c.json({ key, ok: false, said: `No answer: ${String(e.message).replace(/([?&](key|token|apikey)=)[^&\s]+/gi, '$1…').slice(0, 160)}` });

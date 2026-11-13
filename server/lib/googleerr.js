@@ -14,21 +14,31 @@
 // message; the first row that matches wins.
 export const TROUBLES = [
   { code: 'key-invalid', reasons: ['API_KEY_INVALID'], words: ['key not valid', 'provided api key is invalid'],
-    plain: 'Google doesn’t recognise this key. Copy it again from Google Cloud → Credentials.', step: 'Recipe B step 6' },
+    plain: 'Google doesn’t recognise this key. Copy it again from Google Cloud → Credentials.', step: 'Recipe B step 6', service: 'maps' },
   { code: 'referrer', reasons: ['API_KEY_HTTP_REFERRER_BLOCKED'], words: ['referer restrictions', 'requests from referer'],
-    plain: 'This key only works from websites. The server needs a key without a website restriction.', step: 'Recipe B step 4' },
+    plain: 'This key only works from websites. The server needs a key without a website restriction.', step: 'Recipe B step 4', service: 'maps' },
   { code: 'ip', reasons: ['API_KEY_IP_ADDRESS_BLOCKED'], words: ['not authorized to use this api key', 'ip address restriction'],
-    plain: 'This key doesn’t allow this server’s address. Remove the IP-address restriction.', step: 'Recipe B step 4' },
+    plain: 'This key doesn’t allow this server’s address. Remove the IP-address restriction.', step: 'Recipe B step 4', service: 'maps' },
   { code: 'api-blocked', reasons: ['API_KEY_SERVICE_BLOCKED'], words: ['are blocked'],
-    plain: 'This key is limited to other Google services. Add Map Tiles API and Places API (New) to it.', step: 'Recipe B step 4' },
+    plain: 'This key is limited to other Google services. Add Map Tiles API and Places API (New) to it.', step: 'Recipe B step 4', service: 'maps' },
   { code: 'api-off', reasons: ['SERVICE_DISABLED'], words: ['has not been used in project', 'not authorized to use this api', 'is disabled'],
-    plain: 'This Google service isn’t turned on for the key’s project. Enable it under APIs & Services.', step: 'Recipe B step 3' },
+    plain: 'This Google service isn’t turned on for the key’s project. Enable it under APIs & Services.', step: 'Recipe B step 3', service: 'maps' },
   { code: 'billing', reasons: ['BILLING_DISABLED'], words: ['billing'],
-    plain: 'Billing isn’t turned on for this Google Cloud project.', step: 'Recipe B step 2' },
+    plain: 'Billing isn’t turned on for this Google Cloud project.', step: 'Recipe B step 2', service: 'maps' },
   { code: 'quota', reasons: ['RESOURCE_EXHAUSTED', 'OVER_QUERY_LIMIT', 'quotaExceeded', 'rateLimitExceeded'], words: ['resource_exhausted', 'over_query_limit', 'quota'],
-    plain: 'Google’s usage limit is used up. Raise it in Google Cloud, or wait.', step: 'Recipe B step 5' },
+    plain: 'Google’s usage limit is used up. Raise it in Google Cloud, or wait.', step: 'Recipe B step 5', service: 'maps' },
   { code: 'session', reasons: ['expired'], words: ['session'],
-    plain: 'The map’s Google session ended. It renews by itself.', step: null },
+    plain: 'The map’s Google session ended. It renews by itself.', step: null, service: 'maps' },
+  // Google Drive and Sheets (ext/drive). Rate limits never reach here:
+  // googleFetch pauses that person's connection first (lib/google/tokens.js).
+  { code: 'drive-api-off', reasons: ['SERVICE_DISABLED', 'accessNotConfigured'], words: ['drive api has not been used', 'sheets api has not been used', 'has not been used in project'],
+    plain: 'The Google Drive API (or Sheets API) isn’t turned on in this Google Cloud project.', step: 'Google Drive step 1', service: 'drive' },
+  { code: 'drive-not-picked', reasons: ['appNotAuthorizedToFile', 'notFound'], words: [],
+    plain: 'base.win can only open files you pick — pick it again.', step: null, service: 'drive' },
+  { code: 'drive-no-access', reasons: ['insufficientFilePermissions'], words: [],
+    plain: 'Your Google account can’t change that file or folder.', step: null, service: 'drive' },
+  { code: 'drive-full', reasons: ['storageQuotaExceeded'], words: [],
+    plain: 'Your Google Drive is full.', step: null, service: 'drive' },
 ];
 
 const CONSOLE_LINK = /https?:\/\/console\.(?:cloud|developers)\.google\.com\/[^\s"'<>]*/gi;
@@ -56,8 +66,9 @@ const parse = (body) => {
   try { return JSON.parse(String(body ?? '')); } catch { return { text: String(body ?? '') }; }
 };
 
-export const googleTrouble = (status, body) => {
+export const googleTrouble = (status, body, { service = 'maps' } = {}) => {
   const b = parse(body);
+  const rows = TROUBLES.filter((t) => t.service === service);
   const err = b.error && typeof b.error === 'object' ? b.error : null;
   const reasons = (err?.details || []).map((d) => d?.reason).filter(Boolean);
   if (Array.isArray(err?.errors)) reasons.push(...err.errors.map((e) => e?.reason).filter(Boolean));
@@ -67,12 +78,13 @@ export const googleTrouble = (status, body) => {
     : b.status && typeof b.status === 'string' ? `${b.status}${b.error_message ? `: ${b.error_message}` : ''}`
       : b.text || '').trim());
   const words = said.toLowerCase();
-  const row = TROUBLES.find((t) => t.reasons.some((r) => reasons.includes(r)))
-    || (Number(status) === 429 ? TROUBLES.find((t) => t.code === 'quota') : null)
-    || TROUBLES.find((t) => t.words.some((w) => words.includes(w)));
+  const row = rows.find((t) => t.reasons.some((r) => reasons.includes(r)))
+    || (Number(status) === 429 && service === 'maps' ? rows.find((t) => t.code === 'quota') : null)
+    || rows.find((t) => t.words.some((w) => words.includes(w)));
   if (!row) {
     const what = Number(status) && Number(status) !== 200 ? status : (typeof b.status === 'string' && b.status) || status;
-    return { code: 'other', plain: `Google refused (${what}).`, said, step: null };
+    const who = service === 'drive' ? 'Google Drive' : 'Google';
+    return { code: 'other', plain: `${who} refused (${what}).`, said, step: null };
   }
   let plain = row.plain;
   if (row.code === 'ip') {
