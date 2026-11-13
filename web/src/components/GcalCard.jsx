@@ -98,6 +98,17 @@ export default function GcalCard({ me }) {
     }
   }, [code, q.data, welcomed]);
 
+  // The background work changed the link (made, removed, needs reconnecting):
+  // the Google connection it rests on may have changed with it.
+  const linkState = q.data ? (q.data.link?.state || 'none') : null;
+  const seen = useRef(linkState);
+  useEffect(() => {
+    if (!linkState || seen.current === linkState) return;
+    const was = seen.current;
+    seen.current = linkState;
+    if (was) qc.invalidateQueries({ queryKey: ['google'] });
+  }, [linkState, qc]);
+
   const refresh = () => Promise.all([qc.invalidateQueries({ queryKey: ['gcal'] }), qc.invalidateQueries({ queryKey: ['google'] })]);
   const run = async (name, after) => {
     setBusy(true); setError(null);
