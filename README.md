@@ -1070,7 +1070,10 @@ one big button, a volunteer or candidate with a walk list with doors left
 sees that turf's doors (a dot in the household's colour) and their turfs'
 outlines, read by `GET /api/map/doors?mine=1` — only the doors inside the
 caller's own turfs and their own record, by the turfs' boxes and the email
-index, never a count over the whole list — and kept on the phone. The
+index, never a count over the whole list — and kept on the phone. (The
+rest of a volunteer's Today counts nothing over the list either: their
+`/api/brief` leaves out the people total, the support picture and, off a
+voting day, the voted totals.) The
 desk's Today has a full-width band of every turf's outline
 (`/api/turfs?outline=1`, nobody read). Either is a picture to glance at: it
 never takes the page's swipe, the whole of it opens the Map (*Open the
