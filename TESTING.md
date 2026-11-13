@@ -995,7 +995,9 @@ one tap away under **More**.
   | `kevin singh` | 467 | 25 | 25 | exact, 284 |
   | `singh kaur` | 776 | 22 | 22 | more than 5,000 |
 
-  "Before" is the relationship editor's old ask (any part of the name,
+  No single run of a new search took longer than 39 ms (budget: median 50,
+  none over 150), so the cap shipped is 5,000. "Before" is the
+  relationship editor’s old ask (any part of the name,
   address, phone, email or a handle, 12 by first name). People's count for
   *smith* went from 572 to 319 ms (it no longer unpacks empty socials), and
   its box finds *smith kevin* (24 people, 338 ms; before, none). The eight
