@@ -45,12 +45,13 @@ api.get('/site', async (c) => {
   const count = async (sql) => (await db.query(sql, [ws])).rows[0];
   const posts = await count(`select count(*)::int as n, count(*) filter (where status = 'published')::int as live from site_posts where workspace_id = $1 and deleted_at is null`);
   const campaigns = await count(`select count(*)::int as n, count(*) filter (where status = 'open')::int as open from site_campaigns where workspace_id = $1 and deleted_at is null`);
-  const actions = await count(`select count(*)::int as n, count(*) filter (where created_at > now() - interval '7 days')::int as week from site_actions where workspace_id = $1`);
+  const actions = await count(`select count(*)::int as n, count(*) filter (where created_at > now() - interval '7 days')::int as week from site_actions where workspace_id = $1 and site_id is null`);
   // Its other websites (Overview's "Other websites · 2 live").
   const sites = await count(`select count(*)::int as n, count(*) filter (where status = 'live')::int as live from microsites where workspace_id = $1 and deleted_at is null`);
   // The week's website actions by kind ({ petition: 12, newsletter: 3 }).
+  // The main site's only (site_id null): Other websites counts each its own.
   const byKind = Object.fromEntries((await db.query(
-    `select kind, count(*)::int as n from site_actions where workspace_id = $1 and created_at > now() - interval '7 days' group by kind order by kind`, [ws],
+    `select kind, count(*)::int as n from site_actions where workspace_id = $1 and site_id is null and created_at > now() - interval '7 days' group by kind order by kind`, [ws],
   )).rows.map((r) => [r.kind, r.n]));
   // SITE_HOSTS answer for the campaign the site is by default (store.js).
   const hosts = envHosts().length && (await siteWorkspace(db))?.id === ws ? envHosts() : [];

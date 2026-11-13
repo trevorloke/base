@@ -225,7 +225,10 @@ test('the People filter web=site:<id> and History know the site; a volunteer nev
   assert.ok(!(await names(vol.client, `web=site:${site.id}`)).includes('gift.example@example.org'));
   assert.ok(!(await names(mgr, `web=site:${site.id}`)).includes('gift.example@example.org'));
   const pat = (await personBy(db, ws, "email = 'pat.example@example.org'"))[0];
-  const titles = ok(await mgr.get(`/api/persons/${pat.id}/timeline?limit=100`)).entries.map((e) => e.title);
+  const entries = ok(await mgr.get(`/api/persons/${pat.id}/timeline?limit=100`)).entries;
+  const titles = entries.map((e) => e.title);
+  // Which link brought them, on the entry itself.
+  assert.equal(entries.find((e) => e.title === `Signed up for the newsletter on ${DOUG}`)?.detail, 'From flyer');
   assert.ok(titles.includes(`Signed up for the newsletter on ${DOUG}`), titles.join(' | '));
   assert.ok(titles.includes('Signed up for the newsletter'), 'the main site’s says no site');
 });
@@ -256,8 +259,13 @@ test('the desk reads: counts and sources, never people; money forms only for tho
   assert.equal(ok(await mgr.get(`/api/site/microsites/host?host=${MAIN}`)).why, `${MAIN} is your main website’s address`);
   assert.equal(ok(await mgr.get(`/api/site/microsites/host?host=${DOUG}&id=${site.id}`)).why, null);
   assert.match(ok(await mgr.get(`/api/site/microsites/host?host=${DOUG}`)).why, /is the address of/);
-  // The Overview's row.
-  assert.deepEqual([ok(await mgr.get('/api/site')).counts.microsites_live >= 1], [true]);
+  // The Overview's row; its own counts are the main site's alone — the
+  // sign-ups on this website are counted here, not again there.
+  const main = ok(await mgr.get('/api/site')).counts;
+  assert.deepEqual([main.microsites_live >= 1], [true]);
+  const onMain = (await db.query('select count(*)::int as n from site_actions where workspace_id = $1 and site_id is null', [ws])).rows[0].n;
+  assert.deepEqual([main.actions, main.actions_week], [onMain, onMain]);
+  assert.equal(Object.values(main.actions_week_by_kind).reduce((a, b) => a + b, 0), onMain);
   const vol = await member(mgr, 'volunteer', 'Vic Example');
   assert.equal((await vol.client.get('/api/site/microsites')).status, 403);
   assert.equal((await vol.client.get(`/api/site/microsites/${site.id}`)).status, 403);

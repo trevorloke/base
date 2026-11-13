@@ -142,7 +142,15 @@ export default function WebsiteSettings() {
     }
   }, [q.data, s]);
   useEffect(() => {
-    if (s && window.location.hash) document.getElementById(window.location.hash.slice(1))?.scrollIntoView();
+    if (!s || !window.location.hash) return;
+    const el = document.getElementById(window.location.hash.slice(1));
+    if (!el) return;
+    // A field (the checklist's "Authorized by line"): to the middle of the
+    // window, clear of the Save bar and the tabs, ready to type in.
+    if (/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) {
+      el.scrollIntoView({ block: 'center' });
+      el.focus({ preventScroll: true });
+    } else el.scrollIntoView();
   }, [s]);
   const changed = useMemo(() => (s && saved ? SECTIONS.filter((k) => !same(s[k], saved[k])) : []), [s, saved]);
   useEffect(() => {

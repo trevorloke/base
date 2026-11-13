@@ -415,7 +415,6 @@ export function GoalBar({ count, goal, kind }) {
 
 // The petition or pledge form; also used by the campaign page.
 export function campaignForm(rc, m, c, { idPrefix } = {}) {
-  const org = orgName(rc);
   const pledge = c.kind === 'pledge';
   const kind = pledge ? 'pledge' : 'petition';
   const path = `/act/${str(c.slug)}`;
@@ -430,8 +429,9 @@ export function campaignForm(rc, m, c, { idPrefix } = {}) {
       F.consentEmail(rc), F.consentSms(rc),
     ],
     submit: pledge ? 'Sign the pledge' : 'Add my name',
+    // Who keeps the details is the form's privacy line (wording.js
+    // PRIVACY_LINE): no second sentence saying it again.
     privacy: privacyHref(rc),
-    small: `Your details stay with ${org}.`,
     thanks: {
       title: pledge ? 'You’ve signed the pledge' : 'Your name is on the petition',
       body: 'Thank you. It counts for more when friends sign too — share it with a neighbour:',

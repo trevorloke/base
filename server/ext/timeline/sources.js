@@ -219,7 +219,7 @@ const webDetail = (r, p) => {
 // On another website of the campaign: which one.
 const onSite = (r) => (!r.site_id ? '' : r.site_deleted || !(r.site_domain || r.site_name) ? ' on a site since deleted' : ` on ${r.site_domain || r.site_name}`);
 const web = async (db, q) => (await rowsOf(db, `
-  select ${ms('a.created_at')} as at, 'web:' || a.id::text as key, a.kind, a.payload,
+  select ${ms('a.created_at')} as at, 'web:' || a.id::text as key, a.kind, a.payload, a.source,
          sc.kind as campaign_kind, sc.title as campaign_title, s.id as shift_id, s.title as shift_title,
          a.site_id, m.name as site_name, m.domains->>0 as site_domain, m.deleted_at as site_deleted
     from site_actions a
@@ -231,7 +231,9 @@ const web = async (db, q) => (await rowsOf(db, `
   q, q.viewer.money ? [] : [...MONEY_KINDS],
 )).map((r) => entry(r, 'website', 'web', 'Website',
   `${r.campaign_title ? campaignWords({ kind: r.campaign_kind, title: r.campaign_title }) : WEB_WORDS[r.kind] || 'Did something on the website'}${onSite(r)}`, {
-    detail: webDetail(r, parseJ(r.payload, {}) || {}), link: r.shift_id ? `/shifts/${r.shift_id}` : null,
+    // Which link brought them ("From flyer"): the source the form kept.
+    detail: line(webDetail(r, parseJ(r.payload, {}) || {}), clean(r.source, 60) && `From ${clean(r.source, 60)}`),
+    link: r.shift_id ? `/shifts/${r.shift_id}` : null,
   }));
 
 // ── Gifts, and a gift taken out of the books ──

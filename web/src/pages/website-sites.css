@@ -74,7 +74,10 @@
 
 @media (max-width: 640px) {
   /* The toast's Undo and ✕: phone-sized taps (website.css draws them 44px). */
-  .toast.wb-toast .btn { min-height: 48px; }
+  .toast.wb-toast .btn { min-height: 48px; flex: none; }
+  /* One row: the message gives way ("Deleted Doug Didn’…"), Undo and ✕ keep their size. */
+  .toast.wb-toast { flex-wrap: nowrap; }
+  .toast.wb-toast > span { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .ms-links > .btn { flex: 1 1 auto; }
   .ms-ask > .btn { flex: 1 1 auto; }
   /* A page's title on its Pages screen is the way to open it. */

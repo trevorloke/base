@@ -45,7 +45,8 @@ export function SiteGone({ q, id }) {
   if (!q.data?.deleted) return null;
   return (
     <section className="card ms-card">
-      <p>This website is deleted. <Link to={`/website/sites/${id}`}>Back to its overview</Link></p>
+      <p>This website is deleted.</p>
+      <Link className="btn btn-quiet ops-tap" to={`/website/sites/${id}`}>Back to its overview</Link>
     </section>
   );
 }
@@ -75,8 +76,9 @@ function Ask({ words, yes, onYes, onNo, busy }) {
 
 const CHECK = {
   home: ['Home page published', (d) => (d.home ? `/website/pages/${d.home.id}` : `/website/sites/${d.microsite.id}/pages`)],
-  authorized: ['Authorized by line', () => '/website/settings#org'],
-  privacy: ['Privacy policy link', () => '/website/settings#org'],
+  // Straight to the field to fill (WebsiteSettings scrolls it into view and focuses it).
+  authorized: ['Authorized by line', () => '/website/settings#wb-s-agent'],
+  privacy: ['Privacy policy link', () => '/website/settings#wb-s-priv'],
 };
 
 export default function WebsiteSite() {
