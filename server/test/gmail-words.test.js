@@ -23,3 +23,18 @@ test('the refusals the checker met read as connecting, not signing in', () => {
   assert.equal(connectWords('unavailable'), 'Google isn’t answering right now. Try again in a minute.');
   assert.equal(connectWords('connected'), 'Connected');
 });
+
+// Your profile's ?google=<code> note is GSI's googleWords with where 'profile':
+// the same rule, since the person reading it is signed in too.
+test('Your profile, back from Google, never says use your password', async () => {
+  const { googleWords, GOOD } = await import('../../web/src/components/google.js');
+  for (const code of CODES) {
+    const said = googleWords(code, { where: 'profile' });
+    assert.ok(said && !/password/i.test(said), `${code}: ${said}`);
+  }
+  assert.equal(googleWords('blocked', { where: 'profile' }), 'Your Google Workspace admin hasn’t allowed base.win — ask them to mark it Trusted.');
+  assert.equal(googleWords('linked', { where: 'profile' }), 'Linked — next time, Sign in with Google');
+  assert.ok(GOOD.includes('linked'));
+  // Sign-in itself still offers the password.
+  assert.match(googleWords('blocked'), /or use your password/);
+});
