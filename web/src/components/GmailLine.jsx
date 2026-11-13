@@ -13,8 +13,8 @@ import { action } from '../api.js';
 import { appMode } from '../mode.js';
 import { useOnline } from './NoSignal.jsx';
 import { StartLink, googleBlocked, useGoogle } from './GoogleConnect.jsx';
-import { appName, clockTime, googleStart, herePath } from './google.js';
-import { useGmail } from './EmailSheet.jsx';
+import { appName, googleStart, herePath } from './google.js';
+import { pauseClock, useGmail } from './EmailSheet.jsx';
 import './gmail.css';
 
 function SendTest({ online }) {
@@ -65,7 +65,7 @@ export default function GmailLine({ purpose }) {
 
   if (purpose) {
     if (!me.connected || me.trouble === 'reconnect') return null;
-    if (me.trouble === 'paused') return <p className="gm-pline">Gmail asked us to wait until {clockTime(me.pausedUntil)}.</p>;
+    if (me.trouble === 'paused') return <p className="gm-pline">Gmail asked us to wait until {pauseClock(me)}.</p>;
     return (
       <div className="gm-count">
         <p className="gm-count__n"><strong>{me.sentToday.toLocaleString('en-CA')}</strong> sent today <span className="muted">of {d.dailyMax.toLocaleString('en-CA')}</span></p>

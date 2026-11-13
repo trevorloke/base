@@ -7,6 +7,8 @@
 //                        on but not ready for me, else null
 //   EmailSheet           "Email Jane Doe": Subject, Message, Send
 //   takeDraft(id)        a draft kept for the connect round trip
+//   notReadySaid(d)      back with a draft and Gmail still not ready: the
+//                        words the sheet opens with
 //
 // A Gmail send is never put in the outbox: it would go later on a stale
 // decision about whether they may be emailed. The draft lives in the open
@@ -39,9 +41,13 @@ export function useToast() {
 
 export const gmailReady = (d) => Boolean(d?.setup && d.on && d.me?.ok && !d.apiOff);
 
+// When the pause ends, on the campaign's clock as the server says it (the
+// send's refusal names the same hour); an older server: this device's clock.
+export const pauseClock = (me) => me.pausedClock || clockTime(me.pausedUntil);
+
 export function gmailNotReadyLine(d) {
   if (!d?.setup || !d.on || gmailReady(d) || d.apiOff) return null;
-  if (d.me?.trouble === 'paused' && d.me.pausedUntil) return <>Gmail asked us to wait until {clockTime(d.me.pausedUntil)}</>;
+  if (d.me?.trouble === 'paused' && d.me.pausedUntil) return <>Gmail asked us to wait until {pauseClock(d.me)}</>;
   return <>Gmail needs connecting — <Link to="/profile">Your profile</Link></>;
 }
 
@@ -61,10 +67,21 @@ export const takeDraft = (id) => {
   } catch { return null; }
 };
 
+// A kept draft back on screen when Gmail still isn't ready (Cancel on
+// Google's page, Google said no): what's in the way, said in the sheet.
+export function notReadySaid(d) {
+  if (!d) return { kind: 'said', said: 'Gmail: Unavailable — try again, or use your mail app' };
+  if (gmailReady(d)) return null;
+  if (!d.setup || !d.on) return { kind: 'said', said: 'Sending from Gmail is off for this campaign' };
+  if (d.apiOff) return { kind: 'said', said: d.apiOff.said };
+  if (d.me?.trouble === 'paused' && d.me.pausedUntil) return { kind: 'said', said: `Gmail asked us to wait. Try after ${pauseClock(d.me)}.` };
+  return { kind: 'reconnect', said: d.me?.connected ? 'Gmail needs connecting again — Your profile' : 'Connect your Gmail first — Your profile' };
+}
+
 // A refusal before anything was asked of Gmail that a connect fixes.
 const needsConnect = (e) => e?.status === 409 && /^(Connect your Gmail|Gmail needs connecting)/.test(e.message || '');
 
-export default function EmailSheet({ person, gmail, draft, onClose, onSent }) {
+export default function EmailSheet({ person, gmail, draft, said = null, onClose, onSent }) {
   const qc = useQueryClient();
   const online = useOnline();
   const google = useGoogle();
@@ -75,7 +92,7 @@ export default function EmailSheet({ person, gmail, draft, onClose, onSent }) {
   const [key, setKey] = useState(newClientId);
   const [busy, setBusy] = useState(false);
   // { kind: 'unsure' | 'reconnect' | 'said', said }
-  const [res, setRes] = useState(null);
+  const [res, setRes] = useState(said);
   const [again, setAgain] = useState(false);
   // The draft was only for the connect round trip: gone once the sheet has it.
   useEffect(() => { clearDraft(person.id); }, [person.id]);
@@ -120,7 +137,7 @@ export default function EmailSheet({ person, gmail, draft, onClose, onSent }) {
         <h2 className="gm-sheet__title" id={`${id}-h`}>Email {person.name}</h2>
         <button type="button" className="btn btn-quiet gm-close" onClick={close} aria-label="Close">✕</button>
       </div>
-      <p className="gm-line">From: <strong>{from}</strong> · your Gmail</p>
+      {from && <p className="gm-line">From: <strong>{from}</strong> · your Gmail</p>}
       <p className="gm-line">To: <strong>{person.email}</strong></p>
       <form onSubmit={(e) => { e.preventDefault(); send(); }}>
         <div className="field">

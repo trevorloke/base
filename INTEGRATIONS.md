@@ -709,7 +709,10 @@ bounces and spam complaints the way Google asks bulk senders to.
   app and presets *Reached by: Email*, with one line saying why when
   Gmail is on (connect it on Your profile, or wait until a time). *Connect
   again* mid-send keeps what was written for the trip to Google, in that
-  browser tab only. A Gmail send needs signal: it never waits in the
+  browser tab only; back on the page the sheet opens with it, even after
+  Cancel on Google's page (with *Connect again* still there). Times
+  ("wait until 3:40 pm") are on the campaign's clock. A Gmail send needs
+  signal: it never waits in the
   outbox.
 - **What base.win keeps:** each send (`gmail_sends`, in the export), never
   on the event log beyond who and whether it went. A send is not a

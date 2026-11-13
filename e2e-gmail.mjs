@@ -149,6 +149,8 @@ try {
     await signUp(page, NOG, '', `rae.nog.${tag}@example.org`);
     await page.goto(`${NOG}/admin/settings/services`, { waitUntil: 'domcontentloaded' });
     await page.getByText('Gmail (send as yourself)').waitFor({ timeout: 10000 });
+    // The row reads Google's side too: wait for it (a busy machine is slow).
+    await page.waitForFunction(() => ![...document.querySelectorAll('.sv2-row')].some((r) => /Gmail \(send as yourself\)/.test(r.innerText) && /Loading…/.test(r.innerText)), null, { timeout: 15000 }).catch(() => {});
     const row = await text(page, '.sv2-row:has(.sv2-name:text-is("Gmail (send as yourself)"))');
     check('Services → Gmail without Google: "Set up Google first — the Google row above." and nothing else', row.includes('Set up Google first — the Google row above.')
       && !row.includes('Let the desk send') && !/Check/.test(row), row);
@@ -340,6 +342,20 @@ try {
   await s.locator('.gm-said a:has-text("Connect again")').waitFor({ timeout: 10000 }).catch(() => {});
   check('Google let go of Sam’s Gmail: the words, and a quiet "Connect again"', /Gmail needs connecting again/.test(await text(s, '.gm-said')) && (await s.locator('.gm-said a:has-text("Connect again")').count()) === 1, await text(s, '.gm-sheet'));
   await shot(s, '14-sheet-reconnect-1440');
+  // Cancel on Google's page: the message is still on screen, with the way back.
+  await s.locator('.gm-said a:has-text("Connect again")').click();
+  await s.waitForURL((u) => u.port === String(G_PORT), { timeout: 10000 });
+  await s.click('#cancel');
+  await s.waitForURL((u) => u.port !== String(G_PORT), { timeout: 10000 });
+  await s.locator('.gm-sheet').waitFor({ timeout: 10000 }).catch(() => {});
+  check('…Cancel at Google: back on Jane’s page, the sheet open with the draft, the words and "Connect again"', new URL(s.url()).pathname === `/admin/people/${jane}`
+    && (await s.locator('.gm-sheet input').inputValue().catch(() => '')) === 'About the lawn sign'
+    && (await s.locator('.gm-sheet textarea').inputValue().catch(() => '')) === 'Hi Jane — still keen on a sign?'
+    && /Gmail needs connecting again/.test(await text(s, '.gm-said'))
+    && (await s.locator('.gm-said a:has-text("Connect again")').count()) === 1
+    && (await text(s, '.toast')) === 'Connecting Gmail was cancelled.', `${s.url()} ${await text(s, '.toast')} ${await text(s, '.gm-sheet')}`);
+  check('…and nothing kept in this tab to pop up later', (await s.evaluate((id) => sessionStorage.getItem(`gmail-draft:${id}`), jane)) === null);
+  await shot(s, '14b-sheet-cancelled-at-google-1440');
   await s.locator('.gm-said a:has-text("Connect again")').click();
   await pickGoogle(s, 'sam');
   await s.locator('.gm-sheet').waitFor({ timeout: 10000 }).catch(() => {});

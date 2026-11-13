@@ -43,7 +43,7 @@ import NameFields from '../components/NameFields.jsx';
 import VoterNumber from '../components/VoterNumber.jsx';
 import SocialsBlock, { SocialsTyped } from '../components/SocialsBlock.jsx';
 import { PersonTimeline, timelineCount, usePersonTimeline } from '../components/PersonTimeline.jsx';
-import EmailSheet, { gmailNotReadyLine, gmailReady, takeDraft, useGmail, useToast } from '../components/EmailSheet.jsx';
+import EmailSheet, { gmailNotReadyLine, gmailReady, notReadySaid, takeDraft, useGmail, useToast } from '../components/EmailSheet.jsx';
 import { useGoogleReturn } from '../components/GoogleConnect.jsx';
 import { googleWords } from '../components/google.js';
 
@@ -855,13 +855,17 @@ export default function Person() {
   const googleCode = useGoogleReturn();
   const gmail = useGmail(desk);
   useEffect(() => {
-    if (googleCode) toast.show(googleWords(googleCode, { where: 'profile' }));
+    // GSI's word for Cancel is sign-in's; here it was connecting Gmail.
+    if (googleCode) toast.show(googleCode === 'cancelled' ? 'Connecting Gmail was cancelled.' : googleWords(googleCode, { where: 'profile' }));
   }, [googleCode]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Back with a draft, connected or not (Cancel at Google, Google said no):
+  // the message is on screen again, with what's in the way and the way back,
+  // and taken now so it never pops up later unasked.
   useEffect(() => {
-    if (!desk || emailing || !gmailReady(gmail.data)) return;
+    if (!desk || emailing || (!gmail.data && !gmail.isError)) return;
     const draft = takeDraft(id);
-    if (draft) setEmailing({ draft });
-  }, [desk, id, gmail.data]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (draft) setEmailing({ draft, said: notReadySaid(gmail.data) });
+  }, [desk, id, gmail.data, gmail.isError]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Awaited by useAction so controls stay disabled until the profile refetches.
   // Covers the map (['doors']: pins, ratings, unlocated count after an address
@@ -948,7 +952,7 @@ export default function Person() {
       )}
 
       {desk && emailing && (
-        <EmailSheet key={`email-${person.id}`} person={person} gmail={gmail.data} draft={emailing.draft}
+        <EmailSheet key={`email-${person.id}`} person={person} gmail={gmail.data} draft={emailing.draft} said={emailing.said}
           onClose={(how) => emailDone(how)} onSent={() => { emailDone('sent'); refresh(); }} />
       )}
       <RatingCard key={person.id} person={person} refresh={refresh} channel={channel} setChannel={setChannel} cardRef={ratingRef} desk={desk} />
