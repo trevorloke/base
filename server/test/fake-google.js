@@ -36,11 +36,14 @@
 //   revokeAll(sub)                as if the person removed base.win in
 //                                 their Google Account
 //   account({ sub, email, hd, name })   add a test account
+//   setNarrow(true | false | 'refuse')   how a refresh honours scope=
+//   drive                         Drive and Sheets (fake-google-drive.js)
 //   counts { auth, token, refresh, revoke, api, discovery } · revoked
 //   (tokens revoked, each with its count) · tokens() (every token issued)
 import http from 'node:http';
 import { createHash, randomBytes } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
+import { fakeDrive } from './fake-google-drive.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 const b64url = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
@@ -63,6 +66,11 @@ export const startFakeGoogle = async ({ port = 0, clientId, secret, redirectUris
   const revoked = new Map(); // token → times
   const apiCalls = [];
   let base = '';
+  // How a refresh with scope= answers: true narrows it; false answers every
+  // scope the grant has (as if Google ignored it); 'refuse' is invalid_scope.
+  let narrow = true;
+  // Drive and Sheets (fake-google-drive.js).
+  const drive = fakeDrive({ accessTokens, people, base: () => base });
 
   const take = (endpoint) => knobs[endpoint].shift() || null;
   const json = (res, status, body, headers = {}) => { res.writeHead(status, { 'content-type': 'application/json', ...headers }); res.end(JSON.stringify(body)); };
@@ -156,8 +164,8 @@ export const startFakeGoogle = async ({ port = 0, clientId, secret, redirectUris
       let scopes = [...g.scopes];
       if (form.scope) {
         const want = String(form.scope).split(' ').filter(Boolean);
-        if (want.some((s) => !g.scopes.has(s))) return json(res, 400, { error: 'invalid_scope' });
-        scopes = want;
+        if (want.some((s) => !g.scopes.has(s)) || narrow === 'refuse') return json(res, 400, { error: 'invalid_scope' });
+        if (narrow !== false) scopes = want;
       }
       return json(res, 200, { access_token: issueAccess(t.sub, scopes), expires_in: 3599, token_type: 'Bearer', scope: scopes.join(' ') });
     }
@@ -195,6 +203,7 @@ ${[...people.values()].map((p) => `<p><a class="acct" data-sub="${esc(p.sub)}" h
         return res.end();
       }
       if (u.pathname === '/token' && req.method === 'POST') return await tokenAnswer(res, form);
+      if (await drive.handle(req, res, u, raw, form)) return;
       if (u.pathname === '/revoke' && req.method === 'POST') {
         counts.revoke += 1;
         const knob = take('revoke');
@@ -228,6 +237,7 @@ ${[...people.values()].map((p) => `<p><a class="acct" data-sub="${esc(p.sub)}" h
         if (name === 'revokeAll') { api.revokeAll(body.sub); return json(res, 200, { ok: true }); }
         if (name === 'account') { api.account(body); return json(res, 200, { ok: true }); }
         if (name === 'counts') return json(res, 200, counts);
+        if (name === 'narrow') { narrow = body.narrow; return json(res, 200, { ok: true }); }
       }
       return json(res, 404, { error: 'not_found' });
     } catch (e) {
@@ -243,6 +253,8 @@ ${[...people.values()].map((p) => `<p><a class="acct" data-sub="${esc(p.sub)}" h
     next: (endpoint, kind, opts = {}) => { knobs[endpoint].push({ kind: String(kind), ...opts }); },
     clearKnobs: () => { for (const k of Object.keys(knobs)) knobs[k].length = 0; },
     revokeAll: (sub) => revokeGrant(sub),
+    setNarrow: (v) => { narrow = v; },
+    drive: drive.api,
     account: (a) => people.set(a.sub, { hd: null, ...a }),
     resetCounts: () => { for (const k of Object.keys(counts)) counts[k] = 0; revoked.clear(); apiCalls.length = 0; },
     tokens: () => [...refreshTokens.keys(), ...accessTokens.keys()],
