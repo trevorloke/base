@@ -40,7 +40,14 @@ also have `GOOGLE_MAPS_TILES=off` before the release is pushed (§5, Recipe B).
    `tzdataCurrent: false` means the server's time-zone rules predate B.C.'s
    permanent UTC-7 (every time after 1 Nov 2026 would show an hour off):
    redeploy on a newer Node image before going further.
-3. Going back to an earlier build (Render → **Rollback**) starts cleanly:
+3. **The first start after the person-search release** builds new search
+   indexes on the people file. On a local 300,000-person copy that took
+   about 2 seconds in all; on staging's database it took *(fill in from
+   staging's boot log: the line `search: indexes ready in <n> ms`)*. While
+   it builds, saving a person waits, and phones keep their saves in the
+   outbox until it ends. Deploy outside canvassing hours. Anyone mid-call-
+   list who sees *A new version is ready* taps Reload.
+4. Going back to an earlier build (Render → **Rollback**) starts cleanly:
    the database keeps what the older build expects to find. A build from
    before other websites (Website → Other websites) doesn't know them, so
    their pages show up among the main site's until you roll forward again.

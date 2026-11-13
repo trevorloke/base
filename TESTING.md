@@ -959,6 +959,49 @@ one tap away under **More**.
   merge, housemates), `server/test/ties-rank.test.js` (which ties come
   first) and `server/test/audience-scale.test.js` (`knows=` through indexes
   among 300,000 people).
+- **Finding a person, and A–Z** — `server/test/search.test.js` (each way in:
+  *kevin smith*, *smith kevin*, *Smith, Kevin*, *kev smi*, *jose*/*josé*,
+  *berg*, *gill*, *d'souza*, *anne*, *jean luc*, a phone with and without
+  its area code, a house number, an email's start on the desk only; not
+  found: *ena*, *der*, *luc*, *society*; pages with no repeats or gaps; past
+  a lowered cap; `role=`, `not=`, `list=`; the fold the same in the server
+  and the browser; each way's index), `server/test/az.test.js` (every list
+  of people in last-name order, the browser's `azSort` agreeing; parts of
+  People meeting with no overlap or gap), `server/test/people-search.test.js`
+  (People's box, online and offline), `server/test/search-scale.test.js`
+  (300,000 made-up people in PGlite: no search reads the table end to end;
+  `SEARCH_PEOPLE` for a smaller file). The speed check is
+  `node scripts/bench-search.mjs postgres://…/search_bench` on a scratch
+  Postgres (it refuses any database whose name doesn't say bench or
+  scratch). On a local Postgres 16, 300,000 made-up people (one surname on
+  8%, a second on 6% and the middle name of 3% more), warm, median of five,
+  cap 5,000:
+
+  | Term | Before (ms) | After, page 1 | After, page 5 | Plan |
+  |---|---:|---:|---:|---|
+  | `smith` | 10 (finds no Smith) | 21 | 26 | exact, 2,020 |
+  | `kevin smith` | 789 | 20 | — | exact, 24 |
+  | `smith kevin` | 847 (finds no one) | 23 | — | exact, 24 |
+  | `si` | 4 | 29 | 35 | more than 5,000 |
+  | `ka` | 3 | 30 | 35 | more than 5,000 |
+  | `zzq` | 762 | 3 | — | none |
+  | `jose` | 770 | 27 | 27 | exact, 1,448 |
+  | `555 01` | 4 | 21 | 26 | exact, 2,431 |
+  | `ksmith` | 395 | 4 | — | exact, 28 |
+  | `145` | 3 | 23 | 32 | exact, 3,386 |
+  | `14520 72` | 1,094 | 3 | — | exact, 4 |
+  | `singh` (8% of the file) | 8 | 9 | 9 | more than 5,000 |
+  | `kaur` (6%, and 3% as a middle name) | 2 | 17 | 22 | more than 5,000 |
+  | `kevin singh` | 467 | 25 | 25 | exact, 284 |
+  | `singh kaur` | 776 | 22 | 22 | more than 5,000 |
+
+  "Before" is the relationship editor's old ask (any part of the name,
+  address, phone, email or a handle, 12 by first name). People's count for
+  *smith* went from 572 to 319 ms (it no longer unpacks empty socials), and
+  its box finds *smith kevin* (24 people, 338 ms; before, none). The eight
+  new indexes took 0.05–0.6 s each to build on that file (the A–Z one 0.6 s
+  and 22 MB, the rest 0.1–5.7 MB); importing 50,000 rows took 40.6 s with
+  them and 40.9 s without.
 - **Desk with no signal** — with wifi, open Today, People, a profile,
   Shifts, Signs, Donations and the Inbox. Turn wifi off and reload: each shows
   what it had and the strip says *No signal · from 2:14 pm*. Search People —

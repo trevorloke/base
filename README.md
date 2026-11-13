@@ -208,11 +208,31 @@ phone (typed any way: *604 555 0142* finds 604-555-0142), or start a common
 job — *Add person, Log a gift, Enter a membership form, Draw a turf, New
 shift, Write an email, Write a text*. ↑ ↓ and Enter, Esc to close; it offers
 only what your areas allow (`web/src/components/commands.js`). People come
-from a quick search on the start of a name or last name, a whole email or a
-phone's digits (`server/ext/search`, indexed: a few milliseconds on a
-300,000-person file, against about a second for People's search of every
-row), then People's own search when that finds nobody. People's search box
-now matches a phone's digits however it was typed, too.
+from the person search (`GET /api/search/people`, `server/ext/search`): the
+start of each part of a name in any order (*kevin smith*, *smith kevin*,
+*Smith, Kevin*, *kev smi*), accents and apostrophes ignored (*jose* finds
+José, *dsouza* finds D'Souza), the last word of a two-part surname (*gill*
+finds Sandhu-Gill), a middle name; a phone from its start with or without
+its area code (*555 0142*); a house number from 3 digits (*145*), an
+address (*14520 72 ave*); and, on the desk only, the start of an email,
+with or without the @. It doesn't find the middle of a word (*ena* for
+Lena), the second half of a hyphenated first name or of a group's name on
+its own (*luc*, *society*), sound-alike spellings, or the last four digits
+of a phone. Answers come A–Z by last name, 6 at a time in the bar (25 in a
+picker), with how many match — or "more than 5,000" — and the next page
+after the last one shown; each way in reads its own index, so a
+300,000-person file answers in under 50 ms (TESTING.md). People's own box
+still reads every row (any part of a name, address, phone, email or
+handle); two words or more of a name now match in any order there too.
+
+**A–Z by last name.** Every list of people — People, a list and its CSV,
+the call list, Knows, who lives at an address, a shift's people, volunteers
+and crews, the reports, a new phone bank's numbers — runs by last name,
+then the whole name (`server/lib/az.js`; `azSort` in `shared/names.js`
+sorts the same in the browser). Names are still written first name first.
+Walk lists keep street order, the map's doors are unchanged, a bank already
+made keeps its order, and the full data export stays in the order people
+were added (so it re-imports cleanly).
 
 ### The rating scale (door, phone, text)
 

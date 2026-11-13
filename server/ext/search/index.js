@@ -66,6 +66,14 @@ create index if not exists persons_ws_email_prefix_idx on persons (workspace_id,
 create index if not exists persons_ws_addr_prefix_idx on persons (workspace_id, lower(address) text_pattern_ops) ${LIVE} and address is not null;
 `;
 
+// The first start after these indexes came builds them on the whole people
+// file (saving a person waits meanwhile): say how long it took, once, so
+// GOING-LIVE can quote it. A new, empty database says nothing.
+export const sqlNote = async (db) => {
+  const { rows } = await db.query("select to_regclass('persons_ws_az_idx') is null and exists (select 1 from persons) as building");
+  return rows[0].building ? (ms) => console.log(`search: indexes ready in ${ms} ms`) : null;
+};
+
 // Every way in reads at most SEARCH_CAP + 1 ids, which is what keeps the
 // count cheap; past it the answer says "more than" instead. Tests lower it.
 export let SEARCH_CAP = 5000;

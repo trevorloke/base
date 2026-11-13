@@ -365,7 +365,14 @@ export const bootstrap = async (db) => {
     // Feature modules' tables (server/ext/*). Imported here, not at the top,
     // because feature modules may import the db client, which imports this.
     const { EXTENSIONS } = await import('../ext.js');
-    for (const e of EXTENSIONS) if (e.sql) await db.exec(e.sql);
+    for (const e of EXTENSIONS) {
+      if (!e.sql) continue;
+      // An ext may say how long its DDL took when it built something big.
+      const t0 = Date.now();
+      const note = e.sqlNote ? await e.sqlNote(db) : null;
+      await db.exec(e.sql);
+      note?.(Date.now() - t0);
+    }
     await db.exec(SEED);
   } finally {
     if (lock) await db.query('select pg_advisory_unlock(7271989)');
