@@ -125,7 +125,9 @@ export default function MapWindowMap({ me, band, turfId }) {
       : [...doors.map((d) => [d.lat, d.lng]), ...outlines.flatMap((t) => ring(t.polygon))];
     fitRef.current = () => {
       if (!frame.length) { map.setView(SURREY, 12, { animate: false }); return; }
-      map.fitBounds(L.latLngBounds(frame), { padding: [16, 16], maxZoom: 17, animate: false });
+      // "Open the map" sits over the bottom-right corner (48 px and its
+      // gap): frame the doors above it, so none hides under the button.
+      map.fitBounds(L.latLngBounds(frame), { paddingTopLeft: [16, 16], paddingBottomRight: [16, 64], maxZoom: 17, animate: false });
     };
     fitRef.current();
   }, [outlines, doors, band, turfId]);

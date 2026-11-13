@@ -56,6 +56,9 @@ export const countsOf = async (db, ctx) => {
 // shared; a mark (vote.mark's after step) drops it, so the walker who just
 // marked someone sees it at once. A count that began before a mark is not
 // kept: it may have read the list before the mark committed.
+// Any other write that changes voted_at (an undo, an import's Voted column,
+// the voted feed) must call forgetCounts(ws) once it commits, or volunteers
+// see the old numbers for up to half a minute.
 const KEEP_MS = 30_000;
 const kept = new Map(); // workspaceId -> { key, at, counts }
 const marks = new Map(); // workspaceId -> how many marks have dropped the count

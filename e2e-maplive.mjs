@@ -474,6 +474,16 @@ try {
     // asks (one far out on purpose) are not the map's tiles.
     const zooms = v.net.osm.filter((t) => t.type !== 'probe').map((t) => Number((new URL(t.url).pathname.match(/^\/(\d+)\//) || [])[1])).filter(Number.isFinite);
     check(`${label}: no street tiles asked for before the window frames on the turf (none below zoom 14)`, zooms.length > 0 && zooms.every((z) => z >= 14), JSON.stringify(zooms));
+    // The window frames its doors clear of the "Open the map" button that sits
+    // over its corner: no door's circle under the button.
+    const hidden = await pg.evaluate(() => {
+      const b = document.querySelector('.mapwindow__open')?.getBoundingClientRect();
+      if (!b) return ['no button'];
+      return [...document.querySelectorAll('.mapwindow__canvas .leaflet-overlay-pane path')].map((p) => p.getBoundingClientRect())
+        .filter((r) => r.width < 20 && r.height < 20 && r.right > b.left && r.left < b.right && r.bottom > b.top && r.top < b.bottom)
+        .map((r) => [Math.round(r.x), Math.round(r.y)]);
+    });
+    check(`${label}: no door is drawn under “Open the map”`, hidden.length === 0, JSON.stringify(hidden));
     check(`${label}: one primary button on the page; every target in the window at least 48 px; no sideways scroll`, w.primaries === 1 && w.small.length === 0 && !(await sideways(pg)), JSON.stringify(w.small));
     // A swipe that starts on the map scrolls the page.
     const box = await rectOf(pg, '.mapwindow__frame');

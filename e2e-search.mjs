@@ -173,6 +173,14 @@ check('picked: "Kevin Smith — how do they know each other?"', (await tc('.rel-
 await page.click('.rel-kind:has-text("Friend")');
 await until(async () => (await page.$$eval('.rel-knows li', (els) => els.length)) === 2);
 check('Knows shows the new tie (Friend)', /Kevin Smith\s*Friend/.test((await page.$$eval('.rel-knows li', (els) => els.map((e) => e.innerText).join(' | ')))));
+// The surname is drawn heavier than the rest of the name (not merely wrapped
+// in <b>: a row whose name is already bold shows no difference).
+const boldGap = (sel) => page.$eval(sel, (b) => {
+  const w = (e) => Number(getComputedStyle(e).fontWeight);
+  return { az: w(b), rest: w(b.parentElement) };
+});
+const surnameBolder = async (sel) => { const g = await boldGap(sel); return [g.az > g.rest, `surname ${g.az}, rest ${g.rest}`]; };
+check('Knows: the surname is bolder than the first name', ...(await surnameBolder('.rel-knows__who a .name-az')));
 
 await page.click('button:has-text("+ Someone they know")');
 await typeIn('zoe');
@@ -276,6 +284,7 @@ const top = await page.$$eval('.pp-table__name a', (els) => els.slice(0, 25).map
 const apiTop = (await api('/persons?q=&limit=25')).json.persons.map((p) => p.name);
 check('People: the first rows are the server\'s A–Z by last name', JSON.stringify(top) === JSON.stringify(apiTop) && /Aexample$/.test(top[0]), top.slice(0, 3).join(', '));
 check('…with the surname in bold', (await page.$$eval('.pp-table__name a b', (els) => els.length)) >= 20);
+check('…and drawn bolder than the first name', ...(await surnameBolder('.pp-table__name a .name-az')));
 await shot('08-people-top-desk');
 await simple('People (desk)');
 const peopleAsks = [];
@@ -453,6 +462,7 @@ await ctx.setOffline(false);
 await go('/people');
 await page.waitForSelector('.pp-row__name');
 check('People on a phone: the surname in bold, no header', (await page.$$eval('.pp-row__name b', (els) => els.length)) >= 20 && (await page.locator('th:has-text("A–Z")').count()) === 0);
+check('People on a phone: the surname drawn bolder than the first name', ...(await surnameBolder('.pp-row__name .name-az')));
 await shot('17-people-top-phone');
 await simple('People (phone)');
 for (let i = 0; i < 12; i++) { await page.click('.pp-more button'); await sleep(60); }
