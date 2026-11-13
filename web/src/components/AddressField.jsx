@@ -114,6 +114,7 @@ export default function AddressField({
     if (s.source !== 'google') { done(); onPick?.(s); return; }
     // Google's row is words only: its parts, and B.C.'s pin, from the server.
     setPicking(i);
+    seq.current += 1; // an ask still on its way doesn't change the rows meanwhile
     const n = seq.current;
     let timer;
     const r = await Promise.race([
