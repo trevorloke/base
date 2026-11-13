@@ -111,6 +111,9 @@ test('the switch: off by default (no link, no push); manager-only; on needs Goog
   ok(await V.b.action('gcal.on', {}));
   await jobs();
   assert.equal(calOf(0).length, 1);
+  // Settings → Services → Google says it's on, and for how many.
+  const row = (await ok(await M.b.get('/api/connections'))).services.find((x) => x.key === 'google');
+  assert.ok(row.lines.includes('Shifts in Google Calendar: on · 1 person'), row.lines.join(' | '));
 });
 
 test('first link: a connect with Calendar makes the link and one push makes the calendar once, named for the campaign', async () => {
