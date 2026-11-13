@@ -193,10 +193,12 @@ const run = async (db, ws) => {
       }
     }
   } finally {
-    await db.transaction(async (tx) => {
-      await nextPush(tx, ws, st);
-      if (c.on) await ensureSweep(tx, ws, c.tz);
-    });
+    if (c.on) {
+      await db.transaction(async (tx) => {
+        await nextPush(tx, ws, st);
+        await ensureSweep(tx, ws, c.tz);
+      });
+    }
   }
 };
 
@@ -291,7 +293,10 @@ const pushOne = async (db, ws, c, link, st) => {
     await release(db, ws, userId);
     return;
   }
-  if (grant.state !== 'ok') { await release(db, ws, userId); return; } // not-allowed, domain: the team's own change handles it
+  // not-allowed, domain: nothing to push here (the team's own change, or
+  // GSI's, takes the link on); not left dirty, or the push would come round
+  // again every second.
+  if (grant.state !== 'ok') { await release(db, ws, userId, ', dirty_at = null'); return; }
   if (grant.pausedUntil && new Date(grant.pausedUntil).getTime() > Date.now()) { await release(db, ws, userId); return; }
   try {
     await reconcile(db, ws, c, link, st, grant);

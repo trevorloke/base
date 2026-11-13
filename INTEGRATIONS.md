@@ -67,6 +67,18 @@ email the link. Google fetches from its own servers, so the link must be
 reachable from the internet (staging and production are). Links are built
 from `STARBASE_PUBLIC_URL`.
 
+With Google set up (below) and **Settings → Services → Google → Shifts in
+Google Calendar** on, anyone can keep their shifts in a calendar base.win
+makes in their own Google account, updated within a minute of any change
+(the same content as their calendar link: no instructions, no online link,
+nobody else). When they stop, or the campaign turns it off, base.win
+deletes that calendar. The link above stays for Outlook and Apple.
+
+**Contacts files** (My people → *Find people I know*, the desk only): a
+contacts file exported from Google Contacts (or Outlook) is read in the
+browser and checked against the list; only the people already on it come
+back, and nothing is kept but the links ticked. No Google setup.
+
 ## Email — Resend or SendGrid
 
 One email sender per deployment, behind one small layer (`server/lib/mail`:
@@ -645,7 +657,7 @@ is missing.
 |---|---|---|
 | `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` | — | Google Cloud → Google Auth Platform → Clients → *Web application*. The secret is shown once: copy it into Render at once (a lost one: add a new secret) |
 | `GOOGLE_TOKEN_KEY` | — | 32 or more random characters (`openssl rand -base64 48`), a different one per environment. Seals each person's stored Google connection; sign-in needs none. There is no fallback in the database: unset, connections are refused. Lost, everyone connects again — nothing else is lost. To change it: `new,old`, then drop the old |
-| `GOOGLE_ACCOUNTS_BASE`, `GOOGLE_OAUTH_BASE` | Google's | tests only (`server/test/fake-google.js`); ignored in production |
+| `GOOGLE_ACCOUNTS_BASE`, `GOOGLE_OAUTH_BASE`, `GOOGLE_CALENDAR_API_BASE` | Google's | tests only (`server/test/fake-google.js`); ignored in production |
 
 - **The redirect address** is always `<STARBASE_PUBLIC_URL>/api/auth/google/back`
   — Services shows it with a Copy button. Paste it into the client's
@@ -667,6 +679,20 @@ is missing.
   person has nothing else connected and nobody else here uses that Google
   account. With `STARBASE_JOBS=off` nothing can tell Google: people remove
   base.win in their Google Account themselves.
+- **Google Calendar** (*Shifts in Google Calendar*, off until a manager
+  turns it on): in the same Google Cloud project, *APIs & Services →
+  Library → Google Calendar API → Enable*, then *Google Auth Platform → Data
+  access* → add `https://www.googleapis.com/auth/calendar.app.created` and
+  note whether the console lists it as sensitive. If it is (and the
+  audience is External), send it for review together with Gmail's scope,
+  and leave Calendar off until Google has verified the app: until then at
+  most 100 people can ever grant an unverified sensitive scope across the
+  whole project, for its whole life. The privacy policy must state that
+  base.win's use of information from Google APIs follows the Google API
+  Services User Data Policy, including the Limited Use requirements. No new
+  setting. base.win only makes and changes its own calendar; it reads
+  nothing else, sends no invitations, and stays well under Google's limits
+  (one run: 60 s or 200 calls; one person: 50 calls a minute).
 
 ## Online payments — Stripe
 

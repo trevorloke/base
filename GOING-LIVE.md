@@ -132,6 +132,12 @@ Then, as each one is ready:
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | from Stripe: **test** keys on staging first; **live** keys on production only once a test gift has gone all the way through | gifts and membership dues paid online on the website (INTEGRATIONS.md, *Online payments — Stripe*) |
 | `CALLHUB_API_KEY`, `CALLHUB_API_BASE` | from CallHub: the account's API key; the second only when the account's API is on another host than `https://api.callhub.io` | only if the campaign calls through CallHub's dialer: *Send to CallHub* on a list or a phone bank, each call's result back on the person (INTEGRATIONS.md, *Phone dialer — CallHub*) |
 
+Google Calendar adds no setting: enable the Google Calendar API and add its
+permission in the same Google Cloud project, then turn on **Settings →
+Services → Google → Shifts in Google Calendar** (INTEGRATIONS.md, *Google
+sign-in and connections*). Leave it off until Google has verified the app
+if the console lists the permission as sensitive.
+
 Twilio: set the number's incoming-message webhook to
 `https://starbase.imaginesurrey.ca/api/public/twilio/sms` (HTTP POST). The
 other addresses Twilio calls back (delivery reports, calls) are sent with

@@ -241,6 +241,15 @@ one tap away under **More**.
   `server/test/calendar.test.js` (a person's calendar link, Make a new link,
   Email me the link, the one-item files, the website's events) and
   `server/test/schedule-tell.test.js` (the emails' files).
+  `server/test/gcal.test.js`: *Shifts in Google Calendar* against the
+  stand-in Google's Calendar (`fake-google.js`, `GOOGLE_CALENDAR_API_BASE`)
+  — the switch, the first link made by connecting, the content (the
+  calendar link's, UTC, ids Google accepts), every write that moves a
+  shift, Google's refusals, the bounds, stopping, and clean-up before GSI
+  revokes. `server/test/addressbook.test.js`: *Find people I know* — the
+  contacts files in `samples/contacts-google.csv` and
+  `samples/contacts-outlook.csv` (made-up people), the check (matches
+  only, the desk only, nothing kept) and the link.
 - **ImagineU** (the tab) → *Edit* → *+ Add a course* (*Canvassing 101*),
   then *+ Add a module*: words to open with, then under *More materials*
   *+ Video* (paste a YouTube link), *+ Document* (upload a PDF), *+ Audio*;
