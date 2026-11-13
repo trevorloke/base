@@ -6,11 +6,12 @@ import { useId, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { action } from '../api.js';
 import { GoogleLoading, useGoogle } from './GoogleConnect.jsx';
+import GcalSwitch from './GcalSwitch.jsx';
 import './google.css';
 
 // One line another Google feature adds here (GCA's GcalSwitch): a
 // component taking { online }.
-export const PANEL_LINES = [];
+export const PANEL_LINES = [GcalSwitch];
 
 function Copy({ value }) {
   const [copied, setCopied] = useState(false);

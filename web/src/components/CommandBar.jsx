@@ -13,6 +13,7 @@
 // its ranking: commands.js.
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { apiGet } from '../api.js';
 import { allowed, commandsFor, fold, rank, scoreItem } from './commands.js';
 import './command-bar.css';
@@ -51,7 +52,10 @@ function Dialog({ me, nav, onClose }) {
   const [activeKey, setActiveKey] = useState(null);
   const canPeople = allowed(me, { area: 'people' });
 
-  const { actions, screens } = useMemo(() => commandsFor(me, nav || []), [me, nav]);
+  // Whether "Shifts in Google Calendar" is on here (an older server: no).
+  const gcalQ = useQuery({ queryKey: ['gcal'], queryFn: () => apiGet('/gcal'), staleTime: 5 * 60_000, retry: false });
+  const gcal = gcalQ.data?.available === true;
+  const { actions, screens } = useMemo(() => commandsFor({ ...me, gcal }, nav || []), [me, nav, gcal]);
 
   // People, from the server: after a short pause, the last search only. The
   // quick search first (the start of a name, a phone, an email — indexed,

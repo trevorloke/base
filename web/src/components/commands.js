@@ -16,6 +16,9 @@ export const allowed = (me, item) => {
   if (item.desk && !isDesk(me)) return false;
   // Google sign-in on here and this person hasn't linked theirs (/auth/me).
   if (item.google && !(me?.google?.on && !me.google.linked)) return false;
+  // Shifts in Google Calendar is on here (GET /api/gcal's available, which
+  // the bar reads when it opens).
+  if (item.gcal && !me?.gcal) return false;
   return !item.area || me?.role === 'manager' || areasOf(me).includes(item.area);
 };
 
@@ -69,6 +72,7 @@ export const SCREENS = [
   { label: 'Profile fields', to: '/people/fields', area: 'admin', manager: true, words: 'custom fields profile' },
   { label: 'Rating scale', to: '/rating-scale', area: 'admin', manager: true, words: 'support scale voting for candidates' },
   { label: 'Your profile', to: '/profile', words: 'account two-step sign-in authenticator me' },
+  { label: 'Shifts in Google Calendar', to: '/profile#gcal', gcal: true, words: 'google calendar shifts' },
 ];
 
 // What this person may open and do. nav: the tabs the Shell shows them
