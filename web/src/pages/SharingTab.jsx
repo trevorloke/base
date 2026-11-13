@@ -165,7 +165,7 @@ function KitEditor({ kit, line, pages, people, onClose, onSaved }) {
 
       {error && <p className="error" role="alert">{error}</p>}
       <div className="sk-actions">
-        <button type="submit" className="btn ops-tap" disabled={!online || busy || n > BODY_MAX}>{busy ? 'Saving…' : kit ? 'Save' : 'Save post'}</button>
+        <button type="submit" className="btn btn-primary ops-tap" disabled={!online || busy || n > BODY_MAX}>{busy ? 'Saving…' : kit ? 'Save' : 'Save post'}</button>
         <button type="button" className="btn btn-quiet ops-tap" onClick={onClose}>{kit ? 'Close' : 'Cancel'}</button>
         {!online && <NeedsSignal />}
       </div>
@@ -203,7 +203,14 @@ export default function SharingTab({ me, creating, onClose }) {
   if (q.isPending) return <p className="muted">Loading…</p>;
   if (q.isError) return <p role="alert"><Unavailable onRetry={() => q.refetch()} /></p>;
   const d = q.data;
-  if (!d.ready) return <p className="muted">The website isn’t set up yet. <Link to="/website">Set it up</Link></p>;
+  if (!d.ready) {
+    return (
+      <div className="sk-setup">
+        <p className="muted">The website isn’t set up yet.</p>
+        <Link className="btn btn-primary ops-tap" to="/website">Set it up</Link>
+      </div>
+    );
+  }
   const open = openId ? d.kits.find((k) => k.id === openId) : null;
 
   return (

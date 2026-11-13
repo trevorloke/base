@@ -34,3 +34,7 @@
 .sa-said.is-ok { color: var(--ok); }
 .sa .btn { min-height: var(--ctl); }
 .sa-full { flex-basis: 100%; }
+/* "· Change" stays together, so the dot never starts a line of its own */
+.sp-change-wrap { white-space: nowrap; }
+/* "Add media@… for press" reads left to right, the address whole where it can be */
+.sa .btn.sa-suggest { justify-content: flex-start; text-align: left; white-space: normal; overflow-wrap: anywhere; max-width: 100%; }

@@ -22,7 +22,7 @@
 .ws-md__bar { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s-2); flex-wrap: wrap; }
 .ws-md__tools { display: flex; flex-wrap: wrap; gap: 4px; }
 .ws-md__tool {
-  min-height: 38px; min-width: 38px; padding: 0 10px; border-radius: var(--r-ctrl);
+  min-height: var(--ctl); min-width: var(--ctl); padding: 0 10px; border-radius: var(--r-ctrl);
   border: var(--border-2); background: var(--paper-0); color: var(--text-1);
   font: 600 13.5px/1 var(--font-sans); cursor: pointer;
 }

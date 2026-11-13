@@ -1291,6 +1291,11 @@ export default function Outreach() {
   const home = canWrite ? '/outreach/email' : sharer ? '/outreach/sharing' : '/outreach/connect';
   const mayMake = canWrite || (sharer && tab === 'sharing');
   const creating = mayMake && params.get('new') === '1';
+  // Sharing's header button only when a post can be made and none is open:
+  // while the website isn't set up, "Set it up" is the one thing to do, and
+  // an open post's Save is the screen's one primary (SharingTab.jsx).
+  const kits = useQuery({ queryKey: ['share', 'kits'], queryFn: () => apiGet('/share/kits'), enabled: tab === 'sharing' && mayMake });
+  const sharingBusy = tab === 'sharing' && (kits.data?.ready !== true || Boolean(params.get('kit')));
   const openNew = () => setParams({ new: '1' });
   const closeNew = () => setParams({}, { replace: true });
 
@@ -1312,7 +1317,7 @@ export default function Outreach() {
   }
   if (!tabs.some((t) => t.key === tab)) return <Navigate to={home} replace />;
 
-  const primary = mayMake && !creating ? PRIMARY[tab] : null;
+  const primary = mayMake && !creating && !sharingBusy ? PRIMARY[tab] : null;
   const tabProps = { me, canWrite, creating, onClose: closeNew, toast: toast.show };
 
   return (

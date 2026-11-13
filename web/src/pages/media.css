@@ -115,3 +115,23 @@
   .md-figs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .md-dl > div { grid-template-columns: 90px minmax(0, 1fr); }
 }
+
+/* The sheet's links (email, phone, each handle, the last release) are whole
+   taps: var(--ctl) tall, 48 px on a phone; each handle on its own line. */
+.md-dl > div { align-items: baseline; }
+.md-dl dd a { display: inline-flex; align-items: center; min-height: var(--ctl); }
+.md-dl .md-handles { display: flex; flex-direction: column; align-items: flex-start; gap: 0; }
+.md-where { margin: 0; }
+.md-where a { display: inline-flex; align-items: center; min-height: var(--ctl); }
+
+/* A wide desk: Socials and Last release need little room; Email and Beat
+   get it, so an address reads whole. */
+@media (min-width: 1280px) {
+  .md-table.is-desk .md-c-name { width: 15%; }
+  .md-table.is-desk .md-c-outlet { width: 15%; }
+  .md-table.is-desk .md-c-beat { width: 16%; }
+  .md-table.is-desk .md-c-email { width: 23%; }
+  .md-table.is-desk .md-c-phone { width: 11%; }
+  .md-table.is-desk .md-c-socials { width: 10%; }
+  .md-table.is-desk .md-c-last { width: 10%; }
+}

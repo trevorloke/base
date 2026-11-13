@@ -114,7 +114,7 @@ export default function SenderAddresses({ online = true }) {
       </ul>
       {offer && (
         <div className="sa-acts">
-          <button type="button" className="btn ops-tap" onClick={() => { setSaid(null); setForm({ name: d.system?.name ? `${d.system.name} Media` : 'Media', email: suggest, press: true }); }}>
+          <button type="button" className="btn ops-tap sa-suggest" onClick={() => { setSaid(null); setForm({ name: d.system?.name ? `${d.system.name} Media` : 'Media', email: suggest, press: true }); }}>
             Add {suggest} for press
           </button>
         </div>

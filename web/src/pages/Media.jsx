@@ -263,6 +263,7 @@ function Sheet({ c, desk, onClose, onChanged }) {
             <input id="md-e-beat" className="input" maxLength={160} value={form.beat} onChange={(e) => setForm({ ...form, beat: e.target.value })} /></div>
           <div className="field"><label htmlFor="md-e-note">Note</label>
             <textarea id="md-e-note" className="input" rows={3} maxLength={500} value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} /></div>
+          <p className="ops-meta md-where">Email, phone and socials: <Link to={`/people/${p.id}`}>Open profile</Link></p>
           <div className="md-acts">
             <button type="submit" className="btn ot-solid ot-btn-tap" disabled={act.busy || !online}>{act.busy ? 'Saving…' : 'Save'}</button>
             <button type="button" className="btn btn-quiet ot-btn-tap" onClick={() => setEditing(false)}>Cancel</button>

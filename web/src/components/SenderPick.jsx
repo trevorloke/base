@@ -43,7 +43,7 @@ export default function SenderPick({ use, value, onChange }) {
       <p className="sp-line">
         <span className="sp-label">From:</span> <span className="sp-addr">{picked ? fromWords(picked) : 'the campaign’s address'}</span>
         {canChange && (
-          <> · <button type="button" className="sp-change" aria-expanded={open} aria-controls={id} onClick={() => setOpen((o) => !o)}>Change</button></>
+          <span className="sp-change-wrap">· <button type="button" className="sp-change" aria-expanded={open} aria-controls={id} onClick={() => setOpen((o) => !o)}>Change</button></span>
         )}
       </p>
       {canChange && open && (
