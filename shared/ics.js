@@ -51,8 +51,10 @@ const utcStamp = (when) => new Date(when).toISOString().replace(/\.\d{3}Z$/, 'Z'
 const dayStamp = (day) => String(day).replace(/-/g, '');
 const endOf = (e) => e.end || (e.allDay ? addDays(e.start, 1) : e.start);
 
+// e.stamp: when this entry last changed, where the caller knows it — a
+// calendar keeps the copy with the later DTSTAMP.
 export const icsEvent = (e, { now = new Date() } = {}) => {
-  const lines = ['BEGIN:VEVENT', `UID:${e.uid}`, `DTSTAMP:${utcStamp(now)}`, `SUMMARY:${escText(e.title)}`];
+  const lines = ['BEGIN:VEVENT', `UID:${e.uid}`, `DTSTAMP:${utcStamp(e.stamp || now)}`, `SUMMARY:${escText(e.title)}`];
   if (e.allDay) {
     lines.push(`DTSTART;VALUE=DATE:${dayStamp(e.start)}`, `DTEND;VALUE=DATE:${dayStamp(endOf(e))}`);
   } else {

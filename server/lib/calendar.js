@@ -40,17 +40,37 @@ export const withCalendarLine = (text) => {
 // all — the reader is the person themselves.
 // The same message must be the same bytes when it is sent again under its
 // idempotency key (the email service refuses a key with other words), so
-// its DTSTAMP is fixed by the shifts, not the clock: the first one's start.
+// each entry's DTSTAMP is fixed, not the clock: when that shift or that
+// booking last changed (changedAt), so a file sent after a move always
+// stamps later than the one before it and the calendar takes the new time.
+// Without it (no event yet), the first shift's start, as before.
 const stampOf = (rows) => new Date(Math.min(...rows.map((s) => new Date(s.starts_at).getTime())));
+export const changedAt = async (q, ws, rows) => {
+  const ids = [...new Set(rows.flatMap((s) => [s.id, s.assignment_id]).filter(Boolean))];
+  if (!ids.length) return rows;
+  const at = new Map((await q.query(
+    `select entity_id, max(server_ts) as at from events
+      where workspace_id = $1 and entity_type in ('shift', 'shift_assignment') and entity_id = any($2::uuid[])
+      group by entity_id`,
+    [ws, ids],
+  )).rows.map((r) => [r.entity_id, new Date(r.at).getTime()]));
+  return rows.map((s) => {
+    const t = Math.max(at.get(s.id) || 0, at.get(s.assignment_id) || 0);
+    return t ? { ...s, changed_at: new Date(t) } : s;
+  });
+};
 export const shiftsAttachment = (rows, { tz, name, filename = 'shifts.ics' }) => ({
   filename,
   content: Buffer.from(icsCalendar({
     name,
     now: stampOf(rows),
-    events: rows.map((s) => shiftEvent(s, {
-      tz,
-      appUrl: shiftAppLink(configuredUrl(), { id: s.id }),
-      booking: { arrive_at: s.arrive_at ?? null, leave_at: s.leave_at ?? null },
+    events: rows.map((s) => ({
+      ...shiftEvent(s, {
+        tz,
+        appUrl: shiftAppLink(configuredUrl(), { id: s.id }),
+        booking: { arrive_at: s.arrive_at ?? null, leave_at: s.leave_at ?? null },
+      }),
+      ...(s.changed_at ? { stamp: s.changed_at } : {}),
     })),
   }), 'utf8').toString('base64'),
   content_type: ATTACH_TYPE,

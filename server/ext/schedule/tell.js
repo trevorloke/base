@@ -52,7 +52,7 @@ import { newId, runAction } from '../../lib/events.js';
 import { runHooks } from '../../lib/hooks.js';
 import { enqueueJob, jobRunnerOn, runJobsSoon } from '../../lib/jobs.js';
 import { emailConfigured, sendEmail, sendText, shiftWhen, shiftWhenShort, textConfigured } from '../../lib/notify.js';
-import { shiftsAttachment, withCalendarLine } from '../../lib/calendar.js';
+import { changedAt, shiftsAttachment, withCalendarLine } from '../../lib/calendar.js';
 import { person as personCols, whyNotSql } from '../../lib/reach.js';
 import { DEFAULT_TZ } from '../../lib/org.js';
 import { mayRun } from '../../lib/perms.js';
@@ -219,7 +219,7 @@ const deliver = async (db, ctx, batchId, { actorId = null, action = TELL_ACTION,
         // What to say, as things stand now: their shifts of these that are
         // not over (as the count before the tap counted them). A reminder
         // is for tomorrow: one whose day has come is too late to send.
-        const shifts = person ? (await tx.query(
+        const shifts = person ? await changedAt(tx, ws, (await tx.query(
           `select a.id as assignment_id, a.arrive_at, a.leave_at, s.title, s.starts_at, s.ends_at, s.drop_in, s.location, s.instructions, s.link,
                   s.id, s.kind, pl.lat as place_lat, pl.lng as place_lng
              from shift_assignments a join shifts s on s.id = a.shift_id and s.deleted_at is null
@@ -229,7 +229,7 @@ const deliver = async (db, ctx, batchId, { actorId = null, action = TELL_ACTION,
             order by s.starts_at, s.id`,
           [ws, parseJ(n.assignment_ids, []), onIt(n.kind), t.toISOString(),
             n.kind === 'reminder' ? instantOf(addDays(today, 1), '00:00', tz) : null],
-        )).rows : [];
+        )).rows) : [];
         if (!shifts.length) {
           await tx.query(
             `update shift_notices set state = 'done', email = 'skipped', text = 'skipped', text_note = $3, sent_at = now() where id = $1 and workspace_id = $2`,

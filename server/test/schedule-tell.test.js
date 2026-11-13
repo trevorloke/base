@@ -718,7 +718,23 @@ test('shift emails carry one calendar file with that person’s shifts; the text
   const message = shiftMessage(shift, `Tell ${tag}`, TZ);
   assert.equal(one.text, message.replace(/\n(— Tell [a-z0-9]+)$/, '\nAdd to your calendar: open the attached file.\n$1'));
   assert.equal(texts.find((m) => m.To === '+16045550151').Body, message, 'the text is byte for byte what it was');
-  // Sent again in the same round (a retry) the bytes are the same, so the
-  // email service takes it as the same email.
-  assert.match(oneIcs, /^DTSTAMP:20310303T133000Z$/m);
+  // DTSTAMP is when the shift or the booking last changed (the event log),
+  // never the clock: sent again in the same round (a retry) the bytes are
+  // the same, so the email service takes it as the same email.
+  const stampIn = (ics) => ics.match(/^DTSTAMP:(\d{8}T\d{6}Z)$/m)[1];
+  const last = (await rows(
+    `select max(server_ts) as at from events where entity_type in ('shift', 'shift_assignment') and entity_id = any($1::uuid[])`,
+    [[mon.id, ...(await rows('select id from shift_assignments where shift_id = $1', [mon.id])).map((x) => x.id)]],
+  ))[0].at;
+  assert.equal(stampIn(oneIcs), new Date(last).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, ''));
+  // Moved a day earlier and Notify again: the new file is stamped later, so
+  // a calendar that has the old one takes the new time.
+  await new Promise((r) => setTimeout(r, 1100));
+  ok(await mgr.action('shift.update', { id: mon.id, starts_at: '2031-03-02T13:30:00Z', ends_at: '2031-03-02T16:30:00Z' }));
+  emails.length = 0;
+  ok(await mgr.action('shift.notify', { shift_id: mon.id }));
+  const moved = emails.find((m) => m.to[0] === P.asha.email);
+  const movedIcs = Buffer.from(moved.attachments[0].content, 'base64').toString('utf8').replace(/\r\n /g, '');
+  assert.match(movedIcs, /DTSTART:20310302T133000Z/);
+  assert.ok(stampIn(movedIcs) > stampIn(oneIcs), `${stampIn(movedIcs)} after ${stampIn(oneIcs)}`);
 });

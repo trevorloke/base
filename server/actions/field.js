@@ -13,7 +13,7 @@ import { checkRating } from '../ext/scale/rules.js';
 import { createHash, randomBytes } from 'node:crypto';
 import { newId } from '../lib/events.js';
 import { emailConfigured, sendEmail, sendText, shiftMessage } from '../lib/notify.js';
-import { shiftsAttachment, withCalendarLine } from '../lib/calendar.js';
+import { changedAt, shiftsAttachment, withCalendarLine } from '../lib/calendar.js';
 // Addresses the campaign must not email (they bounced for good or reported spam).
 import { httpError } from './util.js';
 import { runHooks, hasHook } from '../lib/hooks.js';
@@ -732,7 +732,7 @@ export const FIELD_ACTIONS = {
           : a.email
           ? await sendEmail({
             to: a.email, subject: `Your shift: ${shift.title}`, text: emailText,
-            attachments: [shiftsAttachment([{ ...shift, arrive_at: a.arrive_at, leave_at: a.leave_at }], { tz, name: ctx.workspace.name, filename: 'shift.ics' })],
+            attachments: [shiftsAttachment(await changedAt(tx, ctx.workspaceId, [{ ...shift, assignment_id: a.assignment_id, arrive_at: a.arrive_at, leave_at: a.leave_at }]), { tz, name: ctx.workspace.name, filename: 'shift.ics' })],
             idempotencyKey: `shift-${shift.id}-${a.assignment_id}-${round}`,
           })
           : { status: 'skipped', detail: 'no email on file' };
