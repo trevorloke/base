@@ -92,7 +92,9 @@ test('the switch: off by default (no link, no push); manager-only; on needs Goog
   assert.equal(calls(), 0);
   assert.equal((await S.b.action('gcal.settings', { on: true })).status, 403, 'staff can’t turn it on');
   assert.equal(areaOfAction('gcal.on'), null);
-  assert.equal(ACTIONS['addressbook.link']?.area ?? 'people', 'people');
+  assert.equal(ACTIONS['addressbook.link'].area, 'people');
+  assert.equal(areaOfAction('gcal.settings'), null);
+  assert.deepEqual(ACTIONS['gcal.settings'].roles, ['manager'], 'manager-only with no area: Admin');
   delete process.env.GOOGLE_TOKEN_KEY;
   const r = await M.b.action('gcal.settings', { on: true });
   assert.equal(r.status, 409);
@@ -631,6 +633,31 @@ test('leaving the team: deleted for a one-campaign user then revoked; through th
   assert.equal(fake.counts.revoke, 0);
   assert.equal(await linkRow(S.id), null);
   assert.equal((await linkRow(S.id, B2.ws)).state, 'ok');
+});
+
+test('with no background work: a disconnect or the switch going off leaves the link, saying so; nothing waits for a job', async () => {
+  assert.equal((await connect(V, 0)).google, 'connected');
+  await jobs();
+  assert.equal((await linkRow(V.id)).state, 'ok');
+  process.env.STARBASE_JOBS = 'off';
+  ok(await V.b.action('google.disconnect', { purpose: 'calendar.mine' }));
+  const l = await linkRow(V.id);
+  assert.equal(l.state, 'left');
+  assert.equal(l.said, 'base.win stopped updating your Google calendar — delete it there or use the calendar link');
+  const last = (await db.query(`select action, op, payload from events where workspace_id = $1 and entity_type = 'gcal_link' order by seq desc limit 1`, [M.ws])).rows[0];
+  assert.deepEqual([last.action, last.op, last.payload], ['google.disconnect', 'update', { state: 'left' }], 'on the log');
+  assert.equal((await db.query(`select count(*)::int as n from jobs where workspace_id = $1 and kind = 'gcal.stop' and status = 'pending'`, [M.ws])).rows[0].n, 0);
+  ok(await V.b.action('gcal.stop', {}));
+  assert.equal(await linkRow(V.id), null);
+  delete process.env.STARBASE_JOBS;
+  assert.equal((await connect(V, 0)).google, 'connected');
+  await jobs();
+  process.env.STARBASE_JOBS = 'off';
+  ok(await M.b.action('gcal.settings', { on: false }));
+  assert.equal((await linkRow(V.id)).state, 'left');
+  delete process.env.STARBASE_JOBS;
+  ok(await V.b.action('gcal.stop', {}));
+  ok(await M.b.action('gcal.settings', { on: true }));
 });
 
 test('hygiene: gcal_link events carry only a state; no calendar id, event id, email, token or Google’s text anywhere; not exported; the chain holds', async () => {

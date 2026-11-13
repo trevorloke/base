@@ -35,7 +35,7 @@ export const forgetLink = (db, ws, userId, action) => runAction(db, { workspaceI
 });
 
 // Base.win can't reach the calendar: a member is told; anyone else's link
-// is forgotten. Inside a write already (q is a tx), the caller emits.
+// is forgotten.
 export const leaveLink = async (db, ws, userId, action) => {
   if (await isMember(db, ws, userId)) {
     await runAction(db, { workspaceId: ws, actorId: null, action }, async (tx, emit) => {
@@ -102,22 +102,16 @@ const stopRun = async (db, job) => {
 
 export const stopJobs = { 'gcal.stop': (db, job) => ({ later: stopRun(db, job) }) };
 
-// GSI's onRevoke. db is the plain database from GSI's job; GSI calls it with
-// a transaction (and fetch null) only on a server that runs no jobs, inside
-// the write that took the purpose away — there the hook (hook.js) has
-// already said what happened on the log, so this only tidies the rows.
+// GSI's onRevoke. db is the plain database from GSI's job. On a server
+// that runs no jobs GSI calls it inside the write that took the purpose
+// away (db is that transaction, fetch null): the hook (hook.js) sees that
+// write's google_grant or membership event and already left or forgot the
+// link, on the log — so there is nothing to do here.
 export const cleanUp = async (db, { userId, fetch }) => {
-  const inWrite = typeof db.transaction !== 'function';
+  if (typeof db.transaction !== 'function') return;
   const links = (await db.query('select workspace_id, calendar_id from gcal_links where user_id = $1', [userId])).rows;
   for (const link of links) {
     const ws = link.workspace_id;
-    if (inWrite) {
-      if (link.calendar_id && await isMember(db, ws, userId)) {
-        await db.query(`update gcal_links set state = 'left', said = $3, dirty_at = null where workspace_id = $1 and user_id = $2`, [ws, userId, SAID.left]);
-        await db.query('delete from gcal_items where workspace_id = $1 and user_id = $2', [ws, userId]);
-      } else await db.query('delete from gcal_links where workspace_id = $1 and user_id = $2', [ws, userId]);
-      continue;
-    }
     if (link.calendar_id && fetch) {
       // A timeout or a 5xx throws: GSI's job is tried again.
       const r = await fetch(`${calBase()}/calendars/${enc(link.calendar_id)}`, { method: 'DELETE' });
