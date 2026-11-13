@@ -19,7 +19,7 @@ import { probeLookup, retiredGoogle, RETIRED_WORDS } from '../../lib/geocode.js'
 import { googleKey, googleTilesOn, googleTilesSetting, mapType, probeTiles } from '../../lib/gtiles.js';
 import { addressSuggester, placesLogo, placesHealth, probePlaces } from '../../lib/places.js';
 import { today as googleToday } from '../../lib/gusage.js';
-import { tileConfig, tileSource } from '../offline/index.js';
+import { tileConfig, tileSource, cartoView } from '../offline/index.js';
 import { jobRunnerOn } from '../../lib/jobs.js';
 import { KEY_ENV, KEY_MIN, keyStatus } from '../../lib/twostep.js';
 import { basePath } from '../../lib/mount.js';
@@ -73,6 +73,7 @@ const googleTilesRow = () => {
     `Google ${mapType()} tiles, through this server${googleTilesSetting() === 'auto' ? ' · On because a Google key is set · GOOGLE_MAPS_TILES=off turns it off' : ''}`,
     'Phones don’t keep Google’s map for no-signal areas (Google’s terms)',
     `Today: ${num(use.tiles)} tiles${max != null ? ` of ${num(max)} (then the free map until midnight)` : ''}`,
+    `While Google isn’t answering: ${cartoView() ? 'CARTO’s' : 'OpenStreetMap’s'} free map`,
     full ? `Daily limit reached${use.tilesFullAt ? ` at ${clock(use.tilesFullAt)}` : ''} — the free map until midnight` : '',
     ...use.problems.filter((p) => p.startsWith('GOOGLE_TILES')),
   ].filter(Boolean);
@@ -118,27 +119,43 @@ const refusedBy = (r) => {
 // The map's own reading of its settings (offline's tileConfig), so this row
 // and the map never disagree about where the tiles come from.
 // The free default is OpenStreetMap's tiles for Standard, Muted and Dark,
-// and CARTO's for Clean (the look most phones draw): both are named.
+// and, with the campaign's CARTO key, CARTO's for Clean: both are named.
+// free: the default (no provider of the campaign's own).
+const FREE_BOTH = 'OpenStreetMap and CARTO';
 const freeTiles = () => {
   const cfg = tileConfig();
   const source = tileSource(cfg.url);
-  return { cfg, source: source === 'OpenStreetMap' ? 'OpenStreetMap and CARTO' : source };
+  const free = source === 'OpenStreetMap';
+  return { cfg, free, source: free && cartoView() ? FREE_BOTH : source };
+};
+const CARTO_NEEDS_KEY = 'CARTO needs a key now (STARBASE_TILE_CARTO_KEY)';
+// Why Clean isn't offered on the free map (a choice, not a fault: unflagged).
+const cleanOff = () => {
+  if (cartoView()) return '';
+  return env('STARBASE_TILE_CARTO_KEY') && process.env.STARBASE_TILE_CLEAN === 'off'
+    ? ' · Clean is off (STARBASE_TILE_CLEAN=off)'
+    : ' · Clean is off: CARTO’s free map needs a key (STARBASE_TILE_CARTO_KEY)';
 };
 const freeTilesRow = () => {
-  const { cfg, source } = freeTiles();
-  const own = source !== 'OpenStreetMap and CARTO';
+  const { cfg, free, source } = freeTiles();
+  const own = !free;
   // Every setting the map couldn't use, not only the first.
   const why = [
     googleTilesSetting() === 'unknown' && `GOOGLE_MAPS_TILES=${env('GOOGLE_MAPS_TILES').slice(0, 40)} isn’t understood — use 1`,
     cfg.ignored.includes('provider') && `STARBASE_TILE_PROVIDER=${env('STARBASE_TILE_PROVIDER').toLowerCase().slice(0, 40)} isn’t known — use stadia`,
     cfg.ignored.includes('url') && 'STARBASE_TILE_URL needs http(s) and {z}/{x}/{y}',
   ].filter(Boolean).join(' · ');
-  return row('tiles', `Map background (${source})`, 'The map volunteers walk', false, [], {
-    detail: why ? `${why} · ${source} meanwhile`
+  // An address of the campaign's own on CARTO, with no key: CARTO sends a
+  // notice instead of streets, so the row isn't shown as ready.
+  const cartoKeyless = cfg.ignored.includes('carto-key');
+  const words = cartoKeyless ? [why, CARTO_NEEDS_KEY].filter(Boolean).join(' · ')
+    : why ? `${why} · ${source} meanwhile`
       : own ? `${source}, straight to the phones`
-        : 'OpenStreetMap’s and CARTO’s free tiles — not for a large team in election week (see Going live §5)',
+        : `${source === FREE_BOTH ? 'OpenStreetMap’s and CARTO’s' : 'OpenStreetMap’s'} free tiles — not for a large team in election week (see Going live §5)${cleanOff()}`;
+  return row('tiles', `Map background (${source})`, 'The map volunteers walk', false, [], {
+    detail: words,
     // A setting it couldn't use leaves the free map drawing: that is what the badge says.
-    state: own && !why ? 'ready' : 'default',
+    state: own && !why && !cartoKeyless ? 'ready' : 'default',
   });
 };
 
@@ -283,10 +300,10 @@ const CHECKS = {
   // refuses. The free maps come straight to each phone: nothing to ask here.
   tiles: async () => {
     if (!googleTiles()) {
-      const { source } = freeTiles();
+      const { source, free } = freeTiles();
       // Only the free default needs the pointer to choosing a provider.
-      const free = source === 'OpenStreetMap and CARTO';
-      return { ok: true, said: `${free ? 'OpenStreetMap’s and CARTO’s' : `${source}${source.endsWith('s') ? '’' : '’s'}`} tiles come straight to each phone${free ? ' · to choose a provider, see Going live §5' : ''}` };
+      const whose = source === FREE_BOTH ? 'OpenStreetMap’s and CARTO’s' : `${source}${source.endsWith('s') ? '’' : '’s'}`;
+      return { ok: true, said: `${whose} tiles come straight to each phone${free ? ' · to choose a provider, see Going live §5' : ''}` };
     }
     if (!googleKey()) return { ok: false, said: 'GOOGLE_MAPS_SERVER_KEY isn’t set', todo: 'See Going live §5, Recipe B step 6.' };
     const r = await probeTiles();

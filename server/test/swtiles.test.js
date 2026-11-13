@@ -146,3 +146,15 @@ test('Google’s tiles through the server are never kept (Google’s terms: no o
   await w.activate();
   assert.deepEqual(w.kept(), [osm]);
 });
+
+test('CARTO’s tiles asked with no key (its “API KEY REQUIRED” notice) go on activate; keyed CARTO and OpenStreetMap stay; VERSION unchanged', async () => {
+  assert.match(SOURCE, /const VERSION = 'v2';/, 'no bump: that would throw away every phone’s kept app and streets');
+  const w = worker();
+  const keyless = ['https://a.basemaps.cartocdn.com/light_all/15/5202/11226.png', 'https://b.basemaps.cartocdn.com/light_all/15/5203/11226@2x.png'];
+  const keyed = 'https://a.basemaps.cartocdn.com/light_all/15/5202/11226.png?key=test-key';
+  const osm = 'https://tile.openstreetmap.org/15/5202/11226.png';
+  const google = `${ORIGIN}/tiles/15/5202/11226.png`;
+  w.stores.set(TILES, new Map([...keyless, keyed, osm, google].map((u) => [u, new Response('x')])));
+  await w.activate();
+  assert.deepEqual(w.kept().sort(), [keyed, osm].sort());
+});
