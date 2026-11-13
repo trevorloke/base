@@ -305,7 +305,7 @@ one tap away under **More**.
   (your own link must be at it first), and under *More*, *Disconnect every
   Google account*. **Settings → Members** marks who signs in with Google and
   offers *Unlink Google*. `e2e-google-signin.mjs` runs all of this against
-  a stand-in Google (it starts its own servers on 5300–5304). It also
+  a stand-in Google (it starts its own servers on PORT to PORT+4, PORT default 5300). It also
   builds a stand-in feature screen with the shared *Connect Google* piece
   on it (`server/test/google-connect-host.jsx`, served at
   `/admin/e2e-google-connect` by the suite's server only) and drives

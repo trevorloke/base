@@ -53,9 +53,10 @@ export function DisconnectButton({ purpose, label, online, onDone }) {
     setBusy(true); setError(null);
     try {
       const r = await action('google.disconnect', { purpose });
+      // Refresh first, so "Disconnected" never shows beside the old "Connected as".
+      await qc.invalidateQueries({ queryKey: ['google'] });
       setAsking(false);
       onDone?.(r.still_at_google ? DISCONNECTED.shared : r.jobs === false ? DISCONNECTED.noJobs : DISCONNECTED.gone);
-      await qc.invalidateQueries({ queryKey: ['google'] });
     } catch (err) {
       setError(err.message);
     } finally {

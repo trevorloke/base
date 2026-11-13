@@ -2,16 +2,17 @@
 // Google (server/test/fake-google.js) — never the real one: the suite fails
 // if the browser asks anything of an address other than 127.0.0.1.
 //
-// It starts its own servers and stops them: base.win on 5300, the fake
-// Google on 5301, a second base.win under BASE_PATH=/imaginesurrey on 5302,
-// a test hook on 5303 (server/test/google-e2e-server.js: one googleFetch,
-// as a feature would make), and a base.win without Google on 5304 (the
+// It starts its own servers and stops them: base.win on PORT (default
+// 5300), the fake Google on PORT+1, a second base.win under
+// BASE_PATH=/imaginesurrey on PORT+2, a test hook on PORT+3
+// (server/test/google-e2e-server.js: one googleFetch, as a feature would
+// make), and a base.win without Google on PORT+4 (the
 // Services row "Not set up"). Build the web app first (cd web && npm run build).
 // The suite also builds a stand-in feature screen with GoogleConnect on it
 // (server/test/google-connect-host.jsx) into a scratch folder, and the
 // servers serve it at /admin/e2e-google-connect.
 //
-//   SHOTS=/tmp/google node e2e-google-signin.mjs
+//   SHOTS=/tmp/google [PORT=5300] node e2e-google-signin.mjs
 //
 // A manager, a staffer and volunteers, at 1440x900 and 390x844: the button
 // under the one primary "Sign in" (and the installed app's line instead);
@@ -36,12 +37,17 @@ import { base32Decode, hotp, totpStep } from './server/lib/twostep.js';
 const SHOTS = process.env.SHOTS || '/tmp/starbase-google';
 mkdirSync(SHOTS, { recursive: true });
 const HOST = '127.0.0.1';
-const BASE = `http://${HOST}:5300`;
-const G = `http://${HOST}:5301`;
-const BP = `http://${HOST}:5302`;
+const PORT = Number(process.env.PORT) || 5300;
+const G_PORT = PORT + 1;
+const BP_PORT = PORT + 2;
+const POKE_PORT = PORT + 3;
+const NOG_PORT = PORT + 4;
+const BASE = `http://${HOST}:${PORT}`;
+const G = `http://${HOST}:${G_PORT}`;
+const BP = `http://${HOST}:${BP_PORT}`;
 const P = '/imaginesurrey';
-const POKE = `http://${HOST}:5303`;
-const NOG = `http://${HOST}:5304`;
+const POKE = `http://${HOST}:${POKE_PORT}`;
+const NOG = `http://${HOST}:${NOG_PORT}`;
 const CLIENT_ID = 'e2e-client.apps.example';
 const SECRET = 'e2e-client-secret';
 const PASSWORD = 'surrey-forward-2026';
@@ -66,7 +72,7 @@ const ACCTS = {
   zed: { sub: '200000000000000000009', email: 'zed.example@gmail.com', name: 'Zed Example' },
 };
 const fake = await startFakeGoogle({
-  port: 5301, clientId: CLIENT_ID, secret: SECRET, accounts: Object.values(ACCTS),
+  port: G_PORT, clientId: CLIENT_ID, secret: SECRET, accounts: Object.values(ACCTS),
   redirectUris: [`${BASE}/api/auth/google/back`, `${BP}${P}/api/auth/google/back`],
 });
 // GoogleConnect on a stand-in feature screen, built the way the app is.
@@ -121,9 +127,9 @@ let browser;
 const errors = [];
 const offHost = [];
 try {
-  await startServer(5300, { ...GOOGLE_ENV, STARBASE_PUBLIC_URL: BASE, GOOGLE_TOKEN_KEY: `e2e-google-token-key-${tag}-0123456789abcdef`, POKE_PORT: '5303', STARBASE_JOBS_EVERY_MS: '1000' }, 'base.win');
-  await startServer(5302, { ...GOOGLE_ENV, STARBASE_PUBLIC_URL: `${BP}${P}`, BASE_PATH: P }, 'base.win under BASE_PATH');
-  await startServer(5304, { STARBASE_PUBLIC_URL: NOG }, 'base.win without Google');
+  await startServer(PORT, { ...GOOGLE_ENV, STARBASE_PUBLIC_URL: BASE, GOOGLE_TOKEN_KEY: `e2e-google-token-key-${tag}-0123456789abcdef`, POKE_PORT: String(POKE_PORT), STARBASE_JOBS_EVERY_MS: '1000' }, 'base.win');
+  await startServer(BP_PORT, { ...GOOGLE_ENV, STARBASE_PUBLIC_URL: `${BP}${P}`, BASE_PATH: P }, 'base.win under BASE_PATH');
+  await startServer(NOG_PORT, { STARBASE_PUBLIC_URL: NOG }, 'base.win without Google');
 
   browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--no-sandbox', '--disable-dev-shm-usage'] });
   const contexts = [];
@@ -156,10 +162,10 @@ try {
   }, [path, body]);
   // The fake's page: pick an account (or Cancel), and wait to be back.
   const pickGoogle = async (p, who) => {
-    await p.waitForURL((u) => u.port === '5301', { timeout: 10000 });
+    await p.waitForURL((u) => u.port === String(G_PORT), { timeout: 10000 });
     if (who === 'cancel') await p.click('#cancel');
     else await p.click(`a.acct[data-sub="${ACCTS[who].sub}"]`);
-    await p.waitForURL((u) => u.port !== '5301', { timeout: 10000 });
+    await p.waitForURL((u) => u.port !== String(G_PORT), { timeout: 10000 });
     await p.waitForLoadState('domcontentloaded');
   };
   const passwordIn = async (p, origin, path, email) => {
@@ -586,9 +592,18 @@ try {
     check('GoogleConnect while Google asks to wait: “try again after <time>”', paused.trouble === 'paused', JSON.stringify(paused));
     await shot(m, '32-connect-paused-desktop');
 
+    // Watch every change: "Disconnected" must never sit beside the old "Connected as".
+    await m.evaluate(() => {
+      window.__ggBoth = false;
+      const el = document.querySelector('.gg-connect');
+      const look = () => { if (/Disconnected\./.test(el.textContent) && /Connected as/.test(el.textContent)) window.__ggBoth = true; };
+      new MutationObserver(look).observe(el, { subtree: true, childList: true, characterData: true });
+    });
     await piece.getByRole('button', { name: /Disconnect/ }).click();
     await piece.locator('.gg-confirm').getByRole('button', { name: 'Disconnect' }).click();
     await piece.getByText('Disconnected. Google no longer lets base.win in.').waitFor({ timeout: 8000 });
+    check('GoogleConnect Disconnect: “Disconnected” never shown beside “Connected as”', !(await m.evaluate(() => window.__ggBoth)));
+    await piece.getByText('Connect Google', { exact: true }).waitFor({ timeout: 8000 }).catch(() => {});
     check('GoogleConnect Disconnect: said, and “Connect Google” is back', (await piece.getByText('Connect Google', { exact: true }).count()) === 1);
     await shot(m, '33-connect-disconnected-desktop');
 
@@ -603,7 +618,7 @@ try {
 
   // ── The wrong address; the installed app ──
   {
-    const LOCAL = 'http://localhost:5300';
+    const LOCAL = `http://localhost:${PORT}`;
     const { page } = await newPage(DESKTOP, 'wrong address');
     await page.route('**/*', (r) => r.continue()); // localhost is this machine too
     await passwordIn(page, LOCAL, '/login', dee); // unlinked by the manager above
@@ -611,7 +626,7 @@ try {
     await page.goto(`${LOCAL}/profile`, { waitUntil: 'domcontentloaded' });
     await page.locator('.gg-card').waitFor({ timeout: 8000 });
     await page.getByText(`Open base.win at ${BASE} to use Google here.`).waitFor({ timeout: 8000 }).catch(() => {});
-    check('opened at another address: one line instead of Link', /Open base\.win at http:\/\/127\.0\.0\.1:5300 to use Google here\./.test(await text(page, '.gg-card'))
+    check('opened at another address: one line instead of Link', new RegExp(`Open base\\.win at http://127\\.0\\.0\\.1:${PORT} to use Google here\\.`).test(await text(page, '.gg-card'))
       && (await page.getByText('Link Google account').count()) === 0, await text(page, '.gg-card'));
     await shot(page, '21-profile-wrong-address-desktop');
     await page.goto(`${LOCAL}/e2e-google-connect`, { waitUntil: 'domcontentloaded' });
@@ -685,7 +700,7 @@ try {
     const { ctx: c2, page: p2 } = await newPage(DESKTOP, 'basepath google');
     await p2.goto(`${BP}${P}/desk/login`, { waitUntil: 'domcontentloaded' });
     await p2.click('.gg-btn');
-    await p2.waitForURL((u) => u.port === '5301', { timeout: 10000 });
+    await p2.waitForURL((u) => u.port === String(G_PORT), { timeout: 10000 });
     const flow = (await c2.cookies(`${BP}${P}/`)).find((c) => c.name === 'mv2_google');
     await p2.click(`a.acct[data-sub="${ACCTS.zed.sub}"]`);
     await p2.waitForURL(new RegExp(`${P}/desk/?$`), { timeout: 10000 });
