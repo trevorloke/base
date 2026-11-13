@@ -249,6 +249,7 @@ export default function App({ mode = 'field' }) {
           <Route path="/outreach/:tab" element={<Outreach />} />
           <Route path="/media" element={<Media />} />
           <Route path="/media/contacts" element={<Media />} />
+          <Route path="/media/templates" element={<Media />} />
           <Route path="/media/releases/:id" element={<Media />} />
           {/* Settings: members, teams, permissions (the old /admin and /team). */}
           <Route path="/team" element={<Navigate to="/settings" replace />} />

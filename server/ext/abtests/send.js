@@ -42,6 +42,8 @@ import { deliverTexts } from '../texting/blast.js';
 import { brandFor } from '../../lib/brand.js';
 import { whyNot } from '../../lib/reach.js';
 import { onMediaTags } from '../media/rules.js';
+import { authorizedBy } from '@starbase/shared/site/wording';
+import { fillHtml, fillText, firstOf } from '@starbase/shared/email/words';
 
 export const AB_MIN = 50;
 export const AB_PCTS = [10, 20, 30];
@@ -182,11 +184,30 @@ export const deliveredRow = (alias = '') => {
 // link) says where the link will be.
 const hasUnsub = (kind) => kind === 'newsletter' || kind === 'eblast' || kind === 'press';
 const UNSUB_WORDS = { press: 'Don’t want press releases? Unsubscribe' };
-export const blastText = (ctx, kind, body, unsubscribeUrl) => {
+
+// The lines the law asks for under every campaign email, from the website's
+// own settings (Website → Settings: the mailing address, an email or phone,
+// the financial agent): { address, contact, auth }, each '' when not set.
+// Read once per send run. Nothing set: the footer is as it always was.
+const trimmed = (v) => String(v ?? '').replace(/\s+/g, ' ').trim();
+export const footOf = async (db, workspaceId) => {
+  let org = {};
+  try {
+    const row = (await db.query('select org from site_settings where workspace_id = $1', [workspaceId])).rows[0];
+    org = (typeof row?.org === 'string' ? JSON.parse(row.org) : row?.org) || {};
+  } catch { org = {}; }
+  return { address: trimmed(org.address), contact: trimmed(org.email) || trimmed(org.phone), auth: trimmed(authorizedBy(org)) };
+};
+// "PO Box 12, Surrey BC." → "PO Box 12, Surrey BC" — the footer adds its own full stop.
+const stop = (v) => trimmed(v).replace(/\.+$/, '');
+const footLines = (foot) => [foot?.address, foot?.contact].map(stop).filter(Boolean);
+
+export const blastText = (ctx, kind, body, unsubscribeUrl, foot = null) => {
   const base = ctx.publicUrl || '';
   const words = markdownPlain(body).replace(/(^|[\s(])\/media\/([A-Za-z0-9-]+)/g, `$1${base}/media/$2`);
+  const more = [...footLines(foot), stop(foot?.auth)].filter(Boolean).map((l) => `${l}.\n`).join('');
   return words + (hasUnsub(kind)
-    ? `\n\n—\nSent by ${ctx.workspace.name}.\n${UNSUB_WORDS[kind] || 'Unsubscribe'}: ${unsubscribeUrl || '(each recipient gets their own link)'}`
+    ? `\n\n—\nSent by ${ctx.workspace.name}.\n${more}${UNSUB_WORDS[kind] || 'Unsubscribe'}: ${unsubscribeUrl || '(each recipient gets their own link)'}`
     : `\n\n—\n${ctx.workspace.name}`);
 };
 
@@ -327,7 +348,7 @@ const emailHeader = (brand, base, name) => {
 
 // The HTML part: the message laid out, its links tracked, the footer
 // (unsubscribe untracked), and the open pixel last — none on a test copy.
-export const blastHtml = (ctx, kind, body, unsubscribeUrl, token, links) => {
+export const blastHtml = (ctx, kind, body, unsubscribeUrl, token, links, foot = null) => {
   const base = ctx.publicUrl || '';
   const brand = brandFor(ctx.workspace?.settings);
   const counted = token ? ' We count opens and clicks.' : '';
@@ -335,22 +356,29 @@ export const blastHtml = (ctx, kind, body, unsubscribeUrl, token, links) => {
   const unsub = unsubscribeUrl
     ? `${ask}<a href="${esc(unsubscribeUrl)}" style="color:#5d6481">Unsubscribe</a>`
     : `<span style="color:#5d6481">${ask}Unsubscribe (each recipient gets their own link)</span>`;
-  const foot = hasUnsub(kind)
-    ? `Sent by ${esc(ctx.workspace.name)}.${counted}<br>${unsub}`
+  // Sent by <name>. <address>. <contact>.<br><Authorized by …>. — each part
+  // only when set, every value escaped.
+  const where = footLines(foot).map((l) => ` ${esc(l)}.`).join('');
+  const auth = stop(foot?.auth) ? `<br>${esc(stop(foot.auth))}.` : '';
+  const lines = hasUnsub(kind)
+    ? `Sent by ${esc(ctx.workspace.name)}.${where}${auth}${counted}<br>${unsub}`
     : `${esc(ctx.workspace.name)}.${counted}`;
   return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>'
     + '<body style="margin:0;padding:0;background:#f4f5fa">'
     + '<div style="max-width:600px;margin:0 auto;padding:24px 16px;font:17px/1.55 system-ui,-apple-system,\'Segoe UI\',Roboto,Arial,sans-serif;color:#161a2e">'
     + emailHeader(brand, base, ctx.workspace?.name)
     + emailBody(body, { base, token, links, link: brand.link })
-    + `<p style="margin:24px 0 0;padding-top:12px;border-top:1px solid #dde0ec;font-size:14px;color:#5d6481">${foot}</p>`
+    + `<p style="margin:24px 0 0;padding-top:12px;border-top:1px solid #dde0ec;font-size:14px;color:#5d6481">${lines}</p>`
     + (token ? `<img src="${esc(`${base}/o/${token}.gif`)}" width="1" height="1" alt="" style="display:block;width:1px;height:1px;border:0">` : '')
     + '</div></body></html>';
 };
 
-export const composeBlast = (ctx, { kind, body, unsubscribeUrl, token, links, attachments }) => ({
-  text: blastText(ctx, kind, body, unsubscribeUrl),
-  html: blastHtml(ctx, kind, body, unsubscribeUrl, token, links),
+// fill: { first, campaign } — "[first name]" and "[campaign]" put in after
+// the message is laid out, so a name is only ever words (escaped in the
+// HTML part). foot: footOf's lines. Neither given (ladders): as before.
+export const composeBlast = (ctx, { kind, body, unsubscribeUrl, token, links, attachments, fill = null, foot = null }) => ({
+  text: fill ? fillText(blastText(ctx, kind, body, unsubscribeUrl, foot), fill) : blastText(ctx, kind, body, unsubscribeUrl, foot),
+  html: fill ? fillHtml(blastHtml(ctx, kind, body, unsubscribeUrl, token, links, foot), fill) : blastHtml(ctx, kind, body, unsubscribeUrl, token, links, foot),
   // The mail-app Unsubscribe button: the same link, by POST.
   headers: hasUnsub(kind) && unsubscribeUrl ? unsubscribeHeaders(unsubscribeUrl) : undefined,
   ...(attachments?.length ? { attachments } : {}),
@@ -436,10 +464,12 @@ export const deliver = async (db, ctx, blast, { actorId = null, budgetMs = Infin
   const run = { sent: 0, failed: 0, skipped: 0, suppressed: 0, unsure: 0, claimed: 0, note: null, more: false };
   const t0 = Date.now();
   let attachments = null; // the send's files, read once, before the first email
+  let foot = null; // the lines at the bottom (footOf), read with them
   for (;;) {
     // Email disconnected since the tap: nothing is claimed; the rest stay not sent.
     if (!emailConfigured()) { run.note = NO_PROVIDER; break; }
     if (!attachments) attachments = await loadAttachments(db, workspaceId, { blastId: blast.id });
+    if (!foot) foot = await footOf(db, workspaceId);
     if (run.claimed >= max || Date.now() - t0 >= budgetMs) {
       run.more = await anyAsked(db, workspaceId, blast.id);
       break;
@@ -447,7 +477,7 @@ export const deliver = async (db, ctx, blast, { actorId = null, budgetMs = Infin
     const { result: go } = await act(async (tx, emit) => {
       const rows = (await tx.query(
         `select r.id, r.email, r.person_id, r.token, r.ab_group, r.send_tries, ${stoppedRow('r')} as stopped,
-                coalesce(p.tags, '[]'::jsonb) as tags
+                coalesce(p.tags, '[]'::jsonb) as tags, r.name, p.first_name
          from blast_recipients r left join persons p on p.id = r.person_id and p.workspace_id = r.workspace_id
          where r.blast_id = $1 and r.workspace_id = $2 and ${askedRow('r')}
          order by r.created_at, r.id limit $3 for update of r skip locked`,
@@ -516,12 +546,14 @@ export const deliver = async (db, ctx, blast, { actorId = null, budgetMs = Infin
     if (go.empty) break;
     for (const r of go.rows) {
       run.claimed += 1;
+      // "[first name]" and "[campaign]", filled for each person.
+      const fill = { first: firstOf(r), campaign: ctx.workspace.name };
       const res = await sendEmail({
         // The From the send recorded (ext/senders): a send keeps it for life.
         from: blast.from_addr || undefined,
         to: r.email,
-        subject: subjectFor(blast, r.ab_group),
-        ...composeBlast(ctx, { kind: blast.kind, body: blast.body, unsubscribeUrl: r.unsubscribeUrl, token: r.token, links, attachments }),
+        subject: fillText(subjectFor(blast, r.ab_group), fill),
+        ...composeBlast(ctx, { kind: blast.kind, body: blast.body, unsubscribeUrl: r.unsubscribeUrl, token: r.token, links, attachments, fill, foot }),
         idempotencyKey: sendKey(blast.id, r),
         ref: r.id,
       });

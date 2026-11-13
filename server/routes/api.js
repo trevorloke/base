@@ -34,6 +34,7 @@ import { goingRow, repeatRow, retryable, sendJobOn } from '../ext/abtests/send.j
 import { notSuppressed } from '../lib/mail/index.js';
 import { attachmentsOf } from '../ext/abtests/attach.js';
 import { onMedia } from '../ext/media/rules.js';
+import { toWords } from '@starbase/shared/email/words';
 // The open pass (ext/passes) and the door rule it shares with the phone.
 import { openPass, listedWhere } from '../ext/passes/rule.js';
 import { doorState, inPass } from '@starbase/shared/passes';
@@ -1017,7 +1018,9 @@ app.get('/blasts', async (c) => {
   const files = await attachmentsOf(c.get('db'), ctx.workspaceId);
   const parseJ = (v) => { try { return typeof v === 'string' ? JSON.parse(v) : v; } catch { return null; } };
   return c.json({
-    blasts: rows.map((b) => ({ ...b, audience: parseJ(b.audience) || null, attachments: files[b.id] || [] })),
+    // The subject in words ("Thank you, [first name]"), as the compose shows
+    // it — and as an older screen compares it to what was typed.
+    blasts: rows.map((b) => ({ ...b, subject: toWords(b.subject), audience: parseJ(b.audience) || null, attachments: files[b.id] || [] })),
     mediaContacts: media, emailConfigured: emailConfigured(), textConfigured: textConfigured(),
   });
 });

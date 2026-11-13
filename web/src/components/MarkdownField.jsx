@@ -4,7 +4,12 @@
 //                      link, list, picture, and "Link to…" for the campaign's
 //                      own pages when given `links`) and a Preview that is
 //                      exactly the email's renderer (@starbase/shared/markdown);
-//                      `upload` is the picture's action (blast.picture)
+//                      `upload` is the picture's action (blast.picture);
+//                      `fills` ([{ word, button }]) adds "+ First name"-style
+//                      buttons that put the word at the cursor; `footer`
+//                      ends the Preview (the email's bottom lines)
+//                      A selected "[link: Read more]" becomes "[Read more](…)"
+//                      under Link and "Link to…", never a link around it.
 //   shrinkImage()      ≤ 2000px and about ≤ 1.5 MB before a picture is sent
 //   uploadImage()      shrink, then the action; answers { id, url }
 //   toDataUrl()        a file as base64, for an attachment
@@ -109,7 +114,10 @@ const TOOLS = [
   { key: 'list', label: '• List', title: 'List', line: '- ', fill: 'Item' },
 ];
 
-export function MarkdownField({ id, label, value, onChange, rows = 12, placeholder, upload, links }) {
+// A template's "[link: Read more]": its words, when that is what's selected.
+const LINK_SPOT = /^\[link:\s*(.+?)\]$/i;
+
+export function MarkdownField({ id, label, value, onChange, rows = 12, placeholder, upload, links, fills, footer }) {
   const ref = useRef(null);
   const [preview, setPreview] = useState(false);
   const linkMenu = useId();
@@ -126,9 +134,39 @@ export function MarkdownField({ id, label, value, onChange, rows = 12, placehold
       el.setSelectionRange(start + before.length, start + before.length + picked.length);
     });
   };
+  // Replace the selected "[link: words]" with "[words](url)"; selectUrl puts
+  // the cursor over the address, ready to paste. False when it isn't one.
+  const linkSpot = (url, selectUrl) => {
+    const el = ref.current;
+    if (!el) return false;
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    const picked = value.slice(start, end);
+    const lead = picked.length - picked.trimStart().length;
+    const m = LINK_SPOT.exec(picked.trim());
+    if (!m) return false;
+    const from = start + lead;
+    const to = from + picked.trim().length;
+    const made = `[${m[1].trim()}](${url})`;
+    onChange(value.slice(0, from) + made + value.slice(to));
+    requestAnimationFrame(() => {
+      el.focus();
+      const at = from + made.length - 1 - url.length;
+      if (selectUrl) el.setSelectionRange(at, at + url.length);
+      else el.setSelectionRange(from + made.length, from + made.length);
+    });
+    return true;
+  };
+  const put = (word) => {
+    const el = ref.current;
+    const start = el?.selectionStart ?? value.length;
+    const end = el?.selectionEnd ?? value.length;
+    onChange(value.slice(0, start) + word + value.slice(end));
+    requestAnimationFrame(() => { if (el) { el.focus(); el.setSelectionRange(start + word.length, start + word.length); } });
+  };
   const tool = (t) => {
     if (t.wrap) return insert(t.wrap[0], t.wrap[1], t.fill);
-    if (t.link) return insert('[', '](https://)', 'link words');
+    if (t.link) return linkSpot('https://', true) || insert('[', '](https://)', 'link words');
     // Line tools start a new line when the cursor isn't at one.
     const at = ref.current?.selectionStart ?? value.length;
     const nl = at > 0 && value[at - 1] !== '\n' ? '\n' : '';
@@ -142,11 +180,14 @@ export function MarkdownField({ id, label, value, onChange, rows = 12, placehold
           {!preview && TOOLS.map((t) => (
             <button key={t.key} type="button" className={`ws-md__tool ws-md__tool--${t.key}`} title={t.title} aria-label={t.title} onClick={() => tool(t)}>{t.label}</button>
           ))}
+          {!preview && fills?.map((f) => (
+            <button key={f.word} type="button" className="ws-md__tool ws-md__fill" title={`Put ${f.word} here`} onClick={() => put(f.word)}>{f.button}</button>
+          ))}
           {!preview && <UploadButton className="ws-md__tool" label="Picture" upload={upload} onUploaded={(m) => insert('\n![', `](/media/${m.id})\n`, 'picture')} />}
           {!preview && links?.length > 0 && (
             // "Link to…": one of the campaign's own pages, as a link at the cursor.
             <select className="ws-md__tool ws-md__links" aria-label="Link to a campaign page" id={linkMenu} value=""
-              onChange={(e) => { const l = links[Number(e.target.value)]; if (l) insert('[', `](${l.url})`, l.label); }}>
+              onChange={(e) => { const l = links[Number(e.target.value)]; if (l && !linkSpot(l.url, false)) insert('[', `](${l.url})`, l.label); }}>
               <option value="">Link to…</option>
               {links.map((l, i) => <option key={l.url} value={i}>{l.label}</option>)}
             </select>
@@ -157,8 +198,13 @@ export function MarkdownField({ id, label, value, onChange, rows = 12, placehold
         </div>
       </div>
       {preview
-        // eslint-disable-next-line react/no-danger -- the site's own safe renderer: every character is escaped first
-        ? <div className="ws-md__preview-body ws-prose" dangerouslySetInnerHTML={{ __html: renderMarkdown(value) || '<p class="muted">Nothing yet.</p>' }} />
+        ? (
+          <div className="ws-md__preview-body">
+            {/* eslint-disable-next-line react/no-danger -- the site's own safe renderer: every character is escaped first */}
+            <div className="ws-prose" dangerouslySetInnerHTML={{ __html: renderMarkdown(value) || '<p class="muted">Nothing yet.</p>' }} />
+            {footer}
+          </div>
+        )
         : <textarea id={id} ref={ref} className="input ws-md__text" rows={rows} value={value} placeholder={placeholder}
           onChange={(e) => onChange(e.target.value)} />}
     </div>

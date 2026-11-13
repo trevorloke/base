@@ -25,7 +25,7 @@ const parseJ = (v, d) => (typeof v === 'string' ? JSON.parse(v) : (v ?? d));
 
 // Where a shared link starts: the campaign's own domain, else the app's
 // /site address (the public address when the app runs under a client's path).
-const baseOf = (c, domains) => {
+export const baseOf = (c, domains) => {
   const d = Array.isArray(domains) ? String(domains[0] || '').trim().toLowerCase() : '';
   if (d) return `https://${d}`;
   const url = new URL(c.req.url);

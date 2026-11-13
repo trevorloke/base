@@ -3,7 +3,7 @@
 // already use.
 //
 //   SOURCES   [{ key, group, can(viewer), read(db, q) → entries }]
-//   q         { ws, person: { id, name, email }, viewer, before: { at, key }
+//   q         { ws, person: { id, name, first_name, email }, viewer, before: { at, key }
 //               | null, limit, tz, campaign }
 //   an entry  { at (a Date), key, group, kind, label, title, detail, by,
 //               link, day?, rating? }
@@ -23,6 +23,7 @@ import { placeLabel } from '@starbase/shared/shiftkinds';
 import { WEB_WORDS, MONEY_KINDS, campaignWords } from '../webdid/words.js';
 import { showValue } from '../surveys/answers.js';
 import { fillIn } from '../ladders/shape.js';
+import { fillText, firstOf } from '@starbase/shared/email/words';
 import { wordOf as paymentWord } from '../payments/api.js';
 import { kitCodeSql, sourceWords } from '../socials/sources.js';
 
@@ -163,7 +164,8 @@ const emails = async (db, q) => (await rowsOf(db, `
       ) x(what, at)`,
   q, String(q.person.email || '').trim().toLowerCase(),
 )).map((r) => entry(r, 'messages', EMAIL[r.what][0], 'Email', EMAIL[r.what][1], {
-  detail: line(clean(r.subject, 200), r.what === 'click' && shortUrl(r.url), r.what === 'bounce' && clean(r.bounce_detail, 120)),
+  // The subject as it went to them: "Thank you, Sam".
+  detail: line(clean(fillText(r.subject, { first: firstOf(q.person), campaign: q.campaign }), 200), r.what === 'click' && shortUrl(r.url), r.what === 'bounce' && clean(r.bounce_detail, 120)),
   link: '/outreach/email',
 }));
 
