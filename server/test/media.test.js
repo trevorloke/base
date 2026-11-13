@@ -130,7 +130,7 @@ test('media.send: to media, to influencers, to both; any capitals; do-not tags l
   assert.deepEqual(await sentTo(old.blast.id), [mail('ann'), mail('bo'), mail('cy')].sort());
 
   const read = ok(await mgr.get('/api/media/contacts'));
-  assert.deepEqual(read.counts, { media: 5, influencer: 1, emailable: { media: 3, influencer: 1, all: 4 } });
+  assert.deepEqual(read.counts, { media: 5, influencer: 1, emailable: { media: 3, influencer: 1, all: 4 }, lists: { op_ed: 0, letters: 0, show: 0 } });
   const why = Object.fromEntries(read.contacts.map((c) => [c.person.name, [c.reachable, c.why]]));
   assert.deepEqual(why['Dee Example'], [false, 'do_not_email']);
   assert.deepEqual(why['Eli Example'], [false, 'do_not_contact']);

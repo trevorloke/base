@@ -21,7 +21,7 @@ export const AREAS = [
   { key: 'money', label: 'Donations', what: 'gifts, receipts' },
   { key: 'signs', label: 'Signs', what: 'requests, crews, the map of signs' },
   { key: 'outreach', label: 'Outreach', what: 'newsletters, blasts, texts, press, surveys, ladders' },
-  { key: 'media', label: 'Media', what: 'press releases, media and influencer contacts' },
+  { key: 'media', label: 'Media', what: 'press releases, media contacts, outlets and letters' },
   { key: 'data', label: 'Data', what: 'the full export, the event log, records' },
   { key: 'admin', label: 'Admin', what: 'members, teams, permissions, the rating scale' },
   { key: 'learn', label: 'ImagineU', what: 'training: the lessons, their files, who has done what' },
@@ -60,6 +60,7 @@ const ACTION_AREA = {
   site: 'site',
   share: 'outreach', // share kits (ext/socials/share.js)
   media: 'media', // press releases and their contacts (ext/media)
+  letter: 'media', // the desk's side of letters and op-eds (ext/letters); a writer's own myletter.* is no area's
 };
 // field.values.set is a person's record; field.ping ("I'm here", from the
 // map) is nobody's area — anyone who canvasses may say where they are; nor

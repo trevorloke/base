@@ -27,7 +27,7 @@ import { audienceOf, recipientsOf } from '../ext/lists/audience.js';
 // The From a send goes from (the campaign's From addresses, ext/senders).
 import { resolveFrom } from '../ext/senders/rules.js';
 // Who is on the media list (ext/media): tagged media or influencer, any capitals.
-import { onMedia } from '../ext/media/rules.js';
+import { LISTS, onLists, onMedia } from '../ext/media/rules.js';
 import { fillText, firstOf, toCodes } from '@starbase/shared/email/words';
 import { emailProblem, stillToFill, testProblem } from '@starbase/shared/email/check';
 import { mayReach, person, address, whyNotSql } from '../lib/reach.js';
@@ -864,6 +864,8 @@ export const FIELD_ACTIONS = {
         filter: z.record(z.string().max(40), z.string().max(400)).optional(),
         // press: who on the media list (media.send's To). Absent: media.
         media: z.array(z.enum(['media', 'influencer'])).min(1).max(2).optional(),
+        // press: only contacts still on one of these lists (media.send's Only:).
+        lists: z.array(z.enum(LISTS)).min(1).max(3).optional(),
       }).optional(),
       // Two subject lines: A and B go to two small groups now; the winner
       // goes to everyone else when the wait ends (ext/abtests).
@@ -922,7 +924,8 @@ export const FIELD_ACTIONS = {
         audience = (await tx.query(
           `select p.id as person_id, p.email, p.name from persons p
            where p.workspace_id = $1 and p.deleted_at is null and ${onMedia('p', input.audience?.media || ['media'])}
-             and ${mayReach('email', 'press', person('p', '$1'))}`,
+             and ${mayReach('email', 'press', person('p', '$1'))}
+             ${input.audience?.lists ? `and exists (select 1 from media_contacts m where m.workspace_id = p.workspace_id and m.person_id = p.id and ${onLists('m', input.audience.lists)})` : ''}`,
           [ctx.workspaceId],
         )).rows;
       }
@@ -946,7 +949,10 @@ export const FIELD_ACTIONS = {
         `insert into blasts (id, workspace_id, kind, subject, body, status, provider_note, audience_count, created_by, audience, list_id, from_addr)
          values ($1, $2, $3, $4, $5, 'queued', $6, $7, $8, $9, $10, $11)`,
         [id, ctx.workspaceId, input.kind, subject, input.body, note, audience.length, ctx.user.id,
-          picked ? JSON.stringify({ list_id: picked.list?.id || null, list_name: picked.name, kind: picked.list?.kind || 'filter', filter: picked.list ? picked.list.filter : picked.filter }) : null, picked?.list?.id || null,
+          picked ? JSON.stringify({ list_id: picked.list?.id || null, list_name: picked.name, kind: picked.list?.kind || 'filter', filter: picked.list ? picked.list.filter : picked.filter })
+            // A release to some of Media's lists says which (its detail line).
+            : input.kind === 'press' && input.audience?.lists ? JSON.stringify({ media: input.audience.media || ['media'], lists: input.audience.lists })
+              : null, picked?.list?.id || null,
           fromAddr],
       );
       const attachments = await bindAttachments(tx, ctx, id, input.attachment_ids);
