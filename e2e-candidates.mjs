@@ -3,7 +3,9 @@
 // (Mo, for Mayor, with no race; Cleo, Council on the City council race),
 // invites both, and each joins in a browser of their own. On a 390x844
 // phone, Cleo's Today is "Your day": one primary button, "Met someone →",
-// her booked shift, "Your week", and Your race from Path to win; Mo's, with
+// her booked shift, "Your week", "Share · 1 post", and Your race from Path
+// to win (reloaded with no signal and no copy of her call time: "Met
+// someone" still leads, and the race says No signal); Mo's, with
 // nothing booked and no race, shows only the button. A candidate has no
 // Admin link; /admin tells them it's not theirs; /api/candidates and
 // /api/pathtowin refuse them. The manager gives People to the Candidates
@@ -127,6 +129,11 @@ const meCleo = (await cleo.api('/auth/me')).json;
 check('Cleo joined in her own browser: a volunteer with the Council seat',
   meCleo.role === 'volunteer' && meCleo.candidate?.office === 'Council' && meCleo.candidate?.race_label === 'City council', JSON.stringify(meCleo.candidate));
 
+// A post to share, made at the desk: a candidate's day leads to it as a volunteer's does.
+await api('/site'); // the campaign's website, as first opened
+const kit = (await api('/actions/share.kit.save', { title: 'Sign for SkyTrain', body: 'Add your name for SkyTrain.', path: '/' })).json?.kit;
+check('the desk makes a post to share', kit && (await api('/actions/share.kit.open', { id: kit.id, open: true })).status === 200);
+
 // ── 2. Cleo's phone: Your day ──
 await cleo.p.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
 await cleo.p.waitForSelector('h1:has-text("Your day")', { timeout: 10000 });
@@ -137,6 +144,7 @@ check('"Good …, Cleo" and "Your day"', /Good (morning|afternoon|evening), Cleo
 check('"Met someone →" is the one primary button, to Mainstreeting',
   (await cleo.p.getAttribute('.today-go a.btn-primary', 'href')) === '/mainstreet' && /Met someone/.test(await cleo.p.innerText('.today-go a.btn-primary')));
 check('her booked shift, then "Your week · 1"', /Your next shift/.test(t) && /Your week · 1/.test(t));
+check('"Share · 1 post" leads to her own link and the posts', /Share · 1 post/.test(t) && await cleo.p.locator('.today-next a[href="/share"]').count() === 1);
 const race = await cleo.p.innerText('.cand-race');
 check('Your race · City council: Supporters, Needed, Days left', /City council/.test(race) && /Supporters/.test(race) && /Needed/.test(race) && /Days left/.test(race), race.replace(/\s+/g, ' '));
 const m2 = await measure(cleo.p, 'main');
@@ -146,6 +154,25 @@ await cleo.p.click('.today-morebox__toggle');
 const more = await cleo.p.innerText('.today-morebox__body');
 check('More: Start canvassing, Calls, Signs', /Start canvassing/.test(more) && /Calls/.test(more) && /Signs/.test(more));
 await cleo.p.screenshot({ path: `${SHOTS}/04-candidate-today-more-390.png`, fullPage: true });
+
+// Offline, with no copy of her call time on this phone: the day still opens
+// on a tappable "Met someone", and the race says No signal, not Loading….
+await cleo.p.evaluate(() => navigator.serviceWorker?.ready);
+await sleep(1500);
+await cleo.p.evaluate(() => { for (const k of Object.keys(localStorage)) if (/calltime-home/.test(k)) localStorage.removeItem(k); });
+await cleo.ctx.setOffline(true);
+await cleo.p.reload({ waitUntil: 'domcontentloaded' });
+await cleo.p.waitForSelector('h1:has-text("Your day")', { timeout: 10000 });
+await sleep(800);
+const off = await cleo.p.innerText('main');
+const offGo = await cleo.p.$$eval('.today-go a.btn-primary', (els) => els.map((a) => [a.getAttribute('href'), a.textContent]));
+check('offline, no copy: "Met someone →" is the primary, a Call time link, "Your race: No signal" — no Loading…',
+  offGo.length === 1 && offGo[0][0] === '/mainstreet' && /Met someone/.test(offGo[0][1]) && /Call time/.test(off) && /Your race: No signal/.test(off) && !/Loading…|Unavailable/.test(off),
+  `${JSON.stringify(offGo)} ${off.replace(/\s+/g, ' ').slice(0, 200)}`);
+await cleo.p.screenshot({ path: `${SHOTS}/04b-candidate-today-offline-390.png`, fullPage: true });
+await cleo.ctx.setOffline(false);
+await cleo.p.reload({ waitUntil: 'domcontentloaded' });
+await cleo.p.waitForSelector('.cand-race .today-num', { timeout: 10000 });
 
 // Mo: nothing booked, no race — only the button.
 const moB = await joinIn(moLink, 'Mo Example');

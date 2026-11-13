@@ -49,6 +49,7 @@ import { useFollowupCount } from '../components/LaddersCount.js';
 import FollowupsToday from '../components/FollowupsToday.jsx';
 import { useTextingStatus } from '../components/TextingStatus.js';
 import { NeedsSignal, useOnline } from '../components/NoSignal.jsx';
+import { phoneCopy, useKeepCopy } from '../components/OfflineCache.js';
 import { useRequestsCount } from '../components/RequestsCount.js';
 import { MineAllTime } from '../components/FieldReportBits.jsx';
 import { turfNames } from '../components/ShiftTurfs.jsx';
@@ -805,7 +806,11 @@ const WEEK = 7 * DAY;
 const raceNum = (n) => (Number(n) >= 100_000
   ? Number(n).toLocaleString('en-CA', { notation: 'compact', maximumFractionDigits: 1 })
   : num(n));
-function YourRace({ home }) {
+// No copy on this phone and no signal to read one: the fetch waits (or,
+// opened with no signal, fails).
+const waitsForSignal = (q, online) => !q.data && (q.fetchStatus === 'paused' || !online);
+function YourRace({ home, offline }) {
+  if (offline) return <p className="muted cand-race" role="status">Your race: No signal</p>;
   if (home.isPending) return <p className="muted cand-race">Loading…</p>;
   const race = home.data?.race;
   if (home.isError || race?.unavailable) {
@@ -838,7 +843,10 @@ function YourRace({ home }) {
 }
 
 function CandidateToday({ b, me }) {
-  const home = useQuery({ queryKey: ['candidate-home'], queryFn: () => apiGet('/candidate/home') });
+  // The same copy Call time keeps, so with no signal the day still opens.
+  const home = useQuery({ queryKey: ['candidate-home'], queryFn: () => apiGet('/candidate/home'), ...phoneCopy(me, 'calltime-home') });
+  useKeepCopy(me, 'calltime-home', home);
+  const offline = waitsForSignal(home, useOnline());
   const { ready, next } = useMyNextShift(me);
   const shiftsQ = useQuery({ queryKey: ['shifts'], queryFn: () => apiGet('/shifts') });
   const now = Date.now();
@@ -861,7 +869,7 @@ function CandidateToday({ b, me }) {
       {b.voted?.on && <GotvCard v={b.voted} />}
       <FollowupsToday me={me} />
 
-      {home.isPending ? (
+      {home.isPending && !offline ? (
         // Not "Met someone" first and call time a moment later: a quick tap
         // would go to the wrong place.
         <section className="today-go" aria-label="Loading">
@@ -881,8 +889,12 @@ function CandidateToday({ b, me }) {
           <Link to="/mainstreet" className="btn btn-primary today-start">
             Met someone <span aria-hidden="true">→</span>
           </Link>
+          {/* No signal: Call time keeps its own list on the phone. */}
+          {offline && (
+            <p className="today-go__meta"><Link to="/call-time" className="btn today-tap">Call time</Link></p>
+          )}
           {/* Call time couldn't be read: said, never silently gone. */}
-          {home.isError && (
+          {home.isError && !offline && (
             <p className="today-go__meta cand-race__fail" role="status">
               <span className="muted">Call time: Unavailable</span>
               <button type="button" className="btn today-tap" onClick={() => home.refetch()} disabled={home.isFetching}>Try again</button>
@@ -892,11 +904,11 @@ function CandidateToday({ b, me }) {
       )}
 
       {/* No rows at all: no empty box either. */}
-      {(calling || !ready || next || week > 0 || Number(b.myPeople) > 0) && <ul className="today-rows today-next">
+      {(calling || !ready || next || week > 0 || Number(b.myPeople) > 0 || Number(b.share?.kits) > 0) && <ul className="today-rows today-next">
         {calling && <LinkRow to="/mainstreet" main="Met someone" />}
         {!ready && <li className="today-need today-row--wait muted" role="status">Loading…</li>}
         {ready && next && (
-          <WhenRow to={`/shifts/${next.id}`} kicker="Your next shift" title={next.title} when={next.starts_at} tz={tz}
+          <WhenRow to={`/shifts/${next.id}`} kicker="Your next shift" title={next.title} when={hoursOf(next, next).starts_at} tz={tz}
             extra={turfNames(b.shiftTurfs?.[next.id] || []) || undefined} />
         )}
         {week > 0 && (
@@ -906,9 +918,14 @@ function CandidateToday({ b, me }) {
           <LinkRow to="/my-people" state={FROM_TODAY}
             main={<>My people · <strong className="mono">{num(b.myPeople)}</strong></>} />
         )}
+        {/* Their own link and the posts to share with it (ext/socials), as on a volunteer's day. */}
+        {Number(b.share?.kits) > 0 && (
+          <LinkRow to="/share" state={FROM_TODAY}
+            main={<>Share · <strong className="mono">{num(b.share.kits)}</strong> {plural(Number(b.share.kits), 'post')}</>} />
+        )}
       </ul>}
 
-      <YourRace home={home} />
+      <YourRace home={home} offline={offline} />
 
       <More>
         <ul className="today-rows">
