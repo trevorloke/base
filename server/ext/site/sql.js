@@ -73,7 +73,16 @@ create table if not exists site_pages (
   deleted_at timestamptz
 );
 alter table site_pages add column if not exists site_id uuid;
-drop index if exists site_pages_slug_idx;
+-- The main site's pages keep an index by the old name, so a build from
+-- before other websites (which runs "create unique index if not exists
+-- site_pages_slug_idx on (workspace_id, slug)") finds it and still starts
+-- when rolled back to. The old one, over every page, goes first.
+do $$ begin
+  if exists (select 1 from pg_indexes where schemaname = current_schema() and indexname = 'site_pages_slug_idx' and indexdef not like '%site_id IS NULL%') then
+    drop index site_pages_slug_idx;
+  end if;
+end $$;
+create unique index if not exists site_pages_slug_idx on site_pages (workspace_id, slug) where deleted_at is null and site_id is null;
 create unique index if not exists site_pages_site_slug_idx on site_pages (workspace_id, coalesce(site_id, '00000000-0000-0000-0000-000000000000'::uuid), slug) where deleted_at is null;
 create index if not exists site_pages_nav_idx on site_pages (workspace_id, nav_order) where deleted_at is null and status = 'published' and show_in_nav;
 

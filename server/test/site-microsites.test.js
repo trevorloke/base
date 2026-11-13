@@ -444,3 +444,15 @@ test('Authorized by: the agent and how to reach them; the old line only while no
   const now = ok(await mgr.get('/api/site')).settings.org;
   assert.deepEqual([now.agentName, now.agentContact, now.authorizationLine, now.phone], ['Ada Example', '604-555-0100', 'Authorized by Old Example, financial agent', '604-555-0199']);
 });
+
+test('rolling back to a build before other websites still starts: its slug index finds one by that name', async () => {
+  // What 04ab25f and 29f9396 run at start-up; both websites have a live 'home'.
+  assert.ok((await db.query("select count(*)::int as n from site_pages where workspace_id = $1 and slug = 'home' and deleted_at is null", [ws])).rows[0].n > 1);
+  await db.exec('create unique index if not exists site_pages_slug_idx on site_pages (workspace_id, slug) where deleted_at is null');
+  // And this build's start-up again after it, unharmed.
+  const { sql } = await import('../ext/site/sql.js');
+  await db.exec(sql);
+  const defs = (await db.query("select indexname, indexdef from pg_indexes where tablename = 'site_pages' and indexname like 'site_pages_%slug_idx' order by 1")).rows;
+  assert.deepEqual(defs.map((d) => d.indexname), ['site_pages_site_slug_idx', 'site_pages_slug_idx']);
+  assert.match(defs[1].indexdef, /WHERE \(\(deleted_at IS NULL\) AND \(site_id IS NULL\)\)/);
+});

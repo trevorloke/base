@@ -33,6 +33,10 @@ promote the code — the production database is the campaign's alone.
    `tzdataCurrent: false` means the server's time-zone rules predate B.C.'s
    permanent UTC-7 (every time after 1 Nov 2026 would show an hour off):
    redeploy on a newer Node image before going further.
+3. Going back to an earlier build (Render → **Rollback**) starts cleanly:
+   the database keeps what the older build expects to find. A build from
+   before other websites (Website → Other websites) doesn't know them, so
+   their pages show up among the main site's until you roll forward again.
 
 ## 2 · Domains
 
