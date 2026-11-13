@@ -12,7 +12,7 @@ import { useId, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { action } from '../api.js';
 import { GoogleLoading } from './GoogleConnect.jsx';
-import { DriveConnect, num, useDrive, usePickFromDrive } from './DriveBits.jsx';
+import { DriveConnect, DriveToast, num, useDrive, useDriveToast, usePickFromDrive } from './DriveBits.jsx';
 import './google.css';
 
 const WHO = [['off', 'No one'], ['managers', 'Managers'], ['desk', 'Anyone at the desk']];
@@ -27,6 +27,7 @@ export default function DrivePanel({ online }) {
   const [tried, setTried] = useState(null);
   const on = Boolean(d.data?.setup && d.data?.on);
   const picker = usePickFromDrive(on);
+  const toast = useDriveToast();
   if (d.data && !d.data.setup) return null;
   if (!d.data) return <div className="drv-panel-s"><GoogleLoading q={d} /></div>;
   const s = d.data;
@@ -93,6 +94,7 @@ export default function DrivePanel({ online }) {
         </>
       )}
       {help && <p className="gg-hint">{help}</p>}
+      <DriveToast text={toast.text} />
       {picker.error && <p className="error" role="alert">{picker.error.replace('Google Drive didn’t open — Try again', 'Google Drive didn’t open — check the GOOGLE_PICKER_KEY websites')}</p>}
       {s.on && (
         <div>

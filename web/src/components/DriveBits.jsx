@@ -68,13 +68,17 @@ export function DriveConnect({ back }) {
 }
 
 // After Google's return (?google=connected): one toast, then gone.
+// Said once however many Drive pieces a page has: the first to ask takes it.
+let toastFor = null;
 export function useDriveToast() {
   const code = useGoogleReturn();
-  const [text, setText] = useState(code === 'connected' ? 'Google Drive connected' : null);
+  const [here] = useState(() => window.location.href);
+  const [text, setText] = useState(null);
   const timer = useRef(null);
   const say = (t) => { clearTimeout(timer.current); setText(t); timer.current = setTimeout(() => setText(null), 4000); };
+  // Claimed once committed, so a render React throws away claims nothing.
   useEffect(() => {
-    if (text) timer.current = setTimeout(() => setText(null), 4000);
+    if (code === 'connected' && toastFor !== here) { toastFor = here; say('Google Drive connected'); }
     return () => clearTimeout(timer.current);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   return { text, say };

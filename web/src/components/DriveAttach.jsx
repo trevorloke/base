@@ -11,7 +11,7 @@
 //   drive.rows    the too-big rows, each with its link choice
 import { useState } from 'react';
 import { action } from '../api.js';
-import { DriveConnect, driveOn, useDrive, usePickFromDrive } from './DriveBits.jsx';
+import { DriveConnect, DriveToast, driveOn, useDrive, useDriveToast, usePickFromDrive } from './DriveBits.jsx';
 
 const WHO = [
   [false, 'People it’s shared with in Drive'],
@@ -64,6 +64,7 @@ export function useDriveAttach({ acts, count, max, online, busy, onAdded, onLink
   const d = useDrive();
   const on = driveOn(d.data) && Boolean(acts.attachDrive);
   const picker = usePickFromDrive(on);
+  const toast = useDriveToast();
   const [adding, setAdding] = useState(null);
   const [big, setBig] = useState([]); // [{ id, name, words }]
   const room = max - count;
@@ -88,11 +89,12 @@ export function useDriveAttach({ acts, count, max, online, busy, onAdded, onLink
     if (notes.length) onNote(notes.join(' · '));
   };
 
-  const button = !on ? null : picker.need === 'connect' ? <DriveConnect /> : (
+  const button = !on ? null : picker.need === 'connect' ? <DriveConnect /> : (<>
+    <DriveToast text={toast.text} />
     <button type="button" className="btn btn-quiet ot-btn-tap" disabled={busy || Boolean(adding) || room <= 0 || !online} onClick={fromDrive}>
       {adding ? 'Adding…' : 'From Google Drive'}
     </button>
-  );
+  </>);
   const rows = big.length ? (
     <ul className="ot-files drv-bigs" aria-label="Too big to attach">
       {big.map((row) => (

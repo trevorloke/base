@@ -16,7 +16,7 @@ import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { action, apiGet } from '../api.js';
 import { NeedsSignal, useOnline } from './NoSignal.jsx';
-import { DriveConnect, DriveToast, num, useDrive, usePickFromDrive, whereSheetsGo } from './DriveBits.jsx';
+import { DriveConnect, DriveToast, num, useDrive, useDriveToast, usePickFromDrive, whereSheetsGo } from './DriveBits.jsx';
 
 const CONTACT = /email|phone|mobile|cell/i;
 const going = (e) => e && (e.status === 'waiting' || e.status === 'sending');
@@ -100,6 +100,7 @@ export function SendToSheet({ source, of, name, count = null, head = [], noun = 
   const [busy, setBusy] = useState(false);
   const [refused, setRefused] = useState(null);
   const [id, setId] = useState(null);
+  const back = useDriveToast();
   const [said, setSaid] = useState(null);
   const ex = useExport(id);
   const e = ex.data;
@@ -165,7 +166,7 @@ export function SendToSheet({ source, of, name, count = null, head = [], noun = 
           )}
         </div>
       )}
-      <DriveToast text={said} />
+      <DriveToast text={said || back.text} />
     </>
   );
 }
