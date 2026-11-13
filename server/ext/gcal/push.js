@@ -329,9 +329,16 @@ const reconcile = async (db, ws, c, link, st, grant) => {
       await db.query(`update gcal_links set wait_until = now() + interval '1 hour' where workspace_id = $1 and user_id = $2`, [ws, userId]);
       throw new Stop('wait');
     }
-    if (!calId) calId = String(r.body.id);
-    await db.query('update gcal_links set calendar_id = $3, cal_hash = $4, updated_at = now() where workspace_id = $1 and user_id = $2',
+    const made = !calId;
+    if (made) calId = String(r.body.id);
+    // Stopped (or forgotten) while Google was answering: a calendar made
+    // just now is deleted again, never left in their Google account.
+    const n = await db.query(`update gcal_links set calendar_id = $3, cal_hash = $4, updated_at = now() where workspace_id = $1 and user_id = $2 and state = 'ok'`,
       [ws, userId, calId, calHash]);
+    if (!n.affectedRows) {
+      if (made) await googleFetch(db, grant, `${calBase()}/calendars/${enc(calId)}`, { method: 'DELETE' }, { retry: 'auth-only' });
+      throw new Stop('stopped');
+    }
   }
 
   const want = await desiredFor(db, ws, userId);

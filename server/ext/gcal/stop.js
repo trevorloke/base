@@ -74,9 +74,13 @@ const stopRun = async (db, job) => {
   let calls = 0;
   let retry = false;
   const links = (await db.query(
-    `select user_id, calendar_id from gcal_links where workspace_id = $1 and state = 'stopping' order by updated_at`, [ws],
+    `select user_id, calendar_id, busy_until > now() as busy from gcal_links where workspace_id = $1 and state = 'stopping' order by updated_at`, [ws],
   )).rows;
+  let held = false;
   for (const link of links) {
+    // A push still holds it (making the calendar, say): its id isn't here
+    // yet. Tried again once the push lets go.
+    if (link.busy) { held = true; continue; }
     if (calls >= RUN_CALLS || Date.now() - started >= RUN_MS) {
       await db.transaction((tx) => enqueueJob(tx, { workspaceId: ws, kind: 'gcal.stop', runAt: new Date(Date.now() + 1000).toISOString(), key: `gcal-stop-${job.id}-more` }));
       break;
@@ -97,6 +101,7 @@ const stopRun = async (db, job) => {
     const more = (await db.query('select 1 from gcal_links where user_id = $1 limit 1', [link.user_id])).rows[0];
     if (!more) await dropPurpose(db, { workspaceId: ws, actorId: link.user_id }, grant, PURPOSE);
   }
+  if (held) await db.transaction((tx) => enqueueJob(tx, { workspaceId: ws, kind: 'gcal.stop', runAt: new Date(Date.now() + 5000).toISOString(), key: `gcal-stop-${job.id}-held` }));
   if (retry) throw new Error('gcal: Google didn’t answer; trying again');
 };
 
@@ -116,8 +121,11 @@ export const cleanUp = async (db, { userId, fetch }) => {
     'select 1 from google_grants where user_id = $1 and $2 = any(purposes)', [userId, PURPOSE],
   )).rows[0]);
   const links = (await db.query(
-    `select workspace_id, calendar_id from gcal_links where user_id = $1 and (not $2::boolean or state in ('stopping', 'left'))`, [userId, back],
+    `select workspace_id, calendar_id, busy_until > now() as busy from gcal_links where user_id = $1 and (not $2::boolean or state in ('stopping', 'left'))`, [userId, back],
   )).rows;
+  // A push still holds one (its calendar maybe on its way): GSI's job is
+  // tried again, the token not yet revoked.
+  if (fetch && links.some((l) => l.busy)) throw new Error('gcal: a push is still running; cleaning up later');
   for (const link of links) {
     const ws = link.workspace_id;
     if (link.calendar_id && fetch) {

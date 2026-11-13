@@ -268,7 +268,7 @@ test('no work: a notice, a door and the sample cost no Google call and mark nobo
   ok(await M.b.action('shift.notify', { shift_id: keep.shift.id }));
   await jobs();
   const p = await M.b.action('person.create', { name: 'Ann Example', phone: '604-555-0101' });
-  ok(await M.b.action('contact.log', { person_id: p.json.person.id, channel: 'door', result: 'talked', rating: 2 }).then((r) => (r.status === 200 ? r : { status: 200, json: {} })));
+  ok(await M.b.action('contact.log', { person_id: ok(p).person.id, channel: 'door', outcome: 'contacted', rating: '2' }), 'the door');
   await jobs();
   assert.equal(calls(), before);
   await db.query('update gcal_links set dirty_at = null where workspace_id = $1', [M.ws]);
@@ -613,6 +613,30 @@ test('turning the switch off deletes every connected person’s calendar, drops 
     assert.ok(!g || !g.purposes.includes('calendar.mine'));
   }
   ok(await M.b.action('gcal.settings', { on: true }));
+});
+
+test('Stop, or the switch going off, while the first push is making the calendar: nothing is left in Google', async () => {
+  const settle = async () => {
+    for (let i = 0; i < 6; i += 1) { await new Promise((r) => setTimeout(r, 300)); await due(); await jobs().catch(() => {}); }
+  };
+  for (const off of [(who) => who.b.action('gcal.stop', {}), () => M.b.action('gcal.settings', { on: false })]) {
+    // (An earlier test left one behind on purpose: a delete that never answered.)
+    const before = new Set(calOf(0).map((c) => c.id));
+    assert.equal((await connect(V, 0)).google, 'connected');
+    fake.cal.next('slow', { route: 'calendars.insert', ms: 800 });
+    jobs();
+    await new Promise((r) => setTimeout(r, 200));
+    assert.ok((await linkRow(V.id)).busy_until, 'the push holds the link');
+    ok(await off(V));
+    await due();
+    await jobs();
+    await settle();
+    assert.deepEqual(calOf(0).filter((c) => !before.has(c.id)), [], 'no base.win calendar left in Google');
+    assert.equal(await linkRow(V.id), null);
+    const g = (await db.query('select purposes from google_grants where user_id = $1', [V.id])).rows[0];
+    assert.ok(!g || !g.purposes.includes('calendar.mine'));
+    ok(await M.b.action('gcal.settings', { on: true }));
+  }
 });
 
 test('leaving the team: deleted for a one-campaign user then revoked; through the other campaign for a two-campaign user; a paid membership touches nothing', async () => {
