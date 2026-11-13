@@ -11,7 +11,8 @@
 //         People one reads straight back in), and everything as one JSON
 //         file, for a backup or a move (/api/export).
 import { Link, useOutletContext } from 'react-router-dom';
-import { EXPORTS } from './Reports.jsx';
+import { EXPORTS, ExportItem } from './Reports.jsx';
+import DriveSent from '../components/DriveSent.jsx';
 import './shifts.css';
 import './data.css';
 import { at } from '../base.js';
@@ -68,9 +69,7 @@ export default function DataPage() {
         <h2 id="dt-out">Take data out</h2>
         <p className="ops-meta">Each as a spreadsheet (CSV, opens in Excel, Numbers or Google Sheets). The People one imports straight back in.</p>
         <ul className="dt-exports">
-          {EXPORTS.map(([k, label]) => (
-            <li key={k}><a className="btn ops-tap" href={at(`/api/export/${k}.csv`)} download>{label}</a></li>
-          ))}
+          {EXPORTS.map(([k, label]) => <ExportItem key={k} k={k} label={label} me={me} download />)}
         </ul>
         <div className="card dt-item dt-backup">
           <div className="dt-item__main">
@@ -80,6 +79,8 @@ export default function DataPage() {
           <a className="btn ops-tap" href={at('/api/export')} download>Download everything</a>
         </div>
       </section>
+
+      <DriveSent />
     </div>
   );
 }

@@ -20,6 +20,7 @@ import SendingDomain from './SendingDomain.jsx';
 import SenderAddresses from './SenderAddresses.jsx';
 import MailchimpPanel from './MailchimpPanel.jsx';
 import GooglePanel from './GooglePanel.jsx';
+import DrivePanel from './DrivePanel.jsx';
 import { NoSignal, noSignal, useOnline } from './NoSignal.jsx';
 import ServiceConnect from './ServiceConnect.jsx';
 import './services.css';
@@ -56,6 +57,7 @@ function Row({ s, online }) {
         {s.domainPanel && <SenderAddresses online={online} />}
         {s.panel === 'mailchimp' && <MailchimpPanel online={online} onChanged={() => setRes(null)} />}
         {s.panel === 'google' && s.lines && <GooglePanel s={s} online={online} />}
+        {s.panel === 'drive' && <DrivePanel online={online} />}
         {/* The email sender's block comes as `hook`: a page cached from before it existed prints Stripe's sentence over any `webhook`. */}
         {s.hook && <Webhook w={s.hook} />}
         {s.webhook && <Webhook w={s.webhook} />}

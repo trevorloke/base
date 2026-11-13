@@ -22,6 +22,7 @@ import { VOLUNTEER_ROLES } from '@starbase/shared/canvass';
 import { ApiError, apiGet } from '../api.js';
 import { NoSignal, noSignal } from '../components/NoSignal.jsx';
 import SendToMailchimp from '../components/SendToMailchimp.jsx';
+import { TakeItOut } from '../components/SendToSheet.jsx';
 import { useScale } from '../components/RatingButtons.jsx';
 import { useAction, ratingBands } from './People.jsx';
 import { CUT_KEYS, CutFields, useTurfs } from '../components/FieldCuts.jsx';
@@ -32,6 +33,9 @@ import {
 import './shifts.css';
 import './lists.css';
 import { at } from '../base.js';
+
+// The list CSV's columns (server ext/lists/rows.js), for the Sheets confirm's do-not-contact line.
+const LIST_HEAD = ['Name', 'Email', 'Phone', 'Address', 'Unit', 'City', 'Postal code', 'Rating', 'Tags', 'Added'];
 
 const FILTER_KEYS = ['q', 'tag', 'rating', 'role', 'has', 'field', ...CUT_KEYS, ...RULE_KEYS];
 const HAS = [['', 'Anyone'], ['email', 'An email address'], ['phone', 'A phone number'], ['location', 'A pin on the map']];
@@ -269,7 +273,7 @@ function OneList({ id }) {
       <Figures counts={list.data.counts} />
       <Ways id={id} name={l.name} page />
       <div className="ops-actions ls-tools">
-        <a className="btn btn-quiet ops-tap" href={at(`/api/lists/${id}/export.csv`)}>Download CSV</a>
+        <TakeItOut csvHref={at(`/api/lists/${id}/export.csv`)} source="list" of={id} name={l.name} count={list.data.counts.total} head={LIST_HEAD} />
         <SendToMailchimp listId={id} />
         {l.kind === 'filter' && <button type="button" className="btn btn-quiet ops-tap" onClick={() => setEditing((v) => !v)}>{editing ? 'Close' : 'Edit the filter'}</button>}
         {asking ? (

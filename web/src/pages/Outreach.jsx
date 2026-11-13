@@ -23,6 +23,7 @@ import { DeliveryStats } from '../components/MailDelivery.jsx';
 import LaddersLink from '../components/LaddersLink.jsx';
 import { useTextingStatus } from '../components/TextingStatus.js';
 import { NeedsSignal, useOnline } from '../components/NoSignal.jsx';
+import { useDriveAttach } from '../components/DriveAttach.jsx';
 import { LOADING, Unavailable, fmt, useListCounts, useListNames } from '../components/AudienceBits.jsx';
 import { MarkdownField, toDataUrl, uploadImage } from '../components/MarkdownField.jsx';
 import SharingTab from './SharingTab.jsx';
@@ -468,13 +469,16 @@ export function BlastResult({ blast: answered, emailConfigured, canWrite, onDism
 // closes and the result is said once under the tabs — a failed one is tried
 // again from there, never sent a second time as a new copy.
 // On the Media tab (pages/Media.jsx) it sends under Media's own names:
-//   actions   { send, test, attach, unattach, picture } (default blast.*)
+//   actions   { send, test, attach, unattach, picture, attachDrive, linkDrive } (default blast.*)
 //   listKey   the list it reads for a lost answer and refreshes after a send
 //   extra     merged into the send (Media's To: { to: { kinds } })
 //   senderUse 'email' | 'press': the From line (components/SenderPick.jsx)
 //   sendLabel the button's word; filesHint the line under Attach a file;
 //   confirmFrom the confirm names the address ("… from media@…?")
-const BLAST_ACTIONS = { send: 'blast.send', test: 'blast.test', attach: 'blast.attach', unattach: 'blast.unattach', picture: 'blast.picture' };
+const BLAST_ACTIONS = {
+  send: 'blast.send', test: 'blast.test', attach: 'blast.attach', unattach: 'blast.unattach', picture: 'blast.picture',
+  attachDrive: 'blast.attach.drive', linkDrive: 'blast.link.drive',
+};
 export function ComposeCard({
   kind, slug, audience, audienceCount, audienceNoun, emptyReason, emailConfigured, onSent, onCancel, campaign,
   actions: names, listKey, extra, senderUse, sendLabel, filesHint, confirmFrom = false,
@@ -583,6 +587,14 @@ export function ComposeCard({
       setUploading(false);
     }
   };
+  // From Google Drive (components/DriveAttach.jsx): added like an uploaded
+  // file; one too big gets "Add a link instead", the link going at the end.
+  const drive = useDriveAttach({
+    acts, count: files.length, max: ATTACH_COUNT, online, busy: uploading,
+    onAdded: (a) => setFiles((cur) => [...cur, a]),
+    onLink: (md) => { setBody((b) => `${b.replace(/\s+$/, '')}${b.trim() ? '\n\n' : ''}${md}`.slice(0, 50000)); setConfirming(false); },
+    onNote: setFileNote,
+  });
   const dropFile = (a) => {
     setFiles((cur) => cur.filter((x) => x.id !== a.id));
     action(acts.unattach, { id: a.id }).catch(() => {});
@@ -640,13 +652,18 @@ export function ComposeCard({
             ))}
           </ul>
         )}
+        {drive.rows}
         <div className="ot-attach__row">
-          <button type="button" className="btn btn-quiet ot-btn-tap" disabled={uploading || files.length >= ATTACH_COUNT || !online}
+          <button type="button" className="btn btn-quiet ot-btn-tap" disabled={uploading || Boolean(drive.adding) || files.length >= ATTACH_COUNT || !online}
             onClick={() => fileRef.current?.click()}>
             {uploading ? 'Uploading…' : 'Attach a file'}
           </button>
-          <span className="ot-attach__hint">{filesHint || <>PDF, pictures, Word, Excel, PowerPoint, .ics, .txt or .csv — {fmtBytes(ATTACH_MAX)} each, {ATTACH_COUNT} files</>}</span>
+          {drive.button}
+          <span className="ot-attach__hint" aria-live="polite">{drive.adding ? `Adding ${drive.adding}…` : (
+            <>{filesHint || <>PDF, pictures, Word, Excel, PowerPoint, .ics, .txt or .csv — {fmtBytes(ATTACH_MAX)} each, {ATTACH_COUNT} files</>}{drive.on && ' Google Docs, Sheets and Slides go as PDF.'}</>
+          )}</span>
         </div>
+        {drive.error && <p className="error" role="alert">{drive.error}</p>}
         {fileNote && <p className="error" role="alert">{fileNote}</p>}
       </div>}
       {act.error && <p className="error">{act.error}</p>}

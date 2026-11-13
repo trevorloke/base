@@ -15,6 +15,7 @@ import { VOLUNTEER_ROLES } from '@starbase/shared/canvass';
 import { splitFirst } from '@starbase/shared/names';
 import { apiPost } from '../api.js';
 import GeocodeButton from '../components/GeocodeButton.jsx';
+import DriveImport from '../components/DriveImport.jsx';
 import { RatingChip, useScale } from '../components/RatingButtons.jsx';
 import { invalidatePersonData, tagWord } from './People.jsx';
 import { FIELD_KEY, fieldCell, useImportFields } from '../components/FieldsBits.jsx';
@@ -1191,9 +1192,12 @@ function ImportFlow() {
               <span className="imp-drop__or">or drop it here</span>
             </label>
             {!pasteOpen ? (
-              <button type="button" className="btn btn-quiet imp-tap" onClick={() => setPasteOpen(true)}>
-                Paste text
-              </button>
+              <div className="imp-actions">
+                <button type="button" className="btn btn-quiet imp-tap" onClick={() => setPasteOpen(true)}>
+                  Paste text
+                </button>
+                <DriveImport busy={busy} setReading={setReading} setLoadError={setLoadError} loadText={loadText} loadFile={loadFile} />
+              </div>
             ) : (
               <div className="imp-paste">
                 <div className="field">

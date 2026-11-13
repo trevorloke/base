@@ -41,7 +41,7 @@ api.get('/drive', async (c) => {
   const canSend = setup && rules.on && mayStillSend(ctx, rules) && place.ok;
   const out = {
     setup, on: rules.on, sheets: rules.sheets, canSend,
-    land: rules.folder ? { kind: 'campaign', name: rules.folder.name, shared: rules.folder.shared } : { kind: 'mine', name: EXPORTS_FOLDER, shared: false },
+    land: rules.folder ? { kind: 'campaign', id: rules.folder.id, name: rules.folder.name, shared: rules.folder.shared } : { kind: 'mine', name: EXPORTS_FOLDER, shared: false },
     me: { connected: Boolean(mine), email: mine?.email || null, state: mine ? mine.state : null, hd: mine?.hd || null },
     domain: signinRules(ctx.workspace.settings).domain,
   };

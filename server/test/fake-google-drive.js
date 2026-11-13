@@ -16,6 +16,13 @@
 //           POST /v4/spreadsheets/:id:batchUpdate  updateSheetProperties, appendDimension
 //           PUT  /v4/spreadsheets/:id/values/:range?valueInputOption=…  the cells, kept
 //   OAuth   POST /tokeninfo                      { scope, expires_in, aud } of an access token
+//   Picker  GET  /picker.js                      a stand-in for Google's loader (GOOGLE_PICKER_SCRIPT):
+//                                                gapi.load and a minimal google.picker that records
+//                                                what it was given on window.__picker and, on
+//                                                setVisible(true), draws a small dialog of the fake's
+//                                                files (#fake-picker: a box per file, Select, Cancel)
+//           POST /picker/files, /picker/pick     the dialog's own calls: what it lists, and the pick
+//                                                (as Google records it: base.win may now open it)
 //
 // Every call needs a live access token holding drive.file, and is recorded
 // in calls (method, path, query, body, the token used).
@@ -226,8 +233,33 @@ export const fakeDrive = ({ accessTokens, people, base }) => {
     return send(res, 200, { scope: t.scopes.join(' '), expires_in: Math.floor((t.expiresAt - Date.now()) / 1000), aud: 'fake' });
   };
 
-  // → true when this request was Drive's, Sheets' or tokeninfo's.
+  // The Picker's dialog: which files this view shows, and the pick itself.
+  const cors = { 'access-control-allow-origin': '*' };
+  const pickerFiles = (res, raw) => {
+    const body = raw ? JSON.parse(raw) : {};
+    const t = accessTokens.get(body.token);
+    if (!t || !t.alive || !t.scopes.includes(DRIVE_FILE)) return send(res, 401, { error: 'bad token' }, cors);
+    const v = (body.views || [])[0] || {};
+    const types = v.mimeTypes ? String(v.mimeTypes).split(',') : null;
+    const ids = v.fileIds ? String(v.fileIds).split(',') : null;
+    const list = [...files.values()].filter((f) => !f.trashed && (f.owner !== 'base.win' || f.ownerSub === t.sub)
+      && (v.viewId === 'folders' ? f.mimeType === FOLDER : f.mimeType !== FOLDER)
+      && (!types || types.includes(f.mimeType)) && (!ids || ids.includes(f.id)));
+    return send(res, 200, { files: list.map((f) => ({ id: f.id, name: f.name, mimeType: f.mimeType })) }, cors);
+  };
+  const pickerPick = (res, raw) => {
+    const body = raw ? JSON.parse(raw) : {};
+    const t = accessTokens.get(body.token);
+    if (!t || !t.alive) return send(res, 401, { error: 'bad token' }, cors);
+    for (const id of body.ids || []) files.get(id)?.picked?.add(t.sub);
+    return send(res, 200, { ok: true }, cors);
+  };
+
+  // → true when this request was Drive's, Sheets', tokeninfo's or the Picker's.
   const handle = async (req, res, u, raw, form) => {
+    if (u.pathname === '/picker.js') { res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8' }); res.end(pickerScript(base())); return true; }
+    if (u.pathname === '/picker/files' && req.method === 'POST') { pickerFiles(res, raw); return true; }
+    if (u.pathname === '/picker/pick' && req.method === 'POST') { pickerPick(res, raw); return true; }
     if (u.pathname.startsWith('/drive/v3/')) { await drive(req, res, u, raw); return true; }
     if (u.pathname.startsWith('/v4/spreadsheets/')) { await sheetsApi(req, res, u, raw); return true; }
     if (u.pathname === '/tokeninfo') { tokeninfo(res, form, u); return true; }
@@ -266,3 +298,83 @@ export const fakeDrive = ({ accessTokens, people, base }) => {
   };
   return { handle, api };
 };
+
+// The stand-in for Google's Picker loader: the same names base.win calls
+// (gapi.load, google.picker.PickerBuilder, DocsView, ViewId, Feature,
+// Action, Response, Document), recording every call on window.__picker.
+const pickerScript = (base) => `(() => {
+  const BASE = ${JSON.stringify(base)};
+  const rec = window.__picker = window.__picker || { builds: [] };
+  const ViewId = { DOCS: 'all', FOLDERS: 'folders', SPREADSHEETS: 'spreadsheets' };
+  const Feature = { MULTISELECT_ENABLED: 'multiselect', SUPPORT_DRIVES: 'sdr', NAV_HIDDEN: 'navHidden' };
+  const Action = { PICKED: 'picked', CANCEL: 'cancel', LOADED: 'loaded' };
+  const Response = { ACTION: 'action', DOCUMENTS: 'docs' };
+  const Document = { ID: 'id', NAME: 'name', MIME_TYPE: 'mimeType' };
+  class DocsView {
+    constructor(id) { this.v = { viewId: id || ViewId.DOCS, mimeTypes: null, fileIds: null, enableDrives: false, includeFolders: false, selectFolder: false, calls: [] }; }
+    note(name) { this.v.calls.push(name); return this; }
+    setMimeTypes(m) { this.v.mimeTypes = m; return this.note('setMimeTypes'); }
+    setEnableDrives(b) { this.v.enableDrives = Boolean(b); return this.note('setEnableDrives'); }
+    setFileIds(ids) { this.v.fileIds = ids; return this.note('setFileIds'); }
+    setIncludeFolders(b) { this.v.includeFolders = Boolean(b); return this.note('setIncludeFolders'); }
+    setSelectFolderEnabled(b) { this.v.selectFolder = Boolean(b); return this.note('setSelectFolderEnabled'); }
+    setMode() { return this; }
+    setParent() { return this; }
+  }
+  const el = (tag, attrs, text) => { const e = document.createElement(tag); Object.assign(e, attrs || {}); if (text != null) e.textContent = text; return e; };
+  const open = async (b, cb) => {
+    const last = { appId: b.appId, token: b.token, key: b.key, title: b.title, views: b.views, multiselect: b.features.includes(Feature.MULTISELECT_ENABLED), features: b.features, maxItems: b.maxItems };
+    rec.last = last; rec.builds.push(last);
+    const r = await fetch(BASE + '/picker/files', { method: 'POST', body: JSON.stringify({ token: b.token, views: b.views }) });
+    const list = r.ok ? (await r.json()).files : [];
+    const d = el('div', { id: 'fake-picker' });
+    d.setAttribute('role', 'dialog');
+    d.setAttribute('aria-label', b.title || 'Google Drive');
+    d.style.cssText = 'position:fixed;inset:10% 20%;background:white;color:black;border:1px solid #888;padding:16px;z-index:9999;overflow:auto;font:15px sans-serif';
+    d.append(el('h2', {}, b.title || 'Google Drive'));
+    if (!r.ok) d.append(el('p', { className: 'fake-picker-error' }, 'The token was refused'));
+    for (const f of list) {
+      const l = el('label', { className: 'fake-picker-file' });
+      l.style.cssText = 'display:block;padding:6px 0';
+      const box = el('input', { type: last.multiselect ? 'checkbox' : 'radio', name: 'fake-picker-pick', value: f.id });
+      box.dataset.name = f.name; box.dataset.mime = f.mimeType;
+      l.append(box, ' ' + f.name);
+      d.append(l);
+    }
+    const close = () => d.remove();
+    const sel = el('button', { id: 'fake-picker-select', type: 'button' }, 'Select');
+    const cancel = el('button', { id: 'fake-picker-cancel', type: 'button' }, 'Cancel');
+    sel.onclick = async () => {
+      const boxes = [...d.querySelectorAll('input:checked')];
+      const docs = boxes.map((x) => ({ [Document.ID]: x.value, [Document.NAME]: x.dataset.name, [Document.MIME_TYPE]: x.dataset.mime }));
+      await fetch(BASE + '/picker/pick', { method: 'POST', body: JSON.stringify({ token: b.token, ids: docs.map((x) => x.id) }) });
+      close();
+      cb({ [Response.ACTION]: Action.PICKED, [Response.DOCUMENTS]: docs });
+    };
+    cancel.onclick = () => { close(); cb({ [Response.ACTION]: Action.CANCEL }); };
+    d.append(sel, ' ', cancel);
+    document.body.append(d);
+    cb({ [Response.ACTION]: Action.LOADED });
+  };
+  class PickerBuilder {
+    constructor() { this.b = { views: [], features: [], title: '', maxItems: null }; this.cb = () => {}; }
+    setAppId(x) { this.b.appId = x; return this; }
+    setOAuthToken(x) { this.b.token = x; return this; }
+    setDeveloperKey(x) { this.b.key = x; return this; }
+    addView(v) { this.b.views.push(v.v); return this; }
+    setTitle(t) { this.b.title = t; return this; }
+    enableFeature(f) { this.b.features.push(f); return this; }
+    setMaxItems(n) { this.b.maxItems = n; return this; }
+    setCallback(fn) { this.cb = fn; return this; }
+    setOrigin() { return this; }
+    setLocale() { return this; }
+    build() { const b = this.b; const cb = this.cb; return { setVisible(on) { if (on) open(b, cb); }, dispose() {} }; }
+  }
+  window.gapi = window.gapi || {};
+  window.gapi.load = (name, then) => {
+    window.google = window.google || {};
+    window.google.picker = { DocsView, ViewId, Feature, Action, Response, Document, PickerBuilder };
+    setTimeout(typeof then === 'function' ? then : then.callback, 0);
+  };
+})();
+`;

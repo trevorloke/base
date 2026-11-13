@@ -33,7 +33,10 @@ import './media.css';
 
 const DESK_ROLES = ['manager', 'treasurer', 'staff'];
 const plural = (n, one, many) => (n === 1 ? one : many);
-const MEDIA_ACTIONS = { send: 'media.send', test: 'media.test', attach: 'media.attach', unattach: 'media.unattach', picture: 'media.picture' };
+const MEDIA_ACTIONS = {
+  send: 'media.send', test: 'media.test', attach: 'media.attach', unattach: 'media.unattach', picture: 'media.picture',
+  attachDrive: 'media.attach.drive', linkDrive: 'media.link.drive',
+};
 const FILES_HINT = 'Photos and PDFs up to 5 MB. Video: paste a link (YouTube, Vimeo, Drive).';
 const TO = [
   { key: 'media', label: 'Media', kinds: ['media'], count: 'media', noun: ['media contact', 'media contacts'] },
