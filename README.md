@@ -817,6 +817,28 @@ served at `/media/:id`, cached a year. Up to five files (PDF, pictures, Word, Ex
 writer a copy first, untracked and off the record. Each email carries a
 plain-text part alongside the HTML.
 
+**Templates.** A campaign keeps its own email templates (Outreach → Email)
+and release templates (Media): a name, a subject and a message, no From,
+To or files (those are chosen at send). Anyone at the desk who may send
+that kind may save, change, copy and remove them, with Undo; a save made
+over a newer change is refused with who changed it and when. Every
+campaign also has thirteen ready-made ones built into base.win
+(`shared/email/starters.js`): four newsletters first (monthly, a short
+update, an issue spotlight, looking back and ahead), then an invitation, a
+volunteer call-out, a donation ask, a thank-you, a campaign statement and a
+welcome, the two voting-day reminders last, and a press release. They state
+no fact about any campaign: what is specific to it is a placeholder in
+[square brackets], and an email started from a template can't go out with
+one of that template's placeholders (or any ready-made one's) still in it:
+*Fill in the [ ] parts first*. A link with no address is refused too. A
+manager can hide a ready-made template. **[first name]** and
+**[campaign]** fill themselves in on every newsletter, email and release:
+the subscriber's or person's first name ("JOHN" is greeted "John"; none:
+"friend"), put in after the message is laid out, so a name is only ever
+words. Every newsletter, email to a list, release and test ends with the
+campaign's mailing address, an email or phone, and "Authorized by …" from
+Website → Settings, as far as they are set.
+
 **Emails and texts to a list.** Outreach → Email → *Write an email*, *To* a list, sends to a
 list (Lists: a saved filter or a hand-picked list): everyone on it who may
 be emailed (below), each copy with its own unsubscribe link

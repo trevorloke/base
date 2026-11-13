@@ -500,6 +500,16 @@ one tap away under **More**.
   sideways scroll, no word running into the next column); `e2e-mail.mjs` runs
   *From addresses* and Outreach → Email's From line.
 
+Email templates: `server/test/templates.test.js` — save, update, copy,
+remove and restore (the stale-edit check on a real round trip, the name
+clash, the 200 limit), a template's use fixed and checked on the stored
+row, every role × Email/Media read and write, hiding a ready-made one, the
+log never holding a body, the ready-made templates' own checks (no facts,
+each refused until filled), [first name] and [campaign] filled per
+subscriber, person, A/B winner and test (a name typed as a link or in bold
+stays words), what stops a send and what only asks, the footer lines
+escaped in both parts (and as before with none set), Use again.
+
 - **Candidates** (Settings → Candidates) — a manager adds and invites
   candidates; each joins as a volunteer with a seat; their phone opens on
   Your day (Met someone, their booked shift, their week, Your race); the

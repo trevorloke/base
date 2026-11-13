@@ -470,6 +470,9 @@ shared, and the code names no client.
 
 - `https://starbase.imaginesurrey.ca/` loads over https and signs in.
 - A test newsletter reaches a real inbox with a working unsubscribe link.
+- Set the campaign’s mailing address, an email or phone, and the financial
+  agent in **Website → Settings**: they go at the bottom of every email. Until
+  the address is set, the compose says *No mailing address yet*.
 - Press releases from media@: once MAIL_FROM is on imaginesurrey.ca and
   **Settings → Services → Email → Sending domain** says Verified, tap *Add
   media@imaginesurrey.ca for press* under **From addresses** (Resend and

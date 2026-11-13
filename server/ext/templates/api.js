@@ -15,7 +15,7 @@
 //                                    { kind, subject, body } (Outreach, desk only)
 // Subjects and bodies are as stored (codes); the screens show them in words.
 import { Hono } from 'hono';
-import { placeholders } from '@starbase/shared/email/words';
+import { NO_ADDRESS, placeholders } from '@starbase/shared/email/words';
 import { STARTERS, starterOf } from '@starbase/shared/email/starters';
 import { footOf } from '../abtests/send.js';
 import { GONE, USES, maySave, mayStart, refusal } from './rules.js';
@@ -23,6 +23,9 @@ import { GONE, USES, maySave, mayStart, refusal } from './rules.js';
 export const api = new Hono();
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// What the compose sends back with blast.send (placeholders_from): the
+// bracketed ones, at most 200 (an empty link is checked on the text itself).
+const toFill = (t) => placeholders(`${t.subject}\n${t.body}`).filter((p) => !p.startsWith(NO_ADDRESS)).slice(0, 200);
 const hiddenOf = (ctx) => {
   const h = ctx.workspace?.settings?.templates?.hidden;
   return new Set(Array.isArray(h) ? h : []);
@@ -59,7 +62,7 @@ api.get('/templates/:ref', async (c) => {
     const s = starterOf(ref.slice('starter:'.length));
     if (!s) return c.json({ error: GONE }, 404);
     if (!mayStart(ctx, s.use)) return c.json({ error: refusal(s.use) }, 403);
-    return c.json({ ref, name: s.name, use: s.use, subject: s.subject, body: s.body, placeholders: placeholders(`${s.subject}\n${s.body}`) });
+    return c.json({ ref, name: s.name, use: s.use, subject: s.subject, body: s.body, placeholders: toFill(s) });
   }
   if (!UUID_RE.test(ref)) return c.json({ error: GONE }, 404);
   const t = (await c.get('db').query(
@@ -69,7 +72,7 @@ api.get('/templates/:ref', async (c) => {
   if (!mayStart(ctx, t.use)) return c.json({ error: refusal(t.use) }, 403);
   return c.json({
     ref, name: t.name, use: t.use, subject: t.subject, body: t.body,
-    placeholders: placeholders(`${t.subject}\n${t.body}`), version: Number(t.version), updated_at: t.updated_at,
+    placeholders: toFill(t), version: Number(t.version), updated_at: t.updated_at,
   });
 });
 
