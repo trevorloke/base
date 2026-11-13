@@ -56,6 +56,16 @@ const drain = async (ws, max = 30) => {
     if (!r.ran && !r.failed) return;
   }
 };
+// Every part to the end, even on a slow machine (a call over googleFetch's
+// 10 s is a counted try: brought forward and run again).
+const finish = async (ws) => {
+  for (let i = 0; i < 8; i += 1) {
+    await drain(ws);
+    const left = (await db.query(`select 1 from jobs where workspace_id = $1 and status = 'pending' limit 1`, [ws])).rows[0];
+    if (!left) return;
+    await due(ws);
+  }
+};
 // A job handed back or tried again later: due now (and Google's 30 s pause over).
 const due = async (ws) => {
   await db.query(`update jobs set run_at = now() where workspace_id = $1 and status = 'pending'`, [ws]);
@@ -442,7 +452,7 @@ test('export, the other edges: no cap, profile fields, too big, empty, replayed,
   // One running per person; a replayed key is the same export.
   const key = randomUUID();
   no(await send(M.b, 'report', 'tags', key), 409, 'You’re already sending one to Google Sheets — wait for it to finish');
-  await drain(M.ws);
+  await finish(M.ws);
   let ex = await exportRow(big.id);
   assert.deepEqual([ex.status, ex.done_rows], ['done', 100_001]);
   const sheet = D().sheet(ex.file_id);
