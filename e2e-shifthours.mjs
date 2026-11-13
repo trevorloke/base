@@ -9,7 +9,7 @@
 // "Drop in · 4–8 pm" on the list and "Tell us when you’ll come" on its page.
 // The desk (1440×900) sees her hours on the roster, sets another person's
 // from the person sheet ("Save hours"), and the check-in board shows both.
-// The website's openings card says "Drop in". Every screen is measured (one
+// The website's openings card says "…, drop in 4:00–8:00 p.m.". Every screen is measured (one
 // main button, no sideways scroll, 48px targets on the phone) and every
 // claim checked against the API.
 //
@@ -267,7 +267,7 @@ try {
   const site = await desk.newPage();
   await site.goto(`${BASE}/site/volunteer`, { waitUntil: 'domcontentloaded' });
   const card = await site.locator('text=Drop in').first().innerText().catch(() => '');
-  check('the website’s openings: the drop-in shift says "Drop in"', /Drop in 4:00\D{1,3}8:00\sp\.m\./.test(card), card);
+  check('the website’s openings: the drop-in shift says “drop in” after its date', /November \d+, drop in 4:00\D{1,3}8:00\sp\.m\./.test(card), card);
   await site.locator('text=Drop in').first().scrollIntoViewIfNeeded().catch(() => {});
   await site.screenshot({ path: `${SHOTS}/10-site-drop-in-1440.png` });
   await site.close();

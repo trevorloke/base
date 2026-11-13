@@ -629,7 +629,7 @@ try {
     check('the street map’s provider refuses: the map switches to the other one by itself, and says so',
       ts.look === 'muted' && ts.tiles === 'ok' && ts.loaded > 0 && ts.said === 'The street map wasn’t loading — switched to Muted Why?', JSON.stringify(ts)); // (Why?: a manager's way to the Map check)
     check('…the ground behind the tiles is the app’s paper, not Leaflet’s grey; the person’s own choice of look is untouched',
-      ts.ground === 'rgb(232, 235, 243)' && ts.pick === null, JSON.stringify({ ground: ts.ground, pick: ts.pick }));
+      ts.ground === 'rgb(233, 234, 238)' /* var(--paper-2), light */ && ts.pick === null, JSON.stringify({ ground: ts.ground, pick: ts.pick }));
     // The other refuses too: that is the signal, not a provider — back to
     // their own pick by itself (its streets are the ones a phone keeps), and
     // said, with one tap to ask again: not to the other, which has just not
@@ -1161,8 +1161,9 @@ try {
     lines = await openCheck(bp);
     await bp.screenshot({ path: `${SHOTS}/11-map-check-troubles-1440.png` });
     const flagged = Object.values(lines).filter((l) => l.warn).map((l) => l.key).sort().join(',');
-    check('troubles are flagged line by line: people waiting for a pin, a paused placing run, a street map that isn’t loading, an older page',
-      flagged === 'build,offmap,placing,tiles' && /277,628/.test(lines.offmap.value) && /Paused/.test(lines.placing.value) && /tries again/.test(lines.placing.value)
+    // (The service the phones reach straight, CARTO here, is flagged with its look.)
+    check('troubles are flagged line by line: people waiting for a pin, a paused placing run, a street map that isn’t loading and its service, an older page',
+      flagged === 'build,offmap,placing,tiles,tilesvc' && /^CARTO \(Clean\)/.test(lines.tilesvc.value) && /277,628/.test(lines.offmap.value) && /Paused/.test(lines.placing.value) && /tries again/.test(lines.placing.value)
         && /isn’t loading/.test(lines.tiles.value) && /older than the server/i.test(lines.build.value), JSON.stringify(Object.values(lines).map((l) => `${l.warn ? '!' : ' '}${l.label}: ${l.value}`)));
     // On a phone one screenshot must show them too: the flagged lines first,
     // each whole on screen with nothing scrolled (the last lines were a scroll
@@ -1187,7 +1188,7 @@ try {
       };
     });
     check('…and on a phone one screenshot shows them all: the flagged lines first, each on screen with nothing scrolled',
-      Object.values(lines).filter((l) => l.warn).length === 4 && seen.scrolled === 0 && seen.flaggedFirst && seen.flaggedInView, JSON.stringify(seen));
+      Object.values(lines).filter((l) => l.warn).length === 5 && seen.scrolled === 0 && seen.flaggedFirst && seen.flaggedInView, JSON.stringify(seen));
     check('…a paused run long past its time says its try was due then, not that it “tries again” at a time gone by',
       /^Paused — was due to try again at \d{1,2}:\d\d [ap]m$/.test(lines.placing.value), lines.placing.value);
     await bad.close();
