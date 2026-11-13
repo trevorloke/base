@@ -43,9 +43,11 @@ export function PersonPicker({
 
   const general = usePersonSearch(q, { limit: PAGE, enabled: open });
   const holders = usePersonSearch(q, { limit: PAGE, role: roleHint, enabled: open && Boolean(roleHint) });
-  // Both answers for what's typed before anything can be picked.
-  const search = roleHint ? { ...general, fresh: general.fresh && holders.fresh } : general;
-  const lead = roleHint && holders.rows.length
+  // Both answers for what's typed before anything can be picked (the role
+  // block is a help: if it fails, everyone is still listed under it).
+  const holdersOff = holders.status === 'error';
+  const search = roleHint ? { ...general, fresh: general.fresh && (holders.fresh || holdersOff) } : general;
+  const lead = roleHint && !holdersOff && holders.rows.length
     ? { heading: `Has this role: ${roleLabel(roleHint)}`, rows: holders.rows.slice(0, PAGE), chip: roleLabel(roleHint) }
     : null;
 
