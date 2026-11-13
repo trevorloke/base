@@ -36,6 +36,8 @@ import { stripeService, checkStripe, webhookUrl } from '../payments/service.js';
 import { callhubService, callhubInbound, checkCallHub } from '../callhub/service.js';
 // Google sign-in and connections (ext/google): a panel, and how many use it.
 import { googleService, googleCounts, checkGoogle } from '../google/service.js';
+// Gmail (ext/gmail): this campaign's switch and who connected; no Check.
+import { gmailService } from '../gmail/service.js';
 
 const MANAGER = 'manager';
 const TIMEOUT_MS = 8000;
@@ -304,6 +306,7 @@ api.get('/connections', async (c) => {
   const list = services(base);
   const g = list.findIndex((s) => s.key === 'google');
   if (g >= 0) list[g] = await googleCounts(c.get('db'), c.get('ctx').workspaceId, list[g]);
+  if (g >= 0) list.splice(g + 1, 0, await gmailService(c.get('db'), c.get('ctx').workspaceId));
   return c.json({ services: list, inbound: inbound(base, deskOf(c, base)), publicUrl: publicUrl() || null });
 });
 

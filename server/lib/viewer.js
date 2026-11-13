@@ -13,7 +13,9 @@ export const loginEmail = (ctx) => String(ctx.user.email || '').trim().toLowerCa
 export const forViewer = (ctx) => {
   if (ctx.role !== 'volunteer') return (p) => p;
   const mine = loginEmail(ctx);
-  return (p) => ({
+  // email_why (may this person be emailed, one to one) would say whether
+  // they have an address at all: never a volunteer's.
+  return ({ email_why: _whyNot, ...p }) => ({
     ...p,
     email: mine && String(p.email || '').trim().toLowerCase() === mine ? p.email : null,
     tags: (Array.isArray(p.tags) ? p.tags : []).filter((t) => !isMoneyTag(t)),

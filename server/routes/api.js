@@ -28,7 +28,7 @@ import { forViewer, loginEmail } from '../lib/viewer.js';
 import { geoBox } from '../lib/org.js';
 import { RATING_CODE_RE } from '@starbase/shared/scale';
 import { personsWhere, joinWhere } from '../lib/audience.js';
-import { mayReach, address, person, noCallSql, NO_CONTACT } from '../lib/reach.js';
+import { mayReach, address, person, person as personCols, noCallSql, whyNotSql, NO_CONTACT } from '../lib/reach.js';
 // Which saved newsletter / press rows Try again would reach (ext/abtests).
 import { goingRow, repeatRow, retryable, sendJobOn } from '../ext/abtests/send.js';
 import { notSuppressed } from '../lib/mail/index.js';
@@ -492,7 +492,8 @@ app.get('/persons/:id', async (c) => {
   const db = c.get('db');
   const person = (await db.query(
     `select id, kind, name, first_name, middle_name, last_name, email, phone, address, house_number, unit, city, postal, lat, lng, tags, socials, rating, rated_at, voted_at, created_at,
-            attrs->>'note' as note, social_reach, followers
+            attrs->>'note' as note, social_reach, followers${ctx.role === 'volunteer' ? '' : `,
+            ${whyNotSql('email', 'direct', personCols('persons', '$2'))} as email_why`}
      from persons where id = $1 and workspace_id = $2 and deleted_at is null`,
     [c.req.param('id'), ctx.workspaceId],
   )).rows[0];

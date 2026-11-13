@@ -24,7 +24,10 @@ export const ratingByCode = (c) => RATINGS.find((r) => r.code === c) || null;
 // the phone only; in a phone bank it finishes the number (nobody gets a
 // second voicemail from the next caller).
 // mainstreet: met at an event, a bus loop, a market (ext/mainstreet, with the place).
-export const CHANNELS = ['door', 'phone', 'text', 'in_person', 'mainstreet'];
+// email: an email exchanged, logged by hand at the desk (they replied, or a
+// coordinator wrote from their own mail): Talked, No answer or Refused only.
+export const CHANNELS = ['door', 'phone', 'text', 'in_person', 'mainstreet', 'email'];
+export const EMAIL_OUTCOMES = ['contacted', 'no_answer', 'refused'];
 export const OUTCOMES = ['contacted', 'no_answer', 'refused', 'moved', 'inaccessible', 'left_lit', 'left_message'];
 
 export const SIGN_KINDS = [
