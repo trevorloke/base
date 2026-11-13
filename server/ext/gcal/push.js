@@ -288,6 +288,7 @@ const pushOne = async (db, ws, c, link, st) => {
   const grant = await grantFor(db, { userId, workspaceId: ws }, PURPOSE);
   if (!grant || grant.state === 'reconnect') {
     await setLinkState(db, ws, userId, 'reconnect', grant?.said || SAID.reconnect);
+    await release(db, ws, userId);
     return;
   }
   if (grant.state !== 'ok') { await release(db, ws, userId); return; } // not-allowed, domain: the team's own change handles it
@@ -302,7 +303,7 @@ const pushOne = async (db, ws, c, link, st) => {
     );
   } catch (e) {
     if (!(e instanceof Stop)) throw e;
-    if (e.why !== 'gone' && e.why !== 'reconnect') await release(db, ws, userId);
+    await release(db, ws, userId);
   }
 };
 
@@ -364,7 +365,9 @@ const reconcile = async (db, ws, c, link, st, grant) => {
     if (stop) throw stop;
     if (r.ok) await itemSet(db, ws, userId, id, d);
     else if (r.status === 404 || r.status === 410) await insert(id, d); // deleted in Google: base.win's copy goes back
-    else if (r.status === 403) { logOnce(st, ws, `403 ${reasonOf(r.body) || 'forbidden'}`); await itemDrop(db, ws, userId, id); }
+    // That one event's problem (moved to another calendar, say): not tried
+    // again until the shift changes — forgotten, it would be sent on every push.
+    else if (r.status === 403) { logOnce(st, ws, `403 ${reasonOf(r.body) || 'forbidden'}`); await itemSet(db, ws, userId, id, d, `refused:${d.hash}`); }
     else logOnce(st, ws, String(r.status));
   }
   const keepAfter = Date.now() - 29 * 86_400_000;

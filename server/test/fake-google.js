@@ -79,6 +79,7 @@ export const startFakeGoogle = async ({ port = 0, clientId, secret, redirectUris
   const revoked = new Map(); // token → times
   const apiCalls = [];
   const order = []; // Calendar calls and revokes, in the order they came
+  const orderBy = []; // the same, each with its Google account
   let base = '';
   // ── Google Calendar ──
   const cals = new Map(); // id → { id, sub, body, deleted, events: Map(eid → { body, deleted }) }
@@ -104,6 +105,7 @@ export const startFakeGoogle = async ({ port = 0, clientId, secret, redirectUris
     const query = Object.fromEntries(u.searchParams);
     calCalls.push({ route, sub: t.sub, query, at: Date.now(), path: u.pathname });
     order.push(route);
+    orderBy.push([route, t.sub]);
     const i = calKnobs.findIndex((k) => (!k.route || k.route === route) && (!k.sub || k.sub === t.sub));
     const knob = i >= 0 ? calKnobs.splice(i, 1)[0] : null;
     if (knob?.kind === 'slow') await later(knob.ms || slowMs);
@@ -285,6 +287,7 @@ ${[...people.values()].map((p) => `<p><a class="acct" data-sub="${esc(p.sub)}" h
         const t = form.token;
         revoked.set(t, (revoked.get(t) || 0) + 1);
         const owner = refreshTokens.get(t) || accessTokens.get(t);
+        orderBy.push(['revoke', owner?.sub || null]);
         if (!owner || !owner.alive) return json(res, 400, { error: 'invalid_token' });
         revokeGrant(owner.sub);
         return json(res, 200, {});
@@ -329,6 +332,7 @@ ${[...people.values()].map((p) => `<p><a class="acct" data-sub="${esc(p.sub)}" h
     next: (endpoint, kind, opts = {}) => { knobs[endpoint].push({ kind: String(kind), ...opts }); },
     clearKnobs: () => { for (const k of Object.keys(knobs)) knobs[k].length = 0; calKnobs.length = 0; },
     order,
+    orderOf: (sub) => orderBy.filter(([, s]) => s === sub).map(([what]) => what),
     cal: {
       next: (kind, opts = {}) => { calKnobs.push({ ...opts, kind: String(kind) }); },
       // Live calendars (of one Google account, or all), each with its live events.
@@ -340,7 +344,7 @@ ${[...people.values()].map((p) => `<p><a class="acct" data-sub="${esc(p.sub)}" h
       dropEvent: (calId, eid) => { const e = cals.get(calId)?.events.get(eid); if (e) e.deleted = true; },
       counts: calCounts,
       calls: calCalls,
-      reset: () => { for (const k of Object.keys(calCounts)) delete calCounts[k]; calCalls.length = 0; order.length = 0; calKnobs.length = 0; },
+      reset: () => { for (const k of Object.keys(calCounts)) delete calCounts[k]; calCalls.length = 0; order.length = 0; orderBy.length = 0; calKnobs.length = 0; },
     },
     revokeAll: (sub) => revokeGrant(sub),
     account: (a) => people.set(a.sub, { hd: null, ...a }),

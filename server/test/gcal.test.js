@@ -30,12 +30,15 @@ let fake, db, M, V, S, W, B2;
 const lines = [];
 const keep = {};
 const ok = (r, msg = '') => { assert.equal(r.status, 200, `${msg} ${JSON.stringify(r.json)}`); return r.json; };
-const jobs = (ws = M.ws) => runDueJobs(db, { workspaceId: ws });
+// Each pass starts a fresh minute (the per-person cap has its own test).
+let bounding = false;
+const jobs = (ws = M.ws) => { if (!bounding) _resetGcalForTest(); return runDueJobs(db, { workspaceId: ws }); };
 const linkRow = async (userId, ws = M.ws) => (await db.query('select * from gcal_links where workspace_id = $1 and user_id = $2', [ws, userId])).rows[0] || null;
 const items = async (userId, ws = M.ws) => (await db.query('select * from gcal_items where workspace_id = $1 and user_id = $2 order by event_id', [ws, userId])).rows;
 const calOf = (n) => fake.cal.calendars(A[n].sub);
 const eventsOf = (n) => (calOf(n)[0]?.events || []);
 const titles = (n) => eventsOf(n).map((e) => e.summary).sort();
+const live = (id) => fake.cal.calendars().some((c) => c.id === id);
 const calls = () => Object.values(fake.cal.counts).reduce((a, b) => a + b, 0);
 const connect = (who, n, purpose = 'calendar.mine') => who.b.google(fake, { do: 'connect', for: purpose, app: 'field', back: '/profile' }, A[n].sub);
 const shiftOn = async (day, extra = {}) => ok(await M.b.action('shift.createMany', {
@@ -303,11 +306,14 @@ test('Google’s answers: deleted event, deleted calendar, 403 reasons, 429 for 
 
   // 403 forbiddenForNonOrganizer on one PUT: that row is forgotten, the others go on.
   ok(await M.b.action('vote.settings', { on: false, election_day: '2030-10-20', advance_days: ['2030-10-14'] }));
+  ok(await M.b.action('shift.update', { id: sh.id, title: 'Burma Shave — moved to another calendar' }));
   fake.cal.next('403', { route: 'events.update', reason: 'forbiddenForNonOrganizer', sub: A[0].sub });
   await jobs();
   assert.equal((await linkRow(V.id)).state, 'ok');
-  assert.ok(eventsOf(2).some((e) => e.id === 'bv20301020'), 'the other person is pushed');
-  assert.ok(lines.some((l) => /gcal: 403 forbiddenForNonOrganizer for a user in /.test(l)));
+  assert.match((await items(V.id)).find((r) => r.event_id === id).hash, /^refused:/, 'not tried again until it changes');
+  assert.ok(eventsOf(0).some((e) => e.id === 'bv20301020'), 'their other events are pushed');
+  assert.ok(eventsOf(2).some((e) => e.id === id && e.summary === 'Burma Shave — moved to another calendar'), 'the other person is pushed');
+  assert.ok(lines.some((l) => /^gcal: 403 forbiddenForNonOrganizer for a user in /.test(l)));
   // On a POST: kept as refused, not tried again until it changes.
   const w = await shiftOn('2030-05-27');
   ok(await V.b.action('shift.join', { shift_id: w.id }));
@@ -429,6 +435,7 @@ test('the runner is not held: a slow Google leaves the next job free', async () 
 
 test('bounds: a person’s calls a minute, a run’s calls, and one push a person at a time', async () => {
   let now = Date.now();
+  bounding = true;
   _setGcalForTest({ now: () => now, perMinute: 4, runCalls: 6 });
   const many = [];
   for (const d of ['2030-07-01', '2030-07-02', '2030-07-03', '2030-07-04', '2030-07-05', '2030-07-06']) many.push(await shiftOn(d));
@@ -450,6 +457,7 @@ test('bounds: a person’s calls a minute, a run’s calls, and one push a perso
     assert.ok(eventsOf(2).some((e) => e.id === `bs${s.id.replace(/-/g, '')}`));
   }
   _resetGcalForTest();
+  bounding = false;
   // Two passes at once never push one event twice.
   for (const s of many) ok(await M.b.action('shift.update', { id: s.id, title: `Burma Shave ${s.id.slice(0, 4)}` }));
   await db.transaction((tx) => enqueueJob(tx, { workspaceId: M.ws, kind: 'gcal.push', key: `gcal-push-extra-${tag}` }));
@@ -480,6 +488,8 @@ test('jobs: one pending push whatever the writes; the sweep once a date marks ev
   fake.cal.reset();
   await jobs();
   assert.equal((await db.query(`select count(*)::int as n from jobs where workspace_id = $1 and kind = 'gcal.sweep' and status = 'done'`, [M.ws])).rows[0].n, 1);
+  assert.equal((await db.query(`select count(*)::int as n from gcal_links where workspace_id = $1 and dirty_at is not null`, [M.ws])).rows[0].n, n, 'every ok link marked');
+  await jobs();
   assert.equal((await db.query(`select count(*)::int as n from gcal_links where workspace_id = $1 and dirty_at is not null`, [M.ws])).rows[0].n, 0, `${n} links pushed`);
   assert.equal(calls(), 0, 'nothing drifted');
 });
@@ -499,6 +509,7 @@ test('stop: the calendar goes with its rows; the Calendar permission goes; revok
   assert.equal((await connect(W, 3)).google, 'connected');
   await jobs();
   assert.equal(calOf(3).length, 1);
+  fake.cal.reset(); fake.resetCounts();
   ok(await W.b.action('gcal.stop', {}));
   await jobs();
   await jobs();
@@ -531,26 +542,26 @@ test('stop while reconnecting: no Google call, left; OK forgets it', async () =>
 test('clean-up through GSI: disconnect and forget delete the calendar before any revoke; a delete that never answers still revokes, and the link is left', async () => {
   assert.equal((await connect(V, 0, 'test.gcal.other')).google, 'connected');
   await jobs();
-  const before = calOf(0).length;
-  assert.ok(before >= 1);
+  let cal = (await linkRow(V.id)).calendar_id;
+  assert.ok(live(cal));
   ok(await V.b.action('google.disconnect', { purpose: 'calendar.mine' }));
   assert.equal((await linkRow(V.id)).state, 'stopping');
   await jobs();
-  assert.equal(calOf(0).length, 0);
+  assert.ok(!live(cal), 'deleted in Google');
+
   assert.equal(await linkRow(V.id), null);
   assert.equal(fake.counts.revoke, 0, 'another purpose remains');
   // Forget (a manager): every member's connection, the calendar first.
   assert.equal((await connect(V, 0)).google, 'connected');
   await jobs();
-  assert.equal(calOf(0).length, 1);
+  cal = (await linkRow(V.id)).calendar_id;
+  assert.ok(live(cal));
   fake.cal.reset(); fake.resetCounts();
   ok(await M.b.action('google.forget', {}));
   assert.equal((await linkRow(V.id)).state, 'stopping', 'the member’s link, read from payload.user_id');
   await jobs();
-  assert.equal(calOf(0).length, 0);
-  const o = fake.order.filter((x) => x === 'calendars.delete' || x === 'revoke');
-  assert.equal(o[0], 'calendars.delete');
-  assert.ok(o.includes('revoke'));
+  assert.ok(!live(cal));
+  assert.deepEqual(fake.orderOf(A[0].sub).filter((x) => x === 'calendars.delete' || x === 'revoke'), ['calendars.delete', 'revoke']);
   assert.equal(await linkRow(V.id), null);
   // A delete that times out on every try: revoked anyway, the link left.
   assert.equal((await connect(V, 0)).google, 'connected');
@@ -573,12 +584,13 @@ test('turning the switch off deletes every connected person’s calendar, drops 
   assert.equal((await connect(V, 0)).google, 'connected');
   assert.equal((await connect(S, 2)).google, 'connected');
   await jobs();
-  assert.equal(calOf(0).length + calOf(2).length, 2);
+  const cals = [(await linkRow(V.id)).calendar_id, (await linkRow(S.id)).calendar_id];
+  assert.ok(cals.every(live));
   ok(await M.b.action('gcal.settings', { on: false }));
   assert.equal((await linkRow(V.id)).state, 'stopping');
   await jobs();
   await jobs();
-  assert.equal(calOf(0).length + calOf(2).length, 0);
+  assert.ok(!cals.some(live));
   assert.equal((await db.query('select count(*)::int as n from gcal_links where workspace_id = $1', [M.ws])).rows[0].n, 0);
   for (const u of [V.id, S.id]) {
     const g = (await db.query('select purposes from google_grants where user_id = $1', [u])).rows[0];
@@ -607,6 +619,8 @@ test('leaving the team: deleted for a one-campaign user then revoked; through th
   ok(await s2.post('/api/auth/join', { token: inv.joinUrl.split('/join/')[1], password: 'google-2026-pass' }));
   assert.equal((await connect(S, 2)).google, 'connected');
   ok(await s2.action('gcal.on', {}));
+  assert.equal((await linkRow(S.id)).state, 'ok', 'connecting made this campaign’s link too');
+  await jobs();
   await jobs(B2.ws);
   assert.equal(calOf(2).length, 2, 'one calendar a campaign');
   fake.cal.reset(); fake.resetCounts();
