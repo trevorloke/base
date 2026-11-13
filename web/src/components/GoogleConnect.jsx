@@ -112,19 +112,26 @@ export const googleBlocked = (data) => {
 export default function GoogleConnect({ purpose, label = 'Connect Google', back }) {
   const q = useGoogle();
   const online = useOnline();
+  // Google's return lands back on this screen (back=), so this screen says
+  // what happened — "Connected", or why not — once, as Your profile does.
+  const code = useGoogleReturn();
   const [note, setNote] = useState(null);
   if (!q.data) return <div className="gg-connect"><GoogleLoading q={q} /></div>;
   const d = q.data;
+  const said = <GoogleNote code={note ? null : code} data={d} note={note} />;
   if (!d.setup.connect) {
     return (
       <div className="gg-connect">
+        {said}
         <p className="muted">Google isn’t set up for this campaign. A manager can set it up in Settings → Services.
           {d.setup.why && <> <a href={adminHref('/settings/services')}>Open Services</a></>}</p>
       </div>
     );
   }
   const p = d.purposes.find((x) => x.key === purpose);
-  if (!p) return null; // not this person's to connect
+  // Not this person's to connect: nothing, unless Google's return has
+  // something to say about it ("You can't connect this.").
+  if (!p) return code ? <div className="gg-connect">{said}</div> : null;
   const app = appName(appMode());
   const href = googleStart('connect', { app, purpose, back: back || herePath() });
   const blocked = googleBlocked(d);
@@ -160,7 +167,7 @@ export default function GoogleConnect({ purpose, label = 'Connect Google', back 
   }
   return (
     <div className="gg-connect">
-      {note && <p className="gg-note is-ok" role="status">{note}</p>}
+      {said}
       {body}
       {!online && <NeedsSignalLine>Google needs signal</NeedsSignalLine>}
     </div>

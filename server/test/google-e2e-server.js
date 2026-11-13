@@ -3,11 +3,16 @@
 // card's connections can be driven end to end, and — with POKE_PORT — a
 // tiny local listener that makes one googleFetch for a person's grant
 // (GET /fetch?email=…), the way a feature would after the fake Google
-// revokes it. Test-only: nothing here is loaded by the real server.
+// revokes it. With CONNECT_HOST (a folder the suite built from
+// google-connect-host.jsx) it also serves a stand-in feature screen with
+// GoogleConnect on it, at /admin/e2e-google-connect and
+// /e2e-google-connect. Test-only: nothing here is loaded by the real server.
 //
 //   GOOGLE_… settings as the suite gives them; POKE_PORT=5303 \
-//   node server/test/google-e2e-server.js
+//   CONNECT_HOST=/tmp/host node server/test/google-e2e-server.js
 import http from 'node:http';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { definePurpose } from '../lib/google/purposes.js';
 
@@ -17,7 +22,28 @@ definePurpose('test.purpose', {
 });
 // index.js starts listening only when it is the script node ran.
 process.argv[1] = fileURLToPath(new URL('../index.js', import.meta.url));
-await import('../index.js');
+const { app } = await import('../index.js');
+
+// The stand-in screen goes in front of the app's own routes: the server
+// reads app.fetch at each request (lib/mount.js), so wrapping it is enough.
+const HOST_DIR = process.env.CONNECT_HOST;
+if (HOST_DIR) {
+  const inner = app.fetch;
+  const TYPES = { '.js': 'text/javascript', '.css': 'text/css' };
+  app.fetch = async (req, env) => {
+    const p = new URL(req.url).pathname;
+    if (p === '/admin/e2e-google-connect' || p === '/e2e-google-connect') {
+      const css = JSON.parse(await readFile(join(HOST_DIR, 'css.json'), 'utf8'));
+      const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Feature screen</title>${css.map((f) => `<link rel="stylesheet" href="/e2e-google-connect/${f}">`).join('')}</head>
+<body><div id="root"></div><script type="module" src="/e2e-google-connect/host.js"></script></body></html>`;
+      return new Response(html, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } });
+    }
+    const f = /^\/e2e-google-connect\/([\w.-]+\.(js|css))$/.exec(p);
+    if (f) return new Response(await readFile(join(HOST_DIR, f[1])), { headers: { 'content-type': TYPES[`.${f[2]}`] } });
+    return inner(req, env);
+  };
+}
 
 const POKE = Number(process.env.POKE_PORT || 0);
 if (POKE) {

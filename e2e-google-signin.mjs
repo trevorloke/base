@@ -7,6 +7,9 @@
 // a test hook on 5303 (server/test/google-e2e-server.js: one googleFetch,
 // as a feature would make), and a base.win without Google on 5304 (the
 // Services row "Not set up"). Build the web app first (cd web && npm run build).
+// The suite also builds a stand-in feature screen with GoogleConnect on it
+// (server/test/google-connect-host.jsx) into a scratch folder, and the
+// servers serve it at /admin/e2e-google-connect.
 //
 //   SHOTS=/tmp/google node e2e-google-signin.mjs
 //
@@ -23,7 +26,10 @@
 // 390, 48 px targets on the phone.
 import { chromium } from 'playwright-core';
 import { spawn } from 'node:child_process';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { startFakeGoogle } from './server/test/fake-google.js';
 import { base32Decode, hotp, totpStep } from './server/lib/twostep.js';
 
@@ -63,10 +69,29 @@ const fake = await startFakeGoogle({
   port: 5301, clientId: CLIENT_ID, secret: SECRET, accounts: Object.values(ACCTS),
   redirectUris: [`${BASE}/api/auth/google/back`, `${BP}${P}/api/auth/google/back`],
 });
+// GoogleConnect on a stand-in feature screen, built the way the app is.
+const HOST_DIR = mkdtempSync(join(tmpdir(), 'google-connect-host-'));
+const SERVER_ENV = { ...process.env }; // before Vite sets NODE_ENV=production for its build
+{
+  const { build } = await import('vite');
+  const react = (await import('@vitejs/plugin-react')).default;
+  await build({
+    configFile: false, logLevel: 'warn', publicDir: false, plugins: [react()],
+    root: fileURLToPath(new URL('./web/', import.meta.url)), base: '/e2e-google-connect/',
+    build: {
+      outDir: HOST_DIR, emptyOutDir: true, copyPublicDir: false, modulePreload: false, target: 'es2020',
+      rollupOptions: {
+        input: fileURLToPath(new URL('./server/test/google-connect-host.jsx', import.meta.url)),
+        output: { format: 'es', entryFileNames: 'host.js', assetFileNames: '[name]-[hash][extname]', inlineDynamicImports: true },
+      },
+    },
+  });
+  writeFileSync(join(HOST_DIR, 'css.json'), JSON.stringify(readdirSync(HOST_DIR).filter((f) => f.endsWith('.css'))));
+}
 const procs = [];
 const startServer = async (port, env, label) => {
   const child = spawn(process.execPath, ['server/test/google-e2e-server.js'], {
-    env: { ...process.env, STARBASE_OPEN_SIGNUP: '1', STARBASE_DATA: 'memory', PORT: String(port), ...env },
+    env: { ...SERVER_ENV, STARBASE_OPEN_SIGNUP: '1', STARBASE_DATA: 'memory', PORT: String(port), CONNECT_HOST: HOST_DIR, ...env },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let log = '';
@@ -89,6 +114,7 @@ const stopAll = async () => {
   await sleep(300);
   for (const p of procs) if (p.exitCode === null) p.kill('SIGKILL');
   await fake.close();
+  rmSync(HOST_DIR, { recursive: true, force: true });
 };
 
 let browser;
@@ -416,6 +442,11 @@ try {
       .filter((e) => e.getBoundingClientRect().right > window.innerWidth + 0.5).map((e) => e.textContent.trim()));
     check('Team on a phone: no sideways scroll, no button past the edge', (await noSideways(page)) <= 0 && past.length === 0, past.join(', '));
     await shot(page, '18-team-chip-phone');
+    await page.goto(`${BASE}/admin/settings/services`, { waitUntil: 'domcontentloaded' });
+    await page.locator('.gg-switch').scrollIntoViewIfNeeded();
+    check('Services on a phone: the switch says On in words, its label flush left', /On/.test(await text(page, '.gg-switch__state'))
+      && (await page.locator('.gg-switch').evaluate((e) => getComputedStyle(e).textAlign)) === 'left' && (await noSideways(page)) <= 0);
+    await shot(page, '18b-services-switch-phone', false);
   }
 
   // ── A connection: Connect, Connected as, Reconnect after Google revokes, Disconnect ──
@@ -444,6 +475,107 @@ try {
   for (let i = 0; i < 30 && fake.counts.revoke === revokesBefore; i += 1) await sleep(500);
   check('…disconnected, and Google is told', fake.counts.revoke > revokesBefore && (await m.locator('.gg-item').count()) === 0);
 
+  // ── GoogleConnect on a feature's screen: the piece Gmail, Drive and Calendar use ──
+  {
+    const HOSTP = `${BASE}/admin/e2e-google-connect`;
+    const piece = m.locator('.gg-connect');
+    await m.goto(HOSTP, { waitUntil: 'domcontentloaded' });
+    await m.getByText('Connect Google', { exact: true }).waitFor({ timeout: 8000 });
+    check('GoogleConnect, not connected: a quiet “Connect Google”, and no primary button', (await primaries(m)) === 0
+      && (await piece.locator('a.btn-quiet', { hasText: 'Connect Google' }).count()) === 1);
+    await shot(m, '25-connect-not-connected-desktop');
+    await m.goto(`${HOSTP}?label=${encodeURIComponent('Connect Gmail')}`, { waitUntil: 'domcontentloaded' });
+    await m.getByText('Connect Gmail', { exact: true }).waitFor({ timeout: 8000 });
+    check('…the caller’s own words on the button', (await piece.getByText('Connect Google', { exact: true }).count()) === 0);
+    await m.goto(`${HOSTP}?for=nothing.here`, { waitUntil: 'domcontentloaded' });
+    await sleep(800);
+    check('…a purpose this person can’t use: nothing drawn', (await piece.count()) === 0, await text(m, 'main'));
+
+    // Google gives less than asked: back on the feature's screen, the reason, once.
+    await m.goto(HOSTP, { waitUntil: 'domcontentloaded' });
+    await fetch(`${G}/__next`, { method: 'POST', body: JSON.stringify({ endpoint: 'token', knob: 'partial_scope' }) });
+    await m.getByText('Connect Google', { exact: true }).click();
+    await pickGoogle(m, 'bo');
+    await m.getByText('Google didn’t give base.win what it needs. Try again and tick every box.').waitFor({ timeout: 8000 });
+    check('a box left unticked at Google: the feature’s screen says why, and the address forgets it',
+      new URL(m.url()).pathname === '/admin/e2e-google-connect' && !/google=/.test(m.url())
+      && (await piece.getByText('Connect Google', { exact: true }).count()) === 1, m.url());
+    await shot(m, '26-connect-missing-scope-desktop');
+
+    await piece.getByText('Connect Google', { exact: true }).click();
+    await pickGoogle(m, 'bo');
+    await piece.getByText('Connected as').waitFor({ timeout: 8000 });
+    check('connected through GoogleConnect: back on the feature’s screen, “Connected”, then “Connected as … · Disconnect”',
+      new URL(m.url()).pathname === '/admin/e2e-google-connect' && !/google=/.test(m.url())
+      && /Connected/.test(await text(m, '.gg-connect .gg-note'))
+      && /Connected as bo@campaign\.example\.org/.test(await text(m, '.gg-connect'))
+      && (await piece.getByRole('button', { name: /Disconnect/ }).count()) === 1, `${m.url()} ${await text(m, '.gg-connect')}`);
+    await shot(m, '27-connect-connected-desktop');
+    await m.reload({ waitUntil: 'domcontentloaded' });
+    await piece.getByText('Connected as').waitFor({ timeout: 8000 });
+    check('…a reload doesn’t say “Connected” again', (await piece.locator('.gg-note').count()) === 0);
+
+    // On a phone: the same piece, 48 px, nothing past the edge.
+    {
+      const { page } = await newPage(PHONE, 'connect phone');
+      await page.context().addCookies(await mctx.cookies());
+      await page.goto(HOSTP, { waitUntil: 'domcontentloaded' });
+      await page.locator('.gg-connect').getByText('Connected as').waitFor({ timeout: 8000 });
+      check('GoogleConnect on a phone: no sideways scroll, 48 px buttons', (await noSideways(page)) <= 0
+        && (await tapTargets(page, '.gg-connect .btn, .gg-connect a.btn')).length === 0, JSON.stringify(await tapTargets(page, '.gg-connect .btn')));
+      await shot(page, '28-connect-connected-phone');
+      await page.locator('.gg-connect').getByRole('button', { name: /Disconnect/ }).click();
+      check('…Disconnect asks in place on a phone', /Stop using Google for Test connection\?/.test(await text(page, '.gg-connect .gg-confirm'))
+        && (await noSideways(page)) <= 0 && (await tapTargets(page, '.gg-confirm .btn')).length === 0);
+      await shot(page, '29-connect-confirm-phone');
+      await page.locator('.gg-confirm').getByRole('button', { name: 'Cancel' }).click();
+      // No signal: the piece's buttons are off, and it says why.
+      await page.context().setOffline(true);
+      await page.locator('.gg-connect').getByText('Google needs signal').waitFor({ timeout: 8000 });
+      check('GoogleConnect with no signal: Disconnect is off, with the no-signal line',
+        await page.locator('.gg-connect').getByRole('button', { name: /Disconnect/ }).isDisabled());
+      await shot(page, '30-connect-offline-phone');
+      await page.context().setOffline(false);
+    }
+
+    // Google stops letting base.win in: the feature's screen asks to reconnect.
+    await fetch(`${G}/__revokeAll`, { method: 'POST', body: JSON.stringify({ sub: ACCTS.bo.sub }) });
+    const poked = await (await fetch(`${POKE}/fetch?email=${encodeURIComponent(mgr)}`)).json();
+    await m.reload({ waitUntil: 'domcontentloaded' });
+    await piece.getByText('Needs reconnecting').waitFor({ timeout: 8000 });
+    check('GoogleConnect after Google revokes: “Needs reconnecting”, what Google said, and Reconnect',
+      poked.trouble === 'reconnect' && /Google stopped letting base\.win use this account/.test(await text(m, '.gg-connect'))
+      && (await piece.getByText('Reconnect', { exact: true }).count()) === 1, JSON.stringify(poked));
+    await shot(m, '31-connect-reconnect-desktop');
+    await piece.getByText('Reconnect', { exact: true }).click();
+    await pickGoogle(m, 'bo');
+    await piece.getByText('Connected as').waitFor({ timeout: 8000 });
+    check('…Reconnect brings it back on the same screen', new URL(m.url()).pathname === '/admin/e2e-google-connect'
+      && (await piece.getByText('Needs reconnecting').count()) === 0);
+
+    // Google asks for a pause: the line says until when.
+    await fetch(`${G}/__next`, { method: 'POST', body: JSON.stringify({ endpoint: 'api', knob: '429', retryAfter: 600 }) });
+    const paused = await (await fetch(`${POKE}/fetch?email=${encodeURIComponent(mgr)}`)).json();
+    await m.reload({ waitUntil: 'domcontentloaded' });
+    await piece.getByText(/Google asked base\.win to wait — try again after \d{1,2}:\d\d [ap]m/).waitFor({ timeout: 8000 });
+    check('GoogleConnect while Google asks to wait: “try again after <time>”', paused.trouble === 'paused', JSON.stringify(paused));
+    await shot(m, '32-connect-paused-desktop');
+
+    await piece.getByRole('button', { name: /Disconnect/ }).click();
+    await piece.locator('.gg-confirm').getByRole('button', { name: 'Disconnect' }).click();
+    await piece.getByText('Disconnected. Google no longer lets base.win in.').waitFor({ timeout: 8000 });
+    check('GoogleConnect Disconnect: said, and “Connect Google” is back', (await piece.getByText('Connect Google', { exact: true }).count()) === 1);
+    await shot(m, '33-connect-disconnected-desktop');
+
+    // The installed app: one line instead of Connect.
+    const { page } = await newPage(PHONE, 'connect installed', { standalone: true });
+    await page.context().addCookies(await mctx.cookies());
+    await page.goto(HOSTP, { waitUntil: 'domcontentloaded' });
+    await page.locator('.gg-connect').getByText('Open base.win in your browser to use Google.').waitFor({ timeout: 8000 });
+    check('GoogleConnect in the installed app: the line, no Connect', (await page.getByText('Connect Google', { exact: true }).count()) === 0);
+    await shot(page, '34-connect-installed-phone');
+  }
+
   // ── The wrong address; the installed app ──
   {
     const LOCAL = 'http://localhost:5300';
@@ -457,6 +589,9 @@ try {
     check('opened at another address: one line instead of Link', /Open base\.win at http:\/\/127\.0\.0\.1:5300 to use Google here\./.test(await text(page, '.gg-card'))
       && (await page.getByText('Link Google account').count()) === 0, await text(page, '.gg-card'));
     await shot(page, '21-profile-wrong-address-desktop');
+    await page.goto(`${LOCAL}/e2e-google-connect`, { waitUntil: 'domcontentloaded' });
+    await page.locator('.gg-connect').getByText(`Open base.win at ${BASE} to use Google here.`).waitFor({ timeout: 8000 });
+    check('GoogleConnect at another address: the same line, no Connect', (await page.getByText('Connect Google', { exact: true }).count()) === 0);
   }
   {
     const { page } = await newPage(PHONE, 'installed profile', { standalone: true });
@@ -491,6 +626,13 @@ try {
     await page.goto(`${NOG}/login`, { waitUntil: 'domcontentloaded' });
     await sleep(500);
     check('…and no Google button on Sign in', (await page.locator('.gg-btn').count()) === 0);
+    await page.goto(`${NOG}/admin/e2e-google-connect`, { waitUntil: 'domcontentloaded' });
+    await page.locator('.gg-connect').getByText('Google isn’t set up for this campaign.', { exact: false }).waitFor({ timeout: 8000 });
+    check('GoogleConnect without Google: one line, and a manager gets the way to Services',
+      /A manager can set it up in Settings → Services\./.test(await text(page, '.gg-connect'))
+      && (await page.locator('.gg-connect a', { hasText: 'Open Services' }).getAttribute('href')) === '/admin/settings/services'
+      && (await page.locator('.gg-connect .btn').count()) === 0);
+    await shot(page, '35-connect-not-set-up-desktop');
   }
 
   // ── Under BASE_PATH (no token key: connections not set up) ──

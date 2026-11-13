@@ -123,6 +123,8 @@ export default function GooglePanel({ s, online }) {
               aria-describedby="gg-signin-hint" onClick={() => setSignin(!q.data.rules.signin)}>
               <span className="gg-switch__track" aria-hidden="true"><span className="gg-switch__dot" /></span>
               <span>Team can sign in with Google</span>
+              {/* The state in words too, not only the colour (aria-checked says it to a screen reader). */}
+              <span className="gg-switch__state" aria-hidden="true">{q.data.rules.signin ? 'On' : 'Off'}</span>
             </button>
             <p className="gg-hint" id="gg-signin-hint">Everyone keeps their password.</p>
             {error && <p className="error" role="alert">{error}</p>}

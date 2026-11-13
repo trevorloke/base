@@ -60,7 +60,9 @@ a.btn.gg-link { display: inline-flex; align-items: center; text-decoration: none
 .gg-switch {
   display: inline-flex; align-items: center; gap: var(--s-3); min-height: var(--ctl); padding: 0 var(--s-2) 0 0;
   font: inherit; font-size: 15px; font-weight: 600; color: var(--text-1); background: none; border: 0; cursor: pointer;
+  text-align: left; /* a label that wraps on a phone stays flush with the lines around it */
 }
+.gg-switch__state { flex: none; font-weight: 500; color: var(--text-3); }
 .gg-switch__track { position: relative; flex: none; width: 48px; height: 28px; border-radius: 999px; background: var(--paper-2); border: 1px solid var(--rule-2); transition: background 0.15s; }
 .gg-switch__dot { position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--paper-0); border: 1px solid var(--rule-2); transition: transform 0.15s; }
 .gg-switch[aria-checked='true'] .gg-switch__track { background: var(--ok); border-color: var(--ok); }
