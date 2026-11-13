@@ -76,6 +76,9 @@ export const setSearchTrace = (fn) => { trace = fn; };
 
 const LIMIT = 6;
 const MAX_LIMIT = 50;
+// Past the cap, a way with more matches than this walks the A–Z index too:
+// sorting a few thousand means folding each of their names first.
+const WALK_FROM = 2000;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DESK = ['manager', 'treasurer', 'staff'];
 const escLike = (s) => s.replace(/[%_\\]/g, (m) => `\\${m}`);
@@ -181,32 +184,38 @@ api.get('/search/people', async (c) => {
   ways = ways.filter((w) => w.n > 0);
   if (!ways.length) return none();
 
-  const b = bind(ws);
-  // A name: every word must start a word of the whole name. (An email's
-  // start, for one word on the desk, needn't: "k.smith".)
-  let fits = '';
-  if (ways.some((w) => w.named)) for (const w of term.words) fits += ` and (' ' || translate(person_fold(p.name), '-', ' ')) like $${b.add(`% ${escLike(w)}%`)}`;
-  const test = (w, cond) => (w.named ? `${cond}${fits}` : cond);
-  let filter = '';
-  // Who else is asked for: a role's holders; not this one.
+  // What every query below adds after its way in, on its own parameters:
+  // a name's words must each start a word of the whole name (an email's
+  // start, for one word on the desk, needn't: "k.smith"); a role's
+  // holders; not this one; whether they're on that list; after whom.
   const role = c.req.query('role');
-  if (role) filter += VOLUNTEER_ROLE_CODES.includes(role) ? ` and exists (select 1 from volunteer_roles v where v.person_id = p.id and v.role = $${b.add(role)})` : ' and false';
   const not = c.req.query('not');
-  if (not && UUID_RE.test(not)) filter += ` and p.id <> $${b.add(not)}`;
-  // On that list already (the desk's Add people): one primary-key probe a row.
-  let onList = '';
   const list = c.req.query('list');
-  if (list && UUID_RE.test(list) && DESK.includes(ctx.role)) {
-    const found = (await db.query('select 1 from lists where id = $1 and workspace_id = $2 and deleted_at is null', [list, ws])).rows[0];
-    if (found) onList = `, exists (select 1 from list_members lm where lm.list_id = $${b.add(list)} and lm.person_id = p.id) as on_list`;
-  }
-  const afterSql = after ? ` and ${azAfter('p', b.add(after), '>')}` : '';
+  const listOk = list && UUID_RE.test(list) && DESK.includes(ctx.role)
+    && (await db.query('select 1 from lists where id = $1 and workspace_id = $2 and deleted_at is null', [list, ws])).rows.length > 0;
+  const named = ways.some((w) => w.named);
+  const around = (b) => {
+    let fits = '';
+    if (named) for (const w of term.words) fits += ` and (' ' || translate(person_fold(p.name), '-', ' ')) like $${b.add(`% ${escLike(w)}%`)}`;
+    let filter = '';
+    if (role) filter += VOLUNTEER_ROLE_CODES.includes(role) ? ` and exists (select 1 from volunteer_roles v where v.person_id = p.id and v.role = $${b.add(role)})` : ' and false';
+    if (not && UUID_RE.test(not)) filter += ` and p.id <> $${b.add(not)}`;
+    // On that list already (the desk's Add people): one primary-key probe a row.
+    const onList = listOk ? `, exists (select 1 from list_members lm where lm.list_id = $${b.add(list)} and lm.person_id = p.id) as on_list` : '';
+    return {
+      test: (w, cond) => (w.named ? `${cond}${fits}` : cond),
+      filter,
+      pick: `${COLS}${onList}, ${AZ1} as k1, person_fold(p.name) collate "C" as k2`,
+      afterSql: after ? ` and ${azAfter('p', b.add(after), '>')}` : '',
+    };
+  };
   const live = 'p.workspace_id = $1 and p.deleted_at is null';
-  const pick = `${COLS}${onList}, ${AZ1} as k1, person_fold(p.name) collate "C" as k2`;
   const capped = ways.some((w) => w.n > cap);
   let rows;
   if (!capped) {
     // Few enough: gather every match, count them, and page in A–Z order.
+    const b = bind(ws);
+    const { test, filter, pick, afterSql } = around(b);
     rows = (await run(
       `with m as materialized (${ways.map((w) => `(${among(cap, test(w, w.cond(b.add(w.value))))})`).join(' union ')}),
        f as materialized (select ${pick} from persons p join m on m.id = p.id where ${live}${filter})
@@ -217,19 +226,45 @@ api.get('/search/people', async (c) => {
   } else {
     // Some way finds more than the cap: each way reads in A–Z order on its
     // own and stops at a page, and the pages are put together. A surname's
-    // way is a range of the A–Z index itself; a crowded first name, middle
-    // name, address or email walks that index with its own test; a way
-    // with few matches sorts its few.
-    const streams = ways.map((w) => {
-      let cond;
-      if (w.n <= cap) cond = `p.id in (${among(cap, test(w, w.cond(b.add(w.value))))})`;
+    // way is a range of the A–Z index itself, and a way with few matches
+    // (2,000 or fewer) sorts its few: those go in one query. A crowded first
+    // name, middle name, address or email walks the A–Z index with its own
+    // test, alone: on a city's file one row in 150 at least passes, so a page
+    // reads a few thousand index entries; left to itself the planner would
+    // read all its thousands by their own index and fold every name to sort
+    // them, so sorting is turned off for that one query.
+    const b = bind(ws);
+    const { test, filter, pick, afterSql } = around(b);
+    const page = (cond) => `(select ${pick} from persons p where ${live} and ${cond}${filter}${afterSql} order by ${azKey('p')} limit ${limit + 1})`;
+    const near = [];
+    const walks = [];
+    for (const w of ways) {
+      if (w.n <= Math.min(cap, WALK_FROM)) near.push(page(`p.id in (${among(cap, test(w, w.cond(b.add(w.value))))})`));
       else if (w.start) {
         const z = w.start.slice(0, -1) + String.fromCharCode(w.start.charCodeAt(w.start.length - 1) + 1);
-        cond = test(w, `${AZ1} >= $${b.add(w.start)} and ${AZ1} < $${b.add(z)}`);
-      } else cond = test(w, w.cond(b.add(w.value)));
-      return `(select ${pick} from persons p where ${live} and ${cond}${filter}${afterSql} order by ${azKey('p')} limit ${limit + 1})`;
-    });
-    rows = (await run(`select * from (${streams.join(' union ')}) s order by s.k1, s.k2, s.id limit ${limit + 1}`, b.params)).rows;
+        near.push(page(test(w, `${AZ1} >= $${b.add(w.start)} and ${AZ1} < $${b.add(z)}`)));
+      } else walks.push(w);
+    }
+    rows = near.length ? (await run(`select * from (${near.join(' union ')}) s order by s.k1, s.k2, s.id limit ${limit + 1}`, b.params)).rows : [];
+    for (const w of walks) {
+      const wb = bind(ws);
+      const own = around(wb);
+      const text = `select ${own.pick} from persons p where ${live} and ${own.test(w, w.cond(wb.add(w.value)))}${own.filter}${own.afterSql}
+        order by ${azKey('p')} limit ${limit + 1}`;
+      trace?.(text, wb.params, { walk: true });
+      rows.push(...(await db.transaction(async (tx) => {
+        // Sorting off for this one query (and no workers: a page is a few
+        // dozen rows, and starting them costs more than it saves).
+        await tx.query("select set_config('enable_sort', 'off', true), set_config('enable_bitmapscan', 'off', true), set_config('max_parallel_workers_per_gather', '0', true)");
+        return (await tx.query(text, wb.params)).rows;
+      })));
+    }
+    // Put together, A–Z (the index's byte order: code units compare the same).
+    const seen = new Set();
+    const cmp = (x, y) => (x < y ? -1 : x > y ? 1 : 0);
+    rows = rows.filter((r) => !seen.has(r.id) && seen.add(r.id))
+      .sort((x, y) => cmp(x.k1, y.k1) || cmp(x.k2, y.k2) || cmp(String(x.id), String(y.id)))
+      .slice(0, limit + 1);
   }
   const first = !after;
   const capOut = first && capped ? { cap } : {};

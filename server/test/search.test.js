@@ -138,6 +138,14 @@ test('past the cap: “more than”, the first page in A–Z order, and paging w
     const both = await ask('bnc2 bigname', '&limit=50');
     assert.deepEqual([both.many, both.total], [false, seen.filter((p) => foldName(p.first_name).startsWith('bnc2')).length]);
     assert.ok(both.total >= 1);
+    // A crowded first name (they all start "Bn"): its walk of the A–Z index
+    // pages through all 51 too.
+    const walked = [];
+    let p = await ask('bn', '&limit=20');
+    assert.deepEqual([p.many, p.total], [true, null]);
+    walked.push(...p.persons);
+    while (p.more) { p = await ask('bn', `&limit=20&after=${walked.at(-1).id}`); walked.push(...p.persons); }
+    assert.deepEqual(walked.map((x) => x.id), seen.map((x) => x.id));
   } finally { setSearchCap(5000); }
 });
 
@@ -209,12 +217,14 @@ test('Postgres 17 maintenance: the indexes on our functions rebuild with only pg
 // reads an index of ours, and none reads persons end to end.
 const plansOf = async (q, more = '') => {
   const seen = [];
-  setSearchTrace((text, params) => seen.push({ text, params }));
+  setSearchTrace((text, params, meta) => seen.push({ text, params, walk: meta?.walk }));
   try { await ask(q, more); } finally { setSearchTrace(null); }
   const out = [];
-  for (const { text, params } of seen) {
+  for (const { text, params, walk } of seen) {
     out.push(await db.transaction(async (tx) => {
       await tx.query('set local enable_seqscan = off');
+      // A crowded way's walk runs with sorting off, as the search runs it.
+      if (walk) { await tx.query('set local enable_sort = off'); await tx.query('set local enable_bitmapscan = off'); }
       return (await tx.query(`explain ${text}`, params)).rows.map((r) => Object.values(r)[0]).join('\n');
     }));
   }
@@ -234,9 +244,11 @@ test('each way in reads its index: name, last name, its last word, middle name, 
   }
   setSearchCap(50);
   try {
-    const plan = await plansOf('bigname', '&limit=20');
-    assert.match(plan, /persons_ws_az_idx/, plan);
-    assert.doesNotMatch(plan, /Seq Scan on persons/, plan);
+    for (const q of ['bigname', 'bn']) {
+      const plan = await plansOf(q, '&limit=20');
+      assert.match(plan, /persons_ws_az_idx/, plan);
+      assert.doesNotMatch(plan, /Seq Scan on persons/, plan);
+    }
   } finally { setSearchCap(5000); }
 });
 

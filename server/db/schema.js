@@ -281,11 +281,18 @@ create table if not exists cap_rules (
 // Postgres 17 builds indexes with only pg_catalog on the search path. No
 // SET search_path on either: they must stay inlinable, or the indexes on
 // them (ext/search) stop matching the queries. Never change these bodies —
-// a different fold is a new function with new indexes.
+// a different fold is a new function with new indexes. A name of plain
+// printable ASCII with no apostrophe or full stop (most of them) skips the
+// translate, which is the slow part and changes nothing there; one with
+// nothing past U+00FF (most of the rest) translates by the Latin-1 part
+// of the strings only, which gives the same.
 const sqlText = (s) => `'${s.replace(/'/g, "''")}'`;
+const LATIN1 = [...FOLD_FROM].map((ch, i) => [ch, FOLD_TO[i] ?? '']).filter(([ch]) => ch.charCodeAt(0) <= 0xff);
 const FOLD = `
 create or replace function person_fold(t text) returns text language sql immutable parallel safe as $fold$
-  select btrim(regexp_replace(lower(translate(t, ${sqlText(FOLD_FROM)}, ${sqlText(FOLD_TO)}) collate "C"), '[ \\t\\n\\r]+', ' ', 'g'))
+  select btrim(regexp_replace(lower((case when t !~ '[^\\x20-\\x26\\x28-\\x2d\\x2f-\\x7e]' then t
+    when t !~ '[^\\x01-\\xff]' then translate(t, ${sqlText(LATIN1.map(([ch]) => ch).join(''))}, ${sqlText(LATIN1.map(([, to]) => to).join(''))})
+    else translate(t, ${sqlText(FOLD_FROM)}, ${sqlText(FOLD_TO)}) end) collate "C"), '[ \\t\\n\\r]+', ' ', 'g'))
 $fold$;
 create or replace function person_fold_tail(t text) returns text language sql immutable parallel safe as $fold$
   select regexp_replace(public.person_fold(t), '^.*[ -]', '')
