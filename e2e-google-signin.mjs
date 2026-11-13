@@ -451,9 +451,9 @@ try {
     check('Team on a phone: no sideways scroll, no button past the edge', (await noSideways(page)) <= 0 && past.length === 0, past.join(', '));
     await shot(page, '18-team-chip-phone');
     await page.goto(`${BASE}/admin/settings/services`, { waitUntil: 'domcontentloaded' });
-    await page.locator('.gg-switch').scrollIntoViewIfNeeded();
+    await page.locator('.gg-switch').first().scrollIntoViewIfNeeded();
     check('Services on a phone: the switch says On in words, its label flush left', /On/.test(await text(page, '.gg-switch__state'))
-      && (await page.locator('.gg-switch').evaluate((e) => getComputedStyle(e).textAlign)) === 'left' && (await noSideways(page)) <= 0);
+      && (await page.locator('.gg-switch').first().evaluate((e) => getComputedStyle(e).textAlign)) === 'left' && (await noSideways(page)) <= 0);
     await shot(page, '18b-services-switch-phone', false);
   }
 
