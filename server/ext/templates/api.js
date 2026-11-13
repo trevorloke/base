@@ -9,6 +9,9 @@
 //                                    except for a manager (flagged, to show again).
 //                                    foot: the lines at the bottom of every email
 //                                    { name, address, contact, auth, missing: ['address'] | [] }
+//                                    links: the website's live pages [{ label, url }]
+//                                    for the compose's "Link to…" (full addresses:
+//                                    an email is read away from the site)
 //   GET /templates/:ref              ref: an id or starter:<key> → { ref, name, use,
 //                                    subject, body, placeholders, version?, updated_at? }
 //   GET /blasts/:id/message          "Use again": a past newsletter's or email's
@@ -18,6 +21,7 @@ import { Hono } from 'hono';
 import { NO_ADDRESS, placeholders } from '@starbase/shared/email/words';
 import { STARTERS, starterOf } from '@starbase/shared/email/starters';
 import { footOf } from '../abtests/send.js';
+import { baseOf } from '../socials/share-api.js';
 import { GONE, USES, maySave, mayStart, refusal } from './rules.js';
 
 export const api = new Hono();
@@ -26,6 +30,26 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 // What the compose sends back with blast.send (placeholders_from): the
 // bracketed ones, at most 200 (an empty link is checked on the text itself).
 const toFill = (t) => placeholders(`${t.subject}\n${t.body}`).filter((p) => !p.startsWith(NO_ADDRESS)).slice(0, 200);
+// The website's published pages and open petitions, as Sharing lists them.
+const linksOf = async (c, db, ws) => {
+  const s = (await db.query('select domains from site_settings where workspace_id = $1', [ws])).rows[0];
+  if (!s) return [];
+  const domains = typeof s.domains === 'string' ? JSON.parse(s.domains) : s.domains;
+  const base = baseOf(c, domains);
+  const rows = [
+    { path: '/', title: 'Home' },
+    ...(await db.query(
+      `select '/' || slug as path, coalesce(nullif(published->>'title', ''), title) as title from site_pages
+        where workspace_id = $1 and deleted_at is null and site_id is null and status = 'published' and slug <> 'home'
+        order by nav_order, created_at limit 100`, [ws],
+    )).rows,
+    ...(await db.query(
+      `select '/act/' || slug as path, title from site_campaigns
+        where workspace_id = $1 and deleted_at is null and status = 'open' order by created_at limit 50`, [ws],
+    )).rows,
+  ];
+  return rows.map((r) => ({ label: r.title || r.path, url: r.path === '/' ? `${base}/` : `${base}${r.path}` }));
+};
 const hiddenOf = (ctx) => {
   const h = ctx.workspace?.settings?.templates?.hidden;
   return new Set(Array.isArray(h) ? h : []);
@@ -52,6 +76,7 @@ api.get('/templates', async (c) => {
   return c.json({
     starters, mine, canSave: maySave(ctx, use), canHide: manager,
     foot: { name: ctx.workspace?.name || '', ...f, missing: f.address ? [] : ['address'] },
+    links: await linksOf(c, db, ctx.workspaceId),
   });
 });
 

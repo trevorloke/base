@@ -438,6 +438,9 @@ test('the footer: as before with nothing set; the address, contact and agent in 
   const t = ok(await staff.get('/api/templates?use=email'));
   assert.deepEqual(t.foot.missing, []);
   assert.equal(t.foot.auth, 'Authorized by Robin Example, 604-555-0100');
+  // "Link to…": the website's pages, as full addresses an email can carry.
+  assert.ok(t.links.length >= 1 && t.links.every((l) => /^https?:\/\/[^/]+\/.*site\//.test(l.url) && l.label), JSON.stringify(t.links));
+  assert.equal(t.links[0].label, 'Home');
   ok(await setOrg(mgr, { ...org, address: '' }));
   assert.deepEqual(ok(await staff.get('/api/templates?use=email')).foot.missing, ['address']);
 });
