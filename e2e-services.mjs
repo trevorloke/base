@@ -25,7 +25,7 @@ let BASE = process.env.BASE;
 const ADMIN = { toString() { return `${BASE}/admin`; } };
 if (!BASE) {
   const env = { ...process.env, STARBASE_OPEN_SIGNUP: '1', STARBASE_DATA: 'memory', PORT: String(PORT), STARBASE_JOBS: 'off' };
-  for (const k of ['RESEND_API_KEY', 'MAIL_FROM', 'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM', 'STARBASE_PUBLIC_URL', 'GOOGLE_MAPS_TILES', 'GEOCODER', 'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'CALLHUB_API_KEY', 'CALLHUB_API_BASE', 'MAIL_PROVIDER', 'SENDGRID_API_KEY', 'MAILCHIMP_API_KEY']) delete env[k];
+  for (const k of ['RESEND_API_KEY', 'MAIL_FROM', 'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM', 'STARBASE_PUBLIC_URL', 'GOOGLE_MAPS_TILES', 'GOOGLE_MAPS_SERVER_KEY', 'ADDRESS_SUGGEST', 'GEOCODER', 'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'CALLHUB_API_KEY', 'CALLHUB_API_BASE', 'MAIL_PROVIDER', 'SENDGRID_API_KEY', 'MAILCHIMP_API_KEY']) delete env[k];
   server = spawn(process.execPath, ['server/index.js'], { env, stdio: ['ignore', 'pipe', 'inherit'] });
   await new Promise((resolve, reject) => {
     const t = setTimeout(() => reject(new Error('server did not start')), 30000);
@@ -61,7 +61,7 @@ await page.waitForURL(/\/admin\/?$/, { timeout: 15000 });
 await page.goto(`${ADMIN}/settings/services`, { waitUntil: 'domcontentloaded' });
 await page.waitForSelector('.sv2-row', { timeout: 10000 }).catch(() => {});
 const names = await page.$$eval('.sv2-list:not(.sv2-in) .sv2-name', (els) => els.map((e) => e.innerText.trim()));
-check('every service listed', names.join(' | ') === 'Database | Public address | Email (Resend) | Texting and calls (Twilio) | Address lookup (BC Address Geocoder) | Map background (OpenStreetMap and CARTO) | Background work | Mailchimp | Online payments (Stripe) | Phone dialer (CallHub) | Two-step sign-in key', names.join(' | '));
+check('every service listed', names.join(' | ') === 'Database | Public address | Email (Resend) | Texting and calls (Twilio) | Map pins (BC Address Geocoder) | Map background (OpenStreetMap and CARTO) | Background work | Mailchimp | Online payments (Stripe) | Phone dialer (CallHub) | Two-step sign-in key | Address suggestions (Google Places)', names.join(' | '));
 // Online payments (ext/payments): not set up, its two keys, and the webhook to give Stripe.
 const stripeRow = (await text(page, '.sv2-row:has(.sv2-name:text-is("Online payments (Stripe)"))')) || '';
 check('Stripe: not set up, both keys named, the webhook address and its events', /Not set up/.test(stripeRow) && /STRIPE_SECRET_KEY · STRIPE_WEBHOOK_SECRET/.test(stripeRow)
