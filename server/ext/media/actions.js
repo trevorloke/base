@@ -92,7 +92,7 @@ export const actions = {
       const email = input.email || null;
       const socials = cleanSocials(input.socials);
       let p = email ? (await tx.query(
-        `select id, name, email, tags from persons where workspace_id = $1 and lower(email) = $2 and deleted_at is null
+        `select id, name, email, phone, socials, tags from persons where workspace_id = $1 and lower(email) = $2 and deleted_at is null
          order by created_at, id limit 1`, [ws, email],
       )).rows[0] : null;
       const existing = !!p;
@@ -101,6 +101,14 @@ export const actions = {
         if (row?.left_how === 'link') throw leftByLink(tx, ctx, row);
         const tags = parseJ(p.tags, []);
         if (!onMediaTags(tags, [input.kind])) await setTags(tx, ws, p, [...tags, input.kind], emit);
+        // The phone and handles typed here fill what their record lacks,
+        // never write over what it has (as outlet, beat and note below).
+        const had = parseJ(p.socials, {}) || {};
+        const fill = {};
+        if (input.phone?.trim() && !p.phone?.trim()) fill.phone = input.phone.trim();
+        const add = Object.fromEntries(Object.entries(socials || {}).filter(([k, v]) => v && !String(had[k] || '').trim()));
+        if (Object.keys(add).length) fill.socials = { ...had, ...add };
+        if (Object.keys(fill).length) await (await core())['person.update'].handler(tx, ctx, { id: p.id, ...fill }, emit);
       } else {
         const made = await (await core())['person.create'].handler(tx, ctx, {
           kind: 'person', name: input.name, email, phone: input.phone || null, tags: [input.kind], socials,

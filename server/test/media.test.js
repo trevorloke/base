@@ -77,6 +77,11 @@ test('contacts: add, an existing email, save, swap the kind, remove and add back
   assert.deepEqual(await tagsOf(lee.id), ['volunteer', 'influencer']);
   const row = async (id) => (await db.query('select outlet, beat, note, left_at, left_how from media_contacts where workspace_id = $1 and person_id = $2', [ws, id])).rows[0];
   assert.equal((await row(lee.id)).outlet, 'Example Radio');
+  // What the desk typed fills what Lee's record lacks, never what it has.
+  ok(await mgr.action('person.update', { id: lee.id, socials: { x: 'leeonx' } }));
+  ok(await mgr.action('media.contact.add', { name: 'Lee E.', kind: 'influencer', email: mail('lee'), phone: '604-555-0177', socials: { x: 'other', instagram: 'lee.example' } }));
+  const leeNow = (await db.query('select phone, socials from persons where id = $1', [lee.id])).rows[0];
+  assert.deepEqual([leeNow.phone, leeNow.socials.x, leeNow.socials.instagram], ['604-555-0177', 'leeonx', 'lee.example']);
 
   ok(await mgr.action('media.contact.save', { person_id: lee.id, kind: 'media', beat: 'Transit', note: 'Prefers email' }));
   assert.deepEqual(await tagsOf(lee.id), ['volunteer', 'media'], 'the kind swaps the tag');
