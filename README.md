@@ -487,7 +487,8 @@ than a week after they came off is refused. Contacts are door, phone, text or
   add someone you know, call, text, or rate a talk in person. A profile's
   *Knows* nudges the desk ("Ask Priya Nair — they know each other"; never on
   a do-not-contact profile) and *Most connected* finds the connectors (and
-  how many each brought in). A tie can be marked **close**
+  how many new people each added — not Share's "brought in", which counts
+  website sign-ups by their link). A tie can be marked **close**
   (`relationship.update` also changes its kind or note; a blank note clears
   it). The desk reads the two ties that matter for up to 20 people at once
   (`GET /api/relationships/key`: close first, then supporters, then family to

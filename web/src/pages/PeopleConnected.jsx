@@ -35,7 +35,9 @@ export default function PeopleConnected() {
               <Link className="ops-row" to={`/people/${p.id}`} state={BACK}>
                 <span className="ops-row__main">
                   <span className="ops-row__name">{p.name}</span>
-                  <span className="ops-row__sub">knows {p.knows} · {plural(p.supporters, 'supporter')}{p.brought_in ? ` · brought in ${p.brought_in}` : ''}</span>
+                  {/* New people they added (a link, or "I know them"): not Share's
+                      "brought in", which counts website sign-ups by their link. */}
+                  <span className="ops-row__sub">knows {p.knows} · {plural(p.supporters, 'supporter')}{p.brought_in ? ` · added ${p.brought_in} new` : ''}</span>
                 </span>
                 <span className="ops-row__end"><RatingChip code={p.rating} who /></span>
               </Link>

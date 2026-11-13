@@ -17,7 +17,7 @@
 // at 1440 and 390, Close in place, Make a list ("Priya Nair’s circle", as many
 // as she knows), People → Knows a supporter (the server's count), the rule
 // builder, a staff member denied Donations (no "Knows a donor"), the desk
-// Calls card's "Knows …", Most connected's "brought in", and Priya at a
+// Calls card's "Knows …", Most connected's "added N new", and Priya at a
 // walk-list door with no signal: More → "I know them" → Friend — the chip at
 // once, sent once; one refused and dismissed still says "Not saved" — while
 // her browser never gets a desk tie read.
@@ -156,7 +156,7 @@ const shown = await page.$$eval('.ops-row', (els) => els.map((e) => ({
 const plural = (n, one) => `${n} ${n === 1 ? one : `${one}s`}`;
 check('Most connected: Priya Nair first, knows 6', apiConnected[0]?.name === 'Priya Nair' && apiConnected[0].knows === 6, JSON.stringify(apiConnected[0]));
 check('each row says "knows N · M supporters" as the server counts them',
-  shown.length === apiConnected.length && shown.every((s, i) => s.name === apiConnected[i].name && s.fact === `knows ${apiConnected[i].knows} · ${plural(apiConnected[i].supporters, 'supporter')}${apiConnected[i].brought_in ? ` · brought in ${apiConnected[i].brought_in}` : ''}`),
+  shown.length === apiConnected.length && shown.every((s, i) => s.name === apiConnected[i].name && s.fact === `knows ${apiConnected[i].knows} · ${plural(apiConnected[i].supporters, 'supporter')}${apiConnected[i].brought_in ? ` · added ${apiConnected[i].brought_in} new` : ''}`),
   `${shown.slice(0, 3).map((s) => `${s.name}: ${s.fact}`).join(' | ')}`);
 let m = await simple(page, 'Most connected (desk 1360)');
 check('Most connected: no yellow button (nothing to do but look)', m.yellow === 0);
@@ -701,7 +701,7 @@ await D.go('/people/connected');
 {
   const conn = (await D.api('/relationships/connected')).json.people;
   const credit = conn.find((p) => p.brought_in > 0);
-  check('Most connected: "brought in" as the server counts it', credit && new RegExp(`${credit.name} knows ${credit.knows} · .* · brought in ${credit.brought_in}`).test(await D.text()), JSON.stringify(conn.slice(0, 3)));
+  check('Most connected: "added N new" as the server counts it', credit && new RegExp(`${credit.name} knows ${credit.knows} · .* · added ${credit.brought_in} new`).test(await D.text()), JSON.stringify(conn.slice(0, 3)));
 }
 await D.shot('19b-most-connected-desk');
 
