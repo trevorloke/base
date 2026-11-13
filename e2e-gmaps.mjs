@@ -49,6 +49,7 @@ const check = (name, ok, extra = '') => {
   results.push(!!ok);
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${extra ? '  — ' + String(extra).slice(0, 300) : ''}`);
 };
+const isUuid = (x) => /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(String(x || ''));
 const until = async (fn, ms = 8000) => { for (const end = Date.now() + ms; Date.now() < end;) { const v = await fn(); if (v) return v; await sleep(150); } return fn(); };
 
 // ── Google's logo, for this run only when the real file isn't in the build ──
@@ -90,11 +91,13 @@ const PREDICTIONS = [
   { id: 'gp13450', main: '13450 104 Ave', types: ['street_address'] },
   { id: 'gp13450u', main: '204-13450 104 Ave', types: ['subpremise'] },
   { id: 'gp13459', main: '13459 104 Ave', types: ['street_address'] },
+  { id: 'gp13470', main: '13470 104 Ave', types: ['street_address'] },
 ];
 const DETAILS = {
   gp13450: { n: '13450', unit: null },
   gp13450u: { n: '13450', unit: '204' },
   gp13459: { n: '13459', unit: null }, // the B.C. stand-in has no such door
+  gp13470: { n: '13470', unit: null, slow: true }, // answers after the server's 2.5 s
 };
 const g = { tiles: 'ok', places: 'ok', autocomplete: [], details: [], tileHits: 0, refusedPlaces: 0 };
 const json = (res, status, body) => { res.writeHead(status, { 'content-type': 'application/json' }); res.end(typeof body === 'string' ? body : JSON.stringify(body)); };
@@ -117,7 +120,7 @@ const gServer = http.createServer((req, res) => {
       if (g.places === 'blocked') { json(res, 403, BLOCKED); return; }
       const d = DETAILS[m[1]];
       if (!d) { json(res, 404, { error: { code: 404, message: 'Not found', status: 'NOT_FOUND' } }); return; }
-      json(res, 200, {
+      setTimeout(() => json(res, 200, {
         formattedAddress: `${d.unit ? `${d.unit}-` : ''}${d.n} 104 Ave, Surrey, BC V3T 1V8, Canada`,
         addressComponents: [
           ...(d.unit ? [{ longText: d.unit, shortText: d.unit, types: ['subpremise'] }] : []),
@@ -126,7 +129,7 @@ const gServer = http.createServer((req, res) => {
           { longText: 'Surrey', shortText: 'Surrey', types: ['locality', 'political'] },
           { longText: 'V3T 1V8', shortText: 'V3T 1V8', types: ['postal_code'] },
         ],
-      });
+      }), d.slow ? 3500 : 0);
       return;
     }
     if (g.tiles === 'billing') { json(res, 403, BILLING); return; }
@@ -545,6 +548,12 @@ s = await seed();
     check(`B4 ${size}: a pick B.C. can’t place says "Couldn’t find that door on the map — tap the map where it is", the words stay`,
       Boolean(err) && /13459 104 Ave/.test(await p.inputValue('#nd-address')), `${err} · ${await p.inputValue('#nd-address')}`);
     await p.screenshot({ path: `${SHOTS}/B-tapthemap-${size}.png` });
+    // Then a tap on the map: the pin is there and "tap the map" goes.
+    const mb = await p.locator('.map-canvas').boundingBox();
+    await p.mouse.click(mb.x + mb.width / 2, mb.y + 70);
+    const tapped = await until(async () => /Pinned on the map/.test(await words(p, '#nd-address-af-note')), 4000);
+    const errAfter = await words(p, 'form[aria-label="New door"] .error');
+    check(`B4 ${size}: after a tap on the map, "Pinned on the map" and no "tap the map" error`, tapped && !/tap the map/.test(errAfter), `${await words(p, '#nd-address-af-note')} · ${errAfter}`);
     await p.close();
   }
 
@@ -554,11 +563,27 @@ s = await seed();
     await p.goto(`${BASE}/admin/people/${s.edit.id}`, { waitUntil: 'domcontentloaded' });
     await p.click('.pf-edit');
     await p.waitForSelector('#ed-address', { timeout: 5000 });
-    await typeAddress(p, '#ed-address', '13450 104');
+    // Leaving the box ends Google's session and takes its rows: none to pick
+    // without one. Typing again asks again, in a new session, and that pick works.
+    await typeAddress(p, '#ed-address', '13450 10');
+    await p.keyboard.press('Tab');
+    await sleep(400);
+    await p.click('#ed-address');
+    await sleep(400);
+    const afterBlur = await options(p);
+    check('B7: Edit person — the box left and come back to: Google’s rows are gone (no pick without a session)', afterBlur.length === 0, JSON.stringify(afterBlur));
+    const a0 = g.autocomplete.length;
+    const d0 = g.details.length;
+    await p.keyboard.type('4', { delay: 40 });
+    await p.waitForSelector('.af-list .af-opt:has-text("204-13450 104 Ave")', { timeout: 6000 }).catch(() => {});
+    await sleep(300);
     await p.click('.af-list .af-opt:has-text("204-13450 104 Ave")');
     await until(async () => (await p.inputValue('#ed-unit')) === '204', 6000);
     const filled = { address: await p.inputValue('#ed-address'), unit: await p.inputValue('#ed-unit'), city: await p.inputValue('#ed-city'), postal: await p.inputValue('#ed-postal') };
     check('B7: Edit person — a Google pick fills street, unit, city and postal code', filled.address === '13450 104 Ave' && filled.unit === '204' && filled.city === 'Surrey' && filled.postal === 'V3T 1V8', JSON.stringify(filled));
+    const asks7 = g.autocomplete.slice(a0);
+    const det7 = g.details.slice(d0);
+    check('B7: after coming back, one details call with the new typing run’s session', asks7.length >= 1 && det7.length === 1 && isUuid(det7[0].session) && asks7.every((x) => x.session === det7[0].session), JSON.stringify({ asks7, det7 }));
     await p.screenshot({ path: `${SHOTS}/B-edit-person-1440.png` });
     await p.click('form[aria-label="Edit details"] button[type="submit"]');
     const placed = await until(async () => {
@@ -566,6 +591,20 @@ s = await seed();
       return r.person?.lat != null ? r.person : null;
     }, 8000);
     check('B7: saved, and placed by B.C. (the stand-in’s pin) — on the map', placed && Math.abs(placed.lat - 49.1906) < 0.001 && Math.abs(placed.lng + 122.8466) < 0.001 && placed.unit === '204', JSON.stringify(placed && { lat: placed.lat, lng: placed.lng, unit: placed.unit }));
+    await p.close();
+  }
+  // A Google pick with no answer in time: the words stay, and the line says so plainly.
+  if (want('B7')) {
+    const p = await pageIn(s.mgr, 'B7-fail');
+    await p.goto(`${BASE}/admin/people/${s.edit.id}`, { waitUntil: 'domcontentloaded' });
+    await p.click('.pf-edit');
+    await p.waitForSelector('#ed-address', { timeout: 5000 });
+    await typeAddress(p, '#ed-address', '13470 104');
+    await p.click('.af-list .af-opt:has-text("13470 104 Ave")').catch(() => {});
+    const line = await until(async () => { const t = await words(p, '#ed-address-af-note'); return /Couldn’t get that address/.test(t) ? t : null; }, 8000);
+    check('B7: a Google pick that fails — "Couldn’t get that address — check it and save; it’s placed on the map when you save", the words kept',
+      line === 'Couldn’t get that address — check it and save; it’s placed on the map when you save' && /13470 104 Ave/.test(await p.inputValue('#ed-address')), `${line} · ${await p.inputValue('#ed-address')}`);
+    await p.screenshot({ path: `${SHOTS}/B-pick-failed-1440.png` });
     await p.close();
   }
   // Services: the Places row on, with today's counts.

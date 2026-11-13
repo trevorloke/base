@@ -291,6 +291,7 @@ export function AddPersonInline({ door, onDone, onCancel, toast, toastQueued = t
 // goes to it (onPlace); a tap on the map drops or moves the pin by hand
 // (latlng). A typed address nobody picked is looked up when it's saved;
 // with no signal, the pin is a tap.
+const TAP_MAP = 'Couldn’t find that door on the map — tap the map where it is';
 export function AddDoorForm({ latlng, onPlace, onDone, onCancel, toast, allowGoogle = false }) {
   const queryClient = useQueryClient();
   const refresh = useRefresh();
@@ -300,6 +301,8 @@ export function AddDoorForm({ latlng, onPlace, onDone, onCancel, toast, allowGoo
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
+  // A tap on the map answers "tap the map".
+  useEffect(() => { if (latlng) setError((e) => (e === TAP_MAP ? null : e)); }, [latlng]);
   const typeAddress = (v) => {
     setForm((f) => ({ ...f, address: v, city: '', postal: '' }));
     // The pin came from the address they're now changing: it goes with it.
@@ -307,9 +310,10 @@ export function AddDoorForm({ latlng, onPlace, onDone, onCancel, toast, allowGoo
   };
   const picked = (s) => {
     setForm((f) => ({ ...f, address: s.address, unit: s.unit || f.unit, city: s.city || '', postal: s.postal || '' }));
-    // Google's words the B.C. service couldn't place: the door needs a tap.
+    // Google's words the B.C. service couldn't place: the door needs a tap
+    // (unless it has one already).
     if (!Number.isFinite(s.lat) || !Number.isFinite(s.lng)) {
-      setError('Couldn’t find that door on the map — tap the map where it is');
+      if (!latlng) setError(TAP_MAP);
       return;
     }
     setPinFrom('address');

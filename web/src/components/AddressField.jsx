@@ -16,7 +16,8 @@
 //   ADDRESS_SUGGEST=google): words with no pin, Google's logo after the list.
 //   Picking one asks /address/place (up to 5 s) for its parts and B.C.'s pin
 //   — lat null when B.C. couldn't place it. One Google session from the first
-//   letter typed to a pick (or the box left with nothing picked).
+//   letter typed to a pick (or the box left with nothing picked, which also
+//   clears the rows: typing again asks again, in a new session).
 // lookupAddress(line) — the same suggestions, for a form saving a typed
 // address nobody picked: the first door whose number and street match.
 import { useEffect, useId, useRef, useState } from 'react';
@@ -38,7 +39,8 @@ const newSession = () => {
   const h = [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
 };
-const PICK_FAILED = 'Couldn’t get that address — ';
+// Every form looks a typed address up when it saves, so these words hold for all.
+const PICK_FAILED = 'Couldn’t get that address — check it and save; it’s placed on the map when you save';
 
 // A pick's pin, or null: a Google pick the B.C. service couldn't place has
 // none (the form then places it on save, as for a typed address).
@@ -68,6 +70,8 @@ export default function AddressField({
   const [state, setState] = useState('idle'); // idle | loading | done | unavailable | pickFailed
   const [by, setBy] = useState(null); // who gave the outside rows ('google' draws Google's logo)
   const [picking, setPicking] = useState(-1); // the Google row being fetched
+  const pickingNow = useRef(false); // the same, for a blur's timer
+  const box = useRef(null);
   const typed = useRef(false); // only typing asks (a pick or a prefilled value doesn't)
   const seq = useRef(0);
   const session = useRef(null);
@@ -107,18 +111,32 @@ export default function AddressField({
     setItems([]);
     setBy(null);
     setPicking(-1);
+    pickingNow.current = false;
     setState(next);
+  };
+  // Left with nothing picked: Google's session ends, and its rows go with it
+  // (a row picked later would have no session to finish).
+  const left = () => {
+    if (pickingNow.current || document.activeElement === box.current) return;
+    seq.current += 1; // an ask still out doesn't bring them back
+    session.current = null;
+    setOpen(false);
+    setItems([]);
+    setBy(null);
+    setActive(-1);
+    setState((st) => (st === 'loading' || st === 'done' ? 'idle' : st));
   };
   const pick = async (s, i) => {
     if (picking >= 0) return;
     if (s.source !== 'google') { done(); onPick?.(s); return; }
     // Google's row is words only: its parts, and B.C.'s pin, from the server.
     setPicking(i);
+    pickingNow.current = true;
     seq.current += 1; // an ask still on its way doesn't change the rows meanwhile
     const n = seq.current;
     let timer;
     const r = await Promise.race([
-      apiGet(`/address/place?id=${encodeURIComponent(s.place_id)}&session=${session.current}`).catch(() => null),
+      apiGet(`/address/place?id=${encodeURIComponent(s.place_id)}&session=${session.current || newSession()}`).catch(() => null),
       new Promise((res) => { timer = setTimeout(() => res(null), PICK_MS); }),
     ]).finally(() => clearTimeout(timer));
     if (n !== seq.current) return;
@@ -138,7 +156,7 @@ export default function AddressField({
   const below = placed
     ? <span className="af-placed">✓ {placedText}</span>
     : state === 'pickFailed'
-      ? <span>{PICK_FAILED}{hint ? hint.charAt(0).toLowerCase() + hint.slice(1) : 'check it and save; it’s placed on the map when you save'}</span>
+      ? <span>{PICK_FAILED}</span>
     : showList && state === 'done' && !items.length
       ? <span>No door found for that — check the number and street</span>
       : state === 'unavailable'
@@ -152,6 +170,7 @@ export default function AddressField({
       <label htmlFor={id}>{label}</label>
       <div className="af-box">
         <input
+          ref={box}
           id={id}
           className="input"
           role="combobox"
@@ -176,7 +195,7 @@ export default function AddressField({
             onChange(e.target.value);
           }}
           onKeyDown={onKeyDown}
-          onBlur={() => setTimeout(() => { setOpen(false); if (picking < 0) session.current = null; }, 150)}
+          onBlur={() => setTimeout(left, 150)}
           onFocus={() => { if (items.length) setOpen(true); }}
         />
         {showList && items.length > 0 && (
