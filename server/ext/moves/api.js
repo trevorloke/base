@@ -1,3 +1,5 @@
+// GET /api/moves/counts   the desk's (People): { open, unknown } — the
+// counts on People's "Needs an address" and "Address unknown" chips.
 // GET /api/moves/door?person=<id>   any signed-in role (area People).
 // Who lives at the new address and still at the old one, for that person's
 // latest move still standing — the lists person.move answers with, under
@@ -7,6 +9,7 @@
 // that door).
 import { Hono } from 'hono';
 import { doorLists, mayMoveAnyone } from './lists.js';
+import { movedCounts } from './open.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -25,4 +28,10 @@ api.get('/moves/door', async (c) => {
   )).rows[0];
   if (!move || (!mayMoveAnyone(ctx) && move.created_by !== ctx.user.id)) return c.json({ error: 'no move on file' }, 404);
   return c.json(await doorLists(db, ctx, move));
+});
+
+api.get('/moves/counts', async (c) => {
+  const ctx = c.get('ctx');
+  if (ctx.role === 'volunteer') return c.json({ error: 'forbidden' }, 403);
+  return c.json(await movedCounts(c.get('db'), ctx.workspaceId));
 });

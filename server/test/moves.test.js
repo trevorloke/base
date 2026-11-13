@@ -350,6 +350,9 @@ test('Needs an address and Address unknown: People, the counts and the ids agree
   assert.ok(!(await openIds()).includes(xan.id));
 
   assert.equal(ok(await mgr.get('/api/brief')).moved.open, (await movedCounts(db, ws)).open);
+  // People's chips: the same counts, the desk's only.
+  assert.deepEqual(ok(await mgr.get('/api/moves/counts')), await movedCounts(db, ws));
+  assert.equal((await vol.get('/api/moves/counts')).status, 403);
   ok(await mgr.action('permission.role.set', { role: 'staff', deny: ['people'] }));
   const [staff] = await (async () => {
     const inv = await mgr.action('member.invite', { email: `moves.staff+${tag}@example.org`, role: 'staff' });

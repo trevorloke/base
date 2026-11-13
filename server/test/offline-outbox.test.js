@@ -719,3 +719,34 @@ test('sign-out: a note still in an open card goes first, as theirs; after it not
   assert.ok(!cs.some((x) => /sign(ed)? out/i.test(x.note || '') && x.note !== 'Wants a lawn sign — call back Tuesday'));
   ob.setOutboxOwner(null);
 });
+
+test('Moved, then a new address, with no signal: knock first, the move once, its words and its chip', async () => {
+  const p = await c.createPerson('Moving Offline', { address: '7195 124 St', city: 'Surrey', lat: 49.1319, lng: -122.8524 });
+  nav.onLine = false;
+  const knock = await ob.logContact({ person_id: p.id, channel: 'door', outcome: 'moved' }, { who: p.name });
+  assert.equal(knock.queued, true);
+  const move = await ob.queueMove({ person_id: p.id, to: { address: '9800 King George Blvd' }, contact_client_id: knock.client_id }, { who: p.name });
+  assert.equal(move.queued, true);
+  const items = JSON.parse(store.get('starbase:outbox:v2')).slice(-2);
+  assert.deepEqual(items.map((i) => i.name), ['contact.log', 'person.move'], 'the knock goes first');
+  assert.equal(items[1].input.client_id, move.client_id, 'keyed by an id made on the phone');
+  assert.match(ob.itemText(items[1]), /^Moved · new address · Moving Offline · \d{1,2}:\d{2} (am|pm)$/);
+  assert.match(ob.itemText({ ...items[1], input: { person_id: p.id, unknown: true } }), /^Address unknown · Moving Offline · /);
+  assert.deepEqual(Object.keys(ob.pendingMoves()), [p.id], 'the walk list’s “Moving — sends soon”');
+  // Signal back; the move's answer is lost after the server wrote it.
+  nav.onLine = true;
+  net.loseNext = 2;
+  for (let i = 0; i < 3 && ob.pendingCount() > 0; i += 1) await ob.flushOutbox();
+  assert.equal(ob.pendingCount(), 0);
+  assert.deepEqual(ob.pendingMoves(), {});
+  const prof = (await c.get(`/api/persons/${p.id}`)).json;
+  assert.equal(prof.person.address, '9800 King George Blvd');
+  assert.equal(prof.latest_move.result, 'new');
+  assert.equal(prof.move_open, false, 'no longer waiting for an address');
+  const moves = (await c.get('/api/events?since=0&limit=5000')).json.events.filter((e) => e.action === 'person.move' && e.entity_id === prof.latest_move.id);
+  assert.equal(moves.length, 1, 'one move, however many replays');
+  assert.equal(prof.contacts.filter((x) => x.outcome === 'moved').length, 1, 'and one Moved tap');
+  const door = await c.get(`/api/moves/door?person=${p.id}`);
+  assert.equal(door.status, 200);
+  assert.deepEqual(door.json.there, []);
+});

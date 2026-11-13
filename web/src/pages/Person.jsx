@@ -43,6 +43,8 @@ import NameFields from '../components/NameFields.jsx';
 import VoterNumber from '../components/VoterNumber.jsx';
 import SocialsBlock, { SocialsTyped } from '../components/SocialsBlock.jsx';
 import { PersonTimeline, timelineCount, usePersonTimeline } from '../components/PersonTimeline.jsx';
+import MovePanel from '../components/MovePanel.jsx';
+import ProfileMove, { addressWords } from '../components/ProfileMove.jsx';
 
 const TIER_LABEL = {
   superstar: DONOR_TIERS.superstar.label,
@@ -234,7 +236,10 @@ function Header({ person, donor, me, desk, onLog, contacted, level, onEdit, keyL
 // Rating card: big rating buttons + outcomes → contact.log. The channel is set
 // by the Call / Text tiles (else Door); the manual switch sits under the note.
 // ─────────────────────────────────────────────────────────────────────────────
-function RatingCard({ person, refresh, channel, setChannel, cardRef }) {
+// canMove: a Moved tap opens "Where did … go?" (the desk; a volunteer when
+// the server says may_move); otherwise the office asks.
+function RatingCard({ person, refresh, channel, setChannel, cardRef, canMove = false, desk = false, household = [] }) {
+  const [moving, setMoving] = useState(null); // the Moved tap's client id, while its panel is open
   const [note, setNoteState] = useState('');
   const [noteOpen, setNoteOpen] = useState(false);
   // The note lives in a ref too, so leaving the profile can still send it
@@ -294,7 +299,12 @@ function RatingCard({ person, refresh, channel, setChannel, cardRef }) {
       setNoteOpen(false);
       // Not reached yet: the door card's words ("Saved on this phone — sends soon").
       const what = `${CHANNEL_LABEL[channel]} · ${contactWord(scale, { rating, outcome })}${answersTail(answers, res.result)}`;
+      if (outcome === 'moved' && !canMove) {
+        setSaid({ text: res.queued ? `${queuedText(res)} · Moved · the office will ask where` : '✓ Moved · the office will ask where', what, queued: Boolean(res.queued) });
+        return;
+      }
       setSaid({ text: res.queued ? `${queuedText(res)} · ${what}` : `✓ ${what}`, what, queued: Boolean(res.queued) });
+      if (outcome === 'moved') setMoving(res.client_id || 'tap');
     }
   };
 
@@ -302,6 +312,11 @@ function RatingCard({ person, refresh, channel, setChannel, cardRef }) {
     <section className="card pf-rate" ref={cardRef} aria-label="Rate">
       <RatingButtons value={person.rating} onPick={(code) => log('contacted', code)} disabled={act.busy} />
       <OutcomeButtons onPick={(o) => log(o)} disabled={act.busy} />
+      {moving && (
+        <MovePanel key={moving} person={person} desk={desk} contactClientId={moving === 'tap' ? null : moving} where="profile"
+          oldDoor={household} toast={(text) => setSaid({ text: `✓ ${text}`, what: text, queued: false })}
+          onClose={() => { setMoving(null); refresh(); }} />
+      )}
       <SurveyQuestions key={`questions-${person.id}`} survey={survey} disabled={act.busy} onSave={() => log('contacted')} />
       <div className="pf-rate__foot">
         {noteOpen ? (
@@ -468,7 +483,7 @@ function EditDetailsForm({ person, refresh, onClose, focus = 'name' }) {
 
 // editing: null, or the field the form opens on (the header's Edit, a tap on
 // a line, or "Edit details" — the page holds it so the header can open it).
-function Details({ person, household, refresh, desk, me, editing, setEditing }) {
+function Details({ person, household, refresh, desk, me, editing, setEditing, move = null, moveOpen = false, contacts = [] }) {
   const [saved, setSaved] = useState(null);
   // The number dials from your own phone only when calls through the campaign are off.
   const ownDialler = textingOn(useTextingStatus(me)).voice === false;
@@ -506,7 +521,7 @@ function Details({ person, household, refresh, desk, me, editing, setEditing }) 
         )}
         <li>
           <span className="k">Address</span>
-          <span className="v addr-lines">{addr.length ? addr.map((l, i) => <div key={i}>{l}</div>) : none}</span>
+          <span className="v addr-lines">{addressWords(person, move, desk) || (addr.length ? addr.map((l, i) => <div key={i}>{l}</div>) : none)}</span>
           {person.address && (
             <span className="act">
               <Link className="btn btn-quiet pp-btn" to={`/map?person=${person.id}`}>
@@ -516,6 +531,7 @@ function Details({ person, household, refresh, desk, me, editing, setEditing }) 
           )}
         </li>
       </ul>
+      {desk && <ProfileMove person={person} move={move} open={moveOpen} contacts={contacts} household={household} refresh={refresh} />}
 
       {person.note && (
         <div className="pf-their-note">
@@ -898,7 +914,8 @@ export default function Person() {
         <p className="ds-waiting" role="status">Saved on {device} — {online ? 'sends soon' : 'sends when you’re back online'}</p>
       )}
 
-      <RatingCard key={person.id} person={person} refresh={refresh} channel={channel} setChannel={setChannel} cardRef={ratingRef} />
+      <RatingCard key={person.id} person={person} refresh={refresh} channel={channel} setChannel={setChannel} cardRef={ratingRef}
+        canMove={desk || profile.data.may_move === true} desk={desk} household={household} />
       {/* Undecided or not rated: a supporter who knows them (desk). */}
       {desk && <KnowsNudge query={knows} person={person} />}
 
@@ -911,7 +928,8 @@ export default function Person() {
 
       <div className="pf-sections">
         <Section title="Details" open={!!open.details} onToggle={toggle('details')}>
-          <Details person={person} household={household} refresh={refresh} desk={desk} me={me} editing={editing} setEditing={setEditing} />
+          <Details person={person} household={household} refresh={refresh} desk={desk} me={me} editing={editing} setEditing={setEditing}
+            move={profile.data.latest_move || null} moveOpen={Boolean(profile.data.move_open)} contacts={contacts} />
         </Section>
         {/* The campaign's own fields (People → More → Profile fields); with no signal and no copy, it says so.
             The desk always has it: the voter number lives here (ext/voternumber). */}

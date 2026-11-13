@@ -65,9 +65,12 @@ import { BASE, NS } from './base.js';
 // the server dedupes it on client_id, server/ext/deskoffline).
 // shift.hours: “only part of it” — the volunteer's own hours on a shift they
 // are on (not undoable: saving again is the undo).
-export const FIELD_ACTIONS = ['contact.log', 'person.create', 'person.addAtDoor', 'person.locate', 'sign.place', 'sign.cancel', 'shift.join', 'shift.leave', 'shift.hours', 'relationship.add', 'person.tag', 'person.details', 'vote.mark', 'request.ask', 'mainstreet.meet', 'calltime.log'];
+// person.move: after a Moved tap, a new address or Address unknown (ext/moves;
+// the server dedupes it on client_id; a typed address is sent as typed — the
+// server places it, never this phone).
+export const FIELD_ACTIONS = ['contact.log', 'person.create', 'person.addAtDoor', 'person.locate', 'sign.place', 'sign.cancel', 'shift.join', 'shift.leave', 'shift.hours', 'relationship.add', 'person.tag', 'person.details', 'vote.mark', 'request.ask', 'mainstreet.meet', 'calltime.log', 'person.move'];
 // Keyed by a client_id the server dedupes on.
-const CLIENT_KEYED = ['contact.log', 'sign.place', 'person.tag', 'vote.mark', 'request.ask', 'mainstreet.meet', 'calltime.log'];
+const CLIENT_KEYED = ['contact.log', 'sign.place', 'person.tag', 'vote.mark', 'request.ask', 'mainstreet.meet', 'calltime.log', 'person.move'];
 // The writes that add a person, on an id made here.
 export const NEW_PERSON = ['person.create', 'person.addAtDoor'];
 const CALLTIME_WORD = { pledged: 'Pledged', no: 'Not now', no_answer: 'No answer', left_message: 'Left message' };
@@ -350,6 +353,9 @@ export async function queueAction(name, input, meta = {}) {
 }
 
 export const logContact = (input, meta = {}) => queueAction('contact.log', input, meta);
+// Moved: a new address ({ person_id, to }) or Address unknown ({ person_id,
+// unknown: true }), behind the Moved tap it follows (queued first, so sent first).
+export const queueMove = (input, meta = {}) => queueAction('person.move', input, meta);
 
 async function runFlush() {
   let sent = 0;
@@ -569,6 +575,8 @@ export function itemText(item, nameOf = () => '') {
     case 'mainstreet.meet': what = `Met · ${i.place || 'mainstreeting'}`; break;
     // Call time (pages/CallTime.jsx): the answer, never the note.
     case 'calltime.log': what = CALLTIME_WORD[i.result] || 'Call time'; break;
+    // "Moved · new address · Ana Souza · 2:14 pm", "Address unknown · Ana Souza · 2:14 pm".
+    case 'person.move': what = i.unknown ? 'Address unknown' : 'Moved · new address'; break;
     default: what = 'Saved';
   }
   const name = NEW_PERSON.includes(item.name) ? i.name : item.name === 'relationship.add' ? i.person?.name || who : who;
@@ -585,6 +593,17 @@ export function pendingKnocks(items = visible) {
     if (it.state !== 'pending' || it.name !== 'contact.log' || it.input?.channel !== 'door' || !it.input.person_id) continue;
     const pid = it.input.person_id;
     out[pid] = { rating: it.input.rating || out[pid]?.rating || null, outcome: it.input.outcome, at: it.at, queued: true };
+  }
+  return out;
+}
+
+// Moves still on this phone, by person id ("Moving — sends soon" on the walk
+// list and door card): { unknown, at }. Once sent, the list loads without them.
+export function pendingMoves(items = visible) {
+  const out = {};
+  for (const it of items) {
+    if (it.state !== 'pending' || it.name !== 'person.move' || !it.input?.person_id) continue;
+    out[it.input.person_id] = { unknown: Boolean(it.input.unknown), at: it.at };
   }
   return out;
 }

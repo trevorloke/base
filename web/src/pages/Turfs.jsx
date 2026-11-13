@@ -31,7 +31,8 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useOutletContext, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiGet, ApiError } from '../api.js';
-import { logContact, pendingKnocks, pendingPeopleIn, queueAction, undoQueued, useOutbox } from '../offline.js';
+import { logContact, pendingKnocks, pendingMoves, pendingPeopleIn, queueAction, undoQueued, useOutbox } from '../offline.js';
+import MovePanel from '../components/MovePanel.jsx';
 import { queuedChip, queuedSaid, queuedText, thisDevice } from '../components/queued.js';
 import { useOnline } from '../components/NoSignal.jsx';
 import { AddPersonInline, Directions, SIGN_LABEL, SignAsk, signCancelOffered, doorTitle } from '../components/DoorCard.jsx';
@@ -65,6 +66,8 @@ const KNOCK_KEYS = ['turfs', 'doors', 'person', 'persons', 'contacts', 'brief'];
 
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 const norm = (s) => String(s || '').trim().toLowerCase();
+// A door's key on this list: its address and unit (a door with no address: its person).
+const doorKey = (d) => `${norm(d.address)}|${norm(d.unit)}|${d.address ? '' : d.persons[0]?.id}`;
 const hashIndex = (s, n) => { let h = 0; for (const ch of String(s)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h % n; };
 const isColor = (c) => typeof c === 'string' && c.length <= 20 && typeof CSS !== 'undefined' && CSS.supports?.('color', c);
 // Same fallback as the map, so a turf is the same color on both screens.
@@ -346,6 +349,10 @@ function WalkList({ id }) {
   const location = useLocation();
   const backTo = useRef(location.state?.door ? location.state : null);
   const [openKey, setOpenKey] = useState(null); // the expanded door
+  // A Moved tap's "Where did … go?" panel: { key, person, cid, queued } —
+  // its door holds still (stays open, stays on the list) until it closes.
+  const [moving, setMoving] = useState(null);
+  const [held, setHeld] = useState(null); // { key, door, index }: the server's door as it was
   const [picked, setPicked] = useState({});    // door key → selected person id
   const [scrollTo, setScrollTo] = useState(null);
   const [focusPanel, setFocusPanel] = useState(null); // reopened by a toast's "Change"
@@ -417,8 +424,17 @@ function WalkList({ id }) {
   const votes = useMemo(() => pendingVoted(outbox.items), [outbox.items]);
   // Knocks still on this phone that count as tries in the open pass.
   const waiting = useMemo(() => waitingTries(outbox.items, pass), [outbox.items, pass]);
+  // Moves still on this phone: "Moving — sends soon" on the person.
+  const movesWaiting = useMemo(() => pendingMoves(outbox.items), [outbox.items]);
   const doors = useMemo(() => {
     const list = (q.data?.doors ?? []).map((d) => ({ ...d, persons: [...d.persons] }));
+    // A door whose panel is open stays as it was, even if a refetch (the
+    // outbox sending) has taken the mover off it meanwhile.
+    if (held) {
+      const at = list.findIndex((d) => doorKey(d) === held.key);
+      if (at < 0) list.splice(Math.min(held.index, list.length), 0, { ...held.door, persons: [...held.door.persons] });
+      else for (const p of held.door.persons) if (!list[at].persons.some((x) => x.id === p.id)) list[at].persons.push(p);
+    }
     const known = new Set(list.flatMap((d) => d.persons.map((p) => p.id)));
     for (const p of added) {
       if (known.has(p.id)) continue;
@@ -431,9 +447,10 @@ function WalkList({ id }) {
         const mine = local[p.id];
         const vote = votes[p.id];
         const withVote = vote ? { ...p, voted_at: vote.voted ? vote.at || p.voted_at || new Date().toISOString() : null } : p;
+        const shown = movesWaiting[p.id] ? { ...withVote, moving: true } : withVote;
         return mine
-          ? { ...withVote, rating: mine.rating ?? p.rating, last_outcome: mine.outcome, last_contact_at: mine.at, door_knocked: true, queued: mine.queued }
-          : withVote;
+          ? { ...shown, rating: mine.rating ?? p.rating, last_outcome: mine.outcome, last_contact_at: mine.at, door_knocked: true, queued: mine.queued }
+          : shown;
       });
       const ids = new Set(persons.map((p) => p.id));
       const signs = [
@@ -452,7 +469,7 @@ function WalkList({ id }) {
         : (d.done || persons.some((p) => local[p.id]) ? 'done' : 'open');
       return {
         ...d,
-        key: `${norm(d.address)}|${norm(d.unit)}|${d.address ? '' : d.persons[0]?.id}`,
+        key: doorKey(d),
         persons: laid,
         signs,
         state,
@@ -460,7 +477,7 @@ function WalkList({ id }) {
         tries: Math.max(0, ...laid.map((p) => p.pass_tries || 0)),
       };
     });
-  }, [q.data, q.dataUpdatedAt, local, added, waitingSigns, pass, votes, waiting]);
+  }, [q.data, q.dataUpdatedAt, local, added, waitingSigns, pass, votes, waiting, held, movesWaiting]);
 
   // The latest list, open door and knocks, for handlers that finish after an
   // await (and for the unmount note flush).
@@ -644,7 +661,9 @@ function WalkList({ id }) {
   // toast's "Change" reopens it); a household with someone still to rate
   // stays open. A note in the box goes with the tap (and is cleared at once,
   // so it can't be sent twice).
-  const log = async (person, outcome, rating = null, { quiet = false, batch = false, door = null, answers = null, visitOf = null } = {}) => {
+  // hold: a Moved tap whose panel opens — the door neither closes nor
+  // reloads until the panel does (release).
+  const log = async (person, outcome, rating = null, { quiet = false, batch = false, door = null, answers = null, visitOf = null, hold = false } = {}) => {
     const note = (notesRef.current[person.id] || '').trim();
     const input = { person_id: person.id, channel: 'door', outcome };
     if (rating) input.rating = rating;
@@ -676,7 +695,7 @@ function WalkList({ id }) {
             ? { label: 'Change', onClick: () => reopen(door.key) }
             : { label: 'Change', onClick: () => focusRating(document.getElementById(`walk-panel-${doorsRef.current.findIndex((d) => d.key === door.key)}`)) };
           // Only if they're still on this door (they may have opened another meanwhile).
-          if (settled && openRef.current === door.key) advanceFrom(door.key);
+          if (settled && !hold && openRef.current === door.key) advanceFrom(door.key);
         }
         const who = multi ? `${firstName(person.name)} · ` : '';
         const what = rating
@@ -688,7 +707,7 @@ function WalkList({ id }) {
           answers?.length ? answersWord(answers.length) : null);
         toast(r.queued ? `${who}${onPhone()}` : `${who}${said}`, { tone: r.queued ? 'queued' : 'ok', act });
       }
-      if (!r.queued && !batch) refresh();
+      if (!r.queued && !batch && !hold) refresh();
       return { ok: true, queued: r.queued, signedOut: r.signedOut, client_id: r.client_id, result: r.result };
     } catch (err) {
       if (note && !notesRef.current[person.id]) setNote(person.id, note);
@@ -697,6 +716,31 @@ function WalkList({ id }) {
     } finally {
       setBusyKey(person.id, false);
     }
+  };
+
+  // Moved: the tap is logged as ever, then "Where did … go?" opens under the
+  // outcome row, and the door holds still while it's open.
+  const moved = async (door, person, answers = null, visitOf = null) => {
+    const raw = (q.data?.doors ?? []).find((d) => doorKey(d) === door.key);
+    const r = await log(person, 'moved', null, { door, answers, visitOf, hold: true });
+    if (!r.ok) return r;
+    if (raw) setHeld({ key: door.key, door: raw, index: (q.data?.doors ?? []).indexOf(raw) });
+    setMoving({ key: door.key, person, cid: r.client_id, queued: r.queued });
+    return r;
+  };
+  // The panel closed (Save with nothing to show, Done, Later, or the
+  // office's line): settled again from what's on the phone; on to the next
+  // door if it is, and the list loads again once if anything went with signal.
+  const release = ({ sent }) => {
+    const m = moving;
+    setMoving(null);
+    setHeld(null);
+    if (!m) return;
+    const door = doorsRef.current.find((d) => d.key === m.key);
+    const now = localRef.current;
+    const settled = Boolean(door) && door.persons.every((p) => p.rating || now[p.id]);
+    if (settled && openRef.current === m.key) advanceFrom(m.key);
+    if (sent || !m.queued) refresh();
   };
 
   // "No answer" at the door: a no-answer for everyone there, one tap. It
@@ -875,7 +919,8 @@ function WalkList({ id }) {
       <span className="walk-next__addr">{doorLabel(target)}</span>
     </>
   ));
-  const nextCls = `btn walk-next__btn ${skipping ? 'walk-next__btn--skip' : 'btn-primary'}`;
+  // The panel's Save or Done is the screen's one primary button while it's open.
+  const nextCls = `btn walk-next__btn ${skipping || moving ? 'walk-next__btn--skip' : 'btn-primary'}`;
   const nextAria = target ? `${skipping ? 'Skip to' : 'Next door:'} ${doorLabel(target)}` : undefined;
 
   return (
@@ -952,7 +997,11 @@ function WalkList({ id }) {
               notes={notes}
               setNote={setNote}
               onNoteFocus={hideToast}
-              onLog={(p, outcome, rating = null, answers = null, visitOf = null) => log(p, outcome, rating, { door: d, answers, visitOf })}
+              onLog={(p, outcome, rating = null, answers = null, visitOf = null) => (outcome === 'moved'
+                ? moved(d, p, answers, visitOf) : log(p, outcome, rating, { door: d, answers, visitOf }))}
+              moving={moving?.key === d.key ? moving : null}
+              onMoveClose={release}
+              desk={desk}
               onNobodyHome={() => nobodyHome(d)}
               onLeftLit={() => leftLit(d)}
               onVoted={() => voted(d)}
@@ -992,7 +1041,7 @@ function WalkList({ id }) {
 function Door({
   door, index, isNext, open, onToggle, selectedId, onPick, busy, notes, setNote, onNoteFocus, onLog, onNobodyHome,
   onLeftLit, onVoted, onSign, onAdded, toast,
-  pass,
+  pass, moving = null, onMoveClose, desk = false,
 }) {
   const [more, setMore] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -1059,6 +1108,7 @@ function Door({
           <span className="walk-door__chips">
             {door.state === 'again' && <TryAgainChip tries={door.tries} max={pass.tries} />}
             {(queued || added) && <span className="chip fk-wait">{added ? 'Not sent' : queuedChip(true)}</span>}
+            {door.persons.some((p) => p.moving) && <span className="chip fk-wait">Moving — sends soon</span>}
             {multi
               ? rated.length > 0 && <span className="chip walk-rated">{rated.length} rated</span>
               : rated.map((p) => <RatingChip key={p.id} code={p.rating} who brief />)}
@@ -1083,6 +1133,13 @@ function Door({
             disabled={doorBusy}
             onPick={(code) => (code === NOBODY ? onNobodyHome() : code === LIT_DOOR ? onLeftLit() : tap(sel, code))}
           />
+          {moving && (
+            <MovePanel key={moving.cid || moving.person.id} person={moving.person} desk={desk} contactClientId={moving.cid}
+              oldDoor={door.persons.filter((p) => !p.pending)} where="door"
+              toast={(text, tone) => toast(text, { tone: tone === 'error' ? 'error' : tone === 'queued' ? 'queued' : 'ok' })}
+              onClose={onMoveClose} />
+          )}
+          {!moving && sel.moving && <p className="walk-dnc"><span className="chip fk-wait">Moving — sends soon</span> {firstName(sel.name)}</p>}
           <SurveyQuestions key={`questions-${sel.id}`} survey={survey} disabled={Boolean(busy[sel.id] || busy[door.key])} onSave={() => talk(sel)} />
           <More id={`walk-more-${index}`} open={more} onToggle={() => setMore((m) => !m)}>
             <p className="walk-last mono">
