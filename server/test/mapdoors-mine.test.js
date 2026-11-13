@@ -95,3 +95,22 @@ test('no turf: their own record or nothing, and no read of the people but by ema
   const j = await mine(lone);
   assert.deepEqual([j.persons, j.turfs, j.outlines], [[], 0, []]);
 });
+
+// The rest of a volunteer's field Today: the brief it reads on every visit.
+// A volunteer's Today shows none of the whole list's numbers (people on file,
+// ratings, voted totals on a day that is not a voting day), so it counts
+// nothing over the people.
+test('a volunteer’s brief counts nothing over the whole list', async () => {
+  const { answer, asked } = await watched(async () => ok(await vol.get('/api/brief')));
+  const overPeople = asked.filter((q) => /\bfrom persons\b/i.test(q) && /count\s*\(/i.test(q));
+  assert.deepEqual(overPeople, [], 'no count over the people');
+  assert.equal(answer.people, null);
+  assert.deepEqual(answer.ratings, {});
+  assert.equal(answer.voted.on, false);
+  assert.equal(answer.voted.total, undefined, 'no voted totals while GOTV is off');
+  assert.deepEqual(answer.myTurfs.map((t) => t.name), ['North block'], 'what Today does show is still there');
+  // A manager's brief still has them.
+  const m = ok(await mgr.get('/api/brief'));
+  assert.ok(m.people.total >= 4);
+  assert.equal(typeof m.voted.total, 'number');
+});

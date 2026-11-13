@@ -1110,9 +1110,13 @@ app.get('/brief', async (c) => {
     }
     await nameMaybes(db, ws, flagged, (g) => g.maybe_same_donor);
   }
-  const people = (await db.query(
+  // The whole list's numbers (people on file, the support picture) are the
+  // desk's: a volunteer's Today shows neither, and at 300,000 people each
+  // count costs every visit.
+  const wholeList = ctx.role !== 'volunteer';
+  const people = wholeList ? (await db.query(
     `select count(*)::int as total from persons where workspace_id = $1 and deleted_at is null`, [ws],
-  )).rows[0];
+  )).rows[0] : null;
   // Field, over the last 7 days (rolling): doors are DISTINCT doors knocked —
   // a household rated twice, or a rating changed, is still one door; the key
   // is the address + unit (the walk list's grouping), or the person when they
@@ -1135,10 +1139,10 @@ app.get('/brief', async (c) => {
        where c.workspace_id = $1 and c.created_at >= now() - interval '7 days'
      ) w`, [ws, ctx.user.id],
   )).rows[0];
-  const ratings = (await db.query(
+  const ratings = wholeList ? (await db.query(
     `select rating, count(*)::int as n from persons
      where workspace_id = $1 and deleted_at is null and rating is not null group by rating`, [ws],
-  )).rows;
+  )).rows : [];
   const shifts = (await db.query(
     `select s.id, s.title, s.starts_at, s.location, s.capacity, s.kind, s.need,
             (select count(*)::int from shift_assignments a where a.shift_id = s.id and a.status in ('assigned', 'confirmed', 'completed')) as filled,

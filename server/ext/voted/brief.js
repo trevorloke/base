@@ -50,8 +50,10 @@ export const countsOf = async (db, ctx) => {
   return { total: r.total, today, supporters: r.supporters, supporters_voted: r.supporters_voted };
 };
 
+// A volunteer sees the numbers only on the GOTV card, which shows only while
+// GOTV is on; on other days their Today counts nothing over the whole list.
 export const briefVoted = async (db, ctx, body) => {
   const settings = await settingsOf(db, ctx);
-  const counts = await countsOf(db, ctx);
+  const counts = settings.on || ctx.role !== 'volunteer' ? await countsOf(db, ctx) : {};
   body.voted = { ...settings, ...counts };
 };
