@@ -153,6 +153,9 @@ export const deliver = async (db, ctx, id) => {
   const grant = await grantFor(db, { userId: row.user_id, workspaceId: row.workspace_id }, 'gmail.send');
   let out;
   if (!grant) out = { status: 'failed', said: WORDS.connect, code: 'connect' };
+  // Gone bad since the write (another tab's reconnect, the domain rule, a
+  // role change): said as the write would have, nothing asked of Google.
+  else if (grant.state !== 'ok') out = { status: 'failed', said: grant.state === 'reconnect' ? WORDS.reconnect : grant.said || WORDS.reconnect, code: 'reconnect' };
   else if (apiOffNow()) out = { status: 'failed', said: WORDS.broken, code: 'broken' };
   else {
     const raw = Buffer.from(buildMessage({
