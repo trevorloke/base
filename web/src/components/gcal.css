@@ -13,4 +13,7 @@
 
 .gc-switch { display: grid; gap: var(--s-1); }
 .gc-switch .gg-confirm { margin-top: var(--s-2); }
+/* The sentence on its line, the two choices together under it. */
+.gc-switch .gg-confirm > span { flex: 1 1 100%; }
+.gc-acts { display: flex; flex-wrap: wrap; gap: var(--s-2); }
 .gc-people { font-size: 14px; color: var(--text-2); }

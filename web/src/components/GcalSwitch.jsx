@@ -43,13 +43,15 @@ export default function GcalSwitch({ online }) {
           <span className="gg-switch__state" aria-hidden="true">{on ? 'On' : 'Off'}</span>
         </button>
       </div>
-      <p className="gg-hint" id="gc-switch-hint">Add the Calendar permission in Google Cloud first (GOING-LIVE.md → Google).</p>
+      <p className="gg-hint" id="gc-switch-hint">Add the Calendar permission in Google Cloud first.</p>
       {on && <p className="gc-people">{fmtN(people)} {people === 1 ? 'person' : 'people'} connected</p>}
       {asking && (
         <div className="gg-confirm" role="group" aria-label="Turn off Shifts in Google Calendar">
           <span>Turn off? Everyone’s base.win calendar is removed from their Google Calendar.</span>
-          <button type="button" className="btn gg-danger" disabled={busy || !online} onClick={() => set(false)}>{busy ? 'Turning off…' : 'Turn off'}</button>
-          <button type="button" className="btn btn-quiet" disabled={busy} onClick={() => setAsking(false)}>Cancel</button>
+          <div className="gc-acts">
+            <button type="button" className="btn gg-danger" disabled={busy || !online} onClick={() => set(false)}>{busy ? 'Turning off…' : 'Turn off'}</button>
+            <button type="button" className="btn btn-quiet" disabled={busy} onClick={() => setAsking(false)}>Cancel</button>
+          </div>
         </div>
       )}
       {note && <p className="gg-note is-ok" role="status">{note}</p>}

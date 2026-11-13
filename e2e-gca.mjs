@@ -17,8 +17,9 @@
 // a booking lands in the fake and the card reads "1 shift · Updated …";
 // unassigned at the desk → gone; another shift called off → gone; the
 // calendar deleted in Google → "Make it again"; GSI's Google card has no
-// Calendar row; Google revokes → "Needs reconnecting" → Reconnect; Stop →
-// confirm in place → gone; the manager turns it off → confirm → gone.
+// Calendar row; Google revokes → "Needs reconnecting" → the Google card’s
+// one Reconnect; Stop → confirm in place → gone; the manager turns it off
+// → confirm → gone.
 // Contacts: My people → Find people I know → the fixture → "3 on our list",
 // none of the others; tick two → "Add 2 to My people" → both in My people;
 // Data → Import shows the hint; a volunteer never gets the screen. One
@@ -199,6 +200,7 @@ try {
   check('back on Profile: "Connected — your shifts are on their way"', Boolean(await until(async () => /Connected — your shifts are on their way/.test(await text(v, 'body')), 10000)));
   check('…and in place: "Stop your calendar link too, so shifts don’t show twice?"', Boolean(await until(async () => /Stop your calendar link too, so shifts don’t show twice\?/.test(await text(v, '#gcal')), 8000)));
   check('the calendar is made in the fake, named for the campaign', Boolean(await until(() => cals().length === 1)) && /— my shifts \(base\.win\)$/.test(cals()[0]?.body.summary || ''), JSON.stringify(cals()[0]?.body));
+  check('…with no toast over the offer', (await v.locator('.gc-toast').count()) === 0);
   await shot(v, '04-profile-connected-offer-phone', false);
   await v.locator('.gc-offer').getByRole('button', { name: 'Stop' }).click();
   check('Stop → the calendar link card shows no link', Boolean(await until(async () => /Get my calendar link/.test(await text(v, '#calendar')), 8000)));
@@ -255,7 +257,9 @@ try {
   await v.reload({ waitUntil: 'domcontentloaded' });
   check('revoked in Google: "Needs reconnecting"', Boolean(await cardSays(v, /Needs reconnecting/)), await text(v, '#gcal'));
   await shot(v, '07-profile-reconnect-phone');
-  await v.locator('#gcal').getByText('Reconnect', { exact: true }).click();
+  check('…one Reconnect on the page: the Google card’s, which the calendar card points to',
+    (await v.getByText('Reconnect', { exact: true }).count()) === 1 && /Reconnect under Google, below\./.test(await text(v, '#gcal')));
+  await v.locator('.gg-card').getByText('Reconnect', { exact: true }).click();
   await pickGoogle(v, VAL);
   check('…Reconnect → the new shift lands', Boolean(await until(() => events().some((e) => e.summary?.includes('Sign build')))));
   await v.reload({ waitUntil: 'domcontentloaded' });

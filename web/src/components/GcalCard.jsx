@@ -10,7 +10,9 @@
 //   Connected, no link   "Keep my shifts in Google Calendar" (gcal.on)
 //   ok / updating        as whom, "12 shifts · 2 dates · Updated 2 min ago", Stop
 //   gone                 "Make it again" (gcal.on) · Stop
-//   reconnect            the chip, why, Reconnect · Stop
+//   reconnect            the chip, why, Reconnect · Stop (when the Google
+//                        connection itself needs it, the Google card's
+//                        Reconnect, pointed to)
 //   stopping             "Removing the base.win calendar…"
 //   left (or it's off)   what to do, and OK (gcal.stop forgets it here)
 // Stop confirms in place. After gcal.on, with a calendar link too, it offers
@@ -209,7 +211,16 @@ export default function GcalCard({ me }) {
         <div className="ts-row">{keep('Make it again')}{stop}</div>
       </>
     );
-  } else if (link.state === 'reconnect' || reconnectGrant) {
+  } else if (reconnectGrant) {
+    // The Google connection itself: the Google card below says why and
+    // carries the one Reconnect.
+    body = (
+      <>
+        <p className="ts-line"><span className="chip chip-warn">Needs reconnecting</span> Reconnect under Google, below.</p>
+        <div className="ts-row">{stop}</div>
+      </>
+    );
+  } else if (link.state === 'reconnect') {
     body = (
       <>
         <p className="ts-line"><span className="chip chip-warn">Needs reconnecting</span>{link.said ? ` ${link.said}` : ''}</p>
@@ -231,11 +242,13 @@ export default function GcalCard({ me }) {
     );
   }
 
+  // The offer already says it worked: no toast over its buttons.
+  const offering = offerFeed && feed.data?.feed && link && !['stopping', 'left'].includes(link.state);
   return (
     <section className="ts-card gc-card" id="gcal" ref={cardRef} aria-label={TITLE}>
       {head}
       {body}
-      {offerFeed && feed.data?.feed && link && !['stopping', 'left'].includes(link.state) && (
+      {offering && (
         <div className="gg-confirm gc-offer" role="group" aria-label="Stop your calendar link">
           <span>Stop your calendar link too, so shifts don’t show twice?</span>
           <button type="button" className="btn btn-quiet" disabled={off}
@@ -248,7 +261,7 @@ export default function GcalCard({ me }) {
         </div>
       )}
       <p className="gg-sr" role="status" aria-live="polite">{toast}</p>
-      {toast && <div className="toast gc-toast" aria-hidden="true">{toast}</div>}
+      {toast && !offering && <div className="toast gc-toast" aria-hidden="true">{toast}</div>}
       {error && <p className="error" role="alert">{error}</p>}
       {!online && <NeedsSignalLine>Google Calendar needs signal</NeedsSignalLine>}
     </section>
