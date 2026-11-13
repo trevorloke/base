@@ -478,6 +478,17 @@ one tap away under **More**.
   Server tests: `server/test/site-*.test.js`; in a browser:
   `e2e-site-server.mjs`.
 
+- **Letters and Media's lists** — `server/test/letters.test.js`: a letter
+  from New to Published, the desk's suggestion beside the writer's text,
+  Keep mine, agreement only on the newest writer draft, sends always
+  recorded and flagged while an exclusive paper has it (same newsroom
+  not), Not published back to Ready, who may read and act (another
+  writer's letter is 404, a volunteer granted Media 403 on the queue, staff
+  denied Media still write), no words in the log, no sign-off in the
+  export, the 30-day purge and Today's counts.
+  `server/test/media-lists.test.js`: outlets (rename carries contacts,
+  name taken 409, checked), the three lists, Copy emails, a release to one
+  list, the merge's union and the migration run twice.
 - **Media and From addresses** — Settings → Services → Email → *From
   addresses*: add an address at MAIL_FROM's domain (another domain is
   refused) and make it the press default; a release then goes from it.

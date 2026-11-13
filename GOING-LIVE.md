@@ -513,6 +513,11 @@ shared, and the code names no client.
   mailbox or forwarding where the campaign's email is hosted first:
   reporters reply to it, and base.win receives no mail. Then **Media →
   Write a release → Send me a test**.
+- Letters: fill in your papers under **Media → Outlets** — check each one's
+  rules on its own page or by phone, tick what it asks a writer for, and
+  tap *I checked these today*. base.win ships with none. Put people on Op-ed
+  editors, Letters editors and Show hosts, and write short talking points
+  for writers (facts and links, never a letter to copy).
 - A test gift logged under **Donations** gets its receipt emailed.
 - Online giving, on staging in test mode: a gift once, a monthly gift and a
   membership go through Stripe's page and show under **Donations** marked

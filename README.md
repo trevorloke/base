@@ -912,6 +912,39 @@ their profile, to message them) and each release's page: who got it,
 opened it or bounced, Try again, and Copy links (the video, the Drive
 folder) to paste into a message to an influencer.
 
+**Media's outlets and lists.** An outlet is a paper, station or show with
+its letters and op-ed address or web form, its length limits (in words or
+characters), whether it wants a letter only for itself, local writers
+only, no candidates, a word about working with a campaign, and what it asks
+a writer for (phone, address); "I checked these today" stamps its rules.
+The list starts empty and only the desk edits it (`media.outlet.save`,
+`.remove`); anyone holding Media reads it. Contacts link to an outlet by
+its name, any capitals, and a rename carries them. A contact may be on
+**Op-ed editors**, **Letters editors** and **Show hosts** (hosts and
+producers: radio, TV, podcasts), any or all; only contacts still on the
+media list count. A release's *Only:* sends to some of the lists — it
+narrows the audience, never widens it — and the desk can copy a list's
+emails, only those a release may reach (`GET /api/media/contacts?list=…&emails=1`).
+
+**Letters to the editor and op-eds** (`server/ext/letters`). A volunteer
+writes a letter or an op-ed, picks up to three papers that take it and
+sends it to the campaign; it goes through the phone's outbox
+(`myletter.submit`), and a paper removed meanwhile is dropped, never a
+refusal. The desk (staff and managers with Media, never a volunteer
+whatever they were granted: the queue holds writers' addresses and phones)
+writes notes and suggests edits (`letter.*`); the writer keeps their words
+or takes changes, and only they can say "This is my final text" (Ready).
+They send it themselves, from their own email — base.win never sends a
+letter for them — and say so (`myletter.sent`, always recorded; sent
+while an exclusive paper still had it, the desk sees which). A paper that
+didn't print it sends it back to Ready for another. The event log holds
+which draft was agreed (its sha256), never a letter's words; the export
+leaves the sign-off out; the sign-off is read from the writer's own record
+and kept on a letter only where they changed it, and the address and phone
+typed for it go 30 days after it closes (at once when withdrawn).
+Talking points for writers: `letter.points`; the wait before another paper
+(10 days by default): `letter.settings`, managers.
+
 **From addresses.** Settings → Services → Email → *From addresses*: a
 manager adds up to ten addresses at MAIL_FROM's own domain (a name and an
 address; anything else is refused) and picks the default for email and
