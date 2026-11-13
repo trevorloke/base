@@ -811,8 +811,9 @@ one tap away under **More**.
 - **Map → filter button → Map** — the map opens on *Clean* (quiet streets,
   no shop icons or house numbers); *Muted* greys the standard streets (the
   doors keep their colours), *Dark* is for night; it stays on that browser.
-  With Google Maps on (`GOOGLE_MAPS_TILES=1`), *Satellite* and *Terrain* are
-  there too.
+  With Google as the map (a `GOOGLE_MAPS_SERVER_KEY` set, `GOOGLE_MAPS_TILES`
+  not `off`), the list is *Streets · Satellite · Terrain*: no *Muted* or
+  *Dark* over Google's map, and a saved one draws *Streets*.
 - **Map, zooming in** — from the whole city to a street: every door is a
   dot in its rating's colour (grey: not asked yet), no number bubbles; a
   door with a sign gets a little flag, and close in a household's size is
@@ -844,6 +845,20 @@ one tap away under **More**.
   an origin. On staging with a real key, also record one tile's
   `Cache-Control` and how many tiles a phone walking a turf for an hour
   used (Settings → Services → Map background shows today's count).
+- **Google Maps, the screens** (`node e2e-gmaps.mjs`: base.win on :5340, a
+  stand-in B.C. service on :5341 and a stand-in Google on :5342; every real
+  Google and B.C. address is blocked) — with only the key, Show → Map is
+  *Streets · Satellite · Terrain*, the phone keeps no Google tiles, and with
+  no signal the map says *No signal — the street map is back when you are.
+  Your doors are all here.*; New door offers the campaign's doors and then
+  B.C.'s, never Google's. With `ADDRESS_SUGGEST=google`, Google's rows come
+  with Google's logo under the list; a pick says *Loading…* and then
+  *Pinned on the map*, and one B.C. can't place asks for a tap on the map.
+  *Directions* (the phone's Google Maps) sits in a door card's and a
+  walk-list door's More, on a shift (in place of *Map ↗*) and on a sign,
+  with or without Google; the *Maps by Google* line ends the Show sheet
+  and Your profile. On a phone: a door's More → *Directions* opens Google
+  Maps walking to the door; a sign's *Directions* opens it driving.
 - **Map, Google Maps refusing** (staging with `GOOGLE_MAPS_SERVER_KEY` set) — a
   key with billing off, or block `/tiles/` in the browser's network tools
   and reload: the map turns to the free map and says *Google Maps isn’t
@@ -1112,13 +1127,10 @@ A full voter list (hundreds of thousands of people) takes a few hours. Set
 `BC_GEOCODER_KEY` (a free key from the BC government's API gateway) for
 higher limits, and `GEOCODE_CONCURRENCY` (default 6) to ask more at once.
 
-To use Google Maps for the lookups instead, or for the addresses the BC
-service can't place: in Google Cloud enable the **Geocoding API**, create a
-key restricted to that API (and to the server's IP), and set
-`GOOGLE_MAPS_SERVER_KEY` with `GEOCODER=google` (Google for everything) or
-`GEOCODER_FALLBACK=google` (BC first, Google for the rest). Google charges
-per lookup past its free monthly allowance — check the current pricing
-before running a whole voter list through it.
+Google no longer places pins (its terms don't let its pins be kept, shared
+or drawn on the free map): `GEOCODER=google` and `GEOCODER_FALLBACK=google`
+are ignored, and the B.C. service places everyone. An address that service
+can't place gets a pin by hand.
 
 For your real voters list: map its columns on the second step; re-importing
 the same file never creates duplicates.

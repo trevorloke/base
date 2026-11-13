@@ -1,0 +1,2 @@
+/* A service row's detail keeps its lines (the server joins them with \n). */
+.sv2-detail { white-space: pre-line; }

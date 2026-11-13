@@ -23,7 +23,7 @@ import { apiGet, action } from '../api.js';
 import { PersonPicker } from './Shifts.jsx';
 import { NoSignal, noSignal, useOnline, NeedsSignalLine } from '../components/NoSignal.jsx';
 import './shifts.css';
-import AddressField, { lookupAddress } from '../components/AddressField.jsx';
+import AddressField, { lookupAddress, pinOf } from '../components/AddressField.jsx';
 
 // The registry label carries the size ("Large sign (4×4)"); it rides along as a tooltip.
 const kindSize = (code) => SIGN_KINDS.find((k) => k.code === code)?.label ?? code;
@@ -272,7 +272,7 @@ function PlaceSignForm({ presetPersonId, canCreatePerson, onSaved, onClose }) {
             value={address}
             placed={Boolean(pin)}
             onChange={(v) => { setAddress(v); setPin(null); }}
-            onPick={(a) => { setAddress(a.unit ? `${a.unit} – ${a.address}` : a.address); setPin({ lat: a.lat, lng: a.lng }); }}
+            onPick={(a) => { setAddress(a.unit ? `${a.unit} – ${a.address}` : a.address); setPin(pinOf(a)); }}
             hint={address.trim() ? 'Pick it from the list to pin it — a corner is fine as typed' : null}
           />
           {mode === 'person' && person && !person.address && !address.trim() && (

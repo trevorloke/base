@@ -40,6 +40,10 @@ const newSession = () => {
 };
 const PICK_FAILED = 'Couldn’t get that address — ';
 
+// A pick's pin, or null: a Google pick the B.C. service couldn't place has
+// none (the form then places it on save, as for a typed address).
+export const pinOf = (a) => (a && Number.isFinite(a.lat) && Number.isFinite(a.lng) ? { lat: a.lat, lng: a.lng } : null);
+
 export async function lookupAddress(line) {
   const q = String(line || '').trim();
   if (q.length < 3) return null;
