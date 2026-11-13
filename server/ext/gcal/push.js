@@ -110,6 +110,26 @@ export const setLinkState = async (db, ws, userId, state, said = null, { action 
   });
 };
 
+// A link left at 'reconnect' while the grant reads ok again: reconnected
+// from another campaign, whose log alone heard it. Back to ok, pushed soon.
+export const revive = async (db, ws, userId) => {
+  const c = await campaignOf(db, ws);
+  if (!c.on) return false;
+  let back = false;
+  await runAction(db, { workspaceId: ws, actorId: null, action: 'gcal.state' }, async (tx, emit) => {
+    const r = await tx.query(
+      `update gcal_links set state = 'ok', said = null, dirty_at = now(), updated_at = now()
+        where workspace_id = $1 and user_id = $2 and state = 'reconnect'`, [ws, userId],
+    );
+    if (!r.affectedRows) return;
+    back = true;
+    emit('gcal_link', userId, 'update', { state: 'ok' });
+    await ensurePush(tx, ws);
+    await ensureSweep(tx, ws, c.tz);
+  });
+  return back;
+};
+
 // ── Jobs: at most one pending push a campaign; the sweep once a date ──
 export const ensurePush = async (tx, ws, runAt = null) => {
   // A push waiting for someone's pause is pulled forward: a pause holds back

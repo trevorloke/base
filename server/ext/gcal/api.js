@@ -7,10 +7,12 @@
 //             days, updated_at, paused_until } | null,
 //     manager: { on, people } (managers) }
 // Never a calendar id, an event id, a scope, a token or Google's words.
+// A link still at reconnect while the grant reads ok (reconnected from
+// another campaign) is put back to ok here, on this campaign's log.
 import { Hono } from 'hono';
 import { googleSetup } from '../../lib/google/config.js';
 import { grantFor } from '../../lib/google/tokens.js';
-import { campaignOf, PURPOSE } from './push.js';
+import { campaignOf, PURPOSE, revive } from './push.js';
 import { jobsOn } from './actions.js';
 
 const iso = (v) => (v ? new Date(v).toISOString() : null);
@@ -26,6 +28,9 @@ api.get('/gcal', async (c) => {
   const manager = ctx.role === 'manager';
   const why = !manager ? null : !camp.on ? 'off' : !connect ? 'not-set-up' : !jobsOn() ? 'jobs-off' : null;
   const grant = await grantFor(db, { userId: ctx.user.id, workspaceId: ws }, PURPOSE);
+  if (grant?.state === 'ok' && available && (await db.query(
+    `select 1 from gcal_links where workspace_id = $1 and user_id = $2 and state = 'reconnect'`, [ws, ctx.user.id],
+  )).rows[0]) await revive(db, ws, ctx.user.id);
   const row = (await db.query(
     `select l.state, l.said, l.dirty_at, l.wait_until, l.last_ok_at,
             (select count(*)::int from gcal_items i where i.workspace_id = l.workspace_id and i.user_id = l.user_id and i.kind = 'shift' and i.hash not like 'refused:%') as shifts,

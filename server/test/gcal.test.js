@@ -423,6 +423,20 @@ test('Google’s answers: deleted event, deleted calendar, 403 reasons, 429 for 
   assert.equal((await connect(V, 0)).google, 'connected');
   await jobs();
   assert.equal((await linkRow(V.id)).state, 'ok');
+
+  // Reconnected from another campaign (that campaign's log heard it, this
+  // one didn't): the grant reads ok again, so the link here comes back too
+  // the next time the card is read — no second trip through Google.
+  await db.query(`update gcal_links set state = 'reconnect', said = 'Connect Google Calendar again' where workspace_id = $1 and user_id = $2`, [M.ws, V.id]);
+  ok(await M.b.action('shift.update', { id: w.id, title: 'Burma Shave — back elsewhere' }));
+  const seen = await gcal(V);
+  assert.equal(seen.link.state, 'updating');
+  assert.equal(seen.link.said, null);
+  await jobs();
+  assert.equal((await linkRow(V.id)).state, 'ok');
+  assert.ok(eventsOf(0).some((e) => e.summary === 'Burma Shave — back elsewhere'));
+  const last = (await db.query(`select action, payload from events where workspace_id = $1 and entity_type = 'gcal_link' order by seq desc limit 1`, [M.ws])).rows[0];
+  assert.deepEqual([last.action, last.payload], ['gcal.state', { state: 'ok' }], 'on the log');
 });
 
 test('the runner is not held: a slow Google leaves the next job free', async () => {
