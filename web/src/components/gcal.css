@@ -4,7 +4,7 @@
 .gc-who { overflow-wrap: anywhere; }
 .gc-count { margin: 0 0 var(--s-2); font-size: 15px; }
 .gc-count > span:first-child { font-weight: 600; font-variant-numeric: tabular-nums; }
-.gc-card .ts-row { align-items: center; }
+.gc-card .ts-row { align-items: center; margin-bottom: 0; }
 .gc-card .gg-connect { margin-top: 0; }
 .gc-offer { margin: var(--s-3) 0 var(--s-2); border-color: var(--rule-2); }
 .toast.gc-toast { max-width: calc(100vw - 32px); width: max-content; }

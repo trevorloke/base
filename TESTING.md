@@ -249,7 +249,12 @@ one tap away under **More**.
   revokes. `server/test/addressbook.test.js`: *Find people I know* — the
   contacts files in `samples/contacts-google.csv` and
   `samples/contacts-outlook.csv` (made-up people), the check (matches
-  only, the desk only, nothing kept) and the link.
+  only, the desk only, nothing kept) and the link. Browser:
+  `e2e-gca.mjs` (it starts base.win and the stand-in Google itself:
+  `PORT=5330 node e2e-gca.mjs` after the web build) — Your profile's
+  *Your shifts in Google Calendar* card in each state, its switch in
+  Settings → Services → Google, then My people → *Find people I know*
+  with the Google fixture, and Data → Import's contacts hint.
 - **ImagineU** (the tab) → *Edit* → *+ Add a course* (*Canvassing 101*),
   then *+ Add a module*: words to open with, then under *More materials*
   *+ Video* (paste a YouTube link), *+ Document* (upload a PDF), *+ Audio*;
