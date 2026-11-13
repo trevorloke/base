@@ -368,6 +368,24 @@ check('…after two pages "+ Add new person “sample”" is still in view at th
 await shot('20-shift-picker-desk');
 await simple('Shifts\' picker (desk)');
 await page.keyboard.press('Escape');
+// Enter when everyone who matches is already on the shift adds no one and
+// makes no one new from the typed letters (only an answer with no rows does).
+const solo = (await api('/actions/person.create', { name: 'Solo Unique Example' })).json?.person;
+await api('/actions/shift.assign', { shift_id: shift.id, person_id: solo.id });
+await openPicker();
+await page.fill(pbox, 'solo');
+await until(async () => (await page.$$eval('.ps-drop .ps-list:not(.is-stale) .ps-row.is-taken', (els) => els.length)) === 1);
+await page.focus(pbox);
+await page.keyboard.press('Enter');
+await sleep(1500);
+const solos = (await find('solo')).persons.map((p) => p.name);
+check('Enter when the only match is on the shift: no one made, no one added', solos.length === 1 && (await page.locator('.ps-drop .ps-row.is-taken').count()) === 1, solos.join(' | '));
+await page.fill(pbox, 'solo uni');
+await until(async () => (await page.$$eval('.ps-drop .ps-list:not(.is-stale) .ps-row.is-taken', (els) => els.length)) === 1);
+await page.keyboard.press('Enter');
+await sleep(1500);
+check('…nor with a partial name ("solo uni")', (await find('solo')).persons.length === 1, (await find('solo')).persons.map((p) => p.name).join(' | '));
+await page.keyboard.press('Escape');
 // Money's donor picker: "smith kevin", and Show more.
 await go('/money?new=1');
 await page.waitForSelector('#gift-donor');
@@ -414,6 +432,8 @@ await shot('12-add-typing-phone');
 await simple('relationship editor (phone)');
 await typeIn('smith kevin');
 await until(async () => (await freshRows()).length === 4);
+const phoneLines = await page.$$eval('.ps-row__phone', (els) => els.map((e) => e.getClientRects().length));
+check('…on a phone each phone number stays on one line', phoneLines.length > 0 && phoneLines.every((n) => n === 1), JSON.stringify(phoneLines));
 await shot('13-add-already-linked-phone');
 await simple('relationship editor, already linked (phone)');
 await typeIn('zzq');

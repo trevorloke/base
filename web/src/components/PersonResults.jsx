@@ -17,7 +17,7 @@
 // lead = { heading, rows, chip }: a block drawn first under its own heading
 // (a dropdown's "Has this role: Driver"), one page, no paging; anyone in it
 // is left out of the rows under it. onNone: Enter with a fresh answer that
-// has no one to pick (a dropdown's "+ Add new person").
+// has no rows at all (a dropdown's "+ Add new person"); rows all taken do nothing.
 import { useEffect, useRef, useState } from 'react';
 import { RatingChip } from './RatingButtons.jsx';
 import { Unavailable } from './AudienceBits.jsx';
@@ -91,7 +91,9 @@ export default function PersonResults({
     setWantFirst(false);
     const p = all.find((r) => !isTaken(r));
     if (p) onPick(p);
-    else onNone?.();
+    // Everyone found is already taken: nothing happens (never a new person
+    // made from a part of a name that's on file).
+    else if (!all.length) onNone?.();
   });
 
   // Scrolled to the end: the next page, by itself (autoMore).
@@ -138,7 +140,9 @@ export default function PersonResults({
   const count = all.length ? countWords(search) : '';
   const row = (p, chip = null) => {
     const off = isTaken(p);
-    const where = whereLine(p, desk);
+    // The phone kept whole: on a phone the line wraps after " · ", never inside the number.
+    const place = whereLine(p, false);
+    const phone = desk && p.phone ? p.phone : '';
     return (
       <li key={p.id}>
         <button type="button" data-row="" className={`ps-row ${rowClass}${off ? ' is-taken' : ''}`} disabled={off}
@@ -146,7 +150,11 @@ export default function PersonResults({
           onClick={() => { if (fresh && !off) onPick(p); }}>
           <span className="ps-row__main">
             <span className="ps-row__name"><NameAz person={p} /></span>
-            {where && <span className="ps-row__where">{where}</span>}
+            {(place || phone) && (
+              <span className="ps-row__where">
+                {place}{place && phone ? ' · ' : ''}{phone && <span className="ps-row__phone">{phone}</span>}
+              </span>
+            )}
           </span>
           <span className="ps-row__end">
             {off ? <span className="chip chip-ghost ps-taken">{takenLabel}</span> : (

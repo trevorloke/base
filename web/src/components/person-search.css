@@ -44,6 +44,7 @@
 .ps-row__name b, .name-az { font-weight: 600; }
 .ps-row.is-taken .ps-row__name b { font-weight: 500; }
 .ps-row__where { font-size: 13px; color: var(--text-3); overflow-wrap: anywhere; }
+.ps-row__phone { white-space: nowrap; }
 .ps-row__end { flex: none; display: flex; align-items: center; }
 .ps-taken { font-size: 12px; }
 .ps-more-li { padding: var(--s-1) var(--s-2); }
