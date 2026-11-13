@@ -44,7 +44,8 @@ import { More, useScale } from '../components/RatingButtons.jsx';
 import GeocodeButton from '../components/GeocodeButton.jsx';
 import { DEFAULT_TILES, safeAttribution } from '../components/tiles.js';
 import { DotLayer, DensityLayer, cellAt, nearest } from './mapDots.js';
-import { DOT_ZOOM, LONE_PIN_ZOOM, PIN_ZOOM, MARK, TILE_WAIT_MS, css, cellOf, cellsFrom, dotsFrom, drawnFor, inBox, mapLooks, pickLook, placingPoll, rowsBudget, streetMove, tileAt, tileHealth, tileHost, viewBox } from './mapView.js';
+import { DOT_ZOOM, LONE_PIN_ZOOM, PIN_ZOOM, MARK, TILE_WAIT_MS, css, cellOf, cellsFrom, defaultLook, dotsFrom, drawnFor, inBox, mapLooks, pickLook, placingPoll, rowsBudget, streetMove, tileAt, tileHealth, tileHost, viewBox } from './mapView.js';
+import { askNotice, forgetNotice } from './tileProbe.js';
 import { useSharePref } from '../components/ShareLocation.js';
 import { cachedWalkLists, useOnline } from './Turfs.jsx';
 import './map.css';
@@ -103,12 +104,11 @@ const writeSignsPref = (v) => { try { localStorage.setItem(SIGNS_PREF, JSON.stri
 // (Satellite, Terrain) from /api/map/config views.
 const VIEW_PREF = `${NS}map:view`;
 const SHADES = [{ key: 'standard', label: 'Standard' }, { key: 'muted', label: 'Muted' }, { key: 'dark', label: 'Dark' }];
-// Clean by default (a light, quiet base map from the server's views — no
-// shop icons, parking lots or house numbers), else Muted: the base map stays
-// in the background, so the doors' colours (support, undecided, opposed)
-// are what you see. Standard and Dark are a tap away (Show → Map), and a
-// choice made is kept.
-const readViewPref = () => { try { return localStorage.getItem(VIEW_PREF) || 'clean'; } catch { return 'clean'; } };
+// The saved pick, or null: nothing picked. With none the map opens on Clean
+// where the server offers it (a light, quiet base map — only with the
+// campaign's CARTO key), else Standard (mapView.js defaultLook). Muted, Dark
+// and the rest are a tap away (Show → Map), and only a tap is ever saved.
+const readViewPref = () => { try { return localStorage.getItem(VIEW_PREF) || null; } catch { return null; } };
 const writeViewPref = (v) => { try { localStorage.setItem(VIEW_PREF, v); } catch { /* storage blocked */ } };
 // When the street map isn't loading, the map may go to its other provider by
 // itself — once in a page's life ({ from: the look that was picked, to: the
@@ -120,6 +120,10 @@ let fellBack = null;
 // Google's live credit, the last one per look (tile address), for this
 // page's life: shown again when the next ask fails or there's no signal.
 const creditByLook = new Map();
+// A tile address as the map fills it on this screen ({r}: @2x on a sharp
+// one), so the probe and the Map check's picture ask what the map drew —
+// answered from what this phone already has.
+const drawnAs = (url) => String(url).replace(/\{r\}/g, L.Browser.retina ? '@2x' : '');
 // Google's looks are the server's own tiles (/tiles/…), not a provider's host.
 const isGoogleLook = (url) => !tileHost(url) && /\/tiles\/\{z\}/.test(url || '');
 // Does a street map's provider answer now? One of its tiles, asked of the
@@ -132,7 +136,7 @@ const PROBE_MS = 4000;
 // On a look the map went to by itself, how often it asks again whether the
 // person's own pick answers (a provider's hiccup is often over in a minute).
 const PICK_AGAIN_MS = 60_000;
-const NOT_SEEN = { url: null, down: false, offlineDown: false, any: false, settled: false }; // a tile layer that hasn't said yet
+const NOT_SEEN = { url: null, down: false, offlineDown: false, any: false, settled: false, why: null }; // a tile layer that hasn't said yet
 // (The server's own tiles — Google's, through it — need the sign-in cookie.)
 const answers = (url) => {
   const stop = typeof AbortController === 'function' ? new AbortController() : null;
@@ -917,7 +921,7 @@ function NameTurfForm({ points, doors, takenNames, busy, error, counted = true, 
 const tilesLine = (setup) => {
   if (!setup?.source) return null;
   const ignored = Array.isArray(setup.ignored) ? setup.ignored : [];
-  const off = [ignored.includes('google') && 'Google Maps setting ignored', ignored.includes('provider') && 'provider name ignored', ignored.includes('url') && 'custom address ignored', ignored.includes('maxZoom') && 'max zoom ignored'].filter(Boolean);
+  const off = [ignored.includes('google') && 'Google Maps setting ignored', ignored.includes('provider') && 'provider name ignored', ignored.includes('url') && 'custom address ignored', ignored.includes('maxZoom') && 'max zoom ignored', ignored.includes('carto-key') && 'CARTO needs a key now (STARBASE_TILE_CARTO_KEY)'].filter(Boolean);
   return `Map tiles: ${setup.source}${off.length ? ` — ${off.join(', ')}` : ''}`;
 };
 
@@ -1337,18 +1341,29 @@ export default function MapPage() {
   useKeepCopy(me, 'mapConfig', tilesQ);
   const baseTiles = tilesQ.data?.tiles || (tilesQ.isError || tilesQ.fetchStatus === 'paused' ? DEFAULT_TILES : null);
   const views = tilesQ.data?.views ?? EMPTY_LIST;
-  const [viewPick, setViewPick] = useState(readViewPref);
+  const [savedPick, setSavedPick] = useState(readViewPref);
+  // The one pick everything below reads: never null.
+  const viewPick = savedPick ?? defaultLook(views);
   // The look the map went to by itself because the picked one's street map
   // wasn't loading (this visit only: the pick itself is not changed) — or
   // one tapped from "The street map isn’t loading" (tapped: theirs once its
   // streets come; not loading either, the map goes back to the pick).
-  const [autoView, setAutoView] = useState(() => (fellBack?.from && fellBack.from === readViewPref() ? fellBack.to : null));
+  const [autoView, setAutoView] = useState(() => (fellBack?.from && fellBack.from === viewPick ? fellBack.to : null));
+  // No kept copy of /map/config at first: once it answers, the same restore
+  // (a look the map went to by itself stays when the Map is opened again).
+  const restored = useRef(Boolean(tilesQ.data));
+  useEffect(() => {
+    if (restored.current || !tilesQ.data) return;
+    restored.current = true;
+    if (!autoView && fellBack?.from && fellBack.from === viewPick) setAutoView(fellBack.to);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tilesQ.data]);
   const [tapped, setTapped] = useState(false);
   // With no signal the pick is drawn: its streets are the ones this phone
   // keeps. Signal back, it stays until it has been asked again (below).
   const online = useOnline();
   const [holdPick, setHoldPick] = useState(!online);
-  const setView = (v) => { setViewPick(v); writeViewPref(v); setAutoView(null); setTapped(false); if (fellBack) fellBack.from = null; };
+  const setView = (v) => { setSavedPick(v); writeViewPref(v); setAutoView(null); setTapped(false); if (fellBack) fellBack.from = null; };
   const drawnAuto = autoView && online && !holdPick ? autoView : null;
   const lookPick = drawnAuto || viewPick;
   // A provider look this server no longer offers falls back to Standard (a
@@ -1362,10 +1377,11 @@ export default function MapPage() {
     () => pickLook({ views, viewPick, drawnAuto, baseUrl, muted: SHADES.find((x) => x.key === 'muted') }),
     [views, viewPick, drawnAuto, baseUrl],
   );
-  // Clean comes from the server; where it isn't offered (the campaign's own
-  // provider), Muted. Over Google's tiles no shade at all: its Streets.
+  // Clean comes from the server; where it isn't offered (no CARTO key, or
+  // the campaign's own provider), Standard: the plainest, fullest streets.
+  // Over Google's tiles no shade at all: its Streets.
   const lookWant = drawnAuto ? lookPick : look;
-  const view = providerView || SHADES.some((s) => s.key === lookWant) ? lookWant : lookWant === 'clean' ? 'muted' : 'standard';
+  const view = providerView || SHADES.some((s) => s.key === lookWant) ? lookWant : 'standard';
   // Show → Map: with Google drawn, Streets · Satellite · Terrain (mapView.js mapLooks).
   const looks = useMemo(
     () => mapLooks({ shades: SHADES, views, standardLabel: tilesQ.data?.standardLabel, shadeAllowed }),
@@ -1432,6 +1448,7 @@ export default function MapPage() {
     switched: Boolean(fellBack),
   });
   const [switchedTo, setSwitchedTo] = useState(null);
+  const [switchedWhy, setSwitchedWhy] = useState(null); // 'notice': it sent a notice, not streets
   // Back on the person's own pick (for the rest of the visit: the map has
   // gone somewhere by itself once already).
   const backToPick = () => { if (fellBack) fellBack.from = null; setAutoView(null); setTapped(false); setSwitchedTo(null); };
@@ -1447,6 +1464,7 @@ export default function MapPage() {
       fellBack = { from: viewPick, to: otherLook.key };
       setAutoView(otherLook.key);
       setSwitchedTo(otherLook.label);
+      setSwitchedWhy(street.why);
     } else if (move === 'back') backToPick();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [move]);
@@ -1473,9 +1491,13 @@ export default function MapPage() {
   const hadSignal = useRef(online);
   const signalNo = useRef(0);
   const pickTiles = views.find((v) => v.key === viewPick && !v.fallback) || baseTiles;
+  // (A provider found sending a notice this page's life answers, but with
+  // no streets: no answer — tileProbe.js keeps what it found.)
   const pickAnswers = () => {
     const map = mapRef.current;
-    return pickTiles?.url && map ? answers(tileAt(pickTiles.url, map.getCenter(), map.getZoom(), pickTiles.maxZoom)) : Promise.resolve(false);
+    if (!pickTiles?.url || !map) return Promise.resolve(false);
+    return answers(tileAt(pickTiles.url, map.getCenter(), map.getZoom(), pickTiles.maxZoom))
+      .then((ok) => ok && askNotice(drawnAs(pickTiles.url), map.getCenter(), pickTiles.maxZoom).then((notice) => notice !== true));
   };
   useEffect(() => {
     const n = ++signalNo.current;
@@ -2099,8 +2121,21 @@ export default function MapPage() {
       // only over Google's map, which phones don't keep (its terms).
       const offlineDown = h.down && navigator.onLine === false;
       streetRef.current = { ...h, down };
-      const next = `${down}|${offlineDown}|${h.loaded > 0}|${settled}`;
-      if (next !== shown) { shown = next; setStreet({ url: tileUrl, down, offlineDown, any: h.loaded > 0, settled }); }
+      const why = down ? h.why : null;
+      const next = `${down}|${offlineDown}|${h.loaded > 0}|${settled}|${why}`;
+      if (next !== shown) { shown = next; setStreet({ url: tileUrl, down, offlineDown, any: h.loaded > 0, settled, why }); }
+    };
+    // Tiles came: are they streets, or a provider's notice (the same picture
+    // everywhere)? Asked once per address per page life (tileProbe.js),
+    // never for the server's own tiles, never with no signal.
+    let gone = false;
+    let probed = false;
+    const probe = () => {
+      if (probed || !health.get().loaded || navigator.onLine === false) return;
+      probed = true;
+      askNotice(drawnAs(tileUrl), map.getCenter(), tileMax).then((notice) => {
+        if (notice === true && !gone) { health.notice(); tell(); }
+      });
     };
     tell();
     layer.on('loading', () => {
@@ -2110,7 +2145,7 @@ export default function MapPage() {
       timer = setTimeout(() => { health.late(Date.now()); tell(); }, TILE_WAIT_MS + 20);
     });
     layer.on('tileerror', () => { health.tile(false); });
-    layer.on('load', () => { clearTimeout(timer); clearTimeout(moved); clearTimeout(soon); soon = null; health.done(); settled = true; tell(); });
+    layer.on('load', () => { clearTimeout(timer); clearTimeout(moved); clearTimeout(soon); soon = null; health.done(); settled = true; tell(); probe(); });
     // The six-second look is each view's own, not only Leaflet's go of
     // asking: one tile that never answers keeps a go open ('loading' comes
     // again only once every tile asked for has loaded or failed), and the
@@ -2153,11 +2188,11 @@ export default function MapPage() {
     layer.on('tileload', () => {
       health.tile(true);
       tell();
-      if (health.get().down && !soon) soon = setTimeout(lookAgain, 1000);
+      if (health.get().why === 'failing' && !soon) soon = setTimeout(lookAgain, 1000);
     });
     layer.addTo(map);
     map.setMaxZoom(tileMax || 19);
-    return () => { clearTimeout(timer); clearTimeout(moved); clearTimeout(soon); clearTimeout(credit); map.off('moveend', askCredit); map.off('moveend zoomend', onMoved); layer.remove(); };
+    return () => { gone = true; clearTimeout(timer); clearTimeout(moved); clearTimeout(soon); clearTimeout(credit); map.off('moveend', askCredit); map.off('moveend zoomend', onMoved); layer.remove(); };
   }, [tileUrl, tileMax, tileCredit, tilesTry]);
 
   // Turf polygons. Hidden by the Turfs chip, except a selected turf always shows.
@@ -2368,8 +2403,16 @@ export default function MapPage() {
     return {
       build: OWN_BUILD, look: lookLabel, tilesFrom: tileHost(tileUrl), tiles: streetRef.current,
       size: { x: size?.x || 0, y: size?.y || 0 }, zoom: map ? map.getZoom() : null,
+      // The tile under the map's middle, at the address the map drew it from.
+      picture: map && tileUrl ? tileAt(drawnAs(tileUrl), map.getCenter(), map.getZoom(), tileMax) : null,
     };
-  }, [lookLabel, tileUrl]);
+  }, [lookLabel, tileUrl, tileMax]);
+  // Check again: the notice probe asks the drawn look afresh (a new layer).
+  const checkAgain = useCallback(() => {
+    if (!tileUrl) return;
+    forgetNotice(drawnAs(tileUrl));
+    setTilesTry((n) => n + 1);
+  }, [tileUrl]);
   const showEmpty = doorsQ.data && !big && doors.length === 0 && !hasSheet && !mode;
   // A big list's number is what is on screen, so it says what it counts:
   // people from further out, doors closer in. A list loaded whole — or a
@@ -2549,7 +2592,7 @@ export default function MapPage() {
       <div
         className="map-canvas" ref={canvasRef} role="application" aria-label="Canvass map"
         data-doors={visible.length + leanShown.length} data-zoom={zoom ?? ''} data-view={big ? drawn?.kind || '' : doorsQ.data ? 'all' : ''}
-        data-tiles={street.down ? 'down' : street.any ? 'ok' : ''}
+        data-tiles={street.why === 'notice' ? 'notice' : street.down ? 'down' : street.any ? 'ok' : ''}
       />
 
       <div className="map-top">
@@ -2684,7 +2727,7 @@ export default function MapPage() {
             the service that failed and what it said. */}
         {tileNote === 'down' ? (
           <div className="map-tilenote" role="status">
-            <span>The street map isn’t loading</span>
+            <span>{street.why === 'notice' ? 'The street map isn’t showing streets' : 'The street map isn’t loading'}</span>
             {/* The taps stay together on one row: never "Why?" alone below. */}
             <span className="map-tilenote__acts">
               {move === 'try-other'
@@ -2699,7 +2742,9 @@ export default function MapPage() {
           </div>
         ) : tileNote === 'switched' ? (
           <div className="map-tilenote map-tilenote--done" role="status">
-            <span>{providerView?.fallback ? 'Google Maps isn’t loading — showing the free map' : `The street map wasn’t loading — switched to ${switchedTo}`}</span>
+            <span>{providerView?.fallback ? 'Google Maps isn’t loading — showing the free map'
+              : switchedWhy === 'notice' ? `The street map wasn’t showing streets — switched to ${switchedTo}`
+                : `The street map wasn’t loading — switched to ${switchedTo}`}</span>
             {mayCheck && <span className="map-tilenote__acts"><button type="button" className="btn btn-quiet map-tilenote__btn map-tilenote__why" onClick={openCheck}>Why?</button></span>}
           </div>
         ) : null}
@@ -2866,7 +2911,7 @@ export default function MapPage() {
       {checkSheetOpen && (
         <>
           <button type="button" className="map-scrim" aria-label="Close the map check" tabIndex={-1} onClick={closeCheck} />
-          <MapCheck facts={checkFacts} onClose={closeCheck} />
+          <MapCheck facts={checkFacts} onClose={closeCheck} onAgain={checkAgain} />
         </>
       )}
 

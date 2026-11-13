@@ -1,0 +1,8 @@
+/* The Map check's picture (MapCheck.jsx): the tile under the map's middle,
+   as this phone gets it, under the Street map line. */
+.map-check__row dd.map-check__picture { grid-column: 2; display: grid; gap: 6px; margin-top: 6px; font-size: 13px; color: var(--text-2); }
+.map-check__picture img {
+  display: block; width: 128px; height: 128px; object-fit: cover;
+  border: 1px solid var(--rule-2); border-radius: var(--r-sm); background: var(--paper-1);
+}
+.map-check__nopic { font-size: 13px; color: var(--danger); }
