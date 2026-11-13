@@ -22,6 +22,13 @@
 //   GET  /.well-known/openid-configuration
 //   ANY  /test-api/*              an API host stand-in: needs a live access
 //                                 token (Authorization: Bearer)
+//   /calendar/v3/…                Google Calendar (GOOGLE_CALENDAR_API_BASE =
+//                                 <base>/calendar/v3): POST /calendars, PATCH
+//                                 and DELETE /calendars/:id, POST
+//                                 /calendars/:id/events, PUT and DELETE
+//                                 …/events/:eid. Event ids must be base32hex
+//                                 (0-9a-v, 5–1024); deleted ids are kept (insert
+//                                 → 409; PUT status confirmed restores)
 //
 // In code, for tests (or over HTTP: POST /__name with JSON):
 //   authorize(authUrl, sub | { cancel }) → the back address Google would
@@ -36,6 +43,15 @@
 //   revokeAll(sub)                as if the person removed base.win in
 //                                 their Google Account
 //   account({ sub, email, hd, name })   add a test account
+//   cal.next(kind, { route?, sub?, reason?, retryAfter?, ms? })   the next
+//                                 Calendar answer: 404, 410, 403 (reason),
+//                                 429, 500, slow — for one route
+//                                 (calendars.insert, calendars.patch,
+//                                 calendars.delete, events.insert,
+//                                 events.update, events.delete) or user
+//   cal.calendars(sub) · cal.dropCalendar(id) · cal.dropEvent(cal, eid) ·
+//   cal.counts (per route) · cal.calls [{ route, sub, query, at }] · order
+//                                 (Calendar calls and revokes, in order)
 //   counts { auth, token, refresh, revoke, api, discovery } · revoked
 //   (tokens revoked, each with its count) · tokens() (every token issued)
 import http from 'node:http';
@@ -62,7 +78,72 @@ export const startFakeGoogle = async ({ port = 0, clientId, secret, redirectUris
   const counts = { auth: 0, token: 0, refresh: 0, revoke: 0, api: 0, discovery: 0 };
   const revoked = new Map(); // token → times
   const apiCalls = [];
+  const order = []; // Calendar calls and revokes, in the order they came
   let base = '';
+  // ── Google Calendar ──
+  const cals = new Map(); // id → { id, sub, body, deleted, events: Map(eid → { body, deleted }) }
+  const calKnobs = [];
+  const calCounts = {};
+  const calCalls = [];
+  const CAL_ID = /^[0-9a-v]{5,1024}$/;
+  const calAnswer = async (req, res, u, raw) => {
+    const parts = u.pathname.replace(/^\/calendar\/v3\//, '').split('/').map(decodeURIComponent);
+    const m = req.method;
+    let route = null;
+    if (parts[0] === 'calendars' && parts.length === 1 && m === 'POST') route = 'calendars.insert';
+    else if (parts[0] === 'calendars' && parts.length === 2 && m === 'PATCH') route = 'calendars.patch';
+    else if (parts[0] === 'calendars' && parts.length === 2 && m === 'DELETE') route = 'calendars.delete';
+    else if (parts[0] === 'calendars' && parts[2] === 'events' && parts.length === 3 && m === 'POST') route = 'events.insert';
+    else if (parts[0] === 'calendars' && parts[2] === 'events' && parts.length === 4 && m === 'PUT') route = 'events.update';
+    else if (parts[0] === 'calendars' && parts[2] === 'events' && parts.length === 4 && m === 'DELETE') route = 'events.delete';
+    if (!route) return json(res, 404, { error: { code: 404, message: 'Not Found' } });
+    const bearer = String(req.headers.authorization || '').replace(/^Bearer /, '');
+    const t = accessTokens.get(bearer);
+    if (!t || !t.alive || t.expiresAt < Date.now()) return json(res, 401, { error: { code: 401, message: 'Invalid Credentials', errors: [{ reason: 'authError' }] } });
+    calCounts[route] = (calCounts[route] || 0) + 1;
+    const query = Object.fromEntries(u.searchParams);
+    calCalls.push({ route, sub: t.sub, query, at: Date.now(), path: u.pathname });
+    order.push(route);
+    const i = calKnobs.findIndex((k) => (!k.route || k.route === route) && (!k.sub || k.sub === t.sub));
+    const knob = i >= 0 ? calKnobs.splice(i, 1)[0] : null;
+    if (knob?.kind === 'slow') await later(knob.ms || slowMs);
+    const err = (code, reason, message) => json(res, code, { error: { code, message, errors: [{ reason, message }] } });
+    if (knob?.kind === '404') return err(404, 'notFound', 'Not Found');
+    if (knob?.kind === '410') return err(410, 'deleted', 'Resource has been deleted');
+    if (knob?.kind === '403') return err(403, knob.reason || 'forbidden', `Forbidden: ${knob.reason || 'forbidden'} (fake google text)`);
+    if (knob?.kind === '429') return json(res, 429, { error: { code: 429, message: 'Rate Limit Exceeded', errors: [{ reason: 'rateLimitExceeded' }] } }, knob.retryAfter ? { 'retry-after': String(knob.retryAfter) } : {});
+    if (knob?.kind === '500') return err(500, 'backendError', 'Backend Error');
+    const body = raw ? JSON.parse(raw) : {};
+    if (route === 'calendars.insert') {
+      const id = `${randomBytes(12).toString('hex')}@group.calendar.example`;
+      cals.set(id, { id, sub: t.sub, body, deleted: false, events: new Map() });
+      return json(res, 200, { kind: 'calendar#calendar', id, ...body });
+    }
+    const cal = cals.get(parts[1]);
+    if (!cal || cal.deleted || cal.sub !== t.sub) return err(404, 'notFound', 'Not Found');
+    if (route === 'calendars.patch') { Object.assign(cal.body, body); return json(res, 200, { id: cal.id, ...cal.body }); }
+    if (route === 'calendars.delete') { cal.deleted = true; res.writeHead(204); return res.end(); }
+    if (route === 'events.insert') {
+      if (!CAL_ID.test(String(body.id || ''))) return err(400, 'invalid', 'Invalid resource id value.');
+      if (cal.events.has(body.id)) return err(409, 'duplicate', 'The requested identifier already exists.');
+      cal.events.set(body.id, { body, deleted: false });
+      return json(res, 200, { kind: 'calendar#event', ...body });
+    }
+    const eid = parts[3];
+    if (!CAL_ID.test(eid)) return err(400, 'invalid', 'Invalid resource id value.');
+    const ev = cal.events.get(eid);
+    if (route === 'events.update') {
+      if (!ev) return err(404, 'notFound', 'Not Found');
+      if (ev.deleted && body.status !== 'confirmed') return err(410, 'deleted', 'Resource has been deleted');
+      cal.events.set(eid, { body: { ...body, id: eid }, deleted: false });
+      return json(res, 200, { kind: 'calendar#event', ...body, id: eid });
+    }
+    if (!ev) return err(404, 'notFound', 'Not Found');
+    if (ev.deleted) return err(410, 'deleted', 'Resource has been deleted');
+    ev.deleted = true;
+    res.writeHead(204);
+    return res.end();
+  };
 
   const take = (endpoint) => knobs[endpoint].shift() || null;
   const json = (res, status, body, headers = {}) => { res.writeHead(status, { 'content-type': 'application/json', ...headers }); res.end(JSON.stringify(body)); };
@@ -197,6 +278,7 @@ ${[...people.values()].map((p) => `<p><a class="acct" data-sub="${esc(p.sub)}" h
       if (u.pathname === '/token' && req.method === 'POST') return await tokenAnswer(res, form);
       if (u.pathname === '/revoke' && req.method === 'POST') {
         counts.revoke += 1;
+        order.push('revoke');
         const knob = take('revoke');
         if (knob?.kind === 'slow') await later(slowMs);
         if (knob?.kind === '500') return json(res, 500, { error: 'internal_failure' });
@@ -221,6 +303,7 @@ ${[...people.values()].map((p) => `<p><a class="acct" data-sub="${esc(p.sub)}" h
         if (knob?.kind === '401' || !t || !t.alive || t.expiresAt < Date.now()) return json(res, 401, { error: { code: 401, message: 'Invalid Credentials' } });
         return json(res, 200, { ok: true, path: u.pathname, scopes: t.scopes });
       }
+      if (u.pathname.startsWith('/calendar/v3/')) return await calAnswer(req, res, u, raw);
       if (u.pathname.startsWith('/__') && req.method === 'POST') {
         const body = raw ? JSON.parse(raw) : {};
         const name = u.pathname.slice(3);
@@ -228,6 +311,9 @@ ${[...people.values()].map((p) => `<p><a class="acct" data-sub="${esc(p.sub)}" h
         if (name === 'revokeAll') { api.revokeAll(body.sub); return json(res, 200, { ok: true }); }
         if (name === 'account') { api.account(body); return json(res, 200, { ok: true }); }
         if (name === 'counts') return json(res, 200, counts);
+        if (name === 'cal.next') { api.cal.next(body.kind, body); return json(res, 200, { ok: true }); }
+        if (name === 'cal.calendars') return json(res, 200, api.cal.calendars(body.sub));
+        if (name === 'cal.dropCalendar') { api.cal.dropCalendar(body.id); return json(res, 200, { ok: true }); }
       }
       return json(res, 404, { error: 'not_found' });
     } catch (e) {
@@ -241,7 +327,21 @@ ${[...people.values()].map((p) => `<p><a class="acct" data-sub="${esc(p.sub)}" h
     base, server, counts, revoked, apiCalls,
     authorize,
     next: (endpoint, kind, opts = {}) => { knobs[endpoint].push({ kind: String(kind), ...opts }); },
-    clearKnobs: () => { for (const k of Object.keys(knobs)) knobs[k].length = 0; },
+    clearKnobs: () => { for (const k of Object.keys(knobs)) knobs[k].length = 0; calKnobs.length = 0; },
+    order,
+    cal: {
+      next: (kind, opts = {}) => { calKnobs.push({ ...opts, kind: String(kind) }); },
+      // Live calendars (of one Google account, or all), each with its live events.
+      calendars: (sub) => [...cals.values()].filter((c) => !c.deleted && (!sub || c.sub === sub)).map((c) => ({
+        id: c.id, sub: c.sub, body: { ...c.body },
+        events: [...c.events].filter(([, e]) => !e.deleted).map(([id, e]) => ({ id, ...e.body })),
+      })),
+      dropCalendar: (id) => { const c = cals.get(id); if (c) c.deleted = true; },
+      dropEvent: (calId, eid) => { const e = cals.get(calId)?.events.get(eid); if (e) e.deleted = true; },
+      counts: calCounts,
+      calls: calCalls,
+      reset: () => { for (const k of Object.keys(calCounts)) delete calCounts[k]; calCalls.length = 0; order.length = 0; calKnobs.length = 0; },
+    },
     revokeAll: (sub) => revokeGrant(sub),
     account: (a) => people.set(a.sub, { hd: null, ...a }),
     resetCounts: () => { for (const k of Object.keys(counts)) counts[k] = 0; revoked.clear(); apiCalls.length = 0; },
