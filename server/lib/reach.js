@@ -15,7 +15,9 @@
 //
 //   senders   email: list · newsletter · press · ladder · shift (a shift's
 //                    notice, reminder or Notify, to someone booked on it) ·
-//                    self (a link someone asked for, to their own address)
+//                    self (a link someone asked for, to their own address) ·
+//                    direct (one person, from a staff member's own mail:
+//                    ext/gmail)
 //             text:  list · ladder · shift (a shift's notice or reminder)
 //             call:  bank (and the Call links: shared/canvass.js noCalls)
 //   mayReach(channel, sender, cols)  SQL, true for someone the sender may
@@ -69,9 +71,9 @@ export const RULES = {
     // sender: no email can reach it.
     { code: 'suppressed', sql: (c) => `not ${notSuppressed(c.ws, c.email)}` },
     // They left the newsletter list (their own link, or the desk's Remove).
-    // Not for a shift they booked, or a link they asked for: neither is
-    // the newsletter.
-    { code: 'unsubscribed', skip: ['press', 'shift', 'self'], sql: (c) => onNewsletter(c, 'unsubscribed') },
+    // Not for a shift they booked, a link they asked for, or one person
+    // writing to them: none of these is the newsletter.
+    { code: 'unsubscribed', skip: ['press', 'shift', 'self', 'direct'], sql: (c) => onNewsletter(c, 'unsubscribed') },
     // A press release honours both (a reporter who left the newsletter
     // still gets releases: they leave the media list by its own link). A
     // link someone asked for themselves goes whatever their tags.
