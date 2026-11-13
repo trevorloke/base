@@ -96,7 +96,14 @@ const newContext = async (opts, net) => {
   const ctx = await browser.newContext({ timezoneId: 'America/Vancouver', serviceWorkers: 'allow', ...opts });
   await ctx.route(/basemaps\.cartocdn\.com/, (route) => {
     const r = route.request();
-    net.carto.push({ url: r.url(), type: r.resourceType(), headers: r.headers() });
+    // type 'probe': asked by the page's own script (the notice probe), not a
+    // tile it draws, nor the service worker fetching one.
+    const probe = r.resourceType() === 'fetch' && !r.serviceWorker();
+    net.carto.push({ url: r.url(), type: probe ? 'probe' : r.resourceType(), headers: r.headers() });
+    // A stand-in can't leave out the CORS header the way a host does: the
+    // browser doesn't check it on an answer made here. A script's ask is
+    // refused instead, which is what the page sees either way (a TypeError).
+    if (net.cartoMode === 'notice-nocors' && probe) return route.abort('failed');
     if (net.cartoMode === 'good') return route.fulfill({ status: 200, contentType: 'image/svg+xml', headers: CORS, body: streetSvg(new URL(r.url()).pathname) });
     return route.fulfill({ status: 200, contentType: 'image/png', headers: net.cartoMode === 'notice-nocors' ? {} : CORS, body: NOTICE });
   });
@@ -166,12 +173,13 @@ const until = async (pg, fn, ms = 12000) => {
   }
 };
 // Open the map twice (the second with the service worker in control).
-const openMap = async (ctx, url, role, pick) => {
+const openMap = async (ctx, url, role, pick, net = null) => {
   const pg = await ctx.newPage();
   pg.on('pageerror', (e) => errors.push(`[${role}] ${e.message}`));
   await pg.goto(url, { waitUntil: 'domcontentloaded' });
   await pg.evaluate((v) => { try { if (v === undefined) return; if (v) localStorage.setItem('starbase:map:view', v); else localStorage.removeItem('starbase:map:view'); } catch {} }, pick);
   await sleep(600);
+  if (net) { await sleep(2500); net.carto.length = 0; net.osm.length = 0; } // count one page life: the second
   await pg.reload({ waitUntil: 'domcontentloaded' });
   return pg;
 };
@@ -249,7 +257,7 @@ try {
           s.look === 'muted' && /^The street map wasn’t showing streets — switched to Muted/.test(s.note || '') && took < 10000 && s.pick === null,
           JSON.stringify({ took, ...s }));
         check(`notice, ${role}: ${role === 'manager' ? 'with' : 'no'} “Why?”`, s.why === (role === 'manager'), JSON.stringify(s));
-        const probes = net.carto.filter((r) => r.type === 'fetch');
+        const probes = net.carto.filter((r) => r.type === 'probe');
         check(`notice, ${role}: the probe asked CARTO at most twice, keyed, with no no-cache headers`,
           probes.length >= 1 && probes.length <= 2 && probes.every((r) => /key=test-key/.test(r.url) && !/no-cache/i.test(r.headers['cache-control'] || '') && !r.headers.pragma),
           JSON.stringify(probes.map((r) => [r.url.replace(/^.*\/light_all/, ''), r.headers['cache-control'] || '', r.headers.pragma || ''])));
@@ -309,15 +317,15 @@ try {
     if (want('good')) {
       // 3. CARTO answering streets.
       const { ctx, net } = await camp.as('manager', DESK, 'good');
-      const pg = await openMap(ctx, `${camp.base}/admin/map`, 'good', null);
+      const pg = await openMap(ctx, `${camp.base}/admin/map`, 'good', null, net);
       const s = await until(pg, (x) => x.tiles === 'ok' && x.loaded > 0 && x.look === 'clean');
       await sleep(3000);
       const s2 = await state(pg);
       check('a key, CARTO answering streets: Clean draws, every tile keyed, nothing said, nothing saved',
         s2.look === 'clean' && s2.tiles === 'ok' && !s2.note && s2.hosts.length > 0 && s2.hosts.every((h) => /basemaps\.cartocdn\.com\+key/.test(h)) && s2.pick === null,
         JSON.stringify({ s, s2 }));
-      const probes = net.carto.filter((r) => r.type === 'fetch');
-      check('…the page asked CARTO at most twice beside its tiles (the probe, once, both loads)', probes.length <= 2, String(probes.length));
+      const probes = net.carto.filter((r) => r.type === 'probe');
+      check('…in its life the page asked CARTO at most twice beside its tiles (the probe, once)', probes.length >= 1 && probes.length <= 2, String(probes.length));
       await openCheck(pg);
       const pic = await pictureOf(pg);
       const rows = await rowsOf(pg);
