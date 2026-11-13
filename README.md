@@ -957,6 +957,23 @@ paper's name — at most one an hour, unless they turned it off on the
 letter; with no email connected nothing is sent. Counting, the comparison
 and the email link are `shared/letters.js`, shared with the field app.
 
+On screen: the field app's **Letters** (a Today row, "Your letters · 1
+reply" when the campaign wrote back; `/letters`): *Write a letter* (Letter
+or Op-ed, the papers with each one's rules, the count against its limit, a
+headline idea, the sign-off under *More details*), a letter's page (each
+suggested change marked in place with *Take* or *Leave*; *Keep mine*;
+*This is my final text*, which says how much of it is the campaign's words
+when that's 20% or more), and *Send it* — it copies the text and opens the
+writer's own email with the paper's address, a subject they can change and
+the agreed text (the text alone when the link would be too long), or the
+paper's web form; then *I sent it*. What's typed is kept on the phone for
+that sign-in (two weeks) until the server has it, and sign-out counts an
+unsent letter. The desk: Media → **Letters** (the queue, a letter in place:
+*Suggest an edit*, notes, *Assign to…*, *Decline*, *They told us they sent
+it*, *Published: paste the link*; *Ideas for writers* under More), Media →
+**Outlets**, "N letters" in Today's *Needs you*, and *Write a letter* in
+the command bar; Settings → Campaign → *Wait before another paper*.
+
 **From addresses.** Settings → Services → Email → *From addresses*: a
 manager adds up to ten addresses at MAIL_FROM's own domain (a name and an
 address; anything else is refused) and picks the default for email and

@@ -295,7 +295,7 @@ check('the volunteer can’t read Outreach’s sends', (await api(vol, '/blasts'
 await go(vol, '/media/contacts');
 w = await words(vol.locator('.md-page'));
 const vHeads = await words(vol.locator('.md-table thead'));
-check('the volunteer’s contacts: no Email or Phone columns, no address or number anywhere, no Add a contact', vHeads === 'Name Outlet Beat Socials Last release'
+check('the volunteer’s contacts: no Email or Phone columns, no address or number anywhere, no Add a contact', vHeads === 'Name Outlet On Beat Socials Last release'
   && !/dana@example\.org|604-555-0161/.test(w) && !(await vol.getByRole('button', { name: 'Add a contact' }).count()), `${vHeads} · ${w.slice(0, 200)}`);
 await shot(vol, '09-volunteer-contacts-1440');
 const volPhoneCtx = await browser.newContext({ ...PHONE, storageState: await volDesk.storageState() });

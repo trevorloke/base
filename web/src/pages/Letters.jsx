@@ -14,7 +14,7 @@
 // The writer always sends it themselves, from their own email: the campaign
 // suggests, never sends under their name.
 import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useOutletContext, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useOutletContext, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { sharedRuns } from '@starbase/shared/letters';
 import { apiGet } from '../api.js';
@@ -32,7 +32,9 @@ import './letters.css';
 export default function Letters({ view }) {
   const { me } = useOutletContext() ?? {};
   const { id } = useParams();
-  if (view === 'new') return <WriteLetter me={me} />;
+  const location = useLocation();
+  // Keyed by the visit: "Back to draft" opening this same screen reads the draft again.
+  if (view === 'new') return <WriteLetter key={location.key} me={me} />;
   if (view === 'one') return <LetterPage key={id} me={me} id={id} />;
   return <LettersList me={me} />;
 }
@@ -120,7 +122,7 @@ function WriteLetter({ me }) {
     clearDraft('draft');
     qc.invalidateQueries({ queryKey: ['letters'] });
     qc.invalidateQueries({ queryKey: ['brief'] });
-    if (result?.letter?.id) navigate(`/letters/${result.letter.id}`, { replace: true });
+    if (result?.letter?.id) navigate(`/letters/${result.letter.id}`, { replace: true, state: { dropped: result.dropped_outlets || [] } });
   }), [f.queued, navigate, qc]);
 
   const picked = f.outlet_ids.map((id) => outlets.find((o) => o.id === id)).filter(Boolean);
@@ -163,7 +165,7 @@ function WriteLetter({ me }) {
       } else {
         clearDraft('draft');
         qc.invalidateQueries({ queryKey: ['letters'] });
-        navigate(`/letters/${r.result.letter.id}`, { replace: true });
+        navigate(`/letters/${r.result.letter.id}`, { replace: true, state: { dropped: r.result.dropped_outlets || [] } });
       }
     } catch (err) {
       const back = { ...f };

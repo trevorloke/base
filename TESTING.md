@@ -497,6 +497,16 @@ one tap away under **More**.
   `server/test/media-lists.test.js`: outlets (rename carries contacts,
   name taken 409, checked), the three lists, Copy emails, a release to one
   list, the merge's union and the migration run twice.
+  In a browser: `node e2e-letters.mjs` (PORT 5480, SHOTS; the stand-in
+  sender on PORT+1) — an outlet and a contact on two lists, Copy emails and
+  a release's *Only:*; a volunteer's letter written with its route blocked
+  (kept through a reload, sent once back, the paper removed meanwhile →
+  *Pick a paper again*), a refused letter's *Copy text* and *Back to
+  draft*, a suggestion taken change by change, *Keep mine*, *This is my
+  final text* with the campaign's share, *Send it* (the mail link and the
+  clipboard, a paper greyed while another still has it, a form paper), the
+  talking points and another writer's shared words, sign-out with an
+  unsent letter, and a volunteer granted Media (no queue, no Copy emails).
 - **Media and From addresses** — Settings → Services → Email → *From
   addresses*: add an address at MAIL_FROM's domain (another domain is
   refused) and make it the press default; a release then goes from it.

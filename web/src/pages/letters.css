@@ -76,6 +76,6 @@
 
 @media (pointer: coarse), (max-width: 720px) {
   .lt-page .input { min-height: var(--ctl); font-size: 16px; }
-  .lt-chip, .lt-take .chip { min-height: 48px; }
+  button.lt-chip, .lt-take button.chip { min-height: 48px; }
   .lt-noteform { flex-direction: column; align-items: stretch; }
 }

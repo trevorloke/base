@@ -9,7 +9,7 @@
 // Edits, notes and "I sent it" go through the outbox (they may be typed in
 // a dead zone); agreeing, details, withdraw and delete need signal.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { applyHunks, campaignShare, mailtoFor, mailtoMax, wordDiff } from '@starbase/shared/letters';
 import { action, apiGet } from '../api.js';
@@ -74,6 +74,9 @@ function Page({ children }) {
 }
 
 function Letter({ me, l, outletsQ, said, setSaid, refresh }) {
+  // Papers the server dropped when the letter landed (taken off the list
+  // while it waited on the phone): said once, as the letter opens.
+  const dropped = [...(useLocation().state?.dropped || []), ...(l.dropped_outlets || [])];
   const drafts = l.drafts || [];
   const newest = drafts[drafts.length - 1] || null;
   const writerDrafts = drafts.filter((d) => d.side === 'writer');
@@ -98,7 +101,7 @@ function Letter({ me, l, outletsQ, said, setSaid, refresh }) {
         <span className={`chip${notPrinted ? ' chip-warn' : ''}`}>{chip}</span>
       </div>
       {l.outlets.length > 0 && <p className="ops-meta">{l.outlets.map((o) => o.name).join(' · ')}</p>}
-      {l.dropped_outlets.length > 0 && editable && <PickAgain l={l} outletsQ={outletsQ} onDone={(m) => { setSaid(m); refresh(); }} />}
+      {(l.outlets.length === 0 || l.dropped_outlets.length > 0) && editable && <PickAgain l={l} dropped={dropped} outletsQ={outletsQ} onDone={(m) => { setSaid(m); refresh(); }} />}
       {said && <p className="ops-done" role="status">{said}</p>}
 
       {suggestion && mineNow && !editing && (
@@ -125,11 +128,11 @@ function Letter({ me, l, outletsQ, said, setSaid, refresh }) {
           <button type="button" className="btn btn-primary ops-tap ops-wide" onClick={() => setSending(true)}>Send it</button>
         </div>
       )}
-      {l.status === 'ready' && agreed && sending && (
+      {['ready', 'sent'].includes(l.status) && agreed && sending && (
         <SendSheet me={me} l={l} agreed={agreed} outletsQ={outletsQ} onClose={() => setSending(false)}
           onSent={(m) => { setSending(false); setSaid(m); refresh(); }} />
       )}
-      {l.status === 'sent' && openSend && <SentLine l={l} send={openSend} onDone={(m) => { setSaid(m); refresh(); }} />}
+      {l.status === 'sent' && openSend && !sending && <SentLine l={l} send={openSend} onAnother={() => setSending(true)} onDone={(m) => { setSaid(m); refresh(); }} />}
       {published && (
         <p className="lt-pub">Published in {published.outlet_name || 'the paper'}{published.published_on ? ` · ${dayWords(published.published_on)}` : ''}
           {published.url && <> · <a href={published.url} target="_blank" rel="noopener noreferrer">Read it</a></>}</p>
@@ -284,7 +287,9 @@ const SIGN_LINES = [['name', 'Name'], ['city', 'City'], ['phone', 'Phone'], ['ad
 function SendSheet({ me, l, agreed, outletsQ, onClose, onSent }) {
   const online = useOnline();
   const data = outletsQ.data;
-  const choices = l.outlets.length ? l.outlets : (data?.outlets || []);
+  // A paper that has it now (no answer yet) isn't offered again.
+  const out = new Set((l.sends || []).filter((s) => !s.outcome).map((s) => s.outlet_id));
+  const choices = (l.outlets.length ? l.outlets : (data?.outlets || [])).filter((x) => !out.has(x.id));
   const blockedOf = (o) => l.blocked.find((b) => b.outlet_id === o.id) || null;
   const [pickId, setPickId] = useState(() => (choices.find((o) => !blockedOf(o)) || choices[0])?.id || null);
   const o = choices.find((x) => x.id === pickId) || null;
@@ -414,7 +419,7 @@ function SendSheet({ me, l, agreed, outletsQ, onClose, onSent }) {
 }
 
 // ── Sent: published, or not ──
-function SentLine({ l, send, onDone }) {
+function SentLine({ l, send, onAnother, onDone }) {
   const [pub, setPub] = useState(false);
   const [url, setUrl] = useState('');
   const [on, setOn] = useState('');
@@ -433,6 +438,7 @@ function SentLine({ l, send, onDone }) {
         <div className="ops-actions">
           <button type="button" className="btn btn-quiet ops-tap" onClick={() => setPub(true)}>It was published</button>
           <button type="button" className="btn btn-quiet ops-tap" onClick={() => run('myletter.not_published', {}, 'Not published')}>Not published</button>
+          <button type="button" className="btn btn-quiet ops-tap" onClick={onAnother}>Send to another paper</button>
         </div>
       ) : (
         <form className="lt-pubform" onSubmit={(e) => { e.preventDefault(); run('myletter.published', { url: url.trim(), ...(on ? { on } : {}) }, 'Published'); }}>
@@ -496,7 +502,7 @@ function Notes({ l, onSaid }) {
 }
 
 // ── Pick a paper again (a paper was taken off the list) ──
-function PickAgain({ l, outletsQ, onDone }) {
+function PickAgain({ l, dropped, outletsQ, onDone }) {
   const online = useOnline();
   const [open, setOpen] = useState(false);
   const [ids, setIds] = useState(() => l.outlets.map((o) => o.id));
@@ -508,8 +514,8 @@ function PickAgain({ l, outletsQ, onDone }) {
   };
   return (
     <div className="lt-remind">
-      <p>{l.dropped_outlets.map((d) => d.name).filter(Boolean).join(', ') || 'A paper you picked'} isn’t on the list any more.</p>
-      {!open ? <button type="button" className="btn ops-tap" onClick={() => setOpen(true)}>Pick a paper again</button> : (
+      <p>{dropped.length ? `${dropped.map((d) => d.name).filter(Boolean).join(', ') || 'A paper you picked'} isn’t on the campaign’s list any more.` : 'No paper picked yet.'}</p>
+      {!open ? <button type="button" className="btn ops-tap" onClick={() => { setOpen(true); outletsQ.refetch(); }}>{dropped.length ? 'Pick a paper again' : 'Pick a paper'}</button> : (
         <>
           {outlets.length === 0 && <p className="ops-meta">The campaign hasn’t added papers yet.</p>}
           <div className="lt-chips" role="group" aria-label="Paper">
