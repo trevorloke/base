@@ -175,7 +175,7 @@ test('the public address, the address service, the database and Google tiles ans
   assert.equal(toGoogle(), calls);
   resetTiles();
   process.env.GOOGLE_MAPS_TILES = 'off';
-  assert.equal(byKey(await list()).tiles.name, 'Map background (OpenStreetMap)');
+  assert.equal(byKey(await list()).tiles.name, 'Map background (OpenStreetMap and CARTO)');
   assert.match((await check('tiles')).said, /Going live §5/);
   process.env.GOOGLE_MAPS_TILES = '1';
   process.env.GEOCODER = 'off';
@@ -211,7 +211,7 @@ test('the tiles row reads the map’s own setting: the Stadia preset is named, r
     assert.match(u.detail, /STARBASE_TILE_PROVIDER=mapbox isn’t known — use stadia/);
     delete process.env.STARBASE_TILE_PROVIDER;
     const d = byKey(await list()).tiles;
-    assert.deepEqual([d.name, d.state], ['Map background (OpenStreetMap)', 'default']);
+    assert.deepEqual([d.name, d.state], ['Map background (OpenStreetMap and CARTO)', 'default']);
   } finally {
     delete process.env.STARBASE_TILE_PROVIDER;
     delete process.env.STARBASE_TILE_KEY;

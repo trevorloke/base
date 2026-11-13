@@ -65,13 +65,16 @@ const refusedBy = (r) => {
 
 // The map's own reading of its settings (offline's tileConfig), so this row
 // and the map never disagree about where the tiles come from.
+// The free default is OpenStreetMap's tiles for Standard, Muted and Dark,
+// and CARTO's for Clean (the look most phones draw): both are named.
 const freeTiles = () => {
   const cfg = tileConfig();
-  return { cfg, source: tileSource(cfg.url) };
+  const source = tileSource(cfg.url);
+  return { cfg, source: source === 'OpenStreetMap' ? 'OpenStreetMap and CARTO' : source };
 };
 const freeTilesRow = () => {
   const { cfg, source } = freeTiles();
-  const own = source !== 'OpenStreetMap';
+  const own = source !== 'OpenStreetMap and CARTO';
   // Every setting the map couldn't use, not only the first.
   const why = [
     googleTilesSetting() === 'unknown' && `GOOGLE_MAPS_TILES=${env('GOOGLE_MAPS_TILES').slice(0, 40)} isn’t understood — use 1`,
@@ -81,7 +84,7 @@ const freeTilesRow = () => {
   return row('tiles', `Map background (${source})`, 'The map volunteers walk', false, [], {
     detail: why ? `${why} · ${source} meanwhile`
       : own ? `${source}, straight to the phones`
-        : 'OpenStreetMap’s free tiles — not for a large team in election week (see Going live §5)',
+        : 'OpenStreetMap’s and CARTO’s free tiles — not for a large team in election week (see Going live §5)',
     // A setting it couldn't use leaves the free map drawing: that is what the badge says.
     state: own && !why ? 'ready' : 'default',
   });
@@ -221,7 +224,8 @@ const CHECKS = {
     if (!googleTiles()) {
       const { source } = freeTiles();
       // Only the free default needs the pointer to choosing a provider.
-      return { ok: true, said: `${source}${source.endsWith('s') ? '’' : '’s'} tiles come straight to each phone${source === 'OpenStreetMap' ? ' · to choose a provider, see Going live §5' : ''}` };
+      const free = source === 'OpenStreetMap and CARTO';
+      return { ok: true, said: `${free ? 'OpenStreetMap’s and CARTO’s' : `${source}${source.endsWith('s') ? '’' : '’s'}`} tiles come straight to each phone${free ? ' · to choose a provider, see Going live §5' : ''}` };
     }
     if (!googleKey()) return { ok: false, said: 'GOOGLE_MAPS_SERVER_KEY isn’t set', todo: 'See Going live §5, Recipe B step 6.' };
     const r = await probeTiles();
