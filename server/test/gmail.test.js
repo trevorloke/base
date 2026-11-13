@@ -14,6 +14,7 @@ import { _resetPausesForTest, _setTokenTimeoutForTest, tokenPaused } from '../li
 import { _resetTokensForTest } from '../lib/google/tokens.js';
 import { _resetGmailForTest, _setGmailTimeoutForTest, sendUrl } from '../ext/gmail/send.js';
 import { _resetLimiterForTest } from '../ext/gmail/actions.js';
+import { forViewer } from '../lib/viewer.js';
 import { acct, join, restoreEnv, signup, startGoogle, tag } from './google-helpers.js';
 
 const GMAIL = 'https://www.googleapis.com/auth/gmail.send';
@@ -447,6 +448,8 @@ test('the person read: email_why for the desk; none at all for a volunteer', asy
   assert.equal((await why(S, P.cy)).email_why, null, 'leaving the newsletter isn’t a no');
   await db.query('update persons set email = null where id = $1', [P.noa.id]);
   assert.equal((await why(S, P.noa)).email_why, 'no_email');
+  // Any other path that hands a volunteer a person row drops it too.
+  assert.ok(!('email_why' in forViewer({ role: 'volunteer', user: { email: '' } })({ id: 'x', email: 'a@b.co', tags: [], email_why: null })));
   const vp = await V.b.get(`/api/persons/${P.dee.id}`);
   if (vp.status === 200) assert.ok(!('email_why' in vp.json.person));
   else assert.equal(vp.status, 403);

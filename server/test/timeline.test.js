@@ -299,7 +299,7 @@ test('one person’s rows come through an index, never a walk over everyone’s'
   const seen = asked.filter((s) => !/information_schema/.test(s.sql));
   assert.equal(seen.length, SOURCES.length, 'one read per source');
   const BIG = ['persons', 'contacts', 'blast_recipients', 'events', 'texting_messages', 'texting_conversations', 'site_actions', 'consent_events',
-    'gifts', 'stripe_payments', 'member_terms', 'shift_assignments', 'survey_responses', 'signs', 'voted_marks', 'ladder_runs'];
+    'gifts', 'stripe_payments', 'member_terms', 'shift_assignments', 'survey_responses', 'signs', 'voted_marks', 'ladder_runs', 'gmail_sends'];
   for (const s of seen) {
     const plan = await db.transaction(async (tx) => {
       await tx.query('set local enable_seqscan = off');
@@ -317,6 +317,7 @@ const STRAIGHT_TO = {
   voted_marks: /person_id = /, texting_conversations: /person_id = /, texting_messages: /conversation_id = /,
   blast_recipients: /person_id = |lower\(/, media_contacts: /person_id = /, ladder_runs: /person_id = /, consent_events: /person_id = /, site_actions: /person_id = /,
   gifts: /person_id = |\bid = /, stripe_payments: /person_id = |gift_id = /, member_terms: /person_id = /, shift_assignments: /person_id = /,
+  gmail_sends: /person_id = /,
 };
 // The plan's scans: [{ table, index, cond }] (a seq scan has no index).
 const scansOf = (plan) => {
@@ -421,6 +422,10 @@ test('a person with thousands of contacts, among 20,000 people with histories of
      insert into ladder_runs (id, workspace_id, ladder_id, person_id, status, log)
        select gen_random_uuid(), $1, l.id, v.id, 'done', '[{"step":0,"kind":"email","result":"sent","at":"2026-10-01T17:00:00.000Z"}]'
          from l cross join (select id from (${voters}) v where v.n % 20 = 10 union all select $2::uuid) v`,
+    `insert into gmail_sends (id, workspace_id, person_id, user_id, client_key, to_email, from_email, subject, body, status, created_at)
+       select gen_random_uuid(), $1, v.id, '${mgrId}'::uuid, gen_random_uuid(), v.email, 'mgr@example.org', 'Hello', 'Hi there', 'sent', now() - interval '4 days'
+         from (${voters}) v where v.n % 10 = 3
+       union all select gen_random_uuid(), $1, $2, '${mgrId}'::uuid, gen_random_uuid(), 'busy@example.org', 'mgr@example.org', 'Hello', 'Hi there', 'sent', now() - interval '4 days'`,
     `insert into media_contacts (workspace_id, person_id, outlet, left_at, left_how)
        select $1, v.id, 'Example Daily', now() - interval '5 days', 'desk' from (${voters}) v where v.n % 50 = 11
        union all select $1, $2, 'Example Radio', now() - interval '2 days', 'link'`,
@@ -468,7 +473,46 @@ test('a person with thousands of contacts, among 20,000 people with histories of
 test('the indexes this feature adds are there', async () => {
   const names = (await db.query(
     `select indexname from pg_indexes where schemaname = current_schema() and indexname = any($1::text[])`,
-    [['gifts_ws_person_idx', 'signs_ws_person_idx', 'sassign_ws_person_idx', 'brecip_ws_person_idx', 'brecip_ws_email_idx', 'stripe_payments_person_idx']],
+    [['gifts_ws_person_idx', 'signs_ws_person_idx', 'sassign_ws_person_idx', 'brecip_ws_person_idx', 'brecip_ws_email_idx', 'stripe_payments_person_idx', 'gmail_sends_person_idx']],
   )).rows.map((r) => r.indexname).sort();
-  assert.deepEqual(names, ['brecip_ws_email_idx', 'brecip_ws_person_idx', 'gifts_ws_person_idx', 'sassign_ws_person_idx', 'signs_ws_person_idx', 'stripe_payments_person_idx']);
+  assert.deepEqual(names, ['brecip_ws_email_idx', 'brecip_ws_person_idx', 'gifts_ws_person_idx', 'gmail_sends_person_idx', 'sassign_ws_person_idx', 'signs_ws_person_idx', 'stripe_payments_person_idx']);
+});
+
+test('a Gmail send (ext/gmail): Email, in its own words, by who sent it; never a test send; Outreach’s, like every email', async () => {
+  const p = ok(await mgr.action('person.create', { name: 'Gia Example', email: 'gia@example.org' })).person;
+  const at = (min) => new Date(Date.now() - min * 60_000).toISOString();
+  const rows = [
+    ['person', 'sent', 'Saturday', 'Hi Gia,\nSee you at the market.', 4],
+    ['person', 'unsure', 'Re: signs', 'Two lawn signs.', 3],
+    ['person', 'failed', 'Hello', 'Hi', 2],
+    ['person', 'sending', 'Now', 'Going', 1],
+  ];
+  for (const [kind, status, subject, body, min] of rows) {
+    await db.query(
+      `insert into gmail_sends (id, workspace_id, kind, person_id, user_id, client_key, to_email, from_email, subject, body, status, created_at)
+       values ($1, $2, $3, $4, $5, $6, 'gia@example.org', 'mgr@example.org', $7, $8, $9, $10)`,
+      [randomUUID(), ws, kind, p.id, mgrId, randomUUID(), subject, body, status, at(min)],
+    );
+  }
+  // A test send: the staff member's own address, no person, never here.
+  await db.query(
+    `insert into gmail_sends (id, workspace_id, kind, person_id, user_id, client_key, to_email, from_email, subject, body, status)
+     values ($1, $2, 'test', null, $3, $4, 'mgr@example.org', 'mgr@example.org', 'Test from base.win', 'x', 'sent')`,
+    [randomUUID(), ws, mgrId, randomUUID()],
+  );
+  const j = ok(await all(mgr, p.id));
+  const mine = j.entries.filter((e) => e.id.startsWith('gmail:'));
+  assert.deepEqual(mine.map((e) => [e.kind, e.label, e.title, e.group]), [
+    ['gmail_sending', 'Email', 'Sending…', 'messages'],
+    ['gmail_failed', 'Email', 'Not sent', 'messages'],
+    ['gmail_unsure', 'Email', 'Not sure it went', 'messages'],
+    ['gmail_sent', 'Email', 'Sent from Gmail', 'messages'],
+  ]);
+  assert.equal(mine.at(-1).detail, 'Saturday · Hi Gia, See you at the market.');
+  assert.ok(mine.every((e) => e.link === null && e.by));
+  assert.ok(!JSON.stringify(j).includes('Test from base.win'));
+  assert.equal(ok(await all(staff.client, p.id)).entries.filter((e) => e.id.startsWith('gmail:')).length, 4);
+  for (const who of [noOutreach, vol, granted]) {
+    assert.ok(!ok(await all(who.client, p.id)).entries.some((e) => e.id.startsWith('gmail:')), who.name || 'denied');
+  }
 });

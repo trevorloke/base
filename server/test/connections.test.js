@@ -84,7 +84,7 @@ const check = async (key) => ok(await mgr.post('/api/connections/check', { key }
 
 test('nothing set: what each service is for and which settings are missing — managers only', async () => {
   const s = byKey(await list());
-  assert.deepEqual(Object.keys(s), ['database', 'public', 'email', 'texting', 'geocoder', 'tiles', 'jobs', 'mailchimp', 'stripe', 'callhub', 'google', 'twostep', 'places']);
+  assert.deepEqual(Object.keys(s), ['database', 'public', 'email', 'texting', 'geocoder', 'tiles', 'jobs', 'mailchimp', 'stripe', 'callhub', 'google', 'gmail', 'twostep', 'places']);
   assert.deepEqual(s.email.missing, ['RESEND_API_KEY', 'MAIL_FROM']);
   assert.equal(s.email.state, 'missing');
   assert.deepEqual(s.texting.missing, ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM']);
@@ -385,5 +385,31 @@ test('Google (sign-in and connections): missing, default, ready — never a valu
   } finally {
     for (const k of ['GOOGLE_OAUTH_CLIENT_ID', 'GOOGLE_OAUTH_CLIENT_SECRET', 'GOOGLE_TOKEN_KEY', 'GOOGLE_ACCOUNTS_BASE', 'GOOGLE_OAUTH_BASE', 'STARBASE_PUBLIC_URL', 'BASE_PATH']) delete process.env[k];
     await g.close();
+  }
+});
+
+test('Gmail (send as yourself): missing until Google’s connections work, off, on — no settings of its own, no Check, the test address said', async () => {
+  const keys = ['GOOGLE_OAUTH_CLIENT_ID', 'GOOGLE_OAUTH_CLIENT_SECRET', 'GOOGLE_TOKEN_KEY', 'STARBASE_PUBLIC_URL', 'GMAIL_API_BASE'];
+  try {
+    let row = byKey(await list()).gmail;
+    assert.deepEqual([row.state, row.missing, row.set, row.checkable, row.panel, row.launch], ['missing', [], [], false, 'gmail', false]);
+    assert.equal(row.detail, 'Set up the Google row first');
+    const all = (await list()).services.map((s) => s.key);
+    assert.equal(all.indexOf('gmail'), all.indexOf('google') + 1, 'right under the Google row');
+    Object.assign(process.env, {
+      GOOGLE_OAUTH_CLIENT_ID: `id-${tag}.apps.example`, GOOGLE_OAUTH_CLIENT_SECRET: `secret-${tag}`,
+      GOOGLE_TOKEN_KEY: `google-token-key-${tag}-0123456789abcdefghij`, STARBASE_PUBLIC_URL: 'https://base.example.org',
+    });
+    row = byKey(await list()).gmail;
+    assert.deepEqual([row.state, row.detail], ['default', 'Off']);
+    ok(await mgr.action('gmail.settings', { on: true, review: 'internal' }));
+    row = byKey(await list()).gmail;
+    assert.deepEqual([row.state, row.detail], ['ready', 'On · 0 connected']);
+    process.env.GMAIL_API_BASE = 'http://127.0.0.1:9';
+    assert.equal(byKey(await list()).gmail.detail, 'On · 0 connected · test address in use (GMAIL_API_BASE)');
+    assert.equal((await mgr.post('/api/connections/check', { key: 'gmail' })).status, 404, 'no Check of its own');
+    ok(await mgr.action('gmail.settings', { on: false }));
+  } finally {
+    for (const k of keys) delete process.env[k];
   }
 });

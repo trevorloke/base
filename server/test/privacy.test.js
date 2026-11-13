@@ -148,6 +148,9 @@ test('volunteer JSON carries no one else\'s email and no donor tags; their own r
     assert.ok('email' in p, `email key present (${p.name})`);
     assert.equal(p.email, p.id === self.id ? myEmail : null, `email for ${p.name}`);
     assert.ok(p.tags.every((t) => !/donor/i.test(t) && t.toLowerCase() !== 'lapsed'), `no money tags on ${p.name}`);
+    // Whether someone may be emailed one to one (ext/gmail) would say
+    // whether they have an address at all: no key, not even null.
+    assert.ok(!('email_why' in p), `no email_why on ${p.name}`);
   }
   assert.deepEqual(reads.neighbour.json.person.tags, ['media', 'youth'], 'other tags stay');
   assert.deepEqual(rows.find((p) => p.id === partner.id).tags, []);
@@ -164,6 +167,7 @@ test('volunteer JSON carries no one else\'s email and no donor tags; their own r
   // The desk still sees all of it.
   const deskN = (await desk.get(`/api/persons/${neighbour.id}`)).json.person;
   assert.equal(deskN.email, 'quiet.reader@example.org');
+  assert.ok('email_why' in deskN, 'the desk gets email_why');
   assert.deepEqual(deskN.tags, [...MONEY_TAGS, 'media', 'youth']);
   const deskWalk = (await desk.get(`/api/turfs/${turf.id}/walk`)).json.doors.flatMap((d) => d.persons);
   assert.equal(deskWalk.find((p) => p.id === neighbour.id).email, 'quiet.reader@example.org');
