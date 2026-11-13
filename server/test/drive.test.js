@@ -71,6 +71,8 @@ const finish = async (ws) => {
 const due = async (ws) => {
   await db.query(`update jobs set run_at = now() where workspace_id = $1 and status = 'pending'`, [ws]);
   _resetTokensForTest();
+  // On a busy machine a slow token answer starts GSI's 30 s server-wide pause: over now too.
+  _resetPausesForTest();
 };
 const exportRow = async (id) => (await db.query('select * from drive_exports where id = $1', [id])).rows[0];
 const jobKeys = async (ws) => (await db.query(`select key from jobs where workspace_id = $1 and kind = 'drive.export' order by created_at, key`, [ws])).rows.map((r) => r.key);
