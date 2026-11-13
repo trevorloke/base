@@ -842,6 +842,39 @@ hand. Fixing an address puts the person back in the queue. With no signal
 the box is a plain field and the pin is a tap. `GEOCODE_ON_SAVE=off` turns
 the lookup on save off.
 
+### Moved: a new address or Address unknown
+
+*Moved* at a door, on the walk list, on a profile or on a call stays one
+tap (it works with no signal). After it, the person can be given a **new
+address** or marked **Address unknown** (`person.move`, `server/ext/moves`):
+desk roles for anyone, a volunteer for someone whose pin is in a turf they
+walk (anyone, once granted People). Either way the move is kept with every
+part of the old address and pin, and the door's own fields (House notes,
+Building notes, Access type, Dwelling type) come off with the old door;
+Home phone stays.
+
+- **A new address** goes on the record like any typed address: the pin is
+  the pick's (a volunteer's only when it is a door already on file) or it
+  is placed just after the save, and the person shows on that door, turf and
+  walk list. The answer lists who is on file at the new address (a volunteer
+  sees them only when one of them is in their own turf) and who is still at
+  the old one, A–Z by last name.
+- **Address unknown** takes them off every door, the map and walk lists; the
+  old address stays on the move for the desk. Typing a real address later
+  (Edit details, the website, the intake API) clears it.
+- **Undo** (`person.unmove`, the desk) puts back the address, pin, status and
+  door fields, for the newest move while the address is still what it left.
+- **Needs an address**: People's `moved=open` is everyone the team tapped
+  Moved on with no address yet (an old list's imported "Moved" history is
+  not in it); `moved=unknown` is Address unknown. Today's brief carries the
+  count for desk roles holding People.
+- **Re-importing the voters list** never puts a moved person back at the old
+  door or makes a second copy of them: they are found by their old address,
+  their address is left as the team found it, and the import's answer counts
+  them (`moved_kept`, with up to 50 `moved_rows`). Someone whose name has
+  changed since the move is not found that way; the duplicate finder is
+  there for that. Merging duplicates keeps Address unknown.
+
 ## Sending email and text
 
 A newsletter or press release is written in Markdown: the message field

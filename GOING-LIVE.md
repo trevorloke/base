@@ -265,6 +265,15 @@ what volunteers get, and what you see under *Field app ↗* in your account menu
    Nothing should be flagged. If anyone says the map looks empty, ask for a
    screenshot of this sheet: the flagged line says which trouble it is.
 
+6. **Re-importing the voters list after people have moved**: base.win keeps
+   moved people where your team put them. Someone marked with a new address
+   or *Address unknown* is found by the old address the list still has, so
+   no second copy is made at the old door and their address isn't filled
+   back in. The import's answer says how many (*moved_kept*) and lists the
+   first 50: the name, the address in the list and the one on file (or
+   *address unknown*). If the list is right and the team was wrong, fix the
+   address on the profile.
+
 ### The street map: choose a provider before election week
 
 The map's street tiles go straight from a provider to each phone; base.win

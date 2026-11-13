@@ -1010,6 +1010,30 @@ comes back, or asks if words were typed meanwhile).
   merge, housemates), `server/test/ties-rank.test.js` (which ties come
   first) and `server/test/audience-scale.test.js` (`knows=` through indexes
   among 300,000 people).
+- **Moved: a new address or Address unknown** — `server/test/moves.test.js`
+  (`person.move` to a new address: the pin drops and the address is placed
+  after the save, a housemate's pin copied, a desk pick's pin kept, the old
+  city when none is typed, the same address refused however it is spaced or
+  capitalised; Address unknown: off the walk list and the map, the old
+  address kept on the move, the Map check not counting it; the door's four
+  fields voided and put back by Undo, Home phone kept; a replay of the
+  phone's id; who may — a volunteer in their turf, not outside it or with no
+  pin, not when denied People, anyone when granted it; a volunteer's made-up
+  pin dropped and the new door's people hidden, a pin at a door on file kept;
+  who lives there, A–Z by last name and in the mover's city only, and
+  `GET /api/moves/door`; the profile's read, with no where-from, where-to or
+  who for a volunteer; Undo, newest first and only while the address is
+  what the move left; a real new address clearing Address unknown, an
+  import not; People's `moved=open|unknown`, `movedCounts` and
+  `movedOpenIds` agreeing; Today's count for the desk only; the hash chain),
+  `server/test/data.test.js` (re-importing the same list after a move makes
+  no second person and keeps the new address or Address unknown, counted in
+  `moved_kept`; the sample's three movers), `server/test/duplicates.test.js`
+  (a merge into Address unknown keeps it), `server/test/cuts.test.js`
+  (`moved=` and a saved list) and `server/test/moves-scale.test.js`
+  (300,000 people, 2,000 Moved taps: the count and People's first page each
+  well under 300 ms, from `contacts_moved_idx`; `MOVES_PEOPLE` for a
+  smaller file).
 - **Finding a person, and A–Z** — `server/test/search.test.js` (each way in:
   *kevin smith*, *smith kevin*, *Smith, Kevin*, *kev smi*, *jose*/*josé*,
   *berg*, *gill*, *d'souza*, *anne*, *jean luc*, a phone with and without
