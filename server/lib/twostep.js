@@ -361,8 +361,9 @@ export async function checkCode(tx, userId, code, { allowRecovery = true, nowMs 
 // (its hash in two_step_pending; the ticket itself in a cookie) waits for
 // the code. A person signing in on a phone and a laptop at once has one
 // each; the few newest are kept, and wrong codes count against the person
-// whichever ticket they come on (codeFails).
-export async function startPending(db, userId, workspaceId) {
+// whichever ticket they come on (codeFails). via: how the first step was
+// passed — 'password', or 'google' (ext/google: Google stood in for it).
+export async function startPending(db, userId, workspaceId, { via = 'password' } = {}) {
   const token = randomBytes(32).toString('hex');
   await db.query('delete from two_step_pending where expires_at < now()');
   await db.query(
@@ -371,9 +372,9 @@ export async function startPending(db, userId, workspaceId) {
     [userId],
   );
   await db.query(
-    `insert into two_step_pending (token_hash, user_id, workspace_id, expires_at)
-     values ($1, $2, $3, now() + interval '${PENDING_MINUTES} minutes')`,
-    [sha256(token), userId, workspaceId],
+    `insert into two_step_pending (token_hash, user_id, workspace_id, expires_at, via)
+     values ($1, $2, $3, now() + interval '${PENDING_MINUTES} minutes', $4)`,
+    [sha256(token), userId, workspaceId, via === 'google' ? 'google' : 'password'],
   );
   return token;
 }
@@ -383,7 +384,7 @@ export async function startPending(db, userId, workspaceId) {
 export const takeTry = async (db, token) => (token ? (await db.query(
   `update two_step_pending set tries = tries + 1
    where token_hash = $1 and expires_at > now() and tries < $2
-   returning token_hash, user_id, workspace_id, tries`,
+   returning token_hash, user_id, workspace_id, tries, via`,
   [sha256(String(token)), PENDING_TRIES],
 )).rows[0] || null : null);
 export const endPending = (db, tokenHash) => db.query('delete from two_step_pending where token_hash = $1', [tokenHash]);
