@@ -9,7 +9,7 @@ import {
   viewBox, rowsBudget, DOT_ZOOM, LONE_PIN_ZOOM, PIN_ZOOM,
   dotsFrom, dotRadius, dotOnScreen, ringedAt, MARK, cellOf, cellsFrom, cellFill, drawnFor, inBox,
   tileHealth, TILE_WAIT_MS, checkLines, timeOfDay, placingPoll, retryLate, tileAt, streetMove, pickLook, tileHost, mapLooks,
-  defaultLook, noticeTiles, sameBytes, NOTICE_CARTO, NOTICE_OTHER, PICTURE,
+  defaultLook, noticeTiles, sameBytes, frontTiles, NOTICE_CARTO, NOTICE_OTHER, PICTURE,
 } from '../../web/src/pages/mapView.js';
 import { bandOf } from '@starbase/shared/scale';
 
@@ -673,4 +673,28 @@ test('the map’s check names a notice, flags its service line, and carries the 
   // An operator's keyless CARTO address: said where the service is named.
   const keyless = checkLines({ ...CHECK, tiles: { ...CHECK.tiles, ignored: ['carto-key'] } }, PAGE, { services: { state: 'ok', data: FREE } });
   assert.match(said(keyless).tilesvc.note, /CARTO needs a key now \(STARBASE_TILE_CARTO_KEY\)/);
+});
+
+test('the front page’s map: the Map’s own look, shade and all — never Google’s tiles, the free map instead', () => {
+  const osm = { url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', attribution: 'OSM', maxZoom: 19 };
+  const clean = { key: 'clean', label: 'Clean', url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=k', attribution: 'CARTO', maxZoom: 20 };
+  const google = { url: '/api/tiles/{z}/{x}/{y}?t=roadmap', attribution: 'Google', maxZoom: 21 };
+  const sat = { key: 'satellite', label: 'Satellite', url: '/api/tiles/{z}/{x}/{y}?t=satellite', attribution: 'Google', maxZoom: 21 };
+  const free = { key: 'free', label: 'Free map', url: osm.url, attribution: 'OSM', maxZoom: 19, fallback: true };
+  // No Clean offered: Standard on OpenStreetMap; a saved Clean draws it too.
+  assert.deepEqual(frontTiles({ views: [], baseTiles: osm }), { ...osm, shade: null });
+  assert.deepEqual(frontTiles({ views: [], baseTiles: osm, savedPick: 'clean' }), { ...osm, shade: null });
+  assert.equal(frontTiles({ views: [], baseTiles: osm, savedPick: 'muted' }).shade, 'muted');
+  // Clean with the key: opens on it.
+  assert.equal(frontTiles({ views: [clean], baseTiles: osm }).url, clean.url);
+  assert.equal(frontTiles({ views: [clean], baseTiles: osm, savedPick: 'standard' }).url, osm.url);
+  // Google as the map: the free map, its own credit, whatever the pick.
+  for (const savedPick of [null, 'standard', 'satellite', 'dark']) {
+    const t = frontTiles({ views: [sat, free], baseTiles: google, savedPick });
+    assert.deepEqual([t.url, t.attribution], [osm.url, 'OSM'], String(savedPick));
+  }
+  assert.equal(frontTiles({ views: [sat, free], baseTiles: google, savedPick: 'dark' }).shade, 'dark');
+  // Nothing to draw yet.
+  assert.equal(frontTiles({ views: [], baseTiles: null }), null);
+  assert.equal(frontTiles({ views: [], baseTiles: google }), null);
 });

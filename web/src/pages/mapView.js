@@ -64,6 +64,15 @@ export const drawnFor = ({ doors, view, density }) => {
 const BAND_NAME = ['unrated', 'undecided', 'support', 'opposed'];
 export const dotsFrom = (rows) => (rows || []).map(([lat, lng, band, n]) => ({ lat, lng, band: BAND_NAME[band] || 'unrated', n }));
 
+// ── Turfs ──
+// New turfs cycle through hues that never read as a rating band (no green,
+// yellow or red), so a turf outline can't be mistaken for support/opposed.
+// A turf's own colour where it has a valid one, else one of these by its id.
+export const TURF_COLORS = ['#2b6cb0', '#7b3fa0', '#b5651d', '#1f7a6d', '#a0306a', '#4c5a8a'];
+const hashIndex = (s, n) => { let h = 0; for (const ch of String(s)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h % n; };
+const isColor = (c) => typeof c === 'string' && c.length <= 20 && typeof CSS !== 'undefined' && CSS.supports?.('color', c);
+export const turfColor = (t) => (isColor(t?.color) ? t.color : TURF_COLORS[hashIndex(t?.id || t?.name || '', TURF_COLORS.length)]);
+
 // ── Marks ──
 // Colours are [r, g, b] or [r, g, b, alpha]; fixed values, not theme tokens:
 // the base map is what it is in either scheme. Rating colours never change
@@ -319,6 +328,24 @@ const pickProvider = ({ views = [], viewPick, drawnAuto = null, baseUrl = null, 
   if (!here || !baseUrl) return { providerView, otherLook: null };
   if (providerView) return { providerView, otherLook: tileHost(baseUrl) && tileHost(baseUrl) !== here ? muted : null };
   return { providerView, otherLook: views.find((v) => !v.fallback && tileHost(v.url) && tileHost(v.url) !== here) || null };
+};
+
+// The front page's map (components/MapWindow.jsx): the look the Map would
+// open on (the saved pick, else defaultLook), shade and all — but never
+// Google's billed tiles: the front page is opened far more often than the
+// Map, so over Google it draws the free map behind it (always offered with
+// Google on: CARTO with the campaign's key, else OpenStreetMap), with that
+// map's own credit.
+//   views, baseTiles  /api/map/config's; savedPick the saved pick or null
+// → { url, attribution, maxZoom, shade: 'muted' | 'dark' | null }, or null
+//   while there are no tiles to draw yet
+export const frontTiles = ({ views = [], baseTiles = null, savedPick = null }) => {
+  const pick = savedPick ?? defaultLook(views);
+  const { providerView } = pickProvider({ views, viewPick: pick, baseUrl: baseTiles?.url });
+  let t = providerView || baseTiles;
+  if (t && isGoogleUrl(t.url)) t = views.find((v) => v.fallback) || null;
+  if (!t?.url) return null;
+  return { url: t.url, attribution: t.attribution, maxZoom: t.maxZoom, shade: pick === 'muted' || pick === 'dark' ? pick : null };
 };
 
 // "3:40 pm", on the reader's own clock: when a paused placing run tries

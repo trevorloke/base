@@ -44,8 +44,9 @@ import { More, useScale } from '../components/RatingButtons.jsx';
 import GeocodeButton from '../components/GeocodeButton.jsx';
 import { DEFAULT_TILES, safeAttribution } from '../components/tiles.js';
 import { DotLayer, DensityLayer, cellAt, nearest } from './mapDots.js';
-import { DOT_ZOOM, LONE_PIN_ZOOM, PIN_ZOOM, MARK, TILE_WAIT_MS, css, cellOf, cellsFrom, defaultLook, dotsFrom, drawnFor, inBox, mapLooks, pickLook, placingPoll, rowsBudget, streetMove, tileAt, tileHealth, tileHost, viewBox } from './mapView.js';
+import { DOT_ZOOM, LONE_PIN_ZOOM, PIN_ZOOM, MARK, TILE_WAIT_MS, css, cellOf, cellsFrom, defaultLook, dotsFrom, drawnFor, inBox, mapLooks, pickLook, placingPoll, rowsBudget, streetMove, tileAt, tileHealth, tileHost, TURF_COLORS, turfColor, viewBox } from './mapView.js';
 import { askNotice, forgetNotice, knownNotice } from './tileProbe.js';
+import { TURFS_OUTLINE, TURFS_WHOLE, VIEW_PREF, readViewPref, tellServiceWorker } from './mapQueries.js';
 import { useSharePref } from '../components/ShareLocation.js';
 import { cachedWalkLists, useOnline } from './Turfs.jsx';
 import './map.css';
@@ -102,13 +103,8 @@ const writeSignsPref = (v) => { try { localStorage.setItem(SIGNS_PREF, JSON.stri
 // standard tiles; Muted (grey, so the pins stand out) and Dark (for night),
 // drawn over any tiles; and, with Google Maps on, its other looks
 // (Satellite, Terrain) from /api/map/config views.
-const VIEW_PREF = `${NS}map:view`;
 const SHADES = [{ key: 'standard', label: 'Standard' }, { key: 'muted', label: 'Muted' }, { key: 'dark', label: 'Dark' }];
-// The saved pick, or null: nothing picked. With none the map opens on Clean
-// where the server offers it (a light, quiet base map — only with the
-// campaign's CARTO key), else Standard (mapView.js defaultLook). Muted, Dark
-// and the rest are a tap away (Show → Map), and only a tap is ever saved.
-const readViewPref = () => { try { return localStorage.getItem(VIEW_PREF) || null; } catch { return null; } };
+// The saved pick, or null (mapQueries.js readViewPref); only a tap is saved.
 const writeViewPref = (v) => { try { localStorage.setItem(VIEW_PREF, v); } catch { /* storage blocked */ } };
 // When the street map isn't loading, the map may go to its other provider by
 // itself — once in a page's life ({ from: the look that was picked, to: the
@@ -163,21 +159,12 @@ const CREATE_ROLES = ['manager', 'treasurer', 'staff'];
 const isTyping = (el) =>
   el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
 
-// ── Turfs ──
-// New turfs cycle through hues that never read as a rating band (no green,
-// yellow or red), so a turf outline can't be mistaken for support/opposed.
-const TURF_COLORS = ['#2b6cb0', '#7b3fa0', '#b5651d', '#1f7a6d', '#a0306a', '#4c5a8a'];
+// ── Turfs ── (their colours: mapView.js TURF_COLORS, turfColor)
 const MAX_TURF_POINTS = 500; // turf.create: polygon max(500)
 const TURFS_PREF = `${NS}map:turfs`;
 const EMPTY_LIST = [];
 const EMPTY_DRAFT = { points: [], naming: false };
-// The map's turfs. A volunteer's own (a few) come whole, counts and all, and
-// stay on the phone: with no signal they still open on "My turf". Anyone
-// else's map asks for names and outlines only (GET /turfs?outline=1) — a
-// city cut into 158 turfs took seconds to count, and no outline showed
-// until it had; a turf's counts are asked for when its sheet opens.
-const TURFS_WHOLE = { key: ['turfs'], path: '/turfs', copy: 'turfs' };
-const TURFS_OUTLINE = { key: ['turfs', 'outline'], path: '/turfs?outline=1', copy: 'turfOutlines' };
+// The map's turfs: TURFS_WHOLE for a volunteer, TURFS_OUTLINE otherwise (mapQueries.js).
 const turfCountsKey = (id) => ['turfs', 'counts', id];
 // While it runs, what it has placed so far is drawn this often.
 const PLACING_REFRESH_MS = 15_000;
@@ -188,9 +175,6 @@ const HINT_PREF = `${NS}map:hint-seen`;
 const readHintSeen = () => { try { return localStorage.getItem(HINT_PREF) === '1'; } catch { return false; } };
 const writeHintSeen = () => { try { localStorage.setItem(HINT_PREF, '1'); } catch { /* storage blocked */ } };
 
-const hashIndex = (s, n) => { let h = 0; for (const ch of String(s)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h % n; };
-const isColor = (c) => typeof c === 'string' && c.length <= 20 && typeof CSS !== 'undefined' && CSS.supports?.('color', c);
-const turfColor = (t) => (isColor(t?.color) ? t.color : TURF_COLORS[hashIndex(t?.id || t?.name || '', TURF_COLORS.length)]);
 const validRing = (ring) => Array.isArray(ring) && ring.length >= 3
   && ring.every((p) => Array.isArray(p) && Number.isFinite(Number(p[0])) && Number.isFinite(Number(p[1])));
 
@@ -327,15 +311,8 @@ const KEY_ROOM = 60;
 // the filter's dot): the same as the canvas dots'.
 const MARK_VARS = { '--door-unrated': css(MARK.unratedPin), '--door-undecided-edge': css(MARK.undecidedEdge.light) };
 
-// The service worker keeps tiles from this provider once they've been seen
-// (never fetched ahead — tile servers' rules).
-function tellServiceWorker(url) {
-  const sw = typeof navigator !== 'undefined' ? navigator.serviceWorker : null;
-  if (!sw) return;
-  const msg = { type: 'starbase:tiles', url };
-  sw.controller?.postMessage(msg);
-  sw.ready?.then((reg) => reg.active?.postMessage(msg)).catch(() => {});
-}
+// (The service worker keeps tiles from the map's provider once they've been
+// seen, never fetched ahead — tile servers' rules: mapQueries.js tellServiceWorker.)
 const SIGN_STATUS = { installed: 'Installed', requested: 'Requested', removed: 'Removed' };
 const HOUSE_SVG = '<svg viewBox="0 0 12 10" aria-hidden="true"><path d="M6 0 0 5h1.6v5h3.2V7h2.4v3h3.2V5H12z"/></svg>';
 const PEOPLE_SVG = '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="4.6" r="3.1"/><path d="M1.8 15.5c0-3.6 2.8-6.2 6.2-6.2s6.2 2.6 6.2 6.2z"/></svg>';
