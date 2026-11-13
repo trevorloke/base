@@ -114,3 +114,28 @@ test('a volunteer’s brief counts nothing over the whole list', async () => {
   assert.ok(m.people.total >= 4);
   assert.equal(typeof m.voted.total, 'number');
 });
+
+// On a voting day every volunteer's Today shows the GOTV card's numbers, and
+// every volunteer opens Today. The office's numbers are counted once and kept
+// for half a minute; a mark counts again at once.
+test('on a voting day volunteers share one count of the voted numbers', async () => {
+  ok(await mgr.action('vote.settings', { on: true }));
+  try {
+    const first = ok(await vol.get('/api/brief'));
+    assert.equal(first.voted.on, true);
+    assert.equal(typeof first.voted.total, 'number');
+    const { answer, asked } = await watched(async () => ok(await vol.get('/api/brief')));
+    assert.deepEqual(asked.filter((q) => /\bfrom persons\b/i.test(q) && /count\s*\(/i.test(q)), [], 'the kept count, not a new one');
+    assert.equal(answer.voted.total, first.voted.total);
+    const north = ok(await mgr.get('/api/persons?q=North')).persons.find((p) => p.name === 'North Example');
+    ok(await vol.action('vote.mark', { person_id: north.id }));
+    const after = ok(await vol.get('/api/brief'));
+    assert.equal(after.voted.total, first.voted.total + 1, 'a mark shows at once');
+    assert.equal(after.voted.today, first.voted.today + 1);
+    // The desk counts afresh.
+    const { asked: deskAsked } = await watched(async () => ok(await mgr.get('/api/brief')));
+    assert.ok(deskAsked.some((q) => /\bfrom persons\b/i.test(q) && /voted_at/i.test(q) && /count\s*\(/i.test(q)));
+  } finally {
+    ok(await mgr.action('vote.settings', { on: false }));
+  }
+});
