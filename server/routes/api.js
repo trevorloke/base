@@ -890,7 +890,7 @@ app.get('/shifts/board', async (c) => {
          join users u on u.id = m.user_id
          join persons p on p.workspace_id = $1 and p.deleted_at is null and p.email is not null and lower(p.email) = lower(u.email)
          where m.workspace_id = $1 and m.role = 'volunteer')
-     select p.id, p.name, p.last_name,
+     select p.id, p.name,
             coalesce((select json_agg(distinct v.role) from volunteer_roles v
                       where v.person_id = p.id and v.workspace_id = p.workspace_id), '[]'::json) as roles,
             exists (select 1 from door_requests r

@@ -323,7 +323,8 @@ test('the link’s shifts are read through the email index and the person index,
   const plan = (await db.query(`explain ${MY_SHIFTS_SQL}`, [ws, `cal-vik+${tag}@example.org`, ['assigned', 'confirmed', 'completed']]))
     .rows.map((r) => r['QUERY PLAN']).join('\n');
   console.log(plan.split('\n').map((l) => `# ${l}`).join('\n'));
-  assert.match(plan, /persons_ws_email_idx/);
+  // (or the person search's prefix index on the same lower(email), when the planner prefers it)
+  assert.match(plan, /persons_ws_email_(prefix_)?idx/);
   assert.match(plan, /sassign_ws_person_idx/);
   assert.ok(!/Seq Scan on shifts/.test(plan));
   // Each matched person drives their own bookings (a Postgres 16 at 300,000
