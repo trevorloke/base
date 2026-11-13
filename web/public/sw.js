@@ -26,6 +26,11 @@
  *               servers' usage rules).
  *               A tile that can't be fetched and was never kept is a failed
  *               tile, as it is without this worker (the map counts them).
+ *               Never the server's own tiles (/tiles/…, Google Maps through
+ *               the server): Google's terms allow no offline use of its
+ *               tiles, so they go straight to the network (the browser's
+ *               own cache follows Google's max-age), and any kept before
+ *               are thrown away on activate.
  *   Never       /api/* (live data and every write — the outbox in
  *               src/offline.js handles knocks), public form pages
  *               (/p /n /v /u /e /d), feature pages served to people
@@ -136,6 +141,14 @@ self.addEventListener('activate', (event) => {
     await Promise.all(names
       .filter((n) => MINE.test(n) && !KEEP.includes(n))
       .map((n) => caches.delete(n)));
+    // Google's tiles kept by an older worker: gone (no offline use).
+    if (names.includes(TILES)) {
+      const cache = await caches.open(TILES);
+      const kept = await cache.keys();
+      await Promise.all(kept
+        .filter((r) => { const u = new URL(r.url); return u.origin === self.location.origin && inside(u.pathname).startsWith('/tiles/'); })
+        .map((r) => cache.delete(r)));
+    }
     await self.clients.claim();
   })());
 });
@@ -156,10 +169,10 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(tile(event, url));
     return;
   }
-  // Starbase's own tiles (Google Maps through the server): the same cache,
-  // fetched with the sign-in cookie.
+  // Starbase's own tiles (Google Maps through the server): straight to the
+  // network, never kept, never served from here (Google's terms).
   if (url.origin === self.location.origin && inside(url.pathname).startsWith('/tiles/')) {
-    event.respondWith(tile(event, url, true));
+    event.respondWith(fetch(req));
     return;
   }
   // Another provider's tiles: images from elsewhere are checked against the

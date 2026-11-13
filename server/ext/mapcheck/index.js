@@ -25,7 +25,10 @@
 //   tiles   { provider, viaServer, probe, last, lastOkAt } — probe only for
 //           Google (through this server); a provider the phones reach
 //           straight is judged by the page's own tile count
-//   lookup  { provider, fallback, probe }
+//   lookup  { provider, fallback, probe } — the map's pins
+//   suggest { provider, probe, paused } — address suggestions: Google Places
+//           (probed whenever ADDRESS_SUGGEST=google and a key is set) or the
+//           pins' own service
 // Never a key or a tile address.
 //
 // What only the browser knows (whether tiles loaded, the page's own build,
@@ -37,6 +40,8 @@ import { status as placingStatus } from '../geocoding/index.js';
 import { tileConfig, tileSource, TILE_DEFAULTS } from '../offline/index.js';
 import { googleTilesOn, probeTiles, tilesHealth } from '../../lib/gtiles.js';
 import { probeLookup } from '../../lib/geocode.js';
+import { googleKey } from '../../lib/gtiles.js';
+import { addressSuggester, probePlaces, placesHealth } from '../../lib/places.js';
 
 export const api = new Hono();
 
@@ -76,12 +81,15 @@ api.get('/map/check', async (c) => {
   });
 });
 
-const LOOKUP_NAMES = { bc: 'BC Address Geocoder', google: 'Google Geocoding', nominatim: 'Nominatim', off: 'off' };
+// GEOCODER=google is retired (Google no longer places pins): B.C. places them.
+const LOOKUP_NAMES = { bc: 'BC Address Geocoder', nominatim: 'Nominatim', off: 'off' };
 const lookupName = (v) => LOOKUP_NAMES[String(v || '').trim().toLowerCase()] || null;
 api.get('/map/check/services', async (c) => {
   if (c.get('ctx').role !== 'manager') return c.json({ error: 'the map check is for managers' }, 403);
   const google = googleTilesOn();
-  const [tilesProbe, lookupProbe] = await Promise.all([google ? probeTiles() : null, probeLookup()]);
+  const places = addressSuggester() === 'google' && Boolean(googleKey());
+  const [tilesProbe, lookupProbe, placesProbe] = await Promise.all([google ? probeTiles() : null, probeLookup(), places ? probePlaces() : null]);
+  const paused = placesHealth().paused;
   const { last, lastOkAt } = tilesHealth();
   const recent = (t) => (t ? { at: new Date(t.at).toISOString(), code: t.code, plain: t.plain, said: t.said, fix: t.step || null, status: t.status } : null);
   return c.json({
@@ -97,5 +105,8 @@ api.get('/map/check/services', async (c) => {
       fallback: lookupName(process.env.GEOCODER_FALLBACK),
       probe: lookupProbe,
     },
+    suggest: places
+      ? { provider: 'Google Places', probe: placesProbe, paused: paused ? { until: paused.until, code: paused.code, plain: paused.plain, said: paused.said, fix: paused.step || null } : null }
+      : { provider: lookupName(addressSuggester() === 'off' ? 'off' : addressSuggester()) || 'BC Address Geocoder', probe: lookupProbe, paused: null },
   });
 });

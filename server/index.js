@@ -19,6 +19,7 @@ import { doorKeySet } from './lib/guard.js';
 import { brandPages } from './lib/brand.js';
 import { siteGate } from './ext/site/public.js';
 import { currentBuild } from './lib/build.js';
+import { start as startUsage, flush as flushUsage } from './lib/gusage.js';
 
 export const app = new Hono();
 
@@ -107,12 +108,15 @@ if (isMain) {
     );
     startJobs();
   }
+  // Today's Google counts (lib/gusage.js), read back from the database.
+  getDb().then(() => startUsage(), () => {});
   // Deploys send SIGTERM: stop accepting requests, then close the database so
   // the embedded store flushes cleanly.
   const shutdown = async (sig) => {
     console.log(`${sig}: shutting down`);
     server.close();
     stopJobRunner();
+    await flushUsage().catch(() => {});
     try { await (await getDb()).close(); } catch { /* already closed */ }
     process.exit(0);
   };

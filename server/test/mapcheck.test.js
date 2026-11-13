@@ -84,7 +84,11 @@ test('the services check: managers only; which street map and address service, w
     if (u.hostname === 'geocoder.api.gov.bc.ca') {
       return new Response(JSON.stringify({ features: [{ geometry: { coordinates: [-122.84, 49.1] }, properties: { fullAddress: '100 Example St, Surrey, BC', score: 95, matchPrecision: 'CIVIC_NUMBER' } }] }), { status: 200 });
     }
-    return realFetch(url, init);
+    if (u.hostname === 'places.googleapis.com') {
+      return new Response(JSON.stringify({ suggestions: [{ placePrediction: { placeId: 'p1', types: ['street_address'], structuredFormat: { mainText: { text: '100 Example St' }, secondaryText: { text: 'Surrey, BC' } } } }] }), { status: 200 });
+    }
+    // No test reaches the network: an address not stood in for is an error.
+    throw new Error(`no stand-in for ${u.hostname}`);
   };
   try {
     process.env.GOOGLE_MAPS_TILES = '1';
@@ -99,7 +103,21 @@ test('the services check: managers only; which street map and address service, w
     assert.match(bad.tiles.probe.plain, /^Billing isn’t turned on/);
     assert.match(bad.tiles.probe.said, /requires billing/);
     assert.deepEqual([bad.lookup.provider, bad.lookup.fallback, bad.lookup.probe.ok], ['BC Address Geocoder', null, true]);
+    // Address suggestions: the B.C. service by default, even with a key.
+    assert.deepEqual([bad.suggest.provider, bad.suggest.probe.ok, bad.suggest.paused], ['BC Address Geocoder', true, null]);
     assert.ok(!JSON.stringify(bad).includes('check-key'), 'never the key');
+    // Turned on: Google Places, probed.
+    process.env.ADDRESS_SUGGEST = 'google';
+    const sug = ok(await mgr.get('/api/map/check/services'));
+    delete process.env.ADDRESS_SUGGEST;
+    assert.deepEqual([sug.suggest.provider, sug.suggest.probe.ok, sug.suggest.probe.example, sug.suggest.paused], ['Google Places', true, '100 Example St', null]);
+    // GEOCODER=google is retired: B.C. places the pins, and no Google name is given.
+    process.env.GEOCODER = 'google';
+    _resetLookupForTest();
+    const retired = ok(await mgr.get('/api/map/check/services'));
+    assert.equal(retired.lookup.provider, 'BC Address Geocoder');
+    delete process.env.GEOCODER;
+    _resetLookupForTest();
     // The quick check is unchanged: no live call in it.
     const quick = ok(await mgr.get('/api/map/check'));
     assert.deepEqual(Object.keys(quick).sort(), ['area', 'build', 'commit', 'people', 'placing', 'tiles', 'turfs']);
@@ -123,7 +141,7 @@ test('the services check: managers only; which street map and address service, w
     assert.match(after.tiles.last.plain, /^Billing isn’t turned on/);
     assert.ok(Date.parse(after.tiles.last.at) <= Date.parse(after.tiles.lastOkAt));
     // A provider the phones reach straight: named, not probed.
-    delete process.env.GOOGLE_MAPS_TILES;
+    process.env.GOOGLE_MAPS_TILES = 'off';
     const direct = ok(await mgr.get('/api/map/check/services'));
     assert.deepEqual([direct.tiles.provider, direct.tiles.viaServer, direct.tiles.probe], ['OpenStreetMap', false, null]);
   } finally {
@@ -139,7 +157,7 @@ test('the services check answers within 8 s when Google doesn’t answer at all'
   const realFetch = globalThis.fetch;
   const prev = { t: process.env.GOOGLE_MAPS_TILES, k: process.env.GOOGLE_MAPS_SERVER_KEY, g: process.env.GEOCODER };
   // Never answers, until the caller gives up.
-  globalThis.fetch = (url, init) => (new URL(String(url)).hostname !== 'tile.googleapis.com' ? realFetch(url, init) : new Promise((resolve, reject) => {
+  globalThis.fetch = (url, init) => (new URL(String(url)).hostname !== 'tile.googleapis.com' ? Promise.reject(new Error('no stand-in')) : new Promise((resolve, reject) => {
     init?.signal?.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'TimeoutError' })));
   }));
   const awake = setInterval(() => {}, 1000); // (the probe's own timer doesn't keep a test alive)

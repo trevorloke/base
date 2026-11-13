@@ -261,8 +261,32 @@ export const tileHost = (url) => {
 // Map): it is drawn only when the map went there by itself, and it is the
 // first look turned to — Google's own looks share its server, so they are
 // no way round it failing.
-// → { providerView, otherLook }
-export const pickLook = ({ views = [], viewPick, drawnAuto = null, baseUrl = null, muted = null }) => {
+// → { providerView, otherLook, shadeAllowed, look }
+//   shadeAllowed  false while a Google look is drawn: no Muted or Dark filter
+//                 over Google's tiles (its imagery may not be altered)
+//   look          the pick to draw: a saved Clean, Muted or Dark is the
+//                 standard look while shades aren't allowed
+export const isGoogleUrl = (url) => !tileHost(url) && /\/tiles\/\{z\}/.test(url || '');
+const SHADE_PICKS = ['clean', 'muted', 'dark'];
+export const pickLook = (args) => {
+  const r = pickProvider(args);
+  const shadeAllowed = !isGoogleUrl(r.providerView ? r.providerView.url : args.baseUrl);
+  const look = !shadeAllowed && SHADE_PICKS.includes(args.viewPick) ? 'standard' : args.viewPick;
+  return { ...r, shadeAllowed, look };
+};
+
+// Show → Map's list. While a Google look is drawn: the standard look,
+// called by its own word (standardLabel: "Streets" for the roadmap), then
+// Google's other types — never Muted or Dark. Otherwise the shades and the
+// provider's looks, as before. A fallback is never offered.
+export const mapLooks = ({ shades = [], views = [], standardLabel = null, shadeAllowed = true }) => {
+  const others = views.filter((v) => !v.fallback);
+  if (shadeAllowed) return [...shades, ...others];
+  const standard = shades.find((x) => x.key === 'standard') || { key: 'standard', label: 'Standard' };
+  return [{ ...standard, label: standardLabel || standard.label }, ...others];
+};
+
+const pickProvider = ({ views = [], viewPick, drawnAuto = null, baseUrl = null, muted = null }) => {
   const look = drawnAuto || viewPick;
   const providerView = views.find((v) => v.key === look && (!v.fallback || v.key === drawnAuto)) || null;
   const fallback = views.find((v) => v.fallback) || null;

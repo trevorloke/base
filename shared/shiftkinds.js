@@ -20,6 +20,7 @@
 // The codes are fixed (reports and ladders can count on them); a shift made
 // before kinds has none and shows as its role implies (kindOf).
 import { addDays } from './dayparts.js';
+import { searchUrl } from './maps.js';
 
 const slot = (start, end) => ({ start, end });
 
@@ -63,7 +64,8 @@ export const pinPoint = (name) => {
 };
 // A shift's place in a message: its words, or for a pin nobody has named a
 // map to tap (the one the app's own map links open).
-export const mapUrl = ({ lat, lng }) => `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+// (A search link is right in a text; Directions, shared/maps.js, on a screen.)
+export const mapUrl = searchUrl;
 export const whereWords = (name) => {
   const pin = pinPoint(name);
   return pin ? `see the map — ${mapUrl(pin)}` : String(name ?? '').trim();

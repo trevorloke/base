@@ -21,17 +21,22 @@
 //   STARBASE_TILE_KEY          the provider's key, if it isn't set to know the
 //                              campaign's own web address (phones can see it)
 // Read on every request, so a restart is all a change needs.
-// Google Maps instead (lib/gtiles.js): GOOGLE_MAPS_TILES=1 with a
-// GOOGLE_MAPS_SERVER_KEY that has the Map Tiles API enabled. The map then
-// draws /tiles/{z}/{x}/{y}.png from Starbase (signed in), which fetches each
-// tile from Google; STARBASE_TILE_* is ignored while it's on.
+// Google Maps instead (lib/gtiles.js): whenever GOOGLE_MAPS_SERVER_KEY is
+// set (a key with the Map Tiles API enabled), unless GOOGLE_MAPS_TILES=off.
+// The map then draws /tiles/{z}/{x}/{y}.png from Starbase (signed in), which
+// fetches each tile from Google; STARBASE_TILE_* is ignored while it's on.
+//   GOOGLE_TILES_DAILY_MAX   tiles a day (the campaign's day); past it the
+//                            tiles answer 503 until midnight and phones turn
+//                            to the free map by themselves. Default: none.
 import { Hono } from 'hono';
 import { getCookie } from 'hono/cookie';
 import { getDb } from '../../db/client.js';
 import { loadContext, SESSION_COOKIE } from '../../lib/auth.js';
-import { googleTilesOn, googleTilesSetting, fetchTile, creditFor, attribution as googleCredit, TILE_PATH as GOOGLE_PATH, MAX_ZOOM as GOOGLE_MAX, MAP_TYPES, mapType } from '../../lib/gtiles.js';
+import { googleTilesOn, googleTilesSetting, googleKey, fetchTile, creditFor, attribution as googleCredit, TILE_PATH as GOOGLE_PATH, MAX_ZOOM as GOOGLE_MAX, MAP_TYPES, mapType } from '../../lib/gtiles.js';
 import { here } from '../../lib/mount.js';
 import { scrub } from '../../lib/googleerr.js';
+import { tilesLeft, secondsToMidnight } from '../../lib/gusage.js';
+import { placesFor } from '../../lib/places.js';
 
 export const sql = `
 alter table signs add column if not exists client_id uuid;
@@ -75,8 +80,9 @@ export const tileConfig = (env = process.env) => {
   if (googleTilesOn(env)) {
     return { url: GOOGLE_PATH, attribution: googleCredit(), maxZoom: GOOGLE_MAX, ignored: [] };
   }
-  // A deliberate 0/off is quietly off; on without a key, or a value that
-  // isn't a yes or a no, is said on the map's sheet.
+  // A deliberate 0/off is quietly off, and so is no setting with no key
+  // (nothing set up, nothing wrong); on without a key, or a value that isn't
+  // a yes or a no, is said on the map's sheet.
   const google = googleTilesSetting(env);
   if (google === 'on') {
     out.ignored.push('google');
@@ -153,8 +159,15 @@ api.get('/map/config', (c) => {
   // Other looks a person can pick on the map (Show → Map). With Google on:
   // its other map types, through the same key. (Muted and Dark are the
   // phone's own, over any tiles.)
+  // Who Google is to the people using it (its terms ask that they're told):
+  // the map, and the address box when Google's suggestions are on.
+  const places = Boolean(googleKey()) && ['off', 'no-key', 'no-logo'].every((r) => placesFor(null) !== r);
+  out.google = { tiles: t.url === GOOGLE_PATH, places };
   if (t.url === GOOGLE_PATH) {
     const words = { roadmap: 'Streets', satellite: 'Satellite', terrain: 'Terrain' };
+    // The standard look's word (Show → Map: no Muted or Dark over Google's
+    // tiles — its imagery may not be altered).
+    out.standardLabel = words[mapType()];
     out.views = MAP_TYPES.filter((k) => k !== mapType()).map((k) => ({
       key: k, label: words[k], url: own(`${GOOGLE_PATH}?t=${k}`), attribution: t.attribution, maxZoom: t.maxZoom,
     }));
@@ -190,9 +203,18 @@ api.get('/map/credit', async (c) => {
   }
 });
 
-// The Google tiles, for anyone signed in (the map sends the session cookie;
-// the service worker fetches them with credentials too). A day's cache life:
-// the browser and the worker keep what they've drawn.
+// The Google tiles, for anyone signed in (the map sends the session cookie).
+// Google's own cache rules, made private: never a longer life than Google
+// gave, and none at all when it gave none. The service worker doesn't keep
+// them (Google's terms: no offline use). A Google answer slower than its
+// limit is 504, not a refusal (no pause); anything else thrown is 502.
+export const privateCache = (google) => {
+  const v = String(google || '').trim();
+  if (!v) return 'private, no-cache';
+  // Google's words, with `public` turned private (one signed-in person's copy).
+  const parts = v.split(',').map((p) => p.trim()).filter((p) => p && !/^public$/i.test(p));
+  return parts.some((p) => /^private$/i.test(p)) ? parts.join(', ') : ['private', ...parts].join(', ');
+};
 export const publicRoutes = new Hono();
 publicRoutes.get('/tiles/:z/:x/:y', async (c) => {
   if (!googleTilesOn()) return c.text('Not found', 404);
@@ -204,10 +226,13 @@ publicRoutes.get('/tiles/:z/:x/:y', async (c) => {
   if (![z, x, y].every(Number.isInteger) || z < 0 || z > GOOGLE_MAX || x < 0 || y < 0 || x >= n || y >= n) {
     return c.text('No such tile', 400);
   }
+  // Today's ceiling reached: the free map until the campaign's midnight.
+  if (!tilesLeft()) return c.text('Map tiles unavailable', 503, { 'Retry-After': String(secondsToMidnight()) });
   let t;
   try {
     t = await fetchTile(z, x, y, c.req.query('t') || undefined);
   } catch (e) {
+    if (e?.name === 'TimeoutError' || e?.name === 'AbortError') return c.text('Map tiles unavailable', 504);
     console.warn(`map tiles: ${scrub(e.message)}`);
     return c.text('Map tiles unavailable', 502);
   }
@@ -215,7 +240,7 @@ publicRoutes.get('/tiles/:z/:x/:y', async (c) => {
   if (t.retryAfter) return c.text('Map tiles unavailable', 503, { 'Retry-After': String(t.retryAfter) });
   if (!t.body) return c.text('Map tiles unavailable', t.status === 404 ? 404 : 502);
   c.header('Content-Type', t.type);
-  c.header('Cache-Control', 'private, max-age=86400');
+  c.header('Cache-Control', privateCache(t.cacheControl));
   c.header('X-Content-Type-Options', 'nosniff');
   return c.body(t.body);
 });
