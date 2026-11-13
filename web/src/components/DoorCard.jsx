@@ -301,8 +301,10 @@ export function AddDoorForm({ latlng, onPlace, onDone, onCancel, toast, allowGoo
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
-  // A tap on the map answers "tap the map".
+  // A tap on the map answers "tap the map" (and a pin already there means
+  // it's never asked).
   useEffect(() => { if (latlng) setError((e) => (e === TAP_MAP ? null : e)); }, [latlng]);
+  const shownError = error === TAP_MAP && latlng ? null : error;
   const typeAddress = (v) => {
     setForm((f) => ({ ...f, address: v, city: '', postal: '' }));
     // The pin came from the address they're now changing: it goes with it.
@@ -393,7 +395,7 @@ export function AddDoorForm({ latlng, onPlace, onDone, onCancel, toast, allowGoo
           </div>
         </div>
         <PersonFields idPrefix="nd" form={form} set={set} focusName={false} />
-        {error && <p className="error">{error}</p>}
+        {shownError && <p className="error">{shownError}</p>}
         <div className="door-form__actions">
           <button type="submit" className="btn btn-primary door-act" disabled={busy}>Add door</button>
           <button type="button" className="btn btn-quiet door-act" onClick={onCancel}>Cancel</button>

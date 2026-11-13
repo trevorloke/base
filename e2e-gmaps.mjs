@@ -219,7 +219,8 @@ const measure = (page, sel = null) => page.evaluate((targets) => {
   const overflow = document.documentElement.scrollWidth - window.innerWidth;
   let minTap = null;
   if (targets) for (const el of document.querySelectorAll(targets)) { if (!visible(el)) continue; const h = el.getBoundingClientRect().height; minTap = minTap == null ? h : Math.min(minTap, h); }
-  return { yellow, overflow, minTap };
+  // To a hundredth: a layout's sub-pixel rounding (47.9999) is still 48 px.
+  return { yellow, overflow, minTap: minTap == null ? null : Math.round(minTap * 100) / 100 };
 }, sel);
 const words = (page, sel) => page.innerText(sel).then((t) => t.replace(/\s+/g, ' ').trim()).catch(() => '');
 
@@ -553,6 +554,7 @@ s = await seed();
     await p.mouse.click(mb.x + mb.width / 2, mb.y + 70);
     const tapped = await until(async () => /Pinned on the map/.test(await words(p, '#nd-address-af-note')), 4000);
     const errAfter = await words(p, 'form[aria-label="New door"] .error');
+    await p.screenshot({ path: `${SHOTS}/B-tapped-${size}.png` });
     check(`B4 ${size}: after a tap on the map, "Pinned on the map" and no "tap the map" error`, tapped && !/tap the map/.test(errAfter), `${await words(p, '#nd-address-af-note')} · ${errAfter}`);
     await p.close();
   }

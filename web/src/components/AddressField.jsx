@@ -79,7 +79,7 @@ export default function AddressField({
   googleOk.current = allowGoogle;
 
   useEffect(() => {
-    if (!typed.current) return undefined;
+    if (!typed.current || pickingNow.current) return undefined; // a pick on its way finishes first
     const q = String(value || '').trim();
     if (q.length < 3 || !online) { setItems([]); setOpen(false); setState('idle'); return undefined; }
     const n = ++seq.current;
