@@ -10,21 +10,9 @@ import { action, apiGet } from '../api.js';
 import { useOnline } from './NoSignal.jsx';
 import { driveOn, num, useDrive } from './DriveBits.jsx';
 import { Progress, Stopped } from './SendToSheet.jsx';
+import { driveWhen } from './DriveWhen.js';
 
 const going = (e) => e.status === 'waiting' || e.status === 'sending';
-// "13 Nov, 10:56 am", in the campaign's time zone (not this computer's).
-const when = (iso, tz, time = true) => {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  const fmt = (opts) => {
-    try { return new Intl.DateTimeFormat('en-CA', { ...opts, timeZone: tz || undefined }).formatToParts(d); } catch { return new Intl.DateTimeFormat('en-CA', opts).formatToParts(d); }
-  };
-  const part = (parts, type) => parts.find((p) => p.type === type)?.value || '';
-  const p = fmt({ day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true });
-  const day = `${part(p, 'day')} ${part(p, 'month').replace('.', '')}`;
-  if (!time) return day;
-  return `${day}, ${part(p, 'hour')}:${part(p, 'minute')} ${part(p, 'dayPeriod').replace(/\./g, '').toLowerCase()}`;
-};
 const chip = (e) => {
   if (e.status === 'done') return ['Done', 'chip-ok'];
   if (e.status === 'sending') return [`Sending ${e.rows ? Math.floor((e.done_rows / e.rows) * 100) : 0}%`, ''];
@@ -42,7 +30,7 @@ function SheetRow({ e, d, manager, online, tz }) {
       <div className="drv-row__main">
         <span className="drv-row__name">{e.name}</span>
         <span className="drv-row__facts">
-          <span className={`chip ${cls}`}>{label}</span> {when(e.created_at, tz)}{manager ? <> · {e.mine ? 'by you' : `by ${e.by}`} · {where}</> : null}
+          <span className={`chip ${cls}`}>{label}</span> {driveWhen(e.created_at, tz)}{manager ? <> · {e.mine ? 'by you' : `by ${e.by}`} · {where}</> : null}
         </span>
       </div>
       {e.status === 'done' && e.url && <a className="btn btn-quiet ops-tap" href={e.url} target="_blank" rel="noopener noreferrer">Open<span className="drv-sr"> {e.name}</span></a>}
@@ -63,7 +51,7 @@ function LinkRow({ l, online, onClosed, tz }) {
     <li className="drv-row">
       <div className="drv-row__main">
         <span className="drv-row__name">{l.name}</span>
-        <span className="drv-row__facts">{l.mine ? 'by you' : `by ${l.by}`} · {when(l.created_at, tz, false)}</span>
+        <span className="drv-row__facts">{l.mine ? 'by you' : `by ${l.by}`} · {driveWhen(l.created_at, tz, false)}</span>
       </div>
       {l.mine ? (
         <button type="button" className="btn btn-quiet ops-tap" disabled={busy || !online} onClick={close}>{busy ? 'Closing…' : 'Make private again'}</button>

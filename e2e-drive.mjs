@@ -556,6 +556,18 @@ try {
   check('manager: everyone’s Sheets, with "by Sam Example" and where', /by Sam Example/.test(sent) && /In Campaign exports/.test(sent) && /Done/.test(sent), sent);
   check('manager: the link opened to anyone, with Make private again', /Links opened to anyone/.test(sent) && /Rally video\.mp4/.test(sent) && (await m.getByRole('button', { name: 'Make private again' }).count()) === 1);
   check('dates read "13 Nov, 10:56 am"', /\b\d{1,2} [A-Z][a-z]{2}, \d{1,2}:\d{2} (am|pm)\b/.test(sent) && !/\b[A-Z][a-z]{2} \d{1,2}, \d/.test(sent), sent);
+  {
+    // The hour is B.C.'s (UTC-7 all year since March 2026), even on this
+    // browser, whose own time-zone rules still fall back in November.
+    const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const bc = (iso) => {
+      const w = new Date(new Date(iso).getTime() - 7 * 3600e3);
+      const h = w.getUTCHours();
+      return `${w.getUTCDate()} ${MON[w.getUTCMonth()]}, ${h % 12 || 12}:${String(w.getUTCMinutes()).padStart(2, '0')} ${h < 12 ? 'am' : 'pm'}`;
+    };
+    const want = ((await api(m, '/api/drive/exports')).json?.exports || []).map((e) => bc(e.created_at));
+    check('each Sheet’s time is the campaign’s hour (UTC-7), not the browser’s older rules', want.length > 0 && want.every((w) => sent.includes(w)), JSON.stringify({ want, sent }));
+  }
   await shot(m, '21-data-sent-manager-desktop');
   {
     const { page } = await newPage(PHONE, 'manager data phone', await mctx.storageState());
