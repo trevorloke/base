@@ -49,7 +49,7 @@ api.get('/persons/:id/timeline', async (c) => {
   const ctx = c.get('ctx');
   const db = c.get('db');
   const person = (await db.query(
-    'select id, name, email from persons where id = $1 and workspace_id = $2 and deleted_at is null', [id, ctx.workspaceId],
+    'select id, name, first_name, email from persons where id = $1 and workspace_id = $2 and deleted_at is null', [id, ctx.workspaceId],
   )).rows[0];
   if (!person) return c.json({ error: 'not found' }, 404);
 

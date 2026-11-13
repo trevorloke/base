@@ -73,6 +73,8 @@ const releaseInput = z.object({
   attachment_ids: z.array(z.uuid()).max(ATTACH_COUNT).optional(),
   sender_id: z.uuid().nullish(),
   to: z.object({ kinds: z.array(z.enum(KINDS)).min(1).max(2) }).optional(),
+  // The template it was started from: its placeholders (blast.send).
+  placeholders_from: z.array(z.string().max(122)).max(200).optional(),
 });
 
 export const actions = {
@@ -175,7 +177,7 @@ export const actions = {
 
   'media.test': {
     roles: DESK_ROLES,
-    input: releaseInput.pick({ subject: true, body: true, attachment_ids: true, sender_id: true }),
+    input: releaseInput.pick({ subject: true, body: true, attachment_ids: true, sender_id: true, placeholders_from: true }),
     handler: async (tx, ctx, input, emit) => (await field())['blast.test'].handler(tx, ctx, { ...input, kind: 'press' }, emit),
     after: async (db, ctx, result) => (await field())['blast.test'].after(db, ctx, result),
   },

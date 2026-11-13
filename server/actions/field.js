@@ -19,7 +19,7 @@ import { httpError } from './util.js';
 import { runHooks, hasHook } from '../lib/hooks.js';
 // The tracked newsletter/press send path and A/B subject lines.
 import {
-  AB_MIN, NO_PROVIDER, NO_TEXT_PROVIDER, abInput, abGroups, abOf, blastCounts, composeBlast, deliver, finishRun, findLinks, inlineMs,
+  AB_MIN, NO_PROVIDER, NO_TEXT_PROVIDER, abInput, abGroups, abOf, blastCounts, composeBlast, deliver, finishRun, findLinks, footOf, inlineMs,
   newToken, openTest, queueSend, restReleased, retryable, runPayload, saveLinks, startTest,
 } from '../ext/abtests/send.js';
 import { ATTACH_COUNT, bindAttachments, loadAttachments } from '../ext/abtests/attach.js';
@@ -28,6 +28,8 @@ import { audienceOf, recipientsOf } from '../ext/lists/audience.js';
 import { resolveFrom } from '../ext/senders/rules.js';
 // Who is on the media list (ext/media): tagged media or influencer, any capitals.
 import { onMedia } from '../ext/media/rules.js';
+import { fillText, firstOf, toCodes } from '@starbase/shared/email/words';
+import { emailProblem, stillToFill, testProblem } from '@starbase/shared/email/check';
 import { mayReach, person, address, whyNotSql } from '../lib/reach.js';
 import { e164, namesCampaign, MAX_BODY as TEXT_MAX } from '../ext/texting/rules.js';
 import { textConfigured } from '../lib/notify.js';
@@ -86,6 +88,18 @@ const selfPerson = async (tx, ctx, emit, { create = false } = {}) => {
 // What the handler hands to `after` sits under this key — a Symbol, so it
 // never reaches the reply.
 const SEND = Symbol('send');
+// Campaign email (blast.send, blast.test; media.send passes it through):
+// the placeholders of the template it was started from.
+export const PLACEHOLDERS_FROM = z.array(z.string().max(122)).max(200).optional();
+// What was typed as "[first name]" / "[campaign]" → the codes, in both
+// subjects and the message.
+const emailCodes = (input) => ({
+  ...input,
+  subject: toCodes(input.subject),
+  body: toCodes(input.body),
+  ...(input.ab ? { ab: { ...input.ab, subject_b: toCodes(input.ab.subject_b) } } : {}),
+});
+const subjectsOf = (input) => [input.subject, input.ab?.subject_b].filter(Boolean).join('\n');
 const blastOut = (b) => ({
   id: b.id, kind: b.kind, subject: b.subject, status: b.status,
   audience_count: b.audience_count, provider_note: b.provider_note, sent_at: b.sent_at,
@@ -859,11 +873,22 @@ export const FIELD_ACTIONS = {
       // One of the campaign's From addresses (ext/senders) — the desk's
       // pick; anyone else's is ignored. Absent: the kind's default.
       sender_id: z.uuid().nullish(),
+      // The placeholders of the template the email was started from (GET
+      // /api/templates/:ref): none may go out still in it. An email: the
+      // ready-made templates' own never may (shared/email/check.js).
+      placeholders_from: PLACEHOLDERS_FROM,
     }),
     handler: async (tx, ctx, input, emit) => {
       const isText = input.kind === 'text';
       const toList = input.kind === 'eblast' || isText;
       if (!isText && !input.subject) throw httpError(400, 'a subject is required');
+      // An email: "[first name]" and "[campaign]" as typed (an older screen)
+      // are stored as the codes each copy fills in.
+      if (!isText) input = emailCodes(input);
+      if (!isText) {
+        const problem = emailProblem(subjectsOf(input), input.body, { from: input.placeholders_from });
+        if (problem) throw httpError(400, problem);
+      }
       if (isText) {
         if (input.ab) throw httpError(400, 'a text has no subject line to test');
         if (input.attachment_ids?.length) throw httpError(400, 'a text carries no files');
@@ -985,6 +1010,9 @@ export const FIELD_ACTIONS = {
   // — their own address, no tracking, no list, nothing on record. The
   // files named are their own uploads not yet on a send (they stay for the
   // real send). Refused while email isn't connected.
+  // It goes with placeholders still in it (so the writer sees the layout)
+  // and says how many: { placeholders: n }. A link with no address or a
+  // fill-in that won't fill stops it. Filled with the writer's own name.
   'blast.test': {
     roles: DESK_ROLES,
     input: z.object({
@@ -993,25 +1021,32 @@ export const FIELD_ACTIONS = {
       body: z.string().trim().min(1).max(50000),
       attachment_ids: z.array(z.uuid()).max(ATTACH_COUNT).optional(),
       sender_id: z.uuid().nullish(),
+      placeholders_from: PLACEHOLDERS_FROM,
     }),
     handler: async (tx, ctx, input) => {
+      input = emailCodes(input);
+      const problem = testProblem(input.subject, input.body);
+      if (problem) throw httpError(400, problem);
       if (!emailConfigured()) throw httpError(409, 'Email isn’t connected — nothing can be sent yet');
       if (!ctx.user?.email) throw httpError(409, 'your sign-in has no email address');
       // From the address the real send would go from.
       const from = await resolveFrom(tx, ctx, input.kind, input.sender_id);
-      return { to: ctx.user.email, [SEND]: { ...input, from } };
+      const left = stillToFill(input.subject, input.body, { from: input.placeholders_from }).length;
+      return { to: ctx.user.email, placeholders: left, [SEND]: { ...input, from } };
     },
     // Committed (nothing was written): now the one email, outside the lock.
     after: async (db, ctx, result) => {
       const plan = result[SEND];
       const attachments = await loadAttachments(db, ctx.workspaceId, { ids: plan.attachment_ids || [], userId: ctx.user.id });
+      const fill = { first: firstOf({ name: ctx.user.name }), campaign: ctx.workspace.name };
+      const foot = await footOf(db, ctx.workspaceId);
       const res = await sendEmail({
         from: plan.from || undefined,
         to: ctx.user.email,
-        subject: `[Test] ${plan.subject}`,
-        ...composeBlast(ctx, { kind: plan.kind, body: plan.body, unsubscribeUrl: null, token: null, links: [], attachments }),
+        subject: `[Test] ${fillText(plan.subject, fill)}`,
+        ...composeBlast(ctx, { kind: plan.kind, body: plan.body, unsubscribeUrl: null, token: null, links: [], attachments, fill, foot }),
       });
-      return { result: { to: ctx.user.email, sent: res.status === 'sent', detail: res.detail || null } };
+      return { result: { to: ctx.user.email, sent: res.status === 'sent', detail: res.detail || null, placeholders: result.placeholders } };
     },
   },
 
