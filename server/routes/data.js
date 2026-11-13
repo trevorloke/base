@@ -1,6 +1,7 @@
 // Data routes (desk roles): bulk import with dedupe, batch geocoding, and the
 // Imagine Surrey sample dataset. Mounted under /api/data, after auth.
 import { civic } from '../lib/address.js';
+import { KEY, NAME_ADDR } from '../lib/matchkeys.js';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { matchRating, offeredCodes, ratingByCode } from '@starbase/shared/scale';
@@ -237,9 +238,7 @@ const historyDay = (raw) => {
 // spelling can be the one a row matches. Each value is looked up on its own
 // (lateral, "offset 0" keeps it so): handed a thousand values at once, the
 // planner takes them for most of the list and reads it all.
-const KEY = (col) => `regexp_replace(lower(${col}), '[^[:alnum:]]+', '', 'g')`;
 const NAME_PHONE = (n, p) => `${KEY(n)} || '|' || regexp_replace(${p}, '[^0-9]+', '', 'g')`;
-const NAME_ADDR = (n, a) => `${KEY(n)} || '|' || ${KEY(a)}`;
 const NAME_ONLY = "coalesce(email, '') = '' and coalesce(phone, '') = '' and coalesce(address, '') = ''";
 const eachValue = (sql) => `select x.id from unnest($2::text[]) as k(v) cross join lateral (${sql} offset 0) as x`;
 const candidates = async (tx, workspaceId, clean) => {
@@ -260,6 +259,10 @@ const candidates = async (tx, workspaceId, clean) => {
     [emails, eachValue(`${live} and lower(email) = k.v`)],
     [keys.p, eachValue(`${live} and ${NAME_PHONE('name', 'phone')} = k.v`)],
     [keys.a, eachValue(`${live} and ${NAME_ADDR('name', 'address')} = k.v`)],
+    // Someone the team moved (ext/moves), found by the old address the list
+    // still has: never made again at the old door.
+    [keys.a, eachValue(`select m.person_id as id from person_moves m join persons p on p.id = m.person_id and p.deleted_at is null
+      where m.workspace_id = $1 and m.undone_at is null and m.from_key = k.v`)],
     [keys.n, eachValue(`select distinct on (name) id from persons where workspace_id = $1 and deleted_at is null
       and ${NAME_ONLY} and ${KEY('name')} = k.v order by name, created_at, id`)],
   ];
@@ -269,11 +272,16 @@ const candidates = async (tx, workspaceId, clean) => {
   }
   if (!ids.size) return [];
   return (await tx.query(
-    `select p.* from unnest($2::uuid[]) as k(id) cross join lateral (
-       select id, name, email, phone, address, house_number, unit, city, postal, tags, socials, rating, lat, lng, voter_number, created_at from persons
+    `select p.*, coalesce(mv.prev, '[]'::json) as prev from unnest($2::uuid[]) as k(id) cross join lateral (
+       select id, name, email, phone, address, house_number, unit, city, postal, tags, socials, rating, lat, lng, voter_number, created_at, address_status from persons
        where id = k.id and workspace_id = $1 offset 0) as p
+     left join lateral (
+       select json_agg(json_build_object('address', x.from_address, 'unit', x.from_unit)) as prev from (
+         select from_address, from_unit from person_moves
+          where workspace_id = $1 and person_id = p.id and undone_at is null
+          order by created_at desc limit 5) x) as mv on true
      order by p.created_at, p.id`, [workspaceId, [...ids]],
-  )).rows.map(({ created_at: _, ...p }) => ({ ...p, tags: parseJson(p.tags, []), socials: parseJson(p.socials, {}) }));
+  )).rows.map(({ created_at: _, ...p }) => ({ ...p, tags: parseJson(p.tags, []), socials: parseJson(p.socials, {}), prev: parseJson(p.prev, []) }));
 };
 
 // PGlite runs no autovacuum, so persons may never have been analyzed: its
@@ -409,6 +417,12 @@ app.post('/import', async (c) => {
       if (p.email) byEmail.set(lower(p.email), p);
       if (p.phone) byNamePhone.set(`${nameKey(p.name)}|${digits(p.phone)}`, p);
       if (p.address) byNameAddr.set(`${nameKey(p.name)}|${lower(p.address)}|${lower(p.unit)}`, p);
+      // Where they lived before a move (ext/moves): found there too, unless
+      // someone really lives there by that name (they win).
+      for (const m of p.prev || []) {
+        const k = m.address && `${nameKey(p.name)}|${lower(m.address)}|${lower(m.unit)}`;
+        if (k && !byNameAddr.has(k)) byNameAddr.set(k, p);
+      }
       const k = nameKey(p.name);
       if (nameOnly(p)) { if (!byName.has(k)) byName.set(k, p); } else if (byName.get(k) === p) byName.delete(k);
     };
@@ -416,6 +430,7 @@ app.post('/import', async (c) => {
 
     let created = 0; let merged = 0; let unchanged = 0;
     let otherNumbers = 0; const otherRows = [];
+    let movedKept = 0; const movedRows = [];
     const decisions = [];
     for (const r of clean) {
       // The same voter number is the same person. Without one in common the
@@ -441,15 +456,27 @@ app.post('/import', async (c) => {
         // Merge: fill blanks, union tags — never overwrite what's on file
         // (but a voter number, when the person said to take the file's).
         const patch = {};
+        // Moved by the team (ext/moves): where they live is what the team
+        // found, not the list — the address and pin are left as they are,
+        // and a list that still has another address is counted and shown.
+        const moved = !!match.address_status || (match.prev || []).length > 0;
+        if (moved && r.address && (lower(r.address) !== lower(match.address) || lower(r.unit) !== lower(match.unit))) {
+          movedKept += 1;
+          if (movedRows.length < 50) {
+            movedRows.push({ row: r.index + 1, name: r.name, id: match.id, in_file: [r.unit, r.address].filter(Boolean).join(' – '),
+              on_file: match.address ? [match.unit, match.address].filter(Boolean).join(' – ') : null, status: match.address_status || null });
+          }
+        }
+        const kept = moved ? ['address', 'unit', 'city', 'postal', 'house_number'] : [];
         for (const k of ['email', 'phone', 'address', 'unit', 'city', 'postal', 'house_number', 'voter_number']) {
-          if (!match[k] && r[k]) patch[k] = r[k];
+          if (!match[k] && r[k] && !kept.includes(k)) patch[k] = r[k];
         }
         if (otherNumber === 'take' && differs(match)) patch.voter_number = r.voter_number;
         const tags = [...new Set([...(match.tags || []), ...r.tags])].slice(0, 50);
         if (tags.length !== (match.tags || []).length) patch.tags = tags;
         if (!match.rating && r.rating) patch.rating = r.rating;
         // A pin from the list goes on only where there is none.
-        if (r.pin && match.lat == null) { patch.lat = r.pin.lat; patch.lng = r.pin.lng; }
+        if (r.pin && match.lat == null && !moved) { patch.lat = r.pin.lat; patch.lng = r.pin.lng; }
         // Handles fill only the platforms with none on file.
         const newHandles = Object.entries(r.socials).filter(([k]) => !String(match.socials?.[k] || '').trim());
         if (newHandles.length) patch.socials = { ...(match.socials || {}), ...Object.fromEntries(newHandles) };
@@ -506,7 +533,8 @@ app.post('/import', async (c) => {
     }
     // What the features held back for a batch (a new person's profile fields).
     if (write) for (const x of extras) if (x.finish) await x.finish(tx);
-    return { created, merged, unchanged, decisions, other_numbers: otherNumbers, other_number_rows: otherRows };
+    return { created, merged, unchanged, decisions, other_numbers: otherNumbers, other_number_rows: otherRows,
+      moved_kept: movedKept, moved_rows: movedRows };
   };
 
   // Handles that didn't read as a handle or a profile link: left out, said.
@@ -751,7 +779,7 @@ app.post('/sample', async (c) => {
     ids.turfs.push(turfId);
     emit('turf', turfId, 'create', { sample: true });
     // Features' own sample rows (ext/fields: three profile fields and a few values).
-    await runHooks('sampleLoaded', tx, ctx, { people: id, emit });
+    await runHooks('sampleLoaded', tx, ctx, { people: id, emit, ids });
 
     await tx.query(
       `update workspaces set settings = jsonb_set(coalesce(settings, '{}'::jsonb), '{sample}', $2::jsonb) where id = $1`,

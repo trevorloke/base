@@ -164,6 +164,7 @@ const isLoginEmail = async (tx, ws, email) => {
 
 // voter_number: the list of electors' number (ext/voternumber), as any other blank.
 const FILL = ['email', 'phone', 'address', 'house_number', 'unit', 'city', 'postal', 'rating', 'rated_at', 'voted_at', 'voter_number'];
+const ADDRESS_KEYS = ['address', 'house_number', 'unit', 'city', 'postal'];
 
 // Drop's "Not the same" rulings become keep's: whoever the desk said isn't
 // drop isn't keep either (never keep and keep). Then drop's go.
@@ -240,9 +241,17 @@ export const actions = {
       await runHooks('personMerging', tx, ctx, { keep, drop });
 
       // Keep's record: its own values stand; blanks come from drop.
+      // Keep marked Address unknown (ext/moves): that was found at the door,
+      // so drop's old address and pin don't bring them back. Keep with no
+      // address of its own takes drop's mark.
       const filled = {};
-      for (const k of FILL) if ((keep[k] == null || keep[k] === '') && drop[k] != null && drop[k] !== '') filled[k] = drop[k];
-      if (keep.lat == null && drop.lat != null) { filled.lat = drop.lat; filled.lng = drop.lng; }
+      const settled = keep.address_status ? ADDRESS_KEYS : [];
+      for (const k of FILL) {
+        if (settled.includes(k)) continue;
+        if ((keep[k] == null || keep[k] === '') && drop[k] != null && drop[k] !== '') filled[k] = drop[k];
+      }
+      if (keep.lat == null && drop.lat != null && !keep.address_status) { filled.lat = drop.lat; filled.lng = drop.lng; }
+      if (!keep.address_status && drop.address_status && !keep.address && !filled.address) filled.address_status = drop.address_status;
       const tags = [...new Set([...parseJ(keep.tags, []), ...parseJ(drop.tags, [])])];
       const socials = { ...parseJ(drop.socials, {}), ...parseJ(keep.socials, {}) };
       const attrs = { ...parseJ(drop.attrs, {}), ...parseJ(keep.attrs, {}) };

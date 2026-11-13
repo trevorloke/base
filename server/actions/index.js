@@ -9,7 +9,7 @@
 // handler (other server code calls handlers and needs the whole result).
 // The palette, buttons, and the public API all call the same registry
 // via POST /api/actions/:name; there is no other way to mutate campaign data.
-import { civic, streetOf } from '../lib/address.js';
+import { civic, settleAddress } from '../lib/address.js';
 import { z } from 'zod';
 import { zodFor } from '@starbase/shared/registry';
 import { newId } from '../lib/events.js';
@@ -112,18 +112,12 @@ export const ACTIONS = {
         }
       }
       const next = { ...rowToPerson(cur), ...patch };
-      // A new street or house number: the two parts settle together (a new
-      // street keeps the house number only if the patch says so).
-      if ('address' in patch || 'house_number' in patch) {
-        // A new number alone goes onto the street as it was, not onto the old line.
-        const street = 'address' in patch ? patch.address : streetOf(cur.house_number, cur.address);
-        Object.assign(next, civic({ house_number: 'house_number' in patch ? patch.house_number : ('address' in patch ? null : cur.house_number), address: street }));
-      }
-      // A changed address makes the old pin wrong: drop it (the person lands in
-      // the map's "place" list) unless the same patch supplies new coordinates.
-      const addrChanged = (('address' in patch || 'house_number' in patch) && (next.address || null) !== (cur.address || null))
-        || ('unit' in patch && (patch.unit || null) !== (cur.unit || null));
-      if (addrChanged && !('lat' in patch) && !('lng' in patch)) { next.lat = null; next.lng = null; }
+      // A new street or house number settles in two parts, and a changed
+      // address drops the old pin (the person lands in the map's "place"
+      // list) unless the same patch supplies new coordinates (lib/address.js).
+      const settled = settleAddress(cur, patch);
+      Object.assign(next, { address: settled.address, house_number: settled.house_number });
+      if (settled.dropPin) { next.lat = null; next.lng = null; }
       // Names: first, middle or last sent → the whole follows; the whole alone → it is
       // split again (ext/names). Neither sent: as they were.
       const namesSent = 'first_name' in patch || 'middle_name' in patch || 'last_name' in patch;

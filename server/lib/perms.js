@@ -91,6 +91,7 @@ const PATH_AREA = [
   [/^\/api\/(banks|lists)(\/|$)/, 'people'],
   [/^\/api\/callhub(\/|$)/, 'people'],
   [/^\/api\/persons(\/|$)/, 'people'],
+  [/^\/api\/moves(\/|$)/, 'people'], // who lives there after a move (ext/moves)
   // Other people's ties; My people (/relationships/mine) is in no area on purpose.
   [/^\/api\/relationships\/(key|connected)(\/|$)/, 'people'],
   [/^\/api\/duplicates$/, 'people'],

@@ -27,7 +27,8 @@ const doorPerson = (r) => ({
   address: r.address ?? null, unit: r.unit ?? null, lat: r.lat, lng: r.lng, tags: [],
 });
 
-const inMyTurf = async (tx, ctx, lat, lng) => {
+// Is this pin inside a turf the person walks? (Also ext/moves: who may move whom.)
+export const inMyTurf = async (tx, ctx, lat, lng) => {
   const turfs = (await tx.query(
     `select t.polygon from turfs t join turf_members m on m.turf_id = t.id and m.user_id = $2
      where t.workspace_id = $1 and t.deleted_at is null`,

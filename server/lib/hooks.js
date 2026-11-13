@@ -50,8 +50,11 @@ const registry = { events: [], contactLogged: [], brief: [], textOut: [], underL
 //                                   { value } | { error } (refuses the row),
 //                                   apply(tx, personId, value, { write },
 //                                   emit) → [words for what it filled] }.
-//   sampleLoaded(tx, ctx, { people, emit })   the sample is loading;
-//                                   people: { sample name → person id }.
+//   sampleLoaded(tx, ctx, { people, emit, ids })   the sample is loading;
+//                                   people: { sample name → person id };
+//                                   ids: the sample's own rows by kind (push
+//                                   a contact made here onto ids.contacts
+//                                   and Clear takes it).
 //   sampleCleared(tx, ctx, { emit, said })    the sample is clearing, just
 //                                   before its people go (void what it
 //                                   made while they are still here);

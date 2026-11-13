@@ -43,6 +43,11 @@ const RATING_CYCLE = ['1', '2', null, '3', '1', '4D', null, '2', '4B', '3', '1',
 
 const emailOf = (name) => `${name.toLowerCase().replace(/[^a-z]+/g, '.').replace(/^\.|\.$/g, '')}@example.org`;
 
+// Who moved (ext/moves): one tapped Moved and moved to another sample door
+// (to: whose door), one marked Address unknown, and one tapped Moved with no
+// address yet, so "Needs an address" has someone in it. Off the sample turf.
+export const SAMPLE_MOVERS = { moved: 'Owen Price', to: 'Yuki Tanaka', unknown: 'Noah Wilson', open: 'George Bell' };
+
 export const buildSample = () => {
   const people = [];
   let n = 0;
