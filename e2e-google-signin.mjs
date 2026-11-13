@@ -432,7 +432,9 @@ try {
   await shot(m, '17-team-chip-confirm-desktop');
   await deeRow.getByRole('button', { name: 'Unlink', exact: true }).click();
   await deeRow.getByText('Google unlinked — Dee Example is signed out.').waitFor({ timeout: 8000 });
-  check('…unlinked, and the chip goes', (await deeRow.locator('.tm-google').count()) === 0);
+  // The message comes before Team's refetch of who signs in with Google: wait for the chip to go.
+  const chipGone = await deeRow.locator('.tm-google').waitFor({ state: 'detached', timeout: 8000 }).then(() => true, () => false);
+  check('…unlinked, and the chip goes', chipGone);
   {
     const { page } = await newPage(PHONE, 'team phone');
     await page.context().addCookies(await mctx.cookies());
@@ -447,6 +449,24 @@ try {
     check('Services on a phone: the switch says On in words, its label flush left', /On/.test(await text(page, '.gg-switch__state'))
       && (await page.locator('.gg-switch').evaluate((e) => getComputedStyle(e).textAlign)) === 'left' && (await noSideways(page)) <= 0);
     await shot(page, '18b-services-switch-phone', false);
+  }
+
+  // ── Your profile when /api/google fails and Google sign-in is off (connections may still be on) ──
+  {
+    const { page } = await newPage(DESKTOP, 'google read fails');
+    await page.context().addCookies(await mctx.cookies());
+    await page.route('**/api/auth/me', async (r) => {
+      const res = await r.fetch();
+      const body = await res.json();
+      if (body.google) body.google.on = false;
+      await r.fulfill({ response: res, json: body });
+    });
+    await page.route('**/api/google', (r) => r.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"stand-in failure"}' }));
+    await page.goto(`${BASE}/admin/profile`, { waitUntil: 'domcontentloaded' });
+    const said = await page.locator('.gg-card', { hasText: 'Unavailable' }).waitFor({ timeout: 10000 }).then(() => true, () => false);
+    check('Your profile: a failed Google read says “Unavailable — Try again”, even with sign-in off', said, await text(page, 'main'));
+    await shot(page, '18c-profile-google-unavailable-desktop');
+    await page.close();
   }
 
   // ── A connection: Connect, Connected as, Reconnect after Google revokes, Disconnect ──

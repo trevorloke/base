@@ -56,13 +56,15 @@ export default function GoogleCard() {
   const code = useGoogleReturn();
   const [note, setNote] = useState(null);
   // Whether Google sign-in is on here, from the sign-in already loaded
-  // (/auth/me): until /api/google answers, a server without Google draws
-  // nothing rather than a "Loading…" card that then vanishes.
+  // (/auth/me): while /api/google loads, a server without Google draws
+  // nothing rather than a "Loading…" card that then vanishes. A failed read
+  // always draws the card ("Unavailable — Try again"): /auth/me knows only
+  // sign-in, and connections may be on with sign-in off.
   const knownOn = useQueryClient().getQueryData(['me'])?.google?.on === true;
   const d = q.data;
   if (d && !d.setup.signin && !d.setup.connect) return null;
   const head = <div className="ts-head"><h2 className="ts-h">Google</h2></div>;
-  if (!d) return knownOn ? <section className="ts-card gg-card" aria-label="Google">{head}<GoogleLoading q={q} /></section> : null;
+  if (!d) return (knownOn || q.isError) ? <section className="ts-card gg-card" aria-label="Google">{head}<GoogleLoading q={q} /></section> : null;
 
   const app = appName(appMode());
   const back = herePath();
