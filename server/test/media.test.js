@@ -148,16 +148,23 @@ test('staff denied Outreach but holding Media does the whole job; the queued rel
   assert.equal((await staff.get('/api/blasts')).status, 403);
   const pic = ok(await staff.action('media.picture', { data: PNG, name: 'p.png' }));
   assert.match(pic.media.url, /^\/media\//);
-  // Media's uploads take the same sizes as Outreach's: a 1 MB attachment
-  // answers 200; one over 5 MB is refused in words, not 413 (5.1 MB: as
-  // base64 it still fits the 7 MB body).
-  const big = ok(await staff.action('media.attach', { data: Buffer.alloc(1024 * 1024, 7).toString('base64'), name: 'report.pdf' }));
-  assert.equal(big.attachment.bytes, 1024 * 1024);
+  // Media's uploads take the same sizes as Outreach's (they had the 256 KB
+  // every address takes): a body well over 256 KB reaches the action — a
+  // .exe is refused in readAttachment's words, not 413 — and one over 5 MB
+  // is refused in words too (5.1 MB: as base64 it still fits the 7 MB body).
+  const exe = await staff.action('media.attach', { data: Buffer.alloc(1024 * 1024, 7).toString('base64'), name: 'report.exe' });
+  assert.equal(exe.status, 400, JSON.stringify(exe.json));
   const over = await staff.action('media.attach', { data: Buffer.alloc(Math.round(5.1 * 1024 * 1024), 7).toString('base64'), name: 'report.pdf' });
   assert.equal(over.status, 400, JSON.stringify(over.json));
   assert.match(over.json.error, /too big — 5 MB at most/);
-  assert.notEqual((await staff.action('media.picture', { data: Buffer.alloc(600 * 1024, 7).toString('base64'), name: 'p.png' })).status, 413, 'a picture over 256 KB reaches the action');
-  ok(await staff.action('media.unattach', { id: big.attachment.id }));
+  // A 1 MB attachment kept: not over the Postgres wire in tests (PGlite's
+  // socket server, npm run test:pg, can't take a parameter that big).
+  if (!process.env.DATABASE_URL) {
+    const big = ok(await staff.action('media.attach', { data: Buffer.alloc(1024 * 1024, 7).toString('base64'), name: 'report.pdf' }));
+    assert.equal(big.attachment.bytes, 1024 * 1024);
+    ok(await staff.action('media.unattach', { id: big.attachment.id }));
+    assert.notEqual((await staff.action('media.picture', { data: Buffer.alloc(600 * 1024, 7).toString('base64'), name: 'p.png' })).status, 413, 'a picture over 256 KB reaches the action');
+  }
   const extra = ok(await staff.action('media.attach', { data: Buffer.from('later').toString('base64'), name: 'later.txt' }));
   ok(await staff.action('media.unattach', { id: extra.attachment.id }), 'and takes one back');
   const file = ok(await staff.action('media.attach', { data: Buffer.from('hello').toString('base64'), name: 'notes.txt' }));
