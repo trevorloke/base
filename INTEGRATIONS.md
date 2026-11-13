@@ -600,7 +600,19 @@ seconds at most). When Google refuses it says what failed in plain words,
 *Google said* with Google's own words, and the step of Recipe B that fixes
 it. The same live check is on the map, for managers: **Map → Show → Map
 check** (or *Why?* when the street map isn't loading) has *Street map
-service* and *Address lookup* lines (`GET /api/map/check/services`).
+service*, *Map pins* and *Address suggestions* lines (`GET /api/map/check/services`).
+
+While Google is the map or suggests addresses, the map's Show sheet and the
+end of **Your profile** say *Maps by Google* (or *Maps and address
+suggestions by Google*) with links to Google's Maps terms and privacy policy,
+as Google's terms ask.
+
+**Directions** (no key, no cost, nothing to set up): a door card's and a
+walk-list door's More, a shift's place and a sign each have a *Directions*
+link that opens the phone's Google Maps from where it is (walking to a door,
+driving to a sign). base.win never sends anyone's location: the link
+carries only the place. Texts, emails and calendar files keep the plain map
+link.
 
 ## Two-step sign-in key
 
