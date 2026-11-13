@@ -21,6 +21,7 @@ import { Link, useOutletContext, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { VOLUNTEER_ROLES, noCalls } from '@starbase/shared/canvass';
 import { placeLabel } from '@starbase/shared/shiftkinds';
+import { azSort } from '@starbase/shared/names';
 import { apiGet, action } from '../api.js';
 import { NeedsSignalLine, useOnline } from '../components/NoSignal.jsx';
 import { clockText, monthDay, overlaps, shortDay, zoneOf } from '../components/shiftTime.js';
@@ -195,7 +196,7 @@ export default function Volunteers() {
       : show === 'active' ? (a, b) => time(a.next?.starts_at) - time(b.next?.starts_at) || time(b.last_active_at) - time(a.last_active_at)
         : (a, b) => (b.asked - a.asked) || time(b.asked_at) - time(a.asked_at)
           || ['active', 'new', 'lapsed'].indexOf(a.stage) - ['active', 'new', 'lapsed'].indexOf(b.stage);
-    return keep.sort((a, b) => by(a, b) || a.name.localeCompare(b.name));
+    return keep.sort((a, b) => by(a, b) || azSort(a, b));
   }, [all, show, role, q]);
   // The next weeks' shifts, for "Put on a shift".
   const ahead = useMemo(() => {

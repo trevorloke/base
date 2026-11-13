@@ -18,6 +18,7 @@
 // stage: 'active' (a shift coming up, or busy in the last 30 days), 'new'
 // (nothing done yet), 'lapsed' (did something once, nothing for 30 days).
 import { noCallSql } from '../../lib/reach.js';
+import { azKey } from '../../lib/az.js';
 
 const ACTIVE = ['assigned', 'confirmed'];
 const DAY = 864e5;
@@ -42,9 +43,9 @@ export const loadVolunteers = async (db, ws, { now = new Date() } = {}) => {
   )).rows.map((r) => r.id);
   if (!ids.length) return [];
   const people = (await db.query(
-    `select p.id, p.name, p.phone, p.email, p.created_at, ${noCallSql('p')} as no_call from persons p
+    `select p.id, p.name, p.last_name, p.phone, p.email, p.created_at, ${noCallSql('p')} as no_call from persons p
      where p.workspace_id = $1 and p.deleted_at is null and p.id = any($2::uuid[])
-     order by lower(p.name) limit ${MAX}`,
+     order by ${azKey('p')} limit ${MAX}`,
     [ws, ids],
   )).rows;
   if (!people.length) return [];

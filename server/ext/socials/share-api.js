@@ -13,6 +13,7 @@
 //       through any link of theirs, all time.
 import { Hono } from 'hono';
 import { here } from '../../lib/mount.js';
+import { azKey } from '../../lib/az.js';
 import { selfPerson } from '../relationships/match.js';
 import { authLine, kitOut, kitPage, kitText } from './share.js';
 
@@ -125,7 +126,7 @@ shareApi.get('/share/kits/:id', async (c) => {
     `select p.id, p.name, count(distinct a.person_id)::int as signups
        from site_actions a join persons p on p.id = a.referrer_id and p.deleted_at is null
       where a.workspace_id = $1 and a.source = $2
-      group by p.id, p.name order by signups desc, lower(p.name), p.id limit ${TOP_MAX}`,
+      group by p.id, p.name order by signups desc, ${azKey('p')} limit ${TOP_MAX}`,
     [ctx.workspaceId, `kit-${k.code}`],
   )).rows;
   return c.json({ kit: { ...kitOut(k), live: page.live, page_title: page.title, signups: k.signups, sharers: k.sharers }, top: sharers });
@@ -138,7 +139,7 @@ shareApi.get('/share/top', async (c) => {
     `select p.id, p.name, count(distinct a.person_id)::int as n
        from site_actions a join persons p on p.id = a.referrer_id and p.deleted_at is null
       where a.workspace_id = $1 and a.referrer_id is not null
-      group by p.id, p.name order by n desc, lower(p.name), p.id limit ${TOP_MAX}`,
+      group by p.id, p.name order by n desc, ${azKey('p')} limit ${TOP_MAX}`,
     [ctx.workspaceId],
   )).rows;
   return c.json({ top });

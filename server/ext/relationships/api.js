@@ -35,6 +35,7 @@
 import { Hono } from 'hono';
 import { rankTies } from '@starbase/shared/ties';
 import { NO_CONTACT } from '../../lib/reach.js';
+import { azKey } from '../../lib/az.js';
 import { selfPerson } from './match.js';
 import { PERSON_COLS, personOut } from './actions.js';
 import { TIE_READERS } from './index.js';
@@ -73,7 +74,7 @@ api.get('/relationships/mine', async (c) => {
             (select max(k.created_at) from contacts k
              where k.workspace_id = r.workspace_id and k.person_id = p.id and k.created_by = $3) as last_at
      from ${LINKS_OF}
-     order by lower(p.name), p.id`,
+     order by ${azKey('p')}`,
     [ctx.workspaceId, me.id, ctx.user.id],
   )).rows;
   const view = personOut(ctx);
@@ -107,7 +108,7 @@ api.get('/persons/:id/knows', async (c) => {
   const rows = (await db.query(
     `select r.id, r.kind, r.note, r.close, r.created_at as linked_at, p.id as pid, p.name, p.rating, ${dncSql('p')} as dnc
      from ${LINKS_OF}
-     order by lower(p.name), p.id`,
+     order by ${azKey('p')}`,
     [ws, id],
   )).rows;
   const knows = rows.map((r) => ({
@@ -158,7 +159,7 @@ api.get('/relationships/connected', async (c) => {
        join persons p on p.id = e.who and p.deleted_at is null
        join persons o on o.id = e.other and o.deleted_at is null
        group by p.id, p.name, p.rating
-       order by knows desc, supporters desc, lower(p.name), p.id
+       order by knows desc, supporters desc, ${azKey('p')}
        limit $2
      ), brought as (
        select from_person as who, count(*)::int as n from relationships

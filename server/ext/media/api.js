@@ -23,6 +23,7 @@
 import { Hono } from 'hono';
 import { areasFor } from '../../lib/perms.js';
 import { forViewer } from '../../lib/viewer.js';
+import { azKey } from '../../lib/az.js';
 import { mayReach, person, whyNotSql } from '../../lib/reach.js';
 import { notSuppressed } from '../../lib/mail/index.js';
 import { deliveredRow, goingRow, repeatRow, retryable, sendJobOn } from '../abtests/send.js';
@@ -72,7 +73,7 @@ api.get('/media/contacts', async (c) => {
        order by b.created_at desc limit 1
      ) l on true
      where p.workspace_id = $1 and p.deleted_at is null and ${onMedia('p')}
-     order by case when ${onMedia('p', ['media'])} then 0 else 1 end, lower(coalesce(m.outlet, '')) = '', lower(m.outlet), lower(p.name), p.id
+     order by case when ${onMedia('p', ['media'])} then 0 else 1 end, lower(coalesce(m.outlet, '')) = '', lower(m.outlet), ${azKey('p')}
      limit ${CONTACTS_MAX}`,
     [ctx.workspaceId],
   );
@@ -177,7 +178,7 @@ api.get('/media/releases/:id', async (c) => {
      left join persons p on p.id = r.person_id and p.workspace_id = r.workspace_id
      left join media_contacts m on m.workspace_id = r.workspace_id and m.person_id = r.person_id
      where r.workspace_id = $1 and r.blast_id = $2
-     order by lower(coalesce(p.name, r.name, '')), r.id`,
+     order by person_fold(coalesce(p.last_name, p.name, r.name, '')) collate "C", person_fold(coalesce(p.name, r.name, '')) collate "C", r.id`,
     [ctx.workspaceId, id],
   )).rows;
   const files = await attachmentsOf(db, ctx.workspaceId);

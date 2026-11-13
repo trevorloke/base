@@ -10,6 +10,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { freshDb, Client } from './helpers.js';
+import { azSort } from '@starbase/shared/names';
 import { app } from '../index.js';
 import { keptCounts, loadList, peopleChanged } from '../ext/lists/audience.js';
 
@@ -180,7 +181,7 @@ test('People’s real total, and a call list that carries on past its first load
   }
   assert.equal(all.length, 18, 'every person with a phone, once');
   assert.equal(new Set(all.map((p) => p.id)).size, 18);
-  assert.deepEqual(all.map((p) => p.name), [...all.map((p) => p.name)].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase())), 'in the list’s order');
+  assert.deepEqual(all.map((p) => p.id), [...all].sort(azSort).map((p) => p.id), 'in the list’s order: A–Z by last name');
   assert.equal(all.filter((p) => p.name === 'Twin Example').length, 2, 'two people of one name are both there');
   const first = ok(await other.get('/api/persons?limit=300'));
   assert.deepEqual([first.persons.length, first.more], [23, false]);

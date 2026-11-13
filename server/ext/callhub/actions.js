@@ -19,6 +19,7 @@
 import { z } from 'zod';
 import { RATING_CODE_RE } from '@starbase/shared/scale';
 import { httpError } from '../../actions/util.js';
+import { azKey } from '../../lib/az.js';
 import { runJobsSoon } from '../../lib/jobs.js';
 import { loadScale, ratingRefusal } from '../scale/rules.js';
 import { preparePush, pushOut, resumePush, startPush } from './push.js';
@@ -32,7 +33,7 @@ const NAMED = 100;
 const named = async (tx, ws, ids) => {
   if (!ids.length) return null;
   const people = (await tx.query(
-    `select id, name from persons where workspace_id = $1 and id = any($2::uuid[]) order by lower(name), id limit ${NAMED}`, [ws, ids],
+    `select p.id, p.name from persons p where p.workspace_id = $1 and p.id = any($2::uuid[]) order by ${azKey('p')} limit ${NAMED}`, [ws, ids],
   )).rows.map((r) => ({ id: r.id, name: r.name }));
   return { n: ids.length, people, more: Math.max(0, ids.length - people.length) };
 };

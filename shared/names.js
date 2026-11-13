@@ -17,6 +17,18 @@ export const splitFirst = (raw) => {
 // First, middle and last → the whole name, as the database writes it.
 export const joinName = (...parts) => parts.map((x) => String(x ?? '').trim()).filter(Boolean).join(' ');
 
+// People's own search box (lib/audience.js, and offline KeptCopies.js):
+// letters, spaces, commas, apostrophes, dots and hyphens only, in two words
+// or more on spaces and commas ("smith kevin", "Smith, Kevin") → the words,
+// at most six, each to be somewhere in the name; anything else → null (one
+// string, as typed).
+export const nameWords = (q) => {
+  const s = String(q ?? '').trim();
+  if (!/^[\p{L}\s,.'’-]+$/u.test(s)) return null;
+  const words = s.split(/[\s,]+/).filter(Boolean);
+  return words.length >= 2 ? words.slice(0, 6) : null;
+};
+
 // One way to fold a name, for finding people and putting them in A–Z order.
 // The database's person_fold (server/db/schema.js) is built from these same
 // two strings, so the server and the browser agree letter for letter,

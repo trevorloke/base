@@ -9,6 +9,7 @@
 // see (viewer.js); the desk's does. Features add their own filters by the
 // personsWhere hook, on the same params.
 import { SOCIAL_PLATFORMS } from '@starbase/shared/canvass';
+import { nameWords } from '@starbase/shared/names';
 import { runHooks } from './hooks.js';
 import { isMoneyTag, loginEmail } from './viewer.js';
 
@@ -39,13 +40,20 @@ export const personsWhere = async (db, ctx, query = {}) => {
     params.push(`%${digits}%`);
     phoneDigits = ` or regexp_replace(coalesce(p.phone, ''), '[^0-9]', '', 'g') like $${params.length}`;
   }
+  // A name of two words or more, in any order ("smith kevin", "Smith,
+  // Kevin"): every word somewhere in the name (KeptCopies.js filterPersons
+  // says the same offline). Anything with a digit or an @ stays one string.
+  const words = nameWords(q);
+  let name = 'p.name ilike $3';
+  if (words) name = `(${words.map((w) => { params.push(`%${w.replace(/[%_\\]/g, (m) => '\\' + m)}%`); return `p.name ilike $${params.length}`; }).join(' and ')})`;
   // $5 is typed here even when nothing else reads it (a desk query), or
-  // the database can't tell what it is.
+  // the database can't tell what it is. Most people have no handles: the
+  // first test spares unpacking their empty socials.
   let where = `p.workspace_id = $1 and p.deleted_at is null and $4::int is not null and $5::text is not null
-       and ($2 = '' or p.name ilike $3 or p.address ilike $3 or p.phone ilike $3${phoneDigits}
+       and ($2 = '' or ${name} or p.address ilike $3 or p.phone ilike $3${phoneDigits}
             or (p.email ilike $3${vol ? ` and ${ownEmail}` : ''})
-            or exists (select 1 from jsonb_each_text(p.socials) s
-                       where regexp_replace(s.value, '^@|^/?u/', '', 'i') ilike ${handleLike}))`;
+            or (p.socials <> '{}'::jsonb and exists (select 1 from jsonb_each_text(p.socials) s
+                       where regexp_replace(s.value, '^@|^/?u/', '', 'i') ilike ${handleLike})))`;
   // One tag, or several with commas: any of them. A volunteer can't sort
   // by the money tags they can't see — alone or among others (as ?notag=).
   const tags = [...new Set(tag.split(',').map((t) => t.trim()).filter(Boolean))].slice(0, 20);

@@ -55,6 +55,7 @@ import { emailConfigured, sendEmail, sendText, shiftWhen, shiftWhenShort, textCo
 import { changedAt, shiftsAttachment, withCalendarLine } from '../../lib/calendar.js';
 import { person as personCols, whyNotSql } from '../../lib/reach.js';
 import { DEFAULT_TZ } from '../../lib/org.js';
+import { azKey } from '../../lib/az.js';
 import { mayRun } from '../../lib/perms.js';
 // One clock for "when is it" in a send: the texting rules' own (their quiet
 // hours read it, and the tests set it).
@@ -463,7 +464,7 @@ export const noticeResults = async (db, ws, batchId, { full = true } = {}) => {
   const rows = (await db.query(
     `select n.kind, n.week, n.created_at, n.person_id, p.name, n.state, n.email, n.text, n.text_note
        from shift_notices n join persons p on p.id = n.person_id
-      where n.workspace_id = $1 and n.batch_id = $2 order by lower(p.name), n.id`,
+      where n.workspace_id = $1 and n.batch_id = $2 order by ${azKey('p')}, n.id`,
     [ws, batchId],
   )).rows;
   if (!rows.length) return null;

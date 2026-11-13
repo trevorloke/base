@@ -33,6 +33,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { VOLUNTEER_ROLES, noCalls } from '@starbase/shared/canvass';
+import { azSort } from '@starbase/shared/names';
 import { apiGet, action } from '../api.js';
 import { useOnline } from '../components/NoSignal.jsx';
 import { useDragDrop } from '../components/useDragDrop.js';
@@ -115,7 +116,7 @@ export default function ShiftCrew({ shiftId, tz, canMap = true, onChanged }) {
     return [...tray].sort((a, b) => {
       const x = rank(a); const y = rank(b);
       for (let i = 0; i < x.length; i += 1) if (x[i] !== y[i]) return x[i] - y[i];
-      return a.name.localeCompare(b.name);
+      return azSort(a, b);
     });
   }, [tray, shift?.role]);
   const q = find.trim().toLowerCase();
@@ -155,9 +156,9 @@ export default function ShiftCrew({ shiftId, tz, canMap = true, onChanged }) {
       ...cur,
       tray: cur.tray.filter((x) => x.id !== v.id),
       crew: [...cur.crew, {
-        assignment_id: `new-${v.id}`, person_id: v.id, name: v.name, phone: v.phone, email: v.email,
+        assignment_id: `new-${v.id}`, person_id: v.id, name: v.name, last_name: v.last_name, phone: v.phone, email: v.email,
         status: status || 'assigned', to, job, signed_in: v.signed_in, first_shift: v.done === 0,
-      }].sort((a, b) => a.name.localeCompare(b.name)),
+      }].sort(azSort),
     }),
     async () => {
       const r = await action('shift.add', { shift_id: shiftId, person_id: v.id, to, ...(job ? { job } : {}) });

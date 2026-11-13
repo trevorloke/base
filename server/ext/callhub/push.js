@@ -24,6 +24,7 @@
 import { runAction, newId } from '../../lib/events.js';
 import { enqueueJob, runJobsSoon } from '../../lib/jobs.js';
 import { httpError } from '../../actions/util.js';
+import { azKey } from '../../lib/az.js';
 import { timeZone } from '../../lib/org.js';
 import { toLocal } from '../../lib/tzsql.js';
 import { callhub, callhubOn, CallHubError, idOf, pause } from './callhub.js';
@@ -224,7 +225,7 @@ export const runPushJob = async (db, job) => {
       const people = (await db.query(
         `select c.person_id, c.phone, c.first_on_number, p.kind, p.name, p.first_name, p.last_name, p.city, p.tags, p.deleted_at
            from callhub_contacts c join persons p on p.id = c.person_id
-          where c.push_id = $1 and c.phone = any($2::text[]) order by c.position, c.first_on_number desc, lower(p.name), p.id`, [id, next],
+          where c.push_id = $1 and c.phone = any($2::text[]) order by c.position, c.first_on_number desc, ${azKey('p')}`, [id, next],
       )).rows;
       for (const phone of next) {
         if (left <= 0) break;
