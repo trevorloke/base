@@ -412,7 +412,9 @@ try {
     await page.context().addCookies(await mctx.cookies());
     await page.goto(`${BASE}/admin/settings`, { waitUntil: 'domcontentloaded' });
     await page.locator('.tm-google').first().waitFor({ timeout: 8000 });
-    check('Team on a phone: no sideways scroll', (await noSideways(page)) <= 0);
+    const past = await page.evaluate(() => [...document.querySelectorAll('.ot-item button, .ot-item select')]
+      .filter((e) => e.getBoundingClientRect().right > window.innerWidth + 0.5).map((e) => e.textContent.trim()));
+    check('Team on a phone: no sideways scroll, no button past the edge', (await noSideways(page)) <= 0 && past.length === 0, past.join(', '));
     await shot(page, '18-team-chip-phone');
   }
 

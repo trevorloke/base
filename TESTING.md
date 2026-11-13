@@ -292,6 +292,20 @@ one tap away under **More**.
   as many sign-ins as it takes) lock the codes from that person's app: the
   sign-in says so, managers get an email and a line on Today, their row
   says *Two-step locked*, and a recovery code signs in and unlocks it.
+- **Sign in with Google** (once the Google client is set; INTEGRATIONS.md) —
+  *Sign in with Google* sits under *Sign in*. Pressed before linking, it
+  says the Google account isn’t linked. Sign in with your password, then
+  **Your profile → Google → Link Google account**: Google asks which
+  account, and the card says *Linked to …*. Sign out and use the Google
+  button: a manager lands on the desk, a volunteer in the field app, and
+  with two-step on it asks for the code first. On an invite, tick *Also sign
+  in with Google next time* before *Join*. **Settings → Services → Google**:
+  the redirect address (*Copy*), *Team can sign in with Google* (off hides
+  the button; passwords still work), *Only Google accounts at* a domain
+  (your own link must be at it first), and under *More*, *Disconnect every
+  Google account*. **Settings → Members** marks who signs in with Google and
+  offers *Unlink Google*. `e2e-google-signin.mjs` runs all of this against
+  a stand-in Google (it starts its own servers on 5300–5304).
 - **Command bar** — on the desk press **Ctrl+K** (⌘K on a Mac), or *Search*
   under the name: *don* + Enter opens Donations, *gift* opens Log a gift
   with its form, a name or a phone (*604 555 0142*) finds the person; ↑ ↓
@@ -1124,6 +1138,20 @@ latest).
 ---
 
 ## 4 · Known limits in this build
+
+- **Google from the installed app — device check not done yet.** The field
+  app installed on a phone’s home screen shows *Open base.win in your
+  browser to use Google.* instead of every Google button: Google’s page may
+  open there in a separate browser whose sign-in isn’t the app’s, and
+  Google refuses sign-in inside other apps’ built-in browsers. Before
+  telling volunteers, on one iPhone (Safari, and installed) and one Android
+  phone (Chrome, and installed), against staging with a real Google client:
+  Sign in with Google, the Join tick box, Link, and one Connect — pass means
+  the app opens signed in (or linked) without a second sign-in; also open an
+  invite inside a social app’s browser and note what Google shows. Record
+  the result here. Until the installed runs pass, the line stays
+  (`googleHere()` in `web/src/components/google.js`).
+  *Result: not yet run.*
 
 - Map tiles come from CARTO (the *Clean* look the map opens on) and
   OpenStreetMap, both free and neither for heavy use; choose a provider the

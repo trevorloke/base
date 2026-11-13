@@ -252,7 +252,7 @@ function MemberRow({ m, isMe, online, onRole, onChanged, twoStep = null, onTwoSt
           )}
           {/* In another campaign here too: they unlink it themselves on Your profile. */}
           {!isMe && google && !google.elsewhere && !confirming && !resetting && !unlinking && (
-            <button type="button" className="btn btn-quiet ot-btn-tap" disabled={busy || !online}
+            <button type="button" className="btn btn-quiet ot-btn-tap tm-unlink-google" disabled={busy || !online}
               onClick={() => { setUnlinking(true); setSaid(null); setError(null); }}>Unlink Google</button>
           )}
           {!isMe && !confirming && !resetting && !unlinking && (

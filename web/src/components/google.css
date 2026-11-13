@@ -78,3 +78,8 @@ a.btn.gg-link { display: inline-flex; align-items: center; text-decoration: none
   .gg-acts .btn, .gg-item .btn, .gg-confirm .btn, .gg-panel .btn { min-height: 48px; }
 }
 .gg-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+/* A member's row with three buttons (Reset two-step, Unlink Google, Remove)
+   wraps them on a phone instead of running past the edge. */
+@media (max-width: 720px) {
+  .ot-row--wrap .ot-row__acts:has(.tm-unlink-google) { flex: 1 1 100%; min-width: 0; }
+}

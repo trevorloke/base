@@ -193,6 +193,12 @@ stored connection per person (`google_grants`, its token sealed with
 `GOOGLE_TOKEN_KEY`) serve Gmail, Drive and Calendar: `server/lib/google/`
 (the plumbing they call) and `server/ext/google/` (the one route pair
 `/api/auth/google/start` and `/back`, tables, actions, Services row).
+On the web: the button on Sign in, the tick box on Join, the Google card on
+Your profile (`GoogleCard.jsx`), `GoogleConnect.jsx` (the one Connect piece
+a Google feature puts on its own screen), the Services panel
+(`GooglePanel.jsx`) and Team's *Google* chip. The installed home-screen app
+shows *Open base.win in your browser to use Google.* instead of any Google
+button until the phone check in TESTING.md §4 passes.
 
 ### The command bar
 
