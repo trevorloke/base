@@ -16,6 +16,9 @@ let tileStatus = 200;
 let viewportStatus = 200;
 let sessionAnswer = null; // { status, body }: Google refuses the session
 const tileAnswers = []; // { status, body }: the next tiles' answers, in turn
+let tileCache = null; // Google's Cache-Control on a tile
+let tileHang = false; // Google never answers a tile
+let tileThrows = false; // the call fails outright (not a timeout)
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
 
 before(async () => {
@@ -24,7 +27,8 @@ before(async () => {
   await mgr.signup({ workspaceName: 'Imagine Surrey', jurisdiction: 'bc-municipal' });
   globalThis.fetch = async (url, init) => {
     const u = new URL(String(url));
-    if (u.hostname !== 'tile.googleapis.com') return realFetch(url, init);
+    // No test reaches the network: an address not stood in for is an error.
+    if (u.hostname !== 'tile.googleapis.com') throw new Error(`no stand-in for ${u.hostname}`);
     log.push({ path: u.pathname, key: u.searchParams.get('key'), session: u.searchParams.get('session'), body: init?.body });
     if (u.pathname === '/v1/createSession') {
       if (sessionAnswer) return new Response(JSON.stringify(sessionAnswer.body), { status: sessionAnswer.status });
@@ -38,23 +42,42 @@ before(async () => {
     const next = tileAnswers.shift();
     if (next) return new Response(typeof next.body === 'string' ? next.body : JSON.stringify(next.body), { status: next.status });
     if (tileStatus !== 200) return new Response('no', { status: tileStatus });
-    return new Response(PNG, { status: 200, headers: { 'content-type': 'image/png' } });
+    if (tileHang) return new Promise((_, reject) => { init?.signal?.addEventListener('abort', () => reject(init.signal.reason)); });
+    if (tileThrows) throw new Error(`socket hang up ${u.search}`);
+    return new Response(PNG, { status: 200, headers: { 'content-type': 'image/png', ...(tileCache ? { 'cache-control': tileCache } : {}) } });
   };
 });
 after(() => {
   globalThis.fetch = realFetch;
-  for (const k of ['GOOGLE_MAPS_TILES', 'GOOGLE_MAPS_SERVER_KEY', 'GOOGLE_MAPS_TILE_TYPE', 'STARBASE_TILE_CLEAN']) {
+  for (const k of ['GOOGLE_MAPS_TILES', 'GOOGLE_MAPS_SERVER_KEY', 'GOOGLE_MAPS_TILE_TYPE', 'STARBASE_TILE_CLEAN', 'GOOGLE_TILES_DAILY_MAX']) {
     if (env[k] === undefined) delete process.env[k]; else process.env[k] = env[k];
   }
 });
 
 const get = (path, cookie) => app.request(path, { headers: cookie ? { cookie } : {} });
 
-test('off by default: OpenStreetMap, and /tiles is not a thing', async () => {
+test('no key: OpenStreetMap, quietly, and /tiles is not a thing; a key alone makes Google the map', async () => {
   delete process.env.GOOGLE_MAPS_TILES;
+  delete process.env.GOOGLE_MAPS_SERVER_KEY;
   const cfg = await (await get('/api/map/config', mgr.cookie)).json();
   assert.match(cfg.tiles.url, /openstreetmap/);
+  assert.deepEqual(cfg.setup.ignored, [], 'nothing set up, nothing wrong');
+  assert.deepEqual(cfg.google, { tiles: false, places: false });
   assert.equal((await get('/tiles/14/2611/5636.png', mgr.cookie)).status, 404);
+  // Only the key: Google (GOOGLE_MAPS_TILES unset reads 'auto').
+  process.env.GOOGLE_MAPS_SERVER_KEY = 'tiles-key';
+  const auto = await (await get('/api/map/config', mgr.cookie)).json();
+  assert.equal(auto.tiles.url, '/tiles/{z}/{x}/{y}.png');
+  assert.deepEqual(auto.setup.ignored, []);
+  assert.equal(auto.standardLabel, 'Streets');
+  assert.deepEqual(auto.google, { tiles: true, places: false }, 'Google’s address rows stay off with only a key');
+  // =off and =0 with a key: the free map, and not said as a mistake.
+  for (const off of ['off', '0']) {
+    process.env.GOOGLE_MAPS_TILES = off;
+    const c = await (await get('/api/map/config', mgr.cookie)).json();
+    assert.match(c.tiles.url, /openstreetmap/, off);
+    assert.deepEqual(c.setup.ignored, [], off);
+  }
   // Turned on without a key: still OpenStreetMap, and the desk is told.
   process.env.GOOGLE_MAPS_TILES = '1';
   delete process.env.GOOGLE_MAPS_SERVER_KEY;
@@ -74,16 +97,19 @@ test('on: the map draws /tiles from Starbase, credited to Google, up to zoom 22'
   assert.equal(cfg.setup.source, 'Google Maps');
 });
 
-test('a tile: signed in only; one Google session shared and reused; bytes, type and a day of cache', async () => {
+test('a tile: signed in only; one Google session shared and reused; bytes, type and Google’s own cache life, made private', async () => {
   log.length = 0;
   assert.equal((await get('/tiles/14/2611/5636.png')).status, 401, 'no cookie');
+  tileCache = 'public, max-age=3600';
   const r = await get('/tiles/14/2611/5636.png', mgr.cookie);
+  tileCache = null;
   assert.equal(r.status, 200);
   assert.equal(r.headers.get('content-type'), 'image/png');
-  assert.equal(r.headers.get('cache-control'), 'private, max-age=86400');
+  assert.equal(r.headers.get('cache-control'), 'private, max-age=3600', 'never longer than Google gave, never public');
   assert.equal(Buffer.from(await r.arrayBuffer()).compare(PNG), 0);
   const r2 = await get('/tiles/14/2612/5636.png', mgr.cookie);
   assert.equal(r2.status, 200);
+  assert.equal(r2.headers.get('cache-control'), 'private, no-cache', 'none from Google: none kept');
   assert.equal(log.filter((l) => l.path === '/v1/createSession').length, 1, 'one session for both tiles');
   assert.equal(JSON.parse(log[0].body).mapType, 'roadmap');
   assert.ok(log.every((l) => l.key === 'tiles-key'));
@@ -129,7 +155,7 @@ test('other looks: Satellite and Terrain offered with Google on; each its own se
   assert.equal((await get('/tiles/14/2611/5636.png?t=bogus', mgr.cookie)).status, 200);
   const made = log.filter((l) => l.path === '/v1/createSession').map((l) => JSON.parse(l.body).mapType);
   assert.deepEqual(made, ['satellite', 'roadmap'], 'one satellite session reused; bogus → the standard look');
-  delete process.env.GOOGLE_MAPS_TILES;
+  process.env.GOOGLE_MAPS_TILES = 'off';
   const off = await (await get('/api/map/config', mgr.cookie)).json();
   assert.deepEqual(off.views.map((v) => [v.key, v.label]), [['clean', 'Clean']], 'OpenStreetMap: Clean, a quiet map of the same streets (Muted and Dark are the phone’s own)');
   assert.match(off.views[0].url, /^https:\/\/\{s\}\.basemaps\.cartocdn\.com\/light_all\//);
@@ -151,6 +177,9 @@ const google = (key = 'tiles-key') => {
   sessionAnswer = null;
   tileAnswers.length = 0;
   tileStatus = 200;
+  tileHang = false;
+  tileThrows = false;
+  tileCache = null;
   _resetForTest();
   log.length = 0;
 };
@@ -169,8 +198,11 @@ test('one reading of the settings: a key or a 1 pasted with a newline works, on 
     process.env.GOOGLE_MAPS_TILES = on;
     assert.equal((await (await get('/api/map/config', mgr.cookie)).json()).tiles.url, '/tiles/{z}/{x}/{y}.png', on);
   }
+  // Unset with a key: on, the same everywhere.
+  process.env.GOOGLE_MAPS_TILES = '';
+  assert.equal((await (await get('/api/map/config', mgr.cookie)).json()).tiles.url, '/tiles/{z}/{x}/{y}.png', 'unset');
   // A deliberate off is quietly off; a value that isn't a yes or a no is said.
-  for (const off of ['0', 'off', 'false', '']) {
+  for (const off of ['0', 'off', 'false']) {
     process.env.GOOGLE_MAPS_TILES = off;
     const c = await (await get('/api/map/config', mgr.cookie)).json();
     assert.match(c.tiles.url, /openstreetmap/, off);
@@ -223,7 +255,7 @@ test('renewal only when it may help: never for a 404 or a key refusal; once for 
   tileAnswers.push({ status: 400, body: 'Bad Request' });
   const r = await get('/tiles/14/2614/5636.png', mgr.cookie);
   assert.equal(r.status, 200);
-  assert.equal(r.headers.get('cache-control'), 'private, max-age=86400');
+  assert.equal(r.headers.get('cache-control'), 'private, no-cache');
   assert.equal(sessions(), 3);
   // Both answers unplaced: one renewal only, then 502.
   tileAnswers.push({ status: 403, body: 'no' }, { status: 403, body: 'no' });
@@ -293,4 +325,53 @@ test('the credit line: “Google Maps” in words; the live one for the view, as
   viewportStatus = 200;
   for (const l of log) assert.equal(l.key, 'tiles-key');
   assert.ok(!JSON.stringify(live).includes('tiles-key'));
+});
+
+// ── A slow Google, and the campaign's daily ceiling ──
+test('Google never answering a tile: 504 within 6.2 s and no pause; a thrown error is still 502', async () => {
+  google();
+  assert.equal((await get('/tiles/14/2611/5636.png', mgr.cookie)).status, 200, 'a session to hand');
+  tileHang = true;
+  // (AbortSignal.timeout's timer doesn't hold a process open; a server does.)
+  const awake = setInterval(() => {}, 1000);
+  const began = Date.now();
+  const r = await get('/tiles/14/2612/5636.png', mgr.cookie);
+  const took = Date.now() - began;
+  clearInterval(awake);
+  tileHang = false;
+  assert.equal(r.status, 504);
+  assert.ok(took >= 5900 && took < 6200, `took ${took} ms`);
+  assert.equal(tilesHealth().last, null, 'a slow answer is not a refusal: no pause');
+  assert.equal((await get('/tiles/14/2613/5636.png', mgr.cookie)).status, 200, 'the next tile is asked');
+  tileThrows = true;
+  const warns = [];
+  const realWarn = console.warn;
+  console.warn = (...a) => { warns.push(a.join(' ')); };
+  try {
+    assert.equal((await get('/tiles/14/2614/5636.png', mgr.cookie)).status, 502);
+  } finally { console.warn = realWarn; tileThrows = false; }
+  assert.ok(warns.length && warns.every((w) => !/tiles-key/.test(w)), 'no key in a log line');
+});
+
+test('GOOGLE_TILES_DAILY_MAX=3: three tiles, then 503 until the campaign’s midnight; no key in any answer', async () => {
+  const { _setNowForTest, _resetForTest: resetUsage } = await import('../lib/gusage.js');
+  google();
+  // 21:59:30 in Surrey (UTC-7 all year since March 2026): 2 h 30 s to midnight.
+  const now = Date.parse('2026-11-13T04:59:30Z');
+  _setNowForTest(() => now);
+  resetUsage();
+  process.env.GOOGLE_TILES_DAILY_MAX = '3';
+  try {
+    for (let i = 0; i < 3; i += 1) assert.equal((await get(`/tiles/14/${2620 + i}/5636.png`, mgr.cookie)).status, 200, `tile ${i + 1}`);
+    const before = log.length;
+    const r = await get('/tiles/14/2630/5636.png', mgr.cookie);
+    assert.equal(r.status, 503);
+    assert.equal(r.headers.get('retry-after'), String(2 * 3600 + 30));
+    assert.doesNotMatch(await r.text(), /tiles-key/);
+    assert.equal(log.length, before, 'nothing went to Google');
+  } finally {
+    delete process.env.GOOGLE_TILES_DAILY_MAX;
+    _setNowForTest(null);
+    resetUsage();
+  }
 });

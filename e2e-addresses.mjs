@@ -269,7 +269,7 @@ await sleep(500);
 check('typed, not picked, on someone already pinned: "The pin moves to the new address when you save"',
   /The pin moves to the new address when you save/.test(await desk.innerText('#ed-address-af-note')), await desk.innerText('#ed-address-af-note'));
 const looked = [];
-const onReq = (r) => { if (r.url().includes('/api/address/suggest')) looked.push(decodeURIComponent(r.url().split('q=')[1] || '')); };
+const onReq = (r) => { if (r.url().includes('/api/address/suggest')) looked.push(decodeURIComponent((r.url().split('q=')[1] || '').split('&')[0])); };
 desk.on('request', onReq);
 await desk.click('form[aria-label="Edit details"] button[type="submit"]');
 // Offline Example's door (added above, pinned by a tap) is on the map at that

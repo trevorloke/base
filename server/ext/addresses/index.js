@@ -5,8 +5,24 @@
 //       the map already, and need no outside service), then the geocoder's
 //       (lib/geocode.js suggestAddresses). → { suggestions: [{ house_number,
 //       street, address, unit, city, postal, lat, lng, label, source }],
-//       lookup: 'ok' | 'unavailable' | 'off' }. source 'map' is a door on
-//       file; 'lookup' is the address service's.
+//       lookup: 'ok' | 'unavailable' | 'off', by }. source 'map' is a door on
+//       file; 'lookup' is the address service's; 'google' is Google's (only
+//       with ADDRESS_SUGGEST=google, lib/places.js): { place_id, label, sub }
+//       with no address parts and no pin. by: who gave the outside rows
+//       ('google' | 'bc' | 'nominatim' | null) — never Google's and another's
+//       in one answer, so Google's logo speaks for all of them or none.
+//       &session=<uuid> (the box's, for Google) and &nogoogle=1 (rows that
+//       carry a pin). Google and the B.C. service are asked at the same time,
+//       within one 4 s budget; B.C.'s rows when Google errs, pauses, or
+//       offers no door.
+//
+//   GET /api/address/place?id=<place_id>&session=<uuid>   any role. A
+//       Google pick in words (Place Details, which ends Google's session),
+//       placed by the B.C. service with what is left of 4 s → { address,
+//       house_number, street, unit, city, postal, label, lat, lng, placed,
+//       source: 'google' } — lat null when B.C. couldn't place it in time.
+//       502 only when Google refused, didn't answer, or is paused. Writes
+//       nothing: the words go into the form, saved as today.
 //
 //   Saved with an address and no pin (person.create, person.update, an
 //   address changed by hand): the person is looked up once, just after the
@@ -26,6 +42,9 @@ import { runAction } from '../../lib/events.js';
 import { geocodeAddress, suggestAddresses } from '../../lib/geocode.js';
 import { civic } from '../../lib/address.js';
 import { makeLimiter } from '../../lib/guard.js';
+import { addressSuggester, placesFor, placesSuggest, placeDetails, isSession, isPlaceId, SESSION_WORDS } from '../../lib/places.js';
+
+export { sql } from './sql.js';
 
 const LIMIT = 5;
 const LOOKUP_MS = 4000;
@@ -40,8 +59,16 @@ const ADDRESS_KEYS = ['address', 'house_number', 'unit', 'city', 'postal'];
 
 const norm = (s) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
 const keyOf = (s) => `${norm(s.address)}|${norm(s.unit)}`;
-const within = (p, ms) => Promise.race([p, new Promise((r) => { setTimeout(() => r({ error: 'timeout' }), ms); })]);
+const within = (p, ms) => {
+  let timer;
+  return Promise.race([p, new Promise((r) => { timer = setTimeout(() => r({ error: 'timeout' }), Math.max(0, ms)); })]).finally(() => clearTimeout(timer));
+};
 const lookupOff = () => (process.env.GEOCODER || '').toLowerCase() === 'off';
+// Who GEOCODER names for suggestions and pins (google is retired: B.C.).
+const geoSuggester = () => ((process.env.GEOCODER || 'bc').trim().toLowerCase() === 'nominatim' ? 'nominatim' : 'bc');
+const PLACE_WORDS = 'Couldn’t get that address — type it in full';
+const PLACE_MS = 4000;
+const PIN_MIN_MS = 1500;
 
 export const api = new Hono();
 
@@ -69,14 +96,35 @@ api.get('/address/suggest', async (c) => {
   });
   let lookup = 'ok';
   let found = [];
-  if (lookupOff()) lookup = 'off';
+  let by = null;
+  const suggester = addressSuggester();
+  const google = suggester === 'google';
+  // GEOCODER=off: no outside lookups, unless Google's were turned on by name.
+  if ((lookupOff() && !google) || suggester === 'off') lookup = 'off';
   else if (typing(ctx.user.id)) lookup = 'unavailable'; // the doors on file still come
   else if (mine.length < LIMIT) {
-    const r = await within(suggestAddresses(q, { limit: LIMIT }), LOOKUP_MS);
-    if (Array.isArray(r)) found = r; else lookup = 'unavailable';
+    const session = c.req.query('session');
+    const askGoogle = google && isSession(session) && c.req.query('nogoogle') !== '1' && placesFor(ctx.user.id) === true;
+    // Who else is asked (never Google): ADDRESS_SUGGEST=bc|nominatim, else
+    // GEOCODER's; nobody with GEOCODER=off.
+    const other = lookupOff() ? null : google ? geoSuggester() : suggester;
+    const end = Date.now() + LOOKUP_MS;
+    // Both at once (B.C. as often as before: whenever fewer than 5 doors).
+    const fromOther = other ? suggestAddresses(q, { limit: LIMIT, provider: other }) : null;
+    let googleAnswered = false;
+    if (askGoogle) {
+      const g = await within(placesSuggest(q, { session, limit: LIMIT, user: ctx.user.id }), end - Date.now());
+      googleAnswered = Array.isArray(g);
+      if (googleAnswered && g.length) { found = g; by = 'google'; }
+    }
+    if (!by && fromOther) {
+      const r = await within(fromOther, end - Date.now());
+      if (Array.isArray(r)) { found = r; by = other; } else lookup = 'unavailable';
+    } else if (!by) lookup = googleAnswered ? 'ok' : askGoogle ? 'unavailable' : 'off';
   }
   const seen = new Set(mine.map(keyOf));
   const theirs = found.map((s) => {
+    if (s.source === 'google') return { ...s, address: s.label };
     const { address } = civic({ house_number: s.house_number, address: s.street });
     return { ...s, address, source: 'lookup' };
   }).filter((s) => {
@@ -85,7 +133,34 @@ api.get('/address/suggest', async (c) => {
     seen.add(k);
     return true;
   });
-  return c.json({ suggestions: [...mine, ...theirs].slice(0, LIMIT), lookup });
+  const suggestions = [...mine, ...theirs].slice(0, LIMIT);
+  return c.json({ suggestions, lookup, by: suggestions.some((s) => s.source !== 'map') ? by : null });
+});
+
+// A Google pick: its words, then a pin from the B.C. service in what is left
+// of 4 s. Never 502 once Google answered.
+api.get('/address/place', async (c) => {
+  const ctx = c.get('ctx');
+  const id = c.req.query('id');
+  const session = c.req.query('session');
+  if (!isPlaceId(id) || !isSession(session)) return c.json({ error: SESSION_WORDS }, 400);
+  if (typing(ctx.user.id)) return c.json({ error: PLACE_WORDS }, 429);
+  if (addressSuggester() !== 'google' || ['no-key', 'no-logo'].includes(placesFor(ctx.user.id))) return c.json({ error: PLACE_WORDS }, 502);
+  const began = Date.now();
+  const d = await placeDetails(id, { session, user: ctx.user.id });
+  if (d.error) return c.json({ error: PLACE_WORDS }, 502);
+  let pin = null;
+  if (d.address && !lookupOff()) {
+    const r = await within(geocodeAddress({ address: d.address, unit: d.unit, city: d.city, postal: d.postal }), Math.max(PIN_MIN_MS, PLACE_MS - (Date.now() - began)));
+    if (r && !r.error && !r.weak && Number.isFinite(r.lat)) pin = r;
+  }
+  return c.json({
+    ...d,
+    lat: pin ? pin.lat : null,
+    lng: pin ? pin.lng : null,
+    placed: pin ? geoSuggester() : null,
+    source: 'google',
+  });
 });
 
 // ── Placed on save ──

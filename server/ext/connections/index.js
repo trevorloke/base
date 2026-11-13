@@ -15,12 +15,15 @@
 //
 // Keys and tokens are never in an answer: only which settings are present.
 import { Hono } from 'hono';
-import { probeLookup } from '../../lib/geocode.js';
-import { googleKey, googleTilesSetting, mapType, probeTiles } from '../../lib/gtiles.js';
+import { probeLookup, retiredGoogle, RETIRED_WORDS } from '../../lib/geocode.js';
+import { googleKey, googleTilesOn, googleTilesSetting, mapType, probeTiles } from '../../lib/gtiles.js';
+import { addressSuggester, placesLogo, placesHealth, probePlaces } from '../../lib/places.js';
+import { today as googleToday } from '../../lib/gusage.js';
 import { tileConfig, tileSource } from '../offline/index.js';
 import { jobRunnerOn } from '../../lib/jobs.js';
 import { KEY_ENV, KEY_MIN, keyStatus } from '../../lib/twostep.js';
 import { basePath } from '../../lib/mount.js';
+import { timeZone } from '../../lib/org.js';
 // Email (ext/mail): its row follows the sender in use (Resend, SendGrid) and
 // carries where that sender's delivery events go.
 import { emailService, emailInbound, checkEmail } from '../mail/service.js';
@@ -54,8 +57,55 @@ const numberKind = (number) => {
   if (/^1?[2-9]\d{9}$/.test(digits)) return ' · a local number — for a text to a list in Canada, Twilio asks for a verified toll-free number or a short code';
   return '';
 };
-// One reading of GOOGLE_MAPS_TILES, the same as the map's (lib/gtiles.js).
-const googleTiles = () => googleTilesSetting() === 'on';
+// Google's row whenever the map is Google's (one reading of the settings,
+// the map's own: lib/gtiles.js), and also for GOOGLE_MAPS_TILES=1 with no key
+// — a turned-on setting that can't work is still a mistake to show.
+const googleTiles = () => googleTilesOn() || googleTilesSetting() === 'on';
+const num = (v) => Number(v || 0).toLocaleString('en-CA');
+// "4:12 pm", in the campaign's own time zone.
+const clock = (iso) => new Intl.DateTimeFormat('en-CA', { timeZone: timeZone(), hour: 'numeric', minute: '2-digit', hour12: true })
+  .format(new Date(iso)).replace(/\s*([ap])\.?m\.?$/i, (m, x) => ` ${x.toLowerCase()}m`);
+const googleTilesRow = () => {
+  const use = googleToday();
+  const max = use.ceilings.tiles;
+  const full = max != null && use.tiles >= max;
+  const lines = [
+    `Google ${mapType()} tiles, through this server${googleTilesSetting() === 'auto' ? ' · On because a Google key is set · GOOGLE_MAPS_TILES=off turns it off' : ''}`,
+    'Phones don’t keep Google’s map for no-signal areas (Google’s terms)',
+    `Today: ${num(use.tiles)} tiles${max != null ? ` of ${num(max)} (then the free map until midnight)` : ''}`,
+    full ? `Daily limit reached${use.tilesFullAt ? ` at ${clock(use.tilesFullAt)}` : ''} — the free map until midnight` : '',
+    ...use.problems.filter((p) => p.startsWith('GOOGLE_TILES')),
+  ].filter(Boolean);
+  return row('tiles', 'Map background (Google Map Tiles)', 'The map volunteers walk', false, ['GOOGLE_MAPS_SERVER_KEY'], {
+    detail: lines.join('\n'),
+    state: googleKey() ? 'ready' : 'missing',
+    ...(full && googleKey() ? { flagged: true } : {}),
+  });
+};
+// Google's address suggestions (lib/places.js): off until the owner turns
+// them on, after counsel's or Google's written yes (GOING-LIVE §5).
+const placesRow = () => {
+  const on = addressSuggester() === 'google';
+  const use = googleToday();
+  const h = placesHealth();
+  const base = (extra) => row('places', 'Address suggestions (Google Places)', 'Addresses as you type, on every form', false, on ? ['GOOGLE_MAPS_SERVER_KEY'] : [], {
+    checkable: Boolean(googleKey()),
+    ...extra,
+  });
+  if (!on || !googleKey()) {
+    return base({ detail: 'Off · the B.C. service (free) · Google’s suggestions need your confirmation first (GOING-LIVE §5)', state: on ? 'missing' : 'default' });
+  }
+  if (!placesLogo()) return base({ detail: 'Google’s logo file is missing — see owner item 9', state: 'missing', flagged: true });
+  const counts = `Today: ${num(Math.max(use.autocomplete, use.details))} of ${num(use.ceilings.places)} asks · at most ${num(use.ceilings.perPerson)} a person`;
+  const problems = use.problems.filter((p) => p.startsWith('GOOGLE_PLACES'));
+  if (h.paused) {
+    return base({
+      detail: [h.paused.plain, h.paused.said ? `Google said: “${h.paused.said}”` : '', h.paused.step ? `See Going live §5, ${h.paused.step}.` : '', 'The B.C. service meanwhile', counts, ...problems].filter(Boolean).join('\n'),
+      flagged: true,
+    });
+  }
+  return base({ detail: ['Google Places, then the B.C. service when Google is busy', counts, ...problems].join(' · ') });
+};
 // A failed check: what went wrong in plain words, then Google's own words and
 // the setup step that fixes it (GOING-LIVE.md §5) — said apart, as a todo.
 const refusedBy = (r) => {
@@ -115,19 +165,18 @@ export const services = (base = publicUrl()) => {
       ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM'], {
         detail: has('TWILIO_FROM') ? `Number ${env('TWILIO_FROM')}${numberKind(env('TWILIO_FROM'))}${env('TWILIO_VOICE') === 'off' ? ' · calls off (TWILIO_VOICE=off)' : pub ? '' : ' · calls need the public address'}` : 'Without it, Call and Text use the phone’s own apps',
       }),
-    row('geocoder', `Address lookup (${{ bc: 'BC Address Geocoder', google: 'Google Geocoding', nominatim: 'OpenStreetMap Nominatim', off: 'off' }[geo] || geo})`,
-      'Address suggestions as you type, placing people on the map', true,
-      geo === 'google' ? ['GOOGLE_MAPS_SERVER_KEY'] : [], {
-        detail: geo === 'off' ? 'Turned off (GEOCODER=off): pins by hand only'
-          : geo === 'bc' ? `Free, no key needed${has('BC_GEOCODER_KEY') ? ' · key set for higher limits' : ''}${env('GEOCODER_FALLBACK') ? ` · then ${env('GEOCODER_FALLBACK')} for what it can’t place` : ''}`
-            : geo === 'nominatim' ? 'Free, no key; light use only' : 'Google Cloud key with the Geocoding API',
-        state: geo === 'off' ? 'missing' : (geo === 'google' && !googleKey()) ? 'missing' : 'ready',
+    // Pins (the B.C. service, or Nominatim): Google no longer places them.
+    ((retired) => row('geocoder', `Map pins (${{ bc: 'BC Address Geocoder', google: 'BC Address Geocoder', nominatim: 'OpenStreetMap Nominatim', off: 'off' }[geo] || geo})`,
+      'Placing people on the map', true, [], {
+        detail: [geo === 'off' ? 'Turned off (GEOCODER=off): pins by hand only'
+          : geo === 'nominatim' ? 'Pins: OpenStreetMap Nominatim (free, no key; light use only)'
+            : `Pins: B.C. Address Geocoder (free)${has('BC_GEOCODER_KEY') ? ' · key set for higher limits' : ''}${env('GEOCODER_FALLBACK') && env('GEOCODER_FALLBACK').toLowerCase() !== 'google' ? ` · then ${env('GEOCODER_FALLBACK')} for what it can’t place` : ''}`,
+        retired.length ? RETIRED_WORDS : ''].filter(Boolean).join('\n'),
+        state: geo === 'off' ? 'missing' : 'ready',
         ...(geo === 'off' ? { missing: ['GEOCODER'] } : {}),
-      }),
-    googleTiles() ? row('tiles', 'Map background (Google Map Tiles)', 'The map volunteers walk', false, ['GOOGLE_MAPS_SERVER_KEY'], {
-      detail: `Google ${mapType()} tiles, through this server`,
-      state: googleKey() ? 'ready' : 'missing',
-    }) : freeTilesRow(),
+        ...(retired.length ? { flagged: true, todo: `Take ${retired.map((k) => `${k}=google`).join(' and ')} away in Render` } : {}),
+      }))(retiredGoogle()),
+    googleTiles() ? googleTilesRow() : freeTilesRow(),
     row('jobs', 'Background work', 'Sends that go out later, ladder steps, receipts, the address run', true, [], {
       detail: jobRunnerOn() ? 'Running on this server' : 'Off on this server (STARBASE_JOBS=off — take that setting away): scheduled sends wait',
       state: jobRunnerOn() ? 'ready' : 'missing',
@@ -148,6 +197,7 @@ export const services = (base = publicUrl()) => {
       missing: k.source === 'env' ? [] : [KEY_ENV],
       checkable: false,
     }))(keyStatus()),
+    placesRow(),
   ];
   return list;
 };
@@ -221,6 +271,13 @@ const CHECKS = {
     const r = await probeLookup();
     if (r.ok) return { ok: true, said: `Answering${r.example ? ` · e.g. ${r.example}` : ''}` };
     return refusedBy(r);
+  },
+  // Google Places: one autocomplete (lib/places.js), whenever a key is set —
+  // also while suggestions are off, so the key can be tested first.
+  places: async () => {
+    if (!googleKey()) return { ok: false, said: 'GOOGLE_MAPS_SERVER_KEY isn’t set', todo: 'See Going live §5, Recipe B step 6.' };
+    const r = await probePlaces();
+    return r.ok ? { ok: true, said: `Working${r.example ? ` · e.g. ${r.example}` : ''}` } : refusedBy(r);
   },
   // Google: one live session and tile (lib/gtiles.js), its own words when it
   // refuses. The free maps come straight to each phone: nothing to ask here.

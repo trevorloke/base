@@ -23,6 +23,7 @@ import GooglePanel from './GooglePanel.jsx';
 import { NoSignal, noSignal, useOnline } from './NoSignal.jsx';
 import ServiceConnect from './ServiceConnect.jsx';
 import './services.css';
+import './services-lines.css';
 
 const STATE_WORD = { ready: 'Set up', missing: 'Not set up', default: 'Using the free default', test: 'Test mode' };
 

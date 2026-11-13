@@ -409,8 +409,9 @@ try {
   await pp.goto(`${ADMIN}/shifts/${tueCards[1].id}`, { waitUntil: 'domcontentloaded' });
   await pp.waitForSelector('.ops-lines .sch-maplink', { timeout: 10000 });
   const pinHref = await pp.locator('.sch-maplink').getAttribute('href');
-  check('the shift’s page: "Pinned place · Map ↗" — its coordinates only in the map link — and "Name it" for the desk',
-    (await PP.text('.sch-maplink')) === 'Pinned place · Map ↗' && /^https:\/\/www\.google\.com\/maps\/search\/\?api=1&query=49\.\d+,-122\.\d+$/.test(pinHref || '')
+  check('the shift’s page: "Pinned place", then "Directions" — its coordinates only in that link — and "Name it" for the desk',
+    (await PP.text('.sch-maplink')) === 'Directions' && /Pinned place/.test(await PP.text('.ops-lines')) && !/Map ↗/.test(await PP.text('.ops-lines'))
+    && /^https:\/\/www\.google\.com\/maps\/dir\/\?api=1&destination=49\.\d+,-122\.\d+$/.test(pinHref || '')
     && !/Pin at|49\.\d{4}, /.test(await PP.text('main.page')) && (await pp.locator('.ops-lines .sch-pinned button:has-text("Name it")').count()) === 1,
     `${await PP.text('.ops-lines')} | ${pinHref}`);
   check('…and its Mainstreeting asks where, never handed the coordinates', (await pp.locator('a:has-text("Start mainstreeting")').getAttribute('href')) === '/admin/mainstreet?ask=1',
@@ -1420,7 +1421,7 @@ try {
   await vrow(tueCards[1].id).locator('.ops-row').tap();
   await vp.waitForSelector('.ops-lines', { timeout: 10000 });
   const mapHref = await vp.locator('.sch-maplink').getAttribute('href').catch(() => null);
-  check('a place with a pin opens a map', /^https:\/\/www\.google\.com\/maps\/search\/\?api=1&query=49\.\d+,-122\.\d+$/.test(mapHref || '') && /Newton Exchange/.test(await V.text('.sch-maplink')), mapHref);
+  check('a place with a pin: its words, then Directions in Google Maps', /^https:\/\/www\.google\.com\/maps\/dir\/\?api=1&destination=49\.\d+,-122\.\d+$/.test(mapHref || '') && /Newton Exchange/.test(await V.text('.ops-lines')) && (await V.text('.sch-maplink')) === 'Directions', mapHref);
   check('the shift says what it is, and when on the campaign’s clock', /Mainstreet/.test(await V.text('.sch-kindchip')) && (await V.text('.ops-lines .when')) === `${longDay(tue)} · 7–9 am`, await V.text('.ops-lines'));
   mm = await measure(vp, '.ops-notify .btn, .sch-maplink');
   check('the shift (390): one main button — "Start mainstreeting" — no sideways scroll, 48px targets', mm.yellow.join('|') === 'Start mainstreeting' && mm.overflow <= 0 && mm.minTap >= 47.5, JSON.stringify(mm));
@@ -1442,8 +1443,8 @@ try {
   await until(async () => /You’re on ✓/.test(await vrow(pinMs.id).innerText()));
   await vrow(pinMs.id).locator('.ops-row').tap();
   await vp.waitForSelector('.ops-lines .sch-maplink', { timeout: 10000 });
-  check('its page: "Pinned place · Map ↗", the coordinates only in the link — and no "Name it" on a volunteer’s phone',
-    (await V.text('.sch-maplink')) === 'Pinned place · Map ↗' && /query=49\.2,-122\.9$/.test(await vp.locator('.sch-maplink').getAttribute('href'))
+  check('its page: "Pinned place", then "Directions", the coordinates only in the link — and no "Name it" on a volunteer’s phone',
+    (await V.text('.sch-maplink')) === 'Directions' && /Pinned place/.test(await V.text('.ops-lines')) && /destination=49\.2,-122\.9$/.test(await vp.locator('.sch-maplink').getAttribute('href'))
     && !/Pin at|49\.2000/.test(await V.text('main.page')) && (await vp.locator('button:has-text("Name it")').count()) === 0, await V.text('.ops-lines'));
   await V.shot('54-vol-pinned-shift-390');
   await vp.locator('a:has-text("Start mainstreeting")').tap();

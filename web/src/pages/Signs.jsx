@@ -18,11 +18,12 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useOutletContext, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { SIGN_KINDS, SIGN_STATUSES } from '@starbase/shared/canvass';
+import { directionsUrl } from '@starbase/shared/maps';
 import { apiGet, action } from '../api.js';
 import { PersonPicker } from './Shifts.jsx';
 import { NoSignal, noSignal, useOnline, NeedsSignalLine } from '../components/NoSignal.jsx';
 import './shifts.css';
-import AddressField, { lookupAddress } from '../components/AddressField.jsx';
+import AddressField, { lookupAddress, pinOf } from '../components/AddressField.jsx';
 
 // The registry label carries the size ("Large sign (4×4)"); it rides along as a tooltip.
 const kindSize = (code) => SIGN_KINDS.find((k) => k.code === code)?.label ?? code;
@@ -39,12 +40,8 @@ const statusLabel = (s) => STATUS_LABEL[s] ?? s;
 const DONE_WORD = { requested: 'To put up', installed: 'Put up', removed: 'Taken down' };
 // The sample dataset tags every note "sample"; Today already says so.
 const shownNote = (n) => (n && n.trim().toLowerCase() !== 'sample' ? n : null);
-// Directions to where the sign goes (the phone's maps app).
-const mapsHref = (s) => {
-  if (s.lat != null && s.lng != null) return `https://www.google.com/maps/search/?api=1&query=${s.lat},${s.lng}`;
-  if (s.address) return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.address)}`;
-  return null;
-};
+// Directions to where the sign goes, by car, in the phone's Google Maps.
+const mapsHref = (s) => directionsUrl({ lat: s.lat, lng: s.lng, address: s.address, city: s.city }, { mode: 'driving' });
 // Requested is amber outline, never the yellow of the one primary button.
 const STATUS_CHIP = { requested: 'ops-chip-amber', installed: 'chip-ok', removed: 'ops-chip-muted' };
 // GET /api/persons/:id 500s on a malformed uuid, so ?person=junk is ignored.
@@ -111,7 +108,7 @@ function SignRow({ s, open, onToggle, busy, onUpdate, onCancel }) {
               {s.person_id && <Link to={`/people/${s.person_id}`}>{s.person_name || 'Supporter'}</Link>}
               {s.person_id && mapsHref(s) && <span aria-hidden="true">·</span>}
               {mapsHref(s) && (
-                <a href={mapsHref(s)} target="_blank" rel="noopener noreferrer">Directions</a>
+                <a href={mapsHref(s)} target="_blank" rel="noopener noreferrer" aria-label={`Directions to ${where(s)} in Google Maps`}>Directions</a>
               )}
             </p>
           )}
@@ -150,7 +147,7 @@ function PutUpRow({ s, busy, onPutUp }) {
           <span className="ops-row__name">
             {mapsHref(s) ? (
               <a className="ops-addr" href={mapsHref(s)} target="_blank" rel="noopener noreferrer"
-                aria-label={`Directions to ${where(s)}`}>
+                aria-label={`Directions to ${where(s)} in Google Maps`}>
                 {s.address || s.person_name}
               </a>
             ) : (s.address || s.person_name || '—')}
@@ -275,7 +272,7 @@ function PlaceSignForm({ presetPersonId, canCreatePerson, onSaved, onClose }) {
             value={address}
             placed={Boolean(pin)}
             onChange={(v) => { setAddress(v); setPin(null); }}
-            onPick={(a) => { setAddress(a.unit ? `${a.unit} – ${a.address}` : a.address); setPin({ lat: a.lat, lng: a.lng }); }}
+            onPick={(a) => { setAddress(a.unit ? `${a.unit} – ${a.address}` : a.address); setPin(pinOf(a)); }}
             hint={address.trim() ? 'Pick it from the list to pin it — a corner is fine as typed' : null}
           />
           {mode === 'person' && person && !person.address && !address.trim() && (

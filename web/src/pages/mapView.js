@@ -261,8 +261,32 @@ export const tileHost = (url) => {
 // Map): it is drawn only when the map went there by itself, and it is the
 // first look turned to — Google's own looks share its server, so they are
 // no way round it failing.
-// → { providerView, otherLook }
-export const pickLook = ({ views = [], viewPick, drawnAuto = null, baseUrl = null, muted = null }) => {
+// → { providerView, otherLook, shadeAllowed, look }
+//   shadeAllowed  false while a Google look is drawn: no Muted or Dark filter
+//                 over Google's tiles (its imagery may not be altered)
+//   look          the pick to draw: a saved Clean, Muted or Dark is the
+//                 standard look while shades aren't allowed
+export const isGoogleUrl = (url) => !tileHost(url) && /\/tiles\/\{z\}/.test(url || '');
+const SHADE_PICKS = ['clean', 'muted', 'dark'];
+export const pickLook = (args) => {
+  const r = pickProvider(args);
+  const shadeAllowed = !isGoogleUrl(r.providerView ? r.providerView.url : args.baseUrl);
+  const look = !shadeAllowed && SHADE_PICKS.includes(args.viewPick) ? 'standard' : args.viewPick;
+  return { ...r, shadeAllowed, look };
+};
+
+// Show → Map's list. While a Google look is drawn: the standard look,
+// called by its own word (standardLabel: "Streets" for the roadmap), then
+// Google's other types — never Muted or Dark. Otherwise the shades and the
+// provider's looks, as before. A fallback is never offered.
+export const mapLooks = ({ shades = [], views = [], standardLabel = null, shadeAllowed = true }) => {
+  const others = views.filter((v) => !v.fallback);
+  if (shadeAllowed) return [...shades, ...others];
+  const standard = shades.find((x) => x.key === 'standard') || { key: 'standard', label: 'Standard' };
+  return [{ ...standard, label: standardLabel || standard.label }, ...others];
+};
+
+const pickProvider = ({ views = [], viewPick, drawnAuto = null, baseUrl = null, muted = null }) => {
   const look = drawnAuto || viewPick;
   const providerView = views.find((v) => v.key === look && (!v.fallback || v.key === drawnAuto)) || null;
   const fallback = views.find((v) => v.fallback) || null;
@@ -334,11 +358,11 @@ const serviceLines = (services, clock, now, page) => {
   // A failed read isn't "nothing wrong": flagged, with the one way to ask again.
   if (services.state === 'error') {
     const o = { warn: true };
-    return [['tilesvc', 'Street map service', 'Unavailable — tap Check again', o], ['lookupsvc', 'Address lookup', 'Unavailable — tap Check again', o]];
+    return [['tilesvc', 'Street map service', 'Unavailable — tap Check again', o], ['lookupsvc', 'Map pins', 'Unavailable — tap Check again', o]];
   }
   const waiting = { pending: 'Checking…', offline: 'No signal — the check needs it' }[services.state];
-  if (waiting) return [['tilesvc', 'Street map service', waiting, {}], ['lookupsvc', 'Address lookup', waiting, {}]];
-  const { tiles: t, lookup: l } = services.data;
+  if (waiting) return [['tilesvc', 'Street map service', waiting, {}], ['lookupsvc', 'Map pins', waiting, {}]];
+  const { tiles: t, lookup: l, suggest: g } = services.data;
   let tiles;
   if (!t.viaServer) {
     // The phones reach it straight: name the service the map actually drew
@@ -356,7 +380,17 @@ const serviceLines = (services, clock, now, page) => {
   if (l.provider === 'off') lookup = ['Turned off', {}];
   else if (l.probe?.ok) lookup = [`Working · ${l.provider}`, {}];
   else lookup = [`Not working · ${l.provider}`, { note: l.probe ? troubleNote(l.probe) : null, warn: true }];
-  return [['tilesvc', 'Street map service', ...tiles], ['lookupsvc', 'Address lookup', ...lookup]];
+  // Who suggests addresses as people type, when it isn't the service that
+  // places the pins (Google Places once turned on; paused after Google
+  // refused: its words and the step) — the sheet stays one screen otherwise.
+  // An older server: no line.
+  let suggest = null;
+  if (!g || (g.provider === l.provider && !g.paused)) suggest = null;
+  else if (g.provider === 'off') suggest = ['Turned off', {}];
+  else if (g.paused) suggest = [`Not working · ${g.provider}`, { note: troubleNote(g.paused), warn: true }];
+  else if (g.probe?.ok) suggest = [`Working · ${g.provider}`, {}];
+  else suggest = [`Not working · ${g.provider}`, { note: g.probe ? troubleNote(g.probe) : null, warn: true }];
+  return [['tilesvc', 'Street map service', ...tiles], ['lookupsvc', 'Map pins', ...lookup], ...(suggest ? [['suggestsvc', 'Address suggestions', ...suggest]] : [])];
 };
 // The placing run's last error, in plain words ("geocoder billing: Billing
 // isn’t turned on…" → "Billing isn’t turned on…"; a bare "geocoder 403" stays).

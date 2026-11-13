@@ -33,7 +33,7 @@ import {
 import { KeyTies, KnowMeChip, MyPeopleLink, useKeyTies } from '../components/RelationshipsBits.jsx';
 import { hasArea } from '../Shell.jsx';
 import { VotedRow } from '../components/Voted.jsx';
-import AddressField, { lookupAddress } from '../components/AddressField.jsx';
+import AddressField, { lookupAddress, pinOf } from '../components/AddressField.jsx';
 import { CUT_KEYS, CutGroups, addCuts, cutChips, useTurfs, useWebDid } from '../components/FieldCuts.jsx';
 import ScriptLine, { useScripts } from '../components/ScriptLine.jsx';
 import NameFields from '../components/NameFields.jsx';
@@ -659,7 +659,7 @@ function AddPersonForm({ onClose, me }) {
       </div>
       <AddressField id="np-address" value={form.address} placed={Boolean(pin)}
         onChange={(v) => { setForm((f) => ({ ...f, address: v })); setPin(null); }}
-        onPick={(a) => { setForm((f) => ({ ...f, address: a.address, unit: a.unit || f.unit, city: a.city || f.city, postal: a.postal || f.postal })); setPin({ lat: a.lat, lng: a.lng }); }}
+        onPick={(a) => { setForm((f) => ({ ...f, address: a.address, unit: a.unit || f.unit, city: a.city || f.city, postal: a.postal || f.postal })); setPin(pinOf(a)); }}
         hint={form.address.trim() ? 'Found on the map when you save' : null} />
       <button type="button" className="pp-moredetails disclose disclose--inline" aria-expanded={more} onClick={() => setMore((v) => !v)}>
         More details

@@ -20,13 +20,15 @@ const realFetch = globalThis.fetch;
 const saved = { ...process.env };
 const KEYS = ['RESEND_API_KEY', 'MAIL_FROM', 'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM', 'STARBASE_PUBLIC_URL',
   'GEOCODER', 'GOOGLE_MAPS_TILES', 'GOOGLE_MAPS_SERVER_KEY', 'DATABASE_URL', 'TWILIO_VOICE', 'STARBASE_TILE_URL', 'STARBASE_TILE_PROVIDER', 'STARBASE_TILE_KEY',
-  'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'BASE_PATH', 'CALLHUB_API_KEY', 'CALLHUB_API_BASE'];
+  'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'BASE_PATH', 'CALLHUB_API_KEY', 'CALLHUB_API_BASE',
+  'ADDRESS_SUGGEST', 'GEOCODER_FALLBACK', 'GOOGLE_PLACES_DAILY_MAX', 'GOOGLE_PLACES_PER_PERSON', 'GOOGLE_TILES_DAILY_MAX'];
 let mgr, staff;
 let resendDomains = [];
 let resendHooks = [];
 let dmarc = null; // the sender's domain's DMARC record (TXT), when it has one
 let twilioNumbers = [];
 let refuse = false;
+let placesRefuse = null; // Google Places' refusal body, or null for a good answer
 const seen = [];
 KEYS.push('GOOGLE_OAUTH_CLIENT_ID', 'GOOGLE_OAUTH_CLIENT_SECRET', 'GOOGLE_TOKEN_KEY', 'GOOGLE_ACCOUNTS_BASE', 'GOOGLE_OAUTH_BASE', 'BASE_DOOR_KEY');
 KEYS.push('MAIL_PROVIDER', 'RESEND_WEBHOOK_SECRET', 'SENDGRID_API_KEY', 'MAILCHIMP_API_KEY', 'MAILCHIMP_API_BASE', 'MAILCHIMP_AUDIENCE_ID');
@@ -55,7 +57,13 @@ before(async () => {
     if (u.hostname === 'tile.googleapis.com') {
       return refuse ? new Response(JSON.stringify(BILLING_OFF), { status: 403 }) : new Response(JSON.stringify({ session: 's', expiry: '9999999999' }));
     }
-    return realFetch(url, opts);
+    if (u.hostname === 'places.googleapis.com') {
+      if (placesRefuse) return new Response(JSON.stringify(placesRefuse), { status: 403 });
+      return new Response(JSON.stringify({ suggestions: [{ placePrediction: { placeId: 'p1', types: ['street_address'],
+        structuredFormat: { mainText: { text: '100 104 Ave' }, secondaryText: { text: 'Surrey, BC, Canada' } } } }] }));
+    }
+    // No test reaches the network: an address not stood in for is an error.
+    throw new Error(`no stand-in for ${u.hostname}`);
   };
   mgr = new Client();
   await mgr.signup({ workspaceName: `Services ${tag}`, email: `sv-mgr+${tag}@example.org`, jurisdiction: 'bc-municipal' });
@@ -76,12 +84,16 @@ const check = async (key) => ok(await mgr.post('/api/connections/check', { key }
 
 test('nothing set: what each service is for and which settings are missing — managers only', async () => {
   const s = byKey(await list());
-  assert.deepEqual(Object.keys(s), ['database', 'public', 'email', 'texting', 'geocoder', 'tiles', 'jobs', 'mailchimp', 'stripe', 'callhub', 'google', 'twostep']);
+  assert.deepEqual(Object.keys(s), ['database', 'public', 'email', 'texting', 'geocoder', 'tiles', 'jobs', 'mailchimp', 'stripe', 'callhub', 'google', 'twostep', 'places']);
   assert.deepEqual(s.email.missing, ['RESEND_API_KEY', 'MAIL_FROM']);
   assert.equal(s.email.state, 'missing');
   assert.deepEqual(s.texting.missing, ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM']);
   assert.equal(s.public.state, 'missing');
   assert.equal(s.geocoder.state, 'ready', 'the BC geocoder needs no key');
+  assert.deepEqual([s.geocoder.name, s.geocoder.for, s.geocoder.detail], ['Map pins (BC Address Geocoder)', 'Placing people on the map', 'Pins: B.C. Address Geocoder (free)']);
+  assert.deepEqual([s.places.name, s.places.for, s.places.state, s.places.flagged, s.places.checkable],
+    ['Address suggestions (Google Places)', 'Addresses as you type, on every form', 'default', undefined, false]);
+  assert.equal(s.places.detail, 'Off · the B.C. service (free) · Google’s suggestions need your confirmation first (GOING-LIVE §5)');
   assert.equal(s.tiles.state, 'default');
   assert.equal((await staff.get('/api/connections')).status, 403);
   assert.equal((await staff.post('/api/connections/check', { key: 'email' })).status, 403);
@@ -189,7 +201,9 @@ test('the public address, the address service, the database and Google tiles ans
 
 test('the tiles row reads the map’s own setting: the Stadia preset is named, ready, and never called OpenStreetMap', async () => {
   const google = process.env.GOOGLE_MAPS_TILES;
+  const key = process.env.GOOGLE_MAPS_SERVER_KEY;
   delete process.env.GOOGLE_MAPS_TILES;
+  delete process.env.GOOGLE_MAPS_SERVER_KEY;
   process.env.STARBASE_TILE_PROVIDER = 'stadia';
   process.env.STARBASE_TILE_KEY = 'stadiakey';
   try {
@@ -217,7 +231,85 @@ test('the tiles row reads the map’s own setting: the Stadia preset is named, r
     delete process.env.STARBASE_TILE_PROVIDER;
     delete process.env.STARBASE_TILE_KEY;
     if (google != null) process.env.GOOGLE_MAPS_TILES = google;
+    if (key != null) process.env.GOOGLE_MAPS_SERVER_KEY = key;
   }
+});
+
+// ── Google Maps: on with a key, the trade-off said, today's counts ──
+const API_BLOCKED = { error: { code: 403, message: 'Requests to this API places.googleapis.com method google.maps.places.v1.Places.AutocompletePlaces are blocked.', status: 'PERMISSION_DENIED',
+  details: [{ '@type': 'type.googleapis.com/google.rpc.ErrorInfo', reason: 'API_KEY_SERVICE_BLOCKED', domain: 'googleapis.com' }] } };
+
+test('Google’s map row: on with only a key, the offline trade-off said; GOOGLE_MAPS_TILES=1 with no key flagged; unset with no key the free row', async () => {
+  for (const k of ['GOOGLE_MAPS_TILES', 'GOOGLE_MAPS_SERVER_KEY']) delete process.env[k];
+  resetTiles();
+  let t = byKey(await list()).tiles;
+  assert.deepEqual([t.name, t.state], ['Map background (OpenStreetMap and CARTO)', 'default'], 'nothing set: the free row, unflagged');
+  process.env.GOOGLE_MAPS_TILES = '1';
+  t = byKey(await list()).tiles;
+  assert.deepEqual([t.name, t.state, t.missing], ['Map background (Google Map Tiles)', 'missing', ['GOOGLE_MAPS_SERVER_KEY']], 'turned on with no key: a mistake, shown');
+  delete process.env.GOOGLE_MAPS_TILES;
+  process.env.GOOGLE_MAPS_SERVER_KEY = 'gkey';
+  t = byKey(await list()).tiles;
+  assert.deepEqual([t.name, t.state], ['Map background (Google Map Tiles)', 'ready']);
+  assert.deepEqual(t.detail.split('\n'), [
+    'Google roadmap tiles, through this server · On because a Google key is set · GOOGLE_MAPS_TILES=off turns it off',
+    'Phones don’t keep Google’s map for no-signal areas (Google’s terms)',
+    'Today: 0 tiles',
+  ]);
+  process.env.GOOGLE_TILES_DAILY_MAX = '20000';
+  assert.equal(byKey(await list()).tiles.detail.split('\n')[2], 'Today: 0 tiles of 20,000 (then the free map until midnight)');
+  process.env.GOOGLE_TILES_DAILY_MAX = 'lots';
+  assert.match(byKey(await list()).tiles.detail, /GOOGLE_TILES_DAILY_MAX isn’t a number — no limit/);
+  delete process.env.GOOGLE_TILES_DAILY_MAX;
+  assert.doesNotMatch(JSON.stringify(await list()), /gkey/);
+});
+
+test('the Places row: off by default (its Check still tests the key), on, logo missing, missing key, paused with Google’s words; GEOCODER=google retired', async () => {
+  const { _setPlacesLogoForTest, _resetPlacesForTest } = await import('../lib/places.js');
+  process.env.GOOGLE_MAPS_SERVER_KEY = 'gkey';
+  _resetPlacesForTest();
+  let p = byKey(await list()).places;
+  assert.deepEqual([p.state, p.checkable], ['default', true]);
+  assert.match(p.detail, /^Off · the B\.C\. service/);
+  const toPlaces = () => seen.filter((x) => x.host === 'places.googleapis.com').length;
+  const before = toPlaces();
+  assert.deepEqual(Object.values(await check('places')).slice(1, 3), [true, 'Working · e.g. 100 104 Ave'], 'the key tested while suggestions are off');
+  assert.equal(toPlaces() - before, 1);
+  // Turned on, with no key: missing it.
+  process.env.ADDRESS_SUGGEST = 'google';
+  delete process.env.GOOGLE_MAPS_SERVER_KEY;
+  p = byKey(await list()).places;
+  assert.deepEqual([p.state, p.missing], ['missing', ['GOOGLE_MAPS_SERVER_KEY']]);
+  process.env.GOOGLE_MAPS_SERVER_KEY = 'gkey';
+  _setPlacesLogoForTest(false);
+  p = byKey(await list()).places;
+  assert.deepEqual([p.flagged, p.detail], [true, 'Google’s logo file is missing — see owner item 9']);
+  _setPlacesLogoForTest(true);
+  p = byKey(await list()).places;
+  assert.equal(p.state, 'ready');
+  assert.equal(p.detail, 'Google Places, then the B.C. service when Google is busy · Today: 0 of 300 asks · at most 50 a person');
+  // Google refuses an ask: the row is flagged with the plain words, Google's and the step.
+  placesRefuse = API_BLOCKED;
+  const r = await mgr.get(`/api/address/suggest?q=${encodeURIComponent('100 10')}&session=${crypto.randomUUID()}`);
+  assert.equal(r.json.by, 'bc');
+  p = byKey(await list()).places;
+  assert.equal(p.flagged, true);
+  const lines = p.detail.split('\n');
+  assert.equal(lines[0], 'This key is limited to other Google services. Add Map Tiles API and Places API (New) to it.');
+  assert.match(lines[1], /^Google said: “Requests to this API places\.googleapis\.com/);
+  assert.equal(lines[2], 'See Going live §5, Recipe B step 4.');
+  assert.match(p.detail, /Today: 1 of 300 asks/);
+  placesRefuse = null;
+  _resetPlacesForTest();
+  _setPlacesLogoForTest(null);
+  delete process.env.ADDRESS_SUGGEST;
+  // GEOCODER=google: B.C. places pins, and the row says to take the setting away.
+  process.env.GEOCODER = 'google';
+  const g = byKey(await list()).geocoder;
+  assert.deepEqual([g.name, g.state, g.flagged, g.todo], ['Map pins (BC Address Geocoder)', 'ready', true, 'Take GEOCODER=google away in Render']);
+  assert.match(g.detail, /\nGEOCODER=google is no longer used for pins: Google’s terms let its pins be kept 30 days only and not on other maps · the B\.C\. service places them$/);
+  delete process.env.GEOCODER;
+  assert.doesNotMatch(JSON.stringify(await list()), /gkey/);
 });
 
 test('files in: the desk’s own address — /desk under the client’s path on base.win, /admin at a server’s root', async () => {

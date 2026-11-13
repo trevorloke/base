@@ -59,7 +59,7 @@ INTEGRATIONS.md.
 | `RESEND_WEBHOOK_SECRET` | bounces, spam complaints and "delivered" back from Resend (INTEGRATIONS.md; SendGrid: `MAIL_PROVIDER`, `SENDGRID_API_KEY`, `SENDGRID_WEBHOOK_PUBLIC_KEY`) | optional — without it a send says *sent* and a dead address is tried again next time |
 | `MAILCHIMP_API_KEY` | *Send to Mailchimp* on a list, unsubscribes kept in step both ways (INTEGRATIONS.md; `MAILCHIMP_AUDIENCE_ID` for an account with several audiences, `MAILCHIMP_WEBHOOK_SECRET` to check its webhook's signature) | optional — without it the button is not there |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` | SMS shift alerts; texting and calling from the app through the campaign's number | optional — without it, Calls opens the phone's own Messages and dialer |
-| `GOOGLE_MAPS_SERVER_KEY` | Google geocoding (`GEOCODER=google` or `GEOCODER_FALLBACK=google`) and Google Maps tiles (`GOOGLE_MAPS_TILES=1`) | optional — the free BC geocoder and OpenStreetMap tiles work without it |
+| `GOOGLE_MAPS_SERVER_KEY` | Google Maps tiles (on whenever it is set, unless `GOOGLE_MAPS_TILES=off`) and, with `ADDRESS_SUGGEST=google`, Google's address suggestions; pins always come from the B.C. service | optional — the free BC geocoder and OpenStreetMap tiles work without it |
 | `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_TOKEN_KEY` | Sign in with Google, and the one Google connection Gmail, Drive and Calendar use (INTEGRATIONS.md); in tests a stand-in Google (`server/test/fake-google.js`, pointed at with `GOOGLE_ACCOUNTS_BASE` and `GOOGLE_OAUTH_BASE`) — never real Google | optional — without them no Google button shows, and passwords work as always |
 | `STARBASE_TWO_STEP_KEY` | seals everyone's two-step sign-in key (INTEGRATIONS.md) | optional to test — without it a key kept in the database is used, and Settings → Services says so |
 
@@ -831,8 +831,9 @@ one tap away under **More**.
 - **Map → filter button → Map** — the map opens on *Clean* (quiet streets,
   no shop icons or house numbers); *Muted* greys the standard streets (the
   doors keep their colours), *Dark* is for night; it stays on that browser.
-  With Google Maps on (`GOOGLE_MAPS_TILES=1`), *Satellite* and *Terrain* are
-  there too.
+  With Google as the map (a `GOOGLE_MAPS_SERVER_KEY` set, `GOOGLE_MAPS_TILES`
+  not `off`), the list is *Streets · Satellite · Terrain*: no *Muted* or
+  *Dark* over Google's map, and a saved one draws *Streets*.
 - **Map, zooming in** — from the whole city to a street: every door is a
   dot in its rating's colour (grey: not asked yet), no number bubbles; a
   door with a sign gets a little flag, and close in a household's size is
@@ -851,7 +852,34 @@ one tap away under **More**.
   (`node e2e-map.mjs` runs a big list in miniature through all of this in a
   browser, and through the next four; `ONLY=tiles,check node e2e-map.mjs`
   runs parts of it.)
-- **Map, Google Maps refusing** (staging with `GOOGLE_MAPS_TILES=1`) — a
+- **Google Maps, the server's part** (`node --test server/test/gtiles.test.js
+  server/test/places.test.js server/test/gusage.test.js
+  server/test/maps-links.test.js`, against stand-in Google and B.C.
+  services, never the real ones): a key alone makes Google the map and
+  `GOOGLE_MAPS_TILES=off` keeps the free one; tiles carry Google's own cache
+  header and the service worker never keeps them; a slow Google tile is a
+  504 with no pause; `GOOGLE_TILES_DAILY_MAX` stops tiles until midnight;
+  Google's address rows only with `ADDRESS_SUGGEST=google` and the logo, a
+  pick placed by B.C. within 4 s, one Google call for 50 asks after a
+  refusal; today's counts survive a restart; Directions links never carry
+  an origin. On staging with a real key, also record one tile's
+  `Cache-Control` and how many tiles a phone walking a turf for an hour
+  used (Settings → Services → Map background shows today's count).
+- **Google Maps, the screens** (`node e2e-gmaps.mjs`: base.win on :5340, a
+  stand-in B.C. service on :5341 and a stand-in Google on :5342; every real
+  Google and B.C. address is blocked) — with only the key, Show → Map is
+  *Streets · Satellite · Terrain*, the phone keeps no Google tiles, and with
+  no signal the map says *No signal — the street map is back when you are.
+  Your doors are all here.*; New door offers the campaign's doors and then
+  B.C.'s, never Google's. With `ADDRESS_SUGGEST=google`, Google's rows come
+  with Google's logo under the list; a pick says *Loading…* and then
+  *Pinned on the map*, and one B.C. can't place asks for a tap on the map.
+  *Directions* (the phone's Google Maps) sits in a door card's and a
+  walk-list door's More, on a shift (in place of *Map ↗*) and on a sign,
+  with or without Google; the *Maps by Google* line ends the Show sheet
+  and Your profile. On a phone: a door's More → *Directions* opens Google
+  Maps walking to the door; a sign's *Directions* opens it driving.
+- **Map, Google Maps refusing** (staging with `GOOGLE_MAPS_SERVER_KEY` set) — a
   key with billing off, or block `/tiles/` in the browser's network tools
   and reload: the map turns to the free map and says *Google Maps isn’t
   loading — showing the free map*; a manager's *Why?* beside it opens the
@@ -1119,13 +1147,10 @@ A full voter list (hundreds of thousands of people) takes a few hours. Set
 `BC_GEOCODER_KEY` (a free key from the BC government's API gateway) for
 higher limits, and `GEOCODE_CONCURRENCY` (default 6) to ask more at once.
 
-To use Google Maps for the lookups instead, or for the addresses the BC
-service can't place: in Google Cloud enable the **Geocoding API**, create a
-key restricted to that API (and to the server's IP), and set
-`GOOGLE_MAPS_SERVER_KEY` with `GEOCODER=google` (Google for everything) or
-`GEOCODER_FALLBACK=google` (BC first, Google for the rest). Google charges
-per lookup past its free monthly allowance — check the current pricing
-before running a whole voter list through it.
+Google no longer places pins (its terms don't let its pins be kept, shared
+or drawn on the free map): `GEOCODER=google` and `GEOCODER_FALLBACK=google`
+are ignored, and the B.C. service places everyone. An address that service
+can't place gets a pin by hand.
 
 For your real voters list: map its columns on the second step; re-importing
 the same file never creates duplicates.

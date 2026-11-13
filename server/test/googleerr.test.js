@@ -70,3 +70,10 @@ test('every step named is a step of GOING-LIVE.md §5', () => {
     assert.match(body, new RegExp(`^${n}\\. `, 'm'), step);
   }
 });
+
+test('a key limited to other services: the words name the two APIs base.win uses (Map Tiles and Places (New))', () => {
+  const t = googleTrouble(403, { error: { code: 403, message: 'Requests to this API places.googleapis.com method google.maps.places.v1.Places.AutocompletePlaces are blocked.', details: [{ reason: 'API_KEY_SERVICE_BLOCKED' }] } });
+  assert.equal(t.code, 'api-blocked');
+  assert.equal(t.plain, 'This key is limited to other Google services. Add Map Tiles API and Places API (New) to it.');
+  assert.equal(t.step, 'Recipe B step 4');
+});

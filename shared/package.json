@@ -15,6 +15,7 @@
     "./names": "./names.js",
     "./giftfile": "./giftfile.js",
     "./ties": "./ties.js",
+    "./maps": "./maps.js",
     "./socials": "./socials.js",
     "./brand": "./brand.js",
     "./brand-look": "./brand-look.js",

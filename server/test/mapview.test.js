@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import {
   viewBox, rowsBudget, DOT_ZOOM, LONE_PIN_ZOOM, PIN_ZOOM,
   dotsFrom, dotRadius, dotOnScreen, ringedAt, MARK, cellOf, cellsFrom, cellFill, drawnFor, inBox,
-  tileHealth, TILE_WAIT_MS, checkLines, timeOfDay, placingPoll, retryLate, tileAt, streetMove, pickLook, tileHost,
+  tileHealth, TILE_WAIT_MS, checkLines, timeOfDay, placingPoll, retryLate, tileAt, streetMove, pickLook, tileHost, mapLooks,
 } from '../../web/src/pages/mapView.js';
 import { bandOf } from '@starbase/shared/scale';
 
@@ -488,7 +488,8 @@ test('on the free tiles, as before: Clean ↔ Muted over OpenStreetMap; a campai
   assert.deepEqual([onClean.providerView.key, onClean.otherLook.key], ['clean', 'muted']);
   const onMuted = pickLook({ views: [CLEAN], viewPick: 'muted', baseUrl: OSM, muted: MUTED });
   assert.deepEqual([onMuted.providerView, onMuted.otherLook.key], [null, 'clean']);
-  assert.deepEqual(pickLook({ views: [], viewPick: 'clean', baseUrl: 'https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png', muted: MUTED }), { providerView: null, otherLook: null });
+  assert.deepEqual(pickLook({ views: [], viewPick: 'clean', baseUrl: 'https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png', muted: MUTED }),
+    { providerView: null, otherLook: null, shadeAllowed: true, look: 'clean' });
   assert.equal(tileHost('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'), 'basemaps.cartocdn.com');
   assert.equal(tileHost(G), '');
 });
@@ -504,6 +505,7 @@ test('the services behind the map: one line each, after the street map — waiti
     const l = checkLines(CHECK, PAGE, { services: { state } });
     assert.deepEqual(keys(l).slice(6, 9), ['tiles', 'tilesvc', 'lookupsvc']);
     assert.deepEqual([said(l).tilesvc.value, said(l).lookupsvc.value, flagged(l)], [words, words, []]);
+    assert.deepEqual(l.filter((x) => x.key.endsWith('svc')).map((x) => x.label), ['Street map service', 'Map pins']);
   }
   // The read failed: flagged, and says the one way to ask again.
   const failed = checkLines(CHECK, PAGE, { services: { state: 'error' } });
@@ -544,6 +546,19 @@ test('the services behind the map: one line each, after the street map — waiti
   assert.deepEqual([said(l).lookupsvc.value, said(l).lookupsvc.note, flagged(l)], ['Not working · BC Address Geocoder', busy.plain, ['lookupsvc']]);
   l = checkLines(CHECK, PAGE, { services: { state: 'ok', data: { ...GOOD, lookup: { provider: 'off', fallback: null, probe: { ok: false, code: 'off' } } } } });
   assert.deepEqual([said(l).lookupsvc.value, flagged(l)], ['Turned off', []]);
+  // Address suggestions: absent from an older server's answer; B.C.'s; Google
+  // Places working; paused after Google refused (its words and the step).
+  assert.ok(!keys(checkLines(CHECK, PAGE, { services: { state: 'ok', data: GOOD } })).includes('suggestsvc'));
+  l = checkLines(CHECK, PAGE, { services: { state: 'ok', data: { ...GOOD, suggest: { provider: 'BC Address Geocoder', probe: { ok: true }, paused: null } } } });
+  assert.ok(!keys(l).includes('suggestsvc'), 'the service that places the pins suggests too: one line says it');
+  l = checkLines(CHECK, PAGE, { services: { state: 'ok', data: { ...GOOD, suggest: { provider: 'off', probe: null, paused: null } } } });
+  assert.deepEqual([said(l).suggestsvc.label, said(l).suggestsvc.value, flagged(l)], ['Address suggestions', 'Turned off', []]);
+  l = checkLines(CHECK, PAGE, { services: { state: 'ok', data: { ...GOOD, suggest: { provider: 'Google Places', probe: { ok: true, example: '13450 104 Ave' }, paused: null } } } });
+  assert.equal(said(l).suggestsvc.value, 'Working · Google Places');
+  const blocked = { code: 'api-blocked', plain: 'This key isn’t allowed to use that Google API. Add Map Tiles API and Places API (New) to it.', said: 'Requests to this API are blocked.', fix: 'Recipe B step 4' };
+  l = checkLines(CHECK, PAGE, { services: { state: 'ok', data: { ...GOOD, suggest: { provider: 'Google Places', probe: { ok: true }, paused: blocked } } } });
+  assert.deepEqual([said(l).suggestsvc.value, flagged(l)], ['Not working · Google Places', ['suggestsvc']]);
+  assert.match(said(l).suggestsvc.note, /Places API \(New\)[\s\S]*Google said: “Requests to this API are blocked\.”[\s\S]*Recipe B step 4/);
   // The placing run, paused on Google's refusal, says it in plain words.
   const paused = { ...CHECK, placing: { ...CHECK.placing, state: 'paused', remaining: 5, retryAt: null,
     lastError: 'geocoder referrer: This key only works from websites. The server needs a key without a website restriction. · Google said: REQUEST_DENIED' } };
@@ -551,4 +566,34 @@ test('the services behind the map: one line each, after the street map — waiti
   // Google's usage limit, the likeliest pause: plain words first too (the "429" stays on the server, for its backoff).
   const quota = { ...paused, placing: { ...paused.placing, lastError: 'geocoder 429 quota: Google’s usage limit is used up for now. · Google said: RESOURCE_EXHAUSTED' } };
   assert.equal(said(checkLines(quota, PAGE)).placing.note, 'Address lookup isn’t answering (Google’s usage limit is used up for now. · Google said: RESOURCE_EXHAUSTED)');
+});
+
+// ── No filters over Google's tiles; Show → Map always has the way back ──
+const SHADES = [{ key: 'standard', label: 'Standard' }, { key: 'muted', label: 'Muted' }, { key: 'dark', label: 'Dark' }];
+
+test('a Google look drawn: no Muted or Dark, and a saved Clean, Muted or Dark draws the standard look; the free map allows them again', () => {
+  for (const viewPick of ['clean', 'muted', 'dark']) {
+    const r = pickLook({ views: GVIEWS, viewPick, baseUrl: G, muted: MUTED });
+    assert.deepEqual([r.shadeAllowed, r.look], [false, 'standard'], viewPick);
+  }
+  const sat = pickLook({ views: GVIEWS, viewPick: 'satellite', baseUrl: G, muted: MUTED });
+  assert.deepEqual([sat.shadeAllowed, sat.look], [false, 'satellite']);
+  // Gone to the free map by itself: shades allowed, the saved pick kept.
+  const free = pickLook({ views: GVIEWS, viewPick: 'muted', drawnAuto: 'free', baseUrl: G, muted: MUTED });
+  assert.deepEqual([free.shadeAllowed, free.look], [true, 'muted']);
+});
+
+test('Show → Map over Google: Streets · Satellite · Terrain (roadmap), Satellite · Streets · Terrain (satellite); the shades otherwise', () => {
+  const words = (l) => l.map((v) => v.label).join(' · ');
+  assert.equal(words(mapLooks({ shades: SHADES, views: GVIEWS, standardLabel: 'Streets', shadeAllowed: false })), 'Streets · Satellite · Terrain');
+  const satViews = [
+    { key: 'roadmap', label: 'Streets', url: `${G}?t=roadmap` },
+    { key: 'terrain', label: 'Terrain', url: `${G}?t=terrain` },
+    GVIEWS[2],
+  ];
+  const sat = mapLooks({ shades: SHADES, views: satViews, standardLabel: 'Satellite', shadeAllowed: false });
+  assert.equal(words(sat), 'Satellite · Streets · Terrain');
+  assert.deepEqual(sat.map((v) => v.key), ['standard', 'roadmap', 'terrain'], 'Streets comes from views: the way back to the street map');
+  const CLEAN = { key: 'clean', label: 'Clean', url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png' };
+  assert.equal(words(mapLooks({ shades: SHADES, views: [CLEAN], standardLabel: null, shadeAllowed: true })), 'Standard · Muted · Dark · Clean');
 });

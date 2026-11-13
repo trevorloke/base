@@ -72,7 +72,12 @@ const worker = () => {
     return Promise.all(waits);
   };
   const kept = () => [...(stores.get(TILES)?.keys() || [])];
-  return { ask, tell, kept, fetched };
+  const activate = async () => {
+    const waits = [];
+    on.activate({ waitUntil: (p) => { waits.push(p); } });
+    for (let i = 0; i < waits.length; i += 1) await waits[i];
+  };
+  return { ask, tell, kept, fetched, stores, activate };
 };
 
 test('the Clean look’s tiles are kept from the first one — before the map has said which provider it draws', async () => {
@@ -123,4 +128,21 @@ test('asked by the map itself (“does this provider answer now?”), a tile goe
     // The map's own tiles, the same: kept and answered.
     assert.equal(w.ask(tile, { cache: 'reload' }).answered(), true, `${host}: a tile on the map is answered`);
   }
+});
+
+test('Google’s tiles through the server are never kept (Google’s terms: no offline use); ones kept before go on activate', async () => {
+  const w = worker();
+  const own = `${ORIGIN}/tiles/15/5202/11226.png`;
+  const a = w.ask(own);
+  assert.equal(a.answered(), true);
+  await a.done();
+  assert.ok(w.fetched.some((f) => f.url === own), 'fetched from the network');
+  assert.ok(!w.kept().some((u) => u.includes('/tiles/')), 'not kept');
+  await w.ask(own).done();
+  assert.equal(w.fetched.filter((f) => f.url === own).length, 2, 'asked again: the network again, never a kept copy');
+  // An older worker kept some: activate throws them away, and keeps the free map's.
+  const osm = 'https://tile.openstreetmap.org/15/5202/11226.png';
+  w.stores.set(TILES, new Map([[own, new Response('x')], [`${ORIGIN}/tiles/15/5203/11226.png?t=satellite`, new Response('x')], [osm, new Response('x')]]));
+  await w.activate();
+  assert.deepEqual(w.kept(), [osm]);
 });

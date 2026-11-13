@@ -1,6 +1,6 @@
 // What Google said when it refused, in plain words, with the setup step that
 // fixes it (GOING-LIVE.md §5, Recipe B). Used by the map's tiles
-// (lib/gtiles.js) and Google address lookup (lib/geocode.js).
+// (lib/gtiles.js) and Google's address suggestions (lib/places.js).
 //
 // googleTrouble(httpStatus, body) → { code, plain, said, step }
 //   body: Map Tiles' { error: { message, details: [{ reason }] } }, or
@@ -20,7 +20,7 @@ export const TROUBLES = [
   { code: 'ip', reasons: ['API_KEY_IP_ADDRESS_BLOCKED'], words: ['not authorized to use this api key', 'ip address restriction'],
     plain: 'This key doesn’t allow this server’s address. Remove the IP-address restriction.', step: 'Recipe B step 4' },
   { code: 'api-blocked', reasons: ['API_KEY_SERVICE_BLOCKED'], words: ['are blocked'],
-    plain: 'This key is limited to other Google services. Add Map Tiles API and Geocoding API to it.', step: 'Recipe B step 4' },
+    plain: 'This key is limited to other Google services. Add Map Tiles API and Places API (New) to it.', step: 'Recipe B step 4' },
   { code: 'api-off', reasons: ['SERVICE_DISABLED'], words: ['has not been used in project', 'not authorized to use this api', 'is disabled'],
     plain: 'This Google service isn’t turned on for the key’s project. Enable it under APIs & Services.', step: 'Recipe B step 3' },
   { code: 'billing', reasons: ['BILLING_DISABLED'], words: ['billing'],

@@ -9,7 +9,7 @@
 // and History (open by default). Volunteers see only what a door needs: Details
 // (open), the rating card, one "Last contact" line and Signs. Their back link
 // returns to wherever they came from (walk list, map, Calls).
-import AddressField, { lookupAddress } from '../components/AddressField.jsx';
+import AddressField, { lookupAddress, pinOf } from '../components/AddressField.jsx';
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { Link, useParams, useOutletContext, useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -439,7 +439,7 @@ function EditDetailsForm({ person, refresh, onClose, focus = 'name' }) {
         <div style={{ flex: '3 1 220px' }}>
           <AddressField id="ed-address" value={form.address} autoFocus={focus === 'address'} placed={moved && Boolean(pin)}
             onChange={(val) => { setForm((f) => ({ ...f, address: val })); setPin(null); }}
-            onPick={(a) => { setForm((f) => ({ ...f, address: a.address, unit: a.unit || f.unit, city: a.city || f.city, postal: a.postal || f.postal })); setPin({ lat: a.lat, lng: a.lng }); }}
+            onPick={(a) => { setForm((f) => ({ ...f, address: a.address, unit: a.unit || f.unit, city: a.city || f.city, postal: a.postal || f.postal })); setPin(pinOf(a)); }}
             hint={addrHint} />
         </div>
         <div className="field" style={{ flex: '0 1 90px' }}>
