@@ -15,7 +15,11 @@
 // more needs signal" with none. The command bar: "sample" → six people and
 // "See all people matching “sample”" → People with "sample" in its box. A
 // kept call list asks with today's parameters and opens again with no
-// signal. Each screen at 1440×900 and 390×844: one yellow button at most,
+// signal. Stage 2b: Shifts' "+ Add volunteer" on a drivers' shift shows
+// "Has this role: Driver" first, then everyone 8 at a time by "Show more"
+// (never by itself) with "+ Add new person" kept at the foot; Money's donor
+// picker finds "smith kevin"; Lists → Add people on a 600-member list says
+// "Already on the list" while the list is filtered. Each screen at 1440×900 and 390×844: one yellow button at most,
 // no sideways scroll, 48 px targets on a phone.
 //
 //   STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=5440 node server/index.js &
@@ -329,6 +333,77 @@ const firstUp = (cardBefore.match(/to call\s*(\S+ \S+?example)/i) || [])[1];
 check('…and opens again with no signal', firstUp && cardAfter.includes(firstUp) && /40 to call/.test(cardAfter), `${firstUp} · `+`${cardBefore.slice(0, 80)} || ${cardAfter.slice(0, 120)}`);
 await ctx.setOffline(false);
 
+// ── 5b. The other pickers (stage 2b) ──
+// Shifts' "+ Add volunteer" on a drivers' shift: the role block, then
+// everyone, 8 at a time by button only, "+ Add new person" kept in view.
+const samples = (await find('sample')).persons;
+for (const p of samples.slice(-3)) await api('/actions/volunteer.assign', { person_id: p.id, role: 'driver' });
+const starts = new Date(Date.now() + 3 * 86400000).toISOString();
+const shift = (await api('/actions/shift.create', { title: 'Drive to the polls', role: 'driver', starts_at: starts })).json?.shift;
+check('a drivers\' shift', shift?.id, JSON.stringify(shift).slice(0, 120));
+const openPicker = async () => {
+  await go(`/shifts/${shift.id}`);
+  await page.click('button:has-text("+ Add volunteer")');
+  await page.waitForSelector('#shift-add-person');
+};
+await openPicker();
+const pbox = '#shift-add-person';
+await page.fill(pbox, 'sample');
+await until(async () => (await page.$$eval('.ps-drop .ps-list:not(.is-stale) .ps-row', (els) => els.length)) === 11);
+const headTxt = await tc('.ps-drop .ps-head');
+const roleRows = await page.$$eval('.ps-drop .ps-row', (els) => els.slice(0, 3).map((e) => e.textContent));
+check('Shifts\' picker: "Has this role: Driver" first, with the three drivers', headTxt === 'Has this role: Driver' && roleRows.every((t) => /Driver/.test(t)), `${headTxt} · ${roleRows.join(' | ')}`);
+check('…then everyone else, 8 at a time, with the count', (await tc('.ps-drop .ps-count')) === '40 people' && (await page.locator('.ps-drop .ps-more').count()) === 1, await tc('.ps-drop .ps-count'));
+await shot('20a-shift-picker-role-desk');
+const dropAsks = asks.length;
+await page.$eval('.ps-drop .ps-list', (el) => { el.scrollTop = el.scrollHeight; });
+await sleep(800);
+check('…a dropdown never loads by itself (no ask on scrolling to the end)', asks.length === dropAsks, asks.length - dropAsks);
+await page.click('.ps-drop .ps-more');
+await until(async () => (await page.$$eval('.ps-drop .ps-row', (els) => els.length)) >= 19);
+await page.click('.ps-drop .ps-more');
+await until(async () => (await page.$$eval('.ps-drop .ps-row', (els) => els.length)) >= 27);
+const foot = await page.$eval('.ps-drop .ps-create', (b) => { const r = b.getBoundingClientRect(); const d = b.closest('.ps-drop').getBoundingClientRect(); return { text: b.textContent, inside: r.bottom <= d.bottom + 1 && r.top >= d.top, h: r.height }; }).catch(() => null);
+check('…after two pages "+ Add new person “sample”" is still in view at the foot', foot && foot.text === '+ Add new person “sample”' && foot.inside, JSON.stringify(foot));
+await shot('20-shift-picker-desk');
+await simple('Shifts\' picker (desk)');
+await page.keyboard.press('Escape');
+// Money's donor picker: "smith kevin", and Show more.
+await go('/money?new=1');
+await page.waitForSelector('#gift-donor');
+await page.fill('#gift-donor', 'smith kevin');
+await until(async () => (await page.$$eval('.ps-drop .ps-list:not(.is-stale) .ps-row', (els) => els.length)) === 4);
+const donors = await page.$$eval('.ps-drop .ps-row__name', (els) => els.map((e) => e.textContent));
+check('Money\'s donor picker finds "smith kevin": the four Kevin Smiths', donors.length === 4 && donors.every((t) => /Kevin Smith/.test(t)), donors.join(' | '));
+await page.fill('#gift-donor', 'sample');
+await until(async () => (await page.locator('.ps-drop .ps-list:not(.is-stale) .ps-more').count()) === 1);
+check('…and "Show more" for a long answer (8 at a time)', (await page.$$eval('.ps-drop .ps-row', (els) => els.length)) === 8);
+await page.click('.ps-drop .ps-row >> nth=0');
+check('…picking one fills the donor', /Sample/.test(await tc('.ops-picked .chip')), await tc('.ops-picked'));
+await shot('21-money-donor-desk');
+// Lists → Add people on a 600-member list, the list's own screen filtered.
+const list = (await api('/actions/list.create', { name: 'Big hand-picked', kind: 'people' })).json?.list;
+const everyone = (await api('/persons?q=&limit=1000')).json.persons;
+const members = everyone.filter((p) => !/Sample|Smith/.test(p.name)).slice(0, 600);
+await api('/actions/list.add', { id: list.id, person_ids: members.map((p) => p.id) });
+const member = members.at(-1);
+await go(`/lists/${list.id}`);
+await page.waitForSelector('.ls-search');
+await page.fill('.ls-search', 'zzzz');
+await sleep(600);
+await page.fill('#ls-add-q', member.name);
+await until(async () => (await page.$$eval('.ls-add .ps-list:not(.is-stale) .ps-row', (els) => els.length)) > 0);
+const onIt = await page.$$eval('.ls-add .ps-row', (els) => els.map((e) => ({ t: e.textContent, off: e.disabled })));
+const theirs = onIt.filter((r) => r.off && /Already on the list/.test(r.t));
+check('Lists → Add people: a member of a 600-person list says "Already on the list" while the list is filtered', theirs.length >= 1, JSON.stringify(onIt.slice(0, 3)));
+await page.fill('#ls-add-q', 'zoe');
+await until(async () => (await page.$$eval('.ls-add .ps-list:not(.is-stale) .ps-row:not([disabled])', (els) => els.length)) === 1);
+await page.click('.ls-add .ps-row');
+await until(async () => /Already on the list/.test(await tc('.ls-add .ps-row')));
+check('…tapping someone adds them, and they say so', /Zoë Sample.*Already on the list/.test(await tc('.ls-add .ps-row')), await tc('.ls-add .ps-row'));
+await shot('22-list-add-desk');
+await simple('Lists → Add people (desk)');
+
 // ── 6. A phone (390×844) ──
 await page.setViewportSize({ width: 390, height: 844 });
 await openAdd();
@@ -371,6 +446,20 @@ await page.waitForSelector('.cmd-input');
 await page.fill('.cmd-input', 'sample');
 await until(async () => (await page.locator('.cmd-opt--all').count()) === 1);
 await shot('19-command-bar-phone');
+
+await openPicker();
+await page.fill(pbox, 'sample');
+await until(async () => (await page.$$eval('.ps-drop .ps-list:not(.is-stale) .ps-row', (els) => els.length)) === 11);
+await page.click('.ps-drop .ps-more');
+await until(async () => (await page.$$eval('.ps-drop .ps-row', (els) => els.length)) >= 19);
+await shot('23-shift-picker-phone');
+await simple('Shifts\' picker (phone)');
+await go(`/lists/${list.id}`);
+await page.waitForSelector('#ls-add-q');
+await page.fill('#ls-add-q', member.name);
+await until(async () => (await page.$$eval('.ls-add .ps-list:not(.is-stale) .ps-row', (els) => els.length)) > 0);
+await shot('24-list-add-phone');
+await simple('Lists → Add people (phone)');
 
 check('no page errors', errors.length === 0, errors.slice(0, 3).join(' | '));
 await browser.close();

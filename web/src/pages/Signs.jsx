@@ -254,7 +254,6 @@ function PlaceSignForm({ presetPersonId, canCreatePerson, onSaved, onClose }) {
             <PersonPicker
               id="sign-person"
               placeholder="Supporter’s name"
-              meta={(p) => p.address || 'no address'}
               allowCreate={canCreatePerson}
               onPick={(p) => setPerson(p)}
             />

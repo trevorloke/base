@@ -12,8 +12,12 @@
 // the server) is drawn greyed with takenLabel and can't be picked.
 // Rows from the last term (the new answer still on its way) are dimmed and
 // can't be picked: Enter in the box waits for the fresh answer.
-// Keys: ↓ from the box to the first row, ↑ ↓ between rows, Enter picks,
-// Esc goes back to the box.
+// Keys: ↓ from the box to the first row, ↑ ↓ between rows (and on to
+// "Show more" and the footer's buttons), Enter picks, Esc goes back to the box.
+// lead = { heading, rows, chip }: a block drawn first under its own heading
+// (a dropdown's "Has this role: Driver"), one page, no paging; anyone in it
+// is left out of the rows under it. onNone: Enter with a fresh answer that
+// has no one to pick (a dropdown's "+ Add new person").
 import { useEffect, useRef, useState } from 'react';
 import { RatingChip } from './RatingButtons.jsx';
 import { Unavailable } from './AudienceBits.jsx';
@@ -40,6 +44,7 @@ export const countWords = (search) => {
 export default function PersonResults({
   search, boxRef, onPick, taken = null, takenLabel = 'Already added', rowClass = '',
   desk = false, offlineWords = 'Searching needs signal', footer = null, autoMore = true,
+  lead = null, onNone = null,
 }) {
   const online = useOnline();
   const listRef = useRef(null);
@@ -47,17 +52,23 @@ export default function PersonResults({
   // Enter in the box before the answer for what's typed has come: picked
   // once it comes (the first one who can be picked), never from the old rows.
   const [wantFirst, setWantFirst] = useState(false);
-  const { rows, fresh } = search;
+  const { fresh } = search;
+  const leadRows = lead?.rows || [];
+  const leadIds = new Set(leadRows.map((p) => p.id));
+  const rows = leadIds.size ? search.rows.filter((p) => !leadIds.has(p.id)) : search.rows;
+  const all = [...leadRows, ...rows];
   const isTaken = (p) => Boolean(p.on_list) || Boolean(taken?.has?.(p.id));
   const typedNow = boxRef?.current?.value?.trim() ?? search.term;
 
-  const rowsOf = () => [...(listRef.current?.querySelectorAll('button[data-row]:not([disabled])') || [])];
+  const wrapRef = useRef(null);
+  // Everything ↑ ↓ moves through: the rows, "Show more", the footer's buttons.
+  const navOf = () => [...(wrapRef.current?.querySelectorAll('button[data-row]:not([disabled]), button.ps-more:not([disabled]), .ps-foot button:not([disabled])') || [])];
   useEffect(() => {
     const box = boxRef?.current;
     if (!box) return undefined;
     const onKey = (e) => {
       if (e.key === 'ArrowDown') {
-        const first = rowsOf()[0];
+        const first = navOf()[0];
         if (first) { e.preventDefault(); first.focus(); }
       } else if (e.key === 'Enter') {
         e.preventDefault();
@@ -78,8 +89,9 @@ export default function PersonResults({
   useEffect(() => {
     if (!wantFirst || !fresh) return;
     setWantFirst(false);
-    const p = rows.find((r) => !isTaken(r));
+    const p = all.find((r) => !isTaken(r));
     if (p) onPick(p);
+    else onNone?.();
   });
 
   // Scrolled to the end: the next page, by itself (autoMore).
@@ -92,26 +104,30 @@ export default function PersonResults({
     return () => io.disconnect();
   });
 
-  const onRowKey = (e) => {
-    const all = rowsOf();
-    const i = all.indexOf(e.currentTarget);
-    if (e.key === 'ArrowDown') { e.preventDefault(); (all[i + 1] || moreRef.current)?.focus(); }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); if (i > 0) all[i - 1].focus(); else boxRef?.current?.focus(); }
+  // ↑ ↓ and Esc anywhere in the list or its footer (the box has its own).
+  const onNavKey = (e) => {
+    const nav = navOf();
+    const i = nav.indexOf(e.target);
+    if (i < 0) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); nav[i + 1]?.focus(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); if (i > 0) nav[i - 1].focus(); else boxRef?.current?.focus(); }
     else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); boxRef?.current?.focus(); }
   };
 
-  if (String(typedNow).length < 2 && !rows.length) return footer ? <div className="ps-foot">{footer}</div> : null;
+  if (String(typedNow).length < 2 && !all.length) {
+    return footer ? <div className="ps" ref={wrapRef} onKeyDown={onNavKey}><div className="ps-foot">{footer}</div></div> : null;
+  }
   const offline = !online || noSignal(search.query) || (search.status === 'error' && search.error?.name === 'NoSignalError');
   if (offline) return <NeedsSignal className="pf-empty ps-state">{offlineWords}</NeedsSignal>;
 
   let state = null;
-  if (search.status === 'error' && !rows.length) {
+  if (search.status === 'error' && !all.length) {
     state = <p className="ps-state" role="alert"><Unavailable onRetry={search.retry} /></p>;
-  } else if (!rows.length && (search.waiting || search.status === 'pending' || search.status === 'idle')) {
+  } else if (!all.length && (search.waiting || search.status === 'pending' || search.status === 'idle')) {
     state = <p className="ps-state muted" role="status">Searching…</p>;
-  } else if (!rows.length && fresh && search.hint === 'digits') {
+  } else if (!all.length && fresh && search.hint === 'digits') {
     state = <p className="ps-state" role="status">{DIGITS_HINT}</p>;
-  } else if (!rows.length && fresh) {
+  } else if (!all.length && fresh) {
     state = (
       <div className="ps-state" role="status">
         <p className="ps-none">No one matches “{search.term}”.</p>
@@ -119,39 +135,40 @@ export default function PersonResults({
       </div>
     );
   }
-  const count = rows.length ? countWords(search) : '';
+  const count = all.length ? countWords(search) : '';
+  const row = (p, chip = null) => {
+    const off = isTaken(p);
+    const where = whereLine(p, desk);
+    return (
+      <li key={p.id}>
+        <button type="button" data-row="" className={`ps-row ${rowClass}${off ? ' is-taken' : ''}`} disabled={off}
+          aria-disabled={!fresh || undefined}
+          onClick={() => { if (fresh && !off) onPick(p); }}>
+          <span className="ps-row__main">
+            <span className="ps-row__name"><NameAz person={p} /></span>
+            {where && <span className="ps-row__where">{where}</span>}
+          </span>
+          <span className="ps-row__end">
+            {off ? <span className="chip chip-ghost ps-taken">{takenLabel}</span> : (
+              <>{chip && <span className="chip chip-ok ps-chip">{chip}</span>}<RatingChip code={p.rating} who /></>
+            )}
+          </span>
+        </button>
+      </li>
+    );
+  };
   return (
-    <div className="ps">
+    <div className="ps" ref={wrapRef} onKeyDown={onNavKey}>
       <p className="ps-count" aria-live="polite">{count}</p>
       {state}
-      {rows.length > 0 && (
+      {all.length > 0 && (
         <ul ref={listRef} className={`ps-list${fresh ? '' : ' is-stale'}`} aria-busy={fresh ? undefined : 'true'} aria-label="People found">
-          {rows.map((p) => {
-            const off = isTaken(p);
-            const where = whereLine(p, desk);
-            return (
-              <li key={p.id}>
-                <button type="button" data-row="" className={`ps-row ${rowClass}${off ? ' is-taken' : ''}`} disabled={off}
-                  aria-disabled={!fresh || undefined} onKeyDown={onRowKey}
-                  onClick={() => { if (fresh && !off) onPick(p); }}>
-                  <span className="ps-row__main">
-                    <span className="ps-row__name"><NameAz person={p} /></span>
-                    {where && <span className="ps-row__where">{where}</span>}
-                  </span>
-                  <span className="ps-row__end">
-                    {off ? <span className="chip chip-ghost ps-taken">{takenLabel}</span> : <RatingChip code={p.rating} who />}
-                  </span>
-                </button>
-              </li>
-            );
-          })}
+          {leadRows.length > 0 && <li className="ps-head">{lead.heading}</li>}
+          {leadRows.map((p) => row(p, lead.chip))}
+          {rows.map((p) => row(p))}
           {search.more && (
             <li className="ps-more-li">
               <button type="button" ref={moreRef} className="btn btn-quiet ps-more" disabled={search.loadingMore || !fresh}
-                onKeyDown={(e) => {
-                  if (e.key === 'ArrowUp') { e.preventDefault(); rowsOf().at(-1)?.focus(); }
-                  else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); boxRef?.current?.focus(); }
-                }}
                 onClick={loadMore}>
                 {search.loadingMore ? 'Loading…' : 'Show more'}
               </button>

@@ -50,3 +50,25 @@
 .ps-more { min-height: var(--ctl); }
 .ps-full { padding: var(--s-2); color: var(--text-3); font-size: 13px; }
 .ps-foot { position: sticky; bottom: 0; background: var(--paper); padding-top: var(--s-1); }
+.ps-head { padding: var(--s-1) var(--s-2); font-size: 13px; font-weight: 600; color: var(--text-2); background: var(--paper-1); }
+.ps-chip { margin-right: var(--s-1); font-size: 12px; }
+/* As a dropdown under a box (PersonPicker): over the page, the footer kept in view. */
+.ps-drop {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0; right: 0;
+  z-index: 20;
+  padding: var(--s-1);
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-ctrl);
+  box-shadow: var(--shadow-2);
+}
+.ps-drop .ps-list { max-height: 320px; }
+@media (max-width: 720px) { .ps-drop .ps-list { max-height: 45vh; } }
+.ps-drop .ps-count, .ps-drop .ps-state { padding: 0 var(--s-2); }
+.ps-foot .ps-create { width: 100%; justify-content: flex-start; min-height: var(--ctl); }
+@media (max-width: 720px) { .ps-foot .ps-create { min-height: 48px; } }
+/* The schedule's People tray: the next 8 people found. */
+.sb-more { width: 100%; min-height: var(--ctl); }
+@media (max-width: 720px) { .sb-more { min-height: 48px; } }

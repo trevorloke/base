@@ -18,9 +18,9 @@
 //   onTap      (item) → a name tapped in the phone's sheet
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { VOLUNTEER_ROLES } from '@starbase/shared/canvass';
-import { apiGet } from '../api.js';
+import { usePersonSearch } from '../components/usePersonSearch.js';
+import '../components/person-search.css';
 import Sheet from './ScheduleSheet.jsx';
 
 const roleLabel = (code) => VOLUNTEER_ROLES.find((r) => r.code === code)?.label ?? code;
@@ -38,14 +38,10 @@ export default function People({
   const tray = people.filter((p) => (!role || (p.roles || []).includes(role)) && (!needle || p.name.toLowerCase().includes(needle)));
   // Typing a name that isn't a volunteer yet: anyone on the list, like the
   // shift screen's "+ Add volunteer".
-  const others = useQuery({
-    queryKey: ['persons', 'search', needle],
-    queryFn: () => apiGet(`/persons?q=${encodeURIComponent(needle)}&limit=8`),
-    enabled: needle.length >= 2,
-    placeholderData: keepPreviousData,
-  });
+  // (The person search: A–Z by last name, 8 at a time, "Show more" for the next.)
+  const others = usePersonSearch(needle, { limit: 8 });
   const trayIds = new Set(people.map((p) => p.id));
-  const extra = needle.length >= 2 ? (others.data?.persons ?? []).filter((p) => !trayIds.has(p.id)).slice(0, 8) : [];
+  const extra = needle.length >= 2 ? others.rows.filter((p) => !trayIds.has(p.id)) : [];
 
   const find = (
     <div className="sb-tray__find">
@@ -87,6 +83,13 @@ export default function People({
     <ul className="sb-people">
       {tray.map((p) => person(p))}
       {extra.map((p) => person(p, true))}
+      {needle.length >= 2 && others.more && (
+        <li>
+          <button type="button" className="btn btn-quiet sb-more" disabled={others.loadingMore || !others.fresh} onClick={others.loadMore}>
+            {others.loadingMore ? 'Loading…' : 'Show more'}
+          </button>
+        </li>
+      )}
     </ul>
   );
 
