@@ -26,3 +26,5 @@
 .so-also { margin: 0; font-size: 14px; }
 .so-typed { margin: var(--s-3) 0; font-size: 13px; color: var(--text-3); }
 .so-note { margin: var(--s-1) 0 0; font-size: 13px; color: var(--text-3); }
+/* Each handle opens the real profile: a full-height target, 48 px on a phone */
+.so-lines .so-v a { display: inline-flex; align-items: center; min-height: var(--ctl); }

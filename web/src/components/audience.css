@@ -69,7 +69,7 @@
 .au-rules .au-rules__body.form-row > .field { flex: 1 1 220px; }
 .au-inline { margin: var(--s-2) 0 0; max-width: 260px; }
 .pp-group .form-row > .field { flex: 1 1 200px; margin-bottom: 0; }
-.pp-sheet .au-inline .input, .pp-group .form-row .input, .au-rules .input { min-height: 48px; }
+.pp-sheet .au-inline .input, .pp-group .form-row .input, .au-rules .input { min-height: var(--ctl); }
 
 /* "Save these people as they are now" */
 .au-snap { display: flex; flex-direction: column; gap: var(--s-2); margin: var(--s-2) 0 var(--s-3); padding: var(--s-3); border: var(--border); border-radius: var(--r-card); background: var(--paper-0); max-width: 520px; }

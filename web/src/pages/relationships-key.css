@@ -14,10 +14,11 @@
 .rk-dim { color: var(--text-3); font-size: 14px; }
 .rk-sep { color: var(--text-3); }
 .rk-lead, .rk-home { white-space: nowrap; }
-/* A long name is cut with "…" (the whole name is its title) */
+/* A long name is cut with "…" (the whole name is its title), only where the
+   desk is narrow; on a phone the 9em cut below keeps the line to two rows. */
 .rk-line .rk-name {
   display: inline-block;
-  max-width: 16em;
+  max-width: 28em;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -56,7 +57,9 @@
 .rk-said { margin: var(--s-2) 0 0; color: var(--text-2); font-size: 14px; }
 
 /* The Knows section: Close beside Remove, Make a list and its line */
-.rk-close[aria-pressed='true'] { color: var(--text-1); background: var(--mark-soft); font-weight: 600; }
+.rk-close[aria-pressed='true'] { color: var(--text-1); background: var(--mark-soft); border: 1px solid var(--text-2); font-weight: 600; }
+/* The rating cell has one width, so Close tie and Remove line up row to row */
+.rk-rate { display: inline-flex; justify-content: flex-end; min-width: 64px; }
 .rk-make { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; margin-top: var(--s-2); }
 .rk-help { margin: 2px 0 0; color: var(--text-3); font-size: 13px; }
 .rel-add__note label { font-size: 14px; color: var(--text-2); }
@@ -64,3 +67,6 @@
 @media (pointer: coarse) {
   .rk-close, .rk-know, .rk-make .btn { min-height: 48px; }
 }
+/* The volunteer profile: "I know them" on its own row after Address */
+.pf-iknow { display: flex; justify-content: flex-start; margin-top: var(--s-2); }
+.pf-iknow:empty { display: none; }

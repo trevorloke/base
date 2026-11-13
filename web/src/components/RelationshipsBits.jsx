@@ -259,11 +259,11 @@ export function PersonKnows({ person, query, me = null }) {
                 <span className="rel-knows__kind">{linkWords(k)}</span>
               </span>
               <span className="rel-knows__end">
-                <RatingChip code={k.person.rating} who />
+                <span className="rk-rate"><RatingChip code={k.person.rating} who /></span>
                 <button type="button" className={`btn btn-quiet pp-btn rk-close${k.close ? ' is-on' : ''}`} aria-pressed={Boolean(k.close)}
-                  aria-label={`Close: ${k.person.name}`} disabled={act.busy || !online}
+                  aria-label={`Close tie: ${k.person.name}`} disabled={act.busy || !online}
                   onClick={() => act.run('relationship.update', { id: k.id, close: !k.close })}>
-                  Close
+                  {k.close ? '✓ Close' : 'Close tie'}
                 </button>
                 {confirm === k.id ? (
                   <span className="ops-confirm rel-confirm">

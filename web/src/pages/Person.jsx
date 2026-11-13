@@ -501,7 +501,6 @@ function Details({ person, household, refresh, desk, me, editing, setEditing }) 
             <span className="k" />
             <span className="v">
               <QuickDetails person={person} me={me} onSaved={() => refresh()} />
-              <IKnowThem person={person} me={me} />
             </span>
           </li>
         )}
@@ -544,6 +543,9 @@ function Details({ person, household, refresh, desk, me, editing, setEditing }) 
             )}
         </>
       )}
+
+      {/* About the person, not the phone: its own row at the end of Details. */}
+      {!desk && <div className="pf-iknow"><IKnowThem person={person} me={me} /></div>}
 
       {desk && (
         <div className="pf-row-acts">
