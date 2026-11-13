@@ -145,9 +145,9 @@ test('a treasurer’s link has the filing dates — unless kept out of Donations
   } finally {
     await db.query(`update memberships set permissions = '{}' where user_id = $1 and workspace_id = $2`, [volId, ws]);
   }
-  // A candidate is a volunteer (CAN keeps the role 'volunteer'): what a
-  // volunteer gets, by the same rule — CAN isn't on this branch, so there
-  // is no candidate flag to set here.
+  // A candidate is a volunteer (ext/candidates keeps the role 'volunteer'):
+  // what a volunteer gets, read through the Candidates row
+  // (candidates.test.js has their link).
 });
 
 test('Make a new link: the old one answers an empty calendar; Stop this link: the same; unknown: not found', async () => {

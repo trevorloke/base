@@ -587,3 +587,33 @@ test('calltime.log: a number already answered is not answered twice', async () =
   const again = await ct.patCl.action('calltime.log', { client_id: newId(), bank_id: bank, person_id: people[0], result: 'pledged', amount_cents: 5000 });
   assert.deepEqual([again.status, again.json.error], [409, 'Already called']);
 });
+
+test('a candidate’s calendar link reads the Candidates row, as their sign-in does — and has no filing dates', async () => {
+  const { app } = await import('../index.js');
+  const rae = await seat('Rae');
+  const raeCl = await sit(rae, 'Rae');
+  const p = await mgr.createPerson('Rae Example', { email: 'rae.ct@example.org' });
+  const soon = new Date(Date.now() + 5 * 86400000).toISOString().slice(0, 10);
+  const shift = ok(await mgr.action('shift.create', { title: 'Rae’s town hall', starts_at: `${soon}T18:00:00-07:00`, ends_at: `${soon}T19:00:00-07:00` })).shift;
+  ok(await mgr.action('shift.assign', { shift_id: shift.id, person_id: p.id }));
+  const url = new URL(ok(await raeCl.action('calendar.feed.make', {})).feed.url).pathname;
+  const uids = async () => {
+    const res = await app.request(url, { headers: { 'x-real-ip': '203.0.113.77' } });
+    assert.equal(res.status, 200);
+    return [...(await res.text()).matchAll(/^UID:(.*?)\r?$/gm)].map((m) => m[1]);
+  };
+  try {
+    assert.ok((await uids()).includes(`shift-${shift.id}@base.win`), 'their booked shift');
+    // Volunteers kept out of Shifts: not the candidate, whose row is their own.
+    ok(await mgr.action('permission.role.set', { role: 'volunteer', grant: [], deny: ['shifts'] }));
+    assert.ok((await uids()).includes(`shift-${shift.id}@base.win`), 'a deny on Volunteers doesn’t reach candidates');
+    ok(await mgr.action('permission.role.set', { role: 'volunteer', grant: [], deny: [] }));
+    ok(await mgr.action('permission.role.set', { role: 'candidate', grant: ['money'], deny: ['shifts'] }));
+    const got = await uids();
+    assert.ok(!got.some((u) => u.startsWith('shift-')), 'a deny on the Candidates row does');
+    assert.ok(!got.some((u) => u.startsWith('filing-')), 'never the filing dates, even given Donations: a candidate is no desk role');
+  } finally {
+    ok(await mgr.action('permission.role.set', { role: 'volunteer', grant: [], deny: [] }));
+    ok(await mgr.action('permission.role.set', { role: 'candidate', grant: [], deny: [] }));
+  }
+});

@@ -250,7 +250,9 @@ publicRoutes.get('/cal/:file{[A-Za-z0-9_-]{43}\\.ics}', async (c) => {
   if (perLink(token)) return c.text('Too many requests — try again later.', 429, NOT_FOUND);
   const db = await getDb();
   const f = (await db.query(
-    `select f.workspace_id, f.stopped_at, u.email, w.name, w.settings, m.role, m.permissions
+    `select f.workspace_id, f.stopped_at, u.email, w.name, w.settings, m.role, m.permissions,
+            exists (select 1 from candidates c where c.workspace_id = f.workspace_id and c.user_id = f.user_id
+                      and c.removed_at is null and m.role = 'volunteer') as candidate
        from calendar_feeds f join users u on u.id = f.user_id join workspaces w on w.id = f.workspace_id
        left join memberships m on m.workspace_id = f.workspace_id and m.user_id = f.user_id
       where f.token = $1`,
@@ -262,7 +264,9 @@ publicRoutes.get('/cal/:file{[A-Za-z0-9_-]{43}\\.ics}', async (c) => {
   // Stopped, or no longer on the campaign: an empty calendar clears theirs.
   if (f.stopped_at || !f.role) return send([]);
   const settings = parseJ(f.settings, {}) || {};
-  const perms = permsOf(f.role, settings, parseJ(f.permissions, {}) || {});
+  // A candidate's grants and denies are the Candidates row's, as when they
+  // sign in (lib/auth.js loadContext).
+  const perms = permsOf(f.candidate ? 'candidate' : f.role, settings, parseJ(f.permissions, {}) || {});
   const tz = tzOf(settings);
   const publicUrl = (configuredUrl() || `${new URL(c.req.url).origin}${c.env?.base || ''}`).replace(/\/$/, '');
   const events = [];
