@@ -80,7 +80,7 @@ export default function DataPage() {
         </div>
       </section>
 
-      <DriveSent />
+      <DriveSent tz={me?.workspace?.settings?.tz || me?.org?.tz || null} />
     </div>
   );
 }

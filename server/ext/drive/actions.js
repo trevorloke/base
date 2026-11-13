@@ -137,7 +137,7 @@ export const actions = {
         throw httpError(409, `Too big for one Google Sheet — ${num(rows)} ${what} × ${cols} columns. Use Download CSV.`);
       }
       const day = new Intl.DateTimeFormat('en-CA', { timeZone: timeZone(), year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
-      return { rows, cols, land: place.land, name: `${src.name} — ${day}`.slice(0, 200) };
+      return { rows, cols, land: place.land, landName: place.land === 'campaign' ? rules.folder?.name || null : null, name: `${src.name} — ${day}`.slice(0, 200) };
     },
     handler: async (tx, ctx, input, emit, ready) => {
       deskOnly(ctx);
@@ -147,9 +147,9 @@ export const actions = {
       await roomFor(tx, ws, ctx.user.id);
       const id = newId();
       await tx.query(
-        `insert into drive_exports (id, workspace_id, user_id, client_key, source, ref, name, rows, cols, land, status)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'waiting')`,
-        [id, ws, ctx.user.id, input.client_key, input.source, input.ref, ready.name, ready.rows, ready.cols, ready.land],
+        `insert into drive_exports (id, workspace_id, user_id, client_key, source, ref, name, rows, cols, land, land_name, status)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'waiting')`,
+        [id, ws, ctx.user.id, input.client_key, input.source, input.ref, ready.name, ready.rows, ready.cols, ready.land, ready.landName],
       );
       await enqueueJob(tx, { workspaceId: ws, kind: JOB, key: `${id}:0`, payload: { id } });
       emit('drive_export', id, 'create', { source: input.source, name: ready.name, rows: ready.rows, cols: ready.cols, land: ready.land });

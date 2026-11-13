@@ -61,7 +61,9 @@ api.get('/drive/picker', async (c) => {
   const ctx = c.get('ctx');
   if (pickers(ctx.user.id)) return c.json({ error: 'Too many tries — wait a few minutes' }, 429);
   const rules = driveRules(ctx.workspace.settings);
-  if (!driveSetup().ok || !rules.on) return c.json({ ready: false });
+  // Off, managers may still open it: Settings → Services' "Try opening
+  // Google Drive" is the check before the desk is let in.
+  if (!driveSetup().ok || (!rules.on && ctx.role !== 'manager')) return c.json({ ready: false });
   const db = c.get('db');
   const g = await driveGrant(db, ctx);
   if (!g) return c.json({ ready: true, connect: true });
@@ -76,7 +78,7 @@ api.get('/drive/picker', async (c) => {
 const shape = (r, ctx) => ({
   id: r.id, name: r.name, source: r.source, rows: r.rows, cols: r.cols, done_rows: r.done_rows,
   status: r.stale ? 'failed' : r.status, said: r.stale ? 'It stopped part-way — Try again' : r.said,
-  url: r.url, land: r.land, by: r.by_name, mine: r.user_id === ctx.user.id, created_at: r.created_at, done_at: r.done_at,
+  url: r.url, land: r.land, land_name: r.land_name, by: r.by_name, mine: r.user_id === ctx.user.id, created_at: r.created_at, done_at: r.done_at,
 });
 const SELECT = `select e.*, u.name as by_name, ${STALE_SQL} as stale from drive_exports e join users u on u.id = e.user_id`;
 

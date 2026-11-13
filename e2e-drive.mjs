@@ -256,22 +256,31 @@ try {
   check('Services: the Drive row, set up, with the switch off', /Picker key and project number set/.test(await text(m, '.sv2-row:has-text("Google Drive and Sheets")'))
     && (await row.getByRole('switch', { name: /Let the desk use Google Drive/ }).getAttribute('aria-checked')) === 'false');
   await shot(m, '01-services-drive-off-desktop');
-  await row.getByRole('switch', { name: /Let the desk use Google Drive/ }).click();
-  await row.getByText('Who can send to Google Sheets').waitFor({ timeout: 8000 });
-  const who = async () => row.locator('[role="radiogroup"] [role="radio"]').evaluateAll((els) => els.map((e) => ({ t: e.innerText.trim(), on: e.getAttribute('aria-checked') === 'true', off: e.disabled })));
-  let w = await who();
-  check('turned on: "No one" chosen first; "Anyone at the desk" waits on a shared-drive folder', w[0].t === 'No one' && w[0].on && w[2].off && /Needs a shared-drive folder/.test(w[2].t)
-    && /Lists and tables stay in base\.win until you choose\./.test(await text(m, '.sv2-row:has-text("Google Drive and Sheets")')), JSON.stringify(w));
-  check('the one helper line: no domain rule yet', /Any Google Workspace account can connect\. Set your domain under Google sign-in to allow only yours\./.test(await text(m, '.sv2-row:has-text("Google Drive and Sheets")')));
-  // Change: the manager hasn't connected Drive — Connect first.
-  await row.getByRole('button', { name: /^Change/ }).click();
-  await row.getByText('Connect Google Drive').waitFor({ timeout: 8000 });
-  check('Change, not connected: Connect Google Drive and "base.win only sees the files you pick."', /base\.win only sees the files you pick\./.test(await text(m, '.sv2-row:has-text("Google Drive and Sheets")')));
-  await row.getByText('Connect Google Drive').click();
+  // Off, the manager checks first (the owner steps): More → Try opening Google Drive.
+  // Not connected yet: Connect Google Drive appears right there, "Change" is not touched.
+  await row.getByRole('button', { name: 'More' }).click();
+  await row.getByRole('button', { name: 'Try opening Google Drive' }).click();
+  await row.locator('.drv-more').getByText('Connect Google Drive').waitFor({ timeout: 8000 });
+  check('Try opening while off, not connected: Connect Google Drive beside it, with its line',
+    /base\.win only sees the files you pick\./.test(await text(m, '.sv2-row:has-text("Google Drive and Sheets") .drv-more')));
+  await row.locator('.drv-more').getByText('Connect Google Drive').click();
   await pickGoogle(m, 'mo');
   check('back on Services after Google', new URL(m.url()).pathname === '/admin/settings/services', m.url());
   await m.getByText('Google Drive connected').first().waitFor({ timeout: 8000 }).catch(() => {});
   check('the toast "Google Drive connected"', /Google Drive connected/.test(await text(m)));
+  await row.getByRole('button', { name: 'More' }).click();
+  await row.getByRole('button', { name: 'Try opening Google Drive' }).click();
+  await pickInDrive(m, 'cancel');
+  await row.getByText('✓ Google Drive opens').waitFor({ timeout: 8000 }).catch(() => {});
+  check('Try opening Google Drive, still off → "✓ Google Drive opens"', /✓ Google Drive opens/.test(await text(m, '.sv2-row:has-text("Google Drive and Sheets")')));
+  await row.getByRole('switch', { name: /Let the desk use Google Drive/ }).click();
+  await row.getByText('Who can send to Google Sheets').waitFor({ timeout: 8000 });
+  const who = async () => row.locator('[role="radiogroup"] [role="radio"]').evaluateAll((els) => els.map((e) => ({ t: e.innerText.trim(), on: e.getAttribute('aria-checked') === 'true', off: e.disabled })));
+  let w = await who();
+  check('turned on: "No one" chosen first; "Anyone at the desk" waits on a shared-drive folder', w[0].t === 'No one' && w[0].on && w[2].off && w[2].t === 'Anyone at the desk'
+    && /Anyone at the desk needs a shared-drive folder\./.test(await text(m, '.sv2-row:has-text("Google Drive and Sheets")'))
+    && /Lists and tables stay in base\.win until you choose\./.test(await text(m, '.sv2-row:has-text("Google Drive and Sheets")')), JSON.stringify(w));
+  check('the one helper line: no domain rule yet', /Any Google Workspace account can connect\. Set your domain under Google sign-in to allow only yours\./.test(await text(m, '.sv2-row:has-text("Google Drive and Sheets")')));
   await row.getByRole('button', { name: /^Change/ }).click();
   await pickInDrive(m, ['Campaign exports']);
   await row.getByText('Campaign exports · shared drive').waitFor({ timeout: 8000 });
@@ -281,11 +290,6 @@ try {
   check('the folder Picker: folders, shared drives shown', pk?.views?.[0]?.viewId === 'folders' && pk.views[0].enableDrives && pk.views[0].selectFolder, JSON.stringify(pk?.views));
   w = await who();
   check('with a shared-drive folder, "Anyone at the desk" may be chosen', !w[2].off, JSON.stringify(w));
-  await row.getByRole('button', { name: 'More' }).click();
-  await row.getByRole('button', { name: 'Try opening Google Drive' }).click();
-  await pickInDrive(m, 'cancel');
-  await row.getByText('✓ Google Drive opens').waitFor({ timeout: 8000 }).catch(() => {});
-  check('Try opening Google Drive → "✓ Google Drive opens"', /✓ Google Drive opens/.test(await text(m, '.sv2-row:has-text("Google Drive and Sheets")')));
   await row.getByRole('button', { name: 'Check' }).click();
   await row.locator('.sv2-said').waitFor({ timeout: 10000 });
   check('Check: Drive and Sheets answer', /Working · Drive and Sheets answer/.test(await text(m, '.sv2-row:has-text("Google Drive and Sheets")')), await text(m, '.sv2-row:has-text("Google Drive and Sheets") .sv2-said'));
@@ -449,6 +453,14 @@ try {
   check('Done: "In Google Sheets · Open" in a new tab', (await open.getAttribute('target')) === '_blank' && /noopener/.test(await open.getAttribute('rel')) && /\/open\//.test(await open.getAttribute('href')));
   check('the toast "Sent to Google Sheets"', /Sent to Google Sheets/.test(await text(m)));
   await shot(m, '13-list-done-desktop');
+  // A list that matches nobody: no offer to send 0 people.
+  const emptyId = (await api(m, '/api/actions/list.create', { name: 'Nobody here', kind: 'filter', filter: { q: `nobody-${tag}-zz` } })).json?.list?.id;
+  await go(m, `/lists/${emptyId}`);
+  await m.getByRole('button', { name: 'Take it out' }).click();
+  await m.getByRole('button', { name: 'Send to Google Sheets' }).click();
+  await m.locator('.drv-panel').waitFor({ timeout: 8000 });
+  check('an empty list: "Nothing to send — the list is empty", no Send', /Nothing to send — the list is empty/.test(await text(m, '.drv-panel'))
+    && (await m.locator('.drv-panel').getByRole('button', { name: 'Send', exact: true }).count()) === 0, await text(m, '.drv-panel'));
   // Too big for one Sheet: the words, and Download CSV beside them.
   await limits({ cells: 5 });
   await go(m, `/lists/${listId}`);
@@ -543,11 +555,18 @@ try {
   const sent = await text(m, '.drv-sent');
   check('manager: everyone’s Sheets, with "by Sam Example" and where', /by Sam Example/.test(sent) && /In Campaign exports/.test(sent) && /Done/.test(sent), sent);
   check('manager: the link opened to anyone, with Make private again', /Links opened to anyone/.test(sent) && /Rally video\.mp4/.test(sent) && (await m.getByRole('button', { name: 'Make private again' }).count()) === 1);
+  check('dates read "13 Nov, 10:56 am"', /\b\d{1,2} [A-Z][a-z]{2}, \d{1,2}:\d{2} (am|pm)\b/.test(sent) && !/\b[A-Z][a-z]{2} \d{1,2}, \d/.test(sent), sent);
   await shot(m, '21-data-sent-manager-desktop');
   {
     const { page } = await newPage(PHONE, 'manager data phone', await mctx.storageState());
     await go(page, '/data');
     const pm = await measure(page);
+    // Each table's CSV and its Google Sheets sit on one line, so a Sheets button never stands alone.
+    const apart = await page.locator('.drv-export').evaluateAll((els) => els.filter((e) => {
+      const [a, b] = [...e.children].map((c) => c.getBoundingClientRect());
+      return a && b && Math.abs(a.top - b.top) > 4;
+    }).map((e) => e.innerText.replace(/\s+/g, ' ')));
+    check('Import & export (390): each table’s two buttons on one line', apart.length === 0, JSON.stringify(apart));
     check('Import & export (390, manager): no sideways scroll; 48 px', pm.overflow <= 0 && (await smallDrive(page)).length === 0, JSON.stringify({ pm, s: await smallDrive(page) }));
     await shot(page, '22-data-sent-manager-phone');
     await page.context().close();
@@ -582,6 +601,15 @@ try {
   await sleep(300);
   check('offline: From Google Drive disabled, with the needs-signal line', await m.getByRole('button', { name: 'From Google Drive' }).isDisabled() && /Needs signal/.test(await text(m)));
   await shot(m, '23-import-offline-desktop');
+  await mctx.setOffline(false);
+  // The compose, offline: From Google Drive off, with the same line.
+  await go(m, '/outreach/newsletter');
+  await m.click('button:has-text("Write an email")');
+  await m.getByRole('button', { name: 'From Google Drive' }).waitFor({ timeout: 8000 });
+  await mctx.setOffline(true);
+  await sleep(300);
+  check('offline compose: From Google Drive disabled, with "Needs signal"', await m.getByRole('button', { name: 'From Google Drive' }).isDisabled() && /Needs signal/.test(await text(m)));
+  await shot(m, '23b-compose-offline-desktop');
   await mctx.setOffline(false);
   // A Sheet on its way when the signal goes: "Needs signal — still sending".
   D.next('drive', 'hang');

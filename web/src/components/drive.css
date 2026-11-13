@@ -57,8 +57,11 @@
 
 /* The two export screens: each table's CSV, and Google Sheets beside it. */
 /* Each table's two buttons stay together, so "Google Sheets" never reads as the next table's. */
-.drv-export { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0 var(--s-1); }
-.drv-export:has(.drv-panel) { gap: var(--s-2); flex: 1 1 100%; }
+/* On one line: the CSV button may shrink and wrap its own words, never the pair. */
+.drv-export { display: inline-flex; flex-wrap: nowrap; align-items: center; gap: 0 var(--s-1); max-width: 100%; }
+.drv-export > a { min-width: 0; flex: 0 1 auto; white-space: normal; }
+.drv-export > button { flex: 0 0 auto; }
+.drv-export:has(.drv-panel) { flex-wrap: wrap; gap: var(--s-2); flex: 1 1 100%; }
 
 /* Import & export → Sent to Google Drive. */
 .drv-h3 { font-family: var(--font-sans); font-size: 15px; font-weight: 700; margin: var(--s-4) 0 var(--s-2); }

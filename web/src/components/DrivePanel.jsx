@@ -25,8 +25,9 @@ export default function DrivePanel({ online }) {
   const [busy, setBusy] = useState(null); // which setting is saving
   const [error, setError] = useState({});
   const [tried, setTried] = useState(null);
-  const on = Boolean(d.data?.setup && d.data?.on);
-  const picker = usePickFromDrive(on);
+  const [asked, setAsked] = useState(null); // which button opened the Picker: 'change' | 'try'
+  // Managers may open it while it's off: Try opening comes before turning it on.
+  const picker = usePickFromDrive(Boolean(d.data?.setup));
   const toast = useDriveToast();
   if (d.data && !d.data.setup) return null;
   if (!d.data) return <div className="drv-panel-s"><GoogleLoading q={d} /></div>;
@@ -37,18 +38,22 @@ export default function DrivePanel({ online }) {
     try { await action(name, input); await refresh(); } catch (err) { setError((e) => ({ ...e, [which]: err.message })); } finally { setBusy(null); }
   };
   const change = async () => {
-    setError((e) => ({ ...e, folder: null }));
+    setError((e) => ({ ...e, folder: null })); setAsked('change'); setTried(null);
     const docs = await picker.pick('folder');
     if (docs?.length) await save('folder', 'drive.folder', { file_id: docs[0].id });
   };
   const tryOpen = async () => {
-    setTried(null);
+    setTried(null); setAsked('try');
     const docs = await picker.pick('table');
     setTried(docs === null ? null : '✓ Google Drive opens');
   };
   const folder = s.land?.kind === 'campaign' ? s.land : null;
   const help = !s.domain ? 'Any Google Workspace account can connect. Set your domain under Google sign-in to allow only yours.'
     : !folder ? 'Sheets stay in their Drive when they leave. A shared drive keeps them.' : null;
+  const connectFor = (which) => picker.need === 'connect' && asked === which;
+  // Picker trouble is said beside the button that opened it.
+  const trouble = picker.error && picker.error.replace('Google Drive didn’t open — Try again', 'Google Drive didn’t open — check the GOOGLE_PICKER_KEY websites');
+  const troubleFor = (which) => trouble && asked === which && <p className="error" role="alert">{trouble}</p>;
   return (
     <div className="gg-panel drv-panel-s">
       <div>
@@ -71,11 +76,12 @@ export default function DrivePanel({ online }) {
                 return (
                   <button key={v} type="button" role="radio" aria-checked={s.sheets === v} className={`chip drv-chip${s.sheets === v ? ' is-on' : ''}`}
                     disabled={Boolean(busy) || !online || needs} onClick={() => s.sheets !== v && save('sheets', 'drive.settings', { sheets: v })}>
-                    {label}{needs && <span className="muted"> · Needs a shared-drive folder</span>}
+                    {label}
                   </button>
                 );
               })}
             </div>
+            {!folder?.shared && <p className="gg-hint">Anyone at the desk needs a shared-drive folder.</p>}
             {s.sheets === 'off' && <p className="gg-hint">Lists and tables stay in base.win until you choose.</p>}
             {error.sheets && <p className="error" role="alert">{error.sheets}</p>}
           </div>
@@ -83,35 +89,35 @@ export default function DrivePanel({ online }) {
             <h3>New Sheets go to</h3>
             <div className="gg-acts">
               <span>{folder ? `${folder.name}${folder.shared ? ' · shared drive' : ''}` : 'Each person’s own Drive (base.win exports)'}</span>
-              {picker.need === 'connect' ? <DriveConnect /> : (
+              {connectFor('change') ? <DriveConnect /> : (
                 <button type="button" className="btn btn-quiet" disabled={Boolean(busy) || !online} onClick={change}>
                   {busy === 'folder' ? 'Saving…' : 'Change'}<span className="gg-sr"> where new Sheets go</span>
                 </button>
               )}
             </div>
+            {troubleFor('change')}
             {error.folder && <p className="error" role="alert">{error.folder}</p>}
           </div>
         </>
       )}
       {help && <p className="gg-hint">{help}</p>}
       <DriveToast text={toast.text} />
-      {picker.error && <p className="error" role="alert">{picker.error.replace('Google Drive didn’t open — Try again', 'Google Drive didn’t open — check the GOOGLE_PICKER_KEY websites')}</p>}
-      {s.on && (
-        <div>
-          <button type="button" className="btn btn-quiet disclose" aria-expanded={more} aria-controls={moreId} onClick={() => setMore((v) => !v)}>More</button>
-          <div id={moreId} hidden={!more} className="drv-more">
-            <div className="gg-acts">
-              <button type="button" className="btn btn-quiet" disabled={!online} onClick={tryOpen}>Try opening Google Drive</button>
-              {tried && <span className="drv-ok" role="status">{tried}</span>}
-            </div>
-            {folder && (
-              <div className="gg-acts">
-                <button type="button" className="btn btn-quiet" disabled={Boolean(busy) || !online} onClick={() => save('folder', 'drive.folder', { file_id: null })}>Use each person’s own Drive</button>
-              </div>
-            )}
+      <div>
+        <button type="button" className="btn btn-quiet disclose" aria-expanded={more} aria-controls={moreId} onClick={() => setMore((v) => !v)}>More</button>
+        <div id={moreId} hidden={!more} className="drv-more">
+          <div className="gg-acts">
+            <button type="button" className="btn btn-quiet" disabled={!online} onClick={tryOpen}>Try opening Google Drive</button>
+            {tried && <span className="drv-ok" role="status">{tried}</span>}
           </div>
+          {connectFor('try') && <DriveConnect />}
+          {troubleFor('try')}
+          {s.on && folder && (
+            <div className="gg-acts">
+              <button type="button" className="btn btn-quiet" disabled={Boolean(busy) || !online} onClick={() => save('folder', 'drive.folder', { file_id: null })}>Use each person’s own Drive</button>
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }

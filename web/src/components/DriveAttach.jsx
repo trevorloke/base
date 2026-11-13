@@ -11,6 +11,7 @@
 //   drive.rows    the too-big rows, each with its link choice
 import { useState } from 'react';
 import { action } from '../api.js';
+import { NeedsSignal } from './NoSignal.jsx';
 import { DriveConnect, DriveToast, driveOn, useDrive, useDriveToast, usePickFromDrive } from './DriveBits.jsx';
 
 const WHO = [
@@ -94,6 +95,7 @@ export function useDriveAttach({ acts, count, max, online, busy, onAdded, onLink
     <button type="button" className="btn btn-quiet ot-btn-tap" disabled={busy || Boolean(adding) || room <= 0 || !online} onClick={fromDrive}>
       {adding ? 'Adding…' : 'From Google Drive'}
     </button>
+    {!online && <NeedsSignal className="drv-line" />}
   </>);
   const rows = big.length ? (
     <ul className="ot-files drv-bigs" aria-label="Too big to attach">

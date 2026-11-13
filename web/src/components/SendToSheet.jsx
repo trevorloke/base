@@ -138,7 +138,8 @@ export function SendToSheet({ source, of, name, count = null, head = [], noun = 
       {(open || showing || (id && !e)) && (
         <div className="drv-panel" role="group" aria-label="Google Sheets">
           {open && !connected && <DriveConnect />}
-          {open && connected && (
+          {open && connected && count === 0 && <p role="status">Nothing to send — the list is empty</p>}
+          {open && connected && count !== 0 && (
             <div className="drv-ask">
               <p className="drv-ask__q">Send {what} to a new Google Sheet in {whereSheetsGo(d.data.land)}?</p>
               {contact && <p className="drv-line">It includes people who asked not to be contacted.</p>}

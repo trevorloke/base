@@ -35,7 +35,7 @@ export function ExportItem({ k, label, me, csvClass = 'btn ops-tap', download = 
     <li className="drv-export">
       <a className={csvClass} href={href} download={download || undefined}>{label}</a>
       {(!MONEY.includes(k) || hasArea(me, 'money')) && (
-        <SendToSheet source="dataset" of={k} name={label} head={CONTACT_COLS[k] || []} label="Google Sheets" csvHref={href} />
+        <SendToSheet source="dataset" of={k} name={label} head={CONTACT_COLS[k] || []} label={<>Google Sheets<span className="drv-sr"> for {label}</span></>} csvHref={href} />
       )}
     </li>
   );

@@ -12,12 +12,18 @@ import { driveOn, num, useDrive } from './DriveBits.jsx';
 import { Progress, Stopped } from './SendToSheet.jsx';
 
 const going = (e) => e.status === 'waiting' || e.status === 'sending';
-const when = (iso, time = true) => {
+// "13 Nov, 10:56 am", in the campaign's time zone (not this computer's).
+const when = (iso, tz, time = true) => {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
-  const day = d.toLocaleDateString('en-CA', { day: 'numeric', month: 'short' }).replace('.', '');
+  const fmt = (opts) => {
+    try { return new Intl.DateTimeFormat('en-CA', { ...opts, timeZone: tz || undefined }).formatToParts(d); } catch { return new Intl.DateTimeFormat('en-CA', opts).formatToParts(d); }
+  };
+  const part = (parts, type) => parts.find((p) => p.type === type)?.value || '';
+  const p = fmt({ day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true });
+  const day = `${part(p, 'day')} ${part(p, 'month').replace('.', '')}`;
   if (!time) return day;
-  return `${day}, ${d.toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit' }).replace(/\./g, '').replace(/\s+/g, ' ')}`;
+  return `${day}, ${part(p, 'hour')}:${part(p, 'minute')} ${part(p, 'dayPeriod').replace(/\./g, '').toLowerCase()}`;
 };
 const chip = (e) => {
   if (e.status === 'done') return ['Done', 'chip-ok'];
@@ -28,15 +34,15 @@ const chip = (e) => {
 };
 const firstName = (n) => String(n || '').split(/\s+/)[0] || 'them';
 
-function SheetRow({ e, d, manager, online }) {
+function SheetRow({ e, d, manager, online, tz }) {
   const [label, cls] = chip(e);
-  const where = e.land === 'campaign' ? `In ${d.land?.kind === 'campaign' ? d.land.name : 'the campaign folder'}` : `In ${e.mine ? 'your' : `${firstName(e.by)}’s`} Google Drive`;
+  const where = e.land === 'campaign' ? `In ${e.land_name || 'the campaign folder'}` : `In ${e.mine ? 'your' : `${firstName(e.by)}’s`} Google Drive`;
   return (
     <li className="drv-row">
       <div className="drv-row__main">
         <span className="drv-row__name">{e.name}</span>
         <span className="drv-row__facts">
-          <span className={`chip ${cls}`}>{label}</span> {when(e.created_at)}{manager ? <> · {e.mine ? 'by you' : `by ${e.by}`} · {where}</> : null}
+          <span className={`chip ${cls}`}>{label}</span> {when(e.created_at, tz)}{manager ? <> · {e.mine ? 'by you' : `by ${e.by}`} · {where}</> : null}
         </span>
       </div>
       {e.status === 'done' && e.url && <a className="btn btn-quiet ops-tap" href={e.url} target="_blank" rel="noopener noreferrer">Open<span className="drv-sr"> {e.name}</span></a>}
@@ -46,7 +52,7 @@ function SheetRow({ e, d, manager, online }) {
   );
 }
 
-function LinkRow({ l, online, onClosed }) {
+function LinkRow({ l, online, onClosed, tz }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const close = async () => {
@@ -57,7 +63,7 @@ function LinkRow({ l, online, onClosed }) {
     <li className="drv-row">
       <div className="drv-row__main">
         <span className="drv-row__name">{l.name}</span>
-        <span className="drv-row__facts">{l.mine ? 'by you' : `by ${l.by}`} · {when(l.created_at, false)}</span>
+        <span className="drv-row__facts">{l.mine ? 'by you' : `by ${l.by}`} · {when(l.created_at, tz, false)}</span>
       </div>
       {l.mine ? (
         <button type="button" className="btn btn-quiet ops-tap" disabled={busy || !online} onClick={close}>{busy ? 'Closing…' : 'Make private again'}</button>
@@ -72,7 +78,7 @@ function LinkRow({ l, online, onClosed }) {
   );
 }
 
-export default function DriveSent() {
+export default function DriveSent({ tz = null }) {
   const d = useDrive();
   const on = driveOn(d.data);
   const online = useOnline();
@@ -101,7 +107,7 @@ export default function DriveSent() {
       {ex.length > 0 && (
         <>
           <h3 className="drv-h3">Sheets</h3>
-          <ul className="drv-rows">{ex.map((e) => <SheetRow key={e.id} e={e} d={d.data} manager={manager} online={online} />)}</ul>
+          <ul className="drv-rows">{ex.map((e) => <SheetRow key={e.id} e={e} d={d.data} manager={manager} online={online} tz={tz} />)}</ul>
           {manager && !more && (sheets.data?.exports?.length || 0) >= 10 && (
             <button type="button" className="btn btn-quiet disclose disclose--inline" aria-expanded={false} onClick={() => setMore(true)}>More</button>
           )}
@@ -112,7 +118,7 @@ export default function DriveSent() {
         <>
           <h3 className="drv-h3">Links opened to anyone</h3>
           <p className="ops-meta">{num(open.length)} still open. Anyone with one of these links can open the file.</p>
-          <ul className="drv-rows">{open.map((l) => <LinkRow key={l.id} l={l} online={online} onClosed={() => qc.invalidateQueries({ queryKey: ['drive', 'links'] })} />)}</ul>
+          <ul className="drv-rows">{open.map((l) => <LinkRow key={l.id} l={l} online={online} tz={tz} onClosed={() => qc.invalidateQueries({ queryKey: ['drive', 'links'] })} />)}</ul>
         </>
       )}
     </section>

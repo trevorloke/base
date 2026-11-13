@@ -228,7 +228,9 @@ const part = async (db, ex, ctx, g, rules) => {
     }
     const made = await makeSheet(db, g, { name: ex.name, parent, exportId: ex.id });
     if (!made.ok) return outcome(db, ex, made, { folder: ex.land === 'campaign' });
-    ex = await step(db, ex, "file_id = $3, url = $4, status = 'sending', cursor = $5::jsonb", [made.id, made.url, JSON.stringify({ grid })]);
+    // The folder it really went to (the campaign's may have changed since it was asked for).
+    const landName = ex.land === 'campaign' && rules.folder?.id === parent ? rules.folder.name : ex.land_name;
+    ex = await step(db, ex, "file_id = $3, url = $4, status = 'sending', cursor = $5::jsonb, land_name = $6", [made.id, made.url, JSON.stringify({ grid }), landName]);
   }
   if (Number(ex.done_rows) === 0 && !cur.page) {
     // The grid and the header row: exact, so a part tried again repeats them harmlessly.

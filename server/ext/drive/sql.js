@@ -28,6 +28,9 @@ create table if not exists drive_exports (
   done_at timestamptz,
   unique (workspace_id, client_key)
 );
+-- The campaign folder's name as it was when the Sheet was sent there, so
+-- the list still says where it went after the folder changes.
+alter table drive_exports add column if not exists land_name text;
 create index if not exists drive_exports_ws_idx on drive_exports (workspace_id, created_at desc);
 create index if not exists drive_exports_file_idx on drive_exports (workspace_id, file_id);
 

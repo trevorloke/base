@@ -261,6 +261,19 @@ test('the Picker’s token: narrowed to Drive, kept an hour, never stored; not n
   assert.equal(last.status, 429);
 });
 
+test('Try opening Google Drive before it’s on: managers only; the desk still gets nothing', async () => {
+  const M = await signup(`Drive try ${tag}`, `try.${tag}@example.org`);
+  assert.equal(ok(await M.b.get('/api/drive')).on, false);
+  assert.deepEqual(ok(await M.b.get('/api/drive/picker')), { ready: true, connect: true });
+  await connect(M.b, A[0].sub);
+  const p = ok(await M.b.get('/api/drive/picker'));
+  assert.deepEqual([p.ready, Boolean(p.token)], [true, true]);
+  const S = await join(M.b, `try2.${tag}@example.org`, 'staff', 'Tor Example');
+  await connect(S.b, A[2].sub);
+  assert.deepEqual(ok(await S.b.get('/api/drive/picker')), { ready: false });
+  no(await send(M.b, 'dataset', 'people'), 409, 'Google Drive is off for this campaign');
+});
+
 test('the Sheets switch and where Sheets land: off by default; "desk" needs a shared-drive folder; personal accounts never hold an export', async () => {
   const M = await signup(`Drive switch ${tag}`, `switch.${tag}@example.org`);
   ok(await M.b.action('drive.settings', { on: true }));
@@ -574,6 +587,12 @@ test('where it lands: the campaign folder, chosen once by each person; a differe
   assert.equal(ok(await S.b.get('/api/drive/exports')).exports.length, 1);
   assert.equal(ok(await M.b.get('/api/drive/exports')).exports.length, 2);
   assert.equal((await S.b.get(`/api/drive/exports/${ok(await M.b.get('/api/drive/exports')).exports.find((x) => x.mine).id}`)).status, 404);
+  // Each says the folder it went to, though the campaign later moves on.
+  const second = D().folder({ name: 'Second exports', driveId: '0AShared4' });
+  D().pick(second, A[0].sub);
+  ok(await M.b.action('drive.folder', { file_id: second }));
+  assert.deepEqual(ok(await M.b.get('/api/drive/exports')).exports.map((x) => [x.land, x.land_name]),
+    [['campaign', 'Campaign exports'], ['campaign', 'Campaign exports']]);
   // A manager can carry on someone else's, as them; not once they've disconnected.
   await db.query(`update drive_exports set status = 'failed' where id = $1`, [e.id]);
   await db.query(`update google_grants set purposes = '{}' where user_id = $1`, [S.id]);
