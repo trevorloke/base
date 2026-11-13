@@ -148,6 +148,16 @@ test('staff denied Outreach but holding Media does the whole job; the queued rel
   assert.equal((await staff.get('/api/blasts')).status, 403);
   const pic = ok(await staff.action('media.picture', { data: PNG, name: 'p.png' }));
   assert.match(pic.media.url, /^\/media\//);
+  // Media's uploads take the same sizes as Outreach's: a 1 MB attachment
+  // answers 200; one over 5 MB is refused in words, not 413 (5.1 MB: as
+  // base64 it still fits the 7 MB body).
+  const big = ok(await staff.action('media.attach', { data: Buffer.alloc(1024 * 1024, 7).toString('base64'), name: 'report.pdf' }));
+  assert.equal(big.attachment.bytes, 1024 * 1024);
+  const over = await staff.action('media.attach', { data: Buffer.alloc(Math.round(5.1 * 1024 * 1024), 7).toString('base64'), name: 'report.pdf' });
+  assert.equal(over.status, 400, JSON.stringify(over.json));
+  assert.match(over.json.error, /too big — 5 MB at most/);
+  assert.notEqual((await staff.action('media.picture', { data: Buffer.alloc(600 * 1024, 7).toString('base64'), name: 'p.png' })).status, 413, 'a picture over 256 KB reaches the action');
+  ok(await staff.action('media.unattach', { id: big.attachment.id }));
   const extra = ok(await staff.action('media.attach', { data: Buffer.from('later').toString('base64'), name: 'later.txt' }));
   ok(await staff.action('media.unattach', { id: extra.attachment.id }), 'and takes one back');
   const file = ok(await staff.action('media.attach', { data: Buffer.from('hello').toString('base64'), name: 'notes.txt' }));
@@ -367,16 +377,4 @@ test('someone who left by a release’s link stays off: a tag put back or a merg
   assert.equal(why[mail('deenew')], 'left_media');
   assert.equal(why[mail('cy')], null);
   assert.equal((await db.query("select left_how from media_contacts where workspace_id = $1 and person_id = $2", [ws, bo.id])).rows[0].left_how, 'link');
-});
-
-test('Media’s uploads take the same sizes as Outreach’s: a 1 MB attachment answers 200, one over 5 MB is refused in words, not 413', async () => {
-  const { staff } = await campaign();
-  const big = ok(await staff.action('media.attach', { data: Buffer.alloc(1024 * 1024, 7).toString('base64'), name: 'report.pdf' }));
-  assert.equal(big.attachment.bytes, 1024 * 1024);
-  // 5.1 MB: as base64 it still fits the 7 MB body, so the words are readAttachment's.
-  const over = await staff.action('media.attach', { data: Buffer.alloc(Math.round(5.1 * 1024 * 1024), 7).toString('base64'), name: 'report.pdf' });
-  assert.equal(over.status, 400, JSON.stringify(over.json));
-  assert.match(over.json.error, /too big — 5 MB at most/);
-  const pic = await staff.action('media.picture', { data: Buffer.alloc(600 * 1024, 7).toString('base64'), name: 'p.png' });
-  assert.notEqual(pic.status, 413, 'a picture over 256 KB reaches the action');
 });

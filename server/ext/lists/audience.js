@@ -73,6 +73,31 @@ export const peopleOf = async (db, ctx, { list = null, filter = null, reach = nu
   return { people: rows.map((r) => ({ ...r, tags: parseJ(r.tags, []) })), total: rows[0]?.total ?? 0 };
 };
 
+// One page of everyone a list names, in name order, after a person's place
+// (after: { key, id } of the last one sent — key is Postgres's own
+// lower(name), so the order and the cursor always agree — or null):
+// the keyset the Google Sheets export reads a big list by, with no cap.
+export const peoplePage = async (db, ctx, { list, after = null, limit = 1000 }) => {
+  const w = await whereFor(db, ctx, { list });
+  let where = w.where;
+  const params = [...w.params];
+  if (after) {
+    params.push(String(after.key), after.id);
+    where += ` and (lower(p.name), p.id) > ($${params.length - 1}::text, $${params.length}::uuid)`;
+  }
+  params.push(limit);
+  const { rows } = await db.query(
+    `select p.id, p.name, p.email, p.phone, p.address, p.unit, p.city, p.postal, p.rating, p.tags, p.created_at, lower(p.name) as _key
+     from persons p where ${where} order by lower(p.name), p.id limit $${params.length}`,
+    params,
+  );
+  return rows.map((r) => ({ ...r, tags: parseJ(r.tags, []) }));
+};
+export const peopleCount = async (db, ctx, { list }) => {
+  const { where, params } = await whereFor(db, ctx, { list });
+  return (await db.query(`select count(*)::int as n from persons p where ${where}`, params)).rows[0].n;
+};
+
 // How many a list names; how many emails and texts a send to it would be
 // (one per address, one per number); how many people can be called; and how
 // many can be reached at all, by any of the three. Each person is read once.
