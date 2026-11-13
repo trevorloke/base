@@ -70,3 +70,6 @@
 /* The volunteer profile: "I know them" on its own row after Address */
 .pf-iknow { display: flex; justify-content: flex-start; margin-top: var(--s-2); }
 .pf-iknow:empty { display: none; }
+/* "Close tie" and "✓ Close" take one width, so Remove never shifts */
+.rk-close { min-width: 7em; justify-content: center; }
+@media (max-width: 480px) { .rk-rate { justify-content: flex-start; } }

@@ -51,8 +51,8 @@
 }
 .map-page.map-view--dark .map-canvas { background: rgb(26, 28, 34); }
 /* The zoom buttons and the credit follow the app's light or dark paper. */
-.map-canvas .leaflet-control-attribution { font: 10px/1.4 var(--font-mono); background: color-mix(in srgb, var(--paper-0) 85%, transparent); color: var(--text-2); }
-.map-canvas .leaflet-control-attribution a { color: var(--text-1); }
+.map-page .map-canvas .leaflet-control-attribution { font: 10px/1.4 var(--font-mono); background: color-mix(in srgb, var(--paper-0) 85%, transparent); color: var(--text-2); }
+.map-page .map-canvas .leaflet-control-attribution a { color: var(--text-1); }
 .map-page .map-canvas .leaflet-bar { border-color: var(--rule); }
 .map-page .map-canvas .leaflet-bar a { width: 48px; height: 48px; line-height: 48px; font-size: 20px; font-family: var(--font-serif); color: var(--text-1); background: var(--paper-0); border-bottom-color: var(--rule); }
 @media (hover: hover) { .map-page .map-canvas .leaflet-bar a:hover { background: var(--paper-1); } }
