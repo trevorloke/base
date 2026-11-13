@@ -32,6 +32,14 @@ create table if not exists media_contacts (
 
 export const exportTables = ['media_contacts'];
 
+// Media's uploads take the sizes Outreach's do (server/index.js BODY_MAX):
+// without these they had the 256 KB every address takes, so a file over
+// about 190 KB was refused as "request too large".
+export const bodyMax = {
+  '/api/actions/media.attach': 7 * 1024 * 1024,
+  '/api/actions/media.picture': 4 * 1024 * 1024,
+};
+
 // Two records made one: if drop left by a release's link, keep has left
 // too (the merge drops drop's row when keep has one), so the reach rule
 // (lib/reach.js left_media) still holds. Keep's outlet, beat and note stand.

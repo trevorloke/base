@@ -123,6 +123,7 @@ Then, as each one is ready:
 | `GOOGLE_PLACES_DAILY_MAX`, `GOOGLE_PLACES_PER_PERSON` | leave unset (300 Google asks a day, 50 a person), or whole numbers | keeping Google's suggestions inside its free use |
 | `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` | the campaign's OAuth client (Google Cloud → Google Auth Platform → Clients → *Web application*, redirect address from **Settings → Services → Google**); staging gets its own project and client, never production's (INTEGRATIONS.md, *Google sign-in and connections*) | Sign in with Google, and every Google connection |
 | `GOOGLE_TOKEN_KEY` | 32 or more random characters (`openssl rand -base64 48`), a different one per environment; keep a copy in the campaign's password manager | Gmail, Drive and Calendar connections (lost: everyone connects again) |
+| `GOOGLE_PICKER_KEY`, `GOOGLE_CLOUD_PROJECT_NUMBER` | a browser API key limited to the public address, the staging address and `https://docs.google.com/*` and to the Google Picker API; the project number (digits) of the project that holds the OAuth client (§7, *Google Drive and Sheets*) | Google Drive and Sheets |
 | `STARBASE_TILE_PROVIDER`, `STARBASE_TILE_KEY` | `stadia` for Stadia Maps (address, credit and zoom filled in), and its key only if it can't be told the campaign's web address (§5, Recipe A) | the map's background, instead of the free tiles |
 | `STARBASE_TILE_URL`, `STARBASE_TILE_ATTRIBUTION`, `STARBASE_TILE_MAX_ZOOM` | a tile provider the campaign has an agreement with: its `https://…/{z}/{x}/{y}.png` address, its credit line, its deepest zoom (§5, *The street map*) | the map's background, instead of the free tiles |
 | `STARBASE_TRUSTED_PROXIES` | leave unset on Render (one proxy). Set to the number of proxies in front if there is a CDN before Render | rate limits reading the right address |
@@ -515,6 +516,36 @@ shared, and the code names no client.
 - Keys: every key above is in Render only, never in the repo or a chat.
   Anyone who leaves the campaign is removed under **Admin → Members**, which ends their
   sign-in everywhere at once.
+
+#### Google Drive and Sheets
+
+Drive uses the Google sign-in client above (same project, same client, same
+`GOOGLE_TOKEN_KEY`). It asks for one permission, *only the specific Google
+Drive files you use with this app* (`drive.file`), which needs no Google
+review. Sheets stay **off** until a manager chooses who may send: decide with
+your counsel first whether voter data may go to Google Drive.
+
+1. Google Cloud → APIs & Services → Library: enable **Google Drive API**,
+   **Google Sheets API** and **Google Picker API** in the project that holds
+   the OAuth client.
+2. Google Auth Platform → **Data access**: add
+   `https://www.googleapis.com/auth/drive.file`. Nothing else for Drive.
+3. APIs & Services → Credentials → **Create credentials → API key**. Websites:
+   `https://base.win/*` (or the public address), the staging address and
+   `https://docs.google.com/*`; API restriction: **Google Picker API** only.
+   Each campaign gets its own project and key.
+4. IAM & Admin → Settings: copy the **Project number** (digits, not the ID).
+5. Google Auth Platform → Audience: if External, **Publish app**. In Testing
+   every Drive connection stops after 7 days.
+6. Render, each service: `GOOGLE_PICKER_KEY` and `GOOGLE_CLOUD_PROJECT_NUMBER`.
+7. On Google Workspace: mark the client *Trusted* if third-party apps are
+   restricted, and decide whether Drive files may be shared outside the
+   campaign's domain.
+8. Before staff may send to Sheets: a **shared drive** (Workspace only) with
+   the managers and staff as members, and a folder in it.
+9. In base.win: **Settings → Services → Google Drive and Sheets → Check**;
+   turn Drive on; pick the shared-drive folder; leave *Who can send to Google
+   Sheets* on **No one** until counsel has answered.
 
 ## What base.win does on its own
 

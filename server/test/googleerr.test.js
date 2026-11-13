@@ -62,7 +62,7 @@ test('Google’s words: a key scrubbed, at most 300 characters, a console link k
 test('every step named is a step of GOING-LIVE.md §5', () => {
   const doc = readFileSync(new URL('../../GOING-LIVE.md', import.meta.url), 'utf8');
   const s5 = doc.slice(doc.indexOf('## 5 ·'), doc.indexOf('## 6 ·'));
-  for (const { step } of TROUBLES.filter((t) => t.step)) {
+  for (const { step } of TROUBLES.filter((t) => t.step && t.service === 'maps')) {
     const [, recipe, n] = step.match(/^Recipe ([AB]) step (\d+)$/);
     const start = s5.indexOf(`#### Recipe ${recipe} `);
     assert.ok(start >= 0, `Recipe ${recipe} in §5`);
@@ -76,4 +76,48 @@ test('a key limited to other services: the words name the two APIs base.win uses
   assert.equal(t.code, 'api-blocked');
   assert.equal(t.plain, 'This key is limited to other Google services. Add Map Tiles API and Places API (New) to it.');
   assert.equal(t.step, 'Recipe B step 4');
+});
+
+test('every row names its service; no option means the map’s rows, answering as before', () => {
+  for (const t of TROUBLES) assert.ok(['maps', 'drive', 'gmail', 'calendar'].includes(t.service), `${t.code} has a service`);
+  assert.equal(TROUBLES.filter((t) => t.service === 'maps').length, 8);
+  assert.equal(googleTrouble(429, 'Too Many Requests').code, 'quota');
+  assert.equal(googleTrouble(403, tiles(403, 'x', 'SERVICE_DISABLED')).code, 'api-off');
+  assert.equal(googleTrouble(403, tiles(403, 'x', 'SERVICE_DISABLED'), { service: 'maps' }).code, 'api-off');
+});
+
+const drive = (status, reason, message = 'Refused') => ({ error: { code: status, message, errors: [{ domain: 'global', reason, message }] } });
+test('Drive’s refusals in Drive’s words, never the map’s', () => {
+  const off = googleTrouble(403, { error: { code: 403, message: 'Google Drive API has not been used in project 123 before or it is disabled.', details: [{ reason: 'SERVICE_DISABLED' }] } }, { service: 'drive' });
+  assert.equal(off.plain, 'The Google Drive API (or Sheets API) isn’t turned on in this Google Cloud project.');
+  assert.equal(off.step, 'Google Drive step 1');
+  assert.equal(googleTrouble(404, drive(404, 'notFound'), { service: 'drive' }).plain, 'base.win can only open files you pick — pick it again.');
+  assert.equal(googleTrouble(404, drive(404, 'appNotAuthorizedToFile'), { service: 'drive' }).plain, 'base.win can only open files you pick — pick it again.');
+  assert.equal(googleTrouble(403, drive(403, 'insufficientFilePermissions'), { service: 'drive' }).plain, 'Your Google account can’t change that file or folder.');
+  assert.equal(googleTrouble(403, drive(403, 'storageQuotaExceeded'), { service: 'drive' }).plain, 'Your Google Drive is full.');
+  // A rate limit, and a 429, never give the map's quota words to Drive.
+  const rate = googleTrouble(403, drive(403, 'rateLimitExceeded'), { service: 'drive' });
+  assert.equal(rate.code, 'other');
+  assert.equal(rate.plain, 'Google Drive refused (403).');
+  assert.equal(googleTrouble(429, 'Too Many Requests', { service: 'drive' }).code, 'other');
+  // And the map never gets Drive's.
+  assert.equal(googleTrouble(403, drive(403, 'storageQuotaExceeded')).code, 'other');
+});
+
+test('rows of one service never answer for another', () => {
+  const gmailish = drive(403, 'insufficientPermissions');
+  assert.equal(googleTrouble(403, gmailish, { service: 'drive' }).code, 'other');
+  assert.equal(googleTrouble(403, drive(403, 'storageQuotaExceeded'), { service: 'gmail' }).code, 'other');
+  assert.equal(googleTrouble(403, drive(403, 'insufficientFilePermissions'), { service: 'calendar' }).code, 'other');
+});
+
+test('every Drive step named is a numbered step of GOING-LIVE.md’s Google Drive section', () => {
+  const doc = readFileSync(new URL('../../GOING-LIVE.md', import.meta.url), 'utf8');
+  const start = doc.indexOf('#### Google Drive and Sheets');
+  assert.ok(start >= 0, 'the section');
+  const body = doc.slice(start, doc.indexOf('\n#', start + 1));
+  for (const { step } of TROUBLES.filter((t) => t.step && t.service === 'drive')) {
+    const [, n] = step.match(/^Google Drive step (\d+)$/);
+    assert.match(body, new RegExp(`^${n}\\. `, 'm'), step);
+  }
 });
