@@ -21,6 +21,7 @@ import Team from './Team.jsx';
 import Candidates from './Candidates.jsx';
 import Services from '../components/Services.jsx';
 import CampaignName from '../components/CampaignName.jsx';
+import LettersWait from '../components/LettersWait.jsx';
 import BrandSettings from '../components/BrandSettings.jsx';
 // The ops-* pieces these screens are built from (the head, the buttons).
 import './shifts.css';
@@ -53,7 +54,7 @@ export default function Admin() {
       {tab === 'teams' && <Teams me={me} />}
       {tab === 'permissions' && <Permissions me={me} />}
       {tab === 'services' && <Services />}
-      {tab === 'campaign' && <CampaignName me={me} />}
+      {tab === 'campaign' && <><CampaignName me={me} /><LettersWait me={me} /></>}
       {tab === 'brand' && <BrandSettings me={me} />}
     </div>
   );

@@ -11,6 +11,11 @@
 //                          Try again; Copy links (the video, the Drive folder);
 //                          Use again (its words in a new release)
 //   /media/templates       release templates (components/EmailTemplates.jsx)
+//   /media/letters         letters and op-eds volunteers sent in, and one
+//                          in place (/media/letters/:id); /media/outlets the
+//                          papers they go to (pages/MediaLetters.jsx; desk)
+// A contact may be on any of three lists — Op-ed editors, Letters editors,
+// Show hosts — shown under "On" (never "Lists": that's People's).
 // Everything reads /api/media (server/ext/media) and writes media.* — so
 // someone given Media but not Outreach can do the whole job. Only the desk
 // (manager, staff, treasurer) sees contacts' emails and phones, and adds or
@@ -31,6 +36,7 @@ import {
   BlastResult, Big, ComposeCard, FailedList, More, PastList, UnsentList, copyText, fmtWhen, useAction, useBlastList,
 } from './Outreach.jsx';
 import { TemplatesScreen } from '../components/EmailTemplates.jsx';
+import { DeskLetter, LettersTab, OutletsScreen, useLettersCount, useOutlets } from './MediaLetters.jsx';
 import '../editor.css';
 import './media.css';
 
@@ -43,6 +49,9 @@ const TO = [
   { key: 'influencer', label: 'Influencers', kinds: ['influencer'], count: 'influencer', noun: ['influencer', 'influencers'] },
   { key: 'both', label: 'Both', kinds: ['media', 'influencer'], count: 'all', noun: ['contact', 'contacts'] },
 ];
+// The three lists, as server/ext/media/rules.js has them (LISTS, LIST_WORDS).
+const LISTS = [['op_ed', 'Op-ed editors'], ['letters', 'Letters editors'], ['show', 'Show hosts']];
+const listWord = Object.fromEntries(LISTS);
 // Why a release won't reach someone (server lib/reach.js whyNot), in words.
 const WHY = {
   no_email: 'no email', do_not_email: 'asked not to be emailed', do_not_contact: 'asked not to be contacted', suppressed: 'address bounced',
@@ -119,11 +128,17 @@ function ReleasesTab({ creating, onClose }) {
   const contacts = useContacts();
   const [result, setResult] = useState(null);
   const [to, setTo] = useState('media');
+  // Only: some of the three lists (narrows the audience, never widens it).
+  const [only, setOnly] = useState([]);
   const releases = list.data?.releases;
   const emailConfigured = list.data?.emailConfigured;
   const pick = TO.find((t) => t.key === to);
   const emailable = contacts.data?.counts?.emailable;
-  const count = emailable ? emailable[pick.count] : null;
+  // With Only: the live contacts of these kinds on those lists who'd get it
+  // (the server picks the same: lists narrow, never widen).
+  const tagged = (c, k) => (c.person.tags || []).some((t) => String(t).trim().toLowerCase() === k);
+  const count = !emailable ? null : !only.length ? emailable[pick.count]
+    : (contacts.data?.contacts || []).filter((c) => c.reachable && pick.kinds.some((k) => tagged(c, k)) && (c.lists || []).some((k) => only.includes(k))).length;
   const n = (t) => (emailable ? fmt(emailable[t.count]) : '…');
 
   return (
@@ -143,6 +158,16 @@ function ReleasesTab({ creating, onClose }) {
             {contacts.isError && <span className="error" role="alert"><Unavailable onRetry={() => contacts.refetch()} /></span>}
             <span className="ops-meta">Anyone who asked not to be emailed or contacted is left out.</span>
           </div>
+          <More>
+            <span className="md-label" id="md-only">Only</span>
+            <div className="md-chips" role="group" aria-labelledby="md-only">
+              {LISTS.map(([k, w]) => (
+                <button key={k} type="button" aria-pressed={only.includes(k)} className={`chip md-chip${only.includes(k) ? ' is-on' : ''}`}
+                  onClick={() => setOnly(only.includes(k) ? only.filter((x) => x !== k) : [...only, k])}>{w}</button>
+              ))}
+            </div>
+            {only.length > 0 && <span className="ops-meta">Only {pick.noun[1]} on {only.map((k) => listWord[k]).join(' or ')}.</span>}
+          </More>
         </div>
       )}
       {creating && (
@@ -154,7 +179,7 @@ function ReleasesTab({ creating, onClose }) {
           emailConfigured={emailConfigured}
           actions={MEDIA_ACTIONS}
           listKey={MEDIA_SCOPE.listKey}
-          extra={{ to: { kinds: pick.kinds } }}
+          extra={{ to: { kinds: pick.kinds, ...(only.length ? { lists: LISTS.map(([k]) => k).filter((k) => only.includes(k)) } : {}) } }}
           senderUse="press"
           confirmFrom
           sendLabel={count == null ? 'Send' : `Send to ${fmt(count)}`}
@@ -224,7 +249,7 @@ function Sheet({ c, desk, onClose, onChanged }) {
   const qc = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
-  const [form, setForm] = useState({ kind: c.kind, outlet: c.outlet || '', beat: c.beat || '', note: c.note || '' });
+  const [form, setForm] = useState({ kind: c.kind, outlet: c.outlet || '', beat: c.beat || '', note: c.note || '', lists: c.lists || [] });
   const ref = useRef(null);
   const online = useOnline();
   useEffect(() => { ref.current?.focus(); }, [c.person.id]);
@@ -250,6 +275,7 @@ function Sheet({ c, desk, onClose, onChanged }) {
         <dl className="md-dl">
           <div><dt>Kind</dt><dd>{c.kind === 'media' ? 'Media' : 'Influencer'}</dd></div>
           {c.outlet && <div><dt>Outlet</dt><dd>{c.outlet}</dd></div>}
+          {(c.lists || []).length > 0 && <div><dt>On</dt><dd className="md-tags">{c.lists.map((k) => <span key={k} className="chip">{listWord[k]}</span>)}</dd></div>}
           {c.beat && <div><dt>Beat</dt><dd>{c.beat}</dd></div>}
           {desk && <div><dt>Email</dt><dd className="md-wrap">{p.email ? <a href={`mailto:${p.email}`}>{p.email}</a> : '—'}</dd></div>}
           {desk && <div><dt>Phone</dt><dd>{p.phone ? <a href={`tel:${p.phone}`}>{p.phone}</a> : '—'}</dd></div>}
@@ -261,8 +287,8 @@ function Sheet({ c, desk, onClose, onChanged }) {
       ) : (
         <form className="md-form" onSubmit={save}>
           <KindChips value={form.kind} onChange={(kind) => setForm({ ...form, kind })} />
-          <div className="field"><label htmlFor="md-e-outlet">Outlet</label>
-            <input id="md-e-outlet" className="input" maxLength={160} value={form.outlet} onChange={(e) => setForm({ ...form, outlet: e.target.value })} /></div>
+          <ListChips value={form.lists} onChange={(lists) => setForm({ ...form, lists })} />
+          <OutletField id="md-e-outlet" value={form.outlet} onChange={(outlet) => setForm({ ...form, outlet })} />
           <div className="field"><label htmlFor="md-e-beat">Beat</label>
             <input id="md-e-beat" className="input" maxLength={160} value={form.beat} onChange={(e) => setForm({ ...form, beat: e.target.value })} /></div>
           <div className="field"><label htmlFor="md-e-note">Note</label>
@@ -304,11 +330,45 @@ function KindChips({ value, onChange }) {
   );
 }
 
+// "On": the three lists, any or all of them (toggles, unlike KindChips).
+function ListChips({ value, onChange }) {
+  const on = value || [];
+  return (
+    <div className="field">
+      <span className="md-label" id="md-on">On</span>
+      <div className="md-chips" role="group" aria-labelledby="md-on">
+        {LISTS.map(([k, w]) => (
+          <button key={k} type="button" aria-pressed={on.includes(k)} className={`chip md-chip${on.includes(k) ? ' is-on' : ''}`}
+            onClick={() => onChange(on.includes(k) ? on.filter((x) => x !== k) : LISTS.map(([x]) => x).filter((x) => x === k || on.includes(x)))}>{w}</button>
+        ))}
+      </div>
+      <span className="ops-meta">Show hosts: hosts and producers — radio, TV, podcasts</span>
+    </div>
+  );
+}
+
+// The outlet: free text, suggesting the campaign's outlets by name (a
+// contact is linked to an outlet by its exact name).
+function OutletField({ id, value, onChange, placeholder }) {
+  const q = useOutlets();
+  const names = (q.data?.outlets || []).map((o) => o.name);
+  const v = String(value || '').trim();
+  const known = !v || names.some((n) => n.toLowerCase() === v.toLowerCase());
+  return (
+    <div className="field"><label htmlFor={id}>Outlet</label>
+      <input id={id} className="input" maxLength={160} list={`${id}-list`} autoComplete="off" value={value} placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)} aria-describedby={known ? undefined : `${id}-hint`} />
+      <datalist id={`${id}-list`}>{names.map((n) => <option key={n} value={n} />)}</datalist>
+      {!known && q.isSuccess && <span className="ops-meta" id={`${id}-hint`}>Not one of your outlets</span>}
+    </div>
+  );
+}
+
 // Add a contact (desk): name, kind, email, outlet; the rest under More.
 function AddContact({ onClose, onAdded }) {
   const qc = useQueryClient();
   const online = useOnline();
-  const [f, setF] = useState({ name: '', kind: 'media', email: '', outlet: '', phone: '', beat: '', note: '' });
+  const [f, setF] = useState({ name: '', kind: 'media', email: '', outlet: '', phone: '', beat: '', note: '', lists: [] });
   // Socials, one row per network, as on a person's page: an influencer is
   // often on two or three.
   const [socials, setSocials] = useState([{ platform: 'instagram', handle: '' }]);
@@ -327,6 +387,7 @@ function AddContact({ onClose, onAdded }) {
       ...(f.beat.trim() ? { beat: f.beat.trim() } : {}),
       ...(f.note.trim() ? { note: f.note.trim() } : {}),
       ...(Object.keys(filled).length ? { socials: filled } : {}),
+      ...(f.lists.length ? { lists: f.lists } : {}),
     });
     if (r) onAdded(r.existing ? 'Already in People — added to the media list' : `Added ${f.name.trim()}`);
   };
@@ -338,8 +399,8 @@ function AddContact({ onClose, onAdded }) {
       <KindChips value={f.kind} onChange={(kind) => setF({ ...f, kind })} />
       <div className="field"><label htmlFor="md-a-email">Email</label>
         <input id="md-a-email" className="input" type="email" maxLength={320} autoCapitalize="none" spellCheck={false} value={f.email} onChange={set('email')} placeholder="name@example.org" /></div>
-      <div className="field"><label htmlFor="md-a-outlet">Outlet</label>
-        <input id="md-a-outlet" className="input" maxLength={160} value={f.outlet} onChange={set('outlet')} placeholder="Newspaper, station or channel" /></div>
+      <OutletField id="md-a-outlet" value={f.outlet} onChange={(outlet) => setF({ ...f, outlet })} placeholder="Newspaper, station or channel" />
+      <ListChips value={f.lists} onChange={(lists) => setF({ ...f, lists })} />
       <More>
         <div className="field"><label htmlFor="md-a-phone">Phone</label>
           <input id="md-a-phone" className="input" type="tel" maxLength={40} value={f.phone} onChange={set('phone')} /></div>
@@ -373,6 +434,23 @@ function AddContact({ onClose, onAdded }) {
   );
 }
 
+// Copy emails (N): a list's addresses a release would reach, for a one-off
+// pitch from the staff member's own mail (desk only; GET ?list&emails=1).
+function CopyEmails({ list }) {
+  const q = useQuery({ queryKey: ['media', 'emails', list], queryFn: () => apiGet(`/media/contacts?list=${list}&emails=1`) });
+  const [said, setSaid] = useState(null);
+  const emails = q.data?.emails || [];
+  const go = async () => setSaid(await copyText(emails.join(', ')) ? `Copied ${fmt(emails.length)} ${plural(emails.length, 'email', 'emails')}` : 'Couldn’t copy');
+  return (
+    <span className="md-copy">
+      <button type="button" className="btn btn-quiet ot-btn-tap" disabled={!q.isSuccess || !emails.length} onClick={go}>
+        {q.isError ? 'Copy emails — unavailable' : q.isSuccess ? `Copy emails (${fmt(emails.length)})` : 'Copy emails (…)'}
+      </button>
+      <span className="md-copy__said" role="status" aria-live="polite">{said || ''}</span>
+    </span>
+  );
+}
+
 function ContactsTab({ desk, adding, onCloseAdd, toast }) {
   const contacts = useContacts();
   const wide = useWide();
@@ -381,7 +459,10 @@ function ContactsTab({ desk, adding, onCloseAdd, toast }) {
   const [open, setOpen] = useState(null);
   const all = contacts.data?.contacts || [];
   const beats = useMemo(() => [...new Set(all.map((c) => (c.beat || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [all]);
-  const shown = all.filter((c) => (filter === 'all' ? true : filter === 'media' || filter === 'influencer' ? c.kind === filter : (c.beat || '').trim() === filter.slice(5)));
+  const shown = all.filter((c) => (filter === 'all' ? true : filter === 'media' || filter === 'influencer' ? c.kind === filter
+    : filter.startsWith('list:') ? (c.lists || []).includes(filter.slice(5)) : (c.beat || '').trim() === filter.slice(5)));
+  const listCounts = contacts.data?.counts?.lists || {};
+  const pickedList = filter.startsWith('list:') ? filter.slice(5) : null;
   const current = open && all.find((c) => c.person.id === open);
   const chip = (key, label) => (
     <button key={key} type="button" role="radio" aria-checked={filter === key} className={`chip md-chip${filter === key ? ' is-on' : ''}`} onClick={() => setFilter(key)}>{label}</button>
@@ -400,14 +481,16 @@ function ContactsTab({ desk, adding, onCloseAdd, toast }) {
             {chip('all', `All (${fmt(all.length)})`)}
             {chip('media', 'Media')}
             {chip('influencer', 'Influencers')}
+            {LISTS.map(([k, w]) => chip(`list:${k}`, `${w} (${fmt(listCounts[k] || 0)})`))}
             {beatChips.map((b) => chip(`beat:${b}`, b))}
             {beats.length > 8 && !moreBeats && <button type="button" className="chip md-chip" onClick={() => setMoreBeats(true)}>More</button>}
           </div>
+          {desk && pickedList && <CopyEmails list={pickedList} />}
           {wide ? (
             <table className={`table md-table${desk ? ' is-desk' : ''}`}>
               <thead>
                 <tr>
-                  <th className="md-c-name">Name</th><th className="md-c-outlet">Outlet</th><th className="md-c-beat">Beat</th>
+                  <th className="md-c-name">Name</th><th className="md-c-outlet">Outlet</th><th className="md-c-on">On</th><th className="md-c-beat">Beat</th>
                   {desk && <th className="md-c-email">Email</th>}{desk && <th className="md-c-phone">Phone</th>}
                   <th className="md-c-socials">Socials</th><th className="md-c-last">Last release</th>
                 </tr>
@@ -421,6 +504,7 @@ function ContactsTab({ desk, adding, onCloseAdd, toast }) {
                       <WontGet c={c} />
                     </td>
                     <td className="md-outlet">{c.outlet || ''}</td>
+                    <td className="md-on">{(c.lists || []).map((k) => listWord[k]).join(', ')}</td>
                     <td className="md-cut md-beat" title={c.beat || undefined}>{c.beat || ''}</td>
                     {desk && <td className="md-cut" title={c.person.email || undefined}>{c.person.email || '—'}</td>}
                     {desk && <td className="md-one">{c.person.phone || '—'}</td>}
@@ -438,6 +522,7 @@ function ContactsTab({ desk, adding, onCloseAdd, toast }) {
                     <span className="ot-row__main">
                       <span className="ot-row__name">{c.person.name}</span>
                       {subOf(c) && <span className="ot-row__sub"><span>{subOf(c)}</span></span>}
+                      {(c.lists || []).length > 0 && <span className="md-on-chips">{c.lists.map((k) => <span key={k} className="chip md-kind">{listWord[k]}</span>)}</span>}
                       <WontGet c={c} />
                     </span>
                     {c.kind === 'influencer' && <span className="chip md-kind">Influencer</span>}
@@ -581,7 +666,7 @@ function ReleasePage({ id }) {
 // ─────────────────────────────────────────────────────────────────────────────
 export default function Media() {
   const { me } = useOutletContext();
-  const { id } = useParams();
+  const { id, letterId } = useParams();
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
@@ -590,11 +675,17 @@ export default function Media() {
   useEffect(() => () => clearTimeout(timer.current), []);
   const toast = (m) => { clearTimeout(timer.current); setToastMsg(m); timer.current = setTimeout(() => setToastMsg(null), 3500); };
   const desk = DESK_ROLES.includes(me.role);
-  const tab = id ? 'release' : /\/media\/contacts/.test(pathname) ? 'contacts' : /\/media\/templates/.test(pathname) ? 'templates' : 'releases';
+  const tab = id ? 'release' : letterId ? 'letter' : /\/media\/contacts/.test(pathname) ? 'contacts' : /\/media\/templates/.test(pathname) ? 'templates'
+    : /\/media\/letters/.test(pathname) ? 'letters' : /\/media\/outlets/.test(pathname) ? 'outlets' : 'releases';
+  const wide = useWide();
+  const letters = useLettersCount(desk);
   const creating = params.get('new') === '1';
   const openNew = () => setParams({ new: '1' });
   const closeNew = () => setParams({}, { replace: true });
-  const primary = tab === 'releases' && !creating ? 'Write a release' : tab === 'contacts' && desk && !creating ? 'Add a contact' : null;
+  const primary = tab === 'releases' && !creating ? 'Write a release' : tab === 'contacts' && desk && !creating ? 'Add a contact'
+    : tab === 'outlets' && desk && !creating ? 'Add an outlet' : null;
+  // Letters are the desk's: a volunteer granted Media has no Letters tab.
+  const TABS = [['releases', 'Releases', '/media'], ['contacts', 'Contacts', '/media/contacts'], ...(desk ? [['letters', 'Letters', '/media/letters']] : [])];
   if (tab === 'templates') return <TemplatesScreen use="press" />;
   return (
     <SendScope.Provider value={MEDIA_SCOPE}>
@@ -603,13 +694,15 @@ export default function Media() {
           <h1>Media</h1>
           {primary && <button type="button" className="btn btn-primary ot-btn-tap" onClick={openNew}>{primary}</button>}
           {tab === 'releases' && !creating && <Link className="btn btn-quiet ot-btn-tap md-templates" to="/media/templates">Templates</Link>}
+          {(tab === 'letters' || tab === 'letter') && <Link className="btn btn-quiet ot-btn-tap md-templates" to="/media/outlets">Outlets</Link>}
         </div>
-        <nav className="ot-tabs md-tabs" aria-label="Media: releases and contacts" style={{ '--ot-tabs': 2 }}>
-          {[['releases', 'Releases', '/media'], ['contacts', 'Contacts', '/media/contacts']].map(([k, label, to]) => {
-            const on = tab === k || (k === 'releases' && tab === 'release');
+        <nav className="ot-tabs md-tabs" aria-label="Media" style={{ '--ot-tabs': TABS.length }}>
+          {TABS.map(([k, label, to]) => {
+            const on = tab === k || (k === 'releases' && tab === 'release') || (k === 'letters' && ['letter', 'outlets'].includes(tab));
             return (
               <Link key={k} to={to} className={`ot-tab${on ? ' active' : ''}`} aria-current={on ? 'page' : undefined}>
                 <span className="ot-tab-label">{label}</span>
+                {k === 'letters' && letters.n > 0 && <span className="ot-count md-tab-n">{fmt(letters.n)}</span>}
               </Link>
             );
           })}
@@ -620,6 +713,20 @@ export default function Media() {
         {tab === 'releases' && <ReleasesTab creating={creating} onClose={closeNew} />}
         {tab === 'contacts' && <ContactsTab desk={desk} adding={creating} onCloseAdd={closeNew} toast={toast} />}
         {tab === 'release' && <ReleasePage id={id} />}
+        {tab === 'letters' && desk && <LettersTab me={me} wide={wide} />}
+        {tab === 'letter' && desk && (
+          <>
+            <p className="ot-note"><button type="button" className="md-back" onClick={() => navigate('/media/letters')}>← Letters</button></p>
+            <DeskLetter id={letterId} />
+          </>
+        )}
+        {(tab === 'letters' || tab === 'letter') && !desk && <p className="ot-note">Letters are worked by the campaign office.</p>}
+        {tab === 'outlets' && (
+          <>
+            {desk && <p className="ot-note"><button type="button" className="md-back" onClick={() => navigate('/media/letters')}>← Letters</button></p>}
+            <OutletsScreen desk={desk} adding={creating} onCloseAdd={closeNew} toast={toast} />
+          </>
+        )}
         <div className="md-live" role="status" aria-live="polite">
           {toastMsg && (
             <div className="toast ot-toast">

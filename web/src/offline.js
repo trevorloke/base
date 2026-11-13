@@ -65,9 +65,12 @@ import { BASE, NS } from './base.js';
 // the server dedupes it on client_id, server/ext/deskoffline).
 // shift.hours: “only part of it” — the volunteer's own hours on a shift they
 // are on (not undoable: saving again is the undo).
-export const FIELD_ACTIONS = ['contact.log', 'person.create', 'person.addAtDoor', 'person.locate', 'sign.place', 'sign.cancel', 'shift.join', 'shift.leave', 'shift.hours', 'relationship.add', 'person.tag', 'person.details', 'vote.mark', 'request.ask', 'mainstreet.meet', 'calltime.log'];
+export const FIELD_ACTIONS = ['contact.log', 'person.create', 'person.addAtDoor', 'person.locate', 'sign.place', 'sign.cancel', 'shift.join', 'shift.leave', 'shift.hours', 'relationship.add', 'person.tag', 'person.details', 'vote.mark', 'request.ask', 'mainstreet.meet', 'calltime.log',
+  // Letters (ext/letters): the writer's own, keyed by the phone's client_id.
+  'myletter.submit', 'myletter.revise', 'myletter.note', 'myletter.sent', 'myletter.published', 'myletter.not_published'];
 // Keyed by a client_id the server dedupes on.
-const CLIENT_KEYED = ['contact.log', 'sign.place', 'person.tag', 'vote.mark', 'request.ask', 'mainstreet.meet', 'calltime.log'];
+const CLIENT_KEYED = ['contact.log', 'sign.place', 'person.tag', 'vote.mark', 'request.ask', 'mainstreet.meet', 'calltime.log',
+  'myletter.submit', 'myletter.revise', 'myletter.note', 'myletter.sent', 'myletter.published', 'myletter.not_published'];
 // The writes that add a person, on an id made here.
 export const NEW_PERSON = ['person.create', 'person.addAtDoor'];
 const CALLTIME_WORD = { pledged: 'Pledged', no: 'Not now', no_answer: 'No answer', left_message: 'Left message' };
@@ -544,6 +547,7 @@ export const clockText = (iso) => {
   const h = d.getHours();
   return `${h % 12 || 12}:${String(d.getMinutes()).padStart(2, '0')} ${h < 12 ? 'am' : 'pm'}`;
 };
+const firstWords = (t) => { const w = String(t || '').trim().split(/\s+/); return w.slice(0, 6).join(' ') + (w.length > 6 ? '…' : ''); };
 // "Knock · Maya Chen · 2:14 pm", "New person · Ana Souza · 2:16 pm".
 // nameOf(personId) fills in a name the item didn't keep.
 export function itemText(item, nameOf = () => '') {
@@ -569,6 +573,13 @@ export function itemText(item, nameOf = () => '') {
     case 'mainstreet.meet': what = `Met · ${i.place || 'mainstreeting'}`; break;
     // Call time (pages/CallTime.jsx): the answer, never the note.
     case 'calltime.log': what = CALLTIME_WORD[i.result] || 'Call time'; break;
+    // A letter (pages/Letters.jsx): its first words, never more.
+    case 'myletter.submit': what = `${i.kind === 'op_ed' ? 'Op-ed' : 'Letter'}: ${firstWords(i.body)}`; break;
+    case 'myletter.revise': what = `Letter: ${firstWords(i.body)}`; break;
+    case 'myletter.note': what = 'Letter: a note'; break;
+    case 'myletter.sent': what = 'Letter: I sent it'; break;
+    case 'myletter.published': what = 'Letter: published'; break;
+    case 'myletter.not_published': what = 'Letter: not published'; break;
     default: what = 'Saved';
   }
   const name = NEW_PERSON.includes(item.name) ? i.name : item.name === 'relationship.add' ? i.person?.name || who : who;

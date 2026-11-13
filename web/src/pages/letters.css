@@ -1,0 +1,81 @@
+/* Letters and op-eds: the writer's screens (Letters.jsx, LetterPage.jsx)
+   and the desk's (MediaLetters.jsx). Built from the shared pieces. */
+.lt-page { max-width: 720px; }
+.lt-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; margin-bottom: var(--s-3); }
+.lt-head h1 { margin: 0; overflow-wrap: anywhere; }
+.lt-empty { display: grid; gap: var(--s-3); justify-items: start; margin-top: var(--s-4); color: var(--text-2); }
+.lt-row { gap: var(--s-2); }
+.lt-reply { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-1); }
+.lt-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--mark-deep); flex: none; }
+
+.lt-form { padding: var(--s-4); display: grid; gap: var(--s-3); }
+.lt-fs { border: 0; margin: 0; padding: 0; min-width: 0; display: grid; gap: var(--s-3); }
+.lt-fs .field { margin: 0; }
+.lt-label, .lt-sub { font-size: 15px; font-weight: 600; color: var(--text-1); margin: 0; }
+.lt-chips { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.lt-chip { cursor: pointer; }
+.lt-chip.is-on { background: var(--mark-soft); border-color: var(--mark-deep); color: var(--text-1); }
+.lt-chip.is-blocked { opacity: 0.55; }
+.lt-n { display: inline-grid; place-items: center; width: 18px; height: 18px; margin-right: 6px; border-radius: 50%; background: var(--mark-deep); color: var(--paper); font-size: 11px; }
+.lt-rules { display: grid; gap: 2px; margin: var(--s-1) 0 0; font-size: 13px; color: var(--text-2); }
+.lt-rules__line { color: var(--text-3); }
+.lt-body { min-height: 220px; font-size: 16px; line-height: 1.5; resize: vertical; }
+.lt-count { display: flex; align-items: center; gap: var(--s-2); margin: 0; font-size: 13px; color: var(--text-3); }
+.lt-over { min-height: 0; }
+.lt-words, .lt-share, .lt-remind { margin: 0; padding: var(--s-2) var(--s-3); border-radius: var(--r-card); background: var(--paper-1); border: 1px solid var(--rule); font-size: 14px; color: var(--text-1); }
+.lt-remind { display: grid; gap: var(--s-2); justify-items: start; margin: var(--s-2) 0; }
+.lt-remind p { margin: 0; }
+.lt-mark { background: var(--mark-soft); color: var(--text-1); padding: 0 2px; border-radius: 2px; }
+.lt-check { display: flex; align-items: center; gap: var(--s-3); min-height: var(--ctl); cursor: pointer; font-size: 15px; }
+.lt-check input { width: 22px; height: 22px; margin: 0; flex: none; accent-color: var(--mark); }
+.lt-points { white-space: pre-wrap; margin: 0; font-size: 14px; color: var(--text-2); }
+.lt-more { margin-top: var(--s-2); }
+.lt-more__body { display: grid; gap: var(--s-3); padding-top: var(--s-3); }
+.lt-more__body .field { margin: 0; }
+.lt-inline { min-height: 0; padding: 0 4px; }
+
+.lt-sec { display: grid; gap: var(--s-2); margin: var(--s-4) 0 0; }
+.lt-sec__head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); }
+.lt-text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 16px; line-height: 1.55; color: var(--text-1); padding: var(--s-3); background: var(--paper-0); border: 1px solid var(--rule); border-radius: var(--r-card); }
+.lt-diff del { color: var(--danger); text-decoration: line-through; }
+.lt-diff ins { color: var(--text-1); text-decoration: underline; text-decoration-color: var(--mark-deep); text-decoration-thickness: 2px; }
+.lt-change.is-taken del { opacity: 0.5; }
+.lt-take { display: inline-flex; gap: 4px; margin: 0 6px; vertical-align: middle; white-space: normal; }
+.lt-take .chip { font-size: 13px; }
+.lt-note-campaign { margin: 0; font-size: 14px; color: var(--text-2); }
+.lt-now { margin-top: var(--s-4); display: grid; gap: var(--s-2); }
+.lt-confirm { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2) var(--s-3); padding: var(--s-3); background: var(--paper-1); border-radius: var(--r-card); }
+.lt-confirm > span { font-size: 15px; flex: 1 1 220px; }
+.lt-pub { margin: var(--s-3) 0 0; }
+.lt-notes { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-2); }
+.lt-notes li { display: grid; gap: 2px; padding: var(--s-2) var(--s-3); border-radius: var(--r-card); background: var(--paper-0); border: 1px solid var(--rule); }
+.lt-notes li.is-campaign { background: var(--paper-1); }
+.lt-note__body { white-space: pre-wrap; overflow-wrap: anywhere; }
+.lt-noteform { display: flex; gap: var(--s-2); align-items: flex-start; }
+.lt-noteform textarea { flex: 1; min-width: 0; }
+.lt-sheet { padding: var(--s-4); display: grid; gap: var(--s-3); margin-top: var(--s-4); }
+.lt-sheet .field { margin: 0; }
+.lt-agreed { max-height: 280px; overflow: auto; }
+.lt-signoff { display: grid; gap: var(--s-2); }
+.lt-sent { border-top: 1px solid var(--rule); padding-top: var(--s-3); }
+.lt-pubform { display: grid; gap: var(--s-2); }
+.lt-pubform .field { margin: 0; }
+
+/* The desk: Media → Letters and Outlets */
+.lt-queue th, .lt-queue td { vertical-align: top; }
+.lt-queue .lt-title { font-weight: 600; color: var(--text-1); background: none; border: 0; padding: 0; text-align: left; cursor: pointer; font: inherit; }
+.lt-flags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.lt-card { padding: var(--s-3); display: grid; gap: var(--s-1); }
+.lt-card p { margin: 0; }
+.lt-editors { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.lt-dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px var(--s-3); margin: 0; }
+.lt-dl dt { color: var(--text-3); font-size: 13px; }
+.lt-dl dd { margin: 0; overflow-wrap: anywhere; }
+.lt-outlet-sheet { padding: var(--s-4); display: grid; gap: var(--s-3); margin-bottom: var(--s-3); }
+.lt-outlet-sheet .field { margin: 0; }
+
+@media (pointer: coarse), (max-width: 720px) {
+  .lt-page .input { min-height: var(--ctl); font-size: 16px; }
+  .lt-chip, .lt-take .chip { min-height: 48px; }
+  .lt-noteform { flex-direction: column; align-items: stretch; }
+}

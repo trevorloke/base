@@ -135,3 +135,9 @@
   .md-table.is-desk .md-c-socials { width: 10%; }
   .md-table.is-desk .md-c-last { width: 10%; }
 }
+
+/* Letters and the three lists (LTE): the tab's count, "On" on a phone row
+   and in the desk table. */
+.md-tab-n { margin-left: 6px; }
+.md-on-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.md-on { font-size: 13px; color: var(--text-2); }

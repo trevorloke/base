@@ -61,6 +61,7 @@ const MyPeople = lazy(() => import('./pages/MyPeople.jsx'));
 const Share = lazy(() => import('./pages/Share.jsx'));
 const CallTime = lazy(() => import('./pages/CallTime.jsx'));
 const Mainstreet = lazy(() => import('./pages/Mainstreet.jsx'));
+const Letters = lazy(() => import('./pages/Letters.jsx'));
 const PeopleConnected = lazy(() => import('./pages/PeopleConnected.jsx'));
 const Passes = lazy(() => import('./pages/Passes.jsx'));
 const Voted = lazy(() => import('./pages/Voted.jsx'));
@@ -195,6 +196,10 @@ export default function App({ mode = 'field' }) {
           <Route path="/share" element={<Share />} />
           <Route path="/call-time" element={<CallTime />} />
           <Route path="/profile" element={<Profile />} />
+          {/* Letters to the editor and op-eds: the writer's own. */}
+          <Route path="/letters" element={<Letters />} />
+          <Route path="/letters/new" element={<Letters view="new" />} />
+          <Route path="/letters/:id" element={<Letters view="one" />} />
         <Route path="/mainstreet" element={<Mainstreet />} />
           <Route path="/mainstreet" element={<Mainstreet />} />
           <Route path="/imagineu" element={<ImagineU />} />
@@ -229,6 +234,9 @@ export default function App({ mode = 'field' }) {
         <Route path="/share" element={<Share />} />
         <Route path="/call-time" element={<CallTime />} />
         <Route path="/profile" element={<Profile />} />
+        <Route path="/letters" element={<Letters />} />
+        <Route path="/letters/new" element={<Letters view="new" />} />
+        <Route path="/letters/:id" element={<Letters view="one" />} />
         <Route path="/imagineu" element={<ImagineU />} />
         <Route path="/imagineu/:id" element={<ImagineU />} />
         <Route path="/banks" element={<Banks />} />
@@ -251,6 +259,10 @@ export default function App({ mode = 'field' }) {
           <Route path="/media/contacts" element={<Media />} />
           <Route path="/media/templates" element={<Media />} />
           <Route path="/media/releases/:id" element={<Media />} />
+          {/* Letters and op-eds: the queue, a letter, the outlets (pages/MediaLetters.jsx). */}
+          <Route path="/media/letters" element={<Media />} />
+          <Route path="/media/letters/:letterId" element={<Media />} />
+          <Route path="/media/outlets" element={<Media />} />
           {/* Settings: members, teams, permissions (the old /admin and /team). */}
           <Route path="/team" element={<Navigate to="/settings" replace />} />
           <Route path="/admin" element={<Navigate to="/settings" replace />} />

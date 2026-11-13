@@ -28,6 +28,7 @@ export const ACTIONS = [
   { label: 'New shift', to: '/shifts?add=1', area: 'shifts', desk: true, words: 'schedule event canvass shift' },
   { label: 'Write an email', to: '/outreach/email?new=1', area: 'outreach', desk: true, words: 'email newsletter blast send' },
   { label: 'Write a text', to: '/outreach/texting?new=1', area: 'outreach', desk: true, words: 'text sms blast message' },
+  { label: 'Write a letter', to: '/letters/new', desk: true, words: 'letter to the editor op-ed oped newspaper paper opinion' },
   { label: 'Link Google account', to: '/profile', google: true, words: 'google sign in link' },
 ];
 
@@ -47,6 +48,8 @@ export const SCREENS = [
   { label: 'Field, by turf', to: '/field-report', area: 'data', words: 'field report coverage turf canvassers' },
   { label: 'Duplicates', to: '/people/duplicates', desk: true, words: 'merge same person double' },
   { label: 'Most connected', to: '/people/connected', area: 'people', words: 'relationships connectors who knows' },
+  { label: 'Letters and op-eds', to: '/media/letters', area: 'media', desk: true, words: 'letters to the editor op-ed oped queue writers papers' },
+  { label: 'Outlets', to: '/media/outlets', area: 'media', desk: true, words: 'papers newspapers stations shows letters rules editors' },
   { label: 'Requests from the doors', to: '/requests', area: 'people', words: 'needs you ask the office requests' },
   { label: 'Get out the vote', to: '/voted', area: 'people', words: 'gotv voted election day voting' },
   { label: 'Passes', to: '/passes', area: 'map', words: 'sweep pass universe' },
