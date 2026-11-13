@@ -130,7 +130,8 @@ export function RatingTag({ code }) {
 export { noSignal };
 
 export const firstName = (name) => String(name || '').trim().split(/\s+/)[0] || '';
-export const isDnc = (p) => Array.isArray(p?.tags) && p.tags.includes('do-not-contact');
+// Any case: an imported "Do-Not-Contact" counts (as noCalls, shared/canvass.js).
+export const isDnc = (p) => Array.isArray(p?.tags) && p.tags.some((t) => String(t).toLowerCase() === 'do-not-contact');
 // Asked not to be phoned: off the Calls list for a call; a text is another matter.
 export { noCalls };
 export const streetLine = (p) => [p.unit ? `${p.unit} –` : null, p.address].filter(Boolean).join(' ');

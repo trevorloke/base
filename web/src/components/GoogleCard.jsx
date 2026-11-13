@@ -13,12 +13,13 @@ import { appName, googleStart, herePath } from './google.js';
 import {
   DisconnectButton, GoogleLoading, GoogleNote, StartLink, googleBlocked, useGoogle, useGoogleReturn,
 } from './GoogleConnect.jsx';
+import GmailLine from './GmailLine.jsx';
 import './google.css';
 
 // One line a feature adds under its own purpose's row (GML's GmailLine
 // under 'gmail.send'): a component taking { purpose }, drawing nothing
 // unless it has something to say.
-export const PURPOSE_LINES = {};
+export const PURPOSE_LINES = { 'gmail.send': GmailLine };
 
 function Unlink({ online, onDone }) {
   const qc = useQueryClient();
@@ -126,6 +127,7 @@ export default function GoogleCard() {
           )}
         </>
       )}
+      {d.setup.connect && <GmailLine />}
       {!online && <NeedsSignalLine>Google needs signal</NeedsSignalLine>}
     </section>
   );

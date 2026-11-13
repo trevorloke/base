@@ -21,7 +21,7 @@ import { ratingByCode } from '@starbase/shared/scale';
 import { SLATES as FALLBACK_SLATES, slateLabel } from '@starbase/shared/canvass';
 import { placeLabel } from '@starbase/shared/shiftkinds';
 import { whenText, zoneOf } from '../components/shiftTime.js';
-import RatingButtons, { OutcomeButtons, RatingChip, focusRating, ratingSay, ratingText, useScale } from '../components/RatingButtons.jsx';
+import RatingButtons, { OUTCOMES, OutcomeButtons, RatingChip, focusRating, ratingSay, ratingText, useScale } from '../components/RatingButtons.jsx';
 import SurveyQuestions, { PersonAnswers, answersTail, usePersonAnswers, useSurvey } from '../components/SurveyQuestions.jsx';
 import { apiGet, fmtMoney, fmtDate, noAnswer } from '../api.js';
 import { EngagementChip, PersonLadders, usePersonLadders } from '../components/LaddersBits.jsx';
@@ -43,6 +43,9 @@ import NameFields from '../components/NameFields.jsx';
 import VoterNumber from '../components/VoterNumber.jsx';
 import SocialsBlock, { SocialsTyped } from '../components/SocialsBlock.jsx';
 import { PersonTimeline, timelineCount, usePersonTimeline } from '../components/PersonTimeline.jsx';
+import EmailSheet, { gmailNotReadyLine, gmailReady, takeDraft, useGmail, useToast } from '../components/EmailSheet.jsx';
+import { useGoogleReturn } from '../components/GoogleConnect.jsx';
+import { googleWords } from '../components/google.js';
 
 const TIER_LABEL = {
   superstar: DONOR_TIERS.superstar.label,
@@ -58,7 +61,10 @@ const OUTCOME_LABEL = {
   left_lit: 'Left lit',
   left_message: 'Left message',
 };
-const CHANNEL_LABEL = { door: 'Door', phone: 'Phone', text: 'Text', in_person: 'In person', mainstreet: 'Mainstreeting' };
+const CHANNEL_LABEL = { door: 'Door', phone: 'Phone', text: 'Text', in_person: 'In person', mainstreet: 'Mainstreeting', email: 'Email' };
+// Email is logged at the desk only, and only as Talked, No answer or Refused
+// (an email reaches no door: Moved and No access aren't its to say).
+const EMAIL_OUTCOMES = OUTCOMES.filter((o) => o.code === 'no_answer' || o.code === 'refused');
 // "Rated 2 · Lean yes", "Rated 4 · Locke" or "No answer" — the field's own words.
 const contactWord = (scale, c) => (c.rating ? `Rated ${ratingText(scale, c.rating)}` : OUTCOME_LABEL[c.outcome] || c.outcome);
 
@@ -138,7 +144,7 @@ function BackLink({ desk, className = 'eyebrow pf-back' }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Header: name, rating, donor tier, Call · Text · Email · Map
 // ─────────────────────────────────────────────────────────────────────────────
-function Header({ person, donor, me, desk, onLog, contacted, level, onEdit, keyLine = null }) {
+function Header({ person, donor, me, desk, onLog, onEmail, contacted, level, onEdit, keyLine = null }) {
   const texting = useTextingStatus(me);
   // true / false, or null while nobody knows (no signal, nothing kept): then
   // the Calls card, which says so — never a guess at the phone's own apps.
@@ -151,7 +157,16 @@ function Header({ person, donor, me, desk, onLog, contacted, level, onEdit, keyL
   // The date of the rating only when no contact says it below.
   const when = contacted ? '' : fmtShort(person.rated_at);
   const email = desk && person.email; // volunteers phone and knock; email is desk work
-  const tiles = Boolean(person.phone || email);
+  // Why they can't be emailed one to one (the server's reach rule; desk only).
+  const emailWhy = desk ? person.email_why || null : null;
+  const dnc = emailWhy === 'do_not_contact' || isDnc(person);
+  const emailTile = Boolean(email) && !emailWhy && !dnc;
+  // Gmail decides the tile before anything opens: ready → the sheet; else the
+  // phone's own mail app, which presets "Reached by: Email".
+  const gmail = useGmail(emailTile);
+  const viaGmail = emailTile && gmailReady(gmail.data);
+  const gmailLine = emailTile ? gmailNotReadyLine(gmail.data) : null;
+  const tiles = Boolean(person.phone || emailTile);
   const located = person.lat != null && person.lng != null;
   // The donor tier chip already says Donor: the level chip never repeats it
   // ("Donor · Volunteer" → "Volunteer"; just "Donor" → no level chip).
@@ -176,8 +191,12 @@ function Header({ person, donor, me, desk, onLog, contacted, level, onEdit, keyL
             {r ? <>{!named && ratingSay(scale, person.rating)}{when && <span className="pf-when">{named ? '' : ' · '}{when}</span>}</> : 'Not rated'}
           </span>
         )}
-        {isDnc(person) && <span className="chip chip-danger">Do not contact</span>}
-        {!isDnc(person) && noCalls(person) && <span className="chip chip-danger">Do not call</span>}
+        {dnc && <span className="chip chip-danger">Do not contact</span>}
+        {!dnc && noCalls(person) && <span className="chip chip-danger">Do not call</span>}
+        {!dnc && emailWhy === 'do_not_email' && <span className="chip chip-danger">Do not email</span>}
+        {!dnc && emailWhy === 'suppressed' && (
+          <span className="chip chip-warn" title="The address bounced or reported spam — fix it under Edit">Email bounced</span>
+        )}
         {desk && shownLevel?.label && <EngagementChip level={shownLevel} />}
         {/* In your own circle (My people on this phone): every role. */}
         <KnowMeChip person={person} me={me} />
@@ -210,11 +229,15 @@ function Header({ person, donor, me, desk, onLog, contacted, level, onEdit, keyL
               <Icon name="text" /> Text
             </Link>
           ))}
-          {email && (
-            <a className="btn pf-act" href={`mailto:${person.email}`}>
+          {emailTile && (viaGmail ? (
+            <button type="button" className="btn pf-act" onClick={onEmail}>
+              <Icon name="email" /> Email
+            </button>
+          ) : (
+            <a className="btn pf-act" href={`mailto:${person.email}`} onClick={() => onLog('email')}>
               <Icon name="email" /> Email
             </a>
-          )}
+          ))}
           {person.address && (
             // Map selects ?person=<id>, and offers to place a pin when there is none
             // (person.locate is open to volunteers too). With no Call or Text
@@ -226,6 +249,7 @@ function Header({ person, donor, me, desk, onLog, contacted, level, onEdit, keyL
           )}
         </div>
       )}
+      {gmailLine && <p className="gm-tileline">{gmailLine}</p>}
     </header>
   );
 }
@@ -234,7 +258,7 @@ function Header({ person, donor, me, desk, onLog, contacted, level, onEdit, keyL
 // Rating card: big rating buttons + outcomes → contact.log. The channel is set
 // by the Call / Text tiles (else Door); the manual switch sits under the note.
 // ─────────────────────────────────────────────────────────────────────────────
-function RatingCard({ person, refresh, channel, setChannel, cardRef }) {
+function RatingCard({ person, refresh, channel, setChannel, cardRef, desk }) {
   const [note, setNoteState] = useState('');
   const [noteOpen, setNoteOpen] = useState(false);
   // The note lives in a ref too, so leaving the profile can still send it
@@ -276,6 +300,9 @@ function RatingCard({ person, refresh, channel, setChannel, cardRef }) {
   const change = () => { setSaid(null); focusRating(cardRef.current); };
   // The active survey's questions (door, or calls when reached by phone/text).
   const survey = useSurvey({ context: channel === 'door' ? 'door' : 'calls', personId: person.id, lat: person.lat, lng: person.lng });
+  // Logged all the same (it happened), with the reason they shouldn't have been emailed in view.
+  const emailWarn = person.email_why === 'do_not_contact' || isDnc(person) ? 'Do not contact'
+    : person.email_why === 'do_not_email' ? 'Do not email' : null;
 
   const log = async (outcome, rating) => {
     const answers = outcome === 'contacted' ? survey.take() : [];
@@ -301,7 +328,8 @@ function RatingCard({ person, refresh, channel, setChannel, cardRef }) {
   return (
     <section className="card pf-rate" ref={cardRef} aria-label="Rate">
       <RatingButtons value={person.rating} onPick={(code) => log('contacted', code)} disabled={act.busy} />
-      <OutcomeButtons onPick={(o) => log(o)} disabled={act.busy} />
+      <OutcomeButtons items={channel === 'email' ? EMAIL_OUTCOMES : OUTCOMES} onPick={(o) => log(o)} disabled={act.busy} />
+      {channel === 'email' && emailWarn && <p className="gm-warn"><span className="chip chip-danger">{emailWarn}</span></p>}
       <SurveyQuestions key={`questions-${person.id}`} survey={survey} disabled={act.busy} onSave={() => log('contacted')} />
       <div className="pf-rate__foot">
         {noteOpen ? (
@@ -316,7 +344,7 @@ function RatingCard({ person, refresh, channel, setChannel, cardRef }) {
         <div className="pf-reach">
           <span className="eyebrow" id={reachId}>Reached by</span>
           <div className="channel-toggle pf-channel" role="group" aria-labelledby={reachId}>
-            {['door', 'phone', 'text'].map((c) => (
+            {(desk ? ['door', 'phone', 'text', 'email'] : ['door', 'phone', 'text']).map((c) => (
               <button key={c} type="button" aria-pressed={channel === c} onClick={() => setChannel(c)}>{CHANNEL_LABEL[c]}</button>
             ))}
           </div>
@@ -493,7 +521,7 @@ function Details({ person, household, refresh, desk, me, editing, setEditing }) 
         {desk && (
           <li>
             <span className="k">Email</span>
-            <span className="v">{person.email ? <a href={`mailto:${person.email}`}>{person.email}</a> : none}</span>
+            <span className="v">{person.email ? (person.email_why ? person.email : <a href={`mailto:${person.email}`}>{person.email}</a>) : none}</span>
           </li>
         )}
         {!desk && (
@@ -819,6 +847,21 @@ export default function Person() {
   const outbox = useOutbox();
   const online = useOnline();
   const device = useThisDevice();
+  // The "Email Jane Doe" sheet (Gmail): null, or { draft } while open.
+  const [emailing, setEmailing] = useState(null);
+  const toast = useToast();
+  // Back from Google's connect page (the sheet's "Connect again"): what it
+  // said, once, and the sheet reopened with what was written.
+  const googleCode = useGoogleReturn();
+  const gmail = useGmail(desk);
+  useEffect(() => {
+    if (googleCode) toast.show(googleWords(googleCode, { where: 'profile' }));
+  }, [googleCode]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!desk || emailing || !gmailReady(gmail.data)) return;
+    const draft = takeDraft(id);
+    if (draft) setEmailing({ draft });
+  }, [desk, id, gmail.data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Awaited by useAction so controls stay disabled until the profile refetches.
   // Covers the map (['doors']: pins, ratings, unlocated count after an address
@@ -830,6 +873,12 @@ export default function Person() {
   const onLog = (ch) => {
     setChannel(ch);
     ratingRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+  // The sheet closed: sent from Gmail, or handed to the mail app ('mailto').
+  const emailDone = (how) => {
+    setEmailing(null);
+    if (how === 'sent') toast.show('Sent from your Gmail');
+    if (how) onLog('email');
   };
   // An entry in History that leads to a section here ("#gifts"): open it,
   // bring it into view, and put the keyboard on its heading.
@@ -891,14 +940,18 @@ export default function Person() {
 
   return (
     <div className="pf-page">
-      <Header person={person} donor={donor} me={me} desk={desk} onLog={onLog} contacted={contacts.length > 0} level={ladders.data?.level}
+      <Header person={person} donor={donor} me={me} desk={desk} onLog={onLog} onEmail={() => setEmailing({ draft: null })} contacted={contacts.length > 0} level={ladders.data?.level}
         onEdit={() => { setOpen((o) => ({ ...o, details: true })); setEditing('name'); }}
         keyLine={desk ? <ProfileKeyTies query={knows} household={household} onMore={() => openSection('knows')} /> : null} />
       {waiting > 0 && (
         <p className="ds-waiting" role="status">Saved on {device} — {online ? 'sends soon' : 'sends when you’re back online'}</p>
       )}
 
-      <RatingCard key={person.id} person={person} refresh={refresh} channel={channel} setChannel={setChannel} cardRef={ratingRef} />
+      {desk && emailing && (
+        <EmailSheet key={person.id} person={person} gmail={gmail.data} draft={emailing.draft}
+          onClose={(how) => emailDone(how)} onSent={() => { emailDone('sent'); refresh(); }} />
+      )}
+      <RatingCard key={person.id} person={person} refresh={refresh} channel={channel} setChannel={setChannel} cardRef={ratingRef} desk={desk} />
       {/* Undecided or not rated: a supporter who knows them (desk). */}
       {desk && <KnowsNudge query={knows} person={person} />}
 
@@ -972,6 +1025,7 @@ export default function Person() {
         {/* Texts through the campaign's number with this person (desk). */}
         {desk && <TextingPersonLink personId={person.id} />}
       </div>
+      {toast.msg && <div className="toast" role="status">{toast.msg}</div>}
     </div>
   );
 }
