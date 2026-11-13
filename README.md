@@ -174,6 +174,19 @@ a lock, a reset and the requirement are on the event log (nothing secret in it).
 Keys are sealed with `STARBASE_TWO_STEP_KEY` (INTEGRATIONS.md); the tables
 (`server/ext/twostep`) are never in the export. The how: `server/lib/twostep.js`.
 
+### Email from a person's page
+
+The person read tells the desk whether someone may be written to one to one
+(`email_why`: the reach rule's `direct` sender — an address, not bounced,
+not do-not-email or do-not-contact; leaving the newsletter is not a no);
+volunteers never get it. With Gmail on (**Settings → Services → Gmail**, on
+the Google row's connection) and connected, `gmail.send` sends one email
+from the staff member's own Gmail and it shows on the person's History.
+*Reached by: Email* (Talked, No answer, Refused) logs a reply by hand, desk
+only, and never counts as a door or a call. Campaign mail never goes
+through Gmail (`server/ext/gmail/`, INTEGRATIONS.md *Gmail*). The desk's
+Email button, sheet and Gmail panels are the next step.
+
 ### Sign in with Google
 
 Once the campaign's Google client is set (`GOOGLE_OAUTH_CLIENT_ID`,
@@ -998,6 +1011,7 @@ election week should switch to a paid provider.
 | `GOOGLE_TILES_DAILY_MAX` | Google tiles a day (the campaign's day); then the free map until midnight | none |
 | `ADDRESS_SUGGEST` | `google` (only after counsel's written yes and with Google's logo in the build), `bc`, `nominatim`, `off` | unset: `GEOCODER`'s suggester, never Google |
 | `GOOGLE_PLACES_DAILY_MAX`, `GOOGLE_PLACES_PER_PERSON` | Google address asks a day, and per person | `300`, `50` |
+| `GMAIL_DAILY_MAX` | emails a person may send from their own Gmail in 24 hours, every campaign on the server counted (1–400) | `100` |
 
 A bad value falls back to the default (and logs once); desk roles see which
 tiles took on the map's filter sheet (*Map tiles: OpenStreetMap — custom

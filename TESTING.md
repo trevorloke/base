@@ -61,6 +61,7 @@ INTEGRATIONS.md.
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` | SMS shift alerts; texting and calling from the app through the campaign's number | optional — without it, Calls opens the phone's own Messages and dialer |
 | `GOOGLE_MAPS_SERVER_KEY` | Google Maps tiles (on whenever it is set, unless `GOOGLE_MAPS_TILES=off`) and, with `ADDRESS_SUGGEST=google`, Google's address suggestions; pins always come from the B.C. service | optional — the free BC geocoder and OpenStreetMap tiles work without it |
 | `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_TOKEN_KEY` | Sign in with Google, and the one Google connection Gmail, Drive and Calendar use (INTEGRATIONS.md); in tests a stand-in Google (`server/test/fake-google.js`, pointed at with `GOOGLE_ACCOUNTS_BASE` and `GOOGLE_OAUTH_BASE`) — never real Google | optional — without them no Google button shows, and passwords work as always |
+| `GMAIL_DAILY_MAX` | emails a person may send from their own Gmail in 24 hours (INTEGRATIONS.md, *Gmail*); in tests Gmail is the stand-in Google too (`GMAIL_API_BASE`) | optional — 100 |
 | `STARBASE_TWO_STEP_KEY` | seals everyone's two-step sign-in key (INTEGRATIONS.md) | optional to test — without it a key kept in the database is used, and Settings → Services says so |
 
 The whole order of things, from deploy to the public link, is in
@@ -311,6 +312,16 @@ one tap away under **More**.
   `/admin/e2e-google-connect` by the suite's server only) and drives
   Connect, *Connected as … · Disconnect*, *Reconnect* and the paused line,
   the way Gmail, Drive and Calendar will use it.
+- **Gmail** (server; the screens come next) — `server/test/gmail.test.js`
+  runs every send against the stand-in Google's Gmail route
+  (`GMAIL_API_BASE`): the message as written (From, To, an encoded subject,
+  no unsubscribe line, no pixel), a replay sending nothing, one bare
+  address, the reach rule, each answer Gmail gives (no answer, a stale
+  token, the token endpoint silent, limits, the API off, a wrong client),
+  the settle job, the cap across campaigns, roles and areas, disconnecting,
+  *Reached by: Email* logged by hand, and `email_why` for the desk only.
+  `reach.test.js`, `timeline.test.js`, `connections.test.js` and
+  `privacy.test.js` hold the rest.
 - **Command bar** — on the desk press **Ctrl+K** (⌘K on a Mac), or *Search*
   under the name: *don* + Enter opens Donations, *gift* opens Log a gift
   with its form, a name or a phone (*604 555 0142*) finds the person; ↑ ↓
