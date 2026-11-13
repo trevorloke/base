@@ -784,7 +784,9 @@ one tap away under **More**.
 - **Shifts** — the long form (**New shift → More → More options**: what,
   when, where; role, end, instructions, link, turfs and *Limit sign-ups to*
   under *More details*),
-  **Add volunteer**, then **Notify everyone** (email + text). Without email/text connected the
+  **Add volunteer** (type two letters: a drivers' shift lists *Has this role:
+  Driver* first, then everyone A–Z, 8 at a time by **Show more**, with *+ Add
+  new person* at the foot; `e2e-search.mjs`), then **Notify everyone** (email + text). Without email/text connected the
   button says *Save — nothing sends*; once connected, *Notify again* reaches
   them. Nothing on any screen claims to be sent unless it was.
   **Edit** under the title opens the shift filled in; move its time or

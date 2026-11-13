@@ -233,6 +233,12 @@ people*), scrolls and loads more by itself, with each person's street, city
 and phone, and *Already linked* on whoever is linked already
 (`web/src/components/PersonResults.jsx`, `usePersonSearch.js`). People's
 **Show more** goes past the first 300, from the server.
+The other pickers use it too: a shift's **+ Add volunteer** (a drivers'
+shift starts with *Has this role: Driver*), a sign's supporter and a gift's
+donor show 8 at a time with **Show more** and *+ Add new person* kept at
+the foot (`PersonPicker.jsx`); *Gifts that need a donor* and a list's **Add
+people** scroll on, and **Add people** says *Already on the list* however
+long the list is.
 
 **A–Z by last name.** Every list of people — People, a list and its CSV,
 the call list, Knows, who lives at an address, a shift's people, volunteers
