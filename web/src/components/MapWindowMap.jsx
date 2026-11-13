@@ -97,40 +97,8 @@ export default function MapWindowMap({ me, band, turfId }) {
     return () => { ro?.disconnect(); map.remove(); mapRef.current = null; layersRef.current = null; };
   }, []);
 
-  // The street map, and whether it is loading (the Map's own check).
-  const tileUrl = tiles?.url;
-  const tileMax = tiles?.maxZoom;
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !tileUrl) return undefined;
-    if (tileHost(tileUrl) && !/openstreetmap\.org|cartocdn\.com/.test(tileHost(tileUrl))) tellServiceWorker(tileUrl);
-    const layer = L.tileLayer(tileUrl, { maxZoom: tileMax || 19 });
-    const health = tileHealth();
-    let timer = null;
-    let gone = false;
-    let probed = false;
-    const tell = () => { if (!gone) { const h = health.get(); setStreet({ down: h.down, why: h.why }); } };
-    layer.on('loading', () => {
-      health.batch(Date.now());
-      clearTimeout(timer);
-      timer = setTimeout(() => { health.late(Date.now()); tell(); }, TILE_WAIT_MS + 20);
-    });
-    layer.on('tileload', () => health.tile(true));
-    layer.on('tileerror', () => health.tile(false));
-    layer.on('load', () => {
-      clearTimeout(timer); health.done(); tell();
-      // Streets, or a provider's notice? Asked once per address per page
-      // life, shared with the Map (tileProbe.js); never Google's /tiles/.
-      if (probed || !health.get().loaded || navigator.onLine === false) return;
-      probed = true;
-      askNotice(drawnAs(tileUrl), map.getCenter(), tileMax).then((notice) => { if (notice === true && !gone) { health.notice(); tell(); } });
-    });
-    setStreet({ down: false, why: null });
-    layer.addTo(map);
-    return () => { gone = true; clearTimeout(timer); layer.remove(); };
-  }, [tileUrl, tileMax]);
-
-  // What it draws, and where it looks.
+  // What it draws, and where it looks (before the street map below, so
+  // its first tiles are asked for where the map frames).
   useEffect(() => {
     const map = mapRef.current; const ly = layersRef.current;
     if (!map || !ly) return;
@@ -161,6 +129,43 @@ export default function MapWindowMap({ me, band, turfId }) {
     };
     fitRef.current();
   }, [outlines, doors, band, turfId]);
+
+  // The street map, and whether it is loading (the Map's own check). Only
+  // once it knows where it looks (the doors or outlines are in, or the read
+  // has failed or waits for a signal): streets for the whole city first
+  // would be asked for and thrown away a moment later, on every visit.
+  const tileUrl = tiles?.url;
+  const tileMax = tiles?.maxZoom;
+  const placed = Boolean(q.data) || q.isError || q.fetchStatus === 'paused';
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !tileUrl || !placed) return undefined;
+    if (tileHost(tileUrl) && !/openstreetmap\.org|cartocdn\.com/.test(tileHost(tileUrl))) tellServiceWorker(tileUrl);
+    const layer = L.tileLayer(tileUrl, { maxZoom: tileMax || 19 });
+    const health = tileHealth();
+    let timer = null;
+    let gone = false;
+    let probed = false;
+    const tell = () => { if (!gone) { const h = health.get(); setStreet({ down: h.down, why: h.why }); } };
+    layer.on('loading', () => {
+      health.batch(Date.now());
+      clearTimeout(timer);
+      timer = setTimeout(() => { health.late(Date.now()); tell(); }, TILE_WAIT_MS + 20);
+    });
+    layer.on('tileload', () => health.tile(true));
+    layer.on('tileerror', () => health.tile(false));
+    layer.on('load', () => {
+      clearTimeout(timer); health.done(); tell();
+      // Streets, or a provider's notice? Asked once per address per page
+      // life, shared with the Map (tileProbe.js); never Google's /tiles/.
+      if (probed || !health.get().loaded || navigator.onLine === false) return;
+      probed = true;
+      askNotice(drawnAs(tileUrl), map.getCenter(), tileMax).then((notice) => { if (notice === true && !gone) { health.notice(); tell(); } });
+    });
+    setStreet({ down: false, why: null });
+    layer.addTo(map);
+    return () => { gone = true; clearTimeout(timer); layer.remove(); };
+  }, [tileUrl, tileMax, placed]);
 
   const to = band ? '/map' : turfId ? `/map?turf=${encodeURIComponent(turfId)}` : '/map';
   const failed = q.isError && !q.data;

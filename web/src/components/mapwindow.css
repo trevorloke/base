@@ -49,6 +49,7 @@
 .mapwindow__over {
   position: absolute; left: 50%; top: var(--s-3); z-index: 2; transform: translateX(-50%);
   display: flex; align-items: center; gap: var(--s-2); margin: 0; padding: var(--s-1) var(--s-3);
+  white-space: nowrap; /* centred by a transform, it would shrink to fit and break "Try again" */
   border-radius: var(--r-ctrl); background: var(--paper-0); color: var(--text-2); font-size: 14px;
   box-shadow: 0 1px 4px color-mix(in srgb, var(--ink) 18%, transparent);
 }

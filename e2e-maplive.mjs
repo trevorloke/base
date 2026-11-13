@@ -24,7 +24,9 @@
 //      1440 × 900, the menu keeps its words, the offline line changes no size;
 //   7. the phone Map is unchanged (390 × 722);
 //   8. the desk band (once HOME mounts it on Today): 1,144 wide, folds and
-//      stays folded, never reads /map/doors or Google's tiles (SKIP before);
+//      stays folded, never reads /map/doors or Google's tiles (SKIP before
+//      HOME's desk Today is there; a FAIL once it is and the band is not,
+//      or with REQUIRE_BAND=1);
 //   9. field Today's map window: open the first time under the one button,
 //      the turf's doors from /map/doors?mine=1 only, folds (no Leaflet asked
 //      for), Open the map, the page scrolls through it, offline, the doors
@@ -38,6 +40,7 @@
 //   ONLY=nokey,notice,good,nocors,google,basepath        just those steps
 //   ONLY=stage2 (desk, band, window), basepath2          stage 2's steps
 //   SHOTS=<dir>                                          where the screenshots go
+//   REQUIRE_BAND=1                                       the desk band must be on Today (no SKIP)
 import { chromium } from 'playwright-core';
 import { spawn } from 'node:child_process';
 import http from 'node:http';
@@ -121,7 +124,7 @@ const newContext = async (opts, net) => {
   });
   await ctx.route(/tile\.openstreetmap\.org/, (route) => {
     const r = route.request();
-    net.osm.push({ url: r.url(), type: r.resourceType(), headers: r.headers() });
+    net.osm.push({ url: r.url(), type: r.resourceType() === 'fetch' && !r.serviceWorker() ? 'probe' : r.resourceType(), headers: r.headers() });
     if (net.osmMode === 'fail') return route.abort('internetdisconnected');
     return route.fulfill({ status: 200, contentType: 'image/svg+xml', headers: CORS, body: streetSvg(new URL(r.url()).pathname) });
   });
@@ -459,11 +462,18 @@ try {
       small: [...document.querySelectorAll('.mapwindow button, .mapwindow a.btn')].map((b) => [b.innerText.trim(), Math.round(b.getBoundingClientRect().height)]).filter(([, h]) => h < 48),
     }));
     const doorAsks = asked.filter((u) => /\/api\/map\/doors/.test(u));
+    await pg.screenshot({ path: `${SHOTS}/9-window-open-view-${label.replace(/\W+/g, '-')}-390.png` });
     await pg.screenshot({ path: `${SHOTS}/9-window-open-${label.replace(/\W+/g, '-')}-390.png`, fullPage: true });
     check(`${label}: field Today 390 — the map window is open the first time, under the one button, doors and outline drawn, streets in`,
       w.open === 'true' && w.afterGo && w.paths >= 3 && w.tiles > 0 && !w.note, JSON.stringify(w));
     check(`${label}: its row reads “Example block · N doors left”`, /^Example block · \d[\d,]* doors? left$/.test(w.meta || ''), w.meta);
     check(`${label}: the only doors read is /api/map/doors?mine=1`, doorAsks.length >= 1 && doorAsks.every((u) => /\/api\/map\/doors\?mine=1$/.test(u)), JSON.stringify(doorAsks));
+    // Streets only once it knows where it looks: no city-wide tiles asked
+    // for while the doors are on their way (OpenStreetMap's servers are
+    // volunteers'; the turf frames at about zoom 15). The notice probe's two
+    // asks (one far out on purpose) are not the map's tiles.
+    const zooms = v.net.osm.filter((t) => t.type !== 'probe').map((t) => Number((new URL(t.url).pathname.match(/^\/(\d+)\//) || [])[1])).filter(Number.isFinite);
+    check(`${label}: no street tiles asked for before the window frames on the turf (none below zoom 14)`, zooms.length > 0 && zooms.every((z) => z >= 14), JSON.stringify(zooms));
     check(`${label}: one primary button on the page; every target in the window at least 48 px; no sideways scroll`, w.primaries === 1 && w.small.length === 0 && !(await sideways(pg)), JSON.stringify(w.small));
     // A swipe that starts on the map scrolls the page.
     const box = await rectOf(pg, '.mapwindow__frame');
@@ -520,7 +530,9 @@ try {
     const unav = await up.waitForFunction(() => /Unavailable/.test(document.querySelector('.mapwindow__over')?.innerText || ''), null, { timeout: 20000 }).then(() => true, () => false);
     const retry = await up.$('.mapwindow__over .mapwindow__retry');
     await up.screenshot({ path: `${SHOTS}/9-window-unavailable-${label.replace(/\W+/g, '-')}-390.png`, fullPage: true });
-    check(`${label}: doors unavailable with no kept copy — “Unavailable” and Try again in the window`, unav && Boolean(retry));
+    // "Try again" on one line (the pill is centred by a transform and would shrink to fit).
+    const lines = retry ? await retry.evaluate((b) => { const r = document.createRange(); r.selectNodeContents(b); return new Set([...r.getClientRects()].map((x) => Math.round(x.top))).size; }) : 0;
+    check(`${label}: doors unavailable with no kept copy — “Unavailable” and Try again in the window, on one line`, unav && Boolean(retry) && lines === 1, JSON.stringify({ unav, lines }));
     await u.ctx.unroute(/\/api\/map\/doors\?mine=1/);
     if (retry) await retry.click();
     const back = await up.waitForFunction(() => !document.querySelector('.mapwindow__over') && document.querySelectorAll('.mapwindow__canvas .leaflet-overlay-pane path').length >= 3, null, { timeout: 10000 }).then(() => true, () => false);
@@ -565,7 +577,15 @@ try {
       pg.on('pageerror', (e) => errors.push(`[${label} band] ${e.message}`));
       await pg.goto(`${camp.base}${camp.prefix}/admin/`, { waitUntil: 'domcontentloaded' });
       await sleep(2500);
-      if (!(await pg.$('.mapwindow--band'))) { console.log(`SKIP  ${label}: the desk band (${role}) — not on Today until HOME mounts it`); await ctx.close(); continue; }
+      // Before HOME: no band, and no HOME desk Today either (.today-desk) —
+      // SKIP. Once HOME's Today is here (or REQUIRE_BAND=1), a missing band
+      // fails: the band must be under the numbers, not quietly gone.
+      if (!(await pg.$('.mapwindow--band'))) {
+        const homeIn = process.env.REQUIRE_BAND === '1' || Boolean(await pg.$('.today-desk'));
+        if (homeIn) check(`${label}, ${role}: the desk band is on HOME’s Today`, false, 'no .mapwindow--band on the desk’s Today');
+        else console.log(`SKIP  ${label}: the desk band (${role}) — not on Today until HOME mounts it`);
+        await ctx.close(); continue;
+      }
       await pg.waitForFunction(() => document.querySelectorAll('.mapwindow--band .leaflet-overlay-pane path').length >= 1, null, { timeout: 10000 }).catch(() => {});
       const r = await rectOf(pg, '.mapwindow--band');
       const f = await rectOf(pg, '.mapwindow--band .mapwindow__frame');
