@@ -106,14 +106,14 @@ api.get('/persons/:id/knows', async (c) => {
   )).rows[0];
   if (!person) return c.json({ error: 'not found' }, 404);
   const rows = (await db.query(
-    `select r.id, r.kind, r.note, r.close, r.created_at as linked_at, p.id as pid, p.name, p.rating, ${dncSql('p')} as dnc
+    `select r.id, r.kind, r.note, r.close, r.created_at as linked_at, p.id as pid, p.name, p.last_name, p.rating, ${dncSql('p')} as dnc
      from ${LINKS_OF}
      order by ${azKey('p')}`,
     [ws, id],
   )).rows;
   const knows = rows.map((r) => ({
     id: r.id, kind: r.kind, note: r.note ?? null, close: Boolean(r.close), linked_at: r.linked_at,
-    person: { id: r.pid, name: r.name, rating: r.rating ?? null, dnc: Boolean(r.dnc) },
+    person: { id: r.pid, name: r.name, last_name: r.last_name ?? null, rating: r.rating ?? null, dnc: Boolean(r.dnc) },
   }));
   // Who brought them in: the other end of the link that added them (kept
   // even if that link was later removed).
@@ -210,7 +210,7 @@ api.get('/relationships/key', async (c) => {
     if (r.id) {
       by[r.who].push({
         id: r.id, kind: r.kind, close: Boolean(r.close), linked_at: r.linked_at,
-        person: { id: r.pid, name: r.name, rating: r.rating ?? null, dnc: Boolean(r.dnc) },
+        person: { id: r.pid, name: r.name, last_name: r.last_name ?? null, rating: r.rating ?? null, dnc: Boolean(r.dnc) },
       });
     }
   }

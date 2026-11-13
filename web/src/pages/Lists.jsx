@@ -18,6 +18,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useSettled } from '../components/useSettled.js';
 import { VOLUNTEER_ROLES } from '@starbase/shared/canvass';
 import { ApiError, apiGet } from '../api.js';
 import { NoSignal, noSignal } from '../components/NoSignal.jsx';
@@ -216,13 +217,6 @@ function Figures({ counts }) {
       ))}
     </ul>
   );
-}
-
-// Typing in a search asks once it settles, not on every key.
-function useSettled(value, ms = 300) {
-  const [v, setV] = useState(value);
-  useEffect(() => { const t = setTimeout(() => setV(value), ms); return () => clearTimeout(t); }, [value, ms]);
-  return v;
 }
 
 function OneList({ id }) {
