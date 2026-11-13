@@ -698,20 +698,20 @@ function PastRow({ b, showKind, emailConfigured, canWrite, linkTo }) {
   const allSent = b.status === 'sent' || (c.sent != null && c.total > 0 && c.sent === c.total);
   let reach;
   let chip;
-  if (c.sent == null) { reach = audienceWords(b.kind, c.total); chip = { status: 'queued', label: 'partly sent' }; }
-  else if (allSent) { reach = audienceWords(b.kind, c.total); chip = { status: 'sent', label: 'sent' }; }
-  else if (c.sent === 0 && c.failed === 0 && !c.sending) { reach = c.total > 0 ? `saved for ${audienceWords(b.kind, c.total)}` : 'saved'; chip = { status: 'ghost', label: 'not sent' }; }
-  else { reach = `${c.sent} of ${c.total} reached`; chip = c.sent > 0 || c.sending > 0 ? { status: 'queued', label: 'partly sent' } : { status: 'failed', label: 'failed' }; }
+  if (c.sent == null) { reach = audienceWords(b.kind, c.total); chip = { status: 'queued', label: 'Partly sent' }; }
+  else if (allSent) { reach = audienceWords(b.kind, c.total); chip = { status: 'sent', label: 'Sent' }; }
+  else if (c.sent === 0 && c.failed === 0 && !c.sending) { reach = c.total > 0 ? `saved for ${audienceWords(b.kind, c.total)}` : 'saved'; chip = { status: 'ghost', label: 'Not sent' }; }
+  else { reach = `${c.sent} of ${c.total} reached`; chip = c.sent > 0 || c.sending > 0 ? { status: 'queued', label: 'Partly sent' } : { status: 'failed', label: 'Failed' }; }
   // A/B: a running test holds the rest for the winner, and a picked winner
   // is sent to them by itself — neither is "partly sent", neither is retried.
   const ab = stat?.ab || null;
   const abNow = abState(ab, stat, c);
   const held = heldOf(ab);
-  if (ab?.status === 'testing') { reach = audienceWords(b.kind, c.total); chip = { status: 'queued', label: 'testing' }; }
-  else if (held > 0) { reach = audienceWords(b.kind, c.total); chip = { status: 'queued', label: 'sending' }; }
+  if (ab?.status === 'testing') { reach = audienceWords(b.kind, c.total); chip = { status: 'queued', label: 'Testing' }; }
+  else if (held > 0) { reach = audienceWords(b.kind, c.total); chip = { status: 'queued', label: 'Sending' }; }
   // On its way (the rest of a big list): how many have gone so far.
   const going = c.going > 0;
-  if (going) { reach = `${c.sent} of ${c.total} sent so far`; chip = { status: 'queued', label: 'sending' }; }
+  if (going) { reach = `${c.sent} of ${c.total} sent so far`; chip = { status: 'queued', label: 'Sending' }; }
   const retry = retryCount(c) - held;
   const canRetry = canWrite && emailConfigured === true && !allSent && !going && retry > 0 && !result;
   let why = null;
@@ -773,6 +773,26 @@ export function PastList({ blasts, loading, kindFilter, emailConfigured, canWrit
   );
 }
 
+// Went to no one at all (every address failed): on the first look, so a
+// release that didn't go is never mistaken for one that did. Each row keeps
+// its quiet "Try again · N".
+const didntGo = (b) => {
+  const c = countsOf(b);
+  return c.sent === 0 && c.failed > 0 && !c.going && !c.sending;
+};
+export function FailedList({ blasts, kind, emailConfigured, canWrite, linkTo, skip }) {
+  const rows = (blasts || []).filter((b) => kindIs(b.kind, kind) && b.id !== skip && didntGo(b));
+  if (rows.length === 0) return null;
+  return (
+    <section className="ot-sec" aria-label="Didn’t go">
+      <h2 className="ot-sec-h">Didn’t go <span className="ot-count">{rows.length}</span></h2>
+      <ul className="ot-list">
+        {rows.map((b) => <PastRow key={b.id} b={b} emailConfigured={emailConfigured} canWrite={canWrite} linkTo={linkTo} />)}
+      </ul>
+    </section>
+  );
+}
+
 // The latest send that went out, on the tab's first look: one row with how
 // it did ("Opened 18% · Clicked 8%"). A test still running has its own
 // section; a send whose result is on screen isn't said twice.
@@ -817,7 +837,7 @@ function UnsentRow({ b, emailConfigured, canWrite, onResent }) {
             <span className="ab-line" data-testid="ab-plan">{abPlanLine(plan, ab.wait_hours)}</span>
             {!emailConfigured && <span className="ot-row-note">{notSent}</span>}
           </span>
-          {emailConfigured && <StatusChip status="ghost" label="not sent" />}
+          {emailConfigured && <StatusChip status="ghost" label="Not sent" />}
         </button>
       ) : (
         <div className="ot-row ot-row--static ot-row--wrap">

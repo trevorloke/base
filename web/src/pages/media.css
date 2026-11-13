@@ -109,7 +109,7 @@
 .md-retry { display: flex; flex-direction: column; gap: var(--s-2); }
 .md-copy { display: inline-flex; align-items: center; gap: var(--s-2); }
 .md-copy__said { font-size: 13px; color: var(--ok); }
-.md-body { white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--font-sans); font-size: 14px; color: var(--text-2); margin: 0; }
+.md-body { overflow-wrap: anywhere; font-size: 15px; color: var(--text-1); margin: 0; }
 .md-links { margin: 0; padding-left: 1.2em; font-size: 14px; overflow-wrap: anywhere; }
 @media (max-width: 480px) {
   .md-figs { grid-template-columns: repeat(2, minmax(0, 1fr)); }

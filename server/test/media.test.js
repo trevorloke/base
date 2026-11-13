@@ -131,7 +131,7 @@ test('media.send: to media, to influencers, to both; any capitals; do-not tags l
   assert.deepEqual(why['Eli Example'], [false, 'do_not_contact']);
   assert.deepEqual(why['Cy Example'], [true, null]);
   assert.deepEqual(read.contacts.find((c) => c.person.name === 'Ann Example').last, {
-    release_id: old.blast.id, subject: 'Old', sent_at: read.contacts.find((c) => c.person.name === 'Ann Example').last.sent_at, opened: false,
+    release_id: old.blast.id, subject: 'Old', sent_at: read.contacts.find((c) => c.person.name === 'Ann Example').last.sent_at, opened: false, bounced: false,
   });
   assert.deepEqual(read.contacts.map((c) => c.kind), ['media', 'media', 'media', 'media', 'media', 'influencer'], 'media first');
 });
@@ -306,6 +306,16 @@ test('a release’s page: opened and bounced per person, no tokens or addresses;
   const raw = JSON.stringify(page);
   assert.ok(!raw.includes(tokenOf(toAnn)) && !raw.includes(mail('ann')), 'no tokens, no addresses');
   assert.ok(page.recipients.every((x) => !('email' in x) && !('token' in x)));
+
+  // Contacts' "Last release": a bounce says so, and a later release that
+  // failed to send isn't one they ignored — Ann's stays "Opened".
+  resend.fail(500);
+  const failed = ok(await mgr.action('media.send', { subject: 'Failed one', body: 'News' }));
+  resend.fail(false);
+  assert.ok((await rowsOf(failed.blast.id)).every((x) => x.status === 'failed'));
+  const last = Object.fromEntries(ok(await mgr.get('/api/media/contacts')).contacts.map((c) => [c.person.name, c.last]));
+  assert.deepEqual([last['Ann Example'].release_id, last['Ann Example'].opened], [r.blast.id, true]);
+  assert.deepEqual([last['Bo Example'].release_id, last['Bo Example'].bounced], [r.blast.id, true]);
 
   ok(await mgr.action('subscription.add', { email: mail('sub') }));
   const news = ok(await mgr.action('blast.send', { kind: 'newsletter', subject: 'N', body: 'B' }));

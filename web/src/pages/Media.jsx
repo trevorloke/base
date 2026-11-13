@@ -18,6 +18,7 @@ import { Link, useNavigate, useOutletContext, useParams, useSearchParams, useLoc
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { SOCIAL_PLATFORMS } from '@starbase/shared/canvass';
 import { platformWord, profileUrl, shownHandle } from '@starbase/shared/socials';
+import { renderMarkdown } from '@starbase/shared/markdown';
 import { action, apiGet } from '../api.js';
 import { OpensNote, TestingList, fmtTime } from '../components/AbTests.jsx';
 import { NeedsSignal, useOnline } from '../components/NoSignal.jsx';
@@ -25,8 +26,9 @@ import { LOADING, Unavailable, fmt } from '../components/AudienceBits.jsx';
 import { MEDIA_SCOPE, SendScope } from '../components/SendScope.js';
 import { useSenders } from '../components/SenderPick.jsx';
 import {
-  BlastResult, Big, ComposeCard, More, PastList, StatusChip, UnsentList, copyText, fmtWhen, useAction, useBlastList,
+  BlastResult, Big, ComposeCard, FailedList, More, PastList, UnsentList, copyText, fmtWhen, useAction, useBlastList,
 } from './Outreach.jsx';
+import '../editor.css';
 import './media.css';
 
 const DESK_ROLES = ['manager', 'treasurer', 'staff'];
@@ -164,6 +166,8 @@ function ReleasesTab({ creating, onClose }) {
           {list.isPending && <p className="ot-note" role="status">{LOADING}</p>}
           {list.isError && <p className="error" role="alert"><Unavailable onRetry={() => list.refetch()} /></p>}
           {list.isSuccess && !(releases || []).length && <p className="ot-empty">No releases yet.</p>}
+          <FailedList blasts={releases} kind="press" emailConfigured={emailConfigured} canWrite skip={result?.id}
+            linkTo={(b) => `/media/releases/${b.id}`} />
           <LastRelease releases={releases} skip={result?.id} />
           <UnsentList blasts={releases} kind="press" emailConfigured={emailConfigured} canWrite onResent={setResult} />
           <TestingList blasts={releases} kind="press" skip={result?.id} />
@@ -205,7 +209,7 @@ function Handles({ person, max = Infinity }) {
     </span>
   );
 }
-const lastWords = (c) => (c.last ? (c.last.opened ? 'Opened' : 'Not opened') : '—');
+const lastWords = (c) => (c.last ? (c.last.bounced ? 'Bounced' : c.last.opened ? 'Opened' : 'Not opened') : '—');
 const subOf = (c) => {
   const first = socialsOf(c.person)[0];
   return [c.outlet || (c.kind === 'influencer' && first ? shownHandle(first[0], first[1]) : null), c.beat].filter(Boolean).join(' · ');
@@ -555,11 +559,12 @@ function ReleasePage({ id }) {
       <More>
         <section className="ot-sec" aria-label="The message as sent">
           <h2 className="ot-sec-h">The message as sent</h2>
-          <pre className="md-body">{b.body}</pre>
+          {/* As the reader saw it: pictures as pictures, links as links (the
+              compose's Preview renderer, which keeps only safe tags). */}
+          <div className="md-body ws-prose" dangerouslySetInnerHTML={{ __html: renderMarkdown(b.body) }} />
           {(b.attachments || []).length > 0 && <p className="ot-note">Files: {b.attachments.map((a) => a.filename).join(', ')}</p>}
           {links.length > 0 && <ul className="md-links">{links.map((l) => <li key={l}><a href={l} target="_blank" rel="noopener noreferrer">{l}</a></li>)}</ul>}
         </section>
-        <StatusChip status={b.status} label={b.status === 'sent' ? 'sent' : b.status} />
       </More>
     </>
   );

@@ -63,9 +63,12 @@ api.get('/media/contacts', async (c) => {
      from persons p
      left join media_contacts m on m.workspace_id = p.workspace_id and m.person_id = p.id
      left join lateral (
-       select b.id as release_id, b.subject, b.sent_at, (r.first_open_at is not null or r.first_click_at is not null) as opened
+       select b.id as release_id, b.subject, b.sent_at, r.bounced_at,
+              (r.first_open_at is not null or r.first_click_at is not null) as opened
        from blast_recipients r join blasts b on b.id = r.blast_id and b.workspace_id = r.workspace_id
-       where r.workspace_id = p.workspace_id and r.person_id = p.id and b.kind = 'press'
+       -- The last release that reached them: one that failed or never went
+       -- isn't "Not opened".
+       where r.workspace_id = p.workspace_id and r.person_id = p.id and b.kind = 'press' and r.status = 'sent'
        order by b.created_at desc limit 1
      ) l on true
      where p.workspace_id = $1 and p.deleted_at is null and ${onMedia('p')}
@@ -91,7 +94,7 @@ api.get('/media/contacts', async (c) => {
       return {
         person: p, kind: kindOf(tags), outlet: r.outlet, beat: r.beat, note: r.note,
         reachable: !r.why, why: r.why || null,
-        last: r.release_id ? { release_id: r.release_id, subject: r.subject, sent_at: r.sent_at, opened: !!r.opened } : null,
+        last: r.release_id ? { release_id: r.release_id, subject: r.subject, sent_at: r.sent_at, opened: !!r.opened, bounced: !!r.bounced_at } : null,
       };
     }),
     counts: {
