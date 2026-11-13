@@ -19,12 +19,24 @@
 //   5. Google down (:5413), and with STARBASE_TILE_CLEAN=off (:5414): the
 //      free map is OpenStreetMap, said as GMP says it; no probe of /tiles/;
 //   10. under BASE_PATH (:5412): step 1, and the check's picture loads.
+// Stage 2 (MAP decisions 9–13):
+//   6. the desk Map has no margins or frame: its canvas is 1208 × 900 at
+//      1440 × 900, the menu keeps its words, the offline line changes no size;
+//   7. the phone Map is unchanged (390 × 722);
+//   8. the desk band (once HOME mounts it on Today): 1,144 wide, folds and
+//      stays folded, never reads /map/doors or Google's tiles (SKIP before);
+//   9. field Today's map window: open the first time under the one button,
+//      the turf's doors from /map/doors?mine=1 only, folds (no Leaflet asked
+//      for), Open the map, the page scrolls through it, offline, the doors
+//      unavailable, its chunk failing, and none with no walk list;
+//   and 6, 8, 9 again under BASE_PATH.
 // Stand-ins answer every tile host (the sandbox reaches none); every person
 // is made up. The notice is a PNG made here; a good tile is a picture of its
 // own address.
 //
 //   (cd web && npm run build) && node e2e-maplive.mjs     servers on :5410–:5414 (a stand-in Google on a free port)
 //   ONLY=nokey,notice,good,nocors,google,basepath        just those steps
+//   ONLY=stage2 (desk, band, window), basepath2          stage 2's steps
 //   SHOTS=<dir>                                          where the screenshots go
 import { chromium } from 'playwright-core';
 import { spawn } from 'node:child_process';
@@ -110,6 +122,7 @@ const newContext = async (opts, net) => {
   await ctx.route(/tile\.openstreetmap\.org/, (route) => {
     const r = route.request();
     net.osm.push({ url: r.url(), type: r.resourceType(), headers: r.headers() });
+    if (net.osmMode === 'fail') return route.abort('internetdisconnected');
     return route.fulfill({ status: 200, contentType: 'image/svg+xml', headers: CORS, body: streetSvg(new URL(r.url()).pathname) });
   });
   return ctx;
@@ -132,20 +145,28 @@ const campaign = async (base, prefix = '') => {
   for (let i = 0; i < 8; i += 1) await post('/actions/person.create', { name: `P${i} Example`, address: `${100 + i} Example St`, city: 'Surrey', lat: 49.105 + (i % 4) * 0.002, lng: -122.84 + Math.floor(i / 4) * 0.003 });
   const invites = {};
   for (const role of ['staff', 'volunteer']) invites[role] = await post('/actions/member.invite', { email: `${role}+${tag}@example.org`, role });
-  const state = await mc.storageState();
-  await mc.close();
+  // Stage 2: a volunteer with no walk list, and a candidate with none.
+  invites.loner = await post('/actions/member.invite', { email: `loner+${tag}@example.org`, role: 'volunteer' });
+  const seat = (await post('/actions/candidate.save', { name: 'Cleo Example', office: 'Council', race: 'council', email: `cand+${tag}@example.org` })).candidate.id;
+  invites.candidate = await post('/actions/candidate.invite', { id: seat });
+  const state = await mc.storageState(); // (mc stays open: the manager's hand for turfs)
   // A context signed in as someone, with its own tile net.
   const as = async (role, opts, mode) => {
     const n = freshNet(mode);
     const ctx = await newContext(opts, n);
+    let userId = null;
     if (role === 'manager') await ctx.addCookies(state.cookies);
+    else if (joined[role]) await ctx.addCookies(joined[role].cookies);
     else {
       const j = await ctx.request.post(`${base}${prefix}/api/auth/join`, { data: { token: invites[role].joinUrl.split('/').pop(), name: `${role} Example`, password: 'knock-knock-2026' } });
       if (!j.ok()) throw new Error(`join ${role} ${j.status()} ${await j.text()}`);
+      userId = (await j.json()).user?.id;
+      joined[role] = { ...(await ctx.storageState()), userId };
     }
-    return { ctx, net: n };
+    return { ctx, net: n, userId: userId || joined[role]?.userId || null };
   };
-  return { as, base, prefix };
+  const joined = {};
+  return { as, base, prefix, post };
 };
 
 const mapPath = (role, prefix = '') => (role === 'volunteer' ? (prefix ? '/field/map' : '/map') : '/admin/map');
@@ -371,6 +392,213 @@ try {
 
   // ── 10. Under BASE_PATH (:5412) ──
   if (want('basepath')) await noKeySteps(await campaign(await start(5412, { BASE_PATH: '/imaginesurrey' }), '/imaginesurrey'), 'under BASE_PATH');
+
+  // ── Stage 2 (MAP decisions 9–13): more room on the Map, a map on Today ──
+  const rectOf = (pg, sel) => pg.$eval(sel, (el) => { const r = el.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), x: Math.round(r.x), y: Math.round(r.y) }; }).catch(() => null);
+  const near = (a, b) => Math.abs(a - b) <= 1;
+  const field = (prefix) => (prefix ? '/field' : '');
+  const deskSteps = async (camp, label) => {
+    // 6. Desk Map: no margins, no frame, the menu with its words.
+    const { ctx } = await camp.as('manager', DESK, 'good');
+    const pg = await openMap(ctx, `${camp.base}${camp.prefix}/admin/map`, `${label} desk map`, null);
+    await until(pg, (x) => x.loaded > 0);
+    await sleep(800);
+    const c = await rectOf(pg, '.map-canvas');
+    const words = await pg.$eval('.nav', (n) => n.innerText).catch(() => '');
+    const frame = await pg.$eval('.map-page', (el) => getComputedStyle(el).borderTopWidth).catch(() => null);
+    await pg.screenshot({ path: `${SHOTS}/6-desk-map-${label.replace(/\W+/g, '-')}-1440.png` });
+    check(`${label}: desk Map 1440 × 900 — the canvas is 1208 × 900, no frame, the menu keeps its words`,
+      c && near(c.w, 1208) && near(c.h, 900) && near(c.x, 232) && frame === '0px' && /People/.test(words) && /Map/.test(words), JSON.stringify({ c, frame, words: words.slice(0, 80) }));
+    await ctx.setOffline(true);
+    await pg.evaluate(() => dispatchEvent(new Event('offline')));
+    await sleep(1200);
+    const off = await rectOf(pg, '.map-canvas');
+    const line = await pg.$eval('.nav', (n) => /offline|no signal/i.test(n.innerText)).catch(() => false);
+    check(`${label}: offline, the line is in the menu and the canvas keeps its size`, off && near(off.w, c.w) && near(off.h, c.h) && line, JSON.stringify({ off, line }));
+    await pg.screenshot({ path: `${SHOTS}/6-desk-map-offline-${label.replace(/\W+/g, '-')}-1440.png` });
+    await ctx.setOffline(false);
+    await pg.evaluate(() => dispatchEvent(new Event('online')));
+    await pg.goto(`${camp.base}${camp.prefix}/admin/people`, { waitUntil: 'domcontentloaded' });
+    await pg.waitForSelector('main.page', { timeout: 10000 });
+    const pad = await pg.$eval('main.page', (el) => getComputedStyle(el).paddingLeft);
+    check(`${label}: back on People, the page has its margins`, pad === '32px', pad);
+    await ctx.close();
+    // 7. Phone Map: unchanged.
+    const v = await camp.as('volunteer', PHONE, 'good');
+    const vp = await openMap(v.ctx, `${camp.base}${camp.prefix}${field(camp.prefix)}/map`, `${label} phone map`, null);
+    await until(vp, (x) => x.loaded > 0);
+    const pc = await rectOf(vp, '.map-canvas');
+    check(`${label}: phone Map 390 × 844 — the canvas is 390 × 722, no sideways scroll`, pc && near(pc.w, 390) && near(pc.h, 722) && !(await sideways(vp)), JSON.stringify(pc));
+    await v.ctx.close();
+  };
+
+  // 9. Field Today's map window.
+  const windowSteps = async (camp, label) => {
+    const v = await camp.as('volunteer', PHONE, 'good');
+    const turf = (await camp.post('/actions/turf.create', { name: 'Example block', polygon: [[49.103, -122.843], [49.103, -122.835], [49.113, -122.835], [49.113, -122.843]] })).turf;
+    await camp.post('/actions/turf.assign', { turf_id: turf.id, user_id: v.userId });
+    const today = `${camp.base}${camp.prefix}${field(camp.prefix)}/`;
+    const asked = [];
+    v.ctx.on('request', (r) => { if (!r.serviceWorker()) asked.push(r.url()); });
+    const pg = await v.ctx.newPage();
+    pg.on('pageerror', (e) => errors.push(`[${label} window] ${e.message}`));
+    await pg.goto(today, { waitUntil: 'domcontentloaded' });
+    await sleep(800);
+    await pg.reload({ waitUntil: 'domcontentloaded' }); // the second, the service worker in control
+    await pg.waitForSelector('.mapwindow--window', { timeout: 10000 });
+    await pg.waitForFunction(() => document.querySelectorAll('.mapwindow__canvas .leaflet-overlay-pane path').length >= 2, null, { timeout: 10000 }).catch(() => {});
+    await sleep(1500);
+    const w = await pg.evaluate(() => ({
+      open: document.querySelector('.mapwindow__toggle')?.getAttribute('aria-expanded'),
+      meta: document.querySelector('.mapwindow__meta')?.innerText.trim(),
+      paths: document.querySelectorAll('.mapwindow__canvas .leaflet-overlay-pane path').length,
+      tiles: document.querySelectorAll('.mapwindow__canvas img.leaflet-tile-loaded').length,
+      note: document.querySelector('.mapwindow__note')?.innerText || null,
+      primaries: [...document.querySelectorAll('.btn-primary')].filter((b) => b.offsetParent).length,
+      afterGo: document.querySelector('.today-go')?.nextElementSibling?.classList.contains('mapwindow'),
+      small: [...document.querySelectorAll('.mapwindow button, .mapwindow a.btn')].map((b) => [b.innerText.trim(), Math.round(b.getBoundingClientRect().height)]).filter(([, h]) => h < 48),
+    }));
+    const doorAsks = asked.filter((u) => /\/api\/map\/doors/.test(u));
+    await pg.screenshot({ path: `${SHOTS}/9-window-open-${label.replace(/\W+/g, '-')}-390.png`, fullPage: true });
+    check(`${label}: field Today 390 — the map window is open the first time, under the one button, doors and outline drawn, streets in`,
+      w.open === 'true' && w.afterGo && w.paths >= 3 && w.tiles > 0 && !w.note, JSON.stringify(w));
+    check(`${label}: its row reads “Example block · N doors left”`, /^Example block · \d[\d,]* doors? left$/.test(w.meta || ''), w.meta);
+    check(`${label}: the only doors read is /api/map/doors?mine=1`, doorAsks.length >= 1 && doorAsks.every((u) => /\/api\/map\/doors\?mine=1$/.test(u)), JSON.stringify(doorAsks));
+    check(`${label}: one primary button on the page; every target in the window at least 48 px; no sideways scroll`, w.primaries === 1 && w.small.length === 0 && !(await sideways(pg)), JSON.stringify(w.small));
+    // A swipe that starts on the map scrolls the page.
+    const box = await rectOf(pg, '.mapwindow__frame');
+    const y0 = await pg.evaluate(() => scrollY);
+    const cdp = await pg.context().newCDPSession(pg);
+    const sx = box.x + box.w / 2; const sy = box.y + box.h / 2;
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: sx, y: sy }] });
+    for (let i = 1; i <= 10; i += 1) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: sx, y: sy - i * 15 }] });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await sleep(500);
+    const y1 = await pg.evaluate(() => scrollY);
+    check(`${label}: a swipe that starts on the map scrolls the page`, y1 > y0 + 50, JSON.stringify({ y0, y1, box }));
+    await pg.evaluate(() => scrollTo(0, 0));
+    // Open the map → the Map, on the turf.
+    await pg.click('.mapwindow__open');
+    await pg.waitForURL(/\/map\?turf=/, { timeout: 8000 }).catch(() => {});
+    check(`${label}: “Open the map” goes to the Map on the turf`, new URL(pg.url()).pathname.endsWith('/map') && new URL(pg.url()).searchParams.get('turf') === turf.id, pg.url());
+    await pg.goto(today, { waitUntil: 'domcontentloaded' });
+    await pg.waitForSelector('.mapwindow__toggle', { timeout: 10000 });
+    // Fold it; reload: folded, and no Leaflet asked for.
+    await pg.click('.mapwindow__toggle');
+    await sleep(300);
+    await pg.screenshot({ path: `${SHOTS}/9-window-folded-${label.replace(/\W+/g, '-')}-390.png`, fullPage: true });
+    asked.length = 0;
+    await pg.reload({ waitUntil: 'domcontentloaded' });
+    await pg.waitForSelector('.mapwindow__toggle', { timeout: 10000 });
+    await sleep(1500);
+    const folded = await pg.$eval('.mapwindow__toggle', (b) => b.getAttribute('aria-expanded'));
+    const chunks = asked.filter((u) => /\/assets\/(leaflet|MapWindowMap)-/.test(u));
+    check(`${label}: folded and reloaded — still folded, and neither Leaflet nor the map window’s chunk was asked for`, folded === 'false' && chunks.length === 0, JSON.stringify({ folded, chunks }));
+    await pg.click('.mapwindow__toggle'); // open again for what follows
+    await pg.waitForSelector('.mapwindow__canvas.leaflet-container', { timeout: 10000 });
+    await sleep(1500);
+    // Offline with the tiles failing: the doors still draw, GMP's no-signal line.
+    v.net.osmMode = 'fail';
+    await pg.evaluate(async () => { for (const k of await caches.keys()) if (/tiles/.test(k)) await caches.delete(k); });
+    await v.ctx.setOffline(true);
+    await pg.reload({ waitUntil: 'domcontentloaded' });
+    const off = await pg.waitForFunction(() => /No signal — the street map is back when you are\. Your doors are all here\./.test(document.querySelector('.mapwindow__note')?.innerText || ''), null, { timeout: 15000 }).then(() => true, () => false);
+    const offPaths = await pg.$$eval('.mapwindow__canvas .leaflet-overlay-pane path', (p) => p.length).catch(() => 0);
+    await pg.screenshot({ path: `${SHOTS}/9-window-offline-${label.replace(/\W+/g, '-')}-390.png`, fullPage: true });
+    check(`${label}: offline, the street map failing — the doors still draw, and “No signal — the street map is back when you are…”`, off && offPaths >= 3, JSON.stringify({ off, offPaths }));
+    await v.ctx.setOffline(false);
+    v.net.osmMode = null;
+    await pg.close();
+    await v.ctx.close();
+    // The doors can't be read and there's no kept copy (a browser that never
+    // had them): Unavailable — Try again.
+    const u = await camp.as('volunteer', PHONE, 'good');
+    await u.ctx.route(/\/api\/map\/doors\?mine=1/, (r) => r.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"x"}' }));
+    const up = await u.ctx.newPage();
+    up.on('pageerror', (e) => errors.push(`[${label} unavailable] ${e.message}`));
+    await up.goto(today, { waitUntil: 'domcontentloaded' });
+    const unav = await up.waitForFunction(() => /Unavailable/.test(document.querySelector('.mapwindow__over')?.innerText || ''), null, { timeout: 20000 }).then(() => true, () => false);
+    const retry = await up.$('.mapwindow__over .mapwindow__retry');
+    await up.screenshot({ path: `${SHOTS}/9-window-unavailable-${label.replace(/\W+/g, '-')}-390.png`, fullPage: true });
+    check(`${label}: doors unavailable with no kept copy — “Unavailable” and Try again in the window`, unav && Boolean(retry));
+    await u.ctx.unroute(/\/api\/map\/doors\?mine=1/);
+    if (retry) await retry.click();
+    const back = await up.waitForFunction(() => !document.querySelector('.mapwindow__over') && document.querySelectorAll('.mapwindow__canvas .leaflet-overlay-pane path').length >= 3, null, { timeout: 10000 }).then(() => true, () => false);
+    check(`${label}: …Try again draws the doors`, back);
+    await u.ctx.close();
+    // The map window's chunk fails to load (no service worker: a first visit).
+    const b = await camp.as('volunteer', { ...PHONE, serviceWorkers: 'block' }, 'good');
+    await b.ctx.route(/\/assets\/MapWindowMap-[^/]*\.js/, (r) => r.abort('failed'));
+    const bp = await b.ctx.newPage();
+    bp.on('pageerror', () => {}); // the failed import is the point here
+    await bp.goto(today, { waitUntil: 'domcontentloaded' });
+    const said = await bp.waitForFunction(() => /Unavailable/.test(document.querySelector('.mapwindow__fail')?.innerText || ''), null, { timeout: 15000 }).then(() => true, () => false);
+    const rest = await bp.evaluate(() => ({ go: Boolean(document.querySelector('.today-go .btn-primary')), rows: Boolean(document.querySelector('.today-rows')) }));
+    await bp.screenshot({ path: `${SHOTS}/9-window-chunk-fails-${label.replace(/\W+/g, '-')}-390.png`, fullPage: true });
+    check(`${label}: the window’s chunk fails — “Unavailable” and Try again in the box; Start canvassing and the rest of Today still there`, said && rest.go && rest.rows, JSON.stringify(rest));
+    await b.ctx.unroute(/\/assets\/MapWindowMap-[^/]*\.js/);
+    await Promise.all([bp.waitForNavigation({ timeout: 10000 }).catch(() => {}), bp.click('.mapwindow__fail .mapwindow__retry').catch(() => {})]);
+    const drew = await bp.waitForFunction(() => document.querySelector('.mapwindow__canvas.leaflet-container'), null, { timeout: 10000 }).then(() => true, () => false);
+    check(`${label}: …Try again with the chunk back draws the map`, drew);
+    await b.ctx.close();
+    // No walk list: no map window (a volunteer, and a candidate).
+    for (const who of ['loner', 'candidate']) {
+      const n = await camp.as(who, PHONE, 'good');
+      const np = await n.ctx.newPage();
+      await np.goto(today, { waitUntil: 'domcontentloaded' });
+      await np.waitForSelector('.today-go', { timeout: 10000 }).catch(() => {});
+      await sleep(1500);
+      const has = await np.$('.mapwindow');
+      check(`${label}: a ${who === 'loner' ? 'volunteer' : 'candidate'} with no walk list sees no map window`, !has);
+      await n.ctx.close();
+    }
+  };
+
+  // 8. The desk band, once HOME mounts it on the desk's Today.
+  const bandSteps = async (camp, label) => {
+    await camp.post('/actions/turf.create', { name: 'Band block', polygon: [[49.12, -122.85], [49.12, -122.84], [49.13, -122.84], [49.13, -122.85]] });
+    for (const role of ['manager', 'staff']) {
+      const { ctx } = await camp.as(role, DESK, 'good');
+      const asked = [];
+      ctx.on('request', (r) => { if (!r.serviceWorker()) asked.push(r.url()); });
+      const pg = await ctx.newPage();
+      pg.on('pageerror', (e) => errors.push(`[${label} band] ${e.message}`));
+      await pg.goto(`${camp.base}${camp.prefix}/admin/`, { waitUntil: 'domcontentloaded' });
+      await sleep(2500);
+      if (!(await pg.$('.mapwindow--band'))) { console.log(`SKIP  ${label}: the desk band (${role}) — not on Today until HOME mounts it`); await ctx.close(); continue; }
+      await pg.waitForFunction(() => document.querySelectorAll('.mapwindow--band .leaflet-overlay-pane path').length >= 1, null, { timeout: 10000 }).catch(() => {});
+      const r = await rectOf(pg, '.mapwindow--band');
+      const f = await rectOf(pg, '.mapwindow--band .mapwindow__frame');
+      const meta = await pg.$eval('.mapwindow--band .mapwindow__meta', (e) => e.innerText.trim());
+      const wide = await pg.$$eval('.today-desk > :not(.mapwindow--band)', (els) => els.map((e) => Math.round(e.getBoundingClientRect().width)).filter((x) => x > 1200));
+      await pg.screenshot({ path: `${SHOTS}/8-band-open-${role}-${label.replace(/\W+/g, '-')}-1440.png` });
+      check(`${label}, ${role}: the band is open, 1,144 wide, 320–560 tall, outlines drawn, “N walk lists”; nothing else wider than 1,200`,
+        r && near(r.w, 1144) && f.h >= 320 && f.h <= 560 && /^\d[\d,]* walk lists?$/.test(meta) && wide.length === 0, JSON.stringify({ r, f, meta, wide }));
+      check(`${label}, ${role}: Today asks nothing of /api/map/doors, nor Google’s /tiles/`, !asked.some((u) => /\/api\/map\/doors|\/tiles\/\d/.test(u)), JSON.stringify(asked.filter((u) => /map|tiles/.test(u))));
+      await pg.click('.mapwindow--band .mapwindow__toggle');
+      asked.length = 0;
+      await pg.reload({ waitUntil: 'domcontentloaded' });
+      await sleep(2000);
+      const folded = await pg.$eval('.mapwindow--band .mapwindow__toggle', (b) => b.getAttribute('aria-expanded')).catch(() => null);
+      await pg.screenshot({ path: `${SHOTS}/8-band-folded-${role}-${label.replace(/\W+/g, '-')}-1440.png` });
+      check(`${label}, ${role}: folded and reloaded — still folded, no Leaflet asked for`, folded === 'false' && !asked.some((u) => /\/assets\/(leaflet|MapWindowMap)-/.test(u)), folded);
+      await pg.click('.mapwindow--band .mapwindow__toggle');
+      await ctx.close();
+    }
+  };
+
+  if (want('stage2') || want('desk') || want('window') || want('band')) {
+    const camp = await campaign(await start(5410, {}).catch(() => 'http://127.0.0.1:5410'));
+    if (want('stage2') || want('desk')) await deskSteps(camp, 'root');
+    if (want('stage2') || want('band')) await bandSteps(camp, 'root');
+    if (want('stage2') || want('window')) await windowSteps(camp, 'root');
+  }
+  if (want('basepath2')) {
+    const camp = await campaign(await start(5412, { BASE_PATH: '/imaginesurrey' }).catch(() => 'http://127.0.0.1:5412'), '/imaginesurrey');
+    await deskSteps(camp, 'under BASE_PATH');
+    await bandSteps(camp, 'under BASE_PATH');
+    await windowSteps(camp, 'under BASE_PATH');
+  }
 
   check('no page errors', errors.length === 0, errors.join(' | '));
 } catch (e) {

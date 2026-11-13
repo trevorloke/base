@@ -156,8 +156,8 @@ export default function MapWindowMap({ me, band, turfId }) {
     const frame = pts.length ? pts : tr.length >= 3 ? tr
       : [...doors.map((d) => [d.lat, d.lng]), ...outlines.flatMap((t) => ring(t.polygon))];
     fitRef.current = () => {
-      if (!frame.length) { map.setView(SURREY, 12); return; }
-      map.fitBounds(L.latLngBounds(frame), { padding: [16, 16], maxZoom: 17 });
+      if (!frame.length) { map.setView(SURREY, 12, { animate: false }); return; }
+      map.fitBounds(L.latLngBounds(frame), { padding: [16, 16], maxZoom: 17, animate: false });
     };
     fitRef.current();
   }, [outlines, doors, band, turfId]);

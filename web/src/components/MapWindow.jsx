@@ -9,7 +9,7 @@
 // loaded only while open, so a browser that keeps it folded never downloads
 // Leaflet on Today — and if that load fails (no service worker yet, an old
 // chunk gone after a deploy), only this box says so: Today stays.
-import { Component, Suspense, lazy, useId, useMemo, useState } from 'react';
+import { Component, Suspense, lazy, useId, useState } from 'react';
 import { NS } from '../base.js';
 import { useBandTurfs } from '../pages/mapQueries.js';
 import './mapwindow.css';
@@ -18,7 +18,11 @@ const readOpen = (key) => { try { return localStorage.getItem(key) !== 'closed';
 const writeOpen = (key, open) => { try { localStorage.setItem(key, open ? 'open' : 'closed'); } catch { /* storage blocked */ } };
 const num = (n) => (Number(n) || 0).toLocaleString('en-CA');
 
+const Inner = lazy(() => import('./MapWindowMap.jsx'));
+
 // A chunk that failed to load: said in the box, with a way to try again.
+// Try again loads the page afresh: Chrome remembers a failed import() for
+// the page's life, so asking again in place fails again (a new lazy() did).
 class ChunkBoundary extends Component {
   constructor(props) { super(props); this.state = { failed: false }; }
   static getDerivedStateFromError() { return { failed: true }; }
@@ -46,9 +50,6 @@ export default function MapWindow({ me, shape = 'window', turfId = null, meta = 
   const band = shape === 'band';
   const key = `${NS}today:${band ? 'band' : 'map'}`;
   const [open, setOpen] = useState(() => readOpen(key));
-  // Try again after a failed load: a new lazy() asks for the chunk afresh.
-  const [tries, setTries] = useState(0);
-  const Inner = useMemo(() => lazy(() => import('./MapWindowMap.jsx')), [tries]); // eslint-disable-line react-hooks/exhaustive-deps
   const bodyId = useId();
   const flip = () => { setOpen((o) => { writeOpen(key, !o); return !o; }); };
   return (
@@ -62,7 +63,7 @@ export default function MapWindow({ me, shape = 'window', turfId = null, meta = 
       </button>
       <div id={bodyId} className="mapwindow__body" hidden={!open}>
         {open && (
-          <ChunkBoundary key={tries} onRetry={() => setTries((t) => t + 1)}>
+          <ChunkBoundary onRetry={() => window.location.reload()}>
             <Suspense fallback={<p className="mapwindow__wait" role="status">Loading the map…</p>}>
               <Inner me={me} band={band} turfId={turfId} />
             </Suspense>
