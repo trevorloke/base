@@ -144,3 +144,25 @@ test('rows older than 40 days go at start; the table holds a date, a kind and a 
   await sync();
   assert.doesNotMatch(JSON.stringify((await db.query('select * from google_usage')).rows), /person-uuid-1/);
 });
+
+test('a sync never shows a count lower than it is, while it writes and reads the table', async () => {
+  count('autocomplete', 3, 'user-a');
+  let low = Infinity;
+  let done = false;
+  const p = sync().finally(() => { done = true; });
+  while (!done) { low = Math.min(low, today().autocomplete); await new Promise((r) => setImmediate(r)); }
+  await p;
+  assert.equal(low, 3, 'never fewer than were counted');
+  assert.equal(today().autocomplete, 3);
+});
+
+test('a sync still out when the counts start again (a test’s reset) leaves the new counts alone', async () => {
+  count('autocomplete', 2);
+  const p = sync();
+  _resetForTest();
+  count('autocomplete', 1);
+  await p;
+  assert.ok(today().autocomplete >= 1, 'the new count is still there');
+  await sync();
+  assert.equal(today().autocomplete, 1 + 2, 'the new count and the row the old sync wrote — none taken off');
+});

@@ -87,6 +87,7 @@ let people = new Map(); // user id → Places asks today (memory only)
 let tilesFullAt = null; // when today's tile ceiling was reached (ms)
 let timer = null;
 let started = null;
+let era = 0; // a test's reset starts a new one: a sync still out from before keeps off
 
 const roll = () => {
   const d = dayOf();
@@ -160,13 +161,21 @@ const flushRows = async (d, counts) => {
 export const sync = async () => {
   roll();
   const d = day;
+  const e = era;
   const sent = { ...pending };
   await flushRows(d, sent);
   // Only what was sent comes off: counts made meanwhile wait for the next.
-  if (day === d) for (const [k, v] of Object.entries(sent)) pending[k] = (pending[k] || 0) - v;
+  // It moves to `stored` at once, so today's count is never short while
+  // the rows are read back.
+  if (day === d && era === e) {
+    for (const [k, v] of Object.entries(sent)) {
+      pending[k] = (pending[k] || 0) - v;
+      stored[k] = (stored[k] || 0) + v;
+    }
+  }
   const db = await getDb();
   const { rows } = await db.query('select kind, n from google_usage where day = $1', [d]);
-  if (day === d) {
+  if (day === d && era === e) {
     stored = Object.fromEntries(rows.map((r) => [r.kind, Number(r.n)]));
     if (!tilesFullAt && !tilesLeft()) tilesFullAt = now();
   }
@@ -199,6 +208,7 @@ export const flush = async () => {
 
 // Tests: a restart (memory gone, the table kept).
 export const _resetForTest = () => {
+  era += 1;
   if (timer) clearInterval(timer);
   timer = null;
   started = null;
