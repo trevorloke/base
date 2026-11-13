@@ -74,6 +74,7 @@ test('a volunteer: their turf’s doors and their own record, whatever the volun
     const j = await mine(vol);
     assert.deepEqual(names(j), ['North Example', 'Walker Example'], scope);
     assert.equal(j.turfs, 1);
+    assert.deepEqual(j.outlines.map((t) => [t.name, t.polygon.length]), [['North block', 4]], 'their turf’s outline, to draw');
   }
   ok(await mgr.action('permission.doors.set', { scope: 'all' }));
   // The bare read is unchanged (every door, as before).
@@ -92,5 +93,5 @@ test('a candidate gets their own turf; a manager with a turf gets theirs, not th
 test('no turf: their own record or nothing, and no read of the people but by email', async () => {
   const [lone] = await join('lone.mine@example.org', 'Lone Example');
   const j = await mine(lone);
-  assert.deepEqual([j.persons, j.turfs], [[], 0]);
+  assert.deepEqual([j.persons, j.turfs, j.outlines], [[], 0, []]);
 });
