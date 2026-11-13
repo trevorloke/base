@@ -62,12 +62,12 @@ const bar = await pp.$eval('header.nav', (e) => e.getBoundingClientRect().height
 check('on a phone the top bar stays one row', bar < 80, bar);
 const overflow = await pp.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
 check('on a phone: no sideways scroll', overflow <= 0, overflow);
-// A manager has nine places: the tab bar shows the first four and "More".
+// A manager has ten places (Media joined after Outreach): the tab bar shows the first four and "More".
 const tabs = await pp.$$eval('.tabbar > a, .tabbar .tab-more__btn', (els) => els.map((e) => { const r = e.getBoundingClientRect(); return { t: e.innerText.trim(), w: Math.round(r.width), h: Math.round(r.height) }; }));
 check('on a phone a desk role gets four tabs and More, each a thumb wide', tabs.length === 5 && tabs[4]?.t === 'More' && tabs.every((t) => t.w >= 64 && t.h >= 48), JSON.stringify(tabs));
 await pp.tap('.tab-more__btn');
 const rest = await pp.$$eval('.tab-more__panel a', (els) => els.filter((e) => e.getBoundingClientRect().height >= 48).map((e) => e.innerText.trim()));
-check('More opens the rest of the places, each a full row', rest.length === 5 && rest[0] === 'Donations' && rest.includes('Website') && (await pp.getAttribute('.tab-more__btn', 'aria-expanded')) === 'true', rest.join(' | '));
+check('More opens the rest of the places, each a full row', rest.length === 6 && rest[0] === 'Donations' && rest.includes('Media') && rest.includes('Website') && (await pp.getAttribute('.tab-more__btn', 'aria-expanded')) === 'true', rest.join(' | '));
 await pp.getByRole('link', { name: 'Donations' }).tap();
 await pp.waitForURL(/\/admin\/money$/, { timeout: 8000 });
 await pp.waitForSelector('.tab-more__btn.active', { timeout: 5000 }).catch(() => {});

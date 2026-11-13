@@ -191,8 +191,10 @@ try {
   await vp.getByRole('button', { name: 'Count me in' }).tap();
   await vp.locator('.ops-onit').waitFor({ timeout: 10000 });
   await vp.locator('.ops-notify .cal-add').waitFor({ timeout: 10000 });
+  // Under it, after the person's own hours line (SH's "Change my hours"), never above it.
   check('after Count me in: the button sits under “You’re on this shift”', await vp.locator('.ops-lines + .cal-add').count() === 0
-    && await vp.locator('.ops-notify .ops-onit + .cal-add').count() === 1);
+    && await vp.locator('.ops-notify .ops-onit ~ .cal-add').count() === 1
+    && await vp.locator('.ops-notify .cal-add ~ .ops-onit').count() === 0);
   await vp.locator('.ops-notify').getByRole('button', { name: 'Add to calendar' }).tap();
   const vApple = vp.locator('.cal-choices a', { hasText: 'Apple & others' });
   await vApple.waitFor({ timeout: 10000 });
