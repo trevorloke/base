@@ -23,6 +23,7 @@
     "./shifthours": "./shifthours.js",
     "./site/*": "./site/*.js",
     "./fillwords": "./fillwords.js",
+    "./letters": "./letters.js",
     "./email/*": "./email/*.js"
   },
   "dependencies": {
