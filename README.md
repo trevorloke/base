@@ -993,6 +993,8 @@ election week should switch to a paid provider.
 | `STARBASE_TILE_MAX_ZOOM` | deepest zoom the provider serves, 1–22 | `19` |
 | `STARBASE_TILE_PROVIDER` | a provider by name: `stadia` (Stadia Maps' Alidade Smooth — its address, credit and zoom 20 filled in; `STARBASE_TILE_URL` wins over it) | — |
 | `STARBASE_TILE_KEY` | the named provider's key, added as `?api_key=` (phones can see it — use only where the provider can't be told the campaign's own web address) | — |
+| `STARBASE_TILE_CARTO_KEY` | the campaign's free CARTO basemap key: the *Clean* look is offered (and the map opens on it) only with it, and it is added to every CARTO address (phones can see it) | — (no Clean) |
+| `STARBASE_TILE_CLEAN` | `off`: never offer CARTO, key or not (the free map behind Google stays, OpenStreetMap's) | — |
 | `GOOGLE_MAPS_SERVER_KEY` | Google's key (Map Tiles API, Places API (New)): Google is the map whenever it is set. **Before this goes to staging, tell us Google or the free map for canvassing. With a key already set, Google becomes the map and phones stop keeping street maps offline.** | — |
 | `GOOGLE_MAPS_TILES` | `off` keeps the free map with a key set (`1` also turns Google on) | unset: on with a key |
 | `GOOGLE_TILES_DAILY_MAX` | Google tiles a day (the campaign's day); then the free map until midnight | none |
@@ -1019,10 +1021,21 @@ Google's has the free map: below), *The street map isn’t loading* stays
 under the count with one tap: *Try again*, or *Try Clean* / *Try Muted*
 only when that provider has just answered. A manager also gets a quiet
 *Why?* there, which opens the Map check.
+**When the street map loads but shows no streets** — a provider that answers
+every tile with the same notice picture (CARTO without a key: "API KEY
+REQUIRED"; a lapsed account; a block) — the page finds it once its first
+tiles are in: it asks two of that provider's tiles for one place, far apart
+in zoom (`tileProbe.js`, once per address per page, from the browser's
+cache where it has them, never Google's), and the same picture is a notice.
+The map then switches by itself as above (*The street map wasn’t showing
+streets — switched to Muted*) or says *The street map isn’t showing
+streets* (`data-tiles="notice"`), and the Map check names it and shows the
+tile under the map's middle as this phone got it.
 **With Google Maps on, volunteers keep streets while Google is down:** the
-map turns to CARTO's free map by itself (*Google Maps isn’t loading —
-showing the free map*) and back once Google answers. The free map is never
-a look to pick, and `STARBASE_TILE_CLEAN=off` leaves it out. A provider of
+map turns to the free map by itself (*Google Maps isn’t loading — showing
+the free map*) and back once Google answers: CARTO's with its key,
+otherwise OpenStreetMap's, always there. The free map is never a look to
+pick. A provider of
 the campaign's own has none: election-week traffic is never sent back to
 the free tiles. The person's own choice of look is only changed by their
 tap, and a look tapped there only once its streets come. The streets a
@@ -1037,10 +1050,12 @@ fifth of that over the wire. Choose the provider before election week:
 [GOING-LIVE.md](GOING-LIVE.md), section 5.
 
 **The map's look** is each person's own (Show → *Map*, kept on that
-browser): *Clean* (the default on the standard tiles: CARTO's light map of
-the same OpenStreetMap streets, without shop icons, parking lots or house
-numbers — `STARBASE_TILE_CLEAN=off` leaves it out; check CARTO's terms for
-your volume); *Standard*; *Muted* (grey streets, so the doors stand out) and
+browser, and only when they tap one): *Standard* (what the map opens on);
+*Clean* (only with `STARBASE_TILE_CARTO_KEY`, and then the map opens on it:
+CARTO's light map of the same OpenStreetMap streets, without shop icons,
+parking lots or house numbers — `STARBASE_TILE_CLEAN=off` leaves it out;
+check CARTO's terms for your volume; a phone that saved Clean draws
+Standard while it isn't offered); *Muted* (grey streets, so the doors stand out) and
 *Dark* (for night), drawn over any tiles; and with Google Maps on, its
 other looks too — *Satellite*, *Terrain* (or *Streets*), each through the
 same key.
