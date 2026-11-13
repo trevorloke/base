@@ -1033,7 +1033,16 @@ comes back, or asks if words were typed meanwhile).
   (`moved=` and a saved list) and `server/test/moves-scale.test.js`
   (300,000 people, 2,000 Moved taps: the count and People's first page each
   well under 300 ms, from `contacts_moved_idx`; `MOVES_PEOPLE` for a
-  smaller file).
+  smaller file); `server/test/offline-outbox.test.js` (a Moved tap and its
+  new address with no signal: the knock first, the move sent once however
+  many replays, its outbox words and "Moving — sends soon"). In the browser,
+  `e2e-moved.mjs` (starts its own server; run it once more with
+  `BASE_PATH=/imaginesurrey`): the walk list's door holding open with the
+  panel, a door on file picked, who lives there, Moved out folding back
+  with one yellow button, Moved too, Later, the door card, no signal (the
+  outbox line, the chip, Loading… and Unavailable — Try again), the desk's
+  Where to? with Someone on file and Undo, Address unknown, People's chips
+  and counts, the import check's line, and a volunteer outside their turf.
 - **Finding a person, and A–Z** — `server/test/search.test.js` (each way in:
   *kevin smith*, *smith kevin*, *Smith, Kevin*, *kev smi*, *jose*/*josé*,
   *berg*, *gill*, *d'souza*, *anne*, *jean luc*, a phone with and without

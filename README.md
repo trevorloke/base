@@ -875,6 +875,24 @@ Home phone stays.
   changed since the move is not found that way; the duplicate finder is
   there for that. Merging duplicates keeps Address unknown.
 
+On screen: after a Moved tap the walk list, the map's door card and the
+profile open **Where did Ana go?** under the outcome row — *New address*
+(the address box's suggestions; Unit, City, and Postal code under More) or
+*Address unknown*, then *Save* or *Later*. The door holds still while it is
+open (the walk list moves on, and reloads, when it closes). After *Save* it
+asks **Who lives at 9800 King George Blvd now?** (*Still here* · *Moved
+out*, *+ Someone else lives here*, and at the desk *Someone on file lives
+here*) and **Did anyone else move from 13450 104 Ave?** (*Still here* ·
+*Moved too*), each tap sent on its own. With no signal the move waits in
+the outbox behind its knock ("Moving — sends soon"). A volunteer whose
+person is outside their turf gets "Moved · the office will ask where". The
+desk's profile says *Marked moved 12 Nov by Dana — where to?*, *Address
+unknown · since … · was …* (*Add new address*, *Undo*) or *Moved here … ·
+from …* (*Undo*); People's filter has *Moved: Needs an address · Address
+unknown* with their counts (`GET /api/moves/counts`), and the import's
+check says how many people on file have moved while the list still has
+their old address.
+
 ## Sending email and text
 
 A newsletter or press release is written in Markdown: the message field

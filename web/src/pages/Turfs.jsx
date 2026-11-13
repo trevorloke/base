@@ -744,6 +744,16 @@ function WalkList({ id }) {
     if (sent || !m.queued) refresh();
   };
 
+  // Another door opened (or this one closed) with the panel still open: the
+  // panel goes with it, and the list loads again.
+  useEffect(() => {
+    if (!moving || openKey === moving.key) return;
+    setMoving(null);
+    setHeld(null);
+    refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openKey]);
+
   // "No answer" at the door: a no-answer for everyone there, one tap. It
   // settles the door, so on to the next one.
   const nobodyHome = async (door) => {
