@@ -305,7 +305,12 @@ one tap away under **More**.
   (your own link must be at it first), and under *More*, *Disconnect every
   Google account*. **Settings → Members** marks who signs in with Google and
   offers *Unlink Google*. `e2e-google-signin.mjs` runs all of this against
-  a stand-in Google (it starts its own servers on 5300–5304).
+  a stand-in Google (it starts its own servers on 5300–5304). It also
+  builds a stand-in feature screen with the shared *Connect Google* piece
+  on it (`server/test/google-connect-host.jsx`, served at
+  `/admin/e2e-google-connect` by the suite's server only) and drives
+  Connect, *Connected as … · Disconnect*, *Reconnect* and the paused line,
+  the way Gmail, Drive and Calendar will use it.
 - **Command bar** — on the desk press **Ctrl+K** (⌘K on a Mac), or *Search*
   under the name: *don* + Enter opens Donations, *gift* opens Log a gift
   with its form, a name or a phone (*604 555 0142*) finds the person; ↑ ↓
