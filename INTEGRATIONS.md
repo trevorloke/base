@@ -18,7 +18,7 @@ is written) and says exactly what is wrong if anything is.
 | [Address lookup](#address-lookup) | suggestions as you type, placing people on the map | yes (free default, no key) | `GEOCODER`, `GEOCODER_FALLBACK`, `BC_GEOCODER_KEY`, `GOOGLE_MAPS_SERVER_KEY` |
 | [Map background](#map-background) | the map volunteers walk | no (free default; change before election week) | `GOOGLE_MAPS_TILES`, `GOOGLE_MAPS_SERVER_KEY`, or `STARBASE_TILE_URL` |
 | [Google sign-in and connections](#google-sign-in-and-connections) | Sign in with Google; the one Google connection Gmail, Drive and Calendar use | no (passwords always work) | `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_TOKEN_KEY` |
-| [Google Drive and Sheets](#google-drive-and-sheets) | lists, reports and tables sent to a new Google Sheet (attach from Drive and import a Sheet follow) | no (Download CSV always works) | `GOOGLE_PICKER_KEY`, `GOOGLE_CLOUD_PROJECT_NUMBER` (+ Google sign-in's three) |
+| [Google Drive and Sheets](#google-drive-and-sheets) | lists, reports and tables sent to a new Google Sheet; files attached from Drive (or linked when too big); a Sheet or file read for the importer | no (Download CSV always works) | `GOOGLE_PICKER_KEY`, `GOOGLE_CLOUD_PROJECT_NUMBER` (+ Google sign-in's three) |
 | [Two-step sign-in key](#two-step-sign-in-key) | seals everyone's authenticator key | before the public link goes out (works without, with a warning) | `STARBASE_TWO_STEP_KEY` |
 | [Hosting — Render](#hosting--render) | the two environments | yes | `render.yaml` |
 | [GitHub Actions](#github-actions) | tests, and promoting staging to production | yes | none |
@@ -711,6 +711,19 @@ Google Drive and Sheets** says what is missing and nothing Drive shows.
   Gmail never hands the browser a Gmail-capable token. If Google won't
   narrow it, the Picker is off (*Google Drive can’t open safely on this
   server — tell us*) and the log says so once.
+- **Attaching from Drive.** A file someone picks goes with an email or a
+  release as an ordinary attachment, with the same limits (5 MB each, 10 MB
+  a send, the same kinds of file). Google Docs, Sheets, Slides and Drawings
+  go as PDF. A file over 5 MB isn't copied: the screen offers its link
+  instead, for the people it's already shared with in Drive, or, as a
+  separate choice, for **anyone with the link**. Anyone is refused for a
+  Sheet base.win made, a folder and a Google Sheet; each link opened to
+  anyone is recorded (`drive_links`, in the full export) and the person who
+  opened it can *Make private again* (or change it in Drive).
+- **Importing from Drive.** The importer reads a picked Google Sheet's tab
+  (as the person sees it, blank rows in the middle kept) or a picked CSV or
+  Excel file (300 MB at most, streamed) and does the rest as for a file
+  from the computer. Nothing about the read is stored.
 - **Check** (needs your own Drive connection): one Drive call and one Sheets
   read of a made-up file; *Working · Drive and Sheets answer*, or which API
   to turn on. A connection Google ended within a week of connecting is

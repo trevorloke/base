@@ -15,7 +15,7 @@ import { csvPlainRow } from '../../lib/csv.js';
 import { NOT_PICKED, gate, refused, usableGrant } from './grant.js';
 import { getFile, kindOf, mediaUrl, refusal } from './files.js';
 import { readRows, tabsOf } from './sheets.js';
-import { StreamStopped, chunksOf, openStream } from './stream.js';
+import { STREAM, StreamStopped, chunksOf, openStream } from './stream.js';
 
 export const FILE_ID = /^[A-Za-z0-9_-]{10,200}$/;
 export const MAX_IMPORT_BYTES = 300 * 1024 * 1024; // the importer's MAX_FILE_BYTES
@@ -47,7 +47,11 @@ const claim = (c) => {
   if (reads(me)) return { res: c.json({ error: 'Too many reads from Google Drive — wait a few minutes' }, 429) };
   open.add(me);
   let done = false;
-  return { release: () => { if (!done) { done = true; open.delete(me); } } };
+  // A browser that stops reading without hanging up holds nothing for ever.
+  const timer = setTimeout(() => release(), STREAM.ceilingMs + 60_000);
+  timer.unref?.();
+  const release = () => { if (!done) { done = true; clearTimeout(timer); open.delete(me); } };
+  return { release };
 };
 
 // A stream to the browser that lets go of the person's open read however it ends.

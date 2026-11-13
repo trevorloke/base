@@ -216,8 +216,13 @@ own *base.win exports* folder (Google Workspace accounts only) or the
 campaign's shared-drive folder. Sheets stay **off** until a manager chooses
 who may send (*No one*, *Managers*, *Anyone at the desk*, the last only with
 a shared-drive folder). Each export is on the event log with no Drive
-address and no cells, and `drive_exports` is in the full export. The how:
-`server/ext/drive/`.
+address and no cells, and `drive_exports` is in the full export. A file
+picked in Drive can be read for the importer (a Sheet's tab as CSV, or a
+CSV or Excel file), attached to an email or a release (Google files as PDF;
+`blast.attach.drive`, `media.attach.drive`), or, when over 5 MB, linked
+instead (`blast.link.drive`, `media.link.drive`; "anyone with the link" is
+a separate choice, recorded in `drive_links` and undone by
+`drive.link.close`). The how: `server/ext/drive/`.
 
 ### The command bar
 

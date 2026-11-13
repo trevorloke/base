@@ -318,6 +318,10 @@ one tap away under **More**.
   jobs, one Sheet, exact RAW ranges, Google not answering, asking to wait,
   a full Drive, someone leaving mid-export. `server/test/export-rows.test.js`
   pins a list's, a report's and the people table's CSV byte for byte.
+  `server/test/drive-files.test.js` reads a picked Sheet's tabs and a tab
+  as CSV (whole-row pages, a blank gap, a quoted title), a stalled or
+  silent download ended by its limits, a Doc attached as PDF, a too-big
+  file offered as a link, "anyone with the link" opened and closed.
 - **Command bar** — on the desk press **Ctrl+K** (⌘K on a Mac), or *Search*
   under the name: *don* + Enter opens Donations, *gift* opens Log a gift
   with its form, a name or a phone (*604 555 0142*) finds the person; ↑ ↓
