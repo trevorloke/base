@@ -28,6 +28,7 @@ import { decide, areasFor } from '../../lib/perms.js';
 import { FIELD_ACTIONS } from '../../actions/field.js';
 import { roomFor, campaignNow } from '../payments/limits.js';
 import { stillOn } from '../banks/numbers.js';
+import { whyNotSql, person } from '../../lib/reach.js';
 import { roomsFor, pledgedFor, openPledge, giftIn } from './room.js';
 
 const MONEY_ROLES = ['manager', 'treasurer', 'staff'];
@@ -219,11 +220,14 @@ api.get('/calltime/:bankId', async (c) => {
        from call_bank_numbers n join persons p on p.id = n.person_id
       where n.bank_id = $1 and n.assigned_to = $2 and n.done_at is null and ${still}`, params,
   )).rows[0];
+  // no_text: said no to texts (a tag, STOP, or asked in words), so the card
+  // never offers to text them the donate link after a pledge.
+  const pp = [...params, ctx.workspaceId];
   const people = (await db.query(
-    `select p.id, p.name, p.phone, p.city
+    `select p.id, p.name, p.phone, p.city, ${whyNotSql('text', 'list', person('p', `$${pp.length}`), { atSend: true })} is not null as no_text
        from call_bank_numbers n join persons p on p.id = n.person_id
       where n.bank_id = $1 and n.assigned_to = $2 and n.done_at is null and ${due} and ${still}
-      order by n.position, p.id limit ${PAGE}`, params,
+      order by n.position, p.id limit ${PAGE}`, pp,
   )).rows;
   const ids = people.map((p) => p.id);
   // What each gave: this year on the race's slate, ever, and the last gift.
@@ -247,7 +251,7 @@ api.get('/calltime/:bankId', async (c) => {
     let ask = bank.ask_cents != null ? Number(bank.ask_cents) : lastGift?.amount_cents ?? null;
     if (ask != null && room != null) ask = Math.min(ask, room);
     return {
-      person_id: p.id, name: p.name, phone: p.phone, city: p.city,
+      person_id: p.id, name: p.name, phone: p.phone, city: p.city, no_text: Boolean(p.no_text),
       given_year_cents: Number(g?.year_cents ?? 0), given_ever_cents: Number(g?.ever_cents ?? 0), last_gift: lastGift,
       room_cents: room, ask_cents: ask,
     };

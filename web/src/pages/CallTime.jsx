@@ -80,7 +80,7 @@ export default function CallTime() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [toast, setToast] = useState(null);
-  const [lastPledge, setLastPledge] = useState(null); // { name, phone }
+  const [lastPledge, setLastPledge] = useState(null); // { name, phone, noText }
   const toastTimer = useRef(null);
   const headRef = useRef(null);
   useEffect(() => () => clearTimeout(toastTimer.current), []);
@@ -122,7 +122,7 @@ export default function CallTime() {
         ...(cents ? { amount_cents: cents } : {}), ...(note.trim() ? { note: note.trim() } : {}),
       }, { who: current.name });
       setAnswered((a) => ({ ...a, [current.person_id]: { result, amount: cents || 0 } }));
-      setLastPledge(result === 'pledged' && current.phone ? { name: current.name, phone: current.phone } : null);
+      setLastPledge(result === 'pledged' && current.phone ? { name: current.name, phone: current.phone, noText: current.no_text === true } : null);
       say(r.queued ? queuedText(r) : 'Saved');
       if (!r.queued) {
         queryClient.invalidateQueries({ queryKey: ['calltime', bankId] });
@@ -183,7 +183,8 @@ export default function CallTime() {
   const toCall = Math.max(numbers.length,
     bank.left - (page.data.numbers ?? []).filter((n) => answered[n.person_id]).length);
   const donate = page.data.donate_url;
-  const sms = lastPledge && donate
+  // Never to someone who said no to texts (the server's no_text).
+  const sms = lastPledge && donate && !lastPledge.noText
     ? `sms:${lastPledge.phone.replace(/[^\d+]/g, '')}?&body=${encodeURIComponent(`Thank you! Here’s where to give: ${donate}`)}`
     : null;
 
@@ -204,6 +205,9 @@ export default function CallTime() {
         <p className="ct-after">
           <a className="btn btn-quiet ops-tap" href={sms}>Text {firstName(lastPledge.name)} the donate link</a>
         </p>
+      )}
+      {lastPledge?.noText && donate && (
+        <p className="ct-after muted">{firstName(lastPledge.name)} asked not to get texts</p>
       )}
 
       {current ? (

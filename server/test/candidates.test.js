@@ -424,6 +424,13 @@ test('the call-time card: giving, room and the ask — no email or tags; theirs 
   assert.deepEqual([fayRow.given_year_cents, fayRow.given_ever_cents, fayRow.room_cents], [0, 20000, 142970]);
   for (const n of page.numbers) assert.deepEqual(Object.keys(n).filter((k) => ['email', 'tags', 'note', 'attrs'].includes(k)), [], 'no email, tags or notes');
   assert.equal(page.donate_url, null, 'no live donate page');
+  // Who may be texted the donate link after a pledge: never one who said no to texts.
+  ok(await mgr.action('person.update', { id: fay, tags: ['donor', 'do-not-text'] }));
+  await (await getDb()).query("insert into texting_optouts (id, workspace_id, phone) values ($1, $2, '+16045550141')", [newId(), ct.ws]);
+  const after = ok(await ct.patCl.get(`/api/calltime/${ct.patBank}`)).numbers;
+  assert.deepEqual(after.map((n) => [n.name, n.no_text]).sort(), [['Eli Example', true], ['Fay Example', true]]);
+  ok(await mgr.action('person.update', { id: fay, tags: ['donor'] }));
+  assert.deepEqual(ok(await ct.patCl.get(`/api/calltime/${ct.patBank}`)).numbers.map((n) => [n.name, n.no_text]).sort(), [['Eli Example', true], ['Fay Example', false]]);
   // Anyone else: not found. A bad id: not found. "pledges" is never a bank id.
   assert.equal((await ct.quinnCl.get(`/api/calltime/${ct.patBank}`)).status, 404, 'another candidate');
   assert.equal((await vol.get(`/api/calltime/${ct.patBank}`)).status, 404, 'a volunteer');

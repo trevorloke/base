@@ -130,7 +130,9 @@ export const address = (email, ws = '$1') => ({ ws, id: 'null::uuid', email, pho
 export const mayReach = (channel, sender, cols = person()) => `(${rulesFor(channel, sender).map((r) => `not (${r.sql(cols)})`).join(' and ')})`;
 // The first reason as a column (null: may reach), for a screen that says
 // why someone won't get a send (Media → Contacts).
-export const whyNotSql = (channel, sender, cols = person()) => `(case ${rulesFor(channel, sender).map((r) => `when (${r.sql(cols)}) then '${r.code}'`).join(' ')} end)`;
+// atSend: the reasons only checked as a send goes too (a screen about to
+// offer one by hand).
+export const whyNotSql = (channel, sender, cols = person(), { atSend = false } = {}) => `(case ${rulesFor(channel, sender, { atSend }).map((r) => `when (${r.sql(cols)}) then '${r.code}'`).join(' ')} end)`;
 
 // One person, as the send is about to go. who: { workspaceId, email, phone,
 // tags, personId } — the address or number on the send itself (it may have
