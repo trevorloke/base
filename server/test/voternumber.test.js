@@ -184,7 +184,9 @@ test('on a profile: the desk reads and sets it; a volunteer gets neither', async
   assert.equal((await vol.get(`/api/persons/${lee.id}/voter-number`)).status, 403);
   assert.equal((await vol.action('person.voterNumber', { id: lee.id, voter_number: '1' })).status, 403);
   const seen = ok(await vol.get(`/api/persons/${lee.id}`));
-  assert.ok(!JSON.stringify(seen).includes('555'), 'nothing a volunteer reads carries it');
+  // The number as a value or under its name: a bare '555' can turn up inside
+  // a random id or a timestamp's milliseconds on a busy run.
+  assert.ok(!/"555"|voter_number/.test(JSON.stringify(seen)), 'nothing a volunteer reads carries it');
   assert.ok(!JSON.stringify(ok(await vol.get('/api/persons?q=Lee'))).includes('voter_number'));
   assert.equal((await mgr.action('person.voterNumber', { id: '00000000-0000-4000-8000-000000000000', voter_number: '111' })).status, 404);
 });
