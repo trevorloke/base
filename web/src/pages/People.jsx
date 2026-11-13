@@ -773,7 +773,8 @@ function PeopleList() {
   // shown never move.
   const [later, setLater] = useState({ key: '', rows: [], more: null, busy: false, error: null });
   const ours = later.key === qsKey && !stale ? later : null;
-  const rows = ours?.rows.length ? [...first, ...ours.rows] : first;
+  // (The first part may load again after a save: never anyone twice.)
+  const rows = ours?.rows.length ? (() => { const had = new Set(first.map((p) => p.id)); return [...first, ...ours.rows.filter((p) => !had.has(p.id))]; })() : first;
   const serverMore = !stale && (ours?.more ?? Boolean(persons.data?.more));
   // A kept copy (no signal) can show what it holds, but can't ask for more.
   const canAskMore = online && !keptCopy(persons.data);
