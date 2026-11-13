@@ -30,7 +30,9 @@ before(async () => {
   delete process.env.GEOCODER;
   globalThis.fetch = async (url, opts) => {
     const u = new URL(String(url));
-    if (u.hostname !== 'geocoder.api.gov.bc.ca') return realFetch(url, opts);
+    // No test reaches the network: an address not stood in for is an error
+    // (Google's address rows: places.test.js).
+    if (u.hostname !== 'geocoder.api.gov.bc.ca') throw new Error(`no stand-in for ${u.hostname}`);
     const q = u.searchParams.get('addressString');
     asked.push({ q, auto: u.searchParams.get('autoComplete') === 'true', bbox: u.searchParams.get('bbox') });
     if (down) return new Response('busy', { status: 503 });

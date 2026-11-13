@@ -123,10 +123,18 @@ const autocomplete = (q, session, signal) => fetch(`${api()}/places:autocomplete
   signal,
 });
 // A door: a street address, a building or a unit — or words that start with
-// a number (Google doesn't always type a house).
+// a number (Google doesn't always type a house), unless Google says it is a
+// street or an area ("104 Ave" starts with a number in Surrey, and is no door).
+const NOT_DOORS = ['route', 'intersection', 'locality', 'sublocality', 'neighborhood', 'postal_code', 'administrative_area_level_1', 'administrative_area_level_2', 'country'];
+const isDoor = (p) => {
+  const types = p.types || [];
+  if (types.some((t) => STREET_TYPES.includes(t))) return true;
+  if (types.some((t) => NOT_DOORS.includes(t))) return false;
+  return /^\d/.test(String(p.structuredFormat?.mainText?.text || '').trim());
+};
 const rowsOf = (body, limit) => (body?.suggestions || [])
   .map((s) => s?.placePrediction)
-  .filter((p) => p?.placeId && ((p.types || []).some((t) => STREET_TYPES.includes(t)) || /^\d/.test(String(p.structuredFormat?.mainText?.text || '').trim())))
+  .filter((p) => p?.placeId && isDoor(p))
   .slice(0, limit)
   .map((p) => ({
     place_id: p.placeId,
