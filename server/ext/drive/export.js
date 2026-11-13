@@ -162,11 +162,12 @@ export const sheetCell = (v) => {
 };
 
 // ── The job ──
-const step = (db, ex, set, params = [], emit = null) => runAction(db, { workspaceId: ex.workspace_id, actorId: null, action: 'drive.export.step' }, async (tx, e) => {
+// One write on the export's row (as the system: the job, not a person) → the row now.
+const step = async (db, ex, set, params = [], emit = null) => (await runAction(db, { workspaceId: ex.workspace_id, actorId: null, action: 'drive.export.step' }, async (tx, e) => {
   const r = (await tx.query(`update drive_exports set ${set}, touched_at = now() where id = $1 and workspace_id = $2 returning *`, [ex.id, ex.workspace_id, ...params])).rows[0];
   if (emit && r) emit(e, r);
   return r;
-});
+})).result;
 const end = (db, ex, status, said) => step(db, ex, "status = $3, said = $4, done_at = case when $3 = 'done' then now() else done_at end",
   [status, said ? String(said).slice(0, 300) : null],
   (e, r) => e('drive_export', r.id, 'update', { status, rows: r.done_rows }));
