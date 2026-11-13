@@ -12,6 +12,7 @@
 import { Hono } from 'hono';
 import { ACTIVE_DAYS, forRole, loadVolunteers } from './data.js';
 import { noCallSql } from '../../lib/reach.js';
+import { azKey } from '../../lib/az.js';
 
 export const api = new Hono();
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -48,7 +49,7 @@ api.get('/crew/:shiftId', async (c) => {
   )).rows;
   const turfIds = new Set(turfs.map((t) => t.id));
   const booked = (await db.query(
-    `select a.id as assignment_id, a.status, a.person_id, a.arrive_at, a.leave_at, p.name, p.phone, p.email, ${noCallSql('p')} as no_call,
+    `select a.id as assignment_id, a.status, a.person_id, a.arrive_at, a.leave_at, p.name, p.last_name, p.phone, p.email, ${noCallSql('p')} as no_call,
             c.placed, c.turf_id, c.job,
             exists (select 1 from users u join memberships m on m.user_id = u.id and m.workspace_id = $1
                     where p.email is not null and lower(u.email) = lower(p.email)) as signed_in
@@ -56,7 +57,7 @@ api.get('/crew/:shiftId', async (c) => {
      join persons p on p.id = a.person_id
      left join shift_crew c on c.assignment_id = a.id
      where a.workspace_id = $1 and a.shift_id = $2
-     order by lower(p.name), a.id`,
+     order by ${azKey('p')}, a.id`,
     [ws, id],
   )).rows;
   // A first shift: nothing done before on any other shift.
@@ -72,6 +73,7 @@ api.get('/crew/:shiftId', async (c) => {
     assignment_id: b.assignment_id,
     person_id: b.person_id,
     name: b.name,
+    last_name: b.last_name ?? null,
     phone: view ? null : b.phone || null,
     no_call: view ? null : b.no_call,
     email: view ? null : b.email || null,

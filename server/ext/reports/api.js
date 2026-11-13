@@ -8,6 +8,7 @@
 // Volunteers are refused all of it. The full JSON export stays at GET /export.
 import { Hono } from 'hono';
 import { csvResponse } from '../../lib/csv.js';
+import { azKey } from '../../lib/az.js';
 import { loadScale } from '../scale/rules.js';
 
 export const api = new Hono();
@@ -125,16 +126,16 @@ const DATASETS = {
       case when p.house_number is not null and p.address like p.house_number || ' %' then substr(p.address, length(p.house_number) + 2) else p.address end as street,
       p.address, p.city, p.postal, p.rating, p.rated_at, p.tags, p.lat, p.lng,
       to_char(p.voted_at, 'YYYY-MM-DD') as voted, p.voter_number, p.kind, p.created_at, p.id as _id
-    from persons p where p.workspace_id = $1 and p.deleted_at is null order by lower(p.name)`, tags: true, fields: true },
+    from persons p where p.workspace_id = $1 and p.deleted_at is null order by ${azKey('p')}`, tags: true, fields: true },
   // Everyone who has been a member: each term, paper or website.
   members: { sql: `select p.first_name, p.last_name, p.email, p.phone, p.address, p.city, p.postal,
       m.term_years, to_char(m.starts_on, 'YYYY-MM-DD') as starts_on, to_char(m.ends_on, 'YYYY-MM-DD') as ends_on,
       case when m.ends_on >= current_date then 'current' else 'lapsed' end as status,
       m.youth, m.citizenship, m.source, to_char(m.declaration_on, 'YYYY-MM-DD') as declaration_on
     from member_terms m join persons p on p.id = m.person_id and p.deleted_at is null
-    where m.workspace_id = $1 and m.voided_at is null order by m.ends_on desc, lower(p.name)` },
+    where m.workspace_id = $1 and m.voided_at is null order by m.ends_on desc, ${azKey('p')}` },
   volunteers: { sql: `select p.name, p.email, p.phone, string_agg(v.role || coalesce(' (' || nullif(v.detail, '') || ')', ''), '; ' order by v.role) as roles
-    from volunteer_roles v join persons p on p.id = v.person_id and p.deleted_at is null where v.workspace_id = $1 group by p.id, p.name, p.email, p.phone order by lower(p.name)` },
+    from volunteer_roles v join persons p on p.id = v.person_id and p.deleted_at is null where v.workspace_id = $1 group by p.id, p.name, p.email, p.phone order by ${azKey('p')}` },
   signs: { sql: `select s.address, s.kind, s.status, p.name as supporter, p.phone, s.note, s.lat, s.lng, s.created_at
     from signs s left join persons p on p.id = s.person_id where s.workspace_id = $1 order by s.status, s.address` },
   shifts: { sql: `select s.title, s.starts_at, s.ends_at, s.location, s.role, s.capacity,
@@ -148,7 +149,7 @@ const DATASETS = {
   contacts: { sql: `select p.name, c.channel, c.outcome, c.rating, c.note, c.place, u.name as by_name, c.created_at
     from contacts c join persons p on p.id = c.person_id left join users u on u.id = c.created_by where c.workspace_id = $1 order by c.created_at desc` },
   lists: { sql: `select l.name as list, l.kind, p.name, p.email, p.phone from list_members m join lists l on l.id = m.list_id join persons p on p.id = m.person_id
-    where m.workspace_id = $1 and l.deleted_at is null order by lower(l.name), lower(p.name)` },
+    where m.workspace_id = $1 and l.deleted_at is null order by lower(l.name), ${azKey('p')}` },
 };
 const cell = (v) => (v && typeof v === 'object' && !(v instanceof Date) ? JSON.stringify(v) : v);
 api.get('/export/:dataset', async (c) => {

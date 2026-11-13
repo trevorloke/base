@@ -15,9 +15,12 @@
 //                    people, search, Add people (hand-picked), Remove, Edit the
 //                    filter, Download CSV, Save these people as they are now
 // Every number is the number, "Loading…" or "Unavailable — Try again".
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useSettled } from '../components/useSettled.js';
+import { usePersonSearch } from '../components/usePersonSearch.js';
+import PersonResults from '../components/PersonResults.jsx';
 import { VOLUNTEER_ROLES } from '@starbase/shared/canvass';
 import { ApiError, apiGet } from '../api.js';
 import { NoSignal, noSignal } from '../components/NoSignal.jsx';
@@ -131,31 +134,33 @@ function usePreview(filter, on) {
   return useQuery({ queryKey: ['lists', 'preview', key], queryFn: () => apiGet(`/lists/preview?${key}`), enabled: on, retry: 1 });
 }
 
-// Add people to a hand-picked list: search, tap to add.
+// Add people to a hand-picked list: search, tap to add. Everyone the server
+// finds, A–Z, more as it scrolls; the server says who is on the list already
+// (however long it is, and whatever this screen's own search shows).
 function AddPeople({ listId, onAdded }) {
   const [q, setQ] = useState('');
-  const found = useQuery({ queryKey: ['persons', 'ls-search', q], queryFn: () => apiGet(`/persons?q=${encodeURIComponent(q.trim())}&limit=20`), enabled: q.trim().length >= 2 });
+  // Added from here since the last answer (a new term asks the server again).
+  const [added, setAdded] = useState(() => new Set());
+  const boxRef = useRef(null);
+  const found = usePersonSearch(q, { limit: 25, list: listId });
   const act = useAction(() => onAdded(), { needsSignal: true });
+  const add = async (p) => {
+    if (act.busy) return;
+    const res = await act.run('list.add', { id: listId, person_ids: [p.id] });
+    if (res) setAdded((s) => new Set(s).add(p.id));
+  };
   return (
     <div className="ls-add">
       <div className="field">
         <label htmlFor="ls-add-q">Add people</label>
-        <input id="ls-add-q" className="input" type="search" placeholder="Type a name" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input id="ls-add-q" ref={boxRef} className="input" type="search" autoComplete="off" placeholder="Name, phone or email" value={q}
+          onChange={(e) => { setQ(e.target.value); setAdded(new Set()); }} />
       </div>
-      {act.error && <p className="error">{act.error}</p>}
-      {q.trim().length >= 2 && (
-        <ul className="ops-rows ls-found">
-          {(found.data?.persons ?? []).map((p) => (
-            <li key={p.id} className="ops-item">
-              <div className="ops-row ops-row--static">
-                <span className="ops-row__main"><span className="ops-row__name">{p.name}</span><span className="ops-row__sub">{p.email && <span>{p.email}</span>}{p.phone && <span>{p.phone}</span>}</span></span>
-                <button type="button" className="btn btn-quiet ops-tap" disabled={act.busy} onClick={() => act.run('list.add', { id: listId, person_ids: [p.id] })}>Add</button>
-              </div>
-            </li>
-          ))}
-          {found.isSuccess && !found.data.persons.length && <li className="ops-empty">No one by that name.</li>}
-        </ul>
-      )}
+      {act.error && <p className="error" role="alert">{act.error}</p>}
+      <div className="ls-found">
+        <PersonResults search={found} boxRef={boxRef} onPick={add} taken={added} takenLabel="Already on the list" desk
+          offlineWords="Adding people needs signal" />
+      </div>
     </div>
   );
 }
@@ -216,13 +221,6 @@ function Figures({ counts }) {
       ))}
     </ul>
   );
-}
-
-// Typing in a search asks once it settles, not on every key.
-function useSettled(value, ms = 300) {
-  const [v, setV] = useState(value);
-  useEffect(() => { const t = setTimeout(() => setV(value), ms); return () => clearTimeout(t); }, [value, ms]);
-  return v;
 }
 
 function OneList({ id }) {

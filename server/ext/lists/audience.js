@@ -5,6 +5,7 @@
 // recipients and a phone bank: 'email' one row per address, 'phone' (a
 // text) one row per number, 'call' everyone with a number.
 import { personsWhere, joinWhere } from '../../lib/audience.js';
+import { azKey } from '../../lib/az.js';
 import { mayReach, person, emailKey, last10 } from '../../lib/reach.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -67,7 +68,7 @@ export const peopleOf = async (db, ctx, { list = null, filter = null, reach = nu
   params.push(limit, offset);
   const { rows } = await db.query(
     `select p.id, p.name, p.email, p.phone, p.address, p.unit, p.city, p.postal, p.rating, p.tags, p.created_at, count(*) over()::int as total
-     from persons p where ${where} order by lower(p.name), p.id limit $${params.length - 1} offset $${params.length}`,
+     from persons p where ${where} order by ${azKey('p')} limit $${params.length - 1} offset $${params.length}`,
     params,
   );
   return { people: rows.map((r) => ({ ...r, tags: parseJ(r.tags, []) })), total: rows[0]?.total ?? 0 };
@@ -148,14 +149,14 @@ export const listCounts = async (db, ctx, list, { fresh = false } = {}) => {
 };
 
 // The recipients of a send: one per address or number, the first person
-// (by name) to carry it.
+// (A–Z by last name) to carry it.
 export const recipientsOf = async (db, ctx, { list = null, filter = null, reach }) => {
   const { where, params } = await whereFor(db, ctx, { list, filter });
   const key = reach === 'email' ? emailKey('p.email') : last10('p.phone');
   const { rows } = await db.query(
     `select distinct on (${key}) p.id, p.name, p.email, p.phone
      from persons p where ${where} and ${REACH[reach]()}
-     order by ${key}, lower(p.name), p.id`,
+     order by ${key}, ${azKey('p')}`,
     params,
   );
   return rows;

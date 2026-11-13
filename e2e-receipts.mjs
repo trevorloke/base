@@ -138,9 +138,9 @@ const signup = async (page, base, { name, email, campaign }) => {
 const logGiftOnScreen = async (page, H, { donor, amount, method }) => {
   await H.go('/money?new=1');
   await page.fill('#gift-donor', donor.split(' ')[0]);
-  const opt = page.locator('#donor-options li', { hasText: donor });
+  const opt = page.locator('.ps-drop .ps-list:not(.is-stale) .ps-row', { hasText: donor });
   await opt.first().waitFor({ timeout: 8000 });
-  await opt.first().dispatchEvent('mousedown');
+  await opt.first().click();
   await page.fill('#gift-amount', String(amount));
   if (method) {
     await page.getByRole('button', { name: 'More details' }).click();
@@ -316,8 +316,8 @@ const dev = (await D.api('/actions/person.create', { name: 'Dev Noaddress', city
 const eli = (await D.api('/actions/person.create', { name: 'Eli Typed' })).json.person;
 await D.go('/money?new=1');
 await page.fill('#gift-donor', 'Dev');
-await page.locator('#donor-options li', { hasText: 'Dev Noaddress' }).first().waitFor({ timeout: 8000 });
-await page.locator('#donor-options li', { hasText: 'Dev Noaddress' }).first().dispatchEvent('mousedown');
+await page.locator('.ps-drop .ps-list:not(.is-stale) .ps-row', { hasText: 'Dev Noaddress' }).first().waitFor({ timeout: 8000 });
+await page.locator('.ps-drop .ps-list:not(.is-stale) .ps-row', { hasText: 'Dev Noaddress' }).first().click();
 await page.fill('#gift-amount', '30');
 check('Log a gift: no Street address field on the first look', !(await page.locator('#gift-address').isVisible()));
 await page.getByRole('button', { name: 'More details' }).click();
@@ -348,8 +348,8 @@ check('saved: the receipt has the address and leaves Needs you', docD.address ==
 // The address typed in the form goes on the donor's record and the receipt.
 await D.go('/money?new=1');
 await page.fill('#gift-donor', 'Eli');
-await page.locator('#donor-options li', { hasText: 'Eli Typed' }).first().waitFor({ timeout: 8000 });
-await page.locator('#donor-options li', { hasText: 'Eli Typed' }).first().dispatchEvent('mousedown');
+await page.locator('.ps-drop .ps-list:not(.is-stale) .ps-row', { hasText: 'Eli Typed' }).first().waitFor({ timeout: 8000 });
+await page.locator('.ps-drop .ps-list:not(.is-stale) .ps-row', { hasText: 'Eli Typed' }).first().click();
 await page.fill('#gift-amount', '20');
 await page.getByRole('button', { name: 'More details' }).click();
 await page.fill('#gift-address', '7 Typed Ave');

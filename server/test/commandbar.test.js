@@ -121,6 +121,18 @@ test('the quick search keeps People’s rules: a volunteer never matches on an e
   assert.equal((await new Client().get('/api/search/people?q=lena')).status, 401);
 });
 
+test('the quick search: a name either way round, an accent not typed, and “more” past its six', async () => {
+  await mgr.createPerson('Kevin Smith');
+  await mgr.createPerson('José Example');
+  for (const f of ['Ada', 'Ben', 'Cy', 'Dev', 'Eve', 'Fay', 'Gus']) await mgr.createPerson(`${f} Morename`);
+  const ask = async (q) => (await mgr.get(`/api/search/people?q=${encodeURIComponent(q)}`)).json;
+  assert.deepEqual((await ask('smith kevin')).persons.map((p) => p.name), ['Kevin Smith']);
+  assert.deepEqual((await ask('jose')).persons.map((p) => p.name), ['José Example']);
+  const more = await ask('morename');
+  assert.deepEqual([more.persons.length, more.more, more.total, more.many], [6, true, 7, false]);
+  assert.deepEqual([(await ask('lena')).more, (await ask('lena')).total], [false, 1]);
+});
+
 test('people: a phone typed any way finds them, digits against digits', async () => {
   const find = async (q) => (await mgr.get(`/api/persons?q=${encodeURIComponent(q)}&limit=6`)).json.persons.map((p) => p.name);
   assert.deepEqual(await find('6045550142'), ['Lena Example']);

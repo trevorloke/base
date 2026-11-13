@@ -40,6 +40,7 @@
 //                  every money write needs signal anyway.
 import { useCallback, useSyncExternalStore } from 'react';
 import { onlineManager, useQueryClient } from '@tanstack/react-query';
+import { nameWords } from '@starbase/shared/names';
 import { ApiError, noAnswer } from '../api.js';
 import { copyGeneration, copyKey, copyScope, readCopy, removeCopy, writeCopy } from './OfflineCache.js';
 
@@ -112,15 +113,20 @@ function planFor(key, me) {
 // field). With no copy of this exact search: the same filters without the
 // search words, or the whole list, filtered here the way the server filters.
 const lower = (v) => String(v ?? '').toLowerCase();
-function filterPersons(rows, p, { q = true, rest = true } = {}) {
+export function filterPersons(rows, p, { q = true, rest = true } = {}) {
   const words = lower(p.get('q')).trim();
+  // Two words or more of a name: each somewhere in the name, in any order,
+  // as the server reads them (shared/names.js nameWords).
+  const parts = nameWords(words);
+  const fits = (r) => (parts ? parts.every((w) => lower(r.name).includes(w)) || [r.address, r.phone, r.email].some((v) => lower(v).includes(words))
+    : [r.name, r.address, r.phone, r.email].some((v) => lower(v).includes(words)));
   const tag = (p.get('tag') || '').trim();
   const rating = (p.get('rating') || '').trim();
   const has = (p.get('has') || '').trim();
   const voted = (p.get('voted') || '').trim(); // GOTV: rows carry voted_at
   const codes = rating ? rating.split(',').map((s) => s.trim()).filter(Boolean) : [];
   return rows.filter((r) => {
-    if (q && words && ![r.name, r.address, r.phone, r.email].some((v) => lower(v).includes(words))) return false;
+    if (q && words && !fits(r)) return false;
     if (!rest) return true;
     if (tag && !(Array.isArray(r.tags) && r.tags.includes(tag))) return false;
     if (codes.length && !codes.some((c) => (c === 'unrated' ? r.rating == null : r.rating === c))) return false;

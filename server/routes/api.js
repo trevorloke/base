@@ -28,6 +28,7 @@ import { forViewer, loginEmail } from '../lib/viewer.js';
 import { geoBox } from '../lib/org.js';
 import { RATING_CODE_RE } from '@starbase/shared/scale';
 import { personsWhere, joinWhere } from '../lib/audience.js';
+import { azKey, azAfter } from '../lib/az.js';
 import { mayReach, address, person, noCallSql, NO_CONTACT } from '../lib/reach.js';
 // Which saved newsletter / press rows Try again would reach (ext/abtests).
 import { goingRow, repeatRow, retryable, sendJobOn } from '../ext/abtests/send.js';
@@ -181,8 +182,7 @@ const personRow = (r) => ({
 // list, its count and every send agree. Anything else names nobody.
 const REACH_SQL = { call: () => mayReach('call', 'bank', person('p', '$1')), text: () => mayReach('text', 'list', person('p', '$1')) };
 const reachSql = (want) => (!want ? '' : REACH_SQL[want] ? ` and ${REACH_SQL[want]()}` : ' and false');
-// A person's place in the name order, for ?after= and ?until= ($n: their id).
-const byName = (n) => `(select lower(a.name), a.id from persons a where a.id = $${n} and a.workspace_id = $1)`;
+// ?after= and ?until= page in the A–Z order (lib/az.js), the ORDER BY's own key.
 
 app.get('/persons', async (c) => {
   const ctx = c.get('ctx');
@@ -202,7 +202,7 @@ app.get('/persons', async (c) => {
     if (!id) continue;
     if (!UUID_RE.test(id)) { from += ' and false'; continue; }
     params.push(id);
-    from += ` and (lower(p.name), p.id) ${op} ${byName(params.length)}`;
+    from += ` and ${azAfter('p', params.length, op)}`;
   }
   // note: their own words from the volunteer form (attrs.note), so the call
   // card needs no per-person fetch. Nothing else from attrs is exposed.
@@ -212,7 +212,7 @@ app.get('/persons', async (c) => {
     `select p.id, p.kind, p.name, p.first_name, p.middle_name, p.last_name, p.email, p.phone, p.address, p.house_number, p.unit, p.city, p.postal,
             p.lat, p.lng, p.tags, p.socials, p.rating, p.rated_at, p.voted_at, p.attrs->>'note' as note${withFollowers ? ', p.followers' : ''}
      from persons p where ${where}${reachSql(c.req.query('reach'))}${from}
-     order by lower(p.name), p.id limit $4`,
+     order by ${azKey('p')} limit $4`,
     params,
   );
   return c.json({ persons: rows.slice(0, limit).map(personRow).map(forViewer(ctx)), more: rows.length > limit });
@@ -552,9 +552,10 @@ app.get('/persons/:id', async (c) => {
   const donor = await tierFor(db, ctx.workspaceId, person.id);
   // dnc: asked not to be contacted (any capitals) — the desk's key line leaves them out.
   const household = (await db.query(
-    `select id, name, rating, lower(tags::text) like $5 as dnc from persons
-     where workspace_id = $1 and deleted_at is null and id <> $2 and address is not null
-       and lower(address) = lower($3) and coalesce(unit, '') = coalesce($4, '')`,
+    `select p.id, p.name, p.rating, lower(p.tags::text) like $5 as dnc from persons p
+     where p.workspace_id = $1 and p.deleted_at is null and p.id <> $2 and p.address is not null
+       and lower(p.address) = lower($3) and coalesce(p.unit, '') = coalesce($4, '')
+     order by ${azKey('p')}`,
     [ctx.workspaceId, person.id, person.address || '', person.unit || null, `%"${NO_CONTACT}"%`],
   )).rows;
   if (ctx.role === 'volunteer') {
@@ -891,7 +892,7 @@ app.get('/shifts/board', async (c) => {
     `select a.id, a.shift_id, a.person_id, a.status, p.name
      from shift_assignments a join persons p on p.id = a.person_id
      where a.workspace_id = $1 and a.shift_id = any($2::uuid[]) and a.status in ('assigned', 'confirmed', 'completed')
-     order by lower(p.name)`,
+     order by ${azKey('p')}`,
     [ctx.workspaceId, ids],
   )).rows : [];
   const people = (await db.query(
@@ -910,7 +911,7 @@ app.get('/shifts/board', async (c) => {
                     where r.workspace_id = p.workspace_id and r.person_id = p.id and r.kind = 'volunteer' and r.done_at is null) as asked
      from persons p join ids on ids.id = p.id
      where p.workspace_id = $1 and p.deleted_at is null
-     order by lower(p.name), p.id limit 1000`,
+     order by ${azKey('p')} limit 1000`,
     [ctx.workspaceId],
   )).rows.map((p) => ({ ...p, roles: typeof p.roles === 'string' ? JSON.parse(p.roles) : p.roles, asked: !!p.asked }));
   return c.json({ shifts, assignments, people });
@@ -932,7 +933,7 @@ app.get('/shifts/:id', async (c) => {
     `select a.id as assignment_id, a.status, a.notified_at, a.notify_email, a.notify_text, a.arrive_at, a.leave_at,
             p.id, p.name, p.email, p.phone, ${noCallSql('p')} as no_call, (lower(p.email) = $3) as is_me
      from shift_assignments a join persons p on p.id = a.person_id
-     where a.shift_id = $1 and a.workspace_id = $2 order by p.name`,
+     where a.shift_id = $1 and a.workspace_id = $2 order by ${azKey('p')}`,
     [shift.id, ctx.workspaceId, myEmail],
   )).rows.map((a) => ({ ...a, is_me: !!a.is_me }));
   // Volunteers see who else is on the shift, not how to reach them, nor the

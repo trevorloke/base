@@ -37,6 +37,8 @@ import AddressField, { lookupAddress, pinOf } from '../components/AddressField.j
 import { CUT_KEYS, CutGroups, addCuts, cutChips, useTurfs, useWebDid } from '../components/FieldCuts.jsx';
 import ScriptLine, { useScripts } from '../components/ScriptLine.jsx';
 import NameFields from '../components/NameFields.jsx';
+import NameAz from '../components/NameAz.jsx';
+import { streetLine } from '../components/people.js';
 import {
   LOADING, RULE_KEYS, RuleGroups, SnapshotForm, Unavailable, fmt, ruleChips, rulesPicked, useAudienceChoices, useKnowsName, useListNames,
 } from '../components/AudienceBits.jsx';
@@ -133,7 +135,7 @@ export const firstName = (name) => String(name || '').trim().split(/\s+/)[0] || 
 export const isDnc = (p) => Array.isArray(p?.tags) && p.tags.includes('do-not-contact');
 // Asked not to be phoned: off the Calls list for a call; a text is another matter.
 export { noCalls };
-export const streetLine = (p) => [p.unit ? `${p.unit} –` : null, p.address].filter(Boolean).join(' ');
+export { streetLine };
 // The opening line of a text: "Hi Aisha, it's Trevor with Imagine Surrey."
 export const textBody = (p, me) =>
   `Hi ${firstName(p.name)}, it's ${firstName(me?.user?.name)} with ${me?.workspace?.name || 'the campaign'}.`;
@@ -763,11 +765,43 @@ function PeopleList() {
   const total = useQuery({
     queryKey: ['persons', 'count', countQs.toString()], queryFn: () => apiGet(`/persons/count?${countQs}`), meta: { side: true }, retry: 1,
   });
-  const rows = persons.data?.persons ?? [];
+  const first = persons.data?.persons ?? [];
   // The last filter's people while this one's load: dimmed, and never counted as this one's.
   const stale = persons.isPlaceholderData;
+  // Past the first 300: the next part from the server, after the last one
+  // loaded, in the same A–Z order (never kept on the phone). Rows already
+  // shown never move.
+  const [later, setLater] = useState({ key: '', rows: [], more: null, busy: false, error: null });
+  const ours = later.key === qsKey && !stale ? later : null;
+  // (The first part may load again after a save: never anyone twice.)
+  const rows = ours?.rows.length ? (() => { const had = new Set(first.map((p) => p.id)); return [...first, ...ours.rows.filter((p) => !had.has(p.id))]; })() : first;
+  const serverMore = !stale && (ours?.more ?? Boolean(persons.data?.more));
+  // A kept copy (no signal) can show what it holds, but can't ask for more.
+  const canAskMore = online && !keptCopy(persons.data);
   const n = page.key === qsKey ? page.n : PAGE;
   const shown = rows.slice(0, n);
+  const showMore = async () => {
+    if (rows.length > n) { setPage({ key: qsKey, n: n + PAGE }); return; }
+    if (!serverMore || !canAskMore || ours?.busy) return;
+    const lastId = rows.at(-1)?.id;
+    if (!lastId) return;
+    const key = qsKey;
+    setLater((l) => ({ key, rows: l.key === key ? l.rows : [], more: l.key === key ? l.more : null, busy: true, error: null }));
+    try {
+      const next = new URLSearchParams(qs);
+      next.set('after', lastId);
+      next.set('limit', String(LIMIT));
+      const res = await apiGet(`/persons?${next}`);
+      setLater((l) => {
+        if (l.key !== key) return l;
+        const seen = new Set([...first, ...l.rows].map((p) => p.id));
+        return { key, rows: [...l.rows, ...(res.persons || []).filter((p) => !seen.has(p.id))], more: Boolean(res.more), busy: false, error: null };
+      });
+      setPage({ key, n: n + PAGE });
+    } catch (e) {
+      setLater((l) => (l.key === key ? { ...l, busy: false, error: e.message } : l));
+    }
+  };
   // Sorted by a following: the desk's table says how big (ext/socials).
   const withFollowers = desk && Boolean(f.followers);
 
@@ -921,7 +955,7 @@ function PeopleList() {
             <li key={p.id}>
               <Link className="pp-row" to={`/people/${p.id}`} state={back}>
                 <span className="pp-row__main">
-                  <span className="pp-row__name">{p.name}</span>
+                  <span className="pp-row__name"><NameAz person={p} /></span>
                   <span className="pp-row__fact">{p.phone || streetLine(p) || p.email || ''}</span>
                 </span>
                 {p.rating && <RatingChip code={p.rating} who />}
@@ -933,7 +967,7 @@ function PeopleList() {
         <table className={`table pp-table${stale ? ' au-stale' : ''}`} aria-busy={stale || undefined}>
           <thead>
             <tr>
-              <th>Name</th>
+              <th>Name (A–Z by last name)</th>
               <th>Rating</th>
               <th>Phone</th>
               <th>Address</th>
@@ -946,7 +980,7 @@ function PeopleList() {
               return (
                 <tr key={p.id} className="rowlink" onClick={() => navigate(`/people/${p.id}`, { state: back })}>
                   <td className="pp-table__name">
-                    <Link to={`/people/${p.id}`} state={back} onClick={(e) => e.stopPropagation()}>{p.name}</Link>
+                    <Link to={`/people/${p.id}`} state={back} onClick={(e) => e.stopPropagation()}><NameAz person={p} /></Link>
                     {p.kind === 'org' && <> <span className="chip chip-ghost">org</span></>}
                     {second && <span className="pp-table__second">{second}</span>}
                   </td>
@@ -965,11 +999,16 @@ function PeopleList() {
         </table>
       )}
 
-      {rows.length > n && (
+      {(rows.length > n || serverMore) && !offline && !failed && (
         <div className="pp-more">
-          <button type="button" className="btn pp-btn" onClick={() => setPage({ key: qsKey, n: n + PAGE })}>
-            Show more
-          </button>
+          {rows.length > n || canAskMore ? (
+            <button type="button" className="btn pp-btn" disabled={Boolean(ours?.busy)} onClick={showMore}>
+              {ours?.busy ? 'Loading…' : 'Show more'}
+            </button>
+          ) : (
+            <button type="button" className="btn pp-btn" disabled>Showing more needs signal</button>
+          )}
+          {ours?.error && <p className="error" role="alert">{ours.error}</p>}
         </div>
       )}
     </>

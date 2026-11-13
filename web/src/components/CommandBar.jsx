@@ -47,7 +47,7 @@ function Dialog({ me, nav, onClose }) {
   const baseId = useId();
   const inputRef = useRef(null);
   const [query, setQuery] = useState('');
-  const [people, setPeople] = useState({ q: '', list: [], busy: false, error: null });
+  const [people, setPeople] = useState({ q: '', list: [], more: false, busy: false, error: null });
   const [activeKey, setActiveKey] = useState(null);
   const canPeople = allowed(me, { area: 'people' });
 
@@ -60,21 +60,24 @@ function Dialog({ me, nav, onClose }) {
   // a while longer.
   const q = query.trim();
   useEffect(() => {
-    if (!canPeople || q.length < 2) { setPeople({ q: '', list: [], busy: false, error: null }); return undefined; }
+    if (!canPeople || q.length < 2) { setPeople({ q: '', list: [], more: false, busy: false, error: null }); return undefined; }
     let live = true;
     setPeople((p) => ({ ...p, busy: true, error: null }));
     const t = setTimeout(async () => {
       try {
-        let list = (await apiGet(`/search/people?q=${encodeURIComponent(q)}`)).persons || [];
+        const quick = await apiGet(`/search/people?q=${encodeURIComponent(q)}`);
+        let list = quick.persons || [];
+        // More than six: the group ends with "See all people matching …".
+        const more = Boolean(quick.more);
         if (live && !list.length && q.length >= 3) {
           setPeople((p) => ({ ...p, q, list: [], busy: true }));
           await new Promise((r) => { setTimeout(r, FALLBACK_PAUSE_MS); });
           if (!live) return;
           list = (await apiGet(`/persons?q=${encodeURIComponent(q)}&limit=6`)).persons || [];
         }
-        if (live) setPeople({ q, list, busy: false, error: null });
+        if (live) setPeople({ q, list, more: more && list.length > 0, busy: false, error: null });
       } catch (e) {
-        if (live) setPeople({ q, list: [], busy: false, error: e.message });
+        if (live) setPeople({ q, list: [], more: false, busy: false, error: e.message });
       }
     }, 120);
     return () => { live = false; clearTimeout(t); };
@@ -90,7 +93,14 @@ function Dialog({ me, nav, onClose }) {
       : people.q && q.startsWith(people.q) ? people.list.filter((p) => stillFits(p, q)) : [];
     const peopleGroup = found.length ? {
       id: 'people', label: 'People',
-      items: found.map((p) => ({ kind: 'person', key: `person:${p.id}`, label: p.name, hint: personHint(p), to: `/people/${p.id}` })),
+      items: [
+        ...found.map((p) => ({ kind: 'person', key: `person:${p.id}`, label: p.name, hint: personHint(p), to: `/people/${p.id}` })),
+        // Never six and no way on: People with the same words in its box
+        // (A–Z, pages past 300). Only with the answer for what's typed now.
+        ...(people.more && people.q === q ? [{
+          kind: 'all', key: 'people:all', label: `See all people matching “${q}”`, to: `/people?${new URLSearchParams({ q })}`,
+        }] : []),
+      ],
     } : null;
     if (q) {
       // A name that's in no screen's or job's own words: the people first.
@@ -153,7 +163,7 @@ function Dialog({ me, nav, onClose }) {
 
   // Said once something is typed (a polite live region): how many, or
   // that people are still being looked up.
-  const count = flat.length;
+  const count = flat.filter((it) => it.kind !== 'all').length;
   const status = !q ? ''
     : people.busy && q.length >= 2 ? 'Searching…'
       : count ? `${count} ${count === 1 ? 'result' : 'results'}` : 'Nothing found';
