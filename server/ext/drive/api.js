@@ -6,6 +6,9 @@
 //   GET /api/drive/exports      your last 10 Sheets (managers: everyone's;
 //                               ?more=1 the 40 before)
 //   GET /api/drive/exports/:id  one, for the progress line
+//   GET /api/drive/files/:id(/tabs/:tab.csv | /content)   a picked file (reads.js)
+//   GET /api/drive/links        links opened to anyone that are still open
+//                               (yours; managers: everyone's)
 //
 // Never a refresh token, a scope list or the client's secret; the Picker's
 // token only in /picker, with no-store.
@@ -18,6 +21,7 @@ import { FOR_THE_DESK, driveGrant, isDesk } from './grant.js';
 import { landing, mayStillSend, STALE_SQL } from './export.js';
 import { EXPORTS_FOLDER } from './files.js';
 import { pickerToken } from './picker.js';
+import { fileContent, fileMeta, tabCsv } from './reads.js';
 
 export const api = new Hono();
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -97,4 +101,31 @@ api.get('/drive/exports/:id', async (c) => {
   const r = (await c.get('db').query(`${SELECT} where e.workspace_id = $1 and e.id = $2`, [ctx.workspaceId, c.req.param('id')])).rows[0];
   if (!r || (ctx.role !== 'manager' && r.user_id !== ctx.user.id)) return c.json({ error: 'not found' }, 404);
   return c.json({ export: shape(r, ctx) });
+});
+
+// A picked file (reads.js): desk roles only, the person's own grant.
+const deskFirst = (fn) => async (c) => desk(c) || fn(c);
+api.get('/drive/files/:id', deskFirst((c) => fileMeta(c, pickers)));
+api.get('/drive/files/:id/tabs/:tab', deskFirst(tabCsv));
+api.get('/drive/files/:id/content', deskFirst(fileContent));
+
+// Links opened to anyone, still open: yours, or (managers) everyone's, so
+// someone can make each private again (only the person who opened it can:
+// under drive.file nobody else's grant reaches that file).
+api.get('/drive/links', async (c) => {
+  const no = desk(c);
+  if (no) return no;
+  const ctx = c.get('ctx');
+  const all = ctx.role === 'manager';
+  const rows = (await c.get('db').query(
+    `select l.id, l.name, l.url, l.user_id, l.created_at, u.name as by_name,
+            exists (select 1 from memberships m where m.workspace_id = l.workspace_id and m.user_id = l.user_id) as still_here
+       from drive_links l join users u on u.id = l.user_id
+      where l.workspace_id = $1 and l.closed_at is null ${all ? '' : 'and l.user_id = $2'}
+      order by l.created_at desc, l.id limit 50`,
+    all ? [ctx.workspaceId] : [ctx.workspaceId, ctx.user.id],
+  )).rows;
+  return c.json({
+    links: rows.map((r) => ({ id: r.id, name: r.name, url: r.url, by: r.by_name, mine: r.user_id === ctx.user.id, left: !r.still_here, created_at: r.created_at })),
+  });
 });

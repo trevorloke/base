@@ -3,6 +3,7 @@
 // drive.folder.reach   { file_id }                 desk: "I picked the campaign folder" — a check, nothing stored
 // drive.export         { source, ref, client_key } desk: a new Google Sheet, made in the background
 // drive.export.retry   { id }                      its starter or a manager: carry on in the same Sheet
+// blast|media.attach.drive, blast|media.link.drive, drive.link.close: attach.js, links.js
 //
 // Google is called only in before (no lock) or in the job, never inside the
 // campaign's write. Every action refuses anyone outside the desk roles
@@ -16,8 +17,10 @@ import { enqueueJob, runJobsSoon } from '../../lib/jobs.js';
 import { grantRowOf } from '../../lib/google/tokens.js';
 import { timeZone } from '../../lib/org.js';
 import { DESK, SHEETS_CHOICES, driveRules, driveSetup } from './config.js';
-import { deskOnly, driveGrant, gate, grantWords, usableGrant } from './grant.js';
+import { deskOnly, driveGrant, gate, grantWords, refused, usableGrant } from './grant.js';
 import { getFile, FOLDER, refusal } from './files.js';
+import { attachActions } from './attach.js';
+import { linkActions } from './links.js';
 import { JOB, LIMITS, checkSource, ctxFor, landing, mayStillSend, sendWords, sourceOf } from './export.js';
 
 const EVERYONE = ['manager', 'treasurer', 'staff', 'volunteer'];
@@ -28,16 +31,6 @@ const num = (n) => Number(n).toLocaleString('en-CA');
 const managerOnly = (ctx) => {
   deskOnly(ctx);
   if (ctx.role !== 'manager') throw httpError(403, 'Only a manager can change this');
-};
-// A Google refusal before a write, in plain words (429: when to try again).
-const refused = (r) => {
-  if (r.trouble?.code === 'paused') {
-    const at = r.trouble.until ? new Date(r.trouble.until).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', timeZone: timeZone() }).replace(/\./g, '') : 'a minute';
-    return httpError(429, `Google asked us to wait — try after ${at}`);
-  }
-  if (r.trouble?.code === 'reconnect') return httpError(409, 'Connect Google Drive again');
-  if (r.trouble?.code === 'unavailable' || r.trouble?.code === 'client') return httpError(503, r.trouble.plain);
-  return httpError(409, r.plain);
 };
 const settingsOf = async (tx, ws) => parse((await tx.query('select settings from workspaces where id = $1 for update', [ws])).rows[0].settings);
 const running = async (tx, ws, userId) => (await tx.query(
@@ -52,6 +45,9 @@ const roomFor = async (tx, ws, userId) => {
 const startNow = async (db, ctx, result) => { runJobsSoon(); return { result }; };
 
 export const actions = {
+  ...attachActions,
+  ...linkActions,
+
   'drive.settings': {
     roles: MANAGER,
     input: z.object({ on: z.boolean().optional(), sheets: z.enum(SHEETS_CHOICES).optional() }),

@@ -6,8 +6,13 @@
 //   Drive   GET  /drive/v3/about                 { kind }
 //           GET  /drive/v3/files?q=…             folders by name (files.list)
 //           POST /drive/v3/files                 a folder or a Sheet (files.create)
-//           GET  /drive/v3/files/:id             metadata (files.get), with driveId
-//   Sheets  GET  /v4/spreadsheets/:id            tabs with rowCount (404 for an unknown id)
+//           GET  /drive/v3/files/:id             metadata (files.get), with driveId and size
+//           GET  /drive/v3/files/:id?alt=media   the bytes, streamed
+//           GET  /drive/v3/files/:id/export      a Google file as PDF
+//           POST /drive/v3/files/:id/permissions  "anyone with the link" (kept in permissions)
+//           DELETE /drive/v3/files/:id/permissions/:pid
+//   Sheets  GET  /v4/spreadsheets/:id            tabs with rowCount and hidden (404 for an unknown id)
+//           GET  /v4/spreadsheets/:id/values/'Tab'!n:m  whole rows, trailing blanks left out
 //           POST /v4/spreadsheets/:id:batchUpdate  updateSheetProperties, appendDimension
 //           PUT  /v4/spreadsheets/:id/values/:range?valueInputOption=…  the cells, kept
 //   OAuth   POST /tokeninfo                      { scope, expires_in, aud } of an access token
@@ -18,11 +23,17 @@
 // Controls (in code, or POST /__drive with JSON { do, … }):
 //   next('drive' | 'sheets', kind, opts)  the next answer: '500', '503',
 //       '429' ({ retryAfter }), 'disabled' (403 SERVICE_DISABLED),
-//       'full' (403 storageQuotaExceeded), 'notFound', 'hang' (no answer)
+//       'full' (403 storageQuotaExceeded), 'notFound', 'hang' (no answer),
+//       'stall' (a download sends 64 KB, then nothing), 'shareRefused' (403
+//       publishOutNotPermitted on permissions.create), 'exportTooBig'
 //   folder({ id, name, driveId, needsPick })  a folder someone made in Drive
 //       (a shared drive's when driveId is set); needsPick: base.win can't
 //       use it until this person picks it (pick(id, sub))
-//   file({ id, name, mimeType })  any other file
+//   file({ id, name, mimeType, data, size, hideSize })  any other file:
+//       data its bytes (Buffer); size what Drive says (default data's length)
+//   readable({ id, name, tabs: [{ title, rows, rowCount, hidden }] })  a
+//       Google Sheet someone made, to import from (pick it first)
+//   streams  { opened, cut } — downloads started, and those cut before the end
 //   sheet(id) → { title, tabs, rows (a Map of row number → cells), writes }
 import { randomBytes } from 'node:crypto';
 
@@ -38,6 +49,24 @@ export const fakeDrive = ({ accessTokens, people, base }) => {
   const calls = [];
   const hanging = new Set();
   const take = (k) => knobs[k].shift() || null;
+  const streams = { opened: 0, cut: 0 };
+  // A download: 64 KB at a time; 'stall' sends the first part, then nothing.
+  const download = (res, buf, stall) => {
+    streams.opened += 1;
+    res.writeHead(200, { 'content-type': 'application/octet-stream', 'content-length': String(buf.length) });
+    let at = 0;
+    let ended = false;
+    res.on('close', () => { if (!ended) streams.cut += 1; });
+    const more = () => {
+      if (res.destroyed) return;
+      if (at >= buf.length) { ended = true; res.end(); return; }
+      const part = buf.subarray(at, at + 65536);
+      at += part.length;
+      if (stall && at > 0 && at >= 65536) { res.write(part); hanging.add(res); return; }
+      if (res.write(part)) setImmediate(more); else res.once('drain', more);
+    };
+    more();
+  };
 
   const send = (res, status, body, headers = {}) => { res.writeHead(status, { 'content-type': 'application/json', ...headers }); res.end(JSON.stringify(body)); };
   const refuse = (res, status, reason, message) => send(res, status, { error: { code: status, message, errors: [{ domain: 'global', reason, message }] } });
@@ -52,6 +81,8 @@ export const fakeDrive = ({ accessTokens, people, base }) => {
     }
     if (knob.kind === 'full') { refuse(res, 403, 'storageQuotaExceeded', 'The user’s Drive storage quota has been exceeded.'); return true; }
     if (knob.kind === 'notFound') { refuse(res, 404, 'notFound', 'File not found.'); return true; }
+    if (knob.kind === 'shareRefused') { refuse(res, 403, 'publishOutNotPermitted', 'The user does not have sufficient permissions for this file.'); return true; }
+    if (knob.kind === 'exportTooBig') { refuse(res, 403, 'exportSizeLimitExceeded', 'This file is too large to be exported.'); return true; }
     return false;
   };
 
@@ -66,13 +97,17 @@ export const fakeDrive = ({ accessTokens, people, base }) => {
   // drive.file: base.win reaches a file it made, or one this person picked.
   const reachable = (f, sub) => f && (!f.needsPick || f.owner === 'base.win' || f.picked.has(sub));
 
-  const meta = (f) => ({ id: f.id, name: f.name, mimeType: f.mimeType, parents: f.parents, ...(f.driveId ? { driveId: f.driveId } : {}), webViewLink: f.webViewLink });
+  const meta = (f) => ({
+    id: f.id, name: f.name, mimeType: f.mimeType, parents: f.parents, ...(f.driveId ? { driveId: f.driveId } : {}), webViewLink: f.webViewLink,
+    ...(f.size != null && !f.hideSize ? { size: String(f.size) } : {}),
+  });
 
   const drive = async (req, res, u, raw) => {
     const me = who(req, res);
     calls.push({ api: 'drive', method: req.method, path: u.pathname, query: Object.fromEntries(u.searchParams), body: raw ? JSON.parse(raw) : null, token: me?.token || null });
     if (!me) return;
-    if (knobAnswer(res, take('drive'))) return;
+    const knob = take('drive');
+    if (knob?.kind !== 'stall' && knobAnswer(res, knob)) return;
     const path = u.pathname.replace(/^\/drive\/v3/, '');
     if (path === '/about') return send(res, 200, { kind: 'drive#about' });
     if (path === '/files' && req.method === 'GET') {
@@ -100,11 +135,27 @@ export const fakeDrive = ({ accessTokens, people, base }) => {
       if (body.mimeType === SHEET) sheets.set(id, { title: body.name, tabs: [{ sheetId: 0, title: 'Sheet1', rowCount: 1000, columnCount: 26, frozen: 0 }], rows: new Map(), writes: [] });
       return send(res, 200, { id, webViewLink: f.webViewLink });
     }
-    const m = path.match(/^\/files\/([^/]+)$/);
-    if (m && req.method === 'GET') {
-      const f = files.get(decodeURIComponent(m[1]));
-      if (!reachable(f, me.sub)) return refuse(res, 404, 'notFound', `File not found: ${m[1]}.`);
-      return send(res, 200, meta(f));
+    const m = path.match(/^\/files\/([^/]+)(\/export|\/permissions(?:\/([^/]+))?)?$/);
+    const f = m && files.get(decodeURIComponent(m[1]));
+    if (m && !reachable(f, me.sub)) return refuse(res, 404, 'notFound', `File not found: ${m[1]}.`);
+    if (m && !m[2] && req.method === 'GET') {
+      if (u.searchParams.get('alt') !== 'media') return send(res, 200, meta(f));
+      if (f.mimeType.startsWith('application/vnd.google-apps.')) return refuse(res, 403, 'fileNotDownloadable', 'Only files with binary content can be downloaded.');
+      return download(res, f.data || Buffer.alloc(0), knob?.kind === 'stall');
+    }
+    if (m && m[2] === '/export' && req.method === 'GET') {
+      if (u.searchParams.get('mimeType') !== 'application/pdf' || !f.mimeType.startsWith('application/vnd.google-apps.')) return refuse(res, 400, 'badRequest', 'Export only supports Docs Editors files.');
+      return download(res, f.pdf || Buffer.from(`%PDF-1.4\n% a fake PDF of ${f.name}\n%%EOF\n`), knob?.kind === 'stall');
+    }
+    if (m && m[2]?.startsWith('/permissions') && req.method === 'POST' && !m[3]) {
+      const body = raw ? JSON.parse(raw) : {};
+      const pid = rand('perm');
+      (f.permissions ||= new Map()).set(pid, body);
+      return send(res, 200, { id: pid });
+    }
+    if (m && m[3] && req.method === 'DELETE') {
+      if (!f.permissions?.delete(decodeURIComponent(m[3]))) return refuse(res, 404, 'notFound', 'Permission not found.');
+      res.writeHead(204); return res.end();
     }
     return send(res, 404, { error: { code: 404, message: 'not here' } });
   };
@@ -119,7 +170,24 @@ export const fakeDrive = ({ accessTokens, people, base }) => {
     const s = m && sheets.get(decodeURIComponent(m[1]));
     if (!s || !reachable(files.get(decodeURIComponent(m[1])), me.sub)) return send(res, 404, { error: { code: 404, message: 'Requested entity was not found.', status: 'NOT_FOUND' } });
     if (!m[2] && req.method === 'GET') {
-      return send(res, 200, { spreadsheetId: m[1], properties: { title: s.title }, sheets: s.tabs.map((t) => ({ properties: { sheetId: t.sheetId, title: t.title, gridProperties: { rowCount: t.rowCount, columnCount: t.columnCount, frozenRowCount: t.frozen } } })) });
+      return send(res, 200, { spreadsheetId: m[1], properties: { title: s.title }, sheets: s.tabs.map((t) => ({ properties: { sheetId: t.sheetId, title: t.title, ...(t.hidden ? { hidden: true } : {}), gridProperties: { rowCount: t.rowCount, columnCount: t.columnCount, frozenRowCount: t.frozen } } })) });
+    }
+    if (m[3] && req.method === 'GET') {
+      // 'Title'!5001:10000 — whole rows; Google leaves out blank cells at a
+      // row's end and blank rows at the range's end.
+      const range = decodeURIComponent(m[3]);
+      const r = range.match(/^'((?:[^']|'')*)'!(\d+):(\d+)$/);
+      const t = r && s.tabs.find((x) => x.title === r[1].replace(/''/g, "'"));
+      if (!t) return send(res, 400, { error: { code: 400, message: `Unable to parse range: ${range}` } });
+      const values = [];
+      for (let i = Number(r[2]); i <= Math.min(Number(r[3]), t.rowCount); i += 1) {
+        const row = [...((t.data || [])[i - 1] || [])].map((v) => (v == null ? '' : String(v)));
+        while (row.length && row.at(-1) === '') row.pop();
+        values.push(row);
+      }
+      while (values.length && !values.at(-1).length) values.pop();
+      s.reads = (s.reads || 0) + 1;
+      return send(res, 200, { range, majorDimension: 'ROWS', ...(values.length ? { values } : {}) });
     }
     if (m[2] === ':batchUpdate' && req.method === 'POST') {
       for (const r of body.requests || []) {
@@ -169,15 +237,27 @@ export const fakeDrive = ({ accessTokens, people, base }) => {
   const api = {
     calls, files,
     next: (k, kind, opts = {}) => { knobs[k].push({ kind: String(kind), ...opts }); },
-    clear: () => { knobs.drive.length = 0; knobs.sheets.length = 0; calls.length = 0; for (const r of hanging) r.destroy(); hanging.clear(); },
+    clear: () => { knobs.drive.length = 0; knobs.sheets.length = 0; calls.length = 0; streams.opened = 0; streams.cut = 0; for (const r of hanging) r.destroy(); hanging.clear(); },
     folder: ({ id = rand('1fold'), name, driveId = null, needsPick = true }) => {
       files.set(id, { id, name, mimeType: FOLDER, parents: [], driveId, needsPick, owner: 'someone', picked: new Set(), webViewLink: `${base()}/open/${id}` });
       return id;
     },
-    file: ({ id = rand('1file'), name, mimeType }) => {
-      files.set(id, { id, name, mimeType, parents: [], driveId: null, needsPick: true, owner: 'someone', picked: new Set(), webViewLink: `${base()}/open/${id}` });
+    file: ({ id = rand('1file'), name, mimeType, data = null, size, hideSize = false, pdf = null }) => {
+      files.set(id, {
+        id, name, mimeType, parents: [], driveId: null, needsPick: true, owner: 'someone', picked: new Set(), webViewLink: `${base()}/open/${id}`,
+        data, pdf, size: size ?? (data ? data.length : null), hideSize,
+      });
       return id;
     },
+    readable: ({ id = rand('1read'), name, tabs }) => {
+      files.set(id, { id, name, mimeType: SHEET, parents: [], driveId: null, needsPick: true, owner: 'someone', picked: new Set(), webViewLink: `${base()}/open/${id}` });
+      sheets.set(id, {
+        title: name, rows: new Map(), writes: [], reads: 0,
+        tabs: tabs.map((t, i) => ({ sheetId: i === 0 ? 0 : 1000 + i, title: t.title, rowCount: t.rowCount ?? Math.max(1, t.rows.length), columnCount: 26, frozen: 0, hidden: Boolean(t.hidden), data: t.rows })),
+      });
+      return id;
+    },
+    streams,
     pick: (id, sub) => files.get(id).picked.add(sub),
     sheet: (id) => sheets.get(id),
     sheetsMade: () => [...files.values()].filter((f) => f.mimeType === SHEET),

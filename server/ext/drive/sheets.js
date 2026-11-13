@@ -8,6 +8,9 @@
 //       RAW: nothing is ever run as a formula, nothing guessed; a part tried
 //       again lands on the same rows, never twice (never values.append)
 //   readSheet(db, g, id)                   the Services Check's spreadsheets.get
+//   tabsOf(db, g, id)                      a picked Sheet's visible tabs (50 at most)
+//   readRows(db, g, id, title, from, to)   whole rows from..to, as the person
+//       sees them (FORMATTED_VALUE); a blank row in the middle is []
 import { googleFetch } from '../../lib/google/tokens.js';
 import { sheetsBase } from './config.js';
 
@@ -55,3 +58,20 @@ export const writeRows = (db, g, id, at, values) => {
 };
 
 export const readSheet = (db, g, id) => googleFetch(db, g, `${sheet(id)}?fields=sheets.properties`);
+
+export const tabsOf = async (db, g, id) => {
+  const r = await call(db, g, `${sheet(id)}?${new URLSearchParams({ fields: 'sheets.properties(sheetId,title,hidden,gridProperties.rowCount)' })}`);
+  if (!r.ok) return r;
+  const tabs = (r.body?.sheets || []).map((s) => s.properties || {}).filter((p) => !p.hidden)
+    .map((p) => ({ id: Number(p.sheetId) || 0, title: String(p.title ?? ''), rows: Number(p.gridProperties?.rowCount) || 0 }))
+    .slice(0, 50);
+  return { ...r, tabs };
+};
+
+// Whole rows ('Title'!5001:10000), so a tab of any width comes back whole.
+export const readRows = async (db, g, id, title, from, to) => {
+  const range = `${quoted(title)}!${from}:${to}`;
+  const r = await call(db, g, `${sheet(id, `/values/${encodeURIComponent(range)}`)}?${new URLSearchParams({ valueRenderOption: 'FORMATTED_VALUE', majorDimension: 'ROWS' })}`);
+  if (!r.ok) return r;
+  return { ...r, values: Array.isArray(r.body?.values) ? r.body.values : [] };
+};

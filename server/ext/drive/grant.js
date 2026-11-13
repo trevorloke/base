@@ -11,6 +11,7 @@
 import { httpError } from '../../actions/util.js';
 import { grantFor } from '../../lib/google/tokens.js';
 import { purposeOf } from '../../lib/google/purposes.js';
+import { timeZone } from '../../lib/org.js';
 import { DESK, driveRules, driveSetup } from './config.js';
 
 export const FOR_THE_DESK = 'Google Drive is for the desk';
@@ -44,4 +45,19 @@ export const gate = (ctx) => {
   const rules = driveRules(ctx.workspace?.settings);
   if (!rules.on) throw httpError(409, 'Google Drive is off for this campaign');
   return rules;
+};
+// A Google refusal before a write, in plain words (429: when to try again).
+export const NOT_PICKED = 'base.win can only open files you pick — pick it again.';
+const PICK_AGAIN = ['notFound', 'appNotAuthorizedToFile'];
+// picked: the file is one the person picked — Google's "not found" means
+// base.win may not open it (drive.file), so they pick it again.
+export const refused = (r, { picked = false } = {}) => {
+  if (picked && (r.status === 404 || PICK_AGAIN.includes(r.reason))) return httpError(404, NOT_PICKED);
+  if (r.trouble?.code === 'paused') {
+    const at = r.trouble.until ? new Date(r.trouble.until).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', timeZone: timeZone() }).replace(/\./g, '') : 'a minute';
+    return httpError(429, `Google asked us to wait — try after ${at}`);
+  }
+  if (r.trouble?.code === 'reconnect') return httpError(409, 'Connect Google Drive again');
+  if (r.trouble?.code === 'unavailable' || r.trouble?.code === 'client') return httpError(503, r.trouble.plain);
+  return httpError(409, r.plain);
 };

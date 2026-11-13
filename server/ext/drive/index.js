@@ -9,6 +9,10 @@
 //   sheets.js   Sheets: the grid, the rows (RAW, exact ranges)
 //   export.js   drive.export's job: one part per job
 //   picker.js   the Picker's narrowed token
+//   reads.js    a picked file for the importer: its tabs, a tab as CSV, its bytes
+//   stream.js   Drive's bytes, bounded (first byte, idle, ceiling)
+//   attach.js   blast.attach.drive · media.attach.drive: a Drive file as an attachment
+//   links.js    blast.link.drive · media.link.drive · drive.link.close: a link instead
 //   actions.js  drive.settings · folder · folder.reach · export · export.retry
 //   api.js      GET /api/drive, /drive/picker, /drive/exports(/:id)
 //   service.js  the row on Settings → Services, and its Check
@@ -32,5 +36,6 @@ export { sql } from './sql.js';
 export { actions } from './actions.js';
 export { api } from './api.js';
 export const jobs = { [JOB]: runExportJob };
-export const exportTables = ['drive_exports'];
-export const deskOnlyReads = ['/drive', '/drive/picker', '/drive/exports', '/drive/exports/:id'];
+export const exportTables = ['drive_exports', 'drive_links'];
+export const deskOnlyReads = ['/drive', '/drive/picker', '/drive/exports', '/drive/exports/:id',
+  '/drive/files/:id', '/drive/files/:id/tabs/:tab', '/drive/files/:id/content', '/drive/links'];

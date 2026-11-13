@@ -2,7 +2,11 @@
 // 401, pauses; it never throws — Google's refusals come back as trouble).
 // Never inside a write: these are called with the plain db.
 //
-//   getFile(db, g, id)              → { ok, file: { id, name, mimeType, driveId } } | refused
+//   getFile(db, g, id)              → { ok, file: { id, name, mimeType, size, url, driveId } } | refused
+//   kindOf(file)                    sheet | csv | xlsx | folder | google | other
+//   mediaUrl(id) / pdfUrl(id)       a file's own bytes (200 units) / a Google file as PDF (200)
+//   openToAnyone(db, g, id)         → { ok, permissionId } | refused   (anyone, reader, no email)
+//   closePermission(db, g, id, pid) → { ok } | refused   (Google's 404 counts as closed)
 //   exportsFolder(db, g)            → { ok, id } | refused   ("base.win exports", made once)
 //   makeSheet(db, g, { name, parent, exportId }) → { ok, id, url } | refused
 //       found again by its export's id (appProperties) before it is ever
@@ -30,9 +34,44 @@ export const refusal = (r) => {
 const refused = (r) => ({ ok: false, ...refusal(r), trouble: r.trouble || null, reached: r.reached });
 
 export const getFile = async (db, g, id) => {
-  const r = await googleFetch(db, g, files(`/${encodeURIComponent(id)}`, { fields: 'id,name,mimeType,driveId' }));
+  const r = await googleFetch(db, g, files(`/${encodeURIComponent(id)}`, { fields: 'id,name,mimeType,size,webViewLink,driveId' }));
   if (!r.ok) return refused(r);
-  return { ok: true, file: { id: r.body.id, name: r.body.name, mimeType: r.body.mimeType, driveId: r.body.driveId || null } };
+  const b = r.body || {};
+  const size = b.size == null || b.size === '' ? null : Number(b.size);
+  return {
+    ok: true,
+    file: { id: b.id, name: String(b.name || 'Untitled'), mimeType: String(b.mimeType || ''), size: Number.isFinite(size) ? size : null, url: b.webViewLink || null, driveId: b.driveId || null },
+  };
+};
+
+// What a picked file is, for the importer and the compose.
+const GOOGLE = 'application/vnd.google-apps.';
+const CSVISH = ['text/csv', 'text/tab-separated-values', 'text/plain'];
+export const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+export const kindOf = (f) => {
+  const ext = String(f.name || '').toLowerCase().split('.').pop();
+  if (f.mimeType === SHEET) return 'sheet';
+  if (f.mimeType === FOLDER) return 'folder';
+  if (f.mimeType.startsWith(GOOGLE)) return 'google';
+  if (f.mimeType === XLSX || ext === 'xlsx') return 'xlsx';
+  if (CSVISH.includes(f.mimeType) || ['csv', 'tsv'].includes(ext)) return 'csv';
+  return 'other';
+};
+// Google-made files that go as a PDF (Docs, Sheets, Slides, Drawings).
+export const AS_PDF = ['document', 'spreadsheet', 'presentation', 'drawing'].map((k) => GOOGLE + k);
+
+export const mediaUrl = (id) => files(`/${encodeURIComponent(id)}`, { alt: 'media' });
+export const pdfUrl = (id) => `${driveBase()}/drive/v3/files/${encodeURIComponent(id)}/export?${new URLSearchParams({ mimeType: 'application/pdf' })}`;
+
+// "Anyone with the link can view": Google refuses sendNotificationEmail for
+// this type, so it is never sent. Never repeated on its own.
+export const openToAnyone = async (db, g, id) => {
+  const r = await googleFetch(db, g, files(`/${encodeURIComponent(id)}/permissions`, { fields: 'id' }), json({ type: 'anyone', role: 'reader' }), { retry: 'auth-only' });
+  return r.ok && r.body?.id ? { ok: true, permissionId: String(r.body.id) } : refused(r);
+};
+export const closePermission = async (db, g, id, pid) => {
+  const r = await googleFetch(db, g, files(`/${encodeURIComponent(id)}/permissions/${encodeURIComponent(pid)}`), { method: 'DELETE' });
+  return r.ok || r.status === 404 ? { ok: true } : refused(r);
 };
 
 const listOne = async (db, g, q) => {

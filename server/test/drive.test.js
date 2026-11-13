@@ -182,12 +182,18 @@ test('roles: a volunteer granted Outreach, Media and Data, and a demoted member 
       ['drive.folder.reach', { file_id: 'abc' }],
       ['drive.settings', { on: false }],
       ['drive.folder', { file_id: null }],
+      ['blast.attach.drive', { file_id: 'abcdefghijkl' }],
+      ['media.attach.drive', { file_id: 'abcdefghijkl' }],
+      ['blast.link.drive', { file_id: 'abcdefghijkl', anyone: true }],
+      ['media.link.drive', { file_id: 'abcdefghijkl', anyone: true }],
+      ['drive.link.close', { id: randomUUID() }],
     ]) {
       const r = await who.b.action(name, input);
       assert.equal(r.status, 403, `${name}: ${JSON.stringify(r.json)}`);
       if (!['drive.settings', 'drive.folder'].includes(name) || who === V) assert.equal(r.json.error, 'Google Drive is for the desk', name);
     }
-    for (const path of ['/api/drive', '/api/drive/picker', '/api/drive/exports', `/api/drive/exports/${randomUUID()}`]) {
+    for (const path of ['/api/drive', '/api/drive/picker', '/api/drive/exports', `/api/drive/exports/${randomUUID()}`, '/api/drive/links',
+      '/api/drive/files/abcdefghijkl', '/api/drive/files/abcdefghijkl/content', '/api/drive/files/abcdefghijkl/tabs/0.csv']) {
       assert.equal((await who.b.get(path)).status, 403, path);
     }
   }
@@ -195,10 +201,15 @@ test('roles: a volunteer granted Outreach, Media and Data, and a demoted member 
   assert.equal(fake.counts.refresh, before, 'no token asked for');
 });
 
-test('permissions: every drive.* action’s area is as planned — no area of its own; the switches are Admin', () => {
+test('permissions: every drive.* and *.drive action’s area is as planned — Outreach and Media by prefix; the switches are Admin', () => {
   const names = Object.keys(ACTIONS).filter((k) => k.startsWith('drive.') || k.endsWith('.drive'));
-  assert.deepEqual(names.sort(), ['drive.export', 'drive.export.retry', 'drive.folder', 'drive.folder.reach', 'drive.settings']);
-  for (const k of names) assert.equal(areaOfAction(k), null, k);
+  assert.deepEqual(names.sort(), [
+    'blast.attach.drive', 'blast.link.drive', 'drive.export', 'drive.export.retry', 'drive.folder', 'drive.folder.reach',
+    'drive.link.close', 'drive.settings', 'media.attach.drive', 'media.link.drive',
+  ]);
+  const area = { blast: 'outreach', media: 'media', drive: null };
+  for (const k of names) assert.equal(areaOfAction(k), area[k.split('.')[0]], k);
+  for (const k of names) assert.ok(!ACTIONS[k].area, `${k}: its area from its prefix, none of its own`);
   assert.deepEqual(ACTIONS['drive.settings'].roles, ['manager']);
   assert.deepEqual(ACTIONS['drive.folder'].roles, ['manager']);
   assert.ok(!ACTIONS['drive.settings'].area && !ACTIONS['drive.folder'].area, 'manager-only with no area: Admin');
@@ -566,13 +577,14 @@ test('where it lands: the campaign folder, chosen once by each person; a differe
   no(await M.b.action('drive.export.retry', { id: e.id }), 409, 'Only Lee Example can carry this on');
 });
 
-test('records: drive_exports is in the full export and google_grants still is not', async () => {
+test('records: drive_exports and drive_links are in the full export and google_grants still is not', async () => {
   const M = await campaign();
   await people(M.ws, 2);
   ok(await send(M.b, 'list', await listOf(M.b, 'Two')));
   const out = ok(await M.b.get('/api/export'));
   const keys = Object.keys(out.tables || out);
   assert.ok(JSON.stringify(keys).includes('drive_exports'), JSON.stringify(keys));
+  assert.ok(JSON.stringify(keys).includes('drive_links'), JSON.stringify(keys));
   assert.ok(!JSON.stringify(out).includes('google_grants'));
   assert.ok(!JSON.stringify(out).includes('refresh_sealed'));
 });
