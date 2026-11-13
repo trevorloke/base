@@ -359,9 +359,12 @@ check('newsletter blast saved, not sent, without a provider', /Saved for \d+ sub
 await shot('8-newsletter');
 
 // Outreach is three modules: Email (newsletter + lists), Texting and Sharing; old addresses land in them.
+// Press releases moved to their own place, Media: /outreach/press opens it.
 await go('/outreach/press');
+check('/outreach/press lands on Media', /\/media$/.test(page.url()), page.url());
+await go('/outreach/newsletter');
 const tabsNow = await page.$$eval('.ot-tabs .ot-tab-label', (els) => els.map((e) => e.innerText.trim()));
-check('Outreach: Email, Texting and Sharing; /outreach/press lands on Email', tabsNow.join('|').toLowerCase() === 'email|texting|sharing' && /\/outreach\/email/.test(page.url()), `${tabsNow.join('|')} ${page.url()}`);
+check('Outreach: Email, Texting and Sharing; /outreach/newsletter lands on Email', tabsNow.join('|').toLowerCase() === 'email|texting|sharing' && /\/outreach\/email/.test(page.url()), `${tabsNow.join('|')} ${page.url()}`);
 await go('/outreach/texts');
 check('/outreach/texts lands on Texting, with the Inbox and phone banks', /\/outreach\/texting/.test(page.url()) && /Inbox/.test(await text()) && /Phone banks/.test(await text()), page.url());
 
