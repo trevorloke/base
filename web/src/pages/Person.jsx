@@ -1030,7 +1030,7 @@ export default function Person() {
         {/* Texts through the campaign's number with this person (desk). */}
         {desk && <TextingPersonLink personId={person.id} />}
       </div>
-      {toast.msg && <div className="toast" role="status">{toast.msg}</div>}
+      {toast.msg && <div className="toast gm-toast" role="status">{toast.msg}</div>}
     </div>
   );
 }

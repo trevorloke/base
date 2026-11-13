@@ -59,3 +59,10 @@
 .chip.gm-review[aria-pressed='true'] { background: var(--mark-soft); border-color: var(--mark-deep); color: var(--text-1); font-weight: 600; box-shadow: inset 0 0 0 1px var(--mark-deep); }
 .chip.gm-review:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
 .gm-people { list-style: none; margin: var(--s-2) 0 0; padding: 0; display: grid; gap: var(--s-1); font-size: 14px; overflow-wrap: anywhere; }
+
+/* The person page's Gmail toast: a long refusal from Google wraps to a
+   readable width, and on a phone sits above the tab bar, not behind it. */
+.toast.gm-toast { max-width: min(560px, calc(100vw - 32px)); width: max-content; line-height: 1.45; }
+@media (max-width: 720px) {
+  .toast.gm-toast { bottom: calc(80px + env(safe-area-inset-bottom)); z-index: 950; }
+}

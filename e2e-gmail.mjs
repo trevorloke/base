@@ -368,6 +368,12 @@ try {
     && (await text(s, '.toast')) === 'Your Google Workspace admin hasn’t allowed base.win — ask them to mark it Trusted.', await text(s, '.toast'));
   await shot(s, '14c-sheet-blocked-at-google-1440');
   await s.setViewportSize({ width: 390, height: 844 });
+  const clear = await s.evaluate(() => {
+    const t = document.querySelector('.toast')?.getBoundingClientRect();
+    const bar = document.querySelector('.tabbar')?.getBoundingClientRect();
+    return Boolean(t && bar && t.bottom <= bar.top && t.left >= 0 && t.right <= innerWidth);
+  });
+  check('phone: the long toast sits whole above the tab bar', clear);
   await s.screenshot({ path: `${SHOTS}/14d-sheet-blocked-at-google-390.png` });
   await s.setViewportSize({ width: 1440, height: 900 });
   await s.locator('.gm-said a:has-text("Connect again")').click();
