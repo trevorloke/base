@@ -73,6 +73,7 @@ api.get('/crew/:shiftId', async (c) => {
     assignment_id: b.assignment_id,
     person_id: b.person_id,
     name: b.name,
+    last_name: b.last_name ?? null,
     phone: view ? null : b.phone || null,
     no_call: view ? null : b.no_call,
     email: view ? null : b.email || null,

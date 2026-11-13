@@ -127,6 +127,7 @@ export const loadVolunteers = async (db, ws, { now = new Date() } = {}) => {
     return {
       id: p.id,
       name: p.name,
+      last_name: p.last_name ?? null,
       phone: p.phone || null,
       no_call: p.no_call,
       email: p.email || null,

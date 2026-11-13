@@ -105,6 +105,7 @@ test('a list’s people and its CSV, Knows, the household, a shift’s people: A
   const crew = ok(await mgr.get(`/api/crew/${shift}`));
   const booked = (crew.crew || crew.booked || []).map((a) => a.name);
   assert.deepEqual(booked, expect);
+  assert.equal((crew.crew || crew.booked).find((a) => a.name === 'Raj Sandhu-Gill').last_name, 'Sandhu-Gill');
 });
 
 test('a new bank’s numbers are A–Z; an existing bank keeps its order and a list added later follows it', async () => {
@@ -136,6 +137,10 @@ test('the people report, volunteers: A–Z; walk lists keep street order', async
   const vols = ok(await mgr.get('/api/volunteers'));
   const list = (vols.volunteers || vols.people || []).map((v) => v.name);
   assert.deepEqual(list.filter((n) => expect.includes(n)), expect);
+  // The browser sorts the volunteers screen and the crew board again (azSort): each row carries its surname.
+  const rowsV = vols.volunteers || vols.people || [];
+  assert.equal(rowsV.find((v) => v.name === 'Raj Sandhu-Gill').last_name, 'Sandhu-Gill');
+  assert.deepEqual(byAz(rowsV.filter((v) => expect.includes(v.name))), expect);
   // Walk order: by street and number, never by name.
   const doors = [{ address: '200 Example St', lat: 49.1, lng: -122.8, people: [{ name: 'Aaron Aardvark' }] },
     { address: '100 Example St', lat: 49.1, lng: -122.8, people: [{ name: 'Zed Abbott' }] }];
