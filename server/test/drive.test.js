@@ -135,8 +135,10 @@ test('setup: nothing set says so everywhere; set up but off draws nothing; test 
     const r2 = ok(await M.b.get('/api/connections')).services.find((s) => s.key === 'drive');
     assert.match(r2.detail, /^Set up Google sign-in and connections first/);
   } finally { process.env.GOOGLE_TOKEN_KEY = keep; }
-  const g = ok(await M.b.get('/api/connections')).services.findIndex((s) => s.key === 'google');
-  assert.equal(ok(await M.b.get('/api/connections')).services[g + 1].key, 'drive', 'right after Google’s row');
+  // OVERVIEW's order: Google, then Gmail, then Google Drive and Sheets.
+  const all = ok(await M.b.get('/api/connections')).services;
+  const g = all.findIndex((s) => s.key === 'google');
+  assert.deepEqual(all.slice(g + 1, g + 3).map((s) => s.key), ['gmail', 'drive'], 'after Google’s and Gmail’s rows');
 
   driveEnv();
   assert.equal(ok(await M.b.get('/api/integrations')).drive, true);
