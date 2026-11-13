@@ -27,6 +27,7 @@ import { mayReach, person, whyNotSql } from '../../lib/reach.js';
 import { notSuppressed } from '../../lib/mail/index.js';
 import { deliveredRow, goingRow, repeatRow, retryable, sendJobOn } from '../abtests/send.js';
 import { attachmentsOf } from '../abtests/attach.js';
+import { toWords } from '@starbase/shared/email/words';
 import { sendStats, statsBody } from '../abtests/stats.js';
 import { emailConfigured } from '../../lib/notify.js';
 import { isDesk, kindOf, onMedia } from './rules.js';
@@ -94,7 +95,7 @@ api.get('/media/contacts', async (c) => {
       return {
         person: p, kind: kindOf(tags), outlet: r.outlet, beat: r.beat, note: r.note,
         reachable: !r.why, why: r.why || null,
-        last: r.release_id ? { release_id: r.release_id, subject: r.subject, sent_at: r.sent_at, opened: !!r.opened, bounced: !!r.bounced_at } : null,
+        last: r.release_id ? { release_id: r.release_id, subject: toWords(r.subject), sent_at: r.sent_at, opened: !!r.opened, bounced: !!r.bounced_at } : null,
       };
     }),
     counts: {
@@ -140,7 +141,9 @@ const releases = (where) => `select ${RELEASE_COLS}
 
 const releaseOut = (b, files) => {
   const { body, ...rest } = b;
-  return { ...rest, audience: parseJ(b.audience, null), attachments: files[b.id] || [] };
+  // The subject in words ("[first name]"), as GET /blasts answers it: what
+  // the compose's lost-answer check compares with what was typed.
+  return { ...rest, subject: toWords(b.subject), audience: parseJ(b.audience, null), attachments: files[b.id] || [] };
 };
 
 api.get('/media/releases', async (c) => {

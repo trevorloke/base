@@ -363,6 +363,11 @@ test('what stops a send: a ready-made placeholder, the template’s own, an empt
   // Media's releases, through media.send — and by staff holding Media only.
   no(await press.action('media.send', { subject: 'Release', body: '“[Quote],” said someone.' }), 400, 'Fill in the [ ] parts first: [Quote]');
   ok(await press.action('media.send', { subject: '[Updated] Release', body: 'A quote [sic] as said.' }));
+  // Media's list answers a release's subject in words, as GET /blasts does.
+  ok(await press.action('media.send', { subject: 'For you, [first name]', body: 'Words.' }));
+  const rel = ok(await press.get('/api/media/releases')).releases.find((b) => b.subject.startsWith('For you'));
+  assert.equal(rel.subject, 'For you, [first name]');
+  assert.equal(ok(await press.get(`/api/media/releases/${rel.id}`)).release.subject, 'For you, [first name]');
   // A text is unchanged: its {{…}} rule stands.
   await mgr.createPerson('Tex Example', { phone: '604-555-0142', tags: [`x${tag}`] });
   const txt = await mgr.action('blast.send', { kind: 'text', body: `Hi {{first_name}}, from ${name}`, audience: { filter: { tag: `x${tag}` } } });
