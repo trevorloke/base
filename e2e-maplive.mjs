@@ -581,7 +581,9 @@ try {
       await sleep(2000);
       const folded = await pg.$eval('.mapwindow--band .mapwindow__toggle', (b) => b.getAttribute('aria-expanded')).catch(() => null);
       await pg.screenshot({ path: `${SHOTS}/8-band-folded-${role}-${label.replace(/\W+/g, '-')}-1440.png` });
-      check(`${label}, ${role}: folded and reloaded — still folded, no Leaflet asked for`, folded === 'false' && !asked.some((u) => /\/assets\/(leaflet|MapWindowMap)-/.test(u)), folded);
+      // (A manager's Today still draws the Dashboard, with its own map, until HOME moves it.)
+      const chunks = asked.filter((u) => /\/assets\/(leaflet|MapWindowMap)-/.test(u));
+      check(`${label}, ${role}: folded and reloaded — still folded, no Leaflet asked for`, folded === 'false' && chunks.length === 0, JSON.stringify({ folded, chunks }));
       await pg.click('.mapwindow--band .mapwindow__toggle');
       await ctx.close();
     }
