@@ -17,9 +17,9 @@
 // a booking lands in the fake and the card reads "1 shift · Updated …";
 // unassigned at the desk → gone; another shift called off → gone; the
 // calendar deleted in Google → "Make it again"; GSI's Google card has no
-// Calendar row; Google revokes → "Needs reconnecting" → the Google card’s
-// one Reconnect; Stop → confirm in place → gone; the manager turns it off
-// → confirm → gone.
+// Calendar row; Google revokes → "Needs reconnecting" → Stop → OK (still
+// one Reconnect) → the Google card’s one Reconnect; Stop → confirm in place
+// → gone; the manager turns it off → confirm → gone.
 // Contacts: My people → Find people I know → the fixture → "3 on our list",
 // none of the others; tick two → "Add 2 to My people" → both in My people;
 // Data → Import shows the hint; a volunteer never gets the screen. One
@@ -259,6 +259,15 @@ try {
   await shot(v, '07-profile-reconnect-phone');
   check('…one Reconnect on the page: the Google card’s, which the calendar card points to',
     (await v.getByText('Reconnect', { exact: true }).count()) === 1 && /Reconnect under Google, below\./.test(await text(v, '#gcal')));
+  // ── Stop while reconnecting → base.win can't delete it → OK: no link, still one Reconnect ──
+  await v.locator('#gcal').getByRole('button', { name: /^Stop/ }).click();
+  await v.locator('#gcal .gg-confirm').getByRole('button', { name: 'Stop' }).click();
+  check('Stop while reconnecting: the card says base.win stopped and to delete it there', Boolean(await cardSays(v, /stopped updating your Google calendar/)), await text(v, '#gcal'));
+  await v.locator('#gcal').getByRole('button', { name: 'OK', exact: true }).click();
+  check('…OK: no link here, and still one Reconnect on the page, the Google card’s', Boolean(await cardSays(v, /Reconnect under Google, below\./))
+    && (await v.getByText('Reconnect', { exact: true }).count()) === 1, await text(v, '#gcal'));
+  await shot(v, '07b-profile-reconnect-nolink-phone');
+  for (const c of cals()) fake.cal.dropCalendar(c.id); // they deleted it in Google, as the card said
   await v.locator('.gg-card').getByText('Reconnect', { exact: true }).click();
   await pickGoogle(v, VAL);
   check('…Reconnect → the new shift lands', Boolean(await until(() => events().some((e) => e.summary?.includes('Sign build')))));

@@ -182,7 +182,10 @@ export default function GcalCard({ me }) {
 
   let body;
   if (!link) {
-    body = !d.google.connected || reconnectGrant ? (
+    // Google's own card further down carries the one Reconnect.
+    body = reconnectGrant ? (
+      <p className="ts-line"><span className="chip chip-warn">Needs reconnecting</span> Reconnect under Google, below.</p>
+    ) : !d.google.connected ? (
       <>
         <p className="ts-line">Updated within a minute of any change. Only base.win’s own calendar.</p>
         <GoogleConnect purpose={PURPOSE} label="Connect Google Calendar" back="/profile" />
