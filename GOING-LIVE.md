@@ -124,6 +124,8 @@ Then, as each one is ready:
 | `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` | the campaign's OAuth client (Google Cloud → Google Auth Platform → Clients → *Web application*, redirect address from **Settings → Services → Google**); staging gets its own project and client, never production's (INTEGRATIONS.md, *Google sign-in and connections*) | Sign in with Google, and every Google connection |
 | `GOOGLE_TOKEN_KEY` | 32 or more random characters (`openssl rand -base64 48`), a different one per environment; keep a copy in the campaign's password manager | Gmail, Drive and Calendar connections (lost: everyone connects again) |
 | `STARBASE_TILE_PROVIDER`, `STARBASE_TILE_KEY` | `stadia` for Stadia Maps (address, credit and zoom filled in), and its key only if it can't be told the campaign's web address (§5, Recipe A) | the map's background, instead of the free tiles |
+| `STARBASE_TILE_CARTO_KEY` | CARTO's free basemap key (§5, *The street map*) | the quiet *Clean* look; without it the map opens on OpenStreetMap's standard look |
+| `STARBASE_TILE_CLEAN` | `off` | never offer CARTO, key or not (the free map behind Google stays) |
 | `STARBASE_TILE_URL`, `STARBASE_TILE_ATTRIBUTION`, `STARBASE_TILE_MAX_ZOOM` | a tile provider the campaign has an agreement with: its `https://…/{z}/{x}/{y}.png` address, its credit line, its deepest zoom (§5, *The street map*) | the map's background, instead of the free tiles |
 | `STARBASE_TRUSTED_PROXIES` | leave unset on Render (one proxy). Set to the number of proxies in front if there is a CDN before Render | rate limits reading the right address |
 | `BASE_DOOR_KEY` | behind the base.win door only: the same 32 or more random characters (`openssl rand -base64 32`) as the door's `BASE_DOOR_KEY` (apps/door/README.md) | each visitor through base.win keeping their own address for the sign-in and form limits — without it, everyone who comes through the door counts as one |
@@ -259,12 +261,37 @@ what volunteers get, and what you see under *Field app ↗* in your account menu
 ### The street map: choose a provider before election week
 
 The map's street tiles go straight from a provider to each phone; base.win
-only says which. Out of the box there are two, both free:
+only says which. Out of the box the map opens on OpenStreetMap's standard
+look; CARTO's quieter *Clean* look needs the campaign's own free key:
 
 | Look | Provider |
 |---|---|
-| *Clean* (what the map opens on) | CARTO's light basemap (`basemaps.cartocdn.com`) |
-| *Standard*, *Muted*, *Dark* | OpenStreetMap's own tile servers (`tile.openstreetmap.org`) |
+| *Standard* (what the map opens on), *Muted*, *Dark* | OpenStreetMap's own tile servers (`tile.openstreetmap.org`) |
+| *Clean* (only with `STARBASE_TILE_CARTO_KEY`; then the map opens on it) | CARTO's light basemap (`basemaps.cartocdn.com`) |
+
+**CARTO needs a key since late August 2026.** Without one, CARTO answers
+every tile with a picture reading "API KEY REQUIRED" on a blank background
+instead of streets (other projects broke the same way: Home Assistant
+issue #180277, opened 26 August 2026; CARTO's FAQ, read through a search
+extract, describes it word for word). That is why the Map showed voter dots
+on blank grey from 9 November. To have *Clean* back:
+
+1. Request CARTO's free basemap key at carto.com/basemaps/apikey (the
+   owner's step; ask CARTO in writing whether a municipal elector
+   organization counts as commercial use — reported caps: 1,000,000
+   requests a month commercial, 5,000,000 non-commercial).
+2. Set `STARBASE_TILE_CARTO_KEY` on Render (staging first). Phones can see
+   it, as CARTO's browser keys are meant to be used.
+3. Open Map → Show → Map check: the picture under *Street map* shows
+   streets.
+
+`STARBASE_TILE_CLEAN=off` now means only "never offer CARTO"; the free map
+behind Google stays. If a provider ever sends a notice instead of streets
+again, the map says *The street map isn’t showing streets*, and the Map
+check shows the picture this phone got (see INTEGRATIONS.md, *If the map is
+blank*). After this update, each volunteer should open their turf on the
+Map once with signal, so the streets are kept for no-signal areas (phones
+had kept CARTO's notices instead; they drop them by themselves).
 
 Neither is meant for heavy use. **We could not read either provider's
 current terms from where this was written** (both sites were out of reach),
@@ -395,14 +422,13 @@ words for the part of the map on screen (Google's policy, as read from
 snippets, accepts the words "Google Maps" where a phone map has no room for
 its logo).
 
-While Google refuses, volunteers keep streets: the map turns to CARTO's free
+While Google refuses, volunteers keep streets: the map turns to the free
 map by itself and says *Google Maps isn’t loading — showing the free map*
 (a manager gets *Why?* beside it, which opens the Map check), and goes back
-to Google once it answers. Whether CARTO's keyless free map keeps working
-could not be checked from here (its FAQ now mentions a free key and a
-1,000,000-requests-a-month commercial cap); if it refuses too, the map says
-*The street map isn’t loading*, as before. `STARBASE_TILE_CLEAN=off` turns
-the fallback off.
+to Google once it answers. The free map is CARTO's with
+`STARBASE_TILE_CARTO_KEY` set (and `STARBASE_TILE_CLEAN` not `off`),
+otherwise OpenStreetMap's; it is always there, and no setting removes it.
+If it refuses too, the map says *The street map isn’t loading*, as before.
 
 Cost, as far as could be read: 100,000 tile requests a month free, then
 about US$0.60 per 1,000; Places Autocomplete 10,000 free, then US$2.83 per

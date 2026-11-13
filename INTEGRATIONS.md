@@ -551,9 +551,15 @@ today's asks against the ceiling.
 
 ## Map background
 
-Free tiles by default, straight to each phone: CARTO's light map for the
-*Clean* look the map opens on (`STARBASE_TILE_CLEAN=off` leaves it out), and
-OpenStreetMap's own servers for *Standard*, *Muted* and *Dark*. Neither is
+Free tiles by default, straight to each phone: OpenStreetMap's own servers
+for *Standard* (what the map opens on), *Muted* and *Dark*; and, only with
+the campaign's free CARTO key (`STARBASE_TILE_CARTO_KEY`, added to every
+CARTO address — since late August 2026 CARTO sends "API KEY REQUIRED"
+pictures to requests with none), CARTO's light map for the *Clean* look,
+which the map then opens on (`STARBASE_TILE_CLEAN=off` leaves it out, key or
+not). A `STARBASE_TILE_URL` on `basemaps.cartocdn.com` needs the key too:
+with it the key is added; without it the map's sheet and Services say
+*CARTO needs a key now (STARBASE_TILE_CARTO_KEY)*. Neither is
 for a large team in election week — OpenStreetMap's servers are run by
 volunteers, CARTO's free basemaps are not meant for heavy or commercial use
 — and their current terms could not be read from where this was written:
@@ -590,8 +596,8 @@ Recipe B). Each call to Google has a limit (a session 8 s, a tile 6 s); a
 slow answer is *504* for that tile and is not a refusal.
 When Google refuses, base.win stops asking it for a minute (30 seconds
 after quota) and the tiles answer *503* with *Retry-After*; the phones turn
-to CARTO's free map by itself until Google answers (`STARBASE_TILE_CLEAN=off`
-leaves that out). The credit line is *Google Maps ·* and Google's own words
+to the free map by itself until Google answers (CARTO's with its key,
+otherwise OpenStreetMap's; always there). The credit line is *Google Maps ·* and Google's own words
 for the view (`GET /api/map/credit`, asked with the phones' session, kept an
 hour per patch of map).
 
@@ -602,6 +608,22 @@ seconds at most). When Google refuses it says what failed in plain words,
 it. The same live check is on the map, for managers: **Map → Show → Map
 check** (or *Why?* when the street map isn't loading) has *Street map
 service*, *Map pins* and *Address suggestions* lines (`GET /api/map/check/services`).
+
+**If the map is blank** (doors on grey, no streets), a manager opens
+**Map → Show → Map check** (or *Why?*): under *Street map* is the tile under
+the map's middle, as this phone got it.
+- It reads "API KEY REQUIRED", or another message, on a blank background:
+  the provider sends a notice, not streets (the line says *sends a notice,
+  not streets*; the map says *The street map isn’t showing streets* and
+  switches by itself where it can). For CARTO, set `STARBASE_TILE_CARTO_KEY`
+  or `STARBASE_TILE_CLEAN=off`; for another provider, check its key or
+  account. The page finds a notice by asking two of the provider's tiles
+  for one place, far apart in zoom, once per page (never Google's).
+- *No picture came back*, and *isn’t loading*: the provider refuses or
+  doesn't answer (blocked network, outage) — the map switches to the other
+  free provider once if it answers.
+- Streets in the picture, but not on the map: a page older than the server
+  (the *This page* line) or a map with no room (*Map on screen*).
 
 While Google is the map or suggests addresses, the map's Show sheet and the
 end of **Your profile** say *Maps by Google* (or *Maps and address

@@ -50,8 +50,35 @@ export const countsOf = async (db, ctx) => {
   return { total: r.total, today, supporters: r.supporters, supporters_voted: r.supporters_voted };
 };
 
+// The GOTV card's numbers as volunteers see them: on a voting day every
+// volunteer opens Today, and each visit counted the whole list twice (over
+// 200 ms at 300,000). One count per campaign is kept for half a minute and
+// shared; a mark (vote.mark's after step) drops it, so the walker who just
+// marked someone sees it at once. A count that began before a mark is not
+// kept: it may have read the list before the mark committed.
+const KEEP_MS = 30_000;
+const kept = new Map(); // workspaceId -> { key, at, counts }
+const marks = new Map(); // workspaceId -> how many marks have dropped the count
+export const forgetCounts = (ws) => { kept.delete(ws); marks.set(ws, (marks.get(ws) || 0) + 1); };
+const sharedCounts = async (db, ctx) => {
+  const ws = ctx.workspaceId;
+  let day;
+  try { day = campaignDay(ctx.workspace?.settings?.tz || DEFAULT_TZ); } catch { day = campaignDay(DEFAULT_TZ); }
+  const key = `${ctx.workspace?.settings?.tz || ''}|${day}`;
+  const hit = kept.get(ws);
+  if (hit && hit.key === key && Date.now() - hit.at < KEEP_MS) return hit.counts;
+  const gen = marks.get(ws) || 0;
+  const at = Date.now();
+  const counts = await countsOf(db, ctx);
+  if ((marks.get(ws) || 0) === gen) kept.set(ws, { key, at, counts });
+  return counts;
+};
+
+// A volunteer sees the numbers only on the GOTV card, which shows only while
+// GOTV is on; on other days their Today counts nothing over the whole list.
+// The desk counts afresh every time.
 export const briefVoted = async (db, ctx, body) => {
   const settings = await settingsOf(db, ctx);
-  const counts = await countsOf(db, ctx);
+  const counts = ctx.role !== 'volunteer' ? await countsOf(db, ctx) : settings.on ? await sharedCounts(db, ctx) : {};
   body.voted = { ...settings, ...counts };
 };

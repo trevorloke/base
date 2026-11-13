@@ -28,6 +28,13 @@
 //   GOOGLE_TILES_DAILY_MAX   tiles a day (the campaign's day); past it the
 //                            tiles answer 503 until midnight and phones turn
 //                            to the free map by themselves. Default: none.
+// The Clean look (CARTO's free map) only with the campaign's own CARTO key:
+// since late August 2026 CARTO answers a request with no key with a picture
+// reading "API KEY REQUIRED", which loads like any tile — a map of no streets.
+//   STARBASE_TILE_CARTO_KEY  CARTO's free basemap key (phones can see it, as
+//                            CARTO's browser keys are meant to be used)
+//   STARBASE_TILE_CLEAN=off  never offer CARTO, key or not. The free map
+//                            behind Google stays (OpenStreetMap then).
 import { Hono } from 'hono';
 import { getCookie } from 'hono/cookie';
 import { getDb } from '../../db/client.js';
@@ -67,6 +74,15 @@ const validUrl = (v) => {
   return s;
 };
 
+// CARTO's free basemaps: only with a key (above). The parameter name is
+// CARTO's FAQ's, read through a search extract (carto.com isn't reachable
+// from where this was built).
+export const CARTO_KEY_PARAM = 'key';
+const isCarto = (url) => /(^|\.)basemaps\.cartocdn\.com$/i.test(hostOf(url));
+const hasCartoKey = (url) => new RegExp(`[?&]${CARTO_KEY_PARAM}=`).test(String(url));
+const cartoKey = (env) => String(env.STARBASE_TILE_CARTO_KEY ?? '').trim();
+const withCartoKey = (url, key) => `${url}${url.includes('?') ? '&' : '?'}${CARTO_KEY_PARAM}=${encodeURIComponent(key)}`;
+
 const warned = new Set();
 const warnOnce = (msg) => {
   if (warned.has(msg)) return;
@@ -105,8 +121,19 @@ export const tileConfig = (env = process.env) => {
   }
   if (env.STARBASE_TILE_URL) {
     const url = validUrl(env.STARBASE_TILE_URL);
-    if (url) { out.url = url; if (!preset || !url.startsWith(preset.url)) out.maxZoom = TILE_DEFAULTS.maxZoom; }
-    else {
+    if (url) {
+      out.url = url;
+      if (!preset || !url.startsWith(preset.url)) out.maxZoom = TILE_DEFAULTS.maxZoom;
+      // An address on CARTO (the docs once suggested one for the quiet look):
+      // the key added when there is one; without it, kept as set and said.
+      if (isCarto(url) && !hasCartoKey(url)) {
+        if (cartoKey(env)) out.url = withCartoKey(url, cartoKey(env));
+        else {
+          out.ignored.push('carto-key');
+          warnOnce('STARBASE_TILE_URL points at CARTO, which needs a key now (STARBASE_TILE_CARTO_KEY)');
+        }
+      }
+    } else {
       out.ignored.push('url');
       warnOnce('STARBASE_TILE_URL needs http(s) and {z}/{x}/{y} — using OpenStreetMap');
     }
@@ -149,6 +176,21 @@ const CLEAN_VIEW = {
   attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
   maxZoom: 20,
 };
+// Clean, with the campaign's CARTO key — or null: no key, or
+// STARBASE_TILE_CLEAN=off. No address built here names CARTO without it.
+export const cartoView = (env = process.env) => {
+  const key = cartoKey(env);
+  if (!key || env.STARBASE_TILE_CLEAN === 'off') return null;
+  return { ...CLEAN_VIEW, url: withCartoKey(CLEAN_VIEW.url, key) };
+};
+// The free map behind Google, always there while Google is the map (phones
+// turn to it by themselves while Google isn't answering, or past the daily
+// ceiling): CARTO with its key, else OpenStreetMap's standard tiles.
+export const freeView = (env = process.env) => {
+  const carto = cartoView(env);
+  const base = carto || { url: TILE_DEFAULTS.url, attribution: TILE_DEFAULTS.attribution, maxZoom: TILE_DEFAULTS.maxZoom };
+  return { key: 'free', label: 'Free map', url: base.url, attribution: base.attribution, maxZoom: base.maxZoom, fallback: true };
+};
 
 api.get('/map/config', (c) => {
   const t = tileConfig();
@@ -173,15 +215,15 @@ api.get('/map/config', (c) => {
     }));
     // While Google isn't answering, volunteers keep streets: the map goes to
     // this free map by itself (never offered as a pick — key 'free', not
-    // 'clean', which nearly every phone has saved and would then draw in
-    // place of Google). STARBASE_TILE_CLEAN=off leaves it out.
-    if (process.env.STARBASE_TILE_CLEAN !== 'off') out.views.push({ ...CLEAN_VIEW, key: 'free', label: 'Free map', fallback: true });
-  } else if (t.url === TILE_DEFAULTS.url && process.env.STARBASE_TILE_CLEAN !== 'off') {
-    // On the standard OpenStreetMap tiles: Clean, a light, quiet map of the
-    // same streets (CARTO's Positron) — no shop icons, parking lots or house
-    // numbers, so the doors are what you see. The map opens on it.
-    // STARBASE_TILE_CLEAN=off leaves it out.
-    out.views = [CLEAN_VIEW];
+    // 'clean', which many phones have saved and would then draw in place of
+    // Google). Always there: no setting removes it.
+    out.views.push(freeView());
+  } else if (t.url === TILE_DEFAULTS.url && cartoView()) {
+    // On the standard OpenStreetMap tiles, with a CARTO key: Clean, a light,
+    // quiet map of the same streets (CARTO's Positron) — no shop icons,
+    // parking lots or house numbers, so the doors are what you see. The map
+    // opens on it when it is offered (mapView.js defaultLook).
+    out.views = [cartoView()];
   }
   // Desk roles: what took, so a mistyped setting shows on the map's sheet.
   if (DESK.includes(c.get('ctx')?.role)) {

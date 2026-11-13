@@ -31,6 +31,12 @@
  *               tiles, so they go straight to the network (the browser's
  *               own cache follows Google's max-age), and any kept before
  *               are thrown away on activate.
+ *               CARTO's tiles asked with no key are thrown away on activate
+ *               too: since late August 2026 CARTO answers those with a
+ *               picture reading "API KEY REQUIRED", not streets, and phones
+ *               kept it for a week. Keyed ones (?key=…) are new addresses
+ *               and stay. (VERSION is not bumped for this: that would throw
+ *               away every phone's kept app and streets.)
  *   Never       /api/* (live data and every write — the outbox in
  *               src/offline.js handles knocks), public form pages
  *               (/p /n /v /u /e /d), feature pages served to people
@@ -147,6 +153,10 @@ self.addEventListener('activate', (event) => {
       const kept = await cache.keys();
       await Promise.all(kept
         .filter((r) => { const u = new URL(r.url); return u.origin === self.location.origin && inside(u.pathname).startsWith('/tiles/'); })
+        .map((r) => cache.delete(r)));
+      // CARTO's notice pictures, kept before the map asked with a key: gone.
+      await Promise.all(kept
+        .filter((r) => { const u = new URL(r.url); return /(^|\.)basemaps\.cartocdn\.com$/.test(u.hostname) && !u.searchParams.has('key'); })
         .map((r) => cache.delete(r)));
     }
     await self.clients.claim();

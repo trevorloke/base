@@ -205,7 +205,7 @@ test('a mistyped STARBASE_TILE_* is shown to desk roles, not only logged', async
   // A volunteer's browser never gets it.
   const v = (await vol.get('/api/map/config')).json;
   assert.equal(v.setup, undefined);
-  assert.deepEqual(Object.keys(v), ['tiles', 'google', 'views'], 'a volunteer: the tiles, whether Google is used (its notice) and the looks, never the setup');
+  assert.deepEqual(Object.keys(v), ['tiles', 'google'], 'a volunteer: the tiles and whether Google is used (its notice), never the setup (no other looks: no CARTO key)');
   assert.deepEqual(v.google, { tiles: false, places: false });
 
   setEnv({ STARBASE_TILE_URL: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', STARBASE_TILE_MAX_ZOOM: null });
@@ -213,6 +213,75 @@ test('a mistyped STARBASE_TILE_* is shown to desk roles, not only logged', async
   assert.equal(setup.source, 'OpenStreetMap', 'an OpenStreetMap mirror is still OpenStreetMap');
   assert.equal(tileSource('https://a.tiles.example:8443/{z}/{x}/{y}.png'), 'a.tiles.example');
   setEnv({ STARBASE_TILE_URL: null });
+});
+
+// Every tile address /api/map/config names, looks included.
+const addresses = (cfg) => [cfg.tiles.url, ...(cfg.views || []).map((v) => v.url)];
+const CARTO = /basemaps\.cartocdn\.com/;
+
+test('no CARTO key: no Clean, and no address on CARTO anywhere — Google on or off, STARBASE_TILE_CLEAN unset or off, any provider', async () => {
+  const combos = [];
+  for (const google of [null, 'g-key']) {
+    for (const clean of [null, 'off']) {
+      for (const tileUrl of [null, 'https://tiles.example/{z}/{x}/{y}.png']) {
+        for (const provider of [null, 'stadia']) combos.push({ google, clean, tileUrl, provider });
+      }
+    }
+  }
+  for (const k of combos) {
+    setEnv({ STARBASE_TILE_CARTO_KEY: null, GOOGLE_MAPS_TILES: null, GOOGLE_MAPS_SERVER_KEY: k.google, STARBASE_TILE_CLEAN: k.clean, STARBASE_TILE_URL: k.tileUrl, STARBASE_TILE_PROVIDER: k.provider });
+    for (const who of [c, vol]) {
+      const cfg = (await who.get('/api/map/config')).json;
+      const at = JSON.stringify(k);
+      assert.ok(!addresses(cfg).some((u) => CARTO.test(u)), `${at}: ${addresses(cfg)}`);
+      assert.ok(!(cfg.views || []).some((v) => v.key === 'clean'), at);
+      // With Google the map, the free map behind it is always there: OpenStreetMap.
+      if (k.google) {
+        const free = cfg.views.filter((v) => v.fallback);
+        assert.deepEqual(free.map((v) => [v.key, v.url, v.maxZoom]), [['free', TILE_DEFAULTS.url, 19]], at);
+        assert.equal(free[0].attribution, TILE_DEFAULTS.attribution);
+      }
+    }
+  }
+  setEnv({ GOOGLE_MAPS_SERVER_KEY: null, STARBASE_TILE_CLEAN: null, STARBASE_TILE_URL: null, STARBASE_TILE_PROVIDER: null });
+});
+
+test('with the campaign’s CARTO key: Clean carries it; behind Google, CARTO unless STARBASE_TILE_CLEAN=off; never in setup', async () => {
+  setEnv({ STARBASE_TILE_CARTO_KEY: ' carto key/1 ', GOOGLE_MAPS_TILES: null, GOOGLE_MAPS_SERVER_KEY: null, STARBASE_TILE_CLEAN: null, STARBASE_TILE_URL: null, STARBASE_TILE_PROVIDER: null });
+  let cfg = (await c.get('/api/map/config')).json;
+  assert.deepEqual(cfg.views.map((v) => v.key), ['clean']);
+  assert.ok(cfg.views[0].url.endsWith(`?key=${encodeURIComponent('carto key/1')}`), cfg.views[0].url);
+  assert.ok(!JSON.stringify(cfg.setup).includes('carto'), 'the key is never in setup');
+  // Off: no Clean, key or not.
+  setEnv({ STARBASE_TILE_CLEAN: 'off' });
+  cfg = (await c.get('/api/map/config')).json;
+  assert.equal(cfg.views, undefined);
+  // Google the map: the free map behind it is CARTO with the key…
+  setEnv({ STARBASE_TILE_CLEAN: null, GOOGLE_MAPS_SERVER_KEY: 'g-key' });
+  cfg = (await vol.get('/api/map/config')).json;
+  const free = cfg.views.filter((v) => v.fallback);
+  assert.deepEqual(free.map((v) => [v.key, v.label]), [['free', 'Free map']]);
+  assert.match(free[0].url, /^https:\/\/\{s\}\.basemaps\.cartocdn\.com\/.*\?key=carto%20key%2F1$/);
+  assert.match(free[0].attribution, /CARTO/);
+  // …and OpenStreetMap with STARBASE_TILE_CLEAN=off: still there.
+  setEnv({ STARBASE_TILE_CLEAN: 'off' });
+  cfg = (await vol.get('/api/map/config')).json;
+  assert.deepEqual(cfg.views.filter((v) => v.fallback).map((v) => [v.key, v.url]), [['free', TILE_DEFAULTS.url]]);
+  setEnv({ STARBASE_TILE_CARTO_KEY: null, GOOGLE_MAPS_SERVER_KEY: null, STARBASE_TILE_CLEAN: null });
+});
+
+test('a STARBASE_TILE_URL on CARTO: the key added where there is one; without one, kept as set and said', () => {
+  const plain = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+  const keyed = tileConfig({ STARBASE_TILE_URL: plain, STARBASE_TILE_CARTO_KEY: 'k1' });
+  assert.equal(keyed.url, `${plain}?key=k1`);
+  assert.deepEqual(keyed.ignored, []);
+  const query = tileConfig({ STARBASE_TILE_URL: `${plain}?lang=en`, STARBASE_TILE_CARTO_KEY: 'k1' });
+  assert.equal(query.url, `${plain}?lang=en&key=k1`);
+  const own = tileConfig({ STARBASE_TILE_URL: `${plain}?key=theirs`, STARBASE_TILE_CARTO_KEY: 'k1' });
+  assert.equal(own.url, `${plain}?key=theirs`, 'a key of the operator’s own is left alone');
+  const none = tileConfig({ STARBASE_TILE_URL: plain });
+  assert.deepEqual([none.url, none.ignored], [plain, ['carto-key']]);
+  assert.equal(tileSource(keyed.url), 'CARTO');
 });
 
 test('STARBASE_TILE_PROVIDER=stadia: Stadia Maps’ address, credit and zoom in one setting; the address beats it; an unknown one is said', () => {

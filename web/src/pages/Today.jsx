@@ -60,6 +60,7 @@ import './candidate.css';
 import { at } from '../base.js';
 import { NS } from '../base.js';
 import { BRAND } from '../brand.js';
+import MapWindow from '../components/MapWindow.jsx';
 
 // The managers' dashboard (its map and chart load with it, not with Today).
 const Dashboard = lazy(() => import('./Dashboard.jsx'));
@@ -608,6 +609,8 @@ const doorsLeft = (stats) => {
   // again: doors to try again in the open pass (ext/passes) — still in "left".
   return { doors, done, left: doors - done, pct: doors ? Math.round((done / doors) * 100) : 0, again: Number(stats.doorsAgain) || 0 };
 };
+// The map window's row: "North block · 1,204 doors left".
+const walkMeta = (t, d) => `${t.name}${d && d.doors > 0 ? ` · ${num(d.left)} ${plural(d.left, 'door')} left` : ''}`;
 const leftLabel = (d) => {
   if (!d) return null;
   if (d.doors === 0) return 'No doors yet';
@@ -752,6 +755,8 @@ function VolunteerToday({ b, me }) {
           )}
         </section>
       )}
+      {/* Their walk list on a map that folds away (only with doors left). */}
+      {firstOpen && !done && <MapWindow me={me} turfId={firstOpen.id} meta={walkMeta(firstOpen, d)} />}
 
       <ul className="today-rows today-next">
         <VolunteerShiftRow shifts={b.shifts ?? []} me={me} turfs={b.shiftTurfs} />
@@ -854,6 +859,9 @@ function CandidateToday({ b, me }) {
     && new Date(s.starts_at).getTime() < now + WEEK).length;
   const tz = zoneOf(me);
   const myTurfs = b.myTurfs ?? [];
+  const turfStats = useTurfStats(myTurfs.length > 0);
+  const candTurf = allTurfsDone(myTurfs, turfStats) ? null
+    : myTurfs.find((t) => (doorsLeft(turfStats[t.id])?.left ?? 1) > 0) ?? null;
   const first = firstName(me.user?.name);
   // Call time (ext/candidates): while there are donors to call, it's the day's one button.
   const ct = home.data?.calltime;
@@ -902,6 +910,7 @@ function CandidateToday({ b, me }) {
           )}
         </section>
       )}
+      {candTurf && <MapWindow me={me} turfId={candTurf.id} meta={walkMeta(candTurf, doorsLeft(turfStats[candTurf.id]))} />}
 
       {/* No rows at all: no empty box either. */}
       {(calling || !ready || next || week > 0 || Number(b.myPeople) > 0 || Number(b.share?.kits) > 0) && <ul className="today-rows today-next">

@@ -45,7 +45,7 @@ button, no paragraphs, everything else one tap away.
 
 | Screen | What it is |
 |---|---|
-| **Today** | Managers: the **dashboard** — every team's contacts, the chart over time, and the map of who is out where. Desk: three big numbers (doors · support · raised) and *Needs you* (with the requests from the doors canvassers sent with *Ask the office*); under *More*, **GOTV & voting days** — GOTV mode, and how many supporters have voted, by band and by turf. While GOTV mode is on, everyone's Today opens with the day's job: *N of M supporters have voted · K to go*, *Call who hasn't voted* and *Map: who hasn't voted*. Volunteers: one big *Start canvassing* and their next shift. Everyone: **Follow up** — the new volunteers, website messages and new RSVPs handed to them (speed to lead: whoever knows them, else their turf's organizer, else a manager), each with a 24-hour clock, one tap to call or text, closed by logging how it went |
+| **Today** | Managers: the **dashboard** — every team's contacts, the chart over time, and the map of who is out where. Desk: three big numbers (doors · support · raised) and *Needs you* (with the requests from the doors canvassers sent with *Ask the office*); under *More*, **GOTV & voting days** — GOTV mode, and how many supporters have voted, by band and by turf. While GOTV mode is on, everyone's Today opens with the day's job: *N of M supporters have voted · K to go*, *Call who hasn't voted* and *Map: who hasn't voted*. Volunteers: one big *Start canvassing*, under it their walk list on a map that folds away, and their next shift. Everyone: **Follow up** — the new volunteers, website messages and new RSVPs handed to them (speed to lead: whoever knows them, else their turf's organizer, else a manager), each with a 24-hour clock, one tap to call or text, closed by logging how it went |
 | **Map** | Field mode. Houses as clickable pins; tap a door → rate, log, request a sign, call/text. *Show* filters by band, by 1s or 2s on their own, and by each opponent on the Voting-for list (*Voting Locke*); its **Signs** chips show signs up and sign requests together (requests a pale flag, a billboard a bigger one) and narrow them by status and kind. Turfs and walk lists; **passes** — a sweep over every turf with a purpose (persuasion, get out the vote, lit drop, find out who's who), a universe (who to knock: a rating band, and/or a List — *List to walk* on the pass's form, or a list's *Walk*: only doors with someone on it, as the list stands at each load; the list can't be deleted while the open pass walks it) and a try rule, so a *No answer* door comes back (*Try again · 1 of 2*) until it's given up. With GOTV mode on, every door card, walk-list door and Calls card has a one-tap *Voted ✓* (offline too, sent once), and a get-out-the-vote pass drops a door once everyone there has voted; a voted file from the campaign's website comes in through People → Import |
 | **Scripts** | What to say at the door and on the phone (`/scripts`, desk): shown as *Script* above the rating buttons on the walk list, the door card and Calls, the voter's and the canvasser's first names filled in, kept on the phone |
 | **People** | Everyone, filterable by rating / tag / role / the campaign's own fields, and by the field's cuts (never knocked or not in 7–30 days, the last outcome, a turf, a postal code, without a tag, what they did on the website), what they gave (this year · before but not this year · never · at least $X in one year), a membership (running · lapsed), their latest answer to a survey question, a shift they came to or missed in the last N days, being on another list or not, and added since a day — saved lists, sends, phone banks, passes and Calls keep them all; a volunteer never filters by money, memberships, answers, attendance or the desk's lists (those match nobody for them — and one given the People area may not save a list by them, copy a list, or make a phone bank or a pass from a list: those stay the desk's; they change only lists they made, and a list a volunteer made names who People would show a volunteer — never by a money tag, an email or a field kept from them — wherever it is used, until the desk saves its filter). The count is the real total, however many (`GET /persons/count`, asked for apart from the names; while a new filter loads the last one's rows are dimmed and the count says *Loading…*). Beside *Save as a list* (which keeps the rule), *Save these people as they are now* makes a hand-picked list of exactly who matches that moment. Profiles with socials, roles, gifts, *More details*, who they know and one **History** — knocks and calls (a dialer's too), texts, emails with their opens and clicks (bounces and spam complaints once the email service reports them), website forms, gifts, memberships, shifts, survey answers, signs, voted, yes and no to email and texts, a merge — newest first, with chips to narrow it, each role seeing what it may; **Calls** works a list one person at a time — any filter, or a List (`/calls?list=`) — asking only for who may be called or texted (`?reach=call|text`, the one place's rule), and goes on past its first 300: the next part loads as the last runs low (`?after=`; a part already loaded is asked for again only up to where it ended, `?until=`, so nobody is pushed out), and *N to call* is the true number left; **My people** is each volunteer's own circle |
@@ -993,6 +993,8 @@ election week should switch to a paid provider.
 | `STARBASE_TILE_MAX_ZOOM` | deepest zoom the provider serves, 1–22 | `19` |
 | `STARBASE_TILE_PROVIDER` | a provider by name: `stadia` (Stadia Maps' Alidade Smooth — its address, credit and zoom 20 filled in; `STARBASE_TILE_URL` wins over it) | — |
 | `STARBASE_TILE_KEY` | the named provider's key, added as `?api_key=` (phones can see it — use only where the provider can't be told the campaign's own web address) | — |
+| `STARBASE_TILE_CARTO_KEY` | the campaign's free CARTO basemap key: the *Clean* look is offered (and the map opens on it) only with it, and it is added to every CARTO address (phones can see it) | — (no Clean) |
+| `STARBASE_TILE_CLEAN` | `off`: never offer CARTO, key or not (the free map behind Google stays, OpenStreetMap's) | — |
 | `GOOGLE_MAPS_SERVER_KEY` | Google's key (Map Tiles API, Places API (New)): Google is the map whenever it is set. **Before this goes to staging, tell us Google or the free map for canvassing. With a key already set, Google becomes the map and phones stop keeping street maps offline.** | — |
 | `GOOGLE_MAPS_TILES` | `off` keeps the free map with a key set (`1` also turns Google on) | unset: on with a key |
 | `GOOGLE_TILES_DAILY_MAX` | Google tiles a day (the campaign's day); then the free map until midnight | none |
@@ -1019,10 +1021,21 @@ Google's has the free map: below), *The street map isn’t loading* stays
 under the count with one tap: *Try again*, or *Try Clean* / *Try Muted*
 only when that provider has just answered. A manager also gets a quiet
 *Why?* there, which opens the Map check.
+**When the street map loads but shows no streets** — a provider that answers
+every tile with the same notice picture (CARTO without a key: "API KEY
+REQUIRED"; a lapsed account; a block) — the page finds it once its first
+tiles are in: it asks two of that provider's tiles for one place, far apart
+in zoom (`tileProbe.js`, once per address per page, from the browser's
+cache where it has them, never Google's), and the same picture is a notice.
+The map then switches by itself as above (*The street map wasn’t showing
+streets — switched to Muted*) or says *The street map isn’t showing
+streets* (`data-tiles="notice"`), and the Map check names it and shows the
+tile under the map's middle as this phone got it.
 **With Google Maps on, volunteers keep streets while Google is down:** the
-map turns to CARTO's free map by itself (*Google Maps isn’t loading —
-showing the free map*) and back once Google answers. The free map is never
-a look to pick, and `STARBASE_TILE_CLEAN=off` leaves it out. A provider of
+map turns to the free map by itself (*Google Maps isn’t loading — showing
+the free map*) and back once Google answers: CARTO's with its key,
+otherwise OpenStreetMap's, always there. The free map is never a look to
+pick. A provider of
 the campaign's own has none: election-week traffic is never sent back to
 the free tiles. The person's own choice of look is only changed by their
 tap, and a look tapped there only once its streets come. The streets a
@@ -1037,13 +1050,40 @@ fifth of that over the wire. Choose the provider before election week:
 [GOING-LIVE.md](GOING-LIVE.md), section 5.
 
 **The map's look** is each person's own (Show → *Map*, kept on that
-browser): *Clean* (the default on the standard tiles: CARTO's light map of
-the same OpenStreetMap streets, without shop icons, parking lots or house
-numbers — `STARBASE_TILE_CLEAN=off` leaves it out; check CARTO's terms for
-your volume); *Standard*; *Muted* (grey streets, so the doors stand out) and
+browser, and only when they tap one): *Standard* (what the map opens on);
+*Clean* (only with `STARBASE_TILE_CARTO_KEY`, and then the map opens on it:
+CARTO's light map of the same OpenStreetMap streets, without shop icons,
+parking lots or house numbers — `STARBASE_TILE_CLEAN=off` leaves it out;
+check CARTO's terms for your volume; a phone that saved Clean draws
+Standard while it isn't offered); *Muted* (grey streets, so the doors stand out) and
 *Dark* (for night), drawn over any tiles; and with Google Maps on, its
 other looks too — *Satellite*, *Terrain* (or *Streets*), each through the
 same key.
+
+**On a desk the Map fills the window** beside the menu: no margins and no
+frame (1208 × 900 at 1440 × 900); the menu keeps its words. A phone's Map
+was already full-bleed and is unchanged.
+
+**The front page's map** (`MapWindow`, one row that folds and opens it in
+place, kept per browser and open the first time). On field Today, under the
+one big button, a volunteer or candidate with a walk list with doors left
+sees that turf's doors (a dot in the household's colour) and their turfs'
+outlines, read by `GET /api/map/doors?mine=1` — only the doors inside the
+caller's own turfs and their own record, by the turfs' boxes and the email
+index, never a count over the whole list — and kept on the phone. (The
+rest of a volunteer's Today counts nothing over the list either: their
+`/api/brief` leaves out the people total, the support picture and, off a
+voting day, the voted totals; on one, the GOTV card's numbers are counted
+once per campaign and shared for half a minute, and a vote mark counts them
+again at once.) The
+desk's Today has a full-width band of every turf's outline
+(`/api/turfs?outline=1`, nobody read). Either is a picture to glance at: it
+never takes the page's swipe, the whole of it opens the Map (*Open the
+map*), its map (and Leaflet) loads only while open, and a load that fails
+says *Unavailable — Try again* in the box, never taking Today down. It
+draws the Map's own look, but never Google's billed tiles: over Google, the
+free map. One line under it says when the street map isn't loading or
+shows a notice, or that there is no signal.
 
 **Doors on the map.** From street zoom (18) every door is a pin, with its
 household and sign flags; one zoom further out a door with room around it

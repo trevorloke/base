@@ -106,6 +106,9 @@ const server = spawn(process.execPath, ['server/index.js'], {
     STARBASE_JOBS: 'on', STARBASE_JOBS_EVERY_MS: '400', GEOCODER: 'bc', BC_GEOCODER_URL: `http://127.0.0.1:${PORT + 1}`,
     GEOCODE_BACKOFF_MS: '0', GEOCODE_RETRY_MS: '8000',
     STARBASE_MAP_ALL: '40', STARBASE_MAP_VIEW: '60', STARBASE_MAP_DOTS: '200',
+    // The Clean look (CARTO) is offered only with the campaign's key: this
+    // suite's Clean, kept-streets and switch steps need it.
+    STARBASE_TILE_CARTO_KEY: 'test-key',
   },
   stdio: ['ignore', 'pipe', 'inherit'],
 });
@@ -129,11 +132,13 @@ const tileSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256
 const EMAIL = `map+${Date.now().toString(36)}@example.org`;
 const PASSWORD = 'surrey-forward-2026';
 let signedUp = false;
-const standIn = { status: 200, contentType: 'image/svg+xml', headers: { 'access-control-allow-origin': '*' }, body: tileSvg };
+// Each tile a picture of its own (its address in it), as a real map's are:
+// the same picture everywhere is a provider's notice, not streets (tileProbe.js).
+const standIn = (route) => ({ status: 200, contentType: 'image/svg+xml', headers: { 'access-control-allow-origin': '*' }, body: tileSvg.replace('</svg>', `<!-- ${new URL(route.request().url()).pathname} --></svg>`) });
 // tiles: false — the part that tests the street map answers the tile hosts itself.
 const context = async (opts = {}, { tiles = true } = {}) => {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, timezoneId: 'America/Vancouver', serviceWorkers: 'block', ...opts });
-  if (tiles) await ctx.route(/tile\.openstreetmap\.org|basemaps\.cartocdn\.com/, (route) => route.fulfill(standIn));
+  if (tiles) await ctx.route(/tile\.openstreetmap\.org|basemaps\.cartocdn\.com/, (route) => route.fulfill(standIn(route)));
   const r = signedUp
     ? await ctx.request.post(`${BASE}/api/auth/login`, { data: { email: EMAIL, password: PASSWORD } })
     : await ctx.request.post(`${BASE}/api/auth/signup`, { data: { name: 'Riley Manager', email: EMAIL, password: PASSWORD, workspaceName: 'Big list', jurisdiction: 'bc-municipal' } });
@@ -583,12 +588,12 @@ try {
         net.asked[who] += 1;
         if (net.drop[who] > 0) { net.drop[who] -= 1; return; }
         if (net.up[who] === 'hang') {
-          if (net.some[who] > 0) { net.some[who] -= 1; await route.fulfill(standIn).catch(() => {}); }
+          if (net.some[who] > 0) { net.some[who] -= 1; await route.fulfill(standIn(route)).catch(() => {}); }
           return;
         }
         if (net.hold[who]) await sleep(net.hold[who]);
         const flicker = net.up[who] === 'asked' && (route.request().resourceType() === 'fetch' || (net.through[who] > 0 && net.through[who]--));
-        await (net.up[who] === true || flicker ? route.fulfill(standIn) : route.abort('connectionrefused')).catch(() => {});
+        await (net.up[who] === true || flicker ? route.fulfill(standIn(route)) : route.abort('connectionrefused')).catch(() => {});
       };
       await tctx.route(/basemaps\.cartocdn\.com/, answer('clean'));
       await tctx.route(/tile\.openstreetmap\.org/, answer('base'));
@@ -1268,7 +1273,7 @@ try {
 
     // A volunteer, on a phone, on their turf.
     const vc = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, timezoneId: 'America/Vancouver', serviceWorkers: 'block' });
-    await vc.route(/tile\.openstreetmap\.org|basemaps\.cartocdn\.com/, (route) => route.fulfill(standIn));
+    await vc.route(/tile\.openstreetmap\.org|basemaps\.cartocdn\.com/, (route) => route.fulfill(standIn(route)));
     const joined = await vc.request.post(`${BASE}/api/auth/join`, { data: { token: invite.joinUrl.split('/').pop(), name: 'Walker Example', password: 'knock-knock-2026' } });
     if (!joined.ok()) throw new Error(`join ${joined.status()} ${await joined.text()}`);
     await post('/actions/turf.assign', { turf_id: turf.id, user_id: (await joined.json()).user.id });
@@ -1365,6 +1370,8 @@ try {
         ...process.env, STARBASE_OPEN_SIGNUP: '1', STARBASE_DATA: 'memory', PORT: String(GPORT), GEOCODE_ON_SAVE: 'off',
         GOOGLE_MAPS_TILES: '1', GOOGLE_MAPS_SERVER_KEY: 'e2e-not-a-key', GOOGLE_MAPS_TILES_URL: `http://127.0.0.1:${GOOGLE_PORT}/v1`,
         GEOCODER: 'bc', BC_GEOCODER_URL: `http://127.0.0.1:${PORT + 1}`,
+        // The free map behind Google: CARTO's, with the campaign's key.
+        STARBASE_TILE_CARTO_KEY: 'test-key',
       },
       stdio: ['ignore', 'pipe', 'inherit'],
     });
@@ -1378,8 +1385,8 @@ try {
     const carto = { asked: 0 };
     const gContext = async (opts = {}) => {
       const c = await browser.newContext({ viewport: { width: 1440, height: 900 }, timezoneId: 'America/Vancouver', serviceWorkers: 'block', ...opts });
-      await c.route(/basemaps\.cartocdn\.com/, (route) => { carto.asked += 1; return route.fulfill(standIn); });
-      await c.route(/tile\.openstreetmap\.org/, (route) => route.fulfill(standIn));
+      await c.route(/basemaps\.cartocdn\.com/, (route) => { carto.asked += 1; return route.fulfill(standIn(route)); });
+      await c.route(/tile\.openstreetmap\.org/, (route) => route.fulfill(standIn(route)));
       return c;
     };
     const mc = await gContext();

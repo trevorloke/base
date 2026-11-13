@@ -9,6 +9,7 @@ import {
   viewBox, rowsBudget, DOT_ZOOM, LONE_PIN_ZOOM, PIN_ZOOM,
   dotsFrom, dotRadius, dotOnScreen, ringedAt, MARK, cellOf, cellsFrom, cellFill, drawnFor, inBox,
   tileHealth, TILE_WAIT_MS, checkLines, timeOfDay, placingPoll, retryLate, tileAt, streetMove, pickLook, tileHost, mapLooks,
+  defaultLook, noticeTiles, sameBytes, frontTiles, NOTICE_CARTO, NOTICE_OTHER, PICTURE,
 } from '../../web/src/pages/mapView.js';
 import { bandOf } from '@starbase/shared/scale';
 
@@ -183,19 +184,19 @@ test('a patch takes the colour of support only as far as people there are rated'
 // ── Is the street map loading? ──
 test('the street map isn’t loading: most of a view’s tiles failed, or not one came in six seconds', () => {
   const h = tileHealth();
-  assert.deepEqual(h.get(), { loaded: 0, failed: 0, down: false }, 'nothing asked for: nothing claimed');
+  assert.deepEqual(h.get(), { loaded: 0, failed: 0, down: false, why: null }, 'nothing asked for: nothing claimed');
   // A view's tiles all come.
   h.batch(0);
   for (let i = 0; i < 20; i += 1) h.tile(true);
   h.done();
-  assert.deepEqual(h.get(), { loaded: 20, failed: 0, down: false });
+  assert.deepEqual(h.get(), { loaded: 20, failed: 0, down: false, why: null });
   // The next view: the host refuses every one. Said once the view is done —
   // a few quick failures among slow tiles are not yet "most".
   h.batch(1000);
   for (let i = 0; i < 12; i += 1) h.tile(false);
   assert.equal(h.get().down, false);
   h.done();
-  assert.deepEqual(h.get(), { loaded: 20, failed: 12, down: true }, 'counted since the layer was added; this view failed');
+  assert.deepEqual(h.get(), { loaded: 20, failed: 12, down: true, why: 'failing' }, 'counted since the layer was added; this view failed');
   // One tile in four failing (one of four hosts down): most came.
   h.batch(2000);
   for (let i = 0; i < 12; i += 1) h.tile(i % 4 !== 0);
@@ -248,7 +249,7 @@ test('the street map isn’t loading: most of a view’s tiles failed, or not on
   // there with tiles still out and not one street on screen (Map.jsx looks)
   // is the street map not loading, whatever came for the view before.
   hung.screen(0);
-  assert.deepEqual(hung.get(), { loaded: 3, failed: 0, down: true });
+  assert.deepEqual(hung.get(), { loaded: 3, failed: 0, down: true, why: 'failing' });
   // Back over streets the phone kept, drawn: the next look takes it back
   // (the note goes by itself, as it does when the hosts refuse)…
   hung.screen(0.5);
@@ -596,4 +597,104 @@ test('Show → Map over Google: Streets · Satellite · Terrain (roadmap), Satel
   assert.deepEqual(sat.map((v) => v.key), ['standard', 'roadmap', 'terrain'], 'Streets comes from views: the way back to the street map');
   const CLEAN = { key: 'clean', label: 'Clean', url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png' };
   assert.equal(words(mapLooks({ shades: SHADES, views: [CLEAN], standardLabel: null, shadeAllowed: true })), 'Standard · Muted · Dark · Clean');
+});
+
+// ── A street map that loads and shows no streets (a provider's notice) ──
+test('a notice, once found, stays for the layer whatever its tiles do after; without one, nothing changes', () => {
+  const h = tileHealth();
+  h.batch(0);
+  for (let i = 0; i < 20; i += 1) h.tile(true);
+  h.done();
+  assert.deepEqual(h.get(), { loaded: 20, failed: 0, down: false, why: null });
+  h.notice();
+  assert.deepEqual(h.get(), { loaded: 20, failed: 0, down: true, why: 'notice' });
+  // Every later tile good, views done, looks at the screen: still a notice.
+  h.batch(1000);
+  for (let i = 0; i < 20; i += 1) h.tile(true);
+  h.done();
+  h.late(1000 + TILE_WAIT_MS);
+  h.screen(1);
+  assert.deepEqual([h.get().down, h.get().why], [true, 'notice']);
+  // A fresh layer starts afresh.
+  assert.deepEqual(tileHealth().get(), { loaded: 0, failed: 0, down: false, why: null });
+});
+
+test('the look the map opens on: Clean only where it is offered (not as a fallback), else Standard; a saved pick is kept', () => {
+  const CLEAN = { key: 'clean', url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=k' };
+  assert.equal(defaultLook([CLEAN]), 'clean');
+  assert.equal(defaultLook([]), 'standard');
+  assert.equal(defaultLook(undefined), 'standard');
+  assert.equal(defaultLook([{ ...CLEAN, fallback: true }]), 'standard');
+  assert.equal(defaultLook([{ key: 'free', url: 'x', fallback: true }]), 'standard');
+  const OSM = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+  const MUTED = { key: 'muted', label: 'Muted' };
+  // A saved Clean with none offered: Map.jsx draws Standard for any look
+  // that is neither a provider's nor a shade; pickLook passes it through.
+  const saved = pickLook({ views: [], viewPick: 'clean', baseUrl: OSM, muted: MUTED });
+  assert.deepEqual([saved.providerView, saved.look], [null, 'clean']);
+  assert.equal(pickLook({ views: [], viewPick: 'muted', baseUrl: OSM, muted: MUTED }).look, 'muted');
+  assert.equal(pickLook({ views: [], viewPick: defaultLook([]), baseUrl: OSM, muted: MUTED }).look, 'standard');
+});
+
+test('two tiles of one place far apart in zoom; bytes compared, true or false only', () => {
+  const at = { lat: 49.19, lng: -122.85 };
+  const [far, near] = noticeTiles('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=k', at, 20);
+  assert.match(far, /^https:\/\/a\.basemaps\.cartocdn\.com\/light_all\/3\/1\/2\.png\?key=k$/);
+  assert.match(near, /^https:\/\/a\.basemaps\.cartocdn\.com\/light_all\/15\/\d+\/\d+\.png\?key=k$/);
+  assert.equal(near, tileAt('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=k', at, 15, 20));
+  const [f2, n2] = noticeTiles('https://tile.openstreetmap.org/{z}/{x}/{y}.png', at);
+  assert.deepEqual([f2.split('/')[3], n2.split('/')[3]], ['3', '15']);
+  const buf = (a) => new Uint8Array(a).buffer;
+  assert.equal(sameBytes(buf([1, 2, 3]), buf([1, 2, 3])), true);
+  assert.equal(sameBytes(buf([1, 2, 3]), buf([1, 2, 4])), false);
+  assert.equal(sameBytes(buf([1, 2, 3]), buf([1, 2])), false);
+  assert.equal(sameBytes(null, buf([1])), false);
+});
+
+test('the map’s check names a notice, flags its service line, and carries the picture of what this phone gets', () => {
+  const FREE = { tiles: { provider: 'OpenStreetMap', viaServer: false, probe: null, last: null }, lookup: { provider: 'BC Address Geocoder', fallback: null, probe: { ok: true } }, suggest: { provider: 'BC Address Geocoder', probe: { ok: true }, paused: null } };
+  const pic = 'https://a.basemaps.cartocdn.com/light_all/12/650/1403.png?key=k';
+  const page = { ...PAGE, tiles: { loaded: 24, failed: 0, down: true, why: 'notice' }, picture: pic };
+  const l = checkLines(CHECK, page, { services: { state: 'ok', data: FREE } });
+  const t = said(l).tiles;
+  assert.deepEqual([t.value, t.note, t.warn], ['Clean · CARTO — sends a notice, not streets', NOTICE_CARTO, true]);
+  assert.match(NOTICE_CARTO, /STARBASE_TILE_CARTO_KEY in Render, or STARBASE_TILE_CLEAN=off/);
+  assert.deepEqual(t.picture, { src: pic, label: 'What this phone gets for the middle of the map:', alt: 'A piece of the street map, as this phone gets it', failed: 'No picture came back.', small: false });
+  assert.equal(PICTURE.failed, 'No picture came back.');
+  assert.deepEqual([said(l).tilesvc.value, said(l).tilesvc.warn], ['CARTO (Clean) · straight to the phones', true], 'its service line flagged too');
+  // Another provider's notice: the other note.
+  const other = said(checkLines({ ...CHECK, tiles: { ...CHECK.tiles, source: 'tiles.example', custom: true } }, { ...page, look: 'Standard', tilesFrom: 'tiles.example' })).tiles;
+  assert.deepEqual([other.value, other.note], ['Standard · tiles.example — sends a notice, not streets', NOTICE_OTHER]);
+  assert.match(NOTICE_OTHER, /The picture is below\.$/);
+  // Streets: the line as before, still with its picture.
+  const ok = said(checkLines(CHECK, { ...PAGE, picture: pic })).tiles;
+  assert.deepEqual([ok.value, ok.warn, ok.picture.src, ok.picture.small], ['Clean · CARTO — 24 loaded, 0 failed', false, pic, true], 'nothing wrong: a small one (the check stays one screen)');
+  assert.equal(said(checkLines(CHECK, PAGE)).tiles.picture, undefined, 'no map yet: no picture');
+  // An operator's keyless CARTO address: said where the service is named.
+  const keyless = checkLines({ ...CHECK, tiles: { ...CHECK.tiles, ignored: ['carto-key'] } }, PAGE, { services: { state: 'ok', data: FREE } });
+  assert.match(said(keyless).tilesvc.note, /CARTO needs a key now \(STARBASE_TILE_CARTO_KEY\)/);
+});
+
+test('the front page’s map: the Map’s own look, shade and all — never Google’s tiles, the free map instead', () => {
+  const osm = { url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', attribution: 'OSM', maxZoom: 19 };
+  const clean = { key: 'clean', label: 'Clean', url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=k', attribution: 'CARTO', maxZoom: 20 };
+  const google = { url: '/api/tiles/{z}/{x}/{y}?t=roadmap', attribution: 'Google', maxZoom: 21 };
+  const sat = { key: 'satellite', label: 'Satellite', url: '/api/tiles/{z}/{x}/{y}?t=satellite', attribution: 'Google', maxZoom: 21 };
+  const free = { key: 'free', label: 'Free map', url: osm.url, attribution: 'OSM', maxZoom: 19, fallback: true };
+  // No Clean offered: Standard on OpenStreetMap; a saved Clean draws it too.
+  assert.deepEqual(frontTiles({ views: [], baseTiles: osm }), { ...osm, shade: null });
+  assert.deepEqual(frontTiles({ views: [], baseTiles: osm, savedPick: 'clean' }), { ...osm, shade: null });
+  assert.equal(frontTiles({ views: [], baseTiles: osm, savedPick: 'muted' }).shade, 'muted');
+  // Clean with the key: opens on it.
+  assert.equal(frontTiles({ views: [clean], baseTiles: osm }).url, clean.url);
+  assert.equal(frontTiles({ views: [clean], baseTiles: osm, savedPick: 'standard' }).url, osm.url);
+  // Google as the map: the free map, its own credit, whatever the pick.
+  for (const savedPick of [null, 'standard', 'satellite', 'dark']) {
+    const t = frontTiles({ views: [sat, free], baseTiles: google, savedPick });
+    assert.deepEqual([t.url, t.attribution], [osm.url, 'OSM'], String(savedPick));
+  }
+  assert.equal(frontTiles({ views: [sat, free], baseTiles: google, savedPick: 'dark' }).shade, 'dark');
+  // Nothing to draw yet.
+  assert.equal(frontTiles({ views: [], baseTiles: null }), null);
+  assert.equal(frontTiles({ views: [], baseTiles: google }), null);
 });

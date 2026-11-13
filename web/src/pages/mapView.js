@@ -64,6 +64,15 @@ export const drawnFor = ({ doors, view, density }) => {
 const BAND_NAME = ['unrated', 'undecided', 'support', 'opposed'];
 export const dotsFrom = (rows) => (rows || []).map(([lat, lng, band, n]) => ({ lat, lng, band: BAND_NAME[band] || 'unrated', n }));
 
+// ── Turfs ──
+// New turfs cycle through hues that never read as a rating band (no green,
+// yellow or red), so a turf outline can't be mistaken for support/opposed.
+// A turf's own colour where it has a valid one, else one of these by its id.
+export const TURF_COLORS = ['#2b6cb0', '#7b3fa0', '#b5651d', '#1f7a6d', '#a0306a', '#4c5a8a'];
+const hashIndex = (s, n) => { let h = 0; for (const ch of String(s)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h % n; };
+const isColor = (c) => typeof c === 'string' && c.length <= 20 && typeof CSS !== 'undefined' && CSS.supports?.('color', c);
+export const turfColor = (t) => (isColor(t?.color) ? t.color : TURF_COLORS[hashIndex(t?.id || t?.name || '', TURF_COLORS.length)]);
+
 // ── Marks ──
 // Colours are [r, g, b] or [r, g, b, alpha]; fixed values, not theme tokens:
 // the base map is what it is in either scheme. Rating colours never change
@@ -177,6 +186,12 @@ export const cellFill = (c, dark) => {
 // look after that (Map.jsx: a second after a tile comes while it says "not
 // loading") finds most of the screen drawn, and takes it back too, unless
 // most of what settled failed.
+// A street map can also load and still show no streets: a provider that
+// answers every tile with the same notice picture (CARTO without a key,
+// "API KEY REQUIRED"; a lapsed account; a block). notice() says so — found
+// by the page's probe (tileProbe.js) — and it stays for this layer whatever
+// the tiles do after; a new layer starts afresh. why: 'notice', 'failing'
+// or null.
 export const TILE_WAIT_MS = 6000;
 export const tileHealth = () => {
   let ok = 0; let bad = 0;         // this view's tiles
@@ -184,7 +199,9 @@ export const tileHealth = () => {
   let since = null;                // when this view's tiles were asked for; null once they are all in
   let down = false;
   let blank = false;               // down by a look at the screen, not by the tiles' own count
+  let noticed = false;             // the provider sends a notice, not streets
   return {
+    notice() { noticed = true; },
     batch(now) { ok = 0; bad = 0; since = now; },
     tile(good) { if (good) { ok += 1; loaded += 1; } else { bad += 1; failed += 1; } },
     done() { if (ok + bad) { down = bad > ok; blank = false; } since = null; },
@@ -193,9 +210,13 @@ export const tileHealth = () => {
       if (since == null) return;
       if (!share) { down = true; blank = true; } else if (blank || (ok > 0 && bad <= ok && share > 0.5)) { down = false; blank = false; }
     },
-    get: () => ({ loaded, failed, down }),
+    get: () => ({ loaded, failed, down: down || noticed, why: noticed ? 'notice' : down ? 'failing' : null }),
   };
 };
+
+// The look the map opens on when the person has picked none: Clean where
+// the server offers it (only with the campaign's CARTO key), else Standard.
+export const defaultLook = (views = []) => (views.some((v) => v.key === 'clean' && !v.fallback) ? 'clean' : 'standard');
 
 // One tile of a street map: the one under a point at a zoom (the nearest
 // whole zoom, never past the provider's last), its address filled in as the
@@ -211,6 +232,18 @@ export const tileAt = (template, { lat, lng }, zoom, maxZoom = 19) => {
   const x = whole(((((lng + 180) % 360) + 360) % 360 / 360) * n);
   const y = whole((0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI)) * n);
   return String(template).replace(/\{s\}/g, 'a').replace(/\{z\}/g, z).replace(/\{x\}/g, x).replace(/\{y\}/g, y).replace(/\{r\}/g, '');
+};
+
+// Two tiles of one place, far apart in zoom: half a continent (zoom 3) and
+// a few streets (zoom 15, or the provider's last). A real map never draws
+// them the same; a notice is the same picture everywhere (tileProbe.js).
+export const noticeTiles = (template, center, maxZoom = 19) => [tileAt(template, center, 3, maxZoom), tileAt(template, center, 15, maxZoom)];
+// Two answers' bytes the same? → true or false, nothing else.
+export const sameBytes = (a, b) => {
+  if (!a || !b || a.byteLength !== b.byteLength) return false;
+  const x = new Uint8Array(a); const y = new Uint8Array(b);
+  for (let i = 0; i < x.length; i += 1) if (x[i] !== y[i]) return false;
+  return true;
 };
 
 // What the map does when its street map isn't loading (Map.jsx), from:
@@ -297,6 +330,24 @@ const pickProvider = ({ views = [], viewPick, drawnAuto = null, baseUrl = null, 
   return { providerView, otherLook: views.find((v) => !v.fallback && tileHost(v.url) && tileHost(v.url) !== here) || null };
 };
 
+// The front page's map (components/MapWindow.jsx): the look the Map would
+// open on (the saved pick, else defaultLook), shade and all — but never
+// Google's billed tiles: the front page is opened far more often than the
+// Map, so over Google it draws the free map behind it (always offered with
+// Google on: CARTO with the campaign's key, else OpenStreetMap), with that
+// map's own credit.
+//   views, baseTiles  /api/map/config's; savedPick the saved pick or null
+// → { url, attribution, maxZoom, shade: 'muted' | 'dark' | null }, or null
+//   while there are no tiles to draw yet
+export const frontTiles = ({ views = [], baseTiles = null, savedPick = null }) => {
+  const pick = savedPick ?? defaultLook(views);
+  const { providerView } = pickProvider({ views, viewPick: pick, baseUrl: baseTiles?.url });
+  let t = providerView || baseTiles;
+  if (t && isGoogleUrl(t.url)) t = views.find((v) => v.fallback) || null;
+  if (!t?.url) return null;
+  return { url: t.url, attribution: t.attribution, maxZoom: t.maxZoom, shade: pick === 'muted' || pick === 'dark' ? pick : null };
+};
+
 // "3:40 pm", on the reader's own clock: when a paused placing run tries
 // again (always a time of day — it may be after midnight).
 export const timeOfDay = (iso) => {
@@ -334,9 +385,12 @@ export const placingPoll = (st, now = Date.now()) => {
 // read — and to screenshot: each way a map can look empty has a line of its
 // own, flagged (warn) when it applies.
 //   c     the server's answer
-//   page  { build, look, tilesFrom, tiles: { loaded, failed, down }, size: { x, y }, zoom }
+//   page  { build, look, tilesFrom, tiles: { loaded, failed, down, why }, size: { x, y }, zoom, picture }
 //         tilesFrom: the host the street map's tiles come from ('' for the
-//         server's own) — said by the provider's name where it has one
+//         server's own) — said by the provider's name where it has one;
+//         why 'notice': it sends a notice, not streets; picture: the address
+//         of the tile under the map's middle (drawn under the line, as an
+//         image — what this phone gets)
 //   services  GET /api/map/check/services, asked apart (it waits on Google):
 //         { state: 'pending' | 'error' | 'offline' | 'ok', data } — or
 //         undefined: no service lines
@@ -352,6 +406,16 @@ const HOUR = 3_600_000;
 const IGNORED = {
   google: 'GOOGLE_MAPS_TILES can’t be used — set it to 1, with GOOGLE_MAPS_SERVER_KEY',
   provider: 'STARBASE_TILE_PROVIDER isn’t known — use stadia',
+  'carto-key': 'CARTO needs a key now (STARBASE_TILE_CARTO_KEY)',
+};
+// The street map sends a notice, not streets: why, by provider.
+export const NOTICE_CARTO = 'Every place gets the same picture. CARTO’s free map needs a key now: set STARBASE_TILE_CARTO_KEY in Render, or STARBASE_TILE_CLEAN=off.';
+export const NOTICE_OTHER = 'Every place gets the same picture — usually a message from the map’s provider about a key or an account. The picture is below.';
+// One tile, drawn under the Street map line: what this phone gets.
+export const PICTURE = {
+  label: 'What this phone gets for the middle of the map:',
+  alt: 'A piece of the street map, as this phone gets it',
+  failed: 'No picture came back.',
 };
 const ignoredNote = (c) => (c.tiles.ignored || []).map((k) => IGNORED[k]).filter(Boolean).join('\n') || null;
 const serviceLines = (services, clock, now, page) => {
@@ -369,7 +433,7 @@ const serviceLines = (services, clock, now, page) => {
     // from ("CARTO (Clean)"), so a failing look and its service agree.
     const drawn = PROVIDER[page?.tilesFrom];
     const name = drawn && drawn !== t.provider ? `${drawn}${page.look ? ` (${page.look})` : ''}` : t.provider;
-    tiles = [`${name} · straight to the phones`, { warn: Boolean(page?.tiles?.down) }];
+    tiles = [`${name} · straight to the phones`, { warn: Boolean(page?.tiles?.down || page?.tiles?.why === 'notice') }];
   }
   else if (!t.probe?.ok) tiles = [`Not working · ${t.provider}`, { note: t.probe ? troubleNote(t.probe) : null, warn: true }];
   else {
@@ -434,13 +498,22 @@ export const checkLines = (c, page, { num = enCA, clock = (iso) => iso, now = Da
   add('turfs', 'Turfs', num(c.turfs));
 
   const t = page.tiles || { loaded: 0, failed: 0, down: false };
-  const from = [page.look, PROVIDER[page.tilesFrom] || page.tilesFrom || c.tiles.source].filter(Boolean).join(' · ');
+  const provider = PROVIDER[page.tilesFrom] || page.tilesFrom || c.tiles.source;
+  const from = [page.look, provider].filter(Boolean).join(' · ');
   const ignored = ignoredNote(c);
   const svc = services ? serviceLines(services, clock, now, page) : null;
-  add('tiles', 'Street map', `${from} — ${t.down ? 'isn’t loading: ' : ''}${num(t.loaded)} loaded, ${num(t.failed)} failed`, {
-    note: [(c.tiles.ignored || []).includes('url') ? 'The street map address set on the server was ignored' : null, svc ? null : ignored].filter(Boolean).join('\n') || null,
-    warn: t.down || (!svc && Boolean(ignored)),
-  });
+  const picture = page.picture ? { src: page.picture, label: PICTURE.label, alt: PICTURE.alt, failed: PICTURE.failed } : null;
+  if (t.why === 'notice') {
+    add('tiles', 'Street map', `${from} — sends a notice, not streets`, { note: provider === 'CARTO' ? NOTICE_CARTO : NOTICE_OTHER, warn: true });
+  } else {
+    add('tiles', 'Street map', `${from} — ${t.down ? 'isn’t loading: ' : ''}${num(t.loaded)} loaded, ${num(t.failed)} failed`, {
+      note: [(c.tiles.ignored || []).includes('url') ? 'The street map address set on the server was ignored' : null, svc ? null : ignored].filter(Boolean).join('\n') || null,
+      warn: t.down || (!svc && Boolean(ignored)),
+    });
+  }
+  // Full size, with its words, when the street map line is flagged; else a
+  // small one beside the value (the check stays one screen on a phone).
+  if (picture) { const line = lines[lines.length - 1]; line.picture = { ...picture, small: !line.warn }; }
   if (svc) {
     for (const [key, label, value, o] of svc) {
       // A setting the map couldn't use: flagged on the service line, with what to set.

@@ -29,6 +29,8 @@
 #   GOOGLE_PLACES_DAILY_MAX, GOOGLE_PLACES_PER_PERSON   Google asks a day (300) and per person (50)
 #   STARBASE_TILE_URL, _ATTRIBUTION, _MAX_ZOOM          another tile provider
 #   STARBASE_TILE_PROVIDER (stadia), STARBASE_TILE_KEY  a tile provider by name (and its key)
+#   STARBASE_TILE_CARTO_KEY  CARTO's free basemap key: the Clean look only with it
+#   STARBASE_TILE_CLEAN      off: never offer CARTO (the free map behind Google stays)
 #   TWILIO_VOICE=off                                    texting without calls
 #   CALLHUB_API_KEY, CALLHUB_API_BASE                   the phone dialer (CallHub): call lists out, results back
 #   STARBASE_CANDIDATES, STARBASE_PROVINCE, STARBASE_GEO_BOUNDS   the campaign
