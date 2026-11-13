@@ -1,0 +1,19 @@
+/* Your profile → "Your shifts in Google Calendar" (GcalCard.jsx) and its
+   switch in Settings → Services → Google (GcalSwitch.jsx). The card is a
+   .ts-card like its neighbours; the confirms and the switch are google.css's. */
+.gc-who { overflow-wrap: anywhere; }
+.gc-count { margin: 0 0 var(--s-2); font-size: 15px; }
+.gc-count > span:first-child { font-weight: 600; font-variant-numeric: tabular-nums; }
+.gc-card .ts-row { align-items: center; margin-bottom: 0; }
+.gc-card .gg-connect { margin-top: 0; }
+.gc-offer { margin: var(--s-3) 0 var(--s-2); border-color: var(--rule-2); }
+.toast.gc-toast { max-width: calc(100vw - 32px); width: max-content; }
+@media (max-width: 720px) { .toast.gc-toast { bottom: calc(76px + env(safe-area-inset-bottom)); } }
+@media (pointer: coarse) { .gc-card .btn, .gc-switch .btn { min-height: 48px; } }
+
+.gc-switch { display: grid; gap: var(--s-1); }
+.gc-switch .gg-confirm { margin-top: var(--s-2); }
+/* The sentence on its line, the two choices together under it. */
+.gc-switch .gg-confirm > span { flex: 1 1 100%; }
+.gc-acts { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.gc-people { font-size: 14px; color: var(--text-2); }

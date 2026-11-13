@@ -1,0 +1,9 @@
+First Name,Middle Name,Last Name,Nickname,File As,Organization Name,Organization Title,Birthday,Notes,Photo,Labels,E-mail 1 - Label,E-mail 1 - Value,E-mail 2 - Label,E-mail 2 - Value,Phone 1 - Label,Phone 1 - Value,Phone 2 - Label,Phone 2 - Value,Address 1 - Label,Address 1 - Formatted
+Ann,,Example,,,,,,,,* myContacts,* Home,ann.example@example.org,,,Mobile,604-555-0101,,,,
+Bo,Lee,Sample,,,,,,,,* myContacts ::: Friends,* Home ::: Work,bo.home@example.org ::: bo.work@example.org,,,Mobile,604-555-0102,,,,
+Cy,,Example,,,,,,Met at the farmers market,,* myContacts,,,,,Mobile,+1 (604) 555-0103,,,Home,"12 Example St, Surrey BC"
+Dee,,Example,,,,,,,,* myContacts,* Home,dee.example@example.org,,,,,,,,
+,,,,,Example Hardware,,,,,* myContacts,,,,,Work,604-555-0105,,,,
+Gil,,Example,,,,,,,,* myContacts,,,,,,,,,,
+Ed,,Example,,,,,,Door code 1234,,* myContacts ::: Friends,* Home,ed.example@example.org,,,,,,,,
+Fay,,Example,,,,,1990-01-01,,,* myContacts,,,* Work,fay.example@example.org,Home,604-555-0108,,,,

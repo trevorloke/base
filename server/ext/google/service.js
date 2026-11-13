@@ -59,6 +59,17 @@ export const googleCounts = async (db, workspaceId, row) => {
   const people = `${n.logins.toLocaleString('en-CA')} ${n.logins === 1 ? 'person signs' : 'people sign'} in with Google · ${n.grants.toLocaleString('en-CA')} connected ${n.grants === 1 ? 'account' : 'accounts'}`;
   const parts = [...row.lines];
   parts.splice(2, 0, people); // after the redirect address and the connections line
+  // GCA's "Shifts in Google Calendar", while it's on (ext/gcal).
+  const cal = (await db.query(
+    `select coalesce((settings->'gcal'->>'on')::boolean, false) as on,
+            (select count(*)::int from gcal_links where workspace_id = $1 and state in ('ok', 'reconnect', 'gone')) as people
+       from workspaces where id = $1`,
+    [workspaceId],
+  )).rows[0];
+  if (cal?.on) {
+    parts.splice(3, 0, `Shifts in Google Calendar: on · ${cal.people.toLocaleString('en-CA')} ${cal.people === 1 ? 'person' : 'people'}`);
+    if (!jobRunnerOn()) parts.splice(4, 0, 'Background work is off on this server — Google Calendar won’t update.');
+  }
   return { ...row, detail: parts.join(' · '), lines: parts };
 };
 

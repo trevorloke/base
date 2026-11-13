@@ -1,0 +1,29 @@
+/* People you know (AddressBook.jsx): the steps before a file, the count,
+   and a stack of 48 px tick rows — the name first, at most two facts. */
+.ab-file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.ab-steps { margin: var(--s-3) 0; }
+.ab-how { margin: 0 0 var(--s-3); padding-left: 1.4em; display: grid; gap: var(--s-1); font-size: 16px; }
+.ab-promise { margin: 0 0 var(--s-2); font-size: 15px; }
+.ab-other { margin: 0; font-size: 14px; }
+.ab-line { margin: var(--s-2) 0; font-size: 15px; font-variant-numeric: tabular-nums; }
+.ab-count { margin: var(--s-3) 0 0; font-size: 18px; }
+.ab-count strong { font-size: 26px; font-variant-numeric: tabular-nums; }
+.ab-sub { margin: 0 0 var(--s-3); font-size: 14px; }
+.ab-ticks { display: flex; flex-wrap: wrap; gap: var(--s-2); margin: 0 0 var(--s-2); }
+.ab-ticks .btn, .ab-again .btn { min-height: var(--ctl); }
+.ab-rows { margin-bottom: var(--s-3); }
+.ab-row { display: flex; align-items: center; gap: var(--s-2); min-height: 48px; padding: var(--s-1) var(--s-3) var(--s-1) var(--s-1); }
+.ab-box { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; cursor: pointer; }
+.ab-box input { width: 22px; height: 22px; margin: 0; accent-color: var(--mark); cursor: pointer; }
+.ab-box input:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
+.ab-row__main { flex: 1 1 auto; min-width: 0; display: grid; gap: 2px; }
+.ab-row__main .ops-row__sub { overflow-wrap: anywhere; }
+.ab-name { color: var(--text-1); font-weight: 600; text-decoration: none; }
+.ab-name:hover, .ab-name:focus-visible { text-decoration: underline; }
+.ab-row__end { flex: none; }
+.ab-skip .ab-row { padding-left: var(--s-3); }
+.ab-again { display: flex; flex-wrap: wrap; gap: var(--s-2); margin: var(--s-3) 0; }
+.ab-again a.btn { display: inline-flex; align-items: center; text-decoration: none; }
+.toast.ab-toast { max-width: calc(100vw - 32px); width: max-content; }
+@media (max-width: 720px) { .toast.ab-toast { bottom: calc(76px + env(safe-area-inset-bottom)); } }
+.ab-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }

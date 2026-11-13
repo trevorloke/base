@@ -58,6 +58,7 @@ const GiftsWaiting = lazy(() => import('./pages/GiftsWaiting.jsx'));
 const RatingScale = lazy(() => import('./pages/RatingScale.jsx'));
 const Fields = lazy(() => import('./pages/Fields.jsx'));
 const MyPeople = lazy(() => import('./pages/MyPeople.jsx'));
+const AddressBook = lazy(() => import('./pages/AddressBook.jsx'));
 const Share = lazy(() => import('./pages/Share.jsx'));
 const CallTime = lazy(() => import('./pages/CallTime.jsx'));
 const Mainstreet = lazy(() => import('./pages/Mainstreet.jsx'));
@@ -192,6 +193,7 @@ export default function App({ mode = 'field' }) {
           <Route path="/inbox" element={<TextingInbox />} />
           <Route path="/inbox/:id" element={<TextingThread />} />
           <Route path="/my-people" element={<MyPeople />} />
+          <Route path="/my-people/contacts" element={<Navigate to="/my-people" replace />} />
           <Route path="/share" element={<Share />} />
           <Route path="/call-time" element={<CallTime />} />
           <Route path="/profile" element={<Profile />} />
@@ -226,6 +228,8 @@ export default function App({ mode = 'field' }) {
         <Route path="/inbox" element={<TextingInbox />} />
         <Route path="/inbox/:id" element={<TextingThread />} />
         <Route path="/my-people" element={<MyPeople />} />
+        {/* The desk's "Find people I know": the page sends anyone else to My people. */}
+        <Route path="/my-people/contacts" element={<AddressBook />} />
         <Route path="/share" element={<Share />} />
         <Route path="/call-time" element={<CallTime />} />
         <Route path="/profile" element={<Profile />} />

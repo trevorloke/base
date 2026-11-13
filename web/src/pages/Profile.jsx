@@ -1,7 +1,8 @@
 // Your profile (anyone, in either app; the account menu's first item): who
 // you are here — name, email, role, campaign — and two-step sign-in, which
-// anyone can turn on for themselves (components/TwoStep.jsx), and their
-// shifts in their own calendar (components/CalendarFeed.jsx), and Google
+// anyone can turn on for themselves (components/TwoStep.jsx), their shifts
+// in their own Google Calendar (components/GcalCard.jsx, when the campaign
+// has it on) and in any calendar (components/CalendarFeed.jsx), and Google
 // (components/GoogleCard.jsx), when this server has it. Last, after every
 // card: Google's notice, while Google is the map or suggests addresses.
 import { useOutletContext } from 'react-router-dom';
@@ -10,6 +11,7 @@ import { apiGet } from '../api.js';
 import GoogleNotice from '../components/GoogleNotice.jsx';
 import TwoStepCard from '../components/TwoStep.jsx';
 import CalendarFeedCard from '../components/CalendarFeed.jsx';
+import GcalCard from '../components/GcalCard.jsx';
 import GoogleCard from '../components/GoogleCard.jsx';
 import '../components/two-step.css';
 
@@ -29,6 +31,7 @@ export default function Profile() {
         <div><dt>Role</dt><dd>{ROLE_WORD[role] || role} · {me.workspace.name}</dd></div>
       </dl>
       <TwoStepCard me={me} />
+      <GcalCard me={me} />
       <CalendarFeedCard me={me} />
       <GoogleCard />
       <GoogleNotice google={mapQ.data?.google} />

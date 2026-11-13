@@ -12,6 +12,7 @@
 // through the outbox) with the way you really talked: a phone call, a text,
 // or "In person". Remove? Yes · No in place (it needs signal, and says so).
 // The server sends only your own people, through the volunteer rule.
+// The desk also gets a quiet "Find people I know" (pages/AddressBook.jsx).
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useLocation, useOutletContext, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
@@ -26,6 +27,7 @@ import { newClientId, onOutboxSent, queueAction, useOutbox } from '../offline.js
 import { Icon, firstName, invalidatePersonData, isDnc, noCalls, smsHref, telHref, textBody, useAction } from './People.jsx';
 import './shifts.css';
 import './people.css';
+import { hasArea, isDesk } from '../Shell.jsx';
 import './relationships.css';
 
 const WAYS = { phone: 'Phone', text: 'Text', in_person: 'In person' };
@@ -260,6 +262,8 @@ export default function MyPeople() {
   const offline = noSignal(q);
   const copy = showingCopy(q);
   const location = useLocation();
+  // The desk app's desk roles holding People (the field app shows everyone as a volunteer).
+  const findKnown = isDesk(me) && !me?.candidate && hasArea(me, 'people');
 
   const addedText = (r, name) => (r?.duplicate ? `${r.person?.name || name} is one of your people already` : `✓ Added ${r?.person?.name || name}`);
   const onAdded = (res, name, linkId) => {
@@ -286,9 +290,13 @@ export default function MyPeople() {
       <div className="ops-head">
         <h1>My people</h1>
         {!adding && (
-          <button type="button" className="btn btn-primary ops-tap" onClick={() => { setNote(null); setParams({ add: '1' }, { state: location.state }); }}>
-            Add someone
-          </button>
+          <span className="ops-head__actions">
+            {/* The desk only (a volunteer must not test emails against the list). */}
+            {findKnown && <Link className="btn btn-quiet ops-tap" to="/my-people/contacts">Find people I know</Link>}
+            <button type="button" className="btn btn-primary ops-tap" onClick={() => { setNote(null); setParams({ add: '1' }, { state: location.state }); }}>
+              Add someone
+            </button>
+          </span>
         )}
       </div>
 
