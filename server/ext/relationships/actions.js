@@ -34,7 +34,9 @@ import { forViewer } from '../../lib/viewer.js';
 import { httpError } from '../../actions/util.js';
 import { findKnown, maybeSame, selfPerson } from './match.js';
 
-// A new role (a candidate) is added here, and to TIE_READERS (index.js) if it reads ties.
+// A candidate is a volunteer with a seat (ext/candidates), not a role of its
+// own: they get the volunteer's view, and TIE_READERS (index.js) keeps the
+// desk's ties from them whatever the Candidates row is granted.
 const ALL_ROLES = ['manager', 'treasurer', 'staff', 'volunteer'];
 export const KINDS = ['family', 'friend', 'neighbour', 'work', 'community', 'other'];
 

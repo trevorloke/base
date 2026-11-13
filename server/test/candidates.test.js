@@ -279,10 +279,9 @@ test('what a candidate may never do: money, records, sends, the team, permission
   assert.deepEqual(ok(await cand.get('/api/auth/me')).areas, ['people']);
   assert.equal((await cand.get(`/api/persons/${p.id}/knows`)).status, 403);
   assert.equal((await cand.get('/api/relationships/connected')).status, 403);
-  // R's key ties: until that read lands the address answers no data; once
-  // it does, it must refuse a candidate (TIE_READERS is the desk's roles).
-  const key = await cand.get('/api/relationships/key');
-  assert.ok(key.status === 403 || key.json === null, `/relationships/key: ${key.status} ${JSON.stringify(key.json)}`);
+  // R's key ties refuse a candidate too (TIE_READERS is the desk's roles).
+  const key = await cand.get(`/api/relationships/key?ids=${p.id}`);
+  assert.equal(key.status, 403, `/relationships/key: ${JSON.stringify(key.json)}`);
   // And no gifts on a profile.
   const prof = ok(await cand.get(`/api/persons/${p.id}`));
   assert.deepEqual(prof.gifts || [], []);
