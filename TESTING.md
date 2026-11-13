@@ -887,6 +887,17 @@ one tap away under **More**.
   Maps* with the plain words, *Google said* and the Recipe B step. Staff and
   volunteers see no *Why?*. (`ONLY=google node e2e-map.mjs` runs this
   against a stand-in Google; `GOOGLE_PORT`, `GPORT` pick its ports.)
+- **Map, a street map that shows no streets** — with no CARTO key the map
+  opens on *Standard* from OpenStreetMap and nothing is asked of CARTO
+  (Show → Map has no *Clean*). With `STARBASE_TILE_CARTO_KEY` set and CARTO
+  sending "API KEY REQUIRED" instead of streets, a line says *The street map
+  wasn’t showing streets — switched to Muted*; a manager's *Why?* opens the
+  Map check, whose top line is *Clean · CARTO — sends a notice, not streets*
+  with the picture this phone got under it. (`node e2e-maplive.mjs` runs
+  this with a notice stand-in — one PNG for every tile — and a good one, a
+  picture per tile, on its own servers at :5410–:5414; `ONLY=` picks steps.
+  The other map suites' stand-ins are a picture per tile too, since the same
+  picture everywhere is now a notice.)
 - **Map, the street map not loading** — block `basemaps.cartocdn.com` in
   the browser's network tools and reload: within a moment a line says *The
   street map wasn’t loading — switched to Muted* and the streets are there.
@@ -1183,8 +1194,8 @@ latest).
   (`googleHere()` in `web/src/components/google.js`).
   *Result: not yet run.*
 
-- Map tiles come from CARTO (the *Clean* look the map opens on) and
-  OpenStreetMap, both free and neither for heavy use; choose a provider the
+- Map tiles come from OpenStreetMap (and CARTO for the *Clean* look, only
+  with the campaign's free CARTO key), both free and neither for heavy use; choose a provider the
   campaign has an agreement with before election week: Google Maps
   (`GOOGLE_MAPS_TILES=1` and a `GOOGLE_MAPS_SERVER_KEY` with the Map Tiles
   API enabled), Stadia Maps (`STARBASE_TILE_PROVIDER=stadia`) or any
