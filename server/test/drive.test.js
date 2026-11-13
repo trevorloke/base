@@ -57,13 +57,14 @@ const drain = async (ws, max = 30) => {
   }
 };
 // Every part to the end, even on a slow machine (a call over googleFetch's
-// 10 s is a counted try: brought forward and run again).
+// 10 s is a counted try: brought forward and run again), and even while the
+// server's own runner (runJobsSoon, after drive.export) holds a part.
 const finish = async (ws) => {
-  for (let i = 0; i < 8; i += 1) {
+  for (let i = 0, tries = 0; i < 600 && tries < 8; i += 1) {
     await drain(ws);
-    const left = (await db.query(`select 1 from jobs where workspace_id = $1 and status = 'pending' limit 1`, [ws])).rows[0];
-    if (!left) return;
-    await due(ws);
+    const left = (await db.query(`select status from jobs where workspace_id = $1 and status in ('pending', 'running')`, [ws])).rows;
+    if (!left.length) return;
+    if (left.some((r) => r.status === 'pending')) { tries += 1; await due(ws); } else await new Promise((r) => { setTimeout(r, 100); });
   }
 };
 // A job handed back or tried again later: due now (and Google's 30 s pause over).
