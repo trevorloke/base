@@ -708,6 +708,16 @@ test('shift emails carry one calendar file with that person’s shifts; the text
 
   // The one-shift Notify: the same file and line; the text is the message as it was.
   emails.length = 0; texts.length = 0;
+  // DTSTAMP is when the shift or Asha's booking last changed (the event log),
+  // never the clock: sent again in the same round (a retry) the bytes are
+  // the same, so the email service takes it as the same email. Read before
+  // Notify — the file is built before Notify's own event is written, and
+  // from Asha's booking only, not the others on the shift — so a busy run
+  // that crosses a second boundary can't make the two differ.
+  const last = (await rows(
+    `select max(server_ts) as at from events where entity_type in ('shift', 'shift_assignment') and entity_id = any($1::uuid[])`,
+    [[mon.id, ...(await rows('select id from shift_assignments where shift_id = $1 and person_id = $2', [mon.id, P.asha.id])).map((x) => x.id)]],
+  ))[0].at;
   ok(await mgr.action('shift.notify', { shift_id: mon.id }));
   const one = emails.find((m) => m.to[0] === P.asha.email);
   assert.equal(one.attachments.length, 1);
@@ -718,14 +728,7 @@ test('shift emails carry one calendar file with that person’s shifts; the text
   const message = shiftMessage(shift, `Tell ${tag}`, TZ);
   assert.equal(one.text, message.replace(/\n(— Tell [a-z0-9]+)$/, '\nAdd to your calendar: open the attached file.\n$1'));
   assert.equal(texts.find((m) => m.To === '+16045550151').Body, message, 'the text is byte for byte what it was');
-  // DTSTAMP is when the shift or the booking last changed (the event log),
-  // never the clock: sent again in the same round (a retry) the bytes are
-  // the same, so the email service takes it as the same email.
   const stampIn = (ics) => ics.match(/^DTSTAMP:(\d{8}T\d{6}Z)$/m)[1];
-  const last = (await rows(
-    `select max(server_ts) as at from events where entity_type in ('shift', 'shift_assignment') and entity_id = any($1::uuid[])`,
-    [[mon.id, ...(await rows('select id from shift_assignments where shift_id = $1', [mon.id])).map((x) => x.id)]],
-  ))[0].at;
   assert.equal(stampIn(oneIcs), new Date(last).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, ''));
   // Moved a day earlier and Notify again: the new file is stamped later, so
   // a calendar that has the old one takes the new time.

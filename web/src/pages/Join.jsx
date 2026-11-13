@@ -1,7 +1,10 @@
 // Join a campaign from an invite link. New people set a name and password;
 // people who already use base.win confirm with their existing password (and
 // the code from their authenticator app, when two-step sign-in is on).
-// Everyone lands on Today, whose one big button is "Start canvassing".
+// Everyone lands on Today, whose one big button is "Start canvassing" —
+// unless they ticked "Also sign in with Google next time": then, once
+// joined (and signed in with their password), Google asks which account,
+// and they land on Your profile with it linked (or the reason it isn't).
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -9,6 +12,8 @@ import { apiGet, apiPost } from '../api.js';
 import { landing } from '../mode.js';
 import { CodeField } from '../components/TwoStep.jsx';
 import AuthPage from '../components/AuthPage.jsx';
+import { appName, googleHere, googleStart } from '../components/google.js';
+import '../components/google.css';
 
 const ROLE_LABEL = { manager: 'a manager', treasurer: 'the treasurer', staff: 'staff', volunteer: 'a volunteer' };
 
@@ -26,6 +31,9 @@ export default function Join({ mode = 'field' }) {
   const [code, setCode] = useState(null);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [withGoogle, setWithGoogle] = useState(false);
+  const setup = useQuery({ queryKey: ['auth-setup'], queryFn: () => apiGet('/auth/setup'), retry: false });
+  const googleOn = Boolean(setup.data?.google) && googleHere();
   // An invite works once: after joining it 404s, so never refetch it.
   const inv = useQuery({
     queryKey: ['invite', token], queryFn: () => apiGet(`/auth/invite/${token}`),
@@ -44,6 +52,12 @@ export default function Join({ mode = 'field' }) {
       // invite, which this screen still shows until Today takes over.
       queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== 'invite' });
       queryClient.setQueryData(['me'], me);
+      if (googleOn && withGoogle) {
+        // The app they'd land in; the server sends them back to its profile.
+        const app = appName(landing(me, mode).href ? (mode === 'admin' ? 'field' : 'admin') : mode);
+        window.location.assign(googleStart('link', { app }));
+        return;
+      }
       const go = landing(me, mode);
       if (go.href) window.location.assign(go.href); else navigate(go.to);
     } catch (err) {
@@ -87,6 +101,15 @@ export default function Join({ mode = 'field' }) {
         </div>
         {code !== null && (
           <CodeField id="join-code" label="Code from your authenticator app (or a recovery code)" value={code} onChange={setCode} recovery autoFocus />
+        )}
+        {googleOn && (
+          <>
+            <label className="gg-tick">
+              <input type="checkbox" checked={withGoogle} onChange={(e) => setWithGoogle(e.target.checked)} aria-describedby="join-google-hint" />
+              <span>Also sign in with Google next time</span>
+            </label>
+            <p className="gg-tick-hint" id="join-google-hint">After joining, Google asks which account to use. If Google says this browser isn’t allowed, open the invite link in Safari or Chrome.</p>
+          </>
         )}
         {error && <p className="error" role="alert">{error}</p>}
         <button type="submit" className="btn btn-primary" style={AUTH_BUTTON} disabled={busy || (code !== null && !code.trim())}>

@@ -174,6 +174,32 @@ a lock, a reset and the requirement are on the event log (nothing secret in it).
 Keys are sealed with `STARBASE_TWO_STEP_KEY` (INTEGRATIONS.md); the tables
 (`server/ext/twostep`) are never in the export. The how: `server/lib/twostep.js`.
 
+### Sign in with Google
+
+Once the campaign's Google client is set (`GOOGLE_OAUTH_CLIENT_ID`,
+`GOOGLE_OAUTH_CLIENT_SECRET`; INTEGRATIONS.md), anyone on the team can link
+their Google account on **Your profile** while signed in, then sign in with
+Google instead of typing the password. It is an extra way in, never a
+replacement: every account keeps its password, and two-step sign-in still
+asks for the code. Google never opens an account on its own — an account
+is found only by the link its owner made (Google's account id), never by
+email — and a removed member stays out. A manager can turn Google sign-in
+off, or allow only Google accounts at the campaign's Workspace domain
+(their own link must be at it first), under **Settings → Services →
+Google**; a manager can also unlink someone's lost Google account. Linking
+and unlinking are on the event log with nothing about the Google account;
+signing in is not (as with passwords). The same Google client and one
+stored connection per person (`google_grants`, its token sealed with
+`GOOGLE_TOKEN_KEY`) serve Gmail, Drive and Calendar: `server/lib/google/`
+(the plumbing they call) and `server/ext/google/` (the one route pair
+`/api/auth/google/start` and `/back`, tables, actions, Services row).
+On the web: the button on Sign in, the tick box on Join, the Google card on
+Your profile (`GoogleCard.jsx`), `GoogleConnect.jsx` (the one Connect piece
+a Google feature puts on its own screen), the Services panel
+(`GooglePanel.jsx`) and Team's *Google* chip. The installed home-screen app
+shows *Open base.win in your browser to use Google.* instead of any Google
+button until the phone check in TESTING.md §4 passes.
+
 ### The command bar
 
 On the desk, **Ctrl+K** (⌘K on a Mac) or **Search** in the header opens one

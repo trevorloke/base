@@ -23,6 +23,10 @@ import {
 import { LOCKED_SIGN_IN, tellLocked } from '../ext/twostep/locked.js';
 import { hostOfRequest, noteAppHost } from '../ext/site/store.js';
 import { candidateOut, linkOnJoin } from '../ext/candidates/invite.js';
+// Google sign-in (ext/google, lib/google/): whether it's on here, and the
+// person's own link.
+import { googleSetup, signinRules } from '../lib/google/config.js';
+import { loginOf } from '../lib/google/flow.js';
 
 const app = new Hono();
 
@@ -40,7 +44,7 @@ const secure = secureFlag ? secureFlag === '1' : process.env.NODE_ENV === 'produ
 // Strict: the cookie goes only with requests the app itself makes (the app
 // is one origin; a link opened from an email loads the app, which then asks
 // for /api/auth/me itself).
-const cookieOpts = { httpOnly: true, sameSite: 'Strict', path: '/', secure, maxAge: 30 * 86400 };
+export const cookieOpts = { httpOnly: true, sameSite: 'Strict', path: '/', secure, maxAge: 30 * 86400 };
 
 // Sign-in guesses: 30 tries from one address and 10 failures against one
 // email per 15 minutes, then 429 for the rest of the window.
@@ -92,11 +96,19 @@ const meOut = (ctx) => ({
   // A volunteer with a candidate's seat (ext/candidates), else null.
   candidate: candidateOut(ctx.candidate),
 });
+// …and their Google sign-in link (ext/google): whether Google sign-in is on
+// here for their campaign, linked, and to which Google address — their
+// own, shown only to them.
+const meFor = async (db, ctx) => {
+  const login = await loginOf(db, ctx.user.id);
+  const on = googleSetup().signin && signinRules(ctx.workspace?.settings).signin;
+  return { ...meOut(ctx), google: { on, linked: Boolean(login), email: login?.email || null } };
+};
 
 // Two-step sign-in: the code after the password. The ticket for it is a
 // cookie of its own, alive for ten minutes; the session comes only with
 // the right code.
-const pendingCookie = { ...cookieOpts, maxAge: PENDING_MINUTES * 60 };
+export const pendingCookie = { ...cookieOpts, maxAge: PENDING_MINUTES * 60 };
 const NO_MATCH = 'That code doesn’t match. Codes change every 30 seconds and each works once: type the newest one, or one of your recovery codes.';
 const TOO_MANY_CODES = 'Too many wrong codes — wait 15 minutes, then try again.';
 
@@ -136,7 +148,15 @@ const uniqueSlug = async (tx, base) => {
 app.get('/setup', async (c) => {
   const db = await getDb();
   const open = await setupOpen(db);
-  return c.json({ open, organization: open ? orgName() : await campaignName(db), org: orgOut() });
+  // Sign in with Google: set up on this server and on for the campaign
+  // (the first one, as campaignName); its domain rule, if any. Never the
+  // client's id.
+  const ws = (await db.query('select settings from workspaces order by created_at limit 1')).rows[0];
+  const rules = signinRules(typeof ws?.settings === 'string' ? JSON.parse(ws.settings) : ws?.settings);
+  return c.json({
+    open, organization: open ? orgName() : await campaignName(db), org: orgOut(),
+    google: googleSetup().signin && rules.signin, googleDomain: rules.domain,
+  });
 });
 
 app.post('/signup', async (c) => {
@@ -188,7 +208,7 @@ app.post('/signup', async (c) => {
   const token = await createSession(db, userId, workspaceId);
   setCookie(c, SESSION_COOKIE, token, cookieOpts);
   const ctx = await loadContext(db, token);
-  return c.json(meOut(ctx), 201);
+  return c.json(await meFor(db, ctx), 201);
 });
 
 app.post('/login', async (c) => {
@@ -226,7 +246,7 @@ app.post('/login', async (c) => {
   const token = await createSession(db, user.id, membership.workspace_id);
   setCookie(c, SESSION_COOKIE, token, cookieOpts);
   const ctx = await loadContext(db, token);
-  return c.json(meOut(ctx));
+  return c.json(await meFor(db, ctx));
 });
 
 // The second step: a code from the app, or one of the recovery codes. Five
@@ -271,11 +291,13 @@ app.post('/login/code', async (c) => {
   // Removed from the campaign between the password and the code.
   if (!ctx) { await destroySession(db, token); return c.json({ error: 'no workspace membership' }, 403); }
   setCookie(c, SESSION_COOKIE, token, cookieOpts);
-  return c.json({ ...meOut(ctx), ...(r.used === 'recovery' ? { recovery_left: r.left } : {}) });
+  // Google stood in for the password: the link counts as used now.
+  if (pending.via === 'google') await db.query('update google_logins set last_used_at = now() where user_id = $1', [pending.user_id]);
+  return c.json({ ...(await meFor(db, ctx)), ...(r.used === 'recovery' ? { recovery_left: r.left } : {}) });
 });
 
 // ── Invites: look up, then join (new account, or an existing one by password) ──
-const findInvite = async (db, token) => (await db.query(
+export const findInvite = async (db, token) => (await db.query(
   `select i.id, i.email, i.role, i.workspace_id, i.candidate_id, w.name as workspace_name
    from invites i join workspaces w on w.id = i.workspace_id
    where i.token_hash = $1 and i.accepted_at is null and i.expires_at > now()`,
@@ -363,7 +385,7 @@ app.post('/join', async (c) => {
   const sessionToken = await createSession(db, userId, inv.workspace_id);
   setCookie(c, SESSION_COOKIE, sessionToken, cookieOpts);
   const ctx = await loadContext(db, sessionToken);
-  return c.json(meOut(ctx));
+  return c.json(await meFor(db, ctx));
 });
 
 app.post('/logout', async (c) => {
@@ -379,7 +401,7 @@ app.get('/me', async (c) => {
   if (!ctx) return c.json({ error: 'not signed in' }, 401);
   // The app opened here, signed in: never a website domain (as in routes/api.js).
   await noteAppHost(db, hostOfRequest(c));
-  return c.json(meOut(ctx));
+  return c.json(await meFor(db, ctx));
 });
 
 export default app;

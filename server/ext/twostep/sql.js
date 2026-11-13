@@ -31,6 +31,9 @@ create table if not exists two_step_pending (
   created_at timestamptz not null default now()
 );
 create index if not exists two_step_pending_user_idx on two_step_pending (user_id);
+-- How the sign-in got this far: 'password', or 'google' (ext/google) — the
+-- code step then notes the Google sign-in as used.
+alter table two_step_pending add column if not exists via text not null default 'password';
 alter table two_step add column if not exists fails int not null default 0;
 alter table two_step add column if not exists locked_at timestamptz;
 

@@ -16,7 +16,8 @@ import { Routes, Route, Navigate, Outlet, useOutletContext, useLocation } from '
 import { useQuery } from '@tanstack/react-query';
 import { apiGet, noAnswer } from './api.js';
 import Shell, { isDesk, hasArea } from './Shell.jsx';
-import { ADMIN_BASE, fieldView, mayAdmin } from './mode.js';
+import { ADMIN_BASE, fieldView, landing, mayAdmin } from './mode.js';
+import { takeSignin } from './components/google.js';
 import Login from './pages/Login.jsx';
 import Signup from './pages/Signup.jsx';
 import Today from './pages/Today.jsx';
@@ -98,6 +99,13 @@ function RequireAuth({ mode }) {
   });
   if (me.isLoading) return null;
   if (me.isError && !(noAnswer(me.error) && me.data)) return <Navigate to="/login" replace />;
+  // Back from signing in with Google (which returns to the app it started
+  // from): placed as a password sign-in would be — a manager on the desk,
+  // a volunteer in the field app.
+  if (me.data?.user && takeSignin()) {
+    const go = landing(me.data, mode === 'admin' ? 'admin' : 'field');
+    if (go.href) { window.location.replace(go.href); return null; }
+  }
   // The campaign requires two-step sign-in for this role and it isn't on
   // yet: its set-up stands before everything else (components/TwoStep.jsx).
   if (me.data?.two_step?.must_set_up || twoStepHeld) return <TwoStepRequired me={me.data} onHold={setTwoStepHeld} />;

@@ -17,6 +17,7 @@ is written) and says exactly what is wrong if anything is.
 | [Texting and calls — Twilio](#texting-and-calls--twilio) | the campaign's number: texts, text blasts, ladder texts, calls, SMS shift alerts | no (phones' own apps until then) | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` |
 | [Address lookup](#address-lookup) | suggestions as you type, placing people on the map | yes (free default, no key) | `GEOCODER`, `GEOCODER_FALLBACK`, `BC_GEOCODER_KEY`, `GOOGLE_MAPS_SERVER_KEY` |
 | [Map background](#map-background) | the map volunteers walk | no (free default; change before election week) | `GOOGLE_MAPS_TILES`, `GOOGLE_MAPS_SERVER_KEY`, or `STARBASE_TILE_URL` |
+| [Google sign-in and connections](#google-sign-in-and-connections) | Sign in with Google; the one Google connection Gmail, Drive and Calendar use | no (passwords always work) | `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_TOKEN_KEY` |
 | [Two-step sign-in key](#two-step-sign-in-key) | seals everyone's authenticator key | before the public link goes out (works without, with a warning) | `STARBASE_TWO_STEP_KEY` |
 | [Hosting — Render](#hosting--render) | the two environments | yes | `render.yaml` |
 | [GitHub Actions](#github-actions) | tests, and promoting staging to production | yes | none |
@@ -570,6 +571,40 @@ and the old one after, separated by a comma (`new,old`); drop the old one
 once everyone has signed in. A key that's lost can't be got back: people
 sign in with a recovery code (and set it up again), or a manager resets
 theirs under **Settings → Members**.
+
+## Google sign-in and connections
+
+One OAuth client in the campaign's Google Cloud project serves Sign in with
+Google and every Google connection (Gmail, Drive, Calendar). Until it is
+set, no Google button shows and **Settings → Services → Google** says what
+is missing.
+
+| Setting | Default | Notes |
+|---|---|---|
+| `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` | — | Google Cloud → Google Auth Platform → Clients → *Web application*. The secret is shown once: copy it into Render at once (a lost one: add a new secret) |
+| `GOOGLE_TOKEN_KEY` | — | 32 or more random characters (`openssl rand -base64 48`), a different one per environment. Seals each person's stored Google connection; sign-in needs none. There is no fallback in the database: unset, connections are refused. Lost, everyone connects again — nothing else is lost. To change it: `new,old`, then drop the old |
+| `GOOGLE_ACCOUNTS_BASE`, `GOOGLE_OAUTH_BASE` | Google's | tests only (`server/test/fake-google.js`); ignored in production |
+
+- **The redirect address** is always `<STARBASE_PUBLIC_URL>/api/auth/google/back`
+  — Services shows it with a Copy button. Paste it into the client's
+  *Authorized redirect URIs*. **Change it in Google first, then change
+  `STARBASE_PUBLIC_URL`.** No JavaScript origins are needed.
+- **Check** reads Google's discovery document, asks Google's sign-in page
+  about the redirect address (nothing is followed), and tries an impossible
+  code with the id and secret: *Working* only when all three pass.
+- **Audience:** Internal (Workspace accounts only) or External and
+  **published** — never left in Testing on production (Testing ends Gmail,
+  Drive and Calendar connections every 7 days). Sign-in alone asks only
+  `openid email profile`: no Google review.
+- Google deletes a client nobody has used for six months: sign in with
+  Google on production at least every four months.
+- When Google refuses the client (a wrong secret), base.win stops calling
+  Google for 60 seconds and Services shows when; when Google doesn't answer,
+  30 seconds. A Gmail or Drive outage never stops anyone signing in.
+- Disconnecting tells Google (a revoke, in the background) only when the
+  person has nothing else connected and nobody else here uses that Google
+  account. With `STARBASE_JOBS=off` nothing can tell Google: people remove
+  base.win in their Google Account themselves.
 
 ## Online payments — Stripe
 

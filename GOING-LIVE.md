@@ -110,6 +110,8 @@ Then, as each one is ready:
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` | from Twilio; for texts to a list in Canada the number should be a verified toll-free number or a short code (INTEGRATIONS.md) | texting and calling through the campaign's number, SMS shift alerts; without them the phone's own apps are used |
 | `GEOCODER` | leave unset (`bc`, the free BC Address Geocoder); `GEOCODER_FALLBACK=google` to ask Google only for addresses BC can't place | placing people on the map |
 | `GOOGLE_MAPS_SERVER_KEY` | a Google Cloud key with application restriction **None** and API restriction to the APIs used (Map Tiles; Geocoding for Google address lookup) — not a *Websites* key, not an IP restriction on Render (§5, Recipe B) | Google geocoding and Google Maps tiles |
+| `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` | the campaign's OAuth client (Google Cloud → Google Auth Platform → Clients → *Web application*, redirect address from **Settings → Services → Google**); staging gets its own project and client, never production's (INTEGRATIONS.md, *Google sign-in and connections*) | Sign in with Google, and every Google connection |
+| `GOOGLE_TOKEN_KEY` | 32 or more random characters (`openssl rand -base64 48`), a different one per environment; keep a copy in the campaign's password manager | Gmail, Drive and Calendar connections (lost: everyone connects again) |
 | `GOOGLE_MAPS_TILES` | `1` (or `true`, `yes`, `on`) to draw the field map on Google's tiles (`GOOGLE_MAPS_TILE_TYPE` roadmap, satellite or terrain); otherwise the free tiles, which are not for a large team in election week (§5, *The street map*) | the map's background |
 | `STARBASE_TILE_PROVIDER`, `STARBASE_TILE_KEY` | `stadia` for Stadia Maps (address, credit and zoom filled in), and its key only if it can't be told the campaign's web address (§5, Recipe A) | the map's background, instead of the free tiles |
 | `STARBASE_TILE_URL`, `STARBASE_TILE_ATTRIBUTION`, `STARBASE_TILE_MAX_ZOOM` | a tile provider the campaign has an agreement with: its `https://…/{z}/{x}/{y}.png` address, its credit line, its deepest zoom (§5, *The street map*) | the map's background, instead of the free tiles |
@@ -439,6 +441,15 @@ shared, and the code names no client.
   log pledges, and the 60 days after which an unpaid pledge leaves Needs
   you. Two-step (above) matters here: candidates see donors' giving.
   **Settings → Services** shows the two-step key set up.
+- Google: `STARBASE_PUBLIC_URL` is the https address people use, the
+  redirect address from **Settings → Services → Google** is in the client's
+  *Authorized redirect URIs* (when the public address changes: the new one
+  in Google first, then Render), the audience is published (not Testing),
+  and **Check** says *Working*. Behind base.win, `BASE_DOOR_KEY` is set. If
+  the campaign uses Google Workspace, its admin marks the base.win client
+  *Trusted* (Admin console → Security → API controls). Sign in with Google
+  once on production; repeat every four months so Google never deletes an
+  idle client.
 - Keys: every key above is in Render only, never in the repo or a chat.
   Anyone who leaves the campaign is removed under **Admin → Members**, which ends their
   sign-in everywhere at once.

@@ -28,6 +28,7 @@ let dmarc = null; // the sender's domain's DMARC record (TXT), when it has one
 let twilioNumbers = [];
 let refuse = false;
 const seen = [];
+KEYS.push('GOOGLE_OAUTH_CLIENT_ID', 'GOOGLE_OAUTH_CLIENT_SECRET', 'GOOGLE_TOKEN_KEY', 'GOOGLE_ACCOUNTS_BASE', 'GOOGLE_OAUTH_BASE', 'BASE_DOOR_KEY');
 KEYS.push('MAIL_PROVIDER', 'RESEND_WEBHOOK_SECRET', 'SENDGRID_API_KEY', 'MAILCHIMP_API_KEY', 'MAILCHIMP_API_BASE', 'MAILCHIMP_AUDIENCE_ID');
 
 before(async () => {
@@ -75,7 +76,7 @@ const check = async (key) => ok(await mgr.post('/api/connections/check', { key }
 
 test('nothing set: what each service is for and which settings are missing — managers only', async () => {
   const s = byKey(await list());
-  assert.deepEqual(Object.keys(s), ['database', 'public', 'email', 'texting', 'geocoder', 'tiles', 'jobs', 'mailchimp', 'stripe', 'callhub', 'twostep']);
+  assert.deepEqual(Object.keys(s), ['database', 'public', 'email', 'texting', 'geocoder', 'tiles', 'jobs', 'mailchimp', 'stripe', 'callhub', 'google', 'twostep']);
   assert.deepEqual(s.email.missing, ['RESEND_API_KEY', 'MAIL_FROM']);
   assert.equal(s.email.state, 'missing');
   assert.deepEqual(s.texting.missing, ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM']);
@@ -233,4 +234,64 @@ test('files in: the desk’s own address — /desk under the client’s path on 
   assert.equal(lists(await under.json()), 'http://base.test/imaginesurrey/desk/people/import');
   assert.equal(lists(await list()), 'http://localhost/admin/people/import');
   delete process.env.BASE_PATH;
+});
+
+test('Google (sign-in and connections): missing, default, ready — never a value; the Check against a stand-in Google', async () => {
+  const { startFakeGoogle } = await import('./fake-google.js');
+  globalThis.fetch = realFetch;
+  const secret = `secret-${tag}-value`;
+  const key = `google-token-key-${tag}-0123456789abcdefghij`;
+  const g = await startFakeGoogle({ port: 0, clientId: `id-${tag}.apps.example`, secret, redirectUris: ['https://base.example.org/api/auth/google/back'] });
+  try {
+    let row = byKey(await list()).google;
+    assert.deepEqual([row.state, row.missing, row.panel, row.launch], ['missing', ['GOOGLE_OAUTH_CLIENT_ID', 'GOOGLE_OAUTH_CLIENT_SECRET'], 'google', false]);
+    Object.assign(process.env, { GOOGLE_OAUTH_CLIENT_ID: `id-${tag}.apps.example`, GOOGLE_OAUTH_CLIENT_SECRET: secret, GOOGLE_ACCOUNTS_BASE: g.base, GOOGLE_OAUTH_BASE: g.base });
+    row = byKey(await list()).google;
+    assert.equal(row.state, 'missing');
+    assert.match(row.detail, /Set STARBASE_PUBLIC_URL \(https:\/\/…\) first/);
+    process.env.STARBASE_PUBLIC_URL = 'https://base.example.org';
+    row = byKey(await list()).google;
+    assert.equal(row.state, 'default', 'sign-in works; connections need the key');
+    assert.match(row.detail, /^Redirect address for Google Cloud: https:\/\/base\.example\.org\/api\/auth\/google\/back · Connections need GOOGLE_TOKEN_KEY/);
+    assert.match(row.detail, /0 people sign in with Google · 0 connected accounts/);
+    assert.match(row.detail, /Test address in use/);
+    // The panel's own: one item a line, and the address for its Copy.
+    assert.equal(row.redirect, 'https://base.example.org/api/auth/google/back');
+    assert.equal(row.lines[2], '0 people sign in with Google · 0 connected accounts');
+    assert.equal(row.lines.join(' · '), row.detail);
+    process.env.GOOGLE_TOKEN_KEY = key;
+    row = byKey(await list()).google;
+    assert.equal(row.state, 'ready');
+    assert.match(row.detail, /Connections: ready/);
+    assert.doesNotMatch(row.detail, /BASE_DOOR_KEY/);
+    process.env.BASE_PATH = '/imaginesurrey';
+    assert.match(byKey(await list()).google.detail, /Google sign-in limits count everyone through base\.win as one address — set BASE_DOOR_KEY/);
+    delete process.env.BASE_PATH;
+    const body = JSON.stringify(await list());
+    for (const v of [secret, key, `id-${tag}.apps.example`]) assert.ok(!body.includes(v), 'no value in the answer');
+
+    // The Check: discovery, the redirect address, the id and secret.
+    let c = await check('google');
+    assert.equal(c.ok, true, c.said);
+    assert.match(c.said, /^Working · Google knows this redirect address · Google accepts this client ID and secret$/);
+    process.env.STARBASE_PUBLIC_URL = 'https://other.example.org';
+    c = await check('google');
+    assert.equal(c.ok, false);
+    assert.match(c.said, /Add https:\/\/other\.example\.org\/api\/auth\/google\/back to the client’s Authorized redirect URIs/);
+    process.env.STARBASE_PUBLIC_URL = 'https://base.example.org';
+    process.env.GOOGLE_OAUTH_CLIENT_SECRET = 'wrong-secret';
+    c = await check('google');
+    assert.equal(c.ok, false);
+    assert.match(c.said, /Google doesn’t recognise this client ID and secret\. Copy them again/);
+    process.env.GOOGLE_OAUTH_CLIENT_SECRET = secret;
+    // Google moved its addresses (here: the discovery document names others).
+    process.env.GOOGLE_OAUTH_BASE = g.base.replace('127.0.0.1', 'localhost');
+    c = await check('google');
+    assert.equal(c.ok, false);
+    assert.match(c.said, /^Google has moved its sign-in addresses — base\.win needs an update/);
+    assert.ok(!JSON.stringify(c).includes(secret));
+  } finally {
+    for (const k of ['GOOGLE_OAUTH_CLIENT_ID', 'GOOGLE_OAUTH_CLIENT_SECRET', 'GOOGLE_TOKEN_KEY', 'GOOGLE_ACCOUNTS_BASE', 'GOOGLE_OAUTH_BASE', 'STARBASE_PUBLIC_URL', 'BASE_PATH']) delete process.env[k];
+    await g.close();
+  }
 });

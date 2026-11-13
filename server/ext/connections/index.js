@@ -31,6 +31,8 @@ import { mailchimpService, mailchimpInbound, checkMailchimp } from '../mailchimp
 import { stripeService, checkStripe, webhookUrl } from '../payments/service.js';
 // The dialer (ext/callhub): its row carries a Connect action beside Check.
 import { callhubService, callhubInbound, checkCallHub } from '../callhub/service.js';
+// Google sign-in and connections (ext/google): a panel, and how many use it.
+import { googleService, googleCounts, checkGoogle } from '../google/service.js';
 
 const MANAGER = 'manager';
 const TIMEOUT_MS = 8000;
@@ -134,6 +136,7 @@ export const services = (base = publicUrl()) => {
     mailchimpService(),
     stripeService(base),
     callhubService(),
+    googleService(),
     // Two-step sign-in's key (lib/twostep.js): without it base.win keeps
     // one in the database — it works, but a copy of the database would
     // give the authenticator keys away.
@@ -180,6 +183,7 @@ const within = (p) => Promise.race([p, new Promise((_, rej) => { setTimeout(() =
 const CHECKS = {
   stripe: (db, ws, base) => checkStripe(base),
   callhub: checkCallHub,
+  google: checkGoogle,
   database: async (db, ws) => {
     await db.query('select 1');
     const n = (await db.query('select count(*)::int as n from persons where workspace_id = $1 and deleted_at is null', [ws])).rows[0].n;
@@ -236,11 +240,14 @@ const CHECKS = {
 export const api = new Hono();
 const managerOnly = (c) => (c.get('ctx').role === MANAGER ? null : c.json({ error: 'managers only' }, 403));
 
-api.get('/connections', (c) => {
+api.get('/connections', async (c) => {
   const denied = managerOnly(c);
   if (denied) return denied;
   const base = baseOf(c);
-  return c.json({ services: services(base), inbound: inbound(base, deskOf(c, base)), publicUrl: publicUrl() || null });
+  const list = services(base);
+  const g = list.findIndex((s) => s.key === 'google');
+  if (g >= 0) list[g] = await googleCounts(c.get('db'), c.get('ctx').workspaceId, list[g]);
+  return c.json({ services: list, inbound: inbound(base, deskOf(c, base)), publicUrl: publicUrl() || null });
 });
 
 api.post('/connections/check', async (c) => {
