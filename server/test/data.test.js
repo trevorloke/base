@@ -144,6 +144,13 @@ test('sample data: loads a full Surrey campaign, safe contacts only, then clears
   assert.deepEqual(press.contacts.map((m) => [m.person.name, m.kind, m.outlet, m.beat]), [
     ['Dana Example', 'media', 'Example Daily', 'City hall'], ['Lee Example', 'media', 'Example Radio', null], ['Sam Example', 'influencer', null, null],
   ], 'two reporters with their outlets, and an influencer');
+  assert.deepEqual(press.contacts.map((m) => m.lists), [['op_ed', 'letters'], ['show'], []], 'Dana on Op-ed and Letters editors, Lee on Show hosts');
+  const papers = (await fresh.get('/api/media/outlets')).json.outlets;
+  assert.deepEqual(papers.map((o) => [o.name, o.letters_email, o.letters_limit, o.exclusive, o.asks_phone]), [['Example Daily', 'letters@example.org', 250, true, true]]);
+  const queue = (await fresh.get('/api/media/letters')).json.letters;
+  assert.deepEqual(queue.map((l) => [l.status, l.writer.name, l.outlets.map((o) => o.name)]), [['working', 'Priya Nair', ['Example Daily']]]);
+  const sampleLetter = (await fresh.get(`/api/media/letters/${queue[0].id}`)).json.letter;
+  assert.deepEqual(sampleLetter.drafts.map((d) => d.side), ['writer', 'campaign'], 'one suggestion from the office');
   const tiers = await Promise.all(['Maya Chen', 'Hannah Lee'].map(async (n) => {
     const p = (await fresh.get(`/api/persons?q=${encodeURIComponent(n)}`)).json.persons[0];
     return (await fresh.get(`/api/persons/${p.id}`)).json.donor.tier;
@@ -160,6 +167,8 @@ test('sample data: loads a full Surrey campaign, safe contacts only, then clears
   assert.equal(clear.json.message, `Sample data cleared — ${load.json.people} sample people removed.`);
   const left = (await fresh.get('/api/persons?limit=2000')).json.persons;
   assert.deepEqual(left.map((p) => p.id), [mine.id], 'only real data remains');
+  assert.deepEqual((await fresh.get('/api/media/letters')).json.letters, [], 'the sample letter goes');
+  assert.deepEqual((await fresh.get('/api/media/outlets')).json.outlets, [], 'and its paper');
   const b2 = (await fresh.get('/api/brief')).json;
   assert.equal(b2.sampleLoaded, false);
   assert.equal(b2.money.totalCents, 0, 'sample money left every total');

@@ -580,7 +580,7 @@ app.post('/geocode', async (c) => {
 // delete); everything else sample-made is deleted with a 'void' event.
 const SAMPLE_TAG = 'sample';
 const SAMPLE_KEYS = ['persons', 'contacts', 'roles', 'gifts', 'signs', 'shifts', 'assignments',
-  'subscriptions', 'turfs', 'relationships'];
+  'subscriptions', 'turfs', 'relationships', 'outlets', 'letters'];
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const idLists = (src = {}) => Object.fromEntries(SAMPLE_KEYS.map((k) => [
   k, Array.isArray(src[k]) ? [...new Set(src[k].filter((v) => UUID_RE.test(String(v))))] : [],
@@ -663,9 +663,44 @@ app.post('/sample', async (c) => {
     for (const m of S.media) {
       if (reused.has(id[m.name]) || (!m.outlet && !m.beat)) continue;
       await tx.query(
-        'insert into media_contacts (workspace_id, person_id, outlet, beat) values ($1, $2, $3, $4) on conflict do nothing',
-        [W, id[m.name], m.outlet || null, m.beat || null],
+        'insert into media_contacts (workspace_id, person_id, outlet, beat, lists) values ($1, $2, $3, $4, $5) on conflict do nothing',
+        [W, id[m.name], m.outlet || null, m.beat || null, JSON.stringify(m.lists || [])],
       );
+    }
+    // The sample paper (ext/media) — unless one of yours has its name — and
+    // a sample volunteer's letter to it, being worked on (ext/letters).
+    const oid = newId();
+    const outletRow = (await tx.query(
+      `insert into media_outlets (id, workspace_id, name, kind, letters_email, letters_limit, exclusive, asks_phone, rules)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9) on conflict do nothing returning id`,
+      [oid, W, S.outlet.name, S.outlet.kind, S.outlet.letters_email, S.outlet.letters_limit, S.outlet.exclusive, S.outlet.asks_phone, S.outlet.rules],
+    )).rows[0];
+    if (outletRow) {
+      ids.outlets.push(oid);
+      emit('media_outlet', oid, 'create', { id: oid, name: S.outlet.name, kind: S.outlet.kind, sample: true });
+    }
+    if (id[S.letter.writer]) {
+      const lid = newId();
+      const outletIds = outletRow ? [oid] : [];
+      await tx.query(
+        `insert into letters (id, workspace_id, kind, writer_user, person_id, title, status, outlet_ids, last_side, last_at)
+         values ($1, $2, $3, null, $4, $5, 'working', $6, 'campaign', now())`,
+        [lid, W, S.letter.kind, id[S.letter.writer], S.letter.title, JSON.stringify(outletIds)],
+      );
+      emit('letter', lid, 'create', { id: lid, kind: S.letter.kind, status: 'working', outlet_ids: outletIds, person_id: id[S.letter.writer], sample: true });
+      for (const [n, side, text, by] of [[1, 'writer', S.letter.body, null], [2, 'campaign', S.letter.suggestion, ctx.user.id]]) {
+        const vid = newId();
+        await tx.query(
+          `insert into letter_versions (id, workspace_id, letter_id, n, side, by_user, body) values ($1, $2, $3, $4, $5, $6, $7)`,
+          [vid, W, lid, n, side, by, text],
+        );
+        emit('letter_version', vid, 'create', { id: vid, letter_id: lid, n, side, sample: true });
+      }
+      const nid = newId();
+      await tx.query(`insert into letter_notes (id, workspace_id, letter_id, side, by_user, body) values ($1, $2, $3, 'campaign', $4, $5)`,
+        [nid, W, lid, ctx.user.id, S.letter.note]);
+      emit('letter_note', nid, 'create', { id: nid, letter_id: lid, side: 'campaign', sample: true });
+      ids.letters.push(lid);
     }
     for (const [who, role, detail] of S.roles) {
       // Someone used again may hold that role already (yours).
@@ -896,6 +931,12 @@ const clearSample = async (tx, W, emit) => {
     gone(shifts), (r) => ({ title: r.title }));
   await drop('turfs', 'turf', 'delete from turfs where workspace_id = $1 and id = any($2::uuid[]) returning id, name',
     ids.turfs, (r) => ({ name: r.name }));
+  // The sample letter (its drafts and notes with it), then the sample paper —
+  // set aside, as a removed outlet is, so a letter of yours that named it keeps its name.
+  await drop('letters', 'letter', 'delete from letters where workspace_id = $1 and id = any($2::uuid[]) returning id', ids.letters);
+  await drop('outlets', 'media_outlet',
+    'update media_outlets set deleted_at = now(), updated_at = now() where workspace_id = $1 and id = any($2::uuid[]) and deleted_at is null returning id, name',
+    ids.outlets, (r) => ({ name: r.name }));
   await drop('subscriptions', 'subscription',
     `delete from subscriptions where workspace_id = $1 and id = any($2::uuid[]) and source = 'sample' returning id`,
     ids.subscriptions);

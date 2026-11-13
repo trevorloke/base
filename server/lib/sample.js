@@ -103,8 +103,8 @@ export const buildSample = () => {
   // The Media tab's contacts (ext/media): two reporters and an influencer,
   // made up, with their outlet and beat.
   const media = [
-    { name: 'Dana Example', email: 'dana.media@example.org', phone: '604-555-0161', tags: ['media'], outlet: 'Example Daily', beat: 'City hall' },
-    { name: 'Lee Example', email: 'lee.media@example.org', phone: '604-555-0162', tags: ['media'], outlet: 'Example Radio' },
+    { name: 'Dana Example', email: 'dana.media@example.org', phone: '604-555-0161', tags: ['media'], outlet: 'Example Daily', beat: 'City hall', lists: ['op_ed', 'letters'] },
+    { name: 'Lee Example', email: 'lee.media@example.org', phone: '604-555-0162', tags: ['media'], outlet: 'Example Radio', lists: ['show'] },
     { name: 'Sam Example', email: 'sam.influencer@example.org', phone: '604-555-0163', tags: ['influencer'], socials: { instagram: '@samexample' } },
   ];
   // Who knows whom (ext/relationships): Priya Nair, a sample volunteer, and
@@ -143,5 +143,19 @@ export const buildSample = () => {
     ],
   };
 
-  return { people, tags, roles, gifts, signs, media, subscribers, turf, relationships };
+  // Letters (ext/letters): one made-up paper with its rules, and one letter
+  // from a sample volunteer the office is working on, with a suggestion.
+  // No real outlet, ever: the campaign fills in its own.
+  const outlet = {
+    name: 'Example Daily', kind: 'paper', letters_email: 'letters@example.org', letters_limit: 250,
+    exclusive: true, asks_phone: true, rules: 'Name and city printed; phone for checking',
+  };
+  const letter = {
+    writer: 'Priya Nair', kind: 'letter', title: 'A crosswalk for our block',
+    body: 'Every morning I watch children cross four lanes to reach the bus stop on our block. A marked crosswalk with a light would make that walk safer, and it would cost far less than the next road widening. I hope council will look at it this year.',
+    suggestion: 'Every morning I watch children cross four lanes to reach the bus stop on our block. A marked crosswalk with a signal would make that walk safer, and it would cost far less than the next road widening. I hope council will act on it this year.',
+    note: 'Two small word changes — take them or leave them.',
+  };
+
+  return { people, tags, roles, gifts, signs, media, subscribers, turf, relationships, outlet, letter };
 };
