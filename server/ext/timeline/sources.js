@@ -24,6 +24,7 @@ import { WEB_WORDS, MONEY_KINDS, campaignWords } from '../webdid/words.js';
 import { showValue } from '../surveys/answers.js';
 import { fillIn } from '../ladders/shape.js';
 import { wordOf as paymentWord } from '../payments/api.js';
+import { kitCodeSql, sourceWords } from '../socials/sources.js';
 
 const ms = (x) => `date_trunc('milliseconds', ${x})`;
 // $1 campaign · $2 person · $3, $4 the cursor · $5 how many; a source's own from $6.
@@ -221,8 +222,9 @@ const onSite = (r) => (!r.site_id ? '' : r.site_deleted || !(r.site_domain || r.
 const web = async (db, q) => (await rowsOf(db, `
   select ${ms('a.created_at')} as at, 'web:' || a.id::text as key, a.kind, a.payload, a.source,
          sc.kind as campaign_kind, sc.title as campaign_title, s.id as shift_id, s.title as shift_title,
-         a.site_id, m.name as site_name, m.domains->>0 as site_domain, m.deleted_at as site_deleted
+         a.site_id, m.name as site_name, m.domains->>0 as site_domain, m.deleted_at as site_deleted, k.title as kit_title
     from site_actions a
+    left join share_kits k on k.workspace_id = a.workspace_id and k.code = ${kitCodeSql('a.source')}
     left join site_campaigns sc on sc.id = a.campaign_id and sc.workspace_id = a.workspace_id
     left join microsites m on m.id = a.site_id and m.workspace_id = a.workspace_id
     left join shifts s on s.workspace_id = a.workspace_id
@@ -232,7 +234,8 @@ const web = async (db, q) => (await rowsOf(db, `
 )).map((r) => entry(r, 'website', 'web', 'Website',
   `${r.campaign_title ? campaignWords({ kind: r.campaign_kind, title: r.campaign_title }) : WEB_WORDS[r.kind] || 'Did something on the website'}${onSite(r)}`, {
     // Which link brought them ("From flyer"): the source the form kept.
-    detail: line(webDetail(r, parseJ(r.payload, {}) || {}), clean(r.source, 60) && `From ${clean(r.source, 60)}`),
+    // A share kit's post by its name, never its code.
+    detail: line(webDetail(r, parseJ(r.payload, {}) || {}), clean(r.source, 60) && `From ${clean(sourceWords(r.source, r.kit_title), 60)}`),
     link: r.shift_id ? `/shifts/${r.shift_id}` : null,
   }));
 

@@ -19,6 +19,7 @@ import { brandFor } from '../../lib/brand.js';
 import { hostOf } from './shape.js';
 import { readSettings, pageOut, parseJ, themeFromBrand } from './store.js';
 import { micrositeOut, liveChecklist, hostProblem, MAX_SITES } from './microsites.js';
+import { kitCodeSql, sourceWords } from '../socials/sources.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MONEY = ['join', 'donate'];
@@ -107,11 +108,13 @@ export const mountMicrositeReads = (api, opened) => {
     const n = (await signups(db, ctx, ws, [r.id])).get(r.id) || {};
     const params = [ws, r.id];
     const not = kindsWhere(ctx, params);
+    // A share kit's sign-ups under the post's name, never its code.
     const sources = (await db.query(
-      `select coalesce(nullif(a.source, ''), 'direct') as source, count(*)::int as n from site_actions a
+      `select coalesce(nullif(a.source, ''), 'direct') as source, min(k.title) as kit_title, count(*)::int as n from site_actions a
+         left join share_kits k on k.workspace_id = a.workspace_id and k.code = ${kitCodeSql('a.source')}
         where a.workspace_id = $1 and a.site_id = $2 and a.created_at > now() - interval '30 days'${not}
         group by 1 order by n desc, source limit 8`, params,
-    )).rows;
+    )).rows.map((s) => ({ source: sourceWords(s.source, s.kit_title), n: s.n }));
     const checklist = (await liveChecklist(db, ws, r.id)).map(({ key, done, why }) => ({ key, done, why }));
     const out = micrositeOut(r);
     const campaign = ctx.workspace;

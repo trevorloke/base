@@ -285,6 +285,14 @@ test('the desk reads: counts and sources, never people; money forms only for tho
   assert.deepEqual([theirs.signups_7, theirs.signups_30], [4, 4]);
   assert.deepEqual(theirs.sources.find((s) => s.source === 'direct').n, 1);
   assert.equal(ok(await noMoney.client.get('/api/site/microsites')).microsites.find((m) => m.id === site.id).signups_7, 4);
+  // A share-kit sign-up there: the post's title, never its code.
+  const kit = ok(await act(mgr, 'share.kit.save', { title: 'Sign for SkyTrain', body: 'Add your name.', path: '/' })).kit;
+  for (const src of [`kit-${kit.code}`, 'kit-zzzzzz']) {
+    await db.query("insert into site_actions (id, workspace_id, kind, source, site_id) values (gen_random_uuid(), $1, 'newsletter', $2, $3)", [ws, src, site.id]);
+  }
+  const kits = ok(await mgr.get(`/api/site/microsites/${site.id}`)).sources.map((s) => s.source);
+  assert.ok(kits.includes('Share: Sign for SkyTrain') && kits.includes('Share kit') && !kits.some((s) => /^kit-/.test(s)), JSON.stringify(kits));
+  await db.query("delete from site_actions where workspace_id = $1 and source like 'kit-%'", [ws]);
   // Counts, never people: no email, name or person id anywhere in either answer.
   const all = JSON.stringify([list, one]);
   for (const bad of ['pat.example', 'person_id', 'email', 'first_name']) assert.ok(!all.includes(bad), bad);

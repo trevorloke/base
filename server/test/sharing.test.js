@@ -215,6 +215,13 @@ test('a kit pointing at /home is not live: the website has no page there', async
   assert.equal(row.live, false);
   assert.equal((await hit('/site/home')).status, 404);
   assert.equal(okA(await vol.client.get('/api/share')).kits.some((x) => x.id === k.id), false);
+  // History names the post, never its code; a code no post has is "Share kit".
+  const [fay] = await personBy(db, ws, "lower(email) = 'fay@example.org'");
+  const fromOf = async (id) => okA(await mgr.get(`/api/persons/${id}/timeline`)).entries.find((x) => x.kind === 'web')?.detail;
+  assert.equal(await fromOf(fay.id), 'From Share: Sign for SkyTrain');
+  ok(await send('newsletter', { email: 'ida@example.org', consent_email: true }, { headers: { cookie: 'site_src=kit-zzzzzz' } }));
+  const [ida] = await personBy(db, ws, "lower(email) = 'ida@example.org'");
+  assert.equal(await fromOf(ida.id), 'From Share kit');
   okA(await mgr.action('share.kit.open', { id: k.id, open: false }));
 });
 
