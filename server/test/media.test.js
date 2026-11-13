@@ -331,3 +331,35 @@ test('merging two records moves the media row (no merge code changed)', async ()
   const rows = (await db.query('select person_id, outlet from media_contacts where workspace_id = $1', [ws])).rows;
   assert.deepEqual(rows, [{ person_id: keep.id, outlet: 'Example Weekly' }]);
 });
+
+test('someone who left by a release’s link stays off: a tag put back or a merge doesn’t send them another', async () => {
+  const { mgr, ws } = await campaign();
+  const ann = await person(mgr, 'Ann Example', mail('annl'), ['media']);
+  const bo = await person(mgr, 'Bo Example', mail('bowork'), ['media']);
+  await person(mgr, 'Cy Example', mail('cy'), ['media']);
+  const deeOld = await person(mgr, 'Dee Example', mail('deeold'), ['media']);
+  resend.sent.length = 0;
+  ok(await mgr.action('media.send', { subject: 'First', body: 'News' }));
+  for (const who of [mail('annl'), mail('bowork'), mail('deeold')]) {
+    const rid = unsubOf(resend.sent.find((x) => x.to === who));
+    assert.equal((await pub(`/bu/${rid}`, { method: 'POST' })).status, 200);
+  }
+  // The desk puts Ann's tag back; Bo has a second record, tagged media, merged into the one that left.
+  ok(await mgr.action('person.update', { id: ann.id, tags: ['media'] }));
+  const home = await person(mgr, 'Bo Example', mail('bohome'), ['media']);
+  ok(await mgr.action('person.merge', { keep: bo.id, drop: home.id }));
+  // Dee's new record, added at the desk with an outlet, keeps the old one that left.
+  const dee = ok(await mgr.action('media.contact.add', { name: 'Dee Example', kind: 'media', email: mail('deenew'), outlet: 'Example Weekly' }));
+  ok(await mgr.action('person.merge', { keep: dee.person_id, drop: deeOld.id }));
+  // A record with the address that left, made fresh.
+  await person(mgr, 'Ann E.', mail('annl'), ['influencer']);
+  const r = ok(await mgr.action('media.send', { subject: 'Second', body: 'More news', audience: { media: ['media', 'influencer'] } }));
+  assert.deepEqual(await sentTo(r.blast.id), [mail('cy')]);
+  const contacts = ok(await mgr.get('/api/media/contacts')).contacts;
+  const why = Object.fromEntries(contacts.map((c) => [c.person.email, c.why]));
+  assert.equal(why[mail('annl')], 'left_media');
+  assert.equal(why[mail('bowork')], 'left_media');
+  assert.equal(why[mail('deenew')], 'left_media');
+  assert.equal(why[mail('cy')], null);
+  assert.equal((await db.query("select left_how from media_contacts where workspace_id = $1 and person_id = $2", [ws, bo.id])).rows[0].left_how, 'link');
+});

@@ -31,3 +31,16 @@ create table if not exists media_contacts (
 );`;
 
 export const exportTables = ['media_contacts'];
+
+// Two records made one: if drop left by a release's link, keep has left
+// too (the merge drops drop's row when keep has one), so the reach rule
+// (lib/reach.js left_media) still holds. Keep's outlet, beat and note stand.
+const personMerging = async (tx, ctx, { keep, drop }) => {
+  await tx.query(
+    `insert into media_contacts (workspace_id, person_id, left_at, left_how, updated_at)
+     select $1, $2, d.left_at, 'link', now() from media_contacts d where d.workspace_id = $1 and d.person_id = $3 and d.left_how = 'link'
+     on conflict (workspace_id, person_id) do update set left_at = excluded.left_at, left_how = 'link', updated_at = now()`,
+    [ctx.workspaceId, keep.id, drop.id],
+  );
+};
+export const hooks = { personMerging };

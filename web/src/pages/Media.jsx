@@ -43,6 +43,7 @@ const TO = [
 // Why a release won't reach someone (server lib/reach.js whyNot), in words.
 const WHY = {
   no_email: 'no email', do_not_email: 'asked not to be emailed', do_not_contact: 'asked not to be contacted', suppressed: 'address bounced',
+  left_media: 'unsubscribed from releases',
 };
 // A handle → its profile page and its shown name: social links' own helper,
 // so Media's links are the same as a person's page.

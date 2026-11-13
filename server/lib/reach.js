@@ -77,6 +77,11 @@ export const RULES = {
     // link someone asked for themselves goes whatever their tags.
     { code: 'do_not_email', skip: ['newsletter', 'self'], sql: (c) => tagged(c, NO_EMAIL) },
     { code: 'do_not_contact', skip: ['newsletter', 'self'], sql: (c) => tagged(c, NO_CONTACT) },
+    // They used a release's own unsubscribe link (ext/media leave.js): a
+    // row of theirs says so, or of anyone with their address — so a tag the
+    // desk puts back, a merge or a fresh record never sends them another.
+    { code: 'left_media', only: ['press'], sql: (c) => `exists (select 1 from media_contacts m join persons x on x.workspace_id = m.workspace_id and x.id = m.person_id
+        where m.workspace_id = ${c.ws} and m.left_how = 'link' and (m.person_id = ${c.id} or ${emailKey('x.email')} = ${emailKey(c.email)}))` },
     // Only to people who said yes: an address on the newsletter list.
     { code: 'no_consent', only: ['newsletter', 'ladder'], sql: (c) => `not (${onNewsletter(c, 'subscribed')})` },
   ],
