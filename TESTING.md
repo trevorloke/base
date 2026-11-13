@@ -517,7 +517,9 @@ the mail as sent ("Hi Sam", "Hi friend", "Hi John", a name typed as a link
 only words), "No mailing address yet" and the Preview footer, Save as
 template and Update twice, the Templates page (a stale save in a second tab,
 copy, Remove → Undo, Hide → Show), Use again, the command bar, Media's
-release templates and no signal.
+release templates, a pick reading a template's current words, and no signal
+(an unread pick says "Needs signal" at once and never lands later over
+what was typed).
 
 - **Candidates** (Settings → Candidates) — a manager adds and invites
   candidates; each joins as a volunteer with a seat; their phone opens on
