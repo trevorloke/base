@@ -264,7 +264,10 @@ test('Gmail’s limits pause this grant only (an hour for a day’s limit); anot
     assert.equal(again.status, 429, kind);
     assert.match(again.json.error, /^Gmail asked us to wait — try after /);
     assert.equal(fake.counts.gmail, 1, kind);
-    assert.equal(ok(await U.b.get('/api/gmail')).me.trouble, 'paused');
+    const me = ok(await U.b.get('/api/gmail')).me;
+    assert.equal(me.trouble, 'paused');
+    // The same hour the refusal named, on the campaign's clock (not the device's).
+    assert.equal(`Gmail asked us to wait. Try after ${me.pausedClock}.`, r.said, kind);
     assert.equal(ok(await send(S, P.jane)).status, 'sent', `${kind}: Sam still sends`);
   }
 });

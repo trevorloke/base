@@ -2,7 +2,8 @@
 // 403 through deskOnlyReads):
 //   { setup, on, review, dailyMax, domain (GSI's, read-only),
 //     me: { connected, email, ok, trouble: null|'reconnect'|'paused'|'off',
-//           said, pausedUntil, sentToday },
+//           said, pausedUntil, pausedClock ("3:40 pm", the campaign's
+//           clock, as the send's refusal says it), sentToday },
 //     apiOff: { until, said } | null,
 //     people: [{ name, email }]   managers: who here can send from Gmail }
 // Never a token, a scope list or anyone's message.
@@ -11,7 +12,7 @@ import { googleSetup } from '../../lib/google/config.js';
 import { domainFor } from '../../lib/google/purposes.js';
 import { grantFor } from '../../lib/google/tokens.js';
 import { DESK, gmailSettings, sentToday } from './actions.js';
-import { apiOffNow, dailyMax } from './send.js';
+import { apiOffNow, clock, dailyMax } from './send.js';
 
 export const api = new Hono();
 
@@ -29,7 +30,7 @@ api.get('/gmail', async (c) => {
     domain: domainFor('gmail.send', settings),
     me: {
       connected: Boolean(g), email: g?.email || null, ok: Boolean(g) && !trouble,
-      trouble, said: g && g.state !== 'ok' ? g.said : null, pausedUntil: paused, sentToday: await sentToday(db, ctx.user.id),
+      trouble, said: g && g.state !== 'ok' ? g.said : null, pausedUntil: paused, pausedClock: paused ? clock(paused) : null, sentToday: await sentToday(db, ctx.user.id),
     },
     apiOff: apiOffNow(),
   };
