@@ -18,7 +18,7 @@ import { Link, useLocation, useNavigate, useOutletContext, useParams } from 'rea
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { sharedRuns } from '@starbase/shared/letters';
 import { apiGet } from '../api.js';
-import { newClientId, onOutboxSent, queueAction } from '../offline.js';
+import { newClientId, onOutboxSent, queueAction, useOutbox } from '../offline.js';
 import { showingCopy } from '../components/OfflineCache.js';
 import {
   BODY_MAX, CampaignWords, Count, KIND_WORDS, LOADING, More, STATUS_WORDS, Unavailable, firstWords, rulesLine, useLetterOutlets,
@@ -105,6 +105,8 @@ function WriteLetter({ me }) {
   const outlets = data?.outlets || [];
   const you = data?.you || { sign: {} };
   const queued = Boolean(f.queued);
+  // Refused by the server from the outbox: it won't send by itself.
+  const refused = useOutbox().items.some((i) => i.cid === f.queued && i.state === 'refused');
   const set = (patch) => setF((x) => ({ ...x, ...patch }));
 
   // Kept on this phone on every change (a moment after), for this sign-in only.
@@ -152,7 +154,8 @@ function WriteLetter({ me }) {
       client_id: cid, kind: f.kind, title: f.title.trim() || undefined, body: f.body,
       outlet_ids: f.outlet_ids.filter((id) => outlets.some((o) => o.id === id) || !data),
       ...(Object.keys(sign).length ? { sign } : {}),
-      disclose_line: disclose, email_me: f.email_me,
+      // Only where a picked paper asks (the switch shows there); Send it can add it later.
+      disclose_line: picked.some((o) => o.disclose) ? disclose : false, email_me: f.email_me,
     };
     const held = { ...f, queued: cid };
     writeDraft('draft', held); // never lost between the tap and the outbox
@@ -266,7 +269,8 @@ function WriteLetter({ me }) {
 
         {error && <p className="error" role="alert">{error}</p>}
         {queued ? (
-          <p className="ops-done ops-done--wait" role="status">{said || 'Waiting to send — it goes to the campaign when you’re back online.'}</p>
+          refused ? <p className="error" role="alert">Not taken — open the outbox: Back to draft or Copy text.</p>
+            : <p className="ops-done ops-done--wait" role="status">{said || 'Waiting to send — it goes to the campaign when you’re back online.'}</p>
         ) : (
           <div className="ops-actions">
             <button type="submit" className="btn btn-primary ops-tap ops-wide" disabled={busy}>{busy ? 'Sending…' : 'Send to the campaign'}</button>

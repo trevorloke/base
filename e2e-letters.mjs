@@ -159,6 +159,9 @@ await both(page, '02-outlet-sheet');
 await page.click('.lt-outlet-sheet button:has-text("I checked these today")');
 await settle(page);
 check('"I checked these today" → "Rules checked"', /Rules checked/.test(await words(page.locator('.ot-list'))));
+// The day as it is in Surrey (a date alone, never read as UTC midnight).
+const TODAY = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'America/Vancouver' });
+check(`…on today’s date in Surrey: "Rules checked ${TODAY}"`, (await words(page.locator('.ot-list'))).includes(`Rules checked ${TODAY}`), await words(page.locator('.ot-list')));
 await both(page, '03-outlets-filled');
 
 await act('media.contact.add', { name: 'Dana Example', kind: 'media', email: 'dana@example.org', outlet: 'Example Daily' });
@@ -252,6 +255,11 @@ t = await words(vp.locator('.lt-page'));
 check('back online: the letter lands as New with no paper, "Pick a paper again", text intact',
   /New/.test(t) && /Pick a paper again/.test(t) && t.includes('Our parks need more trees.') && t.includes('Plant them this year'), t.slice(0, 300));
 check('…and only now is the draft cleared', (await draftKey()) === 0);
+await vp.reload({ waitUntil: 'domcontentloaded' });
+await vp.locator('.lt-page h1').waitFor();
+await settle(vp);
+t = await words(vp.locator('.lt-page'));
+check('reloaded: the dropped paper is still named, "Pick a paper again"', /Example Daily isn’t on the campaign’s list any more/.test(t) && /Pick a paper again/.test(t), t.slice(0, 300));
 
 // The paper again, and a second one at another newsroom.
 const daily = (await act('media.outlet.save', { name: 'Example Daily', kind: 'paper', letters_email: 'letters@example.org', letters_limit: 250, disclose: true, rules: 'Name and city printed; phone for checking', newsroom: 'Example Daily newsroom' })).json;
@@ -284,6 +292,8 @@ await sleep(300);
 t = await words(vp.locator('.obx-sheet'));
 check('refused: the outbox shows the reason, "Copy text" and "Back to draft"', /That letter can’t be taken/.test(t) && /Copy text/.test(t) && /Back to draft/.test(t), t);
 await shot(vp, '09-refused-390');
+t = await words(vp.locator('.lt-form'));
+check('…and the write screen no longer says it sends soon', /Not taken — open the outbox: Back to draft or Copy text\./.test(t) && !/sends soon/.test(t), t.slice(-200));
 await vp.click('.obx-sheet button:has-text("Copy text")');
 await sleep(300);
 check('Copy text copies the letter', (await vp.evaluate(() => navigator.clipboard.readText())) === BODY2);
@@ -422,8 +432,49 @@ await vp.click('button:has-text("Send to another paper")');
 await vp.locator('.lt-sheet').waitFor();
 t = await words(vp.locator('.lt-sheet'));
 check('a second paper while the first is out: greyed, "Still out at Example Daily until …", no mail link', /Still out at Example Daily until \d+ \w+/.test(t)
-  && !(await vp.locator('.lt-sheet a:has-text("Open my email")').count()) && (await vp.locator('.lt-chip.is-blocked').count()) === 1, t.slice(0, 300));
+  && !(await vp.locator('.lt-sheet a:has-text("Open my email")').count()) && (await vp.locator('.lt-chip.is-blocked:has-text("Example Weekly")').count()) === 1, t.slice(0, 300));
 await both(vp, '19-send-blocked');
+
+// A letter to one paper: once it's there, or turned down, Send it offers the campaign's others.
+const BODY4 = `Our libraries should open on Sunday mornings for families. ${LONG(30, 'book')}`;
+const letter4 = (await act('myletter.submit', { client_id: '00000000-0000-4000-8000-000000000401', kind: 'letter', body: BODY4, outlet_ids: [oid('Example Weekly')], sign: { city: 'Surrey', phone: '604-555-0123' } }, vp)).json.letter.id;
+const l4 = (await api(vp, `/letters/mine/${letter4}`)).json.letter;
+await act('myletter.agree', { id: letter4, version_id: l4.drafts[0].id }, vp);
+await goField(vp, `/letters/${letter4}`);
+await vp.click('button:has-text("Send it")');
+await vp.locator('.lt-sheet').waitFor();
+check('one paper: Send it picks it', (await words(vp.locator('.lt-sheet .lt-chip.is-on'))) === 'Example Weekly');
+await vp.click('button:has-text("I sent it")');
+await settle(vp);
+await vp.click('button:has-text("Send to another paper")');
+await vp.locator('.lt-sheet').waitFor();
+t = await words(vp.locator('.lt-sheet'));
+check('…"Send to another paper" offers the campaign’s others (greyed while Weekly has it), never "hasn’t added papers"',
+  /Example Daily/.test(t) && /Example Online/.test(t) && !/hasn’t added papers/.test(t) && /Still out at Example Weekly/.test(t), t.slice(0, 300));
+await both(vp, '19b-another-paper');
+await vp.click('.lt-sheet button:has-text("Close")');
+await vp.click('button:has-text("Not published")');
+await settle(vp);
+check('Not published → Ready, "Not printed at Example Weekly"', /Not printed at Example Weekly/.test(await words(vp.locator('.lt-head'))));
+await vp.click('button:has-text("Send it")');
+await vp.locator('.lt-sheet').waitFor();
+await vp.evaluate(() => document.addEventListener('click', (e) => { if (e.target.closest('a[href^="mailto:"]')) e.preventDefault(); }));
+const picked4 = await words(vp.locator('.lt-sheet .lt-chip.is-on'));
+check('…Send it again: another paper picked, and the mail link goes to it', picked4 === 'Example Daily'
+  && (await vp.getAttribute('a:has-text("Open my email")', 'href')).startsWith('mailto:letters@example.org'), picked4);
+await phoneOk(vp, 'Send it (after Not published)');
+await both(vp, '19c-after-not-printed');
+// Sent at Daily while Weekly still had it: the desk's chip names Weekly.
+await act('myletter.sent', { id: letter4, outlet_id: oid('Example Weekly'), how: 'email', client_id: '00000000-0000-4000-8000-000000000402' }, vp);
+await act('myletter.sent', { id: letter4, outlet_id: oid('Example Daily'), how: 'email', client_id: '00000000-0000-4000-8000-000000000403' }, vp);
+await page.setViewportSize({ width: 950, height: 900 });
+await goDesk(page, '/media/letters');
+await page.click('.md-filter button:has-text("Sent")');
+await settle(page);
+check('the desk queue at 950 px: a table, and "Sent while out at Example Weekly"', (await page.locator('table.lt-queue').count()) === 1
+  && /Sent while out at Example Weekly/.test(await words(page.locator('.md-page'))), (await words(page.locator('.md-page'))).slice(0, 300));
+await shot(page, 'g-queue-950');
+await page.setViewportSize({ width: 1440, height: 900 });
 
 // ── 6. Talking points, overlap, a form paper ──
 await goDesk(page, '/media/letters');

@@ -677,7 +677,6 @@ export default function Media() {
   const desk = DESK_ROLES.includes(me.role);
   const tab = id ? 'release' : letterId ? 'letter' : /\/media\/contacts/.test(pathname) ? 'contacts' : /\/media\/templates/.test(pathname) ? 'templates'
     : /\/media\/letters/.test(pathname) ? 'letters' : /\/media\/outlets/.test(pathname) ? 'outlets' : 'releases';
-  const wide = useWide();
   const letters = useLettersCount(desk);
   const creating = params.get('new') === '1';
   const openNew = () => setParams({ new: '1' });
@@ -713,7 +712,7 @@ export default function Media() {
         {tab === 'releases' && <ReleasesTab creating={creating} onClose={closeNew} />}
         {tab === 'contacts' && <ContactsTab desk={desk} adding={creating} onCloseAdd={closeNew} toast={toast} />}
         {tab === 'release' && <ReleasePage id={id} />}
-        {tab === 'letters' && desk && <LettersTab me={me} wide={wide} />}
+        {tab === 'letters' && desk && <LettersTab me={me} />}
         {tab === 'letter' && desk && (
           <>
             <p className="ot-note"><button type="button" className="md-back" onClick={() => navigate('/media/letters')}>← Letters</button></p>

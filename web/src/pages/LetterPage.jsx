@@ -75,8 +75,10 @@ function Page({ children }) {
 
 function Letter({ me, l, outletsQ, said, setSaid, refresh }) {
   // Papers the server dropped when the letter landed (taken off the list
-  // while it waited on the phone): said once, as the letter opens.
-  const dropped = [...(useLocation().state?.dropped || []), ...(l.dropped_outlets || [])];
+  // while it waited on the phone): the read names them until the writer
+  // picks again; the landing's own answer covers the moment before it.
+  const landed = useLocation().state?.dropped || [];
+  const dropped = [...(l.dropped_outlets || []), ...landed.filter((d) => !(l.dropped_outlets || []).some((x) => x.id === d.id))];
   const drafts = l.drafts || [];
   const newest = drafts[drafts.length - 1] || null;
   const writerDrafts = drafts.filter((d) => d.side === 'writer');
@@ -287,16 +289,25 @@ const SIGN_LINES = [['name', 'Name'], ['city', 'City'], ['phone', 'Phone'], ['ad
 function SendSheet({ me, l, agreed, outletsQ, onClose, onSent }) {
   const online = useOnline();
   const data = outletsQ.data;
-  // A paper that has it now (no answer yet) isn't offered again.
+  // The writer's own papers first, then the campaign's others for this kind
+  // (after one turns it down, or to try another). A paper that has it now
+  // (no answer yet) isn't offered again; one that turned it down isn't the
+  // one picked for them.
   const out = new Set((l.sends || []).filter((s) => !s.outcome).map((s) => s.outlet_id));
-  const choices = (l.outlets.length ? l.outlets : (data?.outlets || [])).filter((x) => !out.has(x.id));
+  const turned = new Set((l.sends || []).filter((s) => s.outcome === 'not_published').map((s) => s.outlet_id));
+  const own = new Set(l.outlets.map((x) => x.id));
+  const all = [...l.outlets, ...(data?.outlets || []).filter((x) => !own.has(x.id))];
+  const choices = all.filter((x) => !out.has(x.id));
   const blockedOf = (o) => l.blocked.find((b) => b.outlet_id === o.id) || null;
-  const [pickId, setPickId] = useState(() => (choices.find((o) => !blockedOf(o)) || choices[0])?.id || null);
-  const o = choices.find((x) => x.id === pickId) || null;
+  const [pickId, setPickId] = useState(null);
+  const first = choices.find((x) => !blockedOf(x) && !turned.has(x.id)) || choices.find((x) => !blockedOf(x)) || choices[0] || null;
+  const o = choices.find((x) => x.id === pickId) || first;
   const blocked = o ? blockedOf(o) : null;
   const [subject, setSubject] = useState(() => (o?.subject_hint || l.title || firstWords(agreed.body, 8)));
   const [sign, setSign] = useState(() => ({ ...l.sign }));
   const [changed, setChanged] = useState({});
+  // "I volunteer with …": theirs to add or take off here too.
+  const [discl, setDiscl] = useState(Boolean(l.disclose_line));
   const [said, setSaid] = useState(null);
   const [shown, setShown] = useState(null); // the text, selected, when the clipboard said no
   const [missing, setMissing] = useState(null);
@@ -305,7 +316,7 @@ function SendSheet({ me, l, agreed, outletsQ, onClose, onSent }) {
   useEffect(() => { if (o?.subject_hint) setSubject(o.subject_hint); }, [o?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const signoff = [
     sign.name, sign.city, o?.asks_phone ? sign.phone : null, o?.asks_address ? sign.address : null,
-    l.disclose_line ? `I volunteer with ${campaign}` : null,
+    discl ? `I volunteer with ${campaign}` : null,
   ].filter((x) => x && String(x).trim()).join('\n');
   const whole = `${agreed.body.trim()}\n\n${signoff}`;
   const link = o?.email ? mailtoFor({ to: o.email, subject, body: agreed.body, signoff, max: mailtoMax() }) : null;
@@ -317,9 +328,13 @@ function SendSheet({ me, l, agreed, outletsQ, onClose, onSent }) {
     return null;
   };
   const keepSign = () => {
+    const keys = Object.keys(changed).filter((k) => k !== 'disclose');
     if (!online || !Object.keys(changed).length) return;
-    action('myletter.details', { id: l.id, sign: Object.fromEntries(Object.keys(changed).map((k) => [k, String(sign[k] || '').trim()])) })
-      .then(() => setChanged({})).catch(() => { /* kept in the sheet */ });
+    action('myletter.details', {
+      id: l.id,
+      ...(keys.length ? { sign: Object.fromEntries(keys.map((k) => [k, String(sign[k] || '').trim()])) } : {}),
+      ...(changed.disclose ? { disclose_line: discl } : {}),
+    }).then(() => setChanged({})).catch(() => { /* kept in the sheet */ });
   };
   const copyFirst = async () => {
     const ok = await copyText(whole);
@@ -361,13 +376,20 @@ function SendSheet({ me, l, agreed, outletsQ, onClose, onSent }) {
         <h2 className="lt-sub" id="lt-send-h">Send it</h2>
         <button type="button" className="btn btn-quiet ops-tap" onClick={onClose}>Close</button>
       </div>
-      {choices.length === 0 && <p className="ops-meta">The campaign hasn’t added papers yet.</p>}
+      {choices.length === 0 && (
+        <p className="ops-meta" role="status">
+          {all.length > 0 ? 'Every paper has it now — wait to hear back.'
+            : outletsQ.isPending && !data ? LOADING
+              : outletsQ.isError && !data ? <Unavailable onRetry={() => outletsQ.refetch()} />
+                : 'The campaign hasn’t added papers yet.'}
+        </p>
+      )}
       <div className="lt-chips" role="radiogroup" aria-label="Paper">
         {choices.map((x) => {
           const b = blockedOf(x);
           return (
-            <button key={x.id} type="button" role="radio" aria-checked={pickId === x.id} aria-disabled={Boolean(b)}
-              className={`chip lt-chip${pickId === x.id ? ' is-on' : ''}${b ? ' is-blocked' : ''}`} onClick={() => setPickId(x.id)}>{x.name}</button>
+            <button key={x.id} type="button" role="radio" aria-checked={o?.id === x.id} aria-disabled={Boolean(b)}
+              className={`chip lt-chip${o?.id === x.id ? ' is-on' : ''}${b ? ' is-blocked' : ''}`} onClick={() => setPickId(x.id)}>{x.name}</button>
           );
         })}
       </div>
@@ -394,7 +416,10 @@ function SendSheet({ me, l, agreed, outletsQ, onClose, onSent }) {
                   onChange={(e) => { setSign({ ...sign, [k]: e.target.value }); setChanged({ ...changed, [k]: true }); setMissing(null); }} />
               </div>
             ))}
-            {l.disclose_line && <p className="ops-meta">I volunteer with {campaign}</p>}
+            {(o.disclose || discl) && (
+              <label className="lt-check"><input type="checkbox" checked={discl} onChange={(e) => { setDiscl(e.target.checked); setChanged({ ...changed, disclose: true }); }} />
+                <span>Add a line: I volunteer with {campaign}</span></label>
+            )}
           </div>
           {missing && <p className="lt-remind" role="alert">{missing}</p>}
           <div className="ops-actions">

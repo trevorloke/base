@@ -52,13 +52,29 @@ function useRun(onDone) {
 // ─────────────────────────────────────────────────────────────────────────────
 const flagsOf = (l) => [
   l.not_printed_at ? ['chip chip-warn', `Not printed at ${l.not_printed_at}`] : null,
-  l.sent_while_out ? ['chip chip-warn', 'Sent while out'] : null,
+  l.sent_while_out ? ['chip chip-warn', l.while_out_name ? `Sent while out at ${l.while_out_name}` : 'Sent while out'] : null,
   l.mostly_campaign ? ['chip chip-warn', 'Mostly the campaign’s words'] : null,
 ].filter(Boolean);
 const papers = (l) => l.outlets.map((o) => o.name).join(', ');
 
-export function LettersTab({ me, wide }) {
+// The queue's table from 900 px (its columns are short; Media's own tables
+// wait for 1000).
+const WIDE_Q = '(min-width: 900px)';
+function useQueueWide() {
+  const [wide, setWide] = useState(() => typeof window !== 'undefined' && Boolean(window.matchMedia?.(WIDE_Q).matches));
+  useEffect(() => {
+    const m = window.matchMedia?.(WIDE_Q);
+    if (!m) return undefined;
+    const on = () => setWide(m.matches);
+    m.addEventListener('change', on);
+    return () => m.removeEventListener('change', on);
+  }, []);
+  return wide;
+}
+
+export function LettersTab({ me }) {
   const navigate = useNavigate();
+  const wide = useQueueWide();
   const [filter, setFilter] = useState('todo');
   const status = [...FILTERS, ['withdrawn', 'Withdrawn', 'withdrawn']].find(([k]) => k === filter)[2];
   const q = useQuery({ queryKey: ['letters', 'queue', status], queryFn: () => apiGet(`/media/letters?status=${status}`) });
