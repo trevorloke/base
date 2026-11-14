@@ -141,3 +141,18 @@
 .md-tab-n { margin-left: 6px; }
 .md-on-chips { display: flex; flex-wrap: wrap; gap: 4px; }
 .md-on { font-size: 13px; color: var(--text-2); }
+/* With the "On" column: every column's share, at every desk width. */
+.md-table.is-desk .md-c-name { width: 16%; }
+.md-table.is-desk .md-c-outlet { width: 15%; }
+.md-table.is-desk .md-c-on { width: 11%; }
+.md-table.is-desk .md-c-beat { width: 10%; }
+.md-table.is-desk .md-c-email { width: 17%; }
+.md-table.is-desk .md-c-phone { width: 12%; }
+.md-table.is-desk .md-c-socials { width: 10%; }
+.md-table.is-desk .md-c-last { width: 9%; }
+.md-table:not(.is-desk) .md-c-name { width: 22%; }
+.md-table:not(.is-desk) .md-c-outlet { width: 18%; }
+.md-table:not(.is-desk) .md-c-on { width: 18%; }
+.md-table:not(.is-desk) .md-c-beat { width: 14%; }
+.md-table:not(.is-desk) .md-c-socials { width: 15%; }
+.md-table:not(.is-desk) .md-c-last { width: 13%; }

@@ -177,7 +177,7 @@ await act('person.create', { name: 'Dee Example', email: 'dee@example.org', tags
 await go(page, '/media/contacts');
 w = await words(page.locator('.md-table'));
 const heads = await words(page.locator('.md-table thead'));
-check('the desk table: Name, Outlet, Beat, Email, Phone, Socials, Last release', heads === 'Name Outlet Beat Email Phone Socials Last release', heads);
+check('the desk table: Name, Outlet, On, Beat, Email, Phone, Socials, Last release', heads === 'Name Outlet On Beat Email Phone Socials Last release', heads);
 check('…Dana with her outlet, beat, email and phone; Sam’s handle; Dee “Won’t get releases: asked not to be emailed”',
   /Dana Example Example Daily City hall dana@example\.org 604-555-0161/.test(w) && /@samexample/.test(w) && /Dee Example\s*Won’t get releases: asked not to be emailed/.test(w), w.slice(0, 400));
 const igHref = await page.locator('.md-table a:has-text("@samexample")').getAttribute('href');

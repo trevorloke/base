@@ -391,7 +391,7 @@ function SendSheet({ me, l, agreed, outletsQ, onClose, onSent }) {
               <div key={k} className="field">
                 <label htmlFor={`lt-so-${k}`}>{label}</label>
                 <input id={`lt-so-${k}`} className="input" type={k === 'phone' ? 'tel' : 'text'} maxLength={k === 'address' ? 300 : 120} value={sign[k] || ''}
-                  onChange={(e) => { setSign({ ...sign, [k]: e.target.value }); setChanged({ ...changed, [k]: true }); }} />
+                  onChange={(e) => { setSign({ ...sign, [k]: e.target.value }); setChanged({ ...changed, [k]: true }); setMissing(null); }} />
               </div>
             ))}
             {l.disclose_line && <p className="ops-meta">I volunteer with {campaign}</p>}
