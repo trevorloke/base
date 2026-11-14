@@ -474,7 +474,23 @@ await settle(page);
 check('the desk queue at 950 px: a table, and "Sent while out at Example Weekly"', (await page.locator('table.lt-queue').count()) === 1
   && /Sent while out at Example Weekly/.test(await words(page.locator('.md-page'))), (await words(page.locator('.md-page'))).slice(0, 300));
 await shot(page, 'g-queue-950');
+check('…the Paper column names Example Daily first, where it went', /Example Daily, Example Weekly/.test(await words(page.locator('tr:has-text("Our libraries should open")'))),
+  await words(page.locator('tr:has-text("Our libraries should open")')));
 await page.setViewportSize({ width: 1440, height: 900 });
+await goDesk(page, `/media/letters/${letter4}`);
+check('the desk’s letter page: "Letter · … · Example Daily, Example Weekly"', /^Letter · .* · Example Daily, Example Weekly$/.test(await words(page.locator('.md-meta').first())), await words(page.locator('.md-meta').first()));
+// Both turned down: Ready again, and the desk can note a paper the letter never named.
+for (const s of (await api(vp, `/letters/mine/${letter4}`)).json.letter.sends.filter((x) => !x.outcome)) await act('letter.not_published', { id: letter4, send_id: s.id });
+await goDesk(page, `/media/letters/${letter4}`);
+await page.click('button:has-text("They told us they sent it")');
+await page.locator('[aria-label="Paper"] button:has-text("Example Online")').waitFor({ timeout: 5000 }).catch(() => {});
+check('…"They told us they sent it" offers the campaign’s other papers too', (await page.locator('[aria-label="Paper"] button:has-text("Example Online")').count()) === 1,
+  await words(page.locator('[aria-label="Paper"]')));
+await page.click('[aria-label="Paper"] button:has-text("Example Online")');
+await shot(page, 'g-told-any-paper');
+await page.click('[aria-label="They told us they sent it"] button:has-text("Save")');
+await settle(page);
+check('…and the letter is filed under it', /^Letter · .* · Example Online, Example Daily, Example Weekly$/.test(await words(page.locator('.md-meta').first())), await words(page.locator('.md-meta').first()));
 
 // ── 6. Talking points, overlap, a form paper ──
 await goDesk(page, '/media/letters');
