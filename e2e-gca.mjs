@@ -10,7 +10,7 @@
 //   SHOTS=/tmp/gca [PORT=5330] node e2e-gca.mjs
 //
 // A manager, a staffer and a volunteer, at 1440x900 and 390x844.
-// Calendar: the card hidden while off (the manager's one line); Services →
+// Calendar: no card while off, for anyone (Services says so); Services →
 // Google → "Shifts in Google Calendar" On; the volunteer connects from the
 // phone and comes back to "Connected — your shifts are on their way", the
 // card above the calendar link card; "Stop your calendar link too" → Stop;
@@ -151,11 +151,11 @@ try {
   const vol = `val.${tag}@example.org`;
   check('a staffer and a volunteer join', (await joinByApi(staff, 'staff', 'Sam Example')) === 200 && (await joinByApi(vol, 'volunteer', 'Val Example')) === 200);
 
-  // ── Off: the manager's one line; nothing for the volunteer ──
+  // ── Off: no card for anyone (Services → Google is where the manager turns it on) ──
   await m.goto(`${BASE}/admin/profile`, { waitUntil: 'domcontentloaded' });
-  await m.locator('#gcal').waitFor({ timeout: 10000 });
-  check('off: the manager sees one line saying where to turn it on', /Google Calendar is off for this campaign\. Turn it on in Settings → Services → Google/.test(await text(m, '#gcal'))
-    && await m.locator('#gcal button, #gcal .btn').count() === 0, await text(m, '#gcal'));
+  await m.locator('#calendar').waitFor({ timeout: 10000 });
+  await sleep(800);
+  check('off: the manager sees no Google Calendar card', await m.locator('#gcal').count() === 0, await text(m, '.me-page'));
   await shot(m, '01-profile-off-manager-desktop');
 
   const { page: v } = await newPage(PHONE, 'volunteer phone');
@@ -202,7 +202,8 @@ try {
   check('the calendar is made in the fake, named for the campaign', Boolean(await until(() => cals().length === 1)) && /— my shifts \(base\.win\)$/.test(cals()[0]?.body.summary || ''), JSON.stringify(cals()[0]?.body));
   check('…with no toast over the offer', (await v.locator('.gc-toast').count()) === 0);
   await shot(v, '04-profile-connected-offer-phone', false);
-  await v.locator('.gc-offer').getByRole('button', { name: 'Stop' }).click();
+  check('…its button says what it stops: "Stop the link", not a second "Stop"', await v.locator('.gc-offer').getByRole('button', { name: 'Stop the link' }).count() === 1);
+  await v.locator('.gc-offer').getByRole('button', { name: 'Stop the link' }).click();
   check('Stop → the calendar link card shows no link', Boolean(await until(async () => /Get my calendar link/.test(await text(v, '#calendar')), 8000)));
 
   // ── A booking lands; unassigned at the desk, it goes ──
@@ -344,7 +345,7 @@ try {
     // Slow the check a little, to see "Checking …".
     await s.route('**/api/addressbook/check', async (r) => { await sleep(1200); await r.continue(); });
     await s.setInputFiles('input.ab-file', FIXTURE);
-    if (await until(async () => /Checking \d+ of \d+…/.test(await text(s)), 4000)) await shot(s, `13-contacts-checking-${size}`, false);
+    if (await until(async () => /Checking \d+ of \d+ contacts…/.test(await text(s)), 4000)) await shot(s, `13-contacts-checking-${size}`, false);
     await s.locator('.ab-count').waitFor({ timeout: 15000 });
     const body = await text(s);
     check(`${size}: "3 on our list", "of 8 contacts · the rest aren’t kept"`, /3 on our list/.test(body) && /of 8 contacts · the rest aren’t kept/.test(body), body.slice(0, 300));

@@ -341,3 +341,8 @@
 .imp-past__fields { margin-top: var(--s-2); }
 .imp-past__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .imp-past__list label { display: flex; gap: var(--s-2); align-items: baseline; flex-wrap: wrap; font-size: 14px; }
+/* The hint for a contacts file: its link to Find people I know is a
+   full-size target on a phone. */
+@media (pointer: coarse) {
+  .imp-contacts a { display: inline-flex; align-items: center; min-height: 48px; }
+}

@@ -110,7 +110,7 @@ function Finder() {
 
   const choose = async (file) => {
     if (!file) return;
-    setError(null); setSkipped([]); setFound([]); setTicked(new Set()); setProgress(0); setCheckedN(0);
+    setError(null); setFailed(null); setSkipped([]); setFound([]); setTicked(new Set()); setProgress(0); setCheckedN(0);
     setPhase('reading');
     let data;
     try {
@@ -171,7 +171,8 @@ function Finder() {
   };
 
   const nTicked = tickable.filter((id) => ticked.has(id)).length;
-  const busy = phase === 'reading' || phase === 'checking' || Boolean(adding);
+  // A check that failed waits on Try again, but another file can be chosen.
+  const busy = phase === 'reading' || (phase === 'checking' && !failed) || Boolean(adding);
   const picker = (
     <input ref={fileRef} type="file" accept=".csv,text/csv,text/plain" className="ab-file" tabIndex={-1} aria-hidden="true"
       onChange={(e) => choose(e.target.files?.[0])} />
@@ -211,7 +212,13 @@ function Finder() {
       <div role="status" aria-live="polite" className="ab-status">
         {phase === 'reading' && <p className="ab-line">Loading… {progress > 0 ? `${Math.round(progress * 100)}%` : ''}</p>}
         {phase === 'checking' && read && !failed && (
-          <p className="ab-line">Checking {fmtN(Math.min(read.rows.length, checkedN + CHECK_SLICE))} of {fmtN(read.rows.length)}…</p>
+          <>
+            {/* The contacts already answered, of those with something to match. */}
+            <p className="ab-line">Checking {fmtN(checkedN)} of {fmtN(read.rows.length)} {read.rows.length === 1 ? 'contact' : 'contacts'}…</p>
+            {read.total > read.rows.length && (
+              <p className="ab-line muted">{fmtN(read.total - read.rows.length)} had no email or phone to match</p>
+            )}
+          </>
         )}
         {adding && <p className="ab-line">Adding {fmtN(Math.min(adding.total, adding.done + LINK_SLICE))} of {fmtN(adding.total)}…</p>}
       </div>

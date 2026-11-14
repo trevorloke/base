@@ -97,6 +97,7 @@ test('the switch: off by default (no link, no push); manager-only; on needs Goog
   assert.equal(areaOfAction('gcal.settings'), null);
   assert.deepEqual(ACTIONS['gcal.settings'].roles, ['manager'], 'manager-only with no area: Admin');
   delete process.env.GOOGLE_TOKEN_KEY;
+  assert.equal((await gcal(M)).why, 'not-set-up', 'Google not set up comes before off: there is no switch to point at');
   const r = await M.b.action('gcal.settings', { on: true });
   assert.equal(r.status, 409);
   assert.equal(r.json.error, 'Set up Google first (Settings → Services → Google)');

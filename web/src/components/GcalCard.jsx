@@ -4,8 +4,9 @@
 // It sits just before the calendar link card, so the one-step way comes
 // first, and it is the only place to stop it (GSI's Google card draws no
 // row for it).
-//   Drawn when the person has a link (any state), or the campaign has it on;
-//   for a manager with it off, one line saying where to turn it on.
+//   Drawn when the person has a link (any state), or the campaign has it on
+//   (while it's off, Settings → Services → Google is the one place that says
+//   so; with Google not set up, nothing here mentions it).
 //   Not connected        GoogleConnect "Connect Google Calendar"
 //   Connected, no link   "Keep my shifts in Google Calendar" (gcal.on)
 //   ok / updating        as whom, "12 shifts · 2 dates · Updated 2 min ago", Stop
@@ -20,7 +21,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { action, apiGet, ApiError } from '../api.js';
-import { adminHref, appMode } from '../mode.js';
+import { appMode } from '../mode.js';
 import { NeedsSignalLine, useOnline } from './NoSignal.jsx';
 import GoogleConnect, { StartLink, googleBlocked, useGoogle, useGoogleReturn } from './GoogleConnect.jsx';
 import { appName, clockTime, googleStart, herePath } from './google.js';
@@ -112,12 +113,13 @@ export default function GcalCard({ me }) {
   }, [linkState, qc]);
 
   const refresh = () => Promise.all([qc.invalidateQueries({ queryKey: ['gcal'] }), qc.invalidateQueries({ queryKey: ['google'] })]);
-  const run = async (name, after) => {
+  const run = async (name, after, then) => {
     setBusy(true); setError(null);
     try {
       await action(name, {});
       await after?.();
       await refresh();
+      then?.();
     } catch (err) {
       setError(said(err.message));
     } finally {
@@ -125,10 +127,12 @@ export default function GcalCard({ me }) {
     }
   };
 
-  // An older server: nothing. A read still on its way: nothing yet (most
-  // campaigns have this off, so a "Loading…" card would only vanish).
+  // An older server: nothing. A read still on its way: "Loading…" where the
+  // campaign has it on (from the sign-in already loaded), so the card holds
+  // its place; nothing where it's off, as a card that would only vanish.
   if (q.isError && q.error instanceof ApiError && q.error.status === 404) return null;
   const head = <div className="ts-head"><h2 className="ts-h">{TITLE}</h2></div>;
+  const campaignOn = me?.workspace?.settings?.gcal?.on === true;
   if (q.isError) {
     return (
       <section className="ts-card gc-card" id="gcal" ref={cardRef} aria-label={TITLE}>
@@ -137,22 +141,27 @@ export default function GcalCard({ me }) {
       </section>
     );
   }
-  if (!q.data) return null;
+  if (!q.data) {
+    if (!campaignOn) return null;
+    return (
+      <section className="ts-card gc-card" id="gcal" ref={cardRef} aria-label={TITLE}>
+        {head}
+        <p className="ts-line muted" role="status">Loading…</p>
+      </section>
+    );
+  }
   const d = q.data;
   const link = d.link;
   const role = me?.admin_role || me?.role;
 
   if (!link && !d.available) {
-    if (role !== 'manager' || !d.manager) return null;
+    // On for the campaign but this server can't run it: the manager is told
+    // why. Off, or Google not set up: Services says so, not this card.
+    if (role !== 'manager' || d.why !== 'jobs-off') return null;
     return (
       <section className="ts-card gc-card gc-card--off" id="gcal" ref={cardRef} aria-label={TITLE}>
         {head}
-        {d.why === 'jobs-off' ? (
-          <p className="ts-line muted">Background work is off on this server, so Google Calendar can’t update.</p>
-        ) : (
-          <p className="ts-line muted">Google Calendar is off for this campaign. Turn it on in{' '}
-            <a href={adminHref('/settings/services')}>Settings → Services → Google</a>.</p>
-        )}
+        <p className="ts-line muted">Background work is off on this server, so Google Calendar can’t update.</p>
       </section>
     );
   }
@@ -165,7 +174,12 @@ export default function GcalCard({ me }) {
         ? 'Stop? base.win can’t reach Google now, so delete its calendar there yourself.'
         : 'Stop? base.win’s calendar is removed from your Google Calendar.'}</span>
       <button type="button" className="btn gg-danger" disabled={off}
-        onClick={() => run('gcal.stop', () => { setAsking(false); setOfferFeed(false); tell(reconnectGrant ? 'Stopped' : 'Removing the base.win calendar'); })}>
+        onClick={() => run('gcal.stop', () => { setAsking(false); setOfferFeed(false); }, () => {
+          // Still being removed: the card itself says so. Already gone (or
+          // out of base.win's reach): say it stopped.
+          const now = qc.getQueryData(['gcal'])?.link?.state;
+          tell(!reconnectGrant && now === 'stopping' ? 'Removing the base.win calendar' : 'Stopped');
+        })}>
         {busy ? 'Stopping…' : 'Stop'}
       </button>
       <button type="button" className="btn btn-quiet" disabled={busy} onClick={() => setAsking(false)}>Cancel</button>
@@ -174,7 +188,7 @@ export default function GcalCard({ me }) {
     <button type="button" className="btn btn-quiet ts-btn" disabled={off} onClick={() => setAsking(true)}>Stop<span className="gg-sr"> Google Calendar</span></button>
   );
   const keep = (label) => (
-    <button type="button" className="btn btn-quiet ts-btn" disabled={off}
+    <button type="button" className="btn ts-btn" disabled={off}
       onClick={() => run('gcal.on', () => { if (feed.data?.feed) setOfferFeed(true); })}>
       {busy ? 'Starting…' : label}
     </button>
@@ -259,7 +273,7 @@ export default function GcalCard({ me }) {
               qc.setQueryData(['calendar-feed'], { ...feed.data, feed: null });
               setOfferFeed(false);
               tell('Calendar link stopped');
-            })}>Stop</button>
+            })}>Stop the link</button>
           <button type="button" className="btn btn-quiet" disabled={busy} onClick={() => setOfferFeed(false)}>Keep</button>
         </div>
       )}

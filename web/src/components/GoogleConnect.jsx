@@ -32,7 +32,7 @@ export function GoogleLoading({ q }) {
 }
 
 // A link that starts a Google flow, or the same words disabled with no signal.
-export function StartLink({ href, online, children, className = 'btn btn-quiet gg-link' }) {
+export function StartLink({ href, online, children, className = 'btn gg-link' }) {
   if (!online) return <button type="button" className={className.replace('gg-link', '')} disabled>{children}</button>;
   return <a className={className} href={href}>{children}</a>;
 }

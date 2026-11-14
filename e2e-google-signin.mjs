@@ -512,8 +512,8 @@ try {
     const piece = m.locator('.gg-connect');
     await m.goto(HOSTP, { waitUntil: 'domcontentloaded' });
     await m.getByText('Connect Google', { exact: true }).waitFor({ timeout: 8000 });
-    check('GoogleConnect, not connected: a quiet “Connect Google”, and no primary button', (await primaries(m)) === 0
-      && (await piece.locator('a.btn-quiet', { hasText: 'Connect Google' }).count()) === 1);
+    check('GoogleConnect, not connected: a bordered “Connect Google”, and no primary button', (await primaries(m)) === 0
+      && (await piece.locator('a.btn.gg-link:not(.btn-primary):not(.btn-quiet)', { hasText: 'Connect Google' }).count()) === 1);
     await shot(m, '25-connect-not-connected-desktop');
     await m.goto(`${HOSTP}?label=${encodeURIComponent('Connect Gmail')}`, { waitUntil: 'domcontentloaded' });
     await m.getByText('Connect Gmail', { exact: true }).waitFor({ timeout: 8000 });
@@ -663,6 +663,8 @@ try {
     await page.locator('.me-page h1').waitFor();
     await sleep(800);
     check('…and no Google card on Your profile', (await page.locator('.gg-card').count()) === 0);
+    check('…and no Google Calendar card either (nothing points at a switch that isn’t there)', (await page.locator('.gc-card').count()) === 0
+      && !/Google Calendar/.test(await page.locator('.me-page').innerText()));
     await page.goto(`${NOG}/login`, { waitUntil: 'domcontentloaded' });
     await sleep(500);
     check('…and no Google button on Sign in', (await page.locator('.gg-btn').count()) === 0);

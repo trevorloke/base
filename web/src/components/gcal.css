@@ -17,3 +17,6 @@
 .gc-switch .gg-confirm > span { flex: 1 1 100%; }
 .gc-acts { display: flex; flex-wrap: wrap; gap: var(--s-2); }
 .gc-people { font-size: 14px; color: var(--text-2); }
+/* The helper's link: a full-size target on a phone. */
+.gc-hint-link { text-decoration: underline; }
+@media (pointer: coarse) { .gc-hint-link { display: inline-flex; align-items: center; min-height: 48px; } }

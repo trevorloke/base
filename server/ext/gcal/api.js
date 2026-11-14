@@ -26,7 +26,9 @@ api.get('/gcal', async (c) => {
   const connect = googleSetup().connect;
   const available = camp.on && connect && jobsOn();
   const manager = ctx.role === 'manager';
-  const why = !manager ? null : !camp.on ? 'off' : !connect ? 'not-set-up' : !jobsOn() ? 'jobs-off' : null;
+  // Google not set up comes first: its switch isn't drawn then, so 'off'
+  // would point at nothing.
+  const why = !manager ? null : !connect ? 'not-set-up' : !camp.on ? 'off' : !jobsOn() ? 'jobs-off' : null;
   const grant = await grantFor(db, { userId: ctx.user.id, workspaceId: ws }, PURPOSE);
   if (grant?.state === 'ok' && available && (await db.query(
     `select 1 from gcal_links where workspace_id = $1 and user_id = $2 and state = 'reconnect'`, [ws, ctx.user.id],

@@ -9,6 +9,10 @@ import { action, apiGet, ApiError } from '../api.js';
 import { GoogleLoading } from './GoogleConnect.jsx';
 import './gcal.css';
 
+// Google Cloud → Google Auth Platform → Data access, where a project's
+// permissions are added.
+const CLOUD_SCOPES = 'https://console.cloud.google.com/auth/scopes';
+
 const fmtN = (n) => Number(n || 0).toLocaleString('en-CA');
 const said = (m) => { const t = String(m || ''); return t.charAt(0).toUpperCase() + t.slice(1); };
 
@@ -43,7 +47,11 @@ export default function GcalSwitch({ online }) {
           <span className="gg-switch__state" aria-hidden="true">{on ? 'On' : 'Off'}</span>
         </button>
       </div>
-      <p className="gg-hint" id="gc-switch-hint">Add the Calendar permission in Google Cloud first.</p>
+      {/* The permission is added in the campaign's Google Cloud project
+          (Google Auth Platform → Data access); GOING-LIVE §3 has the steps. */}
+      <p className="gg-hint" id="gc-switch-hint">
+        <a className="gc-hint-link" href={CLOUD_SCOPES} target="_blank" rel="noopener noreferrer">Add the Calendar permission in Google Cloud</a> first (Going live §3).
+      </p>
       {on && <p className="gc-people">{fmtN(people)} {people === 1 ? 'person' : 'people'} connected</p>}
       {asking && (
         <div className="gg-confirm" role="group" aria-label="Turn off Shifts in Google Calendar">

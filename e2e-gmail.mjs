@@ -243,9 +243,9 @@ try {
   await s.goto(`${BASE}/admin/profile`, { waitUntil: 'domcontentloaded' });
   await s.locator('.gm-connect').waitFor({ timeout: 10000 });
   const pre = await text(s, '.gm-connect');
-  check('Your profile: what Gmail is for, the not-reviewed line, Connect Gmail (quiet)', pre.includes('Send email from your own Gmail, from a person’s page.')
+  check('Your profile: what Gmail is for, the not-reviewed line, Connect Gmail (bordered, not a primary)', pre.includes('Send email from your own Gmail, from a person’s page.')
     && pre.includes('Google will warn that it hasn’t reviewed base.win. That’s expected here — continue past it.')
-    && (await s.locator('.gm-connect a:has-text("Connect Gmail")').getAttribute('class')).includes('btn-quiet'), pre);
+    && (await s.locator('.gm-connect a:has-text("Connect Gmail")').getAttribute('class')).includes('btn-primary') === false, pre);
   check('…one primary on Your profile at most (Two-step’s)', (await primaries(s)) <= 1);
   await shot(s, '06-profile-not-connected-1440');
   await s.locator('.gm-connect a:has-text("Connect Gmail")').click();
