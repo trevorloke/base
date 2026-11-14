@@ -351,6 +351,7 @@ await vpage.tap('.pf-rate .fk-out:has-text("Moved")');
 await sleep(1200);
 check('outside the turf: no panel, "Moved · the office will ask where"', !(await vpage.$('.mv-panel')) && /Moved · the office will ask where/.test(await V.text('.pf-rate')), await V.text('.pf-status'));
 await V.shot('09-profile-office-390');
+await twin(vpage, V, '09-profile-office');
 
 // ── 9. Desk profile: Needs an address → Where to? → Someone on file → Moved here → Undo ──
 await V.api('/actions/contact.log', { person_id: P.hal.id, channel: 'door', outcome: 'moved' });
@@ -416,6 +417,7 @@ await page.setViewportSize({ width: 390, height: 844 });
 await sleep(300);
 await simple(page, 'Add new address at 390', PANEL_TARGETS);
 await D.shot('13b-add-new-address-390');
+await twin(page, D, '13b-add-new-address', PHONE);
 await page.setViewportSize({ width: 1440, height: 900 });
 await page.click('.mv-panel button:has-text("Later")');
 
