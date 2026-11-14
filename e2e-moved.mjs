@@ -52,8 +52,9 @@ await new Promise((resolve, reject) => {
 });
 process.on('exit', () => { server.kill(); });
 process.on('unhandledRejection', (e) => { console.log(`FAIL  stopped: ${e?.stack || e}`); process.exit(1); });
-const BASE = `http://127.0.0.1:${PORT}${BASE_PATH}`;
-const ADMIN = `${BASE}/admin`;
+// Under a client's path the field app is <path>/field and the desk <path>/desk.
+const BASE = BASE_PATH ? `http://127.0.0.1:${PORT}${BASE_PATH}/field` : `http://127.0.0.1:${PORT}`;
+const ADMIN = BASE_PATH ? `http://127.0.0.1:${PORT}${BASE_PATH}/desk` : `${BASE}/admin`;
 
 const browser = await chromium.launch({
   executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
@@ -109,7 +110,7 @@ if (await page.locator('#su-org').count()) await page.fill('#su-org', 'Moved Exa
 await page.fill('#su-email', `riley+${tag}@moved.example`);
 await page.fill('#su-password', 'surrey-forward-2026');
 await page.click('button[type="submit"]');
-await page.waitForURL(/\/admin\/?$/, { timeout: 15000 });
+await page.waitForURL(/\/(admin|desk)\/?$/, { timeout: 15000 });
 const P = {};
 const mk = async (key, name, address, lat, lng, extra = {}) => {
   P[key] = (await D.api('/actions/person.create', { name, address, city: 'Surrey', ...(lat != null ? { lat, lng } : {}), ...extra })).json.person;
