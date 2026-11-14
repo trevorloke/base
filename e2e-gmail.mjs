@@ -304,7 +304,8 @@ try {
   check('Send again asks first: "Send again? It may arrive twice."', (await text(s, '.gm-confirm')).startsWith('Send again? It may arrive twice.'));
   // Right after no answer, GSI waits 30 s before asking Gmail again: said, nothing sent.
   const sentBefore = fake.gmailSent.length;
-  await s.locator('.gm-confirm button:has-text("Send")').click();
+  check('…its buttons say what they do: "Yes, send again" and "Don’t send", with no second Send or Cancel on the sheet', (await s.locator('.gm-sheet button:text-is("Send"), .gm-sheet button:text-is("Cancel")').count()) === 0);
+  await s.locator('.gm-confirm button:has-text("Yes, send again")').click();
   await s.locator('.gm-sheet .error').waitFor({ timeout: 10000 }).catch(() => {});
   check('…at once: "Google isn’t answering — nothing was sent. Try again in a minute."', (await text(s, '.gm-sheet .error')) === 'Google isn’t answering — nothing was sent. Try again in a minute.'
     && fake.gmailSent.length === sentBefore, await text(s, '.gm-sheet'));
@@ -410,6 +411,24 @@ try {
   check('a bounced address: the "Email bounced" chip, titled how to fix it, and no Email tile', (await bounced.count()) === 1
     && (await bounced.getAttribute('title')) === 'The address bounced or reported spam — fix it under Edit' && !(await s.locator('.pf-act:has-text("Email")').count()));
   await s.unroute(`**/api/persons/${bo}`);
+
+  // ── At the day's cap (the read as the server says it at GMAIL_DAILY_MAX) ──
+  await s.route('**/api/gmail', async (route) => {
+    const r = await route.fetch();
+    const j = await r.json();
+    j.me.sentToday = j.dailyMax;
+    await route.fulfill({ response: r, json: j });
+  });
+  await s.goto(`${BASE}/admin/people/${jane}`, { waitUntil: 'domcontentloaded' });
+  await s.locator('.gm-tileline').waitFor({ timeout: 10000 }).catch(() => {});
+  check('at the cap: the tile is the mail app, "You’ve sent … from Gmail today — try tomorrow"', /^You’ve sent [\d,]+ from Gmail today — try tomorrow$/.test(await text(s, '.gm-tileline'))
+    && (await s.locator('.pf-acts a.pf-act:has-text("Email")').count()) === 1, await text(s, '.gm-tileline'));
+  await shot(s, '15b-person-at-cap-1440');
+  await s.goto(`${BASE}/admin/profile`, { waitUntil: 'domcontentloaded' });
+  await s.locator('.gm-count').waitFor({ timeout: 10000 }).catch(() => {});
+  check('…Your profile: the same words instead of "Send me a test"', /try tomorrow/.test(await text(s, '.gm-count'))
+    && (await s.getByRole('button', { name: 'Send me a test' }).count()) === 0, await text(s, '.gm-count'));
+  await s.unroute('**/api/gmail');
 
   // ── Paused: Gmail asks to wait ──
   await s.goto(`${BASE}/admin/people/${jane}`, { waitUntil: 'domcontentloaded' });

@@ -14,7 +14,7 @@ import { appMode } from '../mode.js';
 import { useOnline } from './NoSignal.jsx';
 import { StartLink, googleBlocked, useGoogle } from './GoogleConnect.jsx';
 import { appName, googleStart, herePath } from './google.js';
-import { pauseClock, useGmail } from './EmailSheet.jsx';
+import { capWords, gmailAtCap, pauseClock, useGmail } from './EmailSheet.jsx';
 import './gmail.css';
 
 function SendTest({ online }) {
@@ -69,7 +69,7 @@ export default function GmailLine({ purpose }) {
     return (
       <div className="gm-count">
         <p className="gm-count__n"><strong>{me.sentToday.toLocaleString('en-CA')}</strong> sent today <span className="muted">of {d.dailyMax.toLocaleString('en-CA')}</span></p>
-        <SendTest online={online} />
+        {gmailAtCap(d) ? <p className="gm-pline muted">{capWords(d)}.</p> : <SendTest online={online} />}
       </div>
     );
   }

@@ -39,7 +39,11 @@ export function useToast() {
   return { msg, show };
 }
 
-export const gmailReady = (d) => Boolean(d?.setup && d.on && d.me?.ok && !d.apiOff);
+// Today's sends from Gmail used up (GMAIL_DAILY_MAX): not ready until tomorrow.
+export const gmailAtCap = (d) => Boolean(d?.me && d.dailyMax && Number(d.me.sentToday) >= d.dailyMax);
+export const capWords = (d) => `You’ve sent ${Number(d.dailyMax).toLocaleString('en-CA')} from Gmail today — try tomorrow`;
+
+export const gmailReady = (d) => Boolean(d?.setup && d.on && d.me?.ok && !d.apiOff && !gmailAtCap(d));
 
 // When the pause ends, on the campaign's clock as the server says it (the
 // send's refusal names the same hour); an older server: this device's clock.
@@ -48,6 +52,7 @@ export const pauseClock = (me) => me.pausedClock || clockTime(me.pausedUntil);
 export function gmailNotReadyLine(d) {
   if (!d?.setup || !d.on || gmailReady(d) || d.apiOff) return null;
   if (d.me?.trouble === 'paused' && d.me.pausedUntil) return <>Gmail asked us to wait until {pauseClock(d.me)}</>;
+  if (d.me?.ok && gmailAtCap(d)) return <>{capWords(d)}</>;
   return <>Gmail needs connecting — <Link to="/profile">Your profile</Link></>;
 }
 
@@ -75,7 +80,17 @@ export function notReadySaid(d) {
   if (!d.setup || !d.on) return { kind: 'said', said: 'Sending from Gmail is off for this campaign' };
   if (d.apiOff) return { kind: 'said', said: d.apiOff.said };
   if (d.me?.trouble === 'paused' && d.me.pausedUntil) return { kind: 'said', said: `Gmail asked us to wait. Try after ${pauseClock(d.me)}.` };
+  if (d.me?.ok && gmailAtCap(d)) return { kind: 'said', said: `${capWords(d)}, or use Outreach → Email` };
   return { kind: 'reconnect', said: d.me?.connected ? 'Gmail needs connecting again — Your profile' : 'Connect your Gmail first — Your profile' };
+}
+
+// A refusal's words, with "Outreach → Email" (the cap's other way) a link there.
+const OUTREACH = 'Outreach → Email';
+function Said({ said }) {
+  const t = String(said || '');
+  const at = t.lastIndexOf(OUTREACH);
+  if (at < 0) return t;
+  return <>{t.slice(0, at)}<Link to="/outreach/email">{OUTREACH}</Link>{t.slice(at + OUTREACH.length)}</>;
 }
 
 // A refusal before anything was asked of Gmail that a connect fixes.
@@ -151,15 +166,15 @@ export default function EmailSheet({ person, gmail, draft, said = null, onClose,
             onChange={(e) => setBody(e.target.value)} />
         </div>
         <div aria-live="polite">
-          {res?.kind === 'said' && <p className="error" role="alert">{res.said}</p>}
+          {res?.kind === 'said' && <p className="error" role="alert"><Said said={res.said} /></p>}
           {res?.kind === 'unsure' && (
             <div className="gm-said">
               <p role="alert">{res.said}</p>
               {again ? (
                 <div className="gm-confirm" role="group" aria-label="Send again">
                   <span>Send again? It may arrive twice.</span>
-                  <button type="button" className="btn btn-quiet" disabled={busy || !online} onClick={sendAgain}>Send</button>
-                  <button type="button" className="btn btn-quiet" onClick={() => setAgain(false)}>Cancel</button>
+                  <button type="button" className="btn btn-quiet" disabled={busy || !online} onClick={sendAgain}>Yes, send again</button>
+                  <button type="button" className="btn btn-quiet" onClick={() => setAgain(false)}>Don’t send</button>
                 </div>
               ) : (
                 <button type="button" className="btn btn-quiet" disabled={busy || !online} onClick={() => setAgain(true)}>Send again</button>
@@ -181,11 +196,19 @@ export default function EmailSheet({ person, gmail, draft, said = null, onClose,
             </div>
           )}
         </div>
+        {/* Not sure it went: the choice is Send again (above) or Close —
+            never a second Send or Cancel beside the confirm's. */}
         <div className="gm-acts">
-          <button type="submit" className="btn btn-primary gm-send" disabled={busy || !online || !filled || res?.kind === 'unsure'}>
-            {busy ? 'Sending…' : 'Send'}
-          </button>
-          <button type="button" className="btn btn-quiet" onClick={close}>Cancel</button>
+          {res?.kind === 'unsure' ? (
+            <button type="button" className="btn btn-quiet" onClick={close}>Close</button>
+          ) : (
+            <>
+              <button type="submit" className="btn btn-primary gm-send" disabled={busy || !online || !filled}>
+                {busy ? 'Sending…' : 'Send'}
+              </button>
+              <button type="button" className="btn btn-quiet" onClick={close}>Cancel</button>
+            </>
+          )}
           {!online && <NeedsSignal />}
         </div>
         <details className="gm-more">
