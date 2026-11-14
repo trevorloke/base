@@ -263,7 +263,7 @@ const bboxParam = (v) => {
   const b = String(v || '').split(',').map(Number);
   return b.length === 4 && b.every(Number.isFinite) && b[0] <= b[2] && b[1] <= b[3] && b[0] >= -90 && b[2] <= 90 ? b : null;
 };
-const DOOR_COLS = 'id, name, phone, email, address, house_number, unit, lat, lng, rating, rated_at, voted_at, tags';
+const DOOR_COLS = 'id, name, phone, email, address, house_number, unit, city, lat, lng, rating, rated_at, voted_at, tags';
 
 // The doors inside the turfs someone walks (and their own record): read by
 // the turfs' corners, then kept to the outlines. { signs: false } skips the
@@ -614,7 +614,7 @@ const loadLocated = async (db, ctx, pass = null, box = null, onList = null) => {
   const params = box ? [ctx.workspaceId, pass?.id || null, ...box] : [ctx.workspaceId, pass?.id || null];
   const listed = onList ? `coalesce((${joinWhere(params, onList)}), false)` : null;
   return (await db.query(
-    `select p.id, p.name, p.email, p.phone, p.address, p.house_number, p.unit, p.lat, p.lng, p.rating, p.tags, p.voted_at,
+    `select p.id, p.name, p.email, p.phone, p.address, p.house_number, p.unit, p.city, p.lat, p.lng, p.rating, p.tags, p.voted_at,
             (select max(c.created_at) from contacts c where c.person_id = p.id and c.workspace_id = p.workspace_id) as last_contact_at,
             (select c.outcome from contacts c where c.person_id = p.id and c.workspace_id = p.workspace_id order by c.created_at desc limit 1) as last_outcome,
             exists (select 1 from contacts c where c.person_id = p.id and c.workspace_id = p.workspace_id and c.channel = 'door') as door_knocked,

@@ -31,8 +31,11 @@ export const addressWords = (person, move, desk) => {
   return ['Address unknown', `since ${dayWords(move.created_at)}`, was ? `was ${was}` : null].filter(Boolean).join(' · ');
 };
 
-export default function ProfileMove({ person, move, open, contacts = [], household = [], refresh }) {
-  const [panel, setPanel] = useState(null); // 'whereTo' | 'add'
+// hidden: the rate card's own panel is open (one panel at a time); onPanel(open)
+// tells the page when this one opens or closes.
+export default function ProfileMove({ person, move, open, contacts = [], household = [], refresh, hidden = false, onPanel = () => {} }) {
+  const [panel, setPanelState] = useState(null); // 'whereTo' | 'add'
+  const setPanel = (v) => { setPanelState(v); onPanel(Boolean(v)); };
   const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [said, setSaid] = useState(null);
@@ -60,10 +63,12 @@ export default function ProfileMove({ person, move, open, contacts = [], househo
   };
   const undoable = live && (unknown ? live.result === 'unknown' : recent);
 
+  if (hidden) return null;
   if (panel) {
     return (
       <div className="mv-profile">
-        <MovePanel person={person} desk mode={panel} oldDoor={household} where="profile"
+        <MovePanel person={unknown && !person.city && live?.from_city ? { ...person, city: live.from_city } : person}
+          desk mode={panel} oldDoor={household} where="profile"
           toast={(text) => setSaid(text)}
           onClose={() => { setPanel(null); refresh?.(); }} />
       </div>

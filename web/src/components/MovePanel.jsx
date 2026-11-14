@@ -251,7 +251,9 @@ function useRows() {
 }
 
 function There({ person, desk, input, res, later, rowOpen, setRowOpen, onSent, toast }) {
-  const to = input.to;
+  // The city the server kept when none was typed: the people added or moved
+  // here get the same one, so they're found at this address.
+  const to = { ...input.to, city: input.to.city || res?.person?.city || person.city || undefined };
   const [rows, patch] = useRows();
   const [added, setAdded] = useState([]); // [{ id, name, said }] added or moved in here
   const [adding, setAdding] = useState(null); // 'new' | 'file'

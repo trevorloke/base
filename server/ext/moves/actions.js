@@ -98,9 +98,16 @@ export const applyMove = async (tx, ctx, cur, input, emit) => {
   if (input.to) {
     const to = input.to;
     const s = settleAddress(cur, { address: to.address, unit: to.unit || null });
+    // No city typed: the one on file, or, for someone marked Address unknown
+    // (whose city went with the old door), the one they had before that.
+    const city = to.city || cur.city || (cur.address_status === 'unknown' ? (await tx.query(
+      `select from_city from person_moves where workspace_id = $1 and person_id = $2 and undone_at is null and from_city is not null
+        order by created_at desc, id desc limit 1`,
+      [ctx.workspaceId, cur.id],
+    )).rows[0]?.from_city : null) || null;
     next = {
       address: s.address, house_number: s.house_number, unit: to.unit || null,
-      city: to.city || cur.city || null, postal: to.postal || null,
+      city, postal: to.postal || null,
     };
     if (low(next.address) === low(cur.address) && low(next.unit) === low(cur.unit) && low(next.city) === low(cur.city)) {
       throw httpError(409, 'That’s the address on file already');

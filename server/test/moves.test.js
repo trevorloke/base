@@ -165,6 +165,26 @@ test('Address unknown: off the door, the map and the walk list; the old address 
   assert.equal((await mgr.action('person.move', { person_id: fay.id, unknown: true })).status, 409, 'already unknown');
 });
 
+test('Address unknown, then a new address with no city: the old city is used, so who lives there is found', async () => {
+  const ida = await mgr.createPerson('Ida Example', { address: '9810 King George Blvd', city: 'Surrey', lat: 49.18, lng: -122.84 });
+  const kim = await atDoor('Kim Example');
+  ok(await mgr.action('person.move', { person_id: kim.id, unknown: true }));
+  const r = ok(await mgr.action('person.move', { person_id: kim.id, to: { address: '9810 King George Blvd' } }));
+  assert.equal((await row(kim.id)).city, 'Surrey', 'the city from before Address unknown');
+  assert.deepEqual(r.there.map((p) => p.id), [ida.id], 'the household at the new address');
+  assert.equal(r.person.city, 'Surrey', 'the answer says the city it kept');
+});
+
+test('the walk list and the door card carry each person’s city (the panel starts with it)', async () => {
+  const lia = await atDoor('Lia Example');
+  const turf = (await db.query('select id from turfs where workspace_id = $1', [ws])).rows[0];
+  const walk = ok(await vol.get(`/api/turfs/${turf.id}/walk`));
+  const there = walk.doors.flatMap((d) => d.persons).find((p) => p.id === lia.id);
+  assert.equal(there.city, 'Surrey', 'walk list');
+  const door = ok(await vol.get(`/api/map/doors?person=${lia.id}`));
+  assert.equal(door.persons.find((p) => p.id === lia.id).city, 'Surrey', 'door card');
+});
+
 test('the door’s fields go with the old door, and come back with Undo; Home phone stays', async () => {
   const gus = await atDoor('Gus Example');
   ok(await mgr.action('field.values.set', { person_id: gus.id, values: [

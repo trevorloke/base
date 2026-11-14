@@ -238,8 +238,15 @@ function Header({ person, donor, me, desk, onLog, contacted, level, onEdit, keyL
 // ─────────────────────────────────────────────────────────────────────────────
 // canMove: a Moved tap opens "Where did … go?" (the desk; a volunteer when
 // the server says may_move); otherwise the office asks.
-function RatingCard({ person, refresh, channel, setChannel, cardRef, canMove = false, desk = false, household = [] }) {
-  const [moving, setMoving] = useState(null); // the Moved tap's client id, while its panel is open
+// onMoving(open) tells the page a panel is open (the desk's own move lines
+// step aside); elsewhere: the desk's "Where to?" panel is open already, so a
+// Moved tap is logged without a second panel.
+function RatingCard({ person, refresh, channel, setChannel, cardRef, canMove = false, desk = false, household = [], onMoving = () => {}, elsewhere = false }) {
+  const [moving, setMovingState] = useState(null); // the Moved tap's client id, while its panel is open
+  const movingRef = useRef(null);
+  const setMoving = (v) => { movingRef.current = v; setMovingState(v); onMoving(Boolean(v)); };
+  useEffect(() => () => { if (movingRef.current) onMoving(false); }, []);
+  const opensPanel = (outcome) => outcome === 'moved' && canMove && !elsewhere;
   const [note, setNoteState] = useState('');
   const [noteOpen, setNoteOpen] = useState(false);
   // The note lives in a ref too, so leaving the profile can still send it
@@ -267,7 +274,9 @@ function RatingCard({ person, refresh, channel, setChannel, cardRef, canMove = f
   const [said, setSaid] = useState(null);
   const status = said?.text || '';
   const reachId = useId();
-  const act = useAction(refresh);
+  // A Moved tap that opens the panel waits to refetch until the panel
+  // closes: the profile holds still while it's open.
+  const act = useAction((res, name, input) => (opensPanel(input?.outcome) ? null : refresh()));
   const outbox = useOutbox();
   const scale = useScale();
   useEffect(() => {
@@ -304,7 +313,7 @@ function RatingCard({ person, refresh, channel, setChannel, cardRef, canMove = f
         return;
       }
       setSaid({ text: res.queued ? `${queuedText(res)} · ${what}` : `✓ ${what}`, what, queued: Boolean(res.queued) });
-      if (outcome === 'moved') setMoving(res.client_id || 'tap');
+      if (opensPanel(outcome)) setMoving(res.client_id || 'tap');
     }
   };
 
@@ -816,6 +825,10 @@ export default function Person() {
   // "3 more" on the Calls card's key line opens their Knows (#knows).
   const [open, setOpen] = useState(() => (desk ? { history: true, ...(location.hash === '#knows' ? { knows: true } : {}) } : { details: true }));
   const [editing, setEditing] = useState(null); // the details form, open on this field (desk)
+  // Which "Where did … go?" panel is open: the rate card's (after a Moved
+  // tap) or the desk's move lines' — one at a time.
+  const [movePanel, setMovePanel] = useState(null); // 'rate' | 'lines' | null
+  useEffect(() => { setMovePanel(null); }, [id]);
   const ratingRef = useRef(null);
   const toggle = (key) => () => setOpen((o) => ({ ...o, [key]: !o[key] }));
   const scale = useScale();
@@ -915,11 +928,13 @@ export default function Person() {
 
       {/* Moved: Needs an address, Address unknown, Moved here — the desk's lines and their Undo. */}
       {desk && (
-        <ProfileMove person={person} move={profile.data.latest_move || null} open={Boolean(profile.data.move_open)}
-          contacts={contacts} household={household} refresh={refresh} />
+        <ProfileMove key={person.id} person={person} move={profile.data.latest_move || null} open={Boolean(profile.data.move_open)}
+          contacts={contacts} household={household} refresh={refresh} hidden={movePanel === 'rate'}
+          onPanel={(on) => setMovePanel(on ? 'lines' : null)} />
       )}
       <RatingCard key={person.id} person={person} refresh={refresh} channel={channel} setChannel={setChannel} cardRef={ratingRef}
-        canMove={desk || profile.data.may_move === true} desk={desk} household={household} />
+        canMove={desk || profile.data.may_move === true} desk={desk} household={household}
+        onMoving={(on) => setMovePanel(on ? 'rate' : null)} elsewhere={movePanel === 'lines'} />
       {/* Undecided or not rated: a supporter who knows them (desk). */}
       {desk && <KnowsNudge query={knows} person={person} />}
 
