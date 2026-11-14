@@ -99,6 +99,19 @@ const simple = async (pg, name, sel = null) => {
   return mm;
 };
 const PANEL_TARGETS = '.mv-panel button, .mv-panel input, .mv-panel .af-opt';
+// The same screen at the other size: each named screen is kept at both.
+const PHONE = { width: 390, height: 844 };
+const WIDE = { width: 1440, height: 900 };
+const twin = async (pg, S, name, from = PHONE) => {
+  const to = from === PHONE ? WIDE : PHONE;
+  await pg.setViewportSize(to);
+  await sleep(300);
+  await simple(pg, `${name} at ${to.width}`);
+  await S.shot(`${name}-${to.width}`);
+  await pg.setViewportSize(from);
+  await sleep(200);
+};
+const cityBox = (pg) => pg.$eval('.mv-panel input[id$="-city"]', (el) => el.value).catch(() => null);
 
 // ── 1. The desk: people, doors and a turf (made-up, 555-01xx phones) ──
 const dctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, timezoneId: 'America/Vancouver' });
@@ -172,12 +185,20 @@ check('Moved: the same door stays open, with "Where did Ana go?"', opens === 1 &
 check('the Moved tap was logged at once', (await profile(P.ana.id)).contacts.some((c) => c.outcome === 'moved'));
 await simple(vpage, 'panel first look at 390', PANEL_TARGETS);
 await V.shot('01-walk-panel-390');
+await twin(vpage, V, '01-walk-panel');
 await vpage.tap('.mv-panel .mv-choice:has-text("New address")');
-await vpage.fill('.mv-panel input[role="combobox"]', '12345 72');
-await vpage.waitForSelector('.af-list .af-opt', { timeout: 5000 }).catch(() => {});
-await sleep(300);
+const anaCity = await cityBox(vpage);
+check('walk list: City starts as Ana’s city', anaCity === 'Surrey', anaCity);
+const suggest = async () => {
+  await vpage.fill('.mv-panel input[role="combobox"]', '12345 72');
+  await vpage.waitForSelector('.af-list .af-opt', { timeout: 5000 }).catch(() => {});
+  await sleep(300);
+};
+await suggest();
 await simple(vpage, 'New address with suggestions at 390', PANEL_TARGETS);
 await V.shot('02-new-address-suggestions-390');
+await twin(vpage, V, '02-new-address-suggestions');
+await suggest();
 await vpage.tap('.af-list .af-opt:has-text("12345 72 Ave")');
 await sleep(300);
 check('a door on file: "Pinned on the map"', /Pinned on the map/.test(await V.text('.mv-panel')), await V.text('.mv-panel .af-note'));
@@ -233,6 +254,7 @@ check('toast: "Address unknown — off this door"', t2 === 'Address unknown — 
 const leftText = await V.text('.mv-list');
 check('"Did anyone else move from 7120 124 St?" lists Bea', /Did anyone else move from 7120 124 St\?/.test(leftText) && /Bea Example/.test(leftText), leftText);
 await V.shot('05-did-anyone-else-move-390');
+await twin(vpage, V, '05-did-anyone-else-move');
 await vpage.tap('.mv-person:has-text("Bea Example") .mv-segbtn:has-text("Moved too")');
 await vpage.waitForSelector('.mv-person:has-text("Bea · moved · Address unknown")', { timeout: 5000 }).catch(() => {});
 check('Moved too: "Bea · moved · Address unknown", and on the server', /Bea · moved · Address unknown/.test(await V.text('.mv-panel'))
@@ -263,6 +285,7 @@ check('door card: Fay stays on the card with "Did anyone else move?"', /Fay Exam
   (await V.text('.door-card')).slice(0, 200));
 await simple(vpage, 'door card panel at 390', '.door-card .mv-panel button');
 await V.shot('06-door-card-390');
+await twin(vpage, V, '06-door-card');
 await vpage.tap('.door-card .mv-panel .btn-primary:has-text("Done")');
 await sleep(1200);
 check('server: Fay Address unknown, Gil still there', (await profile(P.fay.id)).person.address_status === 'unknown' && (await profile(P.gil.id)).person.address === '7180 124 St');
@@ -290,11 +313,13 @@ await sleep(400);
 const sheet = await vpage.$$eval('.obx-what', (els) => els.map((e) => e.innerText.trim())).catch(() => []);
 check('the outbox sheet: "Moved · new address · Gus Example · <time>" after the knock', sheet.length === 2 && /^Knock · Gus Example/.test(sheet[0]) && /^Moved · new address · Gus Example · \d{1,2}:\d{2} (am|pm)$/.test(sheet[1]), sheet.join(' | '));
 await V.shot('07-offline-outbox-390');
+await twin(vpage, V, '07-offline-outbox');
 await vpage.tap('.offline-strip__chip').catch(() => {}); // closes the sheet
 await sleep(300);
 check('"Shown when you have signal" for the new address', /Shown when you have signal/.test(await V.text('.mv-panel')));
 check('the chip "Moving — sends soon" on the door', /Moving — sends soon/.test(await V.text('.walk-door:has-text("7190 124 St") .walk-door__chips')));
 await V.shot('08-offline-chip-390');
+await twin(vpage, V, '08-offline-chip');
 // Back online: the door's lists answer slowly, then fail once, then come.
 let fail = true;
 await vpage.route(/\/api\/moves\/door/, async (route) => {
@@ -333,8 +358,11 @@ await D.go(`/people/${P.hal.id}`);
 await page.waitForSelector('.mv-pline', { timeout: 8000 }).catch(() => {});
 const line = await D.text('.mv-profile');
 check('"Marked moved <day> by Amrit — where to?"', /Marked moved \d{1,2} [A-Z][a-z]{2} by Amrit — where to\?/.test(line), line);
+const plines = (await page.$$('.mv-pline')).length;
+check('the "where to?" line shows once', plines === 1, String(plines));
 await simple(page, 'profile Needs an address at 1440');
 await D.shot('10-profile-needs-address-1440');
+await twin(page, D, '10-profile-needs-address', WIDE);
 await page.click('.mv-pline button:has-text("Where to?")');
 await page.click('.mv-panel .mv-choice:has-text("New address")');
 await page.fill('.mv-panel input[role="combobox"]', '9800 King George Blvd');
@@ -351,6 +379,7 @@ const idaRow = await page.$eval('.mv-onfile button[data-row]:has-text("Ida")', (
 check('Ida, already there, reads "Already lives here" and can’t be picked', idaRow?.off && /Already lives here/.test(idaRow.t), JSON.stringify(idaRow));
 await simple(page, 'Someone on file at 1440');
 await D.shot('11-someone-on-file-1440');
+await twin(page, D, '11-someone-on-file', WIDE);
 await page.click('.mv-onfile button[data-row]:has-text("Jo"):not([disabled])');
 await page.waitForSelector('.mv-person:has-text("Jo Example · moved here")', { timeout: 6000 }).catch(() => {});
 check('Jo joins the list as "moved here", and on the server', /Jo Example · moved here/.test(await D.text('.mv-panel')) && (await profile(P.jo.id)).person.address === '9800 King George Blvd');
@@ -378,14 +407,46 @@ const kimAddr = await D.text('.mv-profile');
 check('"Address unknown · since <day> · was 13500 104 Ave" with Add new address', /Address unknown · since \d{1,2} [A-Z][a-z]{2} · was 13500 104 Ave/.test(kimAddr)
   && !!(await page.$('.mv-pline button:has-text("Add new address")')), kimAddr);
 await D.shot('13-profile-address-unknown-1440');
+await twin(page, D, '13-profile-address-unknown', WIDE);
 await page.click('.mv-pline button:has-text("Add new address")');
 check('Add new address: New address already chosen, no "Address unknown" choice', !!(await page.$('.mv-panel input[role="combobox"]')) && !(await page.$('.mv-panel .mv-choice')));
+const kimCity = await cityBox(page);
+check('Add new address: City starts as the city Kim had', kimCity === 'Surrey', kimCity);
 await page.setViewportSize({ width: 390, height: 844 });
 await sleep(300);
 await simple(page, 'Add new address at 390', PANEL_TARGETS);
 await D.shot('13b-add-new-address-390');
 await page.setViewportSize({ width: 1440, height: 900 });
 await page.click('.mv-panel button:has-text("Later")');
+
+// The desk's own Moved tap on a profile: one panel; the move lines wait
+// until it closes, then the profile reads again.
+await page.setViewportSize(PHONE);
+await D.go(`/people/${P.gil.id}`);
+await page.waitForSelector('.pf-rate', { timeout: 8000 });
+await page.click('.pf-rate .fk-out:has-text("Moved")');
+await page.waitForSelector('.pf-rate .mv-panel', { timeout: 5000 }).catch(() => {});
+await sleep(1500);
+const deskTap = await page.evaluate(() => ({ panels: document.querySelectorAll('.mv-panel').length, lines: document.querySelectorAll('.mv-pline').length }));
+check('desk profile Moved tap: one panel, no "where to?" line beside it', deskTap.panels === 1 && deskTap.lines === 0, JSON.stringify(deskTap));
+await page.click('.mv-panel .mv-choice:has-text("New address")');
+const gilCity = await cityBox(page);
+check('profile: City starts as Gil’s city', gilCity === 'Surrey', gilCity);
+await simple(page, 'desk profile Moved tap at 390', PANEL_TARGETS);
+await D.shot('16-profile-moved-tap-390');
+await twin(page, D, '16-profile-moved-tap');
+await page.click('.mv-panel button:has-text("Later")');
+await page.waitForSelector('.mv-pline:has-text("where to?")', { timeout: 6000 }).catch(() => {});
+check('Later: the profile reads again — "Marked moved … — where to?"', /Marked moved .* — where to\?/.test(await D.text('.mv-profile')) && !(await page.$('.mv-panel')), await D.text('.mv-profile'));
+await page.click('.mv-pline button:has-text("Where to?")');
+await page.click('.pf-rate .fk-out:has-text("Moved")');
+await sleep(1500);
+const both = await page.evaluate(() => document.querySelectorAll('.mv-panel').length);
+check('a Moved tap while "Where to?" is open opens no second panel', both === 1, both);
+await simple(page, 'Where to? and a Moved tap at 390');
+await page.click('.mv-panel button:has-text("Later")');
+await sleep(600);
+await page.setViewportSize(WIDE);
 
 // ── 10. People: Needs an address and Address unknown, with counts ──
 const counts = (await D.api('/moves/counts')).json;
@@ -397,6 +458,7 @@ check(`the Moved chips carry the counts (${counts.open} · ${counts.unknown})`, 
 await page.click('.pp-sheet .pp-pick:has-text("Needs an address")');
 await sleep(400);
 await D.shot('14-people-moved-chips-1440');
+await twin(page, D, '14-people-moved-chips', WIDE);
 await page.click('.pp-sheet__head button:has-text("Done")');
 await sleep(800);
 const openNames = await page.$$eval('.pp-row__name, .pp-table__name a', (els) => els.map((e) => e.innerText.replace(/\s+/g, ' ').trim()));
@@ -412,6 +474,7 @@ await page.setViewportSize({ width: 390, height: 844 });
 await sleep(300);
 await simple(page, 'People Address unknown at 390');
 await D.shot('14b-people-address-unknown-390');
+await twin(page, D, '14b-people-address-unknown');
 await page.setViewportSize({ width: 1440, height: 900 });
 
 // ── 11. Import: the list still has a mover's old address ──

@@ -928,7 +928,7 @@ export default function Person() {
 
       {/* Moved: Needs an address, Address unknown, Moved here — the desk's lines and their Undo. */}
       {desk && (
-        <ProfileMove key={person.id} person={person} move={profile.data.latest_move || null} open={Boolean(profile.data.move_open)}
+        <ProfileMove key={`move-${person.id}`} person={person} move={profile.data.latest_move || null} open={Boolean(profile.data.move_open)}
           contacts={contacts} household={household} refresh={refresh} hidden={movePanel === 'rate'}
           onPanel={(on) => setMovePanel(on ? 'lines' : null)} />
       )}
