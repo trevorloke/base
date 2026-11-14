@@ -109,7 +109,7 @@ function SignRow({ s, open, onToggle, busy, onUpdate, onCancel }) {
             <p className="ops-chips sg-links">
               {s.person_id && <Link className="sg-person" to={`/people/${s.person_id}`}>{s.person_name || 'Supporter'}</Link>}
               {mapsHref(s) && (
-                <a className="btn btn-quiet ops-tap directions" href={mapsHref(s)} target="_blank" rel="noopener noreferrer"
+                <a className="btn ops-tap directions" href={mapsHref(s)} target="_blank" rel="noopener noreferrer"
                   aria-label={`Directions to ${where(s)} in Google Maps`}>Directions</a>
               )}
             </p>
@@ -153,7 +153,7 @@ function PutUpRow({ s, busy, onPutUp }) {
           </span>
           {/* The word, as everywhere: "Directions" opens Google Maps. */}
           {mapsHref(s) && (
-            <a className="btn btn-quiet ops-tap directions sg-dir" href={mapsHref(s)} target="_blank" rel="noopener noreferrer"
+            <a className="btn ops-tap directions sg-dir" href={mapsHref(s)} target="_blank" rel="noopener noreferrer"
               aria-label={`Directions to ${where(s)} in Google Maps`}>Directions</a>
           )}
         </span>

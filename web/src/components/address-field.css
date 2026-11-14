@@ -26,5 +26,6 @@
 /* Dark: Google's logo is drawn on a light plate, so its dark letters stay
    readable (Google's attribution must be legible on any background). */
 @media (prefers-color-scheme: dark) {
-  .af-attrib img { background: var(--inverse); padding: 3px 6px; border-radius: var(--r-sm); box-sizing: content-box; }
+  /* The plate is a shadow ring, so the logo itself stays 16 px tall. */
+  .af-attrib img { background: var(--inverse); box-shadow: 0 0 0 4px var(--inverse); border-radius: 2px; margin-left: 4px; }
 }
