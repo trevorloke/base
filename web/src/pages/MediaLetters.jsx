@@ -359,6 +359,11 @@ function DeskActions({ l, openSend, go, act, online }) {
   const [toldId, setToldId] = useState(l.outlets[0]?.id || null);
   const members = useQuery({ queryKey: ['members'], queryFn: () => apiGet('/members'), staleTime: 60_000, enabled: mode === 'assign' });
   const desk = (members.data?.members || []).filter((m) => m.role !== 'volunteer');
+  // The letter's papers first, then any other paper that takes this kind:
+  // after a paper said no, the writer may have sent it anywhere.
+  const all = useOutlets(mode === 'told');
+  const takes = (o) => (l.kind === 'op_ed' ? o.oped_email || o.oped_form : o.letters_email || o.letters_form);
+  const toldOutlets = [...l.outlets, ...(all.data?.outlets || []).filter((o) => takes(o) && !l.outlets.some((x) => x.id === o.id))];
   const done = () => { setMode(null); setText(''); };
   return (
     <section className="lt-sec" aria-label="More for this letter">
@@ -368,7 +373,7 @@ function DeskActions({ l, openSend, go, act, online }) {
           <button type="button" className="btn btn-quiet ot-btn-tap" onClick={() => setMode('assign')}>Assign to…</button>
           {['new', 'working', 'ready'].includes(l.status) && <button type="button" className="btn btn-quiet ot-btn-tap" onClick={() => setMode('decline')}>Decline</button>}
           {l.status === 'declined' && <button type="button" className="btn btn-quiet ot-btn-tap" disabled={!online} onClick={() => go('letter.reopen', { id: l.id }, 'Back to working on it')}>Work on it again</button>}
-          {l.status === 'ready' && l.outlets.length > 0 && <button type="button" className="btn btn-quiet ot-btn-tap" onClick={() => setMode('told')}>They told us they sent it</button>}
+          {l.status === 'ready' && <button type="button" className="btn btn-quiet ot-btn-tap" onClick={() => setMode('told')}>They told us they sent it</button>}
           {openSend && <button type="button" className="btn btn-quiet ot-btn-tap" onClick={() => setMode('published')}>Published: paste the link</button>}
           {openSend && <button type="button" className="btn btn-quiet ot-btn-tap" disabled={!online} onClick={() => go('letter.not_published', { id: l.id, send_id: openSend.id }, 'Not published — back to Ready')}>Not published</button>}
         </div>
@@ -396,8 +401,10 @@ function DeskActions({ l, openSend, go, act, online }) {
         <div className="ot-confirm" role="group" aria-label="They told us they sent it">
           <span>Which paper?</span>
           <div className="md-chips" role="radiogroup" aria-label="Paper">
-            {l.outlets.map((o) => <button key={o.id} type="button" role="radio" aria-checked={toldId === o.id} className={`chip md-chip${toldId === o.id ? ' is-on' : ''}`} onClick={() => setToldId(o.id)}>{o.name}</button>)}
+            {toldOutlets.map((o) => <button key={o.id} type="button" role="radio" aria-checked={toldId === o.id} className={`chip md-chip${toldId === o.id ? ' is-on' : ''}`} onClick={() => setToldId(o.id)}>{o.name}</button>)}
           </div>
+          {all.isPending && <span>{LOADING}</span>}
+          {all.isError && <span>Other papers unavailable — <button type="button" className="btn btn-quiet" onClick={() => all.refetch()}>Try again</button></span>}
           <button type="button" className="btn ot-btn-tap" disabled={act.busy || !online || !toldId} onClick={async () => { if (await go('letter.told_sent', { id: l.id, outlet_id: toldId }, 'Noted as sent')) done(); }}>Save</button>
           <button type="button" className="btn btn-quiet ot-btn-tap" onClick={done}>Cancel</button>
         </div>

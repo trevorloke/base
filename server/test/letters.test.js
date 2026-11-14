@@ -269,7 +269,28 @@ test('a one-paper letter can go to any of the campaign’s papers: the read bloc
   const s2 = ok(await vic.action('myletter.sent', { id: l.id, outlet_id: other.id, how: 'email', client_id: cid() })).send;
   assert.equal(s2.while_out_at, null);
   assert.equal((await row(l.id)).status, 'sent');
+  // Where it went is where it's filed: first, before the paper that said no.
+  const names = (os) => os.map((o) => o.name);
+  assert.deepEqual(names(ok(await mgr.get('/api/media/letters')).letters.find((x) => x.id === l.id).outlets), [other.name, only.name], 'the desk queue');
+  assert.deepEqual(names((await desk(l.id)).outlets), [other.name, only.name], 'the desk’s letter page');
+  assert.deepEqual(names((await mine(vic, l.id)).outlets), [other.name, only.name], 'the writer’s page');
+  assert.deepEqual(names(ok(await vic.get('/api/letters/mine')).letters.find((x) => x.id === l.id).outlets), [other.name, only.name], 'the writer’s list');
+  assert.equal(JSON.stringify(parseOut((await row(l.id)).outlet_ids)), JSON.stringify([other.id, only.id]));
+
+  // The desk recording the writer's word, to a paper the letter never named.
+  const third = await outlet();
+  ok(await mgr.action('letter.not_published', { id: l.id, send_id: s2.id }));
+  ok(await mgr.action('letter.told_sent', { id: l.id, outlet_id: third.id }));
+  assert.deepEqual(names((await desk(l.id)).outlets), [third.name, other.name, only.name]);
+
+  // Never more than three: the ones that said no go first.
+  const fourth = await outlet();
+  const s3 = (await mine(vic, l.id)).sends.find((x) => x.outlet_id === third.id && !x.outcome);
+  ok(await vic.action('myletter.not_published', { id: l.id, send_id: s3.id, client_id: cid() }));
+  ok(await vic.action('myletter.sent', { id: l.id, outlet_id: fourth.id, how: 'email', client_id: cid() }));
+  assert.deepEqual(names((await desk(l.id)).outlets), [fourth.name, third.name, other.name]);
 });
+const parseOut = (v) => (typeof v === 'string' ? JSON.parse(v) : v);
 
 test('a paper dropped when the letter landed is still named on every read until the writer picks again', async () => {
   const gone = await outlet();

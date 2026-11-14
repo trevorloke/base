@@ -157,7 +157,23 @@ export const outAt = async (db, ctx, letterId, outlet, days) => (await db.query(
   [letterId, ctx.workspaceId, days],
 )).rows.filter((s) => !sameNewsroom({ id: s.outlet_id, newsroom: s.newsroom }, outlet));
 
-const recordSend = async (tx, ctx, l, { outletId, how, clientId = null }, emit) => {
+// A send to a paper the letter didn't name (any paper, once one said no):
+// the letter is filed under it from now on, first, so the queue, the paper
+// card and the writer's header all name where it went. Still three at most:
+// papers that said no make room first, then the last picks. Null: no change.
+const filedUnder = async (tx, l, outletId) => {
+  const ids = parseJ(l.outlet_ids, []);
+  if (ids.includes(outletId)) return null;
+  const next = [outletId, ...ids];
+  if (next.length <= 3) return next;
+  const no = new Set((await tx.query(
+    `select outlet_id from letter_sends where letter_id = $1 and outcome = 'not_published'`, [l.id],
+  )).rows.map((r) => r.outlet_id));
+  for (let i = next.length - 1; i > 0 && next.length > 3; i--) if (no.has(next[i])) next.splice(i, 1);
+  return next.slice(0, 3);
+};
+
+const recordSend = async (tx, ctx, l,{ outletId, how, clientId = null }, emit) => {
   if (clientId) {
     const dup = (await tx.query('select * from letter_sends where workspace_id = $1 and client_id = $2', [ctx.workspaceId, clientId])).rows[0];
     if (dup) return { send: dup, duplicate: true };
@@ -175,8 +191,9 @@ const recordSend = async (tx, ctx, l, { outletId, how, clientId = null }, emit) 
     [id, ctx.workspaceId, l.id, o.id, how, ctx.user.id, out?.id || null, clientId],
   )).rows[0];
   emit('letter_send', id, 'create', { id, letter_id: l.id, outlet_id: o.id, how, outcome: null, url: null, while_out_at: out?.id || null });
-  const next = await touch(tx, l, how === 'told_desk' ? 'campaign' : 'writer', { status: 'sent', closed_at: null });
-  if (l.status !== 'sent') emit('letter', l.id, 'update', letterEvent(next));
+  const ids = await filedUnder(tx, l, o.id);
+  const next = await touch(tx, l, how === 'told_desk' ? 'campaign' : 'writer', { status: 'sent', closed_at: null, ...(ids ? { outlet_ids: JSON.stringify(ids) } : {}) });
+  if (l.status !== 'sent' || ids) emit('letter', l.id, 'update', letterEvent(next));
   return { send };
 };
 
