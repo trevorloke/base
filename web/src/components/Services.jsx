@@ -47,7 +47,11 @@ function Row({ s, online }) {
               green "Set up" over a red ✕. */}
           {res && !res.ok && s.state !== 'missing'
             ? <span className="chip sv2-state sv2-state--broken">{STATE_WORD[s.state]} · not working</span>
-            : <span className={`chip sv2-state sv2-state--${s.state}`}>{STATE_WORD[s.state]}{s.launch && s.state === 'missing' ? ' · needed to launch' : ''}</span>}
+            : s.flagged && s.state !== 'missing'
+              // Set up, but the server says something is wrong (Google
+              // paused it, its daily limit is reached, a setting to change).
+              ? <span className="chip sv2-state sv2-state--flagged">{STATE_WORD[s.state]} · {s.flagWord || 'needs a look'}</span>
+              : <span className={`chip sv2-state sv2-state--${s.state}`}>{STATE_WORD[s.state]}{s.launch && s.state === 'missing' ? ' · needed to launch' : ''}</span>}
         </div>
         <p className="sv2-for">{s.for}</p>
         {s.detail && !(s.panel === 'google' && s.lines) && !(s.panel === 'gmail' && s.state === 'missing') && <p className="sv2-detail">{s.detail}</p>}
@@ -67,6 +71,7 @@ function Row({ s, online }) {
         {res && <p className={`sv2-said ${res.ok ? 'is-ok' : 'is-bad'}`} role="status">{res.ok ? '✓ ' : '✕ '}{res.said}</p>}
         {/* Something for the manager to do at the service: said apart, not in the line that says what works. */}
         {res?.todo && <p className="sv2-detail sv2-todo" role="status">{res.todo}</p>}
+        {s.todo && !res?.todo && <p className="sv2-detail sv2-todo">{s.todo}</p>}
       </div>
       {s.checkable && (
         <button type="button" className="btn ops-tap sv2-check" disabled={busy || !online} onClick={check}>{busy ? 'Checking…' : 'Check'}</button>

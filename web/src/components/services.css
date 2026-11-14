@@ -35,3 +35,5 @@
 .sv2-state--broken { color: var(--danger); }
 /* Google's words on their own line, then the step that fixes it */
 .sv2-todo { white-space: pre-line; }
+/* Set up, but the server flags it: paused by Google, limit reached */
+.sv2-state--flagged { color: var(--danger); }

@@ -294,6 +294,7 @@ test('the Places row: off by default (its Check still tests the key), on, logo m
   assert.equal(r.json.by, 'bc');
   p = byKey(await list()).places;
   assert.equal(p.flagged, true);
+  assert.equal(p.flagWord, 'not working', 'the badge says so: never a plain green "Set up"');
   const lines = p.detail.split('\n');
   assert.equal(lines[0], 'This key is limited to other Google services. Add Map Tiles API and Places API (New) to it.');
   assert.match(lines[1], /^Google said: “Requests to this API places\.googleapis\.com/);
@@ -306,7 +307,7 @@ test('the Places row: off by default (its Check still tests the key), on, logo m
   // GEOCODER=google: B.C. places pins, and the row says to take the setting away.
   process.env.GEOCODER = 'google';
   const g = byKey(await list()).geocoder;
-  assert.deepEqual([g.name, g.state, g.flagged, g.todo], ['Map pins (BC Address Geocoder)', 'ready', true, 'Take GEOCODER=google away in Render']);
+  assert.deepEqual([g.name, g.state, g.flagged, g.flagWord, g.todo], ['Map pins (BC Address Geocoder)', 'ready', true, 'needs a change', 'Take GEOCODER=google away in Render']);
   assert.match(g.detail, /\nGEOCODER=google is no longer used for pins: Google’s terms let its pins be kept 30 days only and not on other maps · the B\.C\. service places them$/);
   delete process.env.GEOCODER;
   assert.doesNotMatch(JSON.stringify(await list()), /gkey/);

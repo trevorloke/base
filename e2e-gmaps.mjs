@@ -644,6 +644,8 @@ s = await seed();
     const row = await words(p, sel);
     check('B5: Services — Address suggestions (Google Places) flagged: "Add Map Tiles API and Places API (New) to it", Google said, Recipe B step 4',
       /Add Map Tiles API and Places API \(New\) to it/.test(row) && /Google said/.test(row) && /Recipe B step 4/.test(row), row);
+    check('B5: …its badge is a warning, "Set up · not working", never a green "Set up"', (await p.locator(`${sel} .sv2-state--ready`).count()) === 0
+      && /Set up · not working/.test(await p.locator(`${sel} .sv2-state`).innerText().catch(() => '')), await p.locator(`${sel} .sv2-state`).innerText().catch(() => ''));
     await p.locator(sel).scrollIntoViewIfNeeded().catch(() => {});
     await p.screenshot({ path: `${SHOTS}/B-services-paused-1440.png`, fullPage: true });
     // The Map check's Address suggestions line.

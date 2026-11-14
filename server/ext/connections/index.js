@@ -84,7 +84,7 @@ const googleTilesRow = () => {
   return row('tiles', 'Map background (Google Map Tiles)', 'The map volunteers walk', false, ['GOOGLE_MAPS_SERVER_KEY'], {
     detail: lines.join('\n'),
     state: googleKey() ? 'ready' : 'missing',
-    ...(full && googleKey() ? { flagged: true } : {}),
+    ...(full && googleKey() ? { flagged: true, flagWord: 'limit reached' } : {}),
   });
 };
 // Google's address suggestions (lib/places.js): off until the owner turns
@@ -106,7 +106,7 @@ const placesRow = () => {
   if (h.paused) {
     return base({
       detail: [h.paused.plain, h.paused.said ? `Google said: “${h.paused.said}”` : '', h.paused.step ? `See Going live §5, ${h.paused.step}.` : '', 'The B.C. service meanwhile', counts, ...problems].filter(Boolean).join('\n'),
-      flagged: true,
+      flagged: true, flagWord: 'not working',
     });
   }
   return base({ detail: ['Google Places, then the B.C. service when Google is busy', counts, ...problems].join(' · ') });
@@ -179,7 +179,7 @@ export const services = (base = publicUrl()) => {
         retired.length ? RETIRED_WORDS : ''].filter(Boolean).join('\n'),
         state: geo === 'off' ? 'missing' : 'ready',
         ...(geo === 'off' ? { missing: ['GEOCODER'] } : {}),
-        ...(retired.length ? { flagged: true, todo: `Take ${retired.map((k) => `${k}=google`).join(' and ')} away in Render` } : {}),
+        ...(retired.length ? { flagged: true, flagWord: 'needs a change', todo: `Take ${retired.map((k) => `${k}=google`).join(' and ')} away in Render` } : {}),
       }))(retiredGoogle()),
     googleTiles() ? googleTilesRow() : freeTilesRow(),
     row('jobs', 'Background work', 'Sends that go out later, ladder steps, receipts, the address run', true, [], {
