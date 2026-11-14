@@ -98,6 +98,8 @@ export default function GcalCard({ me }) {
     if (q.data.link.state === 'ok' || q.data.link.state === 'updating') {
       tell('Connected — your shifts are on their way');
       setOfferFeed(true);
+      // The card sits below the calendar link card: bring it (and its offer) up.
+      requestAnimationFrame(() => cardRef.current?.scrollIntoView({ block: 'start' }));
     }
   }, [code, q.data, welcomed]);
 

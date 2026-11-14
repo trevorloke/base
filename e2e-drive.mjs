@@ -459,7 +459,7 @@ try {
   await m.getByRole('button', { name: 'Take it out' }).click();
   await m.getByRole('button', { name: 'Send to Google Sheets' }).click();
   await m.locator('.drv-panel').waitFor({ timeout: 8000 });
-  check('an empty list: "Nothing to send — the list is empty", no Send', /Nothing to send — the list is empty/.test(await text(m, '.drv-panel'))
+  check('an empty list: "Nothing to send yet" (a list or a report alike), no Send', /Nothing to send yet/.test(await text(m, '.drv-panel'))
     && (await m.locator('.drv-panel').getByRole('button', { name: 'Send', exact: true }).count()) === 0, await text(m, '.drv-panel'));
   // Too big for one Sheet: the words, and Download CSV beside them.
   await limits({ cells: 5 });
