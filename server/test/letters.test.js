@@ -208,7 +208,8 @@ test('sends: agreement first; an exclusive paper still out flags a send elsewher
   assert.equal((await vic.action('myletter.sent', { id: l.id, outlet_id: a.id, how: 'email', client_id: key })).json.duplicate, true);
   assert.equal((await row(l.id)).status, 'sent');
   let w = await mine(vic, l.id);
-  assert.deepEqual(w.blocked.map((x) => [x.outlet_id, x.by]), [[b.id, a.name]], 'the sister paper is the same newsroom; the other is blocked');
+  const ours = (bl) => bl.filter((x) => [a.id, sister.id, b.id].includes(x.outlet_id));
+  assert.deepEqual(ours(w.blocked).map((x) => [x.outlet_id, x.by]), [[b.id, a.name]], 'the sister paper is the same newsroom; the other is blocked');
   // The writer sends to the sister paper: same newsroom, no flag.
   const s2 = ok(await vic.action('myletter.sent', { id: l.id, outlet_id: sister.id, how: 'form', client_id: cid() })).send;
   assert.equal(s2.while_out_at, null);
@@ -217,6 +218,7 @@ test('sends: agreement first; an exclusive paper still out flags a send elsewher
   assert.ok([s1.id, s2.id].includes(s3.while_out_at), 'flagged: sent while that newsroom still had it');
   const q = ok(await mgr.get('/api/media/letters')).letters.find((x) => x.id === l.id);
   assert.equal(q.sent_while_out, true);
+  assert.ok([a.name, sister.name].includes(q.while_out_name), 'the desk’s chip names the paper that still had it');
   assert.ok([a.name, sister.name].includes((await desk(l.id)).sends.find((s) => s.id === s3.id).while_out_at.outlet_name));
   // Not published at each: back to Ready once none is still out, with the chip.
   for (const s of [s1, s2, s3]) ok(await vic.action('myletter.not_published', { id: l.id, send_id: s.id, client_id: cid() }));
@@ -250,6 +252,34 @@ test('sends: agreement first; an exclusive paper still out flags a send elsewher
   const told = ok(await mgr.action('letter.told_sent', { id: l2.id, outlet_id: b.id })).send;
   assert.equal(told.how, 'told_desk');
   assert.equal((await row(l2.id)).status, 'sent');
+});
+
+test('a one-paper letter can go to any of the campaign’s papers: the read blocks the others while an exclusive send is out', async () => {
+  const only = await outlet();
+  const other = await outlet();
+  const l = ok(await submit(vic, { outlet_ids: [only.id] })).letter;
+  ok(await ready(vic, l.id));
+  const s = ok(await vic.action('myletter.sent', { id: l.id, outlet_id: only.id, how: 'email', client_id: cid() })).send;
+  const w = await mine(vic, l.id);
+  assert.deepEqual(w.blocked.filter((x) => x.outlet_id === other.id).map((x) => x.by), [only.name], 'another of the campaign’s papers, not one the writer picked');
+  assert.equal(w.blocked.some((x) => x.outlet_id === only.id), false, 'not blocked by its own send');
+  // Not printed: back to Ready, and any other paper may have it.
+  ok(await vic.action('myletter.not_published', { id: l.id, send_id: s.id, client_id: cid() }));
+  assert.deepEqual((await mine(vic, l.id)).blocked, []);
+  const s2 = ok(await vic.action('myletter.sent', { id: l.id, outlet_id: other.id, how: 'email', client_id: cid() })).send;
+  assert.equal(s2.while_out_at, null);
+  assert.equal((await row(l.id)).status, 'sent');
+});
+
+test('a paper dropped when the letter landed is still named on every read until the writer picks again', async () => {
+  const gone = await outlet();
+  const good = await outlet();
+  ok(await mgr.action('media.outlet.remove', { id: gone.id }));
+  const l = ok(await submit(vic, { outlet_ids: [good.id, gone.id] })).letter;
+  assert.deepEqual((await mine(vic, l.id)).dropped_outlets.map((d) => d.name), [gone.name], 'the writer’s read, after a reload');
+  assert.deepEqual((await desk(l.id)).dropped_outlets.map((d) => d.name), [gone.name], 'the desk’s read');
+  ok(await vic.action('myletter.details', { id: l.id, outlet_ids: [good.id] }));
+  assert.deepEqual((await mine(vic, l.id)).dropped_outlets, [], 'picked again: no longer said');
 });
 
 test('published, declined, withdrawn, deleted; the purge 30 days after a letter closes, unless reopened', async () => {

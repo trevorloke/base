@@ -145,6 +145,7 @@ const overlapsOf = async (db, ctx, l, text) => {
 const letterOut = async (db, ctx, l) => {
   const ws = ctx.workspaceId;
   const ids = parseJ(l.outlet_ids, []);
+  const droppedIds = parseJ(l.dropped_ids, []).filter((id) => !ids.includes(id));
   const [drafts, notes, sends] = await Promise.all([
     db.query(
       `select v.id, v.n, v.side, v.body, v.from_version, v.created_at, u.name as by_name
@@ -162,14 +163,22 @@ const letterOut = async (db, ctx, l) => {
        where s.letter_id = $1 order by s.sent_at, s.id`, [l.id],
     ),
   ]).then((r) => r.map((x) => x.rows));
-  const outlets = await outletsOf(db, ws, ids);
+  const outlets = await outletsOf(db, ws, [...ids, ...droppedIds]);
   const by = new Map(outlets.map((o) => [o.id, o]));
   const live = ids.map((id) => by.get(id)).filter((o) => o && !o.deleted_at);
+  // Send it offers any of the campaign's papers for this kind, the writer's
+  // own first: each one an exclusive send elsewhere still has is blocked.
   const days = waitDays(ctx.workspace);
   const blocked = [];
-  for (const o of live) {
-    const out = (await outAt(db, ctx, l.id, o, days))[0];
-    if (out) blocked.push({ outlet_id: o.id, by: out.name, until: new Date(new Date(out.sent_at).getTime() + days * 86400000).toISOString() });
+  const out = sends.some((s) => !s.outcome) ? await outAt(db, ctx, l.id, { id: null, newsroom: null }, days) : [];
+  if (out.length) {
+    const all = (await db.query(
+      `select id, newsroom from media_outlets where workspace_id = $1 and deleted_at is null and ${takesSql(l.kind)}`, [ws],
+    )).rows;
+    for (const o of [...live, ...all.filter((x) => !ids.includes(x.id))]) {
+      const at = out.find((s) => !sameRoom({ id: s.outlet_id, newsroom: s.newsroom }, o));
+      if (at) blocked.push({ outlet_id: o.id, by: at.name, until: new Date(new Date(at.sent_at).getTime() + days * 86400000).toISOString() });
+    }
   }
   const person = await personOf(db, ws, l.person_id);
   const newest = newestWriter(drafts);
@@ -178,7 +187,7 @@ const letterOut = async (db, ctx, l) => {
     agreed_version: l.agreed_version, agreed_at: l.agreed_at, disclose_line: l.disclose_line, email_me: l.email_me,
     declined_note: l.declined_note, last_side: l.last_side, last_at: l.last_at,
     outlets: live.map((o) => cardFor(o, l.kind)),
-    dropped_outlets: ids.filter((id) => !by.get(id) || by.get(id).deleted_at).map((id) => ({ id, name: by.get(id)?.name || null })),
+    dropped_outlets: [...ids.filter((id) => !by.get(id) || by.get(id).deleted_at), ...droppedIds].map((id) => ({ id, name: by.get(id)?.name || null })),
     blocked,
     campaign_words: await campaignWords(db, ctx, newest?.body),
     drafts: drafts.map((d) => ({
@@ -281,7 +290,9 @@ api.get('/media/letters', async (c) => {
     `select l.id, l.kind, l.title, l.status, l.outlet_ids, l.last_side, l.last_at, l.person_id, l.agreed_campaign_share,
             coalesce(p.name, wu.name) as writer_name, au.name as assigned_to_name, ${WAITING} as waiting,
             case when l.status = 'ready' then ${NOT_PRINTED} end as not_printed_at,
-            exists (select 1 from letter_sends s where s.letter_id = l.id and s.while_out_at is not null) as sent_while_out,
+            (select coalesce(wo.name, '') from letter_sends s join letter_sends ws on ws.id = s.while_out_at
+               left join media_outlets wo on wo.id = ws.outlet_id and wo.workspace_id = ws.workspace_id
+             where s.letter_id = l.id order by s.sent_at desc limit 1) as while_out_name,
             (select v.body from letter_versions v where v.letter_id = l.id and v.side = 'writer' order by v.n desc limit 1) as body
      from letters l
      left join persons p on p.id = l.person_id and p.workspace_id = l.workspace_id
@@ -299,7 +310,7 @@ api.get('/media/letters', async (c) => {
       status: r.status, writer: { name: r.writer_name || null, person_id: r.person_id },
       outlets: parseJ(r.outlet_ids, []).filter((id) => names.has(id)).map((id) => ({ id, name: names.get(id) })),
       assigned_to_name: r.assigned_to_name || null, last_side: r.last_side, last_at: r.last_at, waiting: Boolean(r.waiting),
-      size: size(r.body || ''), not_printed_at: r.not_printed_at || null, sent_while_out: Boolean(r.sent_while_out),
+      size: size(r.body || ''), not_printed_at: r.not_printed_at || null, sent_while_out: r.while_out_name != null, while_out_name: r.while_out_name || null,
       mostly_campaign: r.agreed_campaign_share != null && Number(r.agreed_campaign_share) > 0.5,
     })),
   });

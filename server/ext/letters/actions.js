@@ -293,11 +293,11 @@ export const actions = {
       const s = signSet(input.sign);
       const l = (await tx.query(
         `insert into letters (id, workspace_id, kind, writer_user, person_id, title, outlet_ids, sign_name, sign_city, sign_address, sign_phone,
-           disclose_line, email_me, last_side, last_at, client_id)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'writer', now(), $14) returning *`,
+           disclose_line, email_me, last_side, last_at, client_id, dropped_ids)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'writer', now(), $14, $15) returning *`,
         [id, ws, input.kind, ctx.user.id, me?.id || null, input.title || null, JSON.stringify(kept),
           s.sign_name ?? null, s.sign_city ?? null, s.sign_address ?? null, s.sign_phone ?? null,
-          input.disclose_line ?? false, input.email_me ?? true, input.client_id],
+          input.disclose_line ?? false, input.email_me ?? true, input.client_id, JSON.stringify(dropped.map((d) => d.id))],
       )).rows[0];
       emit('letter', id, 'create', letterEvent(l));
       await addDraft(tx, ctx, l, { side: 'writer', text: input.body }, emit);
@@ -383,6 +383,7 @@ export const actions = {
       if (input.outlet_ids) {
         const sorted = await sortOutlets(tx, ctx.workspaceId, l.kind, input.outlet_ids);
         set.outlet_ids = JSON.stringify(sorted.kept);
+        set.dropped_ids = JSON.stringify(sorted.dropped.map((d) => d.id));
         dropped = sorted.dropped;
       }
       if (input.disclose_line !== undefined) set.disclose_line = input.disclose_line;

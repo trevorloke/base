@@ -14,10 +14,7 @@ export const KIND_WORDS = { letter: 'Letter', op_ed: 'Op-ed' };
 export const BODY_MAX = 20000;
 export const LOADING = 'Loading…';
 export const fmt = (n) => Number(n || 0).toLocaleString('en-CA');
-export const dayWords = (iso) => {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-};
+export { dayWords } from './letterWords.js';
 export const firstWords = (t, n = 8) => { const w = String(t || '').trim().split(/\s+/).filter(Boolean); return w.slice(0, n).join(' ') + (w.length > n ? '…' : ''); };
 export function Unavailable({ onRetry }) {
   return <>Unavailable — <button type="button" className="btn btn-quiet lt-inline" onClick={onRetry}>Try again</button></>;

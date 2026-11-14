@@ -49,6 +49,10 @@ create table if not exists letters (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+-- Papers the writer picked that were dropped when the letter landed or was
+-- re-picked (gone, or not taking this kind): named on the letter until the
+-- writer picks again, however it's opened.
+alter table letters add column if not exists dropped_ids jsonb not null default '[]'::jsonb;
 create unique index if not exists letters_client_idx on letters (workspace_id, client_id) where client_id is not null;
 create index if not exists letters_status_idx on letters (workspace_id, status, last_at);
 create index if not exists letters_writer_idx on letters (workspace_id, writer_user);
