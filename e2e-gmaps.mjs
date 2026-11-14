@@ -466,8 +466,21 @@ let s = await seed();
     if (await row.count() && (await row.getAttribute('aria-expanded').catch(() => null)) === 'false') await row.click();
     await sleep(300);
     const links = await directionsIn(p, '.ops-item');
-    check('A8: a sign’s Directions go by car (travelmode=driving), new tab, noopener noreferrer', links.length >= 1 && links.every((l) => DRIVE.test(l.href) && relOk(l)), JSON.stringify(links));
+    check('A8: a sign’s Directions go by car (travelmode=driving), new tab, noopener noreferrer, the word "Directions", a full control tall', links.length >= 1
+      && links.every((l) => DRIVE.test(l.href) && relOk(l) && l.text === 'Directions' && l.h >= 40), JSON.stringify(links));
     await p.close();
+    // …and on a phone, 48 px.
+    const pc = await sized(s.mgr, PHONE);
+    const ph = await pageIn(pc, 'A8-sign-390');
+    await ph.goto(`${BASE}/admin/signs`, { waitUntil: 'domcontentloaded' });
+    await ph.waitForSelector('.ops-item', { timeout: 10000 }).catch(() => {});
+    const prow = ph.locator('.ops-item .ops-row').first();
+    if (await prow.count() && (await prow.getAttribute('aria-expanded').catch(() => null)) === 'false') await prow.click();
+    await sleep(300);
+    const plinks = await directionsIn(ph, '.ops-item');
+    check('A8: a sign’s Directions is 48 px tall on a phone', plinks.length >= 1 && plinks.every((l) => l.h >= 48), JSON.stringify(plinks));
+    await ph.screenshot({ path: `${SHOTS}/A8-sign-390.png` });
+    await pc.close();
   }
   // 9. Your profile: the notice is the last line, after every card.
   if (want('A9')) for (const [who, c, path] of [['manager', s.mgr, '/admin/profile'], ['volunteer', s.vol, '/profile']]) {

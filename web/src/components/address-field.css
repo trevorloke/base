@@ -23,3 +23,8 @@
 .af-attrib { display: flex; align-items: center; padding: 10px 10px 5px; pointer-events: none; }
 .af-attrib img { display: block; height: 16px; width: auto; }
 .af-attrib .visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+/* Dark: Google's logo is drawn on a light plate, so its dark letters stay
+   readable (Google's attribution must be legible on any background). */
+@media (prefers-color-scheme: dark) {
+  .af-attrib img { background: var(--inverse); padding: 3px 6px; border-radius: var(--r-sm); box-sizing: content-box; }
+}

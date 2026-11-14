@@ -1083,3 +1083,14 @@
 .btn.map-check__again, .btn.map-check__retry { display: inline-flex; align-items: center; min-height: 48px; padding: 0 var(--s-3); }
 .map-check__wait { margin: 0; font-size: 15px; color: var(--text-2); }
 .map-page .map-canvas .leaflet-bar a.leaflet-disabled { background: var(--paper-1); color: var(--text-4); }
+
+/* Dark: the mode bar and the first-visit hint follow the scheme like the
+   other floating controls (a dark card, light words), not a white slab;
+   Finish and the active "+ Door" are the accent with its own ink, which
+   reads on dark where mid-blue on navy did not. */
+@media (prefers-color-scheme: dark) {
+  .map-mode, .map-hint { background: var(--paper-0); color: var(--text-1); border: 1px solid var(--rule-2); }
+  .map-mode .btn.map-mode__go { background: var(--mark); color: var(--mark-ink); border-color: var(--mark); }
+  @media (hover: hover) { .map-mode .btn.map-mode__go:hover { background: var(--mark); border-color: var(--mark); filter: brightness(1.08); } }
+  .map-fab--add.is-on { background: var(--mark); color: var(--mark-ink); border-color: var(--mark); }
+}

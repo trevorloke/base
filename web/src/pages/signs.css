@@ -1,0 +1,5 @@
+/* Signs (Signs.jsx): the supporter and Directions on an open sign, and
+   Directions on the sign crew's rows — each a full-size target. */
+.sg-links { gap: var(--s-2); }
+.sg-person { display: inline-flex; align-items: center; min-height: var(--ctl); }
+.btn.sg-dir { align-self: flex-start; margin-top: var(--s-1); padding: 0 12px; }

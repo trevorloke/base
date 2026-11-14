@@ -1060,7 +1060,9 @@ function FilterSheet({
           </div>
         )}
         {countsNote && <p className="map-fsheet__tiles">{countsNote}</p>}
-        {desk && tilesNote && <p className="map-fsheet__tiles">{tilesNote}</p>}
+        {/* Google's own notice below already says where the map comes from:
+            the tiles line stays only when it has more to say (a setting ignored). */}
+        {desk && tilesNote && !(google?.tiles && !tilesNote.includes(' — ')) && <p className="map-fsheet__tiles">{tilesNote}</p>}
         {/* Managers: what the map is drawn from, on one sheet (MapCheck.jsx). */}
         {onCheck && <button type="button" className="btn btn-quiet map-fsheet__check" onClick={onCheck}>Map check</button>}
         <GoogleNotice google={google} />

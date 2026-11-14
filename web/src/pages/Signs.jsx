@@ -8,7 +8,8 @@
 //   the status switch and the note. A status change says so in a toast with
 //   Undo (the row may leave the filtered list).
 //   Volunteers (the sign crew): "Signs to put up" — only the signs waiting,
-//   the address opens directions, one "Put up ✓" per row (toast + Undo).
+//   "Directions" under each address opens Google Maps, one "Put up ✓" per
+//   row (toast + Undo).
 //   "Add a sign" and the full list (?all=1) sit under "More"; with nothing
 //   left to put up, "Add a sign" is the one button.
 //   ?new=1 opens "Add a sign" (at a supporter's address, or any address);
@@ -23,6 +24,7 @@ import { apiGet, action } from '../api.js';
 import { PersonPicker } from './Shifts.jsx';
 import { NoSignal, noSignal, useOnline, NeedsSignalLine } from '../components/NoSignal.jsx';
 import './shifts.css';
+import './signs.css';
 import AddressField, { lookupAddress, pinOf } from '../components/AddressField.jsx';
 
 // The registry label carries the size ("Large sign (4×4)"); it rides along as a tooltip.
@@ -104,11 +106,11 @@ function SignRow({ s, open, onToggle, busy, onUpdate, onCancel }) {
       {open && (
         <div className="ops-body" id={bodyId}>
           {(s.person_id || mapsHref(s)) && (
-            <p className="ops-chips">
-              {s.person_id && <Link to={`/people/${s.person_id}`}>{s.person_name || 'Supporter'}</Link>}
-              {s.person_id && mapsHref(s) && <span aria-hidden="true">·</span>}
+            <p className="ops-chips sg-links">
+              {s.person_id && <Link className="sg-person" to={`/people/${s.person_id}`}>{s.person_name || 'Supporter'}</Link>}
               {mapsHref(s) && (
-                <a href={mapsHref(s)} target="_blank" rel="noopener noreferrer" aria-label={`Directions to ${where(s)} in Google Maps`}>Directions</a>
+                <a className="btn btn-quiet ops-tap directions" href={mapsHref(s)} target="_blank" rel="noopener noreferrer"
+                  aria-label={`Directions to ${where(s)} in Google Maps`}>Directions</a>
               )}
             </p>
           )}
@@ -144,18 +146,16 @@ function PutUpRow({ s, busy, onPutUp }) {
     <li className="ops-item">
       <div className="ops-row ops-row--static">
         <span className="ops-row__main">
-          <span className="ops-row__name">
-            {mapsHref(s) ? (
-              <a className="ops-addr" href={mapsHref(s)} target="_blank" rel="noopener noreferrer"
-                aria-label={`Directions to ${where(s)} in Google Maps`}>
-                {s.address || s.person_name}
-              </a>
-            ) : (s.address || s.person_name || '—')}
-          </span>
+          <span className="ops-row__name">{s.address || s.person_name || '—'}</span>
           <span className="ops-row__sub">
             <span className="chip" title={kindSize(s.kind)}>{kindWord(s.kind)}</span>
             {shownNote(s.note) && <span className="ops-row__note">{shownNote(s.note)}</span>}
           </span>
+          {/* The word, as everywhere: "Directions" opens Google Maps. */}
+          {mapsHref(s) && (
+            <a className="btn btn-quiet ops-tap directions sg-dir" href={mapsHref(s)} target="_blank" rel="noopener noreferrer"
+              aria-label={`Directions to ${where(s)} in Google Maps`}>Directions</a>
+          )}
         </span>
         <span className="ops-row__end">
           <button type="button" className="btn ops-solid ops-tap ops-putup" disabled={busy}

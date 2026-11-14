@@ -713,12 +713,11 @@ export default function DoorCard({ door, selectedId, onSelect, onClose, toast, m
                 {!noTexts(sel) && (on.sms === false
                   ? <a className="btn door-act" href={smsHref(sel.phone, smsBody(sel))} onClick={() => startReach(sel, 'text')}>Text</a>
                   : <Link className="btn door-act" to={callsCard(sel, 'text')}>Text</Link>)}
-                <span className="door-more__phone mono">{sel.phone}</span>
               </>
-            ) : (
-              <span className="muted door-more__phone">No phone</span>
-            )}
-            <Directions to={{ lat: door.lat, lng: door.lng, address: door.address, city: sel.city }} words={doorTitle(door)} mode="walking" />
+            ) : null}
+            {/* One look with Call and Text, in the same row. */}
+            <Directions to={{ lat: door.lat, lng: door.lng, address: door.address, city: sel.city }} words={doorTitle(door)} mode="walking" className="btn door-act" />
+            {sel.phone ? <span className="door-more__phone mono">{sel.phone}</span> : <span className="muted door-more__phone">No phone</span>}
           </div>
           {!sel.pending && (
             <QuickDetails key={`qd-${sel.id}`} person={sel} me={me} toast={toast}
