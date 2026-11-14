@@ -13,7 +13,7 @@
 // Calendar: no card while off, for anyone (Services says so); Services →
 // Google → "Shifts in Google Calendar" On; the volunteer connects from the
 // phone and comes back to "Connected — your shifts are on their way", the
-// card above the calendar link card; "Stop your calendar link too" → Stop;
+// card after the calendar link card; "Stop your calendar link too" → Stop;
 // a booking lands in the fake and the card reads "1 shift · Updated …";
 // unassigned at the desk → gone; another shift called off → gone; the
 // calendar deleted in Google → "Make it again"; GSI's Google card has no
@@ -184,9 +184,9 @@ try {
   check('the volunteer makes a calendar link', (await api(v, '/api/actions/calendar.feed.make', {})).status === 200);
   await v.goto(`${BASE}/profile`, { waitUntil: 'domcontentloaded' });
   await v.locator('#gcal').waitFor({ timeout: 10000 });
-  check('on: the card is drawn, above the calendar link card', await v.evaluate(() => {
+  check('on: the card is drawn, after the calendar link card (the Google pieces together)', await v.evaluate(() => {
     const a = document.getElementById('gcal'); const b = document.getElementById('calendar');
-    return Boolean(a && b && (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING));
+    return Boolean(a && b && (b.compareDocumentPosition(a) & Node.DOCUMENT_POSITION_FOLLOWING));
   }));
   await v.getByText('Connect Google Calendar').waitFor({ timeout: 8000 });
   check('not connected: what it does, and Connect Google Calendar (not a primary)', /Updated within a minute of any change\. Only base\.win’s own calendar\./.test(await text(v, '#gcal'))
@@ -314,7 +314,9 @@ try {
       && (await smallTargets(mp, '.gc-switch .gg-switch')).length === 0, JSON.stringify(await smallTargets(mp, '.gc-switch .gg-switch')));
     await shot(mp, '10-services-gcal-phone', false);
     await mp.goto(`${BASE}/admin/profile`, { waitUntil: 'domcontentloaded' });
-    await mp.locator('#gcal').waitFor({ timeout: 10000 });
+    await mp.locator('#calendar').waitFor({ timeout: 10000 });
+    await sleep(800);
+    check('off again: the manager’s phone shows no Google Calendar card (Services says it is off)', await mp.locator('#gcal').count() === 0, await text(mp, '.me-page'));
     await shot(mp, '01-profile-off-manager-phone');
   }
 
