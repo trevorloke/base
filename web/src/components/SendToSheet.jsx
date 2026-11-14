@@ -138,7 +138,7 @@ export function SendToSheet({ source, of, name, count = null, head = [], noun = 
       {(open || showing || (id && !e)) && (
         <div className="drv-panel" role="group" aria-label="Google Sheets">
           {open && !connected && <DriveConnect />}
-          {open && connected && count === 0 && <p role="status">Nothing to send — the list is empty</p>}
+          {open && connected && count === 0 && <p role="status">Nothing to send yet</p>}
           {open && connected && count !== 0 && (
             <div className="drv-ask">
               <p className="drv-ask__q">Send {what} to a new Google Sheet in {whereSheetsGo(d.data.land)}?</p>
@@ -159,7 +159,8 @@ export function SendToSheet({ source, of, name, count = null, head = [], noun = 
           ) : <p role="status">Loading…</p>)}
           {showing && going(e) && <Progress e={e} online={online} />}
           {showing && e.status === 'done' && (
-            <p className="drv-done" role="status">In Google Sheets · <a href={e.url} target="_blank" rel="noopener noreferrer">Open</a>
+            <p className="drv-done" role="status">In Google Sheets{' '}
+              <a className="btn btn-quiet ops-tap" href={e.url} target="_blank" rel="noopener noreferrer">Open<span className="drv-sr"> {name || 'the Sheet'}</span></a>
               {e.said && <span className="drv-line"> {e.said}</span>}</p>
           )}
           {showing && (e.status === 'failed' || e.status === 'stopped') && (

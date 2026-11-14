@@ -30,7 +30,7 @@ function SheetRow({ e, d, manager, online, tz }) {
       <div className="drv-row__main">
         <span className="drv-row__name">{e.name}</span>
         <span className="drv-row__facts">
-          <span className={`chip ${cls}`}>{label}</span> {driveWhen(e.created_at, tz)}{manager ? <> · {e.mine ? 'by you' : `by ${e.by}`} · {where}</> : null}
+          <span className={`chip ${cls}`}>{label}</span> {driveWhen(e.created_at, tz)}{manager ? <span className="drv-row__more"> · {e.mine ? 'by you' : `by ${e.by}`} · {where}</span> : null}
         </span>
       </div>
       {e.status === 'done' && e.url && <a className="btn btn-quiet ops-tap" href={e.url} target="_blank" rel="noopener noreferrer">Open<span className="drv-sr"> {e.name}</span></a>}

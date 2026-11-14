@@ -17,6 +17,7 @@ import { MAX_ATTEMPTS as EXPORT_MAX } from '../lib/jobs.js';
 import { _setLimitsForTest, LIMITS } from '../ext/drive/export.js';
 import { _setPaceForTest } from '../ext/drive/sheets.js';
 import { _resetPickerForTest } from '../ext/drive/picker.js';
+import { _resetPickerLimitsForTest } from '../ext/drive/api.js';
 import { Browser, acct, join, restoreEnv, signup, startGoogle, tag } from './google-helpers.js';
 
 const DRIVE_FILE = 'https://www.googleapis.com/auth/drive.file';
@@ -220,7 +221,7 @@ test('permissions: every drive.* and *.drive action’s area is as planned — O
   assert.ok(!ACTIONS['drive.settings'].area && !ACTIONS['drive.folder'].area, 'manager-only with no area: Admin');
 });
 
-test('the Picker’s token: narrowed to Drive, kept an hour, never stored; not narrowed or refused → off; 31 in 15 minutes → 429', async () => {
+test('the Picker’s token: narrowed to Drive, kept an hour, never stored; not narrowed or refused → off; 31 from Google in 15 minutes → 429, page opens free', async () => {
   const M = await campaign();
   const logs = [];
   const log = console.log;
@@ -258,8 +259,13 @@ test('the Picker’s token: narrowed to Drive, kept an hour, never stored; not n
   await connect(S.b, A[2].sub);
   fake.setNarrow(false);
   assert.ok(ok(await S.b.get('/api/drive/picker')).token);
+  // Page opens while the token is held: never counted (a manager reloading
+  // Import, the compose and Media isn't locked out of Drive).
   let last;
-  for (let i = 0; i < 30; i += 1) last = await S.b.get('/api/drive/picker');
+  for (let i = 0; i < 40; i += 1) last = await S.b.get('/api/drive/picker');
+  assert.equal(last.status, 200);
+  // Each a fresh token from Google: the 31st in 15 minutes is refused.
+  for (let i = 0; i < 30; i += 1) { _resetTokensForTest(); _resetPickerForTest(); _resetPickerLimitsForTest(); last = await S.b.get('/api/drive/picker'); }
   assert.equal(last.status, 429);
 });
 

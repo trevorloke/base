@@ -26,7 +26,20 @@ import { fileContent, fileMeta, tabCsv } from './reads.js';
 export const api = new Hono();
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const desk = (c) => (isDesk(c.get('ctx')) ? null : c.json({ error: FOR_THE_DESK }, 403));
+// Only work that goes to Google is counted: the Picker's token while it is
+// still held in memory (every page open with a Drive button reads it) is
+// free, and a picked file's details have a limit of their own.
 const pickers = makeLimiter({ windowMs: 15 * 60_000, max: 30 });
+const metas = makeLimiter({ windowMs: 15 * 60_000, max: 30 });
+// person → { grant, until }: when the token last handed out stops being
+// served from memory (GSI keeps it until five minutes before it expires).
+// Never the token itself.
+const handed = new Map();
+export const _resetPickerLimitsForTest = () => { handed.clear(); };
+const held = (userId, g) => {
+  const h = handed.get(userId);
+  return Boolean(h && h.grant === g.id && h.until > Date.now());
+};
 
 api.get('/drive', async (c) => {
   const no = desk(c);
@@ -59,7 +72,6 @@ api.get('/drive/picker', async (c) => {
   if (no) return no;
   c.header('Cache-Control', 'no-store');
   const ctx = c.get('ctx');
-  if (pickers(ctx.user.id)) return c.json({ error: 'Too many tries — wait a few minutes' }, 429);
   const rules = driveRules(ctx.workspace.settings);
   // Off, managers may still open it: Settings → Services' "Try opening
   // Google Drive" is the check before the desk is let in.
@@ -68,10 +80,13 @@ api.get('/drive/picker', async (c) => {
   const g = await driveGrant(db, ctx);
   if (!g) return c.json({ ready: true, connect: true });
   if (g.state !== 'ok') return c.json({ ready: true, connect: true, said: g.said || 'Connect Google Drive again' });
+  if (!held(ctx.user.id, g) && pickers(ctx.user.id)) return c.json({ error: 'Too many tries — wait a few minutes' }, 429);
   const t = await pickerToken(db, g);
   if (t.unsafe) return c.json({ ready: true, unsafe: true, said: 'Google Drive can’t open safely on this server — tell us' });
   if (t.trouble?.code === 'reconnect') return c.json({ ready: true, connect: true, said: 'Connect Google Drive again' });
   if (t.trouble) return c.json({ ready: true, trouble: t.trouble.plain }, t.trouble.code === 'paused' ? 429 : 503);
+  if (handed.size > 5000) handed.clear();
+  handed.set(ctx.user.id, { grant: g.id, until: new Date(t.expiresAt).getTime() - 300_000 });
   return c.json({ ready: true, apiKey: pickerKey(), appId: projectNumber(), script: pickerScript(), email: g.email, token: t.token, expiresAt: t.expiresAt });
 });
 
@@ -107,7 +122,7 @@ api.get('/drive/exports/:id', async (c) => {
 
 // A picked file (reads.js): desk roles only, the person's own grant.
 const deskFirst = (fn) => async (c) => desk(c) || fn(c);
-api.get('/drive/files/:id', deskFirst((c) => fileMeta(c, pickers)));
+api.get('/drive/files/:id', deskFirst((c) => fileMeta(c, metas)));
 api.get('/drive/files/:id/tabs/:tab', deskFirst(tabCsv));
 api.get('/drive/files/:id/content', deskFirst(fileContent));
 

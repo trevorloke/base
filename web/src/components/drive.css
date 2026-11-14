@@ -10,6 +10,9 @@
 .drv-acts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); margin-top: var(--s-2); }
 .drv-acts .btn { min-height: var(--ctl); }
 .toast.drv-toast { max-width: calc(100vw - 32px); }
+/* On a phone the tab bar sits at the foot: the toast goes above it, as
+   Gmail's and Calendar's do. */
+@media (max-width: 720px) { .toast.drv-toast { bottom: calc(80px + env(safe-area-inset-bottom)); z-index: 950; } }
 .drv-ok { color: var(--ok); font-weight: 600; }
 
 /* Chips you choose from: Which tab?, Who can open the link?, Who can send. */
@@ -52,7 +55,9 @@
 .drv-bar span { display: block; height: 100%; background: var(--mark); transition: width 0.3s; }
 @media (prefers-reduced-motion: reduce) { .drv-bar span { transition: none; } }
 .drv-done { font-weight: 600; }
-.drv-done a { color: var(--mark-deep); }
+.drv-done { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
+.drv-done a.btn { min-height: var(--ctl); text-decoration: none; }
+.drv-done .drv-line { flex: 1 1 100%; margin: 0; font-weight: 400; }
 .drv-said { font-weight: 600; }
 
 /* The two export screens: each table's CSV, and Google Sheets beside it. */
@@ -83,3 +88,7 @@
 .drv-take .btn { white-space: nowrap; }
 .rp-sec__head:has(.drv-take.is-open) { flex-wrap: wrap; justify-content: flex-start; gap: var(--s-2); }
 .rp-sec__head:has(.drv-take.is-open) h2 { flex: 1 1 auto; }
+
+/* Sent to Google Drive on a phone: the name, then two facts (how it went,
+   when); who and where only on a wider screen. */
+@media (max-width: 720px) { .drv-row__more { display: none; } }

@@ -183,7 +183,7 @@
 }
 .ot-file__name { overflow-wrap: anywhere; }
 .ot-file__size { color: var(--text-3); font-family: var(--font-mono); font-size: 12px; white-space: nowrap; }
-.ot-file .btn { min-height: 32px; min-width: 32px; padding: 0 8px; }
+.ot-file .btn { min-height: var(--ctl); min-width: var(--ctl); padding: 0 8px; }
 .ot-attach__row { display: flex; align-items: center; gap: var(--s-2) var(--s-3); flex-wrap: wrap; }
 .ot-attach__hint { color: var(--text-3); font-size: 13px; }
 .ot-test-note { color: var(--text-2); font-size: 14px; margin: var(--s-2) 0 0; }
