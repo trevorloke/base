@@ -611,11 +611,13 @@ const parseJ = (v, d) => (typeof v === 'string' ? JSON.parse(v) : (v ?? d));
 // is on it as it stands now — the pass's universe (shared/passes.js
 // inUniverse). onList: the list's WHERE, read once per request (ext/passes
 // listedWhere); null for a pass that walks no list.
-const loadLocated = async (db, ctx, pass = null, box = null, onList = null) => {
+// names: also first_name and last_name (Reports' walking list prints them
+// apart); every other caller's rows stay exactly as they were.
+const loadLocated = async (db, ctx, pass = null, box = null, onList = null, { names = false } = {}) => {
   const params = box ? [ctx.workspaceId, pass?.id || null, ...box] : [ctx.workspaceId, pass?.id || null];
   const listed = onList ? `coalesce((${joinWhere(params, onList)}), false)` : null;
   return (await db.query(
-    `select p.id, p.name, p.email, p.phone, p.address, p.house_number, p.unit, p.city, p.lat, p.lng, p.rating, p.tags, p.voted_at,
+    `select p.id, p.name,${names ? ' p.first_name, p.last_name,' : ''} p.email, p.phone, p.address, p.house_number, p.unit, p.city, p.lat, p.lng, p.rating, p.tags, p.voted_at,
             (select max(c.created_at) from contacts c where c.person_id = p.id and c.workspace_id = p.workspace_id) as last_contact_at,
             (select c.outcome from contacts c where c.person_id = p.id and c.workspace_id = p.workspace_id order by c.created_at desc limit 1) as last_outcome,
             exists (select 1 from contacts c where c.person_id = p.id and c.workspace_id = p.workspace_id and c.channel = 'door') as door_knocked,
@@ -628,7 +630,7 @@ const loadLocated = async (db, ctx, pass = null, box = null, onList = null) => {
   )).rows.map((p) => ({ ...p, tags: parseJ(p.tags, []), door_knocked: !!p.door_knocked, ...(listed ? { pass_listed: !!p.pass_listed } : {}) }));
 };
 // A polygon's corners, [south, west, north, east] (null for no polygon).
-const boxOf = (polygon) => {
+export const boxOf = (polygon) => {
   const pts = (polygon || []).map(([lat, lng]) => [Number(lat), Number(lng)]).filter(([a, b]) => Number.isFinite(a) && Number.isFinite(b));
   if (pts.length < 3) return null;
   return [Math.min(...pts.map((x) => x[0])), Math.min(...pts.map((x) => x[1])), Math.max(...pts.map((x) => x[0])), Math.max(...pts.map((x) => x[1]))];
@@ -732,10 +734,17 @@ app.get('/turfs/:id/walk', async (c) => {
     const mine = (await db.query('select 1 from turf_members where turf_id = $1 and user_id = $2', [t.id, ctx.user.id])).rows[0];
     if (!mine) return c.json({ error: 'this turf is not assigned to you' }, 403);
   }
+  return c.json(await walkFor(db, ctx, t));
+});
+
+// One turf's walk list: its doors in walking order, each with its people,
+// signs and state in the open pass. t: the turf's row. names: the person
+// rows carry first_name and last_name too (Reports' walking list).
+export const walkFor = async (db, ctx, t, { names = false } = {}) => {
   const polygon = parseJ(t.polygon, []);
   const pass = await openPass(db, ctx.workspaceId);
   const box = boxOf(polygon);
-  const located = box ? await loadLocated(db, ctx, pass, box, await listedWhere(db, ctx, pass)) : [];
+  const located = box ? await loadLocated(db, ctx, pass, box, await listedWhere(db, ctx, pass), { names }) : [];
   const doors = walkOrder(groupDoors(located.filter((p) => pointInPolygon(p.lat, p.lng, polygon))).filter((d) => inPass(d, pass)));
   const view = forViewer(ctx);
   // Each door's signs (requested or up), matched the way the map matches
@@ -752,7 +761,7 @@ app.get('/turfs/:id/walk', async (c) => {
       .filter((s) => (s.person_id ? ids.has(s.person_id) : addr && String(s.address || '').trim().toLowerCase() === addr))
       .map(({ id, kind, status }) => ({ id, kind, status }));
   };
-  return c.json({
+  return {
     turf: { id: t.id, name: t.name, color: t.color, notes: t.notes, polygon },
     // Each door's state in the open pass (open · again · done) and the most
     // tries anyone there has had; done is state === 'done' (the old rule
@@ -765,8 +774,8 @@ app.get('/turfs/:id/walk', async (c) => {
     }),
     pass: pass ? { id: pass.id, name: pass.name, kind: pass.kind, who: pass.who, list_id: pass.list_id || null, tries: pass.tries, started_at: pass.started_at } : null,
     stats: turfStats(polygon, located, pass),
-  });
-});
+  };
+};
 
 // Team members for assignment pickers (desk roles; /team stays manager-only).
 app.get('/members', async (c) => {

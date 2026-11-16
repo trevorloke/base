@@ -1,0 +1,134 @@
+/* Quick reports (Reports.jsx), one report (QuickReport.jsx) and the paper
+   walking list (WalkSheet.jsx). Screen and paper share the sheet; the
+   chrome around it carries qr-noprint. Only the app's variables. */
+
+/* ── Reports: the menu ── */
+.rp-quick { margin: 0 0 var(--s-5); }
+.rp-quick h2 { margin: 0 0 var(--s-2); font-size: 18px; }
+.rp-quick__list { list-style: none; margin: 0; padding: 0; border: var(--border); border-radius: var(--r-card); background: var(--paper-0); }
+.rp-quick__list li + li { border-top: 1px solid var(--rule); }
+.rp-quick__i {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s-3);
+  min-height: 48px; padding: var(--s-2) var(--s-3); color: var(--text-1); text-decoration: none;
+}
+@media (hover: hover) { .rp-quick__i:hover { background: var(--paper-1); } }
+.rp-quick__i:focus-visible { outline: 2px solid var(--mark); outline-offset: -2px; }
+.rp-quick__t { display: flex; flex-direction: column; min-width: 0; }
+.rp-quick__name { font-size: 15px; font-weight: 600; }
+.rp-quick__what { font-size: 13px; color: var(--text-3); }
+.rp-quick__n { font-size: 14px; color: var(--text-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+@media (min-width: 721px) and (hover: hover) { .rp-quick__i { min-height: 44px; } }
+.rp-more { margin: 0 0 var(--s-4); }
+.rp-more__body { margin-top: var(--s-3); }
+
+/* ── One report ── */
+.qr-page { max-width: 1100px; }
+.qr-chips { display: flex; flex-wrap: wrap; gap: var(--s-2); margin: 0 0 var(--s-3); }
+.qr-chips .qr-chip { min-height: var(--ctl); padding: 0 14px; cursor: pointer; font-size: 14px; border-color: var(--rule); background: var(--paper-0); }
+.qr-chips .qr-chip.is-on { background: var(--mark-soft); border-color: var(--mark); color: var(--text-1); }
+.qr-chip:focus-visible { outline: 2px solid var(--mark); outline-offset: 2px; }
+.qr-big { font-size: 22px; font-weight: 600; margin: var(--s-2) 0 var(--s-3); font-variant-numeric: tabular-nums; }
+.qr-big .muted { font-size: 15px; font-weight: 400; }
+.qr-state { font-size: 15px; color: var(--text-2); margin: var(--s-3) 0; }
+.qr-state--bad { color: var(--danger); }
+.qr-wrap { border: var(--border); border-radius: var(--r-card); background: var(--paper-0); overflow: hidden; }
+.qr-table { border-collapse: collapse; width: 100%; font-size: 14px; }
+.qr-table th, .qr-table td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+.qr-table th { font-size: 13px; font-weight: 600; color: var(--text-3); white-space: nowrap; }
+.qr-table td.num, .qr-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.qr-table tbody tr:last-child td { border-bottom: 0; }
+.qr-table td.qr-masked { color: var(--text-3); }
+.qr-table .qr-stackname { display: none; }
+.qr-cut { margin: var(--s-3) 0; font-size: 14px; color: var(--text-2); }
+.qr-more { margin: var(--s-4) 0; }
+.qr-printonly { display: none; }
+
+/* Under 720 px: each row a block, the name first and two facts. */
+@media (max-width: 720px) {
+  .qr-table thead { display: none; }
+  .qr-table, .qr-table tbody, .qr-table tr { display: block; width: 100%; }
+  .qr-table tr { padding: var(--s-2) var(--s-3); border-bottom: 1px solid var(--rule); }
+  .qr-table tbody tr:last-child { border-bottom: 0; }
+  .qr-table td { display: none; padding: 0; border: 0; text-align: left; }
+  .qr-table td.qr-stackname, .qr-table td.qr-lead { display: block; font-size: 15px; font-weight: 500; overflow-wrap: anywhere; }
+  .qr-table td.qr-fact { display: block; font-size: 14px; color: var(--text-2); text-align: left; }
+  .qr-table td.qr-fact::before { content: attr(data-label) ": "; color: var(--text-3); }
+}
+
+/* ── The walking list ── */
+.ws-search { margin: 0 0 var(--s-3); width: 100%; max-width: 420px; }
+.ws-turfs { list-style: none; margin: 0 0 var(--s-3); padding: 0; border: var(--border); border-radius: var(--r-card); background: var(--paper-0); }
+.ws-turfs li + li { border-top: 1px solid var(--rule); }
+.ws-turfs a { display: flex; align-items: center; min-height: 48px; padding: 0 var(--s-3); color: var(--text-1); text-decoration: none; font-size: 15px; }
+@media (hover: hover) { .ws-turfs a:hover { background: var(--paper-1); } }
+.ws-unplaced { font-size: 14px; color: var(--text-2); }
+
+.ws-sheet { font-size: 14px; }
+.ws-sheet h2 { font-size: 20px; margin: 0 0 var(--s-1); }
+.ws-sub { margin: 0 0 var(--s-2); color: var(--text-2); }
+.ws-fill { margin: 0 0 var(--s-3); white-space: pre-wrap; }
+.ws-who { margin: 0 0 var(--s-2); font-size: 13px; }
+.ws-script { border: 1px solid var(--rule-2); border-radius: var(--r-card); padding: var(--s-2) var(--s-3); margin: 0 0 var(--s-3); white-space: pre-wrap; }
+.ws-script b { display: block; font-size: 13px; color: var(--text-3); }
+.ws-table { border-collapse: collapse; width: 100%; }
+.ws-table th, .ws-table td { border-bottom: 1px solid var(--rule); padding: 4px 6px; vertical-align: top; text-align: left; }
+.ws-table thead th { font-size: 12px; font-weight: 600; color: var(--text-2); vertical-align: bottom; }
+.ws-table thead th.ws-tickh { writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; padding: 6px 2px; width: 26px; text-align: left; }
+.ws-table td.ws-tick { width: 26px; text-align: center; padding: 4px 2px; }
+.ws-box { display: inline-block; width: 14px; height: 14px; border: 1px solid var(--text-2); border-radius: 2px; }
+.ws-table td.ws-note { min-width: 120px; }
+.ws-line { display: block; border-bottom: 1px solid var(--text-3); height: 18px; }
+.ws-street th { font-size: 15px; font-weight: 600; padding-top: var(--s-3); border-bottom: 2px solid var(--rule-2); }
+.ws-door { break-inside: avoid; page-break-inside: avoid; }
+.ws-door__addr td { font-size: 16px; font-weight: 600; padding-top: var(--s-2); }
+.ws-door__state { margin-left: var(--s-2); font-size: 13px; font-weight: 500; color: var(--text-3); }
+.ws-door.is-done td { color: var(--text-3); }
+.ws-person { font-size: 14px; }
+.ws-person__facts { display: block; font-size: 13px; color: var(--text-2); }
+.ws-skip { color: var(--danger); font-weight: 600; }
+.ws-foot { margin: var(--s-3) 0; color: var(--text-2); }
+
+/* On a phone's screen the ticks are for paper: the names and doors only. */
+@media screen and (max-width: 720px) {
+  .ws-table .ws-tickh, .ws-table .ws-tick, .ws-table .ws-noteh, .ws-table .ws-note { display: none; }
+}
+
+/* ── Paper ── */
+@media print {
+  @page { size: letter; margin: 12mm; }
+  body:has(.qr-print) .nav,
+  body:has(.qr-print) .tabbar,
+  body:has(.qr-print) .offline-strip,
+  body:has(.qr-print) .toast,
+  .qr-print .qr-noprint { display: none !important; }
+  html:has(.qr-print), body:has(.qr-print) { background: white !important; color: black !important; }
+  body:has(.qr-print) .page { padding: 0; margin: 0; max-width: none; }
+  /* The desk's side nav is hidden; so is the room kept for it. */
+  body:has(.qr-print) #root.has-nav { padding-left: 0 !important; }
+  .qr-print, .qr-print * { color: black !important; background: transparent !important; box-shadow: none !important; }
+  .qr-print { font-size: 10.5pt; max-width: none; }
+  .qr-print .qr-printonly { display: block; margin: 0 0 6pt; }
+  .qr-print .qr-wrap { border: 0; }
+  .qr-print thead { display: table-header-group; }
+  .qr-print tr, .qr-print .ws-door { break-inside: avoid; page-break-inside: avoid; }
+  /* Paper is always a table, even from a phone. */
+  .qr-print .qr-table { display: table; font-size: 10.5pt; }
+  .qr-print .qr-table thead { display: table-header-group; }
+  .qr-print .qr-table tbody { display: table-row-group; }
+  .qr-print .qr-table tr { display: table-row; padding: 0; }
+  .qr-print .qr-table td { display: table-cell; padding: 3pt 5pt; border-bottom: 0.5pt solid black; }
+  .qr-print .qr-table td.qr-stackname { display: none; }
+  .qr-print .qr-table td.qr-fact::before { content: none; }
+  .qr-print .qr-table th { padding: 3pt 5pt; border-bottom: 1pt solid black; }
+  .qr-print .ws-table .ws-tickh, .qr-print .ws-table .ws-tick, .qr-print .ws-table .ws-noteh, .qr-print .ws-table .ws-note { display: table-cell; }
+  .qr-print .ws-table th, .qr-print .ws-table td { border-bottom: 0.5pt solid black; }
+  .qr-print .ws-door__addr td { font-size: 14pt; }
+  .qr-print .ws-table td.ws-person, .qr-print .ws-table thead th:first-child { width: 32%; }
+  .qr-print .ws-box { border-color: black; }
+  .qr-print .ws-line { border-color: black; }
+  .qr-print .ws-script { border-color: black; }
+}
+
+/* A turf's walk list on the desk: Print beside Map, both on the right. */
+.walk-nav:has(.walk-print) .btn.walk-map { margin-left: auto; margin-right: 0; }
+.btn.walk-print { margin-right: -14px; }

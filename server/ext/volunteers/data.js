@@ -28,9 +28,9 @@ const MAX = 5000;
 const iso = (v) => (v instanceof Date ? v.toISOString() : v || null);
 const later = (a, b) => (!a ? b : !b ? a : (new Date(a) > new Date(b) ? a : b));
 
-export const loadVolunteers = async (db, ws, { now = new Date() } = {}) => {
-  const ids = (await db.query(
-    `select person_id as id from volunteer_roles where workspace_id = $1
+// Everyone above, as ids ($1: the workspace). Shared with Reports'
+// Volunteers report (ext/reports/quick.js), which has no cap.
+export const VOLUNTEER_IDS_SQL = `select person_id as id from volunteer_roles where workspace_id = $1
      union select person_id from shift_assignments where workspace_id = $1
      union select person_id from door_requests where workspace_id = $1 and kind = 'volunteer'
      union select p.id from memberships m
@@ -38,9 +38,10 @@ export const loadVolunteers = async (db, ws, { now = new Date() } = {}) => {
        join persons p on p.workspace_id = $1 and p.deleted_at is null and p.email is not null and lower(p.email) = lower(u.email)
        where m.workspace_id = $1 and m.role = 'volunteer'
      union select id from persons
-       where workspace_id = $1 and deleted_at is null and (tags @> '["volunteer"]'::jsonb or tags @> '["Volunteer"]'::jsonb)`,
-    [ws],
-  )).rows.map((r) => r.id);
+       where workspace_id = $1 and deleted_at is null and (tags @> '["volunteer"]'::jsonb or tags @> '["Volunteer"]'::jsonb)`;
+
+export const loadVolunteers = async (db, ws, { now = new Date() } = {}) => {
+  const ids = (await db.query(VOLUNTEER_IDS_SQL, [ws])).rows.map((r) => r.id);
   if (!ids.length) return [];
   const people = (await db.query(
     `select p.id, p.name, p.last_name, p.phone, p.email, p.created_at, ${noCallSql('p')} as no_call from persons p

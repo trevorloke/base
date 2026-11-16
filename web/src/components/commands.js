@@ -19,7 +19,9 @@ export const allowed = (me, item) => {
   // Shifts in Google Calendar is on here (GET /api/gcal's available, which
   // the bar reads when it opens).
   if (item.gcal && !me?.gcal) return false;
-  return !item.area || me?.role === 'manager' || areasOf(me).includes(item.area);
+  // Every area an entry needs (a report needs Data and its own area too).
+  const need = item.areas || (item.area ? [item.area] : []);
+  return need.every((a) => me?.role === 'manager' || areasOf(me).includes(a));
 };
 
 // Jobs, in the words of the buttons they press.
@@ -47,6 +49,10 @@ export const SCREENS = [
   { label: 'Import & export', to: '/data', area: 'data', words: 'download backup spreadsheet export data' },
   { label: 'Lists', to: '/lists', area: 'people', words: 'saved list audience filter' },
   { label: 'Reports', to: '/reports', area: 'data', words: 'numbers csv report' },
+  // Quick reports (Reports.jsx): the sheet needs Map alone; the others Data and their own area, as the server asks.
+  { label: 'Print a walking list', to: '/reports/walk', area: 'map', desk: true, words: 'walk list print paper sheet canvass turf' },
+  { label: 'Donors report', to: '/reports/quick/donors', areas: ['data', 'money'], desk: true, words: 'donors donations givers report call time' },
+  { label: 'Interested in being a candidate', to: '/reports/quick/running', areas: ['data', 'people'], desk: true, words: 'candidates run running interested report' },
   { label: 'Field, by turf', to: '/field-report', area: 'data', words: 'field report coverage turf canvassers' },
   { label: 'Duplicates', to: '/people/duplicates', desk: true, words: 'merge same person double' },
   { label: 'Most connected', to: '/people/connected', area: 'people', words: 'relationships connectors who knows' },

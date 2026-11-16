@@ -72,6 +72,10 @@ export const areaOfAction = (name) => {
 };
 
 const PATH_AREA = [
+  // Quick reports (ext/reports/quick.js): the walking list is the map's;
+  // every other one takes people out in bulk, so it is Data's.
+  [/^\/api\/quick-reports\/walk(\.csv|\/unplaced)?$/, 'map'],
+  [/^\/api\/quick-reports(\/|$)/, 'data'],
   [/^\/api\/(records|export|events|audit|reports)(\/|$)/, 'data'],
   [/^\/api\/data\/(import|export)/, 'data'],
   [/^\/api\/(gifts|receipts|money|cap|stewardship|membership)(\/|$)/, 'money'],

@@ -81,3 +81,29 @@ test('more as spreadsheets: volunteers with their roles, signs, shifts; People c
   assert.ok(back && back.voted_at, 'Bob comes back, voted');
   assert.deepEqual([back.first_name, back.last_name], ['Bob', 'Voter'], 'first and last apart, as they went out');
 });
+
+test('money takes Donations: a staff member denied it gets no gifts, members or donations — and the old page still draws', async () => {
+  const inv = await mgr.action('member.invite', { email: `nomoney.${tag}@example.org`, role: 'staff' });
+  const staff = new Client();
+  await staff.post('/api/auth/join', { token: inv.json.joinUrl.split('/join/')[1], name: 'Nia Example', password: 'reports-pass-2026' });
+  const me = (await staff.get('/api/auth/me')).json.user;
+  assert.equal((await mgr.action('permission.member.set', { user_id: me.id, deny: ['money'] })).status, 200);
+  for (const path of ['/api/export/gifts.csv', '/api/export/members.csv', '/api/reports/donations.csv']) {
+    const res = await app.request(path, { headers: { cookie: staff.cookie } });
+    assert.equal(res.status, 403, path);
+    assert.equal((await res.json()).error, 'not for you — ask a manager under Admin → Permissions');
+  }
+  assert.equal((await app.request('/api/export/people.csv', { headers: { cookie: staff.cookie } })).status, 200, 'Data alone still takes people');
+  const r = await staff.get('/api/reports');
+  assert.equal(r.status, 200);
+  assert.ok(!('donations' in r.json.reports));
+  assert.deepEqual(r.json.totals.donations, { gifts: null, cents: null, donors: null, hidden: true });
+  // The page a tab may still be running reads fmtMoney(t.donations.cents) and {t.donations.gifts}.
+  const { fmtMoney } = await import('../../web/src/api.js');
+  assert.equal(fmtMoney(r.json.totals.donations.cents), '$0.00');
+  // A manager sees no change.
+  const m = await mgr.get('/api/reports');
+  assert.equal(m.json.totals.donations.cents, 5000);
+  assert.ok(m.json.reports.donations);
+  assert.equal((await app.request('/api/export/gifts.csv', { headers: { cookie: mgr.cookie } })).status, 200);
+});

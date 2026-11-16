@@ -47,6 +47,7 @@ import { PassChip, TryAgainChip, WalkShow, overlayPass, waitingTries } from '../
 import { VotedChip, VotedRow, pendingVoted } from '../components/Voted.jsx';
 import RequestAsk from '../components/RequestAsk.jsx';
 import './turfs.css';
+import './quick.css'; // the desk's Print beside Map
 import ScriptLine, { useScripts } from '../components/ScriptLine.jsx';
 import { NS } from '../base.js';
 
@@ -939,6 +940,8 @@ function WalkList({ id }) {
       <div className="walk-nav">
         <Link className="btn btn-quiet walk-back" to="/turfs">← Turfs</Link>
         <Link className="btn btn-quiet walk-act walk-map" to={`/map?turf=${turf.id}`} aria-label="Map of this turf">Map</Link>
+        {/* The desk prints a sheet for a canvasser with no phone (WalkSheet.jsx); never in the field app. */}
+        {desk && <Link className="btn btn-quiet walk-act walk-print" to={`/reports/walk?turf=${turf.id}`} aria-label="Print this turf’s walking list">Print</Link>}
       </div>
 
       <header className="walk-head">

@@ -27,6 +27,8 @@ const ImagineU = lazy(() => import('./pages/ImagineU.jsx'));
 const Banks = lazy(() => import('./pages/Banks.jsx'));
 const Lists = lazy(() => import('./pages/Lists.jsx'));
 const Reports = lazy(() => import('./pages/Reports.jsx'));
+const QuickReport = lazy(() => import('./pages/QuickReport.jsx'));
+const WalkSheet = lazy(() => import('./pages/WalkSheet.jsx'));
 const TextingThread = lazy(() => import('./pages/TextingThread.jsx'));
 const TextingSettings = lazy(() => import('./pages/TextingSettings.jsx'));
 const People = lazy(() => import('./pages/People.jsx'));
@@ -143,6 +145,8 @@ function FieldFallback() {
 // Desk screens: a desk role, or anyone given the screen's area (Admin →
 // Permissions); a desk role denied the area is sent home too.
 const ROUTE_AREA = [
+  // The paper walking list needs Map alone (its read never sends a phone or an email).
+  [/^\/reports\/walk(\/|$)/, 'map'],
   [/^\/people\/(import|connected)|^\/lists/, 'people'], [/^\/people\/fields/, 'admin'], [/^\/reports|^\/data(\/|$)/, 'data'],
   [/^\/money/, 'money'], [/^\/outreach|^\/ladders|^\/follow-ups|^\/surveys|^\/scripts|^\/inbox\/settings/, 'outreach'],
   [/^\/team|^\/settings|^\/rating-scale/, 'admin'],
@@ -245,6 +249,8 @@ export default function App({ mode = 'field' }) {
           <Route path="/lists" element={<Lists />} />
           <Route path="/lists/:id" element={<Lists />} />
           <Route path="/reports" element={<Reports />} />
+          <Route path="/reports/walk" element={<WalkSheet />} />
+          <Route path="/reports/quick/:name" element={<QuickReport />} />
           <Route path="/inbox/settings" element={<TextingSettings />} />
           <Route path="/money" element={<Money />} />
           <Route path="/money/receipts" element={<Receipts />} />

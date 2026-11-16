@@ -13,6 +13,13 @@
 // write them their own way.
 import { loadScale } from '../scale/rules.js';
 import { azAfter, azCols, azKey } from '../../lib/az.js';
+import { areasFor } from '../../lib/perms.js';
+
+// Money takes Donations as well as Data: a desk member a manager denied
+// Donations sees no gift, in a download or a Sheet (Quick reports' rule).
+export const MONEY_REPORTS = ['donations'];
+export const MONEY_DATASETS = ['gifts', 'members'];
+export const hasMoney = (ctx) => areasFor(ctx).includes('money');
 
 const j = (v, d) => { try { return typeof v === 'string' ? JSON.parse(v) : (v ?? d); } catch { return d; } };
 const day = (d) => (d instanceof Date ? d.toISOString().slice(0, 10) : String(d ?? '').slice(0, 10));

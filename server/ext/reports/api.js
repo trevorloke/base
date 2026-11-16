@@ -8,11 +8,13 @@
 // Volunteers are refused all of it. The full JSON export stays at GET /export.
 import { Hono } from 'hono';
 import { csvResponse } from '../../lib/csv.js';
-import { DATASETS, REPORTS, datasetRows } from './rows.js';
+import { DATASETS, REPORTS, datasetRows, MONEY_REPORTS, MONEY_DATASETS, hasMoney } from './rows.js';
+import { mountQuick } from './quick.js';
 
 export const api = new Hono();
 const DESK = ['manager', 'treasurer', 'staff'];
 const refuse = (c) => c.json({ error: 'desk only' }, 403);
+const noMoney = (c) => c.json({ error: 'not for you — ask a manager under Admin → Permissions' }, 403);
 
 const totals = async (db, ws) => {
   const one = async (sql) => (await db.query(sql, [ws])).rows[0];
@@ -32,10 +34,20 @@ const totals = async (db, ws) => {
 api.get('/reports', async (c) => {
   const ctx = c.get('ctx'); const db = c.get('db'); const ws = ctx.workspaceId;
   if (!DESK.includes(ctx.role)) return refuse(c);
+  const money = hasMoney(ctx);
   const out = { totals: await totals(db, ws), reports: {} };
-  for (const [name, fn] of Object.entries(REPORTS)) out.reports[name] = await fn(db, ws, ctx);
+  // Same key and shape without Donations, so a tab still on the old page
+  // (it reads t.donations.cents unguarded) shows $0.00 until it reloads.
+  if (!money) out.totals.donations = { gifts: null, cents: null, donors: null, hidden: true };
+  for (const [name, fn] of Object.entries(REPORTS)) {
+    if (!money && MONEY_REPORTS.includes(name)) continue;
+    out.reports[name] = await fn(db, ws, ctx);
+  }
   return c.json(out);
 });
+
+// Quick reports (quick.js) on their own prefix, before /reports/:name.
+mountQuick(api);
 
 api.get('/reports/:name', async (c) => {
   const ctx = c.get('ctx'); const db = c.get('db');
@@ -43,6 +55,7 @@ api.get('/reports/:name', async (c) => {
   const name = c.req.param('name').replace(/\.csv$/, '');
   const fn = REPORTS[name];
   if (!fn) return c.json({ error: 'no such report' }, 404);
+  if (MONEY_REPORTS.includes(name) && !hasMoney(ctx)) return noMoney(c);
   const r = await fn(db, ctx.workspaceId, ctx);
   return csvResponse(c, `report-${name}`, r.head, r.rows);
 });
@@ -52,6 +65,7 @@ api.get('/export/:dataset', async (c) => {
   if (!DESK.includes(ctx.role)) return refuse(c);
   const name = c.req.param('dataset').replace(/\.csv$/, '');
   if (!DATASETS[name]) return c.json({ error: 'no such export' }, 404);
+  if (MONEY_DATASETS.includes(name) && !hasMoney(ctx)) return noMoney(c);
   const { head, rows } = await datasetRows(db, ctx.workspaceId, name);
   return csvResponse(c, `starbase-${name}`, head, rows);
 });
