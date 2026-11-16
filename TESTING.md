@@ -1105,7 +1105,7 @@ comes back, or asks if words were typed meanwhile).
   file); Members (ending in 60 days, a voided term ignored); Signs in
   walking order; Moved equal to People’s `moved=open`; keyset pages with no
   gap or overlap across one surname; 5,101 volunteers all in the CSV, the
-  id set read once; the walking list (the walk list’s own doors and order,
+  id set read once, and its chips only the roles someone holds; the walking list (the walk list’s own doors and order,
   names apart, no phone, email or tags on any person, Still to knock, the
   scale’s words and its live candidates, 1,500 doors and `more`, a turf
   round the city refused before anyone in it is read, the CSV’s Street
@@ -1147,8 +1147,10 @@ comes back, or asks if words were typed meanwhile).
   address, Largest first, Print the one primary, the CSV with its BOM, *Do
   not call* in a Phone cell, *Make it a list* on This year and Lapsed only,
   the phone stack); Interested in being a candidate (rows, *Make it a list*,
-  *Unavailable* after a rename); the walking list (the chooser, the sheet's
-  head, heads and tick boxes in the scale's words, the *If Opposed* line, the
+  *Unavailable* after a rename, with Download CSV turned off too); Volunteers
+  (Everyone and the roles in use) and Signs (each phone block led by the
+  address) with no bare label; the walking list (the chooser, *1 door · 1
+  person*, the sheet's head, heads and tick boxes in the scale's words, the *If Opposed* line, the
   script filled, streets with capitals, no phone, email or two-letter code,
   Still to knock and Every door, Script Off, print media, PDFs of the sheet
   and of Donors); Print from a turf's walk list at the desk and none in the
