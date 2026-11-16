@@ -50,7 +50,7 @@
   .qr-table tr { padding: var(--s-2) var(--s-3); border-bottom: 1px solid var(--rule); }
   .qr-table tbody tr:last-child { border-bottom: 0; }
   .qr-table td { display: none; padding: 0; border: 0; text-align: left; }
-  .qr-table td.qr-stackname { display: block; font-size: 15px; font-weight: 500; overflow-wrap: anywhere; }
+  .qr-table td.qr-stackname, .qr-table td.qr-lead { display: block; font-size: 15px; font-weight: 500; overflow-wrap: anywhere; }
   .qr-table td.qr-fact { display: block; font-size: 14px; color: var(--text-2); text-align: left; }
   .qr-table td.qr-fact::before { content: attr(data-label) ": "; color: var(--text-3); }
 }

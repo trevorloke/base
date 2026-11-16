@@ -118,7 +118,7 @@ function Sheet({ s, script }) {
   return (
     <div className="ws-sheet">
       <h2>{s.turf.name} — walking list</h2>
-      <p className="ws-sub">{[s.pass?.name, `${fmt(s.counts.doors)} ${s.counts.doors === 1 ? 'door' : 'doors'}`, `${fmt(s.counts.people)} people`, `printed ${todayWords()}`].filter(Boolean).join(' · ')}</p>
+      <p className="ws-sub">{[s.pass?.name, `${fmt(s.counts.doors)} ${s.counts.doors === 1 ? 'door' : 'doors'}`, `${fmt(s.counts.people)} ${s.counts.people === 1 ? 'person' : 'people'}`, `printed ${todayWords()}`].filter(Boolean).join(' · ')}</p>
       <p className="ws-fill">{'Canvasser ____________  Date ________  Back to the office by ________'}</p>
       {cands.length > 0 && <p className="ws-who">If Opposed, write the letter of who they’re voting for: {cands.join(' · ')}</p>}
       {script && <div className="ws-script"><b>Script</b>{script}</div>}
@@ -171,14 +171,16 @@ function WalkOne({ turf }) {
       <Link className="ops-back qr-noprint" to="/reports/walk">← Choose another turf</Link>
       <div className="qr-printonly">
         <strong>{s?.campaign || me?.workspace?.name}</strong> · Walking list
-        <br />Printed {todayWords()}{me?.user?.name ? ` by ${me.user.name}` : ''}{s ? ` · ${fmt(s.counts.doors)} doors` : ''}
+        <br />Printed {todayWords()}{me?.user?.name ? ` by ${me.user.name}` : ''}{s ? ` · ${fmt(s.counts.doors)} ${s.counts.doors === 1 ? 'door' : 'doors'}` : ''}
       </div>
       {/* On paper the sheet's own head says the turf. */}
       <div className="ops-head qr-noprint">
         <h1>{s?.turf?.name || (q.isError ? 'Walking list' : 'Loading…')}</h1>
         <div className="ops-head__actions qr-noprint">
           <button type="button" className="btn btn-primary ops-tap" disabled={!canPrint || tooBig} onClick={() => window.print()}>Print</button>
-          <a className="btn btn-quiet ops-tap" href={csv} download>Download CSV</a>
+          {s && !q.isError
+            ? <a className="btn btn-quiet ops-tap" href={csv} download>Download CSV</a>
+            : <button type="button" className="btn btn-quiet ops-tap" disabled>Download CSV</button>}
         </div>
       </div>
       {s && (s.pass || door?.body) && (

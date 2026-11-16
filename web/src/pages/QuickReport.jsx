@@ -20,6 +20,8 @@ const NOUN = { donors: ['donor', 'donors'], running: ['person', 'people'], volun
 export const countWords = (name, n) => `${fmt(n)} ${(NOUN[name] || ['', ''])[Number(n) === 1 ? 0 : 1]}`.trim();
 // The fact a phone's stack shows beside the phone.
 const MAIN = { donors: 'total', running: 'said_on', volunteers: 'next_shift', members: 'ends_on', signs: 'kind', moved: 'marked_on' };
+// A report with no name columns leads each phone block with this one.
+const LEAD = { signs: 'address' };
 // More than this many role chips: the rest under More.
 const CHIPS_MAX = 8;
 
@@ -105,7 +107,10 @@ export default function QuickReport() {
         <h1>{title}</h1>
         <div className="ops-head__actions qr-noprint">
           <button type="button" className="btn btn-primary ops-tap" disabled={!canPrint} onClick={() => window.print()}>Print</button>
-          <a className="btn btn-quiet ops-tap" href={csv} download aria-disabled={!d || undefined}>Download CSV</a>
+          {/* No file to give while the report is loading or was refused. */}
+          {d && !q.isError
+            ? <a className="btn btn-quiet ops-tap" href={csv} download>Download CSV</a>
+            : <button type="button" className="btn btn-quiet ops-tap" disabled>Download CSV</button>}
         </div>
       </div>
       {d?.options?.map((o) => <Chips key={o.key} option={o} onPick={pick} />)}
@@ -128,11 +133,14 @@ export default function QuickReport() {
                     {rows.map((r, i) => (
                       <tr key={r.id || i}>
                         {nameCols && <td className="qr-stackname"><NameAz person={{ name: [r.first_name, r.last_name].filter(Boolean).join(' '), last_name: r.first_name ? r.last_name : '' }} /></td>}
-                        {cols.map((h, j) => {
+                        {cols.map((h) => {
                           const masked = (h.key === 'phone' || h.key === 'email') && r.no_contact && r[h.key] && !/[\d@]/.test(r[h.key]);
-                          const fact = h.key === 'phone' || h.key === MAIN[name] || (!nameCols && j === 0);
-                          const cls = [h.type === 'money' || h.type === 'count' ? 'num' : '', masked ? 'qr-masked' : '', fact ? 'qr-fact' : ''].filter(Boolean).join(' ');
-                          return <td key={h.key} className={cls || undefined} data-label={h.label}>{show(r[h.key], h.type)}</td>;
+                          const v = show(r[h.key], h.type);
+                          const lead = !nameCols && h.key === LEAD[name];
+                          // A blank fact is left off the phone block, not shown as a bare label.
+                          const fact = !lead && v !== '' && (h.key === 'phone' || h.key === MAIN[name]);
+                          const cls = [h.type === 'money' || h.type === 'count' ? 'num' : '', masked ? 'qr-masked' : '', fact ? 'qr-fact' : '', lead ? 'qr-lead' : ''].filter(Boolean).join(' ');
+                          return <td key={h.key} className={cls || undefined} data-label={h.label}>{v}</td>;
                         })}
                       </tr>
                     ))}

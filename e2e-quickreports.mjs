@@ -149,6 +149,8 @@ await mk('cy', 'Cy', 'Van Sample', '12345 72 Ave', 49.1330, -122.8510, { phone: 
 await mk('dee', 'Dee', 'Example', '7120 124 St', 49.1310, -122.8520);
 await mk('eve', 'Eve', 'Example', '7150 124 St', 49.1300, -122.8530, { phone: '604-555-0155' });
 await mk('fay', 'Fay', 'Nowhere', '15000 88 Ave', null, null);
+// The one door in Fleetwood West: its sheet says "1 door · 1 person".
+await mk('gus', 'Gus', 'Example', '16010 92 Ave', 49.1650, -122.7950);
 const turf = (await act('turf.create', {
   name: 'Newton East', polygon: [[49.125, -122.860], [49.140, -122.860], [49.140, -122.838], [49.125, -122.838]],
 })).turf;
@@ -161,6 +163,9 @@ await act('gift.log', { person_id: P.ben.id, amount_cents: 2000, date: `${yr - 1
 // Ratings: Ana Lean yes; Ben voting for Locke (4B).
 await act('contact.log', { person_id: P.ana.id, channel: 'door', outcome: 'contacted', rating: '2' });
 await act('contact.log', { person_id: P.ben.id, channel: 'door', outcome: 'contacted', rating: '4B' });
+// Ben phones (no shift booked); a lawn sign for Dee waits to go up.
+await act('volunteer.assign', { person_id: P.ben.id, role: 'phoning' });
+await act('sign.place', { kind: 'lawn', person_id: P.dee.id, address: '7120 124 St' });
 const fields = (await D.api('/fields')).json;
 const cand = (fields?.fields || fields || []).find?.((f) => /interested in being a candidate/i.test(f.name));
 await act('field.values.set', { person_id: P.dee.id, values: [{ field_id: cand?.id, value: true }] });
@@ -255,12 +260,27 @@ await D.go('/reports/quick/running');
 t = await settled(page, '.qr-page');
 check('after a rename: Unavailable, in place, and Print off', /Unavailable — the profile field “Interested in being a candidate” was renamed/.test(t)
   && await page.locator('.btn-primary:has-text("Print")').isDisabled(), t.slice(0, 200));
+check('after a rename: Download CSV is off too, not a link to a refusal', (await page.locator('a:has-text("Download CSV")').count()) === 0
+  && await page.locator('button:has-text("Download CSV")').isDisabled());
 await both(page, D, 'running-renamed');
 await act('field.update', { id: cand?.id, name: 'Interested in being a candidate' });
 for (const name of ['volunteers', 'members', 'signs', 'moved']) {
   await D.go(`/reports/quick/${name}`);
   const s = await settled(page, '.qr-page');
   check(`${name}: opens with its number or No one yet.`, /\d/.test(s) && !/Unavailable/.test(s), s.slice(0, 160));
+  if (name === 'volunteers') {
+    const chips = await page.$$eval('.qr-chip', (b) => b.map((x) => x.innerText));
+    check('volunteers: Everyone, then only the roles in use', chips.join('|') === 'Everyone|Phoning', chips.join('|'));
+  }
+  if (name === 'volunteers' || name === 'signs') {
+    await page.setViewportSize(PHONE); await sleep(300);
+    const blocks = await page.$$eval('.qr-table tbody tr', (trs) => trs.map((tr) => [...tr.querySelectorAll('td')]
+      .filter((td) => td.getBoundingClientRect().height > 0).map((td) => (td.classList.contains('qr-fact') ? `${td.dataset.label}:` : '') + td.innerText.trim())));
+    const ok = blocks.length > 0 && blocks.every((b) => b.length <= 3 && b.every((x) => !/:\s*$/.test(x) && x !== ''));
+    const lead = name === 'signs' ? blocks[0]?.[0] === '7120 124 St' && blocks[0]?.includes('Kind:Lawn sign') : /Ben Sample/.test(blocks.find((b) => /Sample/.test(b[0]))?.[0] || '');
+    check(`${name} at 390: each block leads with ${name === 'signs' ? 'the address' : 'the name'}, at most two facts, no bare label`, ok && lead, JSON.stringify(blocks));
+    await page.setViewportSize(WIDE); await sleep(200);
+  }
   await both(page, D, name);
 }
 
@@ -270,6 +290,12 @@ const chooser = await settled(page, '.qr-page');
 check('the chooser lists turf names A–Z', (await page.$$eval('.ws-turfs a', (a) => a.map((x) => x.innerText))).join('|') === 'Fleetwood West|Newton East');
 check('the "aren’t on the map yet" line, once', /1 person with an address isn’t on the map yet, so they’re on no walking list\./.test(chooser), chooser);
 await both(page, D, 'walk-chooser');
+await page.click('.ws-turfs a:has-text("Fleetwood West")');
+await page.waitForSelector('.ws-sheet', { timeout: 8000 });
+const one = await D.text('.ws-sheet');
+check('one door, one person: "1 door · 1 person"', /· 1 door · 1 person · printed/.test(one), one.slice(0, 160));
+await page.click('.ops-back');
+await page.waitForSelector('.ws-turfs', { timeout: 8000 });
 await page.click('.ws-turfs a:has-text("Newton East")');
 await page.waitForSelector('.ws-sheet', { timeout: 8000 });
 let sheet = await D.text('.ws-sheet');
