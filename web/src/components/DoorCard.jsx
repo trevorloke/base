@@ -43,7 +43,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { apiGet, ApiError } from '../api.js';
-import { holdNote, logContact, queueAction, undoQueued, useOutbox } from '../offline.js';
+import { holdNote, logContact, pendingMoves, queueAction, undoQueued, useOutbox } from '../offline.js';
+import MovePanel from './MovePanel.jsx';
 import { isOffline, queuedChip, queuedSaid, queuedText } from './queued.js';
 import { SIGN_KINDS, noCalls, noCallsWord } from '@starbase/shared/canvass';
 import { directionsUrl } from '@starbase/shared/maps';
@@ -96,6 +97,7 @@ const refusalMsg = (err, fallback) => {
 };
 
 const firstName = (name) => String(name || '').trim().split(/\s+/)[0] || '';
+const DESK_ROLES = ['manager', 'treasurer', 'staff'];
 // GET /api/actions lists what this sign-in may do (same key as Shifts/Team).
 const ACTIONS_QUERY = { queryKey: ['actions'], queryFn: () => apiGet('/actions'), staleTime: 5 * 60_000 };
 const hasAction = (data, name) => Array.isArray(data?.actions) && data.actions.includes(name);
@@ -434,6 +436,9 @@ export default function DoorCard({ door, selectedId, onSelect, onClose, toast, m
   const [busy, setBusy] = useState(false);
   const [adding, setAdding] = useState(false);
   const [more, setMore] = useState(false);
+  // A Moved tap's "Where did … go?" ({ person, cid, queued }): the card keeps
+  // them until it closes, then loads again.
+  const [moving, setMoving] = useState(null);
   // true / false, or null while nobody knows: then the Calls card, never a guess.
   const on = textingOn(useTextingStatus(me));
   // Whether Undo on a sign request can really cancel it (sign.cancel).
@@ -443,6 +448,7 @@ export default function DoorCard({ door, selectedId, onSelect, onClose, toast, m
   const sel = persons.find((p) => p.id === selectedId) || persons[0];
   // A knock on them still on this phone: the rating shown isn't on the server yet.
   const outbox = useOutbox();
+  const movesWaiting = pendingMoves(outbox.items);
   const knockWaiting = Boolean(sel) && outbox.items.some((i) => i.state === 'pending' && i.name === 'contact.log' && i.input?.person_id === sel.id);
   const waitChip = sel?.pending ? 'Not sent yet' : knockWaiting ? queuedChip() : null;
   const ratingOf = (p) => (p.id in local ? local[p.id] : p.rating);
@@ -543,6 +549,7 @@ export default function DoorCard({ door, selectedId, onSelect, onClose, toast, m
           : outcome !== 'contacted' ? OUTCOME_LABEL[outcome]
             : sentNote ? 'Note' : ({ phone: 'Call', text: 'Text' })[via] || null;
         toast(`${multi ? `${firstName(person.name)} · ` : ''}${queuedSaid(r, saidQ, answers.length ? answersWord(answers.length) : null)}`, change);
+        if (outcome === 'moved') setMoving({ person, cid: r.client_id, queued: true });
         return;
       }
       const who = multi ? `${firstName(person.name)} · ` : '';
@@ -553,7 +560,8 @@ export default function DoorCard({ door, selectedId, onSelect, onClose, toast, m
           : `${OUTCOME_LABEL[outcome]}${via !== 'door' ? ` (${via})` : ''}`;
       const only = answers.length && !rating && !sentNote && via === 'door';
       toast(`${who}${only ? answersSaid(answers, r.result) : `${what}${answersTail(answers, r.result)}`}`, change);
-      refresh();
+      if (outcome === 'moved') setMoving({ person, cid: r.client_id, queued: false });
+      else refresh();
     } catch (err) {
       // Only a refusal lands here (bad input, no permission) — network
       // trouble is queued above, never thrown.
@@ -679,6 +687,15 @@ export default function DoorCard({ door, selectedId, onSelect, onClose, toast, m
           />
           <VotedRow person={sel} source={channel === 'phone' ? 'phone' : 'door'} toast={(text, o) => toast(text, o?.act || null)} onMarked={refresh} />
           <OutcomeButtons items={channel === 'door' ? [...OUTCOMES, LIT] : OUTCOMES} disabled={busy} onPick={(code) => log(sel, channel, code)} />
+          {moving && (
+            <MovePanel key={moving.cid || moving.person.id} person={{ ...moving.person, address: moving.person.address ?? door.address, unit: moving.person.unit ?? door.unit }}
+              desk={DESK_ROLES.includes(me?.role)} contactClientId={moving.cid} oldDoor={persons.filter((p) => !p.pending)} where="door"
+              toast={(text) => toast(text)}
+              onClose={({ sent }) => { const m = moving; setMoving(null); if (sent || !m.queued) refresh(); }} />
+          )}
+          {!moving && persons.some((p) => movesWaiting[p.id]) && (
+            <p className="door-dnc-line"><span className="chip fk-wait">Moving — sends soon</span> {persons.filter((p) => movesWaiting[p.id]).map((p) => firstName(p.name)).join(', ')}</p>
+          )}
           <SurveyQuestions key={`questions-${sel.id}`} survey={survey} disabled={busy} onSave={() => log(sel, channel, 'contacted')} />
         </section>
       )}

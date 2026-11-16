@@ -124,10 +124,11 @@ export const joinWhere = (params, { where, params: more }) => {
 // did on the website (ext/webdid); gave, member, answer, shift, since: what
 // they gave, joined, answered and came to (ext/audience); list, notlist: on
 // another list or not (ext/lists); knows: who they know (ext/relationships);
-// followers: a following typed in (ext/socials).
+// followers: a following typed in (ext/socials); moved: Needs an address
+// or Address unknown (ext/moves).
 export const FILTER_KEYS = [
   'q', 'tag', 'rating', 'role', 'has', 'field', 'knocked', 'outcome', 'turf', 'postal', 'notag', 'voted', 'web',
-  'gave', 'member', 'answer', 'shift', 'since', 'list', 'notlist', 'knows', 'followers',
+  'gave', 'member', 'answer', 'shift', 'since', 'list', 'notlist', 'knows', 'followers', 'moved',
 ];
 // The rules only the desk sorts people by (ext/audience, ext/lists). For a
 // volunteer they match nobody; a volunteer given the People area may not

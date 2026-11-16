@@ -884,6 +884,57 @@ hand. Fixing an address puts the person back in the queue. With no signal
 the box is a plain field and the pin is a tap. `GEOCODE_ON_SAVE=off` turns
 the lookup on save off.
 
+### Moved: a new address or Address unknown
+
+*Moved* at a door, on the walk list, on a profile or on a call stays one
+tap (it works with no signal). After it, the person can be given a **new
+address** or marked **Address unknown** (`person.move`, `server/ext/moves`):
+desk roles for anyone, a volunteer for someone whose pin is in a turf they
+walk (anyone, once granted People). Either way the move is kept with every
+part of the old address and pin, and the door's own fields (House notes,
+Building notes, Access type, Dwelling type) come off with the old door;
+Home phone stays.
+
+- **A new address** goes on the record like any typed address: the pin is
+  the pick's (a volunteer's only when it is a door already on file) or it
+  is placed just after the save, and the person shows on that door, turf and
+  walk list. The answer lists who is on file at the new address (a volunteer
+  sees them only when one of them is in their own turf) and who is still at
+  the old one, A–Z by last name.
+- **Address unknown** takes them off every door, the map and walk lists; the
+  old address stays on the move for the desk. Typing a real address later
+  (Edit details, the website, the intake API) clears it.
+- **Undo** (`person.unmove`, the desk) puts back the address, pin, status and
+  door fields, for the newest move while the address is still what it left.
+- **Needs an address**: People's `moved=open` is everyone the team tapped
+  Moved on with no address yet (an old list's imported "Moved" history is
+  not in it); `moved=unknown` is Address unknown. Today's brief carries the
+  count for desk roles holding People.
+- **Re-importing the voters list** never puts a moved person back at the old
+  door or makes a second copy of them: they are found by their old address,
+  their address is left as the team found it, and the import's answer counts
+  them (`moved_kept`, with up to 50 `moved_rows`). Someone whose name has
+  changed since the move is not found that way; the duplicate finder is
+  there for that. Merging duplicates keeps Address unknown.
+
+On screen: after a Moved tap the walk list, the map's door card and the
+profile open **Where did Ana go?** under the outcome row — *New address*
+(the address box's suggestions; Unit, City, and Postal code under More) or
+*Address unknown*, then *Save* or *Later*. The door holds still while it is
+open (the walk list moves on, and reloads, when it closes). After *Save* it
+asks **Who lives at 9800 King George Blvd now?** (*Still here* · *Moved
+out*, *+ Someone else lives here*, and at the desk *Someone on file lives
+here*) and **Did anyone else move from 13450 104 Ave?** (*Still here* ·
+*Moved too*), each tap sent on its own. With no signal the move waits in
+the outbox behind its knock ("Moving — sends soon"). A volunteer whose
+person is outside their turf gets "Moved · the office will ask where". The
+desk's profile says *Marked moved 12 Nov by Dana — where to?*, *Address
+unknown · since … · was …* (*Add new address*, *Undo*) or *Moved here … ·
+from …* (*Undo*); People's filter has *Moved: Needs an address · Address
+unknown* with their counts (`GET /api/moves/counts`), and the import's
+check says how many people on file have moved while the list still has
+their old address.
+
 ## Sending email and text
 
 A newsletter or press release is written in Markdown: the message field

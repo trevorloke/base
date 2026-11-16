@@ -45,6 +45,8 @@ import { hostOfRequest, noteAppHost } from '../ext/site/store.js';
 import { maybesNamed } from '../ext/payments/limits.js';
 // The caller's own booking on a shift, one rule everywhere (ext/schedule).
 import { myBookingSql } from '../ext/schedule/hours.js';
+// Whether a volunteer may move this person (ext/core: a pin in their turf).
+import { inMyTurf } from '../ext/core/index.js';
 
 // Gift rows flagged as maybe one donor (idsOf: the ids a row names, as
 // stored) get maybe_same_as: those records by name, as things stand.
@@ -261,7 +263,7 @@ const bboxParam = (v) => {
   const b = String(v || '').split(',').map(Number);
   return b.length === 4 && b.every(Number.isFinite) && b[0] <= b[2] && b[1] <= b[3] && b[0] >= -90 && b[2] <= 90 ? b : null;
 };
-const DOOR_COLS = 'id, name, phone, email, address, house_number, unit, lat, lng, rating, rated_at, voted_at, tags';
+const DOOR_COLS = 'id, name, phone, email, address, house_number, unit, city, lat, lng, rating, rated_at, voted_at, tags';
 
 // The doors inside the turfs someone walks (and their own record): read by
 // the turfs' corners, then kept to the outlines. { signs: false } skips the
@@ -506,7 +508,7 @@ app.get('/persons/:id', async (c) => {
   const db = c.get('db');
   const person = (await db.query(
     `select id, kind, name, first_name, middle_name, last_name, email, phone, address, house_number, unit, city, postal, lat, lng, tags, socials, rating, rated_at, voted_at, created_at,
-            attrs->>'note' as note, social_reach, followers${ctx.role === 'volunteer' ? '' : `,
+            attrs->>'note' as note, social_reach, followers, address_status${ctx.role === 'volunteer' ? '' : `,
             ${whyNotSql('email', 'direct', personCols('persons', '$2'))} as email_why`}
      from persons where id = $1 and workspace_id = $2 and deleted_at is null`,
     [c.req.param('id'), ctx.workspaceId],
@@ -531,11 +533,28 @@ app.get('/persons/:id', async (c) => {
     [ctx.workspaceId, person.id],
   )).rows;
   const contacts = (await db.query(
-    `select c.id, c.channel, c.outcome, c.rating, c.note, c.created_at, u.name as by_name
+    `select c.id, c.channel, c.outcome, c.rating, c.note, c.created_at, u.name as by_name, c.source
      from contacts c left join users u on u.id = c.created_by
      where c.workspace_id = $1 and c.person_id = $2 order by c.created_at desc limit 100`,
     [ctx.workspaceId, person.id],
   )).rows;
+  // A move (ext/moves): the latest one, and whether the team's own latest
+  // knock is a Moved still waiting for an address ("Needs an address" for
+  // one person: the newest team contact is Moved, and no move stands since).
+  const latestMove = (await db.query(
+    `select m.id, m.reason, m.result, m.from_address, m.from_unit, m.from_city, m.to_address, m.created_at, m.undone_at, u.name as by_name
+       from person_moves m left join users u on u.id = m.created_by
+      where m.workspace_id = $1 and m.person_id = $2 order by m.created_at desc, m.id desc limit 1`,
+    [ctx.workspaceId, person.id],
+  )).rows[0] || null;
+  const ownLast = contacts.find((x) => x.source == null);
+  const liveMove = latestMove && !latestMove.undone_at ? latestMove
+    : (await db.query(
+      `select created_at from person_moves where workspace_id = $1 and person_id = $2 and undone_at is null
+        order by created_at desc limit 1`, [ctx.workspaceId, person.id],
+    )).rows[0];
+  const moveOpen = ownLast?.outcome === 'moved' && !(liveMove && new Date(liveMove.created_at) >= new Date(ownLast.created_at));
+  for (const x of contacts) delete x.source;
   const roles = (await db.query(
     'select id, role, detail from volunteer_roles where workspace_id = $1 and person_id = $2 order by role',
     [ctx.workspaceId, person.id],
@@ -562,12 +581,21 @@ app.get('/persons/:id', async (c) => {
   if (ctx.role === 'volunteer') {
     // Followers (ext/socials) are the desk's.
     delete person.social_reach; delete person.followers;
+    // Where they moved from, to, and who moved them are the desk's: only
+    // what happened (lib/viewer.js would pass every column through).
+    const mayMove = decide(ctx.perms, 'people') === true
+      || (person.lat != null && person.lng != null && await inMyTurf(db, ctx, person.lat, person.lng));
     return c.json({
       person: forViewer(ctx)(personRow(person)), gifts: [], totals: [], contacts, roles, signs, shifts, donor: null,
       household: household.map(({ id, name, rating }) => ({ id, name, rating })),
+      latest_move: latestMove ? { reason: latestMove.reason, result: latestMove.result } : null,
+      move_open: moveOpen, may_move: mayMove,
     });
   }
-  return c.json({ person: personRow(person), gifts, totals, contacts, roles, signs, shifts, donor, household });
+  return c.json({
+    person: personRow(person), gifts, totals, contacts, roles, signs, shifts, donor, household,
+    latest_move: latestMove, move_open: moveOpen,
+  });
 });
 
 app.route('/data', dataRoutes); // import · geocode · sample (desk roles; own guard)
@@ -587,7 +615,7 @@ const loadLocated = async (db, ctx, pass = null, box = null, onList = null) => {
   const params = box ? [ctx.workspaceId, pass?.id || null, ...box] : [ctx.workspaceId, pass?.id || null];
   const listed = onList ? `coalesce((${joinWhere(params, onList)}), false)` : null;
   return (await db.query(
-    `select p.id, p.name, p.email, p.phone, p.address, p.house_number, p.unit, p.lat, p.lng, p.rating, p.tags, p.voted_at,
+    `select p.id, p.name, p.email, p.phone, p.address, p.house_number, p.unit, p.city, p.lat, p.lng, p.rating, p.tags, p.voted_at,
             (select max(c.created_at) from contacts c where c.person_id = p.id and c.workspace_id = p.workspace_id) as last_contact_at,
             (select c.outcome from contacts c where c.person_id = p.id and c.workspace_id = p.workspace_id order by c.created_at desc limit 1) as last_outcome,
             exists (select 1 from contacts c where c.person_id = p.id and c.workspace_id = p.workspace_id and c.channel = 'door') as door_knocked,
