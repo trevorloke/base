@@ -350,7 +350,13 @@ one tap away under **More**.
   runs the switches, who may use Drive, the Picker's narrowed token and
   *Send to Google Sheets* against the stand-in Google: three parts as three
   jobs, one Sheet, exact RAW ranges, Google not answering, asking to wait,
-  a full Drive, someone leaving mid-export. `server/test/export-rows.test.js`
+  a full Drive, someone leaving mid-export. `server/test/drive-batch8.test.js`
+  holds where batch 8 meets it: a quick report as a fourth source (A–Z
+  pages with the raw number and the Do not contact column, its id set read
+  once a job; Largest first, the walking list and a Donations-denied staffer
+  refused), a People filter of moved people, people and lists paged A–Z,
+  letters and the media lists never a table Sheets can send, and the
+  source check widened on an older database. `server/test/export-rows.test.js`
   pins a list's, a report's and the people table's CSV byte for byte.
   `server/test/drive-files.test.js` reads a picked Sheet's tabs and a tab
   as CSV (whole-row pages, a blank gap, a quoted title), a stalled or

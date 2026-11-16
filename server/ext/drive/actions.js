@@ -121,8 +121,9 @@ export const actions = {
   'drive.export': {
     roles: EVERYONE,
     input: z.object({
-      source: z.enum(['list', 'report', 'dataset']),
-      ref: z.string().trim().min(1).max(80),
+      source: z.enum(['list', 'report', 'dataset', 'quick']),
+      // A quick report's ref carries its options: "donors?period=year&order=az".
+      ref: z.string().trim().min(1).max(200),
       client_key: z.uuid(),
     }),
     // Every check, and the count, before the write (no lock); nothing is

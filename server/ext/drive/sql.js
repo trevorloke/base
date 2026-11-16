@@ -9,7 +9,7 @@ create table if not exists drive_exports (
   workspace_id uuid not null,
   user_id uuid not null references users(id) on delete cascade,
   client_key uuid not null,
-  source text not null check (source in ('list','report','dataset')),
+  source text not null check (source in ('list','report','dataset','quick')),
   ref text not null,
   name text not null,
   rows int not null,
@@ -28,6 +28,19 @@ create table if not exists drive_exports (
   done_at timestamptz,
   unique (workspace_id, client_key)
 );
+-- A quick report (ext/reports/quick.js) is a fourth source: the check
+-- widened in place on a database made before it.
+do $$
+begin
+  if exists (select 1 from pg_constraint where conrelid = 'drive_exports'::regclass and conname = 'drive_exports_source_check'
+             and pg_get_constraintdef(oid) not like '%''quick''%') then
+    alter table drive_exports drop constraint drive_exports_source_check;
+  end if;
+  if not exists (select 1 from pg_constraint where conrelid = 'drive_exports'::regclass and conname = 'drive_exports_source_check') then
+    alter table drive_exports add constraint drive_exports_source_check
+      check (source in ('list', 'report', 'dataset', 'quick'));
+  end if;
+end $$;
 -- The campaign folder's name as it was when the Sheet was sent there, so
 -- the list still says where it went after the folder changes.
 alter table drive_exports add column if not exists land_name text;

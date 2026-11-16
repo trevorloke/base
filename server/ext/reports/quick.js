@@ -647,3 +647,45 @@ async function* pages(db, ctx, r, opts) {
     after = page.next;
   } while (after);
 }
+
+// ── Google Sheets (ext/drive) ──
+// A quick report as "Send to Google Sheets"'s fourth source. ref is
+// "<name>?<options>" (the screen writes them in the recipe's own order).
+// The walking list is paper only. A Sheet fills in the background, part by
+// part, so it pages by the A–Z keyset, whose order can't shift under it:
+// Largest first is refused. Each cell is the CSV's: the number and address
+// as stored and the Do not contact column (mask is the screen's alone).
+export const SHEETS_AZ_ONLY = 'Choose A–Z to send to Sheets';
+export const quickRef = (name, opts = {}) => {
+  const r = RECIPES[name];
+  const keys = Object.keys(optionsOf(r || {}));
+  const q = new URLSearchParams(keys.filter((k) => opts[k] != null).map((k) => [k, opts[k]])).toString();
+  return q ? `${name}?${q}` : name;
+};
+export const quickSource = (db, ctx, ref) => {
+  const s = String(ref || '');
+  const at = s.indexOf('?');
+  const name = at < 0 ? s : s.slice(0, at);
+  const r = name !== 'walk' && Object.hasOwn(RECIPES, name) ? RECIPES[name] : null;
+  if (!r) throw new Refusal(404, 'No such report');
+  const opts = parseOptions(r, Object.fromEntries(new URLSearchParams(at < 0 ? '' : s.slice(at + 1))));
+  if (opts.order === 'largest') throw new Refusal(400, SHEETS_AZ_ONLY);
+  const head = r.head(opts);
+  // The id set (Volunteers, Signs, Moved), read once for the whole job.
+  let ids;
+  const idsOnce = async () => {
+    if (r.idsFor && ids === undefined) ids = await r.idsFor(db, ctx, opts);
+    return ids;
+  };
+  return {
+    area: r.areas,
+    name: [r.title, ...wordsOf(r, opts, { forFile: true })].join(' · '),
+    count: async () => (await r.count(db, ctx, opts)).count,
+    cols: async () => head.length,
+    head: async () => head.map((h) => h.label),
+    page: async (cursor, limit) => {
+      const p = await r.rows(db, ctx, opts, { after: cursor?.after || null, limit: Math.min(limit, PAGE_MAX), ids: await idsOnce() });
+      return { rows: p.rows.map((x) => head.map((h) => x[h.key] ?? '')), next: p.next ? { after: p.next } : null };
+    },
+  };
+};

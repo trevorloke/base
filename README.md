@@ -221,14 +221,16 @@ manager turns Drive on for the campaign (Settings → Services → Google Drive
 and Sheets: the switch, who may send to Google Sheets, where new Sheets go,
 *Try opening Google Drive*). Every Drive button is quiet and drawn only once
 Drive is on: *From Google Drive* on People → Import and on the compose,
-*Take it out* (Download CSV and Send to Google Sheets) on a list and each
-report, *Google Sheets* beside each table on the export screens, and *Sent to
+*Take it out* (Download CSV and Send to Google Sheets) on a list, each
+report and each quick report (not the paper walking list), *Google Sheets* beside each table on the export screens, and *Sent to
 Google Drive* at the end of Import & export.
 base.win asks each person for one Google permission, only the
 Drive files they use with base.win (`drive.file`), and only the desk
 (managers, treasurers, staff) may connect it. **Send to Google Sheets**
-makes a new Sheet from a list, a report or a table, the same columns as
-Download CSV, in the background (`drive.export`, one part per job, exact
+makes a new Sheet from a list, a report, a quick report or a table, the
+same columns as Download CSV (people A–Z by last name; a quick report's
+Donors only A–Z: *Choose A–Z to send to Sheets*; money needs Donations as
+well as Data, as its CSV does), in the background (`drive.export`, one part per job, exact
 ranges so a part tried again never writes a row twice), into each person's
 own *base.win exports* folder (Google Workspace accounts only) or the
 campaign's shared-drive folder. Sheets stay **off** until a manager chooses

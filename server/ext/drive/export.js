@@ -2,7 +2,7 @@
 // one part (at most 20 s) per job — the Mailchimp sync's pattern
 // (ext/mailchimp/push.js runSyncJob).
 //
-//   SOURCES                    what can be sent: a list, a report, a dataset
+//   SOURCES                    what can be sent: a list, a report, a dataset, a quick report
 //   sourceOf(db, ctx, source, ref) → { area[], name, count(), cols(), page(cursor, limit) } | throws
 //   ctxFor(db, workspaceId, userId)  the person who started it, as they are now
 //   mayStillSend(ctx, rules)   whether they may still send
@@ -22,7 +22,8 @@ import { signinRules } from '../../lib/google/config.js';
 import { timeZone } from '../../lib/org.js';
 import { loadList } from '../lists/audience.js';
 import { LIST_HEAD, listCount, listPage } from '../lists/rows.js';
-import { DATASETS, REPORTS, datasetCols, datasetCount, datasetPage } from '../reports/rows.js';
+import { DATASETS, MONEY_DATASETS, MONEY_REPORTS, REPORTS, datasetCols, datasetCount, datasetPage } from '../reports/rows.js';
+import { quickSource } from '../reports/quick.js';
 import { DESK, driveRules, driveSetup } from './config.js';
 import { driveGrant } from './grant.js';
 import { exportsFolder, makeSheet } from './files.js';
@@ -63,7 +64,8 @@ export const sourceOf = async (db, ctx, source, ref) => {
     if (!Object.hasOwn(REPORTS, ref)) throw httpError(404, 'No such report');
     const read = () => REPORTS[ref](db, ws, ctx);
     return {
-      area: ['data'], name: REPORT_TITLES[ref] || ref,
+      // Money (Donations by month) needs Donations as well as Data, as its CSV does.
+      area: MONEY_REPORTS.includes(ref) ? ['data', 'money'] : ['data'], name: REPORT_TITLES[ref] || ref,
       count: async () => (await read()).rows.length, cols: async () => (await read()).head.length, head: async () => (await read()).head,
       // Small (a hundred rows at most): read whole, sent in slices.
       page: async (cursor, limit) => {
@@ -77,7 +79,7 @@ export const sourceOf = async (db, ctx, source, ref) => {
     if (!Object.hasOwn(DATASETS, ref)) throw httpError(404, 'No such table');
     return {
       // Money going to Google needs Donations as well as Data.
-      area: ['gifts', 'members'].includes(ref) ? ['data', 'money'] : ['data'], name: DATASET_TITLES[ref] || ref,
+      area: MONEY_DATASETS.includes(ref) ? ['data', 'money'] : ['data'], name: DATASET_TITLES[ref] || ref,
       count: () => datasetCount(db, ws, ref), cols: () => datasetCols(db, ws, ref),
       head: async () => (await datasetPage(db, ws, ref, { limit: 1 })).head,
       page: async (cursor, limit) => {
@@ -86,6 +88,9 @@ export const sourceOf = async (db, ctx, source, ref) => {
       },
     };
   }
+  // A quick report (ext/reports/quick.js): its own areas (desk roles are
+  // mayStillSend's), A–Z pages only, never the walking list.
+  if (source === 'quick') return quickSource(db, ctx, ref);
   throw httpError(400, 'Send a list, a report or a table');
 };
 export const mayReadSource = (ctx, src) => src.area.every((a) => areasFor(ctx).includes(a));
@@ -213,9 +218,9 @@ const refusedOf = (r) => {
 };
 
 // One part: make the Sheet if there is none, then pages until the time is up.
-const part = async (db, ex, ctx, g, rules) => {
+// src: the job's own reading of what is sent (a quick report's id set is read once per job).
+const part = async (db, ex, ctx, g, rules, src) => {
   const until = Date.now() + LIMITS.sliceMs;
-  const src = await sourceOf(db, ctx, ex.source, ex.ref);
   const cols = Number(ex.cols);
   let cur = typeof ex.cursor === 'string' ? JSON.parse(ex.cursor) : (ex.cursor || {});
   let grid = Number(cur.grid) || Number(ex.rows) + 1;
@@ -296,7 +301,7 @@ export const runExportJob = async (db, job) => {
   if (ex.status === 'waiting') await step(db, ex, "status = 'sending'");
   let out;
   try {
-    out = await part(db, { ...ex, status: 'sending' }, ctx, g, rules);
+    out = await part(db, { ...ex, status: 'sending' }, ctx, g, rules, src);
   } catch (e) {
     if (!(e instanceof NoAnswer)) {
       // The runner gives up after this try: failed, so Try again shows (and works).

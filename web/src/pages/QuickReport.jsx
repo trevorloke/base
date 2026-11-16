@@ -2,7 +2,9 @@
 // the address, so a link or a reload gives the same report), the number, and
 // the sheet — a table on a desk, a stack on a phone, a table on paper.
 // Print is the one primary; Download CSV has every row
-// (GET /api/quick-reports/:name, server/ext/reports/quick.js).
+// (GET /api/quick-reports/:name, server/ext/reports/quick.js). Where a
+// manager has turned Google Sheets on, Download CSV sits under GDR's quiet
+// "Take it out" with Send to Google Sheets (source 'quick', A–Z only).
 import { useState } from 'react';
 import { Link, Navigate, useOutletContext, useParams, useSearchParams } from 'react-router-dom';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
@@ -11,6 +13,7 @@ import { at } from '../base.js';
 import { fmt } from '../components/AudienceBits.jsx';
 import NameAz from '../components/NameAz.jsx';
 import { NeedsSignal, noSignal, useOnline } from '../components/NoSignal.jsx';
+import { TakeItOut } from '../components/SendToSheet.jsx';
 import { zoneOf } from '../components/shiftTime.js';
 import { isDesk } from '../Shell.jsx';
 import './shifts.css';
@@ -97,6 +100,8 @@ export default function QuickReport() {
   const dark = noSignal(q) || (!online && !d);
   const canPrint = Boolean(d) && rows.length > 0 && !q.isPlaceholderData && online;
   const csv = at(`/api/quick-reports/${encodeURIComponent(name)}.csv${qs ? `?${qs}` : ''}`);
+  // The Sheet's ref: the name and the choices in force, in the report's own order.
+  const sheetRef = d ? [name, new URLSearchParams((d.options || []).map((o) => [o.key, o.value])).toString()].filter(Boolean).join('?') : name;
   const title = d?.title || (q.isError ? 'Report' : 'Loading…');
 
   return (
@@ -112,7 +117,8 @@ export default function QuickReport() {
           <button type="button" className="btn btn-primary ops-tap" disabled={!canPrint} onClick={() => window.print()}>Print</button>
           {/* No file to give while the report is loading or was refused. */}
           {d && !q.isError
-            ? <a className="btn btn-quiet ops-tap" href={csv} download>Download CSV</a>
+            ? <TakeItOut csvHref={csv} source="quick" of={sheetRef} name={[d.title, d.said].filter(Boolean).join(' · ')}
+                count={d.total} noun={(NOUN[name] || ['row', 'rows'])[d.total === 1 ? 0 : 1]} head={d.head.map((h) => h.label)} />
             : <button type="button" className="btn btn-quiet ops-tap" disabled>Download CSV</button>}
         </div>
       </div>

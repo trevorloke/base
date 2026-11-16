@@ -9,7 +9,7 @@
 //     holds people who asked not to be contacted), the progress read every
 //     2 s, "In Google Sheets · Open", or the words of what stopped it and
 //     Try again. Leaving the page doesn't stop it; Import & export lists it.
-//   source 'list' | 'report' | 'dataset'; of: the list id or the name
+//   source 'list' | 'report' | 'dataset' | 'quick'; of: the list id, the name, or a quick report's "name?options"
 //   head   the columns, so the do-not-contact line is said when they hold
 //          an email or a phone
 import { useEffect, useState } from 'react';
