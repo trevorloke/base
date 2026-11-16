@@ -1,0 +1,44 @@
+/* The desk's Today (HOME): the page is the window's width (layout.js
+   page--wide) so MAP's band runs across it; every other block keeps the
+   1,200 px column, so the numbers and the lists never stretch into long
+   lines on a wide screen. */
+.today-desk > :not(.mapwindow--band) { max-width: var(--page-max); }
+/* On a phone-sized desk window the band is the field window's height. The
+   vh line first: a browser without dvh drops the second. */
+@media (max-width: 720px) {
+  .today-desk .mapwindow--band .mapwindow__frame { height: min(45vh, 360px); height: min(45dvh, 360px); }
+}
+
+/* "Activity ›" under the band, at the band's right edge. */
+.today-desk > .today-under-band { width: fit-content; margin: calc(-1 * var(--s-3)) 0 0 auto; }
+
+/* The Supporters tile: the win number's bar and "of 12,000 needed". */
+.today-num__bar { flex: none; width: 100%; height: 4px; }
+.today-num__sub { font-size: 13px; color: var(--text-2); line-height: 1.3; }
+
+/* The breakdown's win-number lines, above the support picture. */
+.today-goal { margin: 0 0 var(--s-3); font-size: 15px; color: var(--text-1); }
+.today-goal p { margin: 0 0 var(--s-1); }
+p.today-goal { margin-bottom: var(--s-3); }
+.today-goal .muted { color: var(--text-3); font-size: 14px; }
+.today-goal__set { color: var(--text-1); font-weight: 500; }
+
+/* Go to: six places, 2 across on a phone, 3 at a desk; then the search. */
+.today-goto__grid {
+  list-style: none; margin: 0 0 var(--s-2); padding: 0;
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-2);
+}
+.today-goto__i {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s-2);
+  min-height: 48px; padding: 0 var(--s-3);
+  border: var(--border); border-radius: var(--r-card); background: var(--paper-0);
+  color: var(--text-1); text-decoration: none; font-size: 15px; font-weight: 500;
+}
+.today-goto__i > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.today-goto__i:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
+@media (hover: hover) { .today-goto__i:hover { border-color: var(--mark); } }
+.btn.today-goto__search { width: 100%; min-height: 48px; justify-content: center; }
+@media (min-width: 721px) {
+  .today-goto__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .today-goto__i { min-height: 44px; }
+}

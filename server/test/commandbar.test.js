@@ -4,7 +4,7 @@
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { freshDb, Client } from './helpers.js';
-import { commandsFor, rank, scoreItem, fold } from '../../web/src/components/commands.js';
+import { commandsFor, rank, scoreItem, fold, SCREENS, QUICK, QUICK_MAX, quickFor } from '../../web/src/components/commands.js';
 
 const NAV = [
   { to: '/', label: 'Today' }, { to: '/map', label: 'Map' }, { to: '/people', label: 'People' }, { to: '/shifts', label: 'Shifts' },
@@ -170,4 +170,71 @@ test('quick reports: an entry needing several areas is offered only with all of 
   const vol = offered({ role: 'volunteer', areas: ['map', 'data', 'money', 'people'] });
   assert.deepEqual(all.filter((s) => vol.includes(s)), [], 'a volunteer, even granted the areas: desk only');
   assert.equal(rank(commandsFor({ role: 'manager', areas: [] }, []).screens, 'walking list')[0].label, 'Print a walking list');
+});
+
+// ── HOME: the new screens, the tightened gates, and Today's Go to ──
+test('Path to win, Activity and Mainstreeting are in the bar, behind their own gates', () => {
+  const byTo = (to) => SCREENS.find((s) => s.to === to);
+  assert.equal(byTo('/path-to-win').area, 'data');
+  assert.equal(byTo('/activity').manager, true);
+  assert.equal(byTo('/mainstreet').area, 'people');
+  const { screens } = commandsFor({ role: 'manager', areas: [] }, NAV);
+  assert.equal(rank(screens, 'win')[0].label, 'Path to win');
+  assert.equal(rank(screens, 'dashboard')[0].label, 'Activity');
+  assert.equal(rank(screens, 'activity')[0].label, 'Activity');
+  const staff = labels(commandsFor({ role: 'staff', areas: ['people', 'map', 'data'] }, NAV).screens);
+  assert.ok(staff.includes('Path to win') && staff.includes('Mainstreeting') && !staff.includes('Activity'), 'Activity is managers only');
+});
+
+test('Phone banks need People and Turfs and walk lists need Map, as their data does', () => {
+  const offered = (me) => labels(commandsFor(me, []).screens);
+  const noPeople = offered({ role: 'staff', areas: ['map', 'shifts', 'data'] });
+  assert.ok(!noPeople.includes('Phone banks'));
+  const noMap = offered({ role: 'staff', areas: ['people', 'shifts', 'data'] });
+  assert.ok(!noMap.includes('Turfs and walk lists'));
+  const mgr = offered({ role: 'manager', areas: [] });
+  assert.ok(mgr.includes('Phone banks') && mgr.includes('Turfs and walk lists'));
+});
+
+test('Go to: at most six, in QUICK order, by each person’s areas, never a tab twice', () => {
+  const ROLES = [
+    { role: 'manager', areas: [] },
+    { role: 'staff', areas: ['people', 'map', 'shifts', 'money', 'signs', 'outreach', 'data'] },
+    { role: 'staff', areas: ['people', 'map', 'shifts'] },
+    { role: 'treasurer', areas: ['money', 'data'] },
+    { role: 'volunteer', areas: [] },
+  ];
+  for (const me of ROLES) {
+    for (const brief of [{}, { letters: { has: true } }, { letters: { has: false } }, null]) {
+      assert.ok(quickFor(me, NAV, brief).length <= QUICK_MAX, JSON.stringify({ me, brief }));
+    }
+  }
+  assert.equal(QUICK_MAX, 6);
+  const mgr = labels(quickFor({ role: 'manager', areas: [] }, NAV, {}));
+  assert.equal(mgr[0], 'Reports');
+  const at = (l) => mgr.indexOf(l);
+  assert.ok(at('Lists') < at('Phone banks') && at('Lists') > 0);
+  assert.ok(at('Path to win') < at('Get out the vote') && at('Path to win') > 0);
+  if (mgr.includes('Print a walking list')) assert.equal(at('Print a walking list'), 1, 'directly after Reports');
+  // The order is QUICK's, whatever subset is shown.
+  const order = QUICK.map((q) => q.to);
+  const tos = quickFor({ role: 'manager', areas: [] }, NAV, {}).map((q) => q.to);
+  assert.deepEqual([...tos].sort((a, b) => order.indexOf(a) - order.indexOf(b)), tos);
+  // Staff denied Data: no Reports, no Path to win.
+  const noData = labels(quickFor({ role: 'staff', areas: ['people', 'map', 'shifts'] }, NAV, {}));
+  assert.ok(!noData.includes('Reports') && !noData.includes('Path to win'));
+  assert.ok(noData.includes('Lists') && noData.includes('Get out the vote'));
+});
+
+test('Go to: a when entry only when the brief says so; a place with no screen and no label is skipped; a tab is left out', () => {
+  const writer = { role: 'staff', areas: ['people'] };
+  assert.ok(!labels(quickFor(writer, [], {})).includes('Your letters'));
+  assert.ok(labels(quickFor(writer, [], { letters: { has: true } })).includes('Your letters'));
+  const real = QUICK.slice();
+  QUICK.unshift({ to: '/nowhere-made-up' });
+  try {
+    assert.ok(!quickFor({ role: 'manager', areas: [] }, [], {}).some((q) => q.to === '/nowhere-made-up'));
+  } finally { QUICK.splice(0, QUICK.length, ...real); }
+  const asTab = quickFor({ role: 'manager', areas: [] }, [...NAV, { to: '/reports', label: 'Reports' }], {});
+  assert.ok(!labels(asTab).includes('Reports'), 'Reports as a tab is not offered twice');
 });

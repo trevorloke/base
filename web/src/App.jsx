@@ -81,6 +81,8 @@ const WebsiteSites = lazy(() => import('./pages/WebsiteSites.jsx'));
 const WebsiteSite = lazy(() => import('./pages/WebsiteSite.jsx'));
 const WebsiteSiteDomain = lazy(() => import('./pages/WebsiteSite.jsx').then((m) => ({ default: m.WebsiteSiteDomain })));
 const PathToWin = lazy(() => import('./pages/PathToWin.jsx'));
+// The managers' dashboard, its own screen (reached from Today and the search).
+const Activity = lazy(() => import('./pages/Dashboard.jsx'));
 import Join from './pages/Join.jsx';
 import { TwoStepRequired } from './components/TwoStep.jsx';
 import AuthPage from './components/AuthPage.jsx';
@@ -130,7 +132,7 @@ function NotForYou({ me }) {
 
 // A desk address typed into the field app (an old bookmark, a link in an
 // email): the admin has it. Volunteers go home, as before.
-const DESK_PATHS = /^\/(people(\/(import|fields|connected|duplicates|membership-form))?|shifts\/volunteers|money|lists|reports|data|outreach|media|ladders|follow-ups|surveys|scripts|rating-scale|settings|team|admin|inbox\/settings|passes|voted|requests|field-report|banks\/new|website)(\/|$)/;
+const DESK_PATHS = /^\/(people(\/(import|fields|connected|duplicates|membership-form))?|shifts\/volunteers|money|lists|reports|data|outreach|media|ladders|follow-ups|surveys|scripts|rating-scale|settings|team|admin|inbox\/settings|passes|voted|requests|field-report|banks\/new|website|activity|path-to-win)(\/|$)/;
 function FieldFallback() {
   const ctx = useOutletContext();
   const { pathname, search } = useLocation();
@@ -158,6 +160,8 @@ const ROUTE_AREA = [
   [/^\/website/, 'site'],
   [/^\/media/, 'media'],
   [/^\/path-to-win/, 'data'],
+  // Managers only, as GET /api/dashboard.
+  [/^\/activity(\/|$)/, 'admin'],
 ];
 function DeskOnly() {
   const ctx = useOutletContext();
@@ -315,6 +319,7 @@ export default function App({ mode = 'field' }) {
           <Route path="/website/sites/:siteId/look" element={<WebsiteTheme />} />
           <Route path="/website/sites/:siteId/domain" element={<WebsiteSiteDomain />} />
           <Route path="/path-to-win" element={<PathToWin />} />
+          <Route path="/activity" element={<Activity />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

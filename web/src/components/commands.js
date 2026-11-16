@@ -4,6 +4,7 @@
 //
 //   commandsFor(me, nav) → { actions, screens } this person may open
 //   rank(items, query)   → the items matching every word typed, best first
+//   quickFor(me, nav, brief) → Today's "Go to": at most six everyday places
 
 // The same rule as Shell's hasArea: the areas the server gave, else a desk
 // role's usual ones; managers have every area. A screen a role may not open
@@ -41,9 +42,10 @@ export const ACTIONS = [
 // so a new tab — the Website — is offered by itself).
 export const SCREENS = [
   { label: 'Calls', to: '/calls', words: 'phone call list dial' },
-  { label: 'Turfs and walk lists', to: '/turfs', words: 'walk list turf canvass doors' },
+  // Gated as their screens' data is (/api/turfs: Map; /api/banks: People).
+  { label: 'Turfs and walk lists', to: '/turfs', area: 'map', words: 'walk list turf canvass doors' },
   { label: 'Text inbox', to: '/inbox', words: 'texts replies messages sms' },
-  { label: 'Phone banks', to: '/banks', desk: true, words: 'call lists phone bank' },
+  { label: 'Phone banks', to: '/banks', area: 'people', desk: true, words: 'call lists phone bank' },
   { label: 'My people', to: '/my-people', words: 'relational friends know' },
   { label: 'Volunteers', to: '/shifts/volunteers', desk: true, words: 'roster volunteer roles' },
   { label: 'Import people', to: '/people/import', area: 'people', desk: true, words: 'upload csv spreadsheet excel voter file list' },
@@ -84,7 +86,41 @@ export const SCREENS = [
   { label: 'Rating scale', to: '/rating-scale', area: 'admin', manager: true, words: 'support scale voting for candidates' },
   { label: 'Your profile', to: '/profile', words: 'account two-step sign-in authenticator me' },
   { label: 'Shifts in Google Calendar', to: '/profile#gcal', gcal: true, words: 'google calendar shifts' },
+  { label: 'Path to win', to: '/path-to-win', area: 'data', words: 'win number supporters needed pace goal race' },
+  { label: 'Activity', to: '/activity', manager: true, words: 'dashboard out now chart teams latest contacts trail' },
+  { label: 'Mainstreeting', to: '/mainstreet', area: 'people', desk: true, words: 'events bus loop met someone' },
 ];
+
+// Today's "Go to" (desk): the places used every day, in this order, each
+// under its SCREENS label and gate (one source for both). An entry with no
+// SCREENS entry needs its own label, or it is skipped (so "Print a walking
+// list" shows only where Reports has it). when(brief): shown only then.
+export const QUICK = [
+  { to: '/reports' },
+  { to: '/reports/walk' },
+  { to: '/lists' },
+  { to: '/banks' },
+  { to: '/path-to-win' },
+  { to: '/voted' },
+  { to: '/letters', label: 'Your letters', when: (b) => Boolean(b?.letters?.has) },
+];
+export const QUICK_MAX = 6;
+
+// The first six this person may open, that are not already one of their
+// tabs (nav), and whose brief test (if any) holds.
+export function quickFor(me, nav = [], brief = {}) {
+  const tabs = new Set(nav.map((n) => n.to));
+  const out = [];
+  for (const q of QUICK) {
+    const screen = SCREENS.find((s) => s.to === q.to);
+    const item = screen ? { ...screen, ...q, label: q.label || screen.label } : q;
+    if (!item.label || !allowed(me, item) || tabs.has(item.to)) continue;
+    if (item.when && !item.when(brief || {})) continue;
+    out.push({ label: item.label, to: item.to });
+    if (out.length === QUICK_MAX) break;
+  }
+  return out;
+}
 
 // What this person may open and do. nav: the tabs the Shell shows them
 // (already their areas), first among the screens.

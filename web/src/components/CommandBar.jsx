@@ -241,8 +241,11 @@ export default function CommandBar({ me, nav }) {
       e.preventDefault();
       if (openRef.current) close(true); else show(document.activeElement);
     };
+    // Today's "All places and people" opens it as this button does.
+    const onAsk = () => { if (!openRef.current) show(document.activeElement); };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener('base:search', onAsk);
+    return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('base:search', onAsk); };
   }, [close, show]);
   return (
     <>

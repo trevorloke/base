@@ -5,6 +5,7 @@
   #root.has-nav { padding-left: var(--side-w); }
 }
 .page.page--map { max-width: none; }
+.page.page--wide { max-width: none; }
 @media (max-width: 720px) {
   .page.page--map { padding-bottom: 64px; }
 }
