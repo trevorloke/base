@@ -21,7 +21,7 @@ import { whyNotSql, person } from '../../lib/reach.js';
 import { loadScale } from '../scale/rules.js';
 import { todayOf } from '../audience/index.js';
 import { VOLUNTEER_IDS_SQL } from '../volunteers/data.js';
-import { movedCounts, movedOpenIds } from '../moves/index.js';
+import { movedCounts, movedOpenWhere } from '../moves/index.js';
 // The walk list's own read (routes/api.js walkFor) is imported when a sheet
 // is asked for, not at load: routes import the extensions, so a static
 // import here would be a cycle (ext.js: features never import routes/*).
@@ -265,19 +265,25 @@ const running = {
   filter: async (opts, db, ctx) => `field=${await candidateField(db, ctx.workspaceId)}:yes`,
 };
 
-// A page of an id set, A–Z (Volunteers, Moved): the set is read once per
-// request; each page reads only the set.
-const idPage = async (db, ctx, ids, { after, limit }, extra) => {
-  const params = [ctx.workspaceId, ids];
-  let cond = '';
-  if (after) { if (!UUID.test(after)) throw new Refusal(400, 'That page is gone — start again'); params.push(after); cond = azPage(params.length); }
-  params.push(limit);
-  const inner = `select ${BASE} from persons p where ${live} and p.id = any($2::uuid[]) ${cond} order by ${AZ} limit $${params.length}`;
-  return (await db.query(withWhy(inner, AZ, extra), params)).rows;
-};
-const liveIds = async (db, ws, sql, params) => (await db.query(
-  `select p.id from persons p where ${live} and p.id in (${sql})`, params,
+// An id set already in A–Z order (Volunteers, Moved): read once per request
+// (azIds); a page is the slice after `after`, its rows read a thousand ids
+// at a time — never the whole set in one query, which a big campaign's
+// volunteers would make a very long one.
+const ID_CHUNK = 1000;
+const azIds = async (db, where, params) => (await db.query(
+  `select p.id from persons p where ${live} and ${where} order by ${AZ}`, params,
 )).rows.map((r) => r.id);
+const idPage = async (db, ctx, ids, { after, limit }, extra) => {
+  let from = 0;
+  if (after) { from = ids.indexOf(after) + 1; if (!from) throw new Refusal(400, 'That page is gone — start again'); }
+  const slice = ids.slice(from, from + limit);
+  const rows = [];
+  for (let i = 0; i < slice.length; i += ID_CHUNK) {
+    const inner = `select ${BASE} from persons p where ${live} and p.id = any($2::uuid[])`;
+    rows.push(...(await db.query(withWhy(inner, AZ, extra), [ctx.workspaceId, slice.slice(i, i + ID_CHUNK)])).rows);
+  }
+  return { rows, next: from + limit < ids.length && slice.length ? slice[slice.length - 1] : null };
+};
 
 const volunteers = {
   title: 'Volunteers',
@@ -287,22 +293,22 @@ const volunteers = {
   // The roster's own union (ext/volunteers VOLUNTEER_IDS_SQL), with no cap.
   // Its tag arm reads persons once; a role reads volunteer_roles alone.
   idsFor: (db, ctx, opts) => (opts.role === 'all'
-    ? liveIds(db, ctx.workspaceId, VOLUNTEER_IDS_SQL, [ctx.workspaceId])
-    : liveIds(db, ctx.workspaceId, 'select r.person_id from volunteer_roles r where r.workspace_id = $1 and r.role = $2', [ctx.workspaceId, opts.role])),
+    ? azIds(db, `p.id in (${VOLUNTEER_IDS_SQL})`, [ctx.workspaceId])
+    : azIds(db, 'p.id in (select r.person_id from volunteer_roles r where r.workspace_id = $1 and r.role = $2)', [ctx.workspaceId, opts.role])),
   async count(db, ctx, opts) { return { count: (await this.idsFor(db, ctx, opts)).length }; },
   async rows(db, ctx, opts, { after = null, limit = PAGE_MAX, ids } = {}) {
     const set = ids || await this.idsFor(db, ctx, opts);
-    const rows = await idPage(db, ctx, set, { after, limit }, `${ROLES},
+    const { rows, next } = await idPage(db, ctx, set, { after, limit }, `${ROLES},
       (select count(*)::int from shift_assignments a where a.workspace_id = $1 and a.person_id = p.id and a.status = 'completed') as shifts_done,
       (select s.starts_at from shift_assignments a join shifts s on s.id = a.shift_id and s.deleted_at is null
         where a.workspace_id = $1 and a.person_id = p.id and a.status in ('assigned', 'confirmed') and s.starts_at > now() order by s.starts_at limit 1) as next_at,
       (select s.title from shift_assignments a join shifts s on s.id = a.shift_id and s.deleted_at is null
         where a.workspace_id = $1 and a.person_id = p.id and a.status in ('assigned', 'confirmed') and s.starts_at > now() order by s.starts_at limit 1) as next_title`);
     const tz = tzOf(ctx);
-    return pageOf(rows.map((r) => finish(r, {
+    return { next, rows: rows.map((r) => finish(r, {
       phone: r.phone || '', email: r.email || '', roles: roleWords(r.roles), shifts_done: r.shifts_done,
       next_shift: r.next_at ? `${dayIn(r.next_at, tz)} ${r.next_title}` : '',
-    })), limit);
+    })) };
   },
   head: () => [
     col('last_name', 'Last name', true), col('first_name', 'First name', true), col('phone', 'Phone', true), col('email', 'Email'),
@@ -416,16 +422,18 @@ const moved = {
   title: 'Moved — needs an address',
   what: 'Marked Moved at the door, no new address yet',
   areas: ['data', 'people'],
-  idsFor: (db, ctx) => movedOpenIds(db, ctx.workspaceId),
+  // movedOpenWhere is the one fragment behind movedOpenIds, People's
+  // moved=open and movedCounts; read here in A–Z order.
+  idsFor: (db, ctx) => azIds(db, movedOpenWhere('p', '$1'), [ctx.workspaceId]),
   async count(db, ctx) { return { count: (await movedCounts(db, ctx.workspaceId)).open }; },
   async rows(db, ctx, opts, { after = null, limit = PAGE_MAX, ids } = {}) {
     const set = ids || await this.idsFor(db, ctx, opts);
-    const rows = await idPage(db, ctx, set, { after, limit }, `(select max(c.created_at) from contacts c
+    const { rows, next } = await idPage(db, ctx, set, { after, limit }, `(select max(c.created_at) from contacts c
         where c.workspace_id = $1 and c.person_id = p.id and c.outcome = 'moved' and c.source is null) as marked_at`);
     const tz = tzOf(ctx);
-    return pageOf(rows.map((r) => finish(r, {
+    return { next, rows: rows.map((r) => finish(r, {
       address: [r.unit, r.address].filter(Boolean).join('-'), phone: r.phone || '', marked_on: dayIn(r.marked_at, tz),
-    })), limit);
+    })) };
   },
   head: () => [
     col('last_name', 'Last name', true), col('first_name', 'First name', true), col('address', 'Address on file', true),

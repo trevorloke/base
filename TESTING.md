@@ -1115,30 +1115,30 @@ comes back, or asks if words were typed meanwhile).
   donations downloads need Donations. The speed check is
   `node --expose-gc scripts/bench-quick.mjs postgres://…/quick_bench` on a
   scratch Postgres. On a local Postgres 16, 300,000 made-up people (20,000
-  donors, 2,000 interested in running, 3,000 volunteers, ~2,250 current
+  donors, 2,000 interested in running, 3,000 volunteers, ~2,300 current
   members, 2,000 signs, 2,000 Moved marks), warm, median of five:
 
   | Read | Median (ms) | Slowest (ms) | Budget (ms) |
   |---|---:|---:|---|
-  | Donors count (10,000 this year) | 34 | 36 | 150 / 400 |
-  | Interested in being a candidate count | 28 | 33 | 150 / 400 |
-  | Volunteers count (one pass over persons for the tag) | 47 | 67 | 150 / 400 |
-  | Members count | 8 | 9 | 150 / 400 |
+  | Donors count (10,000 this year) | 29 | 32 | 150 / 400 |
+  | Interested in being a candidate count | 22 | 23 | 150 / 400 |
+  | Volunteers count (one pass over persons for the tag) | 48 | 55 | 150 / 400 |
+  | Members count | 7 | 8 | 150 / 400 |
   | Signs count | 2 | 2 | 150 / 400 |
-  | Moved count | 10 | 10 | 150 / 400 |
-  | Volunteers count, one role | 3 | 3 | 150 / 400 |
-  | Donors, a page of 2,000 with its total | 129 | 143 | 300 / 800 |
-  | Interested in being a candidate, 2,000 | 166 | 192 | 300 / 800 |
-  | Volunteers, 2,000 (the id set and one page) | 96 | 165 | 300 / 800 |
-  | Members, 2,000 | 41 | 51 | 300 / 800 |
-  | Signs, 2,000 | 146 | 163 | 300 / 800 |
-  | Moved, 2,000 | 150 | 271 | 300 / 800 |
-  | Donors, largest first, 2,000 | 150 | 206 | 300 / 800 |
-  | Walking list, one turf (330 doors) | 27 | 27 | 300 |
-  | Walking list, a turf round the city (the 409; the walk list never read) | 26 | 29 | 100 |
+  | Moved count | 10 | 11 | 150 / 400 |
+  | Volunteers count, one role | 4 | 5 | 150 / 400 |
+  | Donors, a page of 2,000 with its total | 140 | 181 | 300 / 800 |
+  | Interested in being a candidate, 2,000 | 162 | 223 | 300 / 800 |
+  | Volunteers, 2,000 (the id set, A–Z, and one page) | 92 | 188 | 300 / 800 |
+  | Members, 2,000 | 40 | 48 | 300 / 800 |
+  | Signs, 2,000 | 170 | 209 | 300 / 800 |
+  | Moved, 2,000 | 128 | 258 | 300 / 800 |
+  | Donors, largest first, 2,000 | 161 | 209 | 300 / 800 |
+  | Walking list, one turf (330 doors) | 30 | 38 | 300 |
+  | Walking list, a turf round the city (the 409; the walk list never read) | 25 | 36 | 100 |
 
   The Donors CSV of 20,000 rows streamed in 1.5 s, and the heap grew by
-  20 MB while it ran (budget 50).
+  22 MB while it ran (budget 50).
 - **Desk with no signal** — with wifi, open Today, People, a profile,
   Shifts, Signs, Donations and the Inbox. Turn wifi off and reload: each shows
   what it had and the strip says *No signal · from 2:14 pm*. Search People —
