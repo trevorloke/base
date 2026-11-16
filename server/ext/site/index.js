@@ -84,4 +84,5 @@ export const hooks = {
 
 // In GET /api/export (rows of this campaign). site_keys holds the server's
 // signing secret and is never exported.
-export const exportTables = ['site_settings', 'site_pages', 'site_posts', 'site_campaigns', 'site_actions', 'consent_events', 'microsites'];
+export const exportTables = ['site_settings', 'site_pages', 'site_posts', 'site_campaigns', 'site_actions', 'consent_events', 'microsites',
+  'site_translations', 'site_translation_versions', 'site_translation_failures', 'site_legal_words', 'site_language_state', 'site_translate_usage'];

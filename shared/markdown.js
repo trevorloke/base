@@ -53,20 +53,22 @@ const emphasis = (s) => s
   .replace(/(^|[^\w*])\*([^*\s][^*]*?)\*(?!\w)/g, '$1<em>$2</em>')
   .replace(/(^|[^\w])_([^_\s][^_]*?)_(?!\w)/g, '$1<em>$2</em>');
 
-const lines = (block) => block.map((l) => inline(l.trim())).join('<br>');
+const lines = (block) => block.map((l) => inline(escapeHtml(l.trim()))).join('<br>');
 
-export const renderMarkdown = (src) => {
-  const rows = escapeHtml(String(src ?? '').replace(/\r\n?/g, '\n')).split('\n');
+// The blocks of a Markdown body, as typed (not escaped): { t: 'p', lines },
+// { t: 'h', level, text }, { t: 'hr' }, { t: 'quote', lines },
+// { t: 'list', tag, items: [{ text }] }. A translated page swaps a block's
+// words for its own language's (server/ext/site translate.js) and marks a
+// block that fell back to English with lang: 'en'; drawBlocks draws them.
+export const blocksOf = (src) => {
+  const rows = String(src ?? '').replace(/\r\n?/g, '\n').split('\n');
   const out = [];
   let para = [];
   let list = null; // { tag, items }
   let quote = [];
-  const flushPara = () => { if (para.length) out.push(`<p>${lines(para)}</p>`); para = []; };
-  const flushList = () => {
-    if (list) out.push(`<${list.tag}>${list.items.map((i) => `<li>${inline(i)}</li>`).join('')}</${list.tag}>`);
-    list = null;
-  };
-  const flushQuote = () => { if (quote.length) out.push(`<blockquote><p>${lines(quote)}</p></blockquote>`); quote = []; };
+  const flushPara = () => { if (para.length) out.push({ t: 'p', lines: para }); para = []; };
+  const flushList = () => { if (list) out.push({ t: 'list', tag: list.tag, items: list.items.map((text) => ({ text })) }); list = null; };
+  const flushQuote = () => { if (quote.length) out.push({ t: 'quote', lines: quote }); quote = []; };
   const flushAll = () => { flushPara(); flushList(); flushQuote(); };
 
   for (const row of rows) {
@@ -76,12 +78,11 @@ export const renderMarkdown = (src) => {
     if ((m = /^(#{1,3})\s+(.+)$/.exec(line))) {
       flushAll();
       // Page titles are h1; a body's # is the page's h2, ## h3, ### h4.
-      const level = m[1].length + 1;
-      out.push(`<h${level}>${inline(m[2].trim())}</h${level}>`);
+      out.push({ t: 'h', level: m[1].length + 1, text: m[2].trim() });
     } else if (/^(-{3,}|\*{3,})$/.test(line.trim())) {
       flushAll();
-      out.push('<hr>');
-    } else if ((m = /^&gt;\s?(.*)$/.exec(line))) {
+      out.push({ t: 'hr' });
+    } else if ((m = /^>\s?(.*)$/.exec(line))) {
       flushPara(); flushList();
       quote.push(m[1]);
     } else if ((m = /^\s*[-*+]\s+(.+)$/.exec(line))) {
@@ -101,8 +102,19 @@ export const renderMarkdown = (src) => {
     }
   }
   flushAll();
-  return out.join('\n');
+  return out;
 };
+
+const langAttr = (b) => (b.lang ? ` lang="${escapeHtml(b.lang)}"` : '');
+export const drawBlocks = (blocks) => (blocks || []).map((b) => {
+  if (b.t === 'h') return `<h${b.level}${langAttr(b)}>${inline(escapeHtml(b.text))}</h${b.level}>`;
+  if (b.t === 'hr') return '<hr>';
+  if (b.t === 'quote') return `<blockquote${langAttr(b)}><p>${lines(b.lines)}</p></blockquote>`;
+  if (b.t === 'list') return `<${b.tag}>${b.items.map((i) => `<li${langAttr(i)}>${inline(escapeHtml(i.text))}</li>`).join('')}</${b.tag}>`;
+  return `<p${langAttr(b)}>${lines(b.lines)}</p>`;
+}).join('\n');
+
+export const renderMarkdown = (src) => drawBlocks(blocksOf(src));
 
 // Plain text of a Markdown body (meta descriptions, summaries): formatting
 // marks dropped, links keep their words. Not HTML — escape it where it goes.

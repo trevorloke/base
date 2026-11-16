@@ -17,15 +17,20 @@
 //   social        { accounts: [{ name, short, handle, url }] }
 //   theme         shared/site/theme.js checkTheme (a pair under 4.5:1 is refused)
 //   domains       ['imaginesurrey.ca', …] — the site answers at / on these
+//   languages     { on: ['pa', 'zh-Hans', 'zh-Hant'], index: { pa, … },
+//                 keep: [names kept as written], monthlyChars, oldPosts } —
+//                 the website in other languages (TR, translate.js); on,
+//                 index, monthlyChars and oldPosts are a manager's
 // Every href is the site's own path (/donate, /#m-join) or http(s), mailto:
 // or tel:; the renderer puts ctx.root in front of the site's own.
 import { z } from 'zod';
 import { consentName, consentWords } from '../../../shared/site/wording.js';
+import { LANG_SLUGS, OTHER_CODES } from '../../../shared/site/languages.js';
 
 export const KINDS = ['newsletter', 'petition', 'pledge', 'volunteer', 'rsvp', 'contact', 'join', 'donate'];
 
 // Addresses the site itself answers (routes) or the app keeps: never a page's.
-export const RESERVED_SLUGS = ['news', 'act', 'r', 'preferences', 'unsubscribe', 'api', 'site-assets', '__preview', 'sitemap.xml', 'robots.txt', 'media', 'stripe', 'site', 'sites'];
+export const RESERVED_SLUGS = ['news', 'act', 'r', 'preferences', 'unsubscribe', 'api', 'site-assets', '__preview', 'sitemap.xml', 'robots.txt', 'media', 'stripe', 'site', 'sites', ...LANG_SLUGS];
 // Pages the site has whatever an admin does: home is /, news is /news.
 export const SYSTEM_SLUGS = ['home', 'news'];
 export const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$/;
@@ -93,6 +98,13 @@ export const SECTIONS = {
     accounts: z.array(z.object({
       name: text(40).default(''), short: text(4).default(''), handle: text(60).default(''), url: href.default(''),
     })).max(12).default([]),
+  }),
+  languages: z.object({
+    on: z.array(z.enum(OTHER_CODES)).max(OTHER_CODES.length).default([]).transform((l) => OTHER_CODES.filter((c) => l.includes(c))),
+    index: z.object(Object.fromEntries(OTHER_CODES.map((c) => [c, z.boolean().default(false)]))).default(Object.fromEntries(OTHER_CODES.map((c) => [c, false]))),
+    keep: z.array(text(60)).max(100).default([]).transform((l) => [...new Set(l.filter(Boolean))]),
+    monthlyChars: z.number().int().min(10_000).max(5_000_000).default(450_000),
+    oldPosts: z.boolean().default(false),
   }),
 };
 export const SECTION_KEYS = Object.keys(SECTIONS);

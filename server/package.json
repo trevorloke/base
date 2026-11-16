@@ -5,6 +5,7 @@
   "type": "module",
   "dependencies": {
     "@starbase/shared": "*",
+    "opencc-js": "^1.4.2",
     "pg": "^8.16.3"
   }
 }

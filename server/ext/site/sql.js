@@ -188,4 +188,88 @@ create table if not exists app_hosts (
 alter table shifts add column if not exists public boolean not null default false;
 create index if not exists shifts_public_idx on shifts (workspace_id, starts_at) where deleted_at is null and public;
 create index if not exists persons_ref_code_idx on persons (workspace_id, (attrs->>'ref_code')) where attrs ? 'ref_code';
+
+-- The website in other languages (TR; ext/site/translate.js). The live
+-- words per language and English segment; every text a row has ever held
+-- (a signature names the exact words it saw; an edit can be undone);
+-- segments that would not translate; each language's readiness and the
+-- version of its words (rev, the renderer's memo); characters used per
+-- month; the approved legal words; the sweep's own bookkeeping.
+alter table site_settings add column if not exists languages jsonb not null default '{}';
+alter table consent_events add column if not exists lang text not null default 'en';
+alter table consent_events add column if not exists wording_en text;
+alter table site_actions add column if not exists lang text not null default 'en';
+alter table microsites add column if not exists check_first boolean not null default false;
+
+create table if not exists site_translations (
+  id uuid primary key,
+  workspace_id uuid not null references workspaces(id) on delete cascade,
+  lang text not null,
+  src_hash text not null,
+  src text not null,
+  text text not null,
+  origin text not null check (origin in ('machine', 'converted', 'edited')),
+  version_id uuid not null,
+  checked_by uuid,
+  checked_at timestamptz,
+  retranslate boolean not null default false,
+  place text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (workspace_id, lang, src_hash)
+);
+create table if not exists site_translation_versions (
+  id uuid primary key,
+  workspace_id uuid not null references workspaces(id) on delete cascade,
+  lang text not null,
+  src_hash text not null,
+  text text not null,
+  origin text not null,
+  made_by uuid,
+  made_at timestamptz not null default now(),
+  state text not null check (state in ('live', 'suggested', 'declined', 'replaced')),
+  decided_by uuid,
+  decided_at timestamptz
+);
+create index if not exists site_translation_versions_hash_idx on site_translation_versions (workspace_id, lang, src_hash, made_at);
+create table if not exists site_translation_failures (
+  workspace_id uuid not null references workspaces(id) on delete cascade,
+  lang text not null,
+  src_hash text not null,
+  tries int not null,
+  last_reason text,
+  next_try_at timestamptz,
+  primary key (workspace_id, lang, src_hash)
+);
+create table if not exists site_language_state (
+  workspace_id uuid not null references workspaces(id) on delete cascade,
+  lang text not null,
+  ready_at timestamptz,
+  last_run_at timestamptz,
+  last_error text,
+  rev bigint not null default 0,
+  primary key (workspace_id, lang)
+);
+create table if not exists site_translate_usage (
+  workspace_id uuid not null references workspaces(id) on delete cascade,
+  month text not null,
+  chars bigint not null default 0,
+  primary key (workspace_id, month)
+);
+create table if not exists site_translate_runtime (
+  workspace_id uuid primary key references workspaces(id) on delete cascade,
+  sweep_id uuid,
+  sweep_until timestamptz,
+  probe jsonb
+);
+create table if not exists site_legal_words (
+  id uuid primary key,
+  workspace_id uuid not null references workspaces(id) on delete cascade,
+  lang text not null,
+  english jsonb not null,
+  words jsonb not null,
+  approved_by uuid not null,
+  approved_at timestamptz not null default now()
+);
+create index if not exists site_legal_words_lang_idx on site_legal_words (workspace_id, lang, approved_at);
 `;

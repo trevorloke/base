@@ -41,3 +41,33 @@ export const authorizedBy = (org) => {
 // Under every form, before its "Privacy policy" link: who keeps what a
 // visitor sends, and why.
 export const PRIVACY_LINE = (name) => `${clean(name) || 'The campaign'} keeps what you send to stay in touch about our work and elections.`;
+
+// ── The words the law or a person's consent depends on, as templates (TR) ──
+// Never machine-translated: a manager approves each, per language
+// (site_legal_words), and until then that one line shows in English. The
+// slots are filled when a page is drawn: {org} consentName(org, seo),
+// {agent} and {contact} the financial agent's as typed, {limit} the year's
+// limit. A release that changes one of these makes its key "English
+// changed" in every language until a manager approves new words
+// (server/test/legal-english.test.js and docs/RELEASE-CHECKLIST.md).
+const C = consentWords('{org}');
+export const LEGAL_ENGLISH = {
+  authorizedBy: 'Authorized by {agent}, {contact}',
+  email: C.email,
+  sms: C.sms,
+  newsletter: C.newsletter,
+  privacy: PRIVACY_LINE('{org}'),
+  donate: DONATE_DECLARATION,
+  join: JOIN_DECLARATION,
+  donateSmall: 'The most anyone can give in a year is {limit}. You’ll pay on the next page by card, Apple Pay or Google Pay.',
+  donateSmallNoLimit: 'You’ll pay on the next page by card, Apple Pay or Google Pay.',
+  payPageNote: 'The payment page may be in English.',
+  translatedNote: 'Translated automatically. The English page is the official version.',
+  readInEnglish: 'Read it in English',
+  policyInEnglish: 'Our privacy policy is in English.',
+};
+export const LEGAL_KEYS = Object.keys(LEGAL_ENGLISH);
+// The slots a template has ("{agent}", …), for the approval's check.
+export const slotsOf = (t) => [...String(t ?? '').matchAll(/\{([a-z]+)\}/gi)].map((m) => m[1]).sort();
+// A template with its slots filled (a slot with nothing for it stays as typed).
+export const fillSlots = (t, values = {}) => String(t ?? '').replace(/\{([a-z]+)\}/gi, (m, k) => (values[k] !== undefined && values[k] !== null ? String(values[k]) : m));
