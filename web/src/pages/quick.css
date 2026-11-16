@@ -139,4 +139,5 @@
 .qr-page .ops-head { align-items: flex-start; }
 .qr-page .ops-head h1 { display: flex; align-items: center; min-height: var(--ctl); }
 .qr-page .ops-head__actions { flex: 1 1 0; min-width: min(100%, 300px); justify-content: flex-end; }
-.ws-unplaced__go { display: flex; width: fit-content; margin-top: var(--s-2); }
+@media (max-width: 720px) { .qr-page .ops-head__actions { justify-content: flex-start; } }
+.ws-unplaced .btn.ws-unplaced__go { display: flex; width: fit-content; margin-top: var(--s-2); }
