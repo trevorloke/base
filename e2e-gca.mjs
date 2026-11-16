@@ -165,6 +165,31 @@ try {
   await v.locator('#calendar').waitFor({ timeout: 10000 });
   await sleep(800);
   check('off: the volunteer sees no Google Calendar card', await v.locator('#gcal').count() === 0);
+  // Weak signal (a read gets no answer): still nothing about Calendar or
+  // Gmail, which this volunteer can't use — never "Unavailable — Try again".
+  await v.route('**/api/gcal', (r) => r.abort('internetdisconnected'));
+  await v.route('**/api/gmail', (r) => r.abort('internetdisconnected'));
+  await v.reload({ waitUntil: 'domcontentloaded' });
+  await v.locator('#calendar').waitFor({ timeout: 10000 });
+  await sleep(1500);
+  check('no answer: the volunteer still sees no Google Calendar card and no Gmail line',
+    await v.locator('#gcal').count() === 0 && !/Gmail:/.test(await text(v, '.me-page')), await text(v, '.me-page'));
+  await v.unroute('**/api/gcal');
+  await v.unroute('**/api/gmail');
+  // Another app's built-in browser (Instagram's): no Google button, one line saying where to go.
+  {
+    const ctx = await browser.newContext({ viewport: PHONE, deviceScaleFactor: 1, isMobile: true, hasTouch: true,
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Instagram 330.0.0.0' });
+    await ctx.route('**/*', (route) => (new URL(route.request().url()).hostname !== HOST ? route.abort() : route.continue()));
+    const ia = await ctx.newPage();
+    await ia.goto(`${BASE}/login`, { waitUntil: 'domcontentloaded' });
+    await ia.locator('#login-email').waitFor({ timeout: 10000 });
+    await sleep(800);
+    check('in-app browser: no "Sign in with Google", the line says to open Safari or Chrome',
+      await ia.getByText('Sign in with Google').count() === 0 && /Open base\.win in Safari or Chrome to use Google\./.test(await text(ia)), await text(ia));
+    await shot(ia, '00-login-in-app-browser-phone');
+    await ctx.close();
+  }
 
   // ── Services → Google → Shifts in Google Calendar: On ──
   await m.goto(`${BASE}/admin/settings/services`, { waitUntil: 'domcontentloaded' });

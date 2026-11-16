@@ -136,6 +136,8 @@ export default function GcalCard({ me }) {
   const head = <div className="ts-head"><h2 className="ts-h">{TITLE}</h2></div>;
   const campaignOn = me?.workspace?.settings?.gcal?.on === true;
   if (q.isError) {
+    // Off for the campaign: nothing to try again for.
+    if (!campaignOn) return null;
     return (
       <section className="ts-card gc-card" id="gcal" ref={cardRef} aria-label={TITLE}>
         {head}

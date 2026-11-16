@@ -16,7 +16,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { action, apiGet } from '../api.js';
 import { adminHref, appMode } from '../mode.js';
 import { NeedsSignalLine, useOnline } from './NoSignal.jsx';
-import { GOOD, INSTALLED, appName, clockTime, googleHere, googleStart, googleWords, herePath } from './google.js';
+import { GOOD, appName, awayWords, clockTime, googleHere, googleStart, googleWords, herePath } from './google.js';
 import './google.css';
 
 export const useGoogle = () => useQuery({ queryKey: ['google'], queryFn: () => apiGet('/google') });
@@ -105,7 +105,7 @@ export function GoogleNote({ code, data, note }) {
 
 // Wrong address / installed app: one line instead of any Google button.
 export const googleBlocked = (data) => {
-  if (!googleHere()) return INSTALLED;
+  if (!googleHere()) return awayWords();
   if (data?.at && data.at.right === false) return googleWords('wrong-address', { address: data.at.address });
   return null;
 };

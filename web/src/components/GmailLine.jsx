@@ -54,8 +54,11 @@ export default function GmailLine({ purpose }) {
   if (q.error?.status === 403) return null;
   const d = q.data;
   if (!d) {
-    // Once, outside the row: "Loading…" or "Unavailable — Try again".
+    // Once, outside the row: "Loading…" or "Unavailable — Try again" —
+    // only where the campaign has Gmail on (from the sign-in already
+    // loaded); elsewhere there is nothing to wait for or try again.
     if (purpose) return null;
+    if (qc.getQueryData(['me'])?.workspace?.settings?.gmail?.on !== true) return null;
     return q.isError ? (
       <p className="gm-pline">Gmail: Unavailable — <button type="button" className="btn btn-quiet" onClick={() => q.refetch()}>Try again</button></p>
     ) : <p className="gm-pline muted">Gmail: Loading…</p>;

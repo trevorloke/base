@@ -14,7 +14,7 @@ import { landing } from '../mode.js';
 import { CodeField } from '../components/TwoStep.jsx';
 import AuthPage from '../components/AuthPage.jsx';
 import { useOnline } from '../components/NoSignal.jsx';
-import { INSTALLED, appName, googleHere, googleStart, googleWords, markSignin, takeSignin } from '../components/google.js';
+import { appName, awayWords, googleHere, googleStart, googleWords, markSignin, takeSignin } from '../components/google.js';
 import gLogo from '../components/google-g.svg';
 import '../components/google.css';
 
@@ -163,7 +163,7 @@ function GoogleSignIn({ mode, online }) {
     return (
       <>
         <hr className="hairline gg-or" />
-        <p className="gg-line">{INSTALLED}</p>
+        <p className="gg-line">{awayWords()}</p>
       </>
     );
   }

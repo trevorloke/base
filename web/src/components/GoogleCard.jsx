@@ -61,7 +61,8 @@ export default function GoogleCard() {
   // nothing rather than a "Loading…" card that then vanishes. A failed read
   // always draws the card ("Unavailable — Try again"): /auth/me knows only
   // sign-in, and connections may be on with sign-in off.
-  const knownOn = useQueryClient().getQueryData(['me'])?.google?.on === true;
+  const me = useQueryClient().getQueryData(['me']);
+  const knownOn = me?.google?.on === true;
   const d = q.data;
   if (d && !d.setup.signin && !d.setup.connect) return null;
   const head = <div className="ts-head"><h2 className="ts-h">Google</h2></div>;
@@ -130,7 +131,7 @@ export default function GoogleCard() {
           )}
         </>
       )}
-      {d.setup.connect && <GmailLine />}
+      {d.setup.connect && ['manager', 'treasurer', 'staff'].includes(me?.admin_role || me?.role) && <GmailLine />}
       {!online && <NeedsSignalLine>Google needs signal</NeedsSignalLine>}
     </section>
   );

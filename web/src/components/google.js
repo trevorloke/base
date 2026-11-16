@@ -6,7 +6,11 @@
 //                       page opens in a separate browser there, whose
 //                       cookies aren't the app's — until a check on real
 //                       phones proves otherwise, those screens say
-//                       INSTALLED instead of showing a Google button
+//                       INSTALLED instead of showing a Google button;
+//                       and false in another app's built-in browser
+//                       (Facebook, Instagram, Messenger…), where Google
+//                       refuses to sign in ("disallowed_useragent")
+//   awayWords()         the one line those screens show instead
 //   googleStart(kind, { app, back, purpose })   the start link (at() puts
 //                       the client's path in front)
 //   appName(mode)       'field' | 'desk' for the start route
@@ -20,14 +24,22 @@
 import { BASE, NS, at } from '../base.js';
 
 export const INSTALLED = 'Open base.win in your browser to use Google.';
+export const IN_APP = 'Open base.win in Safari or Chrome to use Google.';
+
+// Another app's built-in browser, by its user agent (an Android WebView
+// says "; wv)").
+const IN_APP_RE = /FBAN|FBAV|FB_IAB|FBIOS|Instagram|Line\/|MicroMessenger|LinkedInApp|TikTok|musical_ly|Snapchat|; wv\)/;
+export const inAppBrowser = () => typeof navigator !== 'undefined' && IN_APP_RE.test(String(navigator.userAgent || ''));
 
 export const googleHere = () => {
   if (typeof window === 'undefined') return true;
+  if (inAppBrowser()) return false;
   try {
     if (window.matchMedia?.('(display-mode: standalone)').matches) return false;
   } catch { /* old browsers: not installed */ }
   return window.navigator?.standalone !== true;
 };
+export const awayWords = () => (inAppBrowser() ? IN_APP : INSTALLED);
 
 export const appName = (mode) => (mode === 'admin' ? 'desk' : 'field');
 
