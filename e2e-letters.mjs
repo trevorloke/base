@@ -486,6 +486,8 @@ await page.click('button:has-text("They told us they sent it")');
 await page.locator('[aria-label="Paper"] button:has-text("Example Online")').waitFor({ timeout: 5000 }).catch(() => {});
 check('…"They told us they sent it" offers the campaign’s other papers too', (await page.locator('[aria-label="Paper"] button:has-text("Example Online")').count()) === 1,
   await words(page.locator('[aria-label="Paper"]')));
+check('…and never starts on a paper that just turned it down: none picked, Save waits', (await page.locator('[aria-label="Paper"] [aria-checked="true"]').count()) === 0
+  && (await page.locator('[aria-label="They told us they sent it"] button:has-text("Save")').isDisabled()), await words(page.locator('[aria-label="Paper"] [aria-checked="true"]')));
 await page.click('[aria-label="Paper"] button:has-text("Example Online")');
 await shot(page, 'g-told-any-paper');
 await page.click('[aria-label="They told us they sent it"] button:has-text("Save")');

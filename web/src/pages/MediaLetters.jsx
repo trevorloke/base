@@ -356,7 +356,7 @@ function DeskActions({ l, openSend, go, act, online }) {
   const [mode, setMode] = useState(null);
   const [text, setText] = useState('');
   const [on, setOn] = useState('');
-  const [toldId, setToldId] = useState(l.outlets[0]?.id || null);
+  const [toldId, setToldId] = useState(null);
   const members = useQuery({ queryKey: ['members'], queryFn: () => apiGet('/members'), staleTime: 60_000, enabled: mode === 'assign' });
   const desk = (members.data?.members || []).filter((m) => m.role !== 'volunteer');
   // The letter's papers first, then any other paper that takes this kind:
@@ -365,6 +365,13 @@ function DeskActions({ l, openSend, go, act, online }) {
   const takes = (o) => (l.kind === 'op_ed' ? o.oped_email || o.oped_form : o.letters_email || o.letters_form);
   const toldOutlets = [...l.outlets, ...(all.data?.outlets || []).filter((o) => takes(o) && !l.outlets.some((x) => x.id === o.id))];
   const done = () => { setMode(null); setText(''); };
+  // Start on one of the letter's papers that hasn't turned it down; if every
+  // one has, pick none so staff choose (never record a send to a paper that said no).
+  const openTold = () => {
+    const turned = new Set((l.sends || []).filter((s) => s.outcome === 'not_published').map((s) => s.outlet_id));
+    setToldId(l.outlets.find((o) => !turned.has(o.id))?.id || null);
+    setMode('told');
+  };
   return (
     <section className="lt-sec" aria-label="More for this letter">
       {!mode && (
@@ -373,7 +380,7 @@ function DeskActions({ l, openSend, go, act, online }) {
           <button type="button" className="btn btn-quiet ot-btn-tap" onClick={() => setMode('assign')}>Assign to…</button>
           {['new', 'working', 'ready'].includes(l.status) && <button type="button" className="btn btn-quiet ot-btn-tap" onClick={() => setMode('decline')}>Decline</button>}
           {l.status === 'declined' && <button type="button" className="btn btn-quiet ot-btn-tap" disabled={!online} onClick={() => go('letter.reopen', { id: l.id }, 'Back to working on it')}>Work on it again</button>}
-          {l.status === 'ready' && <button type="button" className="btn btn-quiet ot-btn-tap" onClick={() => setMode('told')}>They told us they sent it</button>}
+          {l.status === 'ready' && <button type="button" className="btn btn-quiet ot-btn-tap" onClick={openTold}>They told us they sent it</button>}
           {openSend && <button type="button" className="btn btn-quiet ot-btn-tap" onClick={() => setMode('published')}>Published: paste the link</button>}
           {openSend && <button type="button" className="btn btn-quiet ot-btn-tap" disabled={!online} onClick={() => go('letter.not_published', { id: l.id, send_id: openSend.id }, 'Not published — back to Ready')}>Not published</button>}
         </div>
