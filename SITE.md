@@ -548,7 +548,12 @@ answer the 404 under a prefix.
   in English with `lang="en"` on its element. Fixed words are
   `shared/site/ui-words.js` keys (`rc.w`); islands get theirs in their
   props. Names are drawn as written, with a manager's approved rendering
-  beside them.
+  beside them. A page (`site.page.save` `check_first`) or another website
+  (`site.microsite.save` `check_first`) set to "Show translated only after
+  a person checks it" shows every unchecked sentence in English; petition
+  statements, the donate notes and quotes always do. Another website's read
+  (`GET /api/site/microsites/:id`) counts its sentences still `waiting`
+  per language.
 - **The words the law needs** (`LEGAL_ENGLISH` in `shared/site/wording.js`)
   are never machine words: a manager approves them per language
   (`site.legal.approve`, `site_legal_words`). The footer carries

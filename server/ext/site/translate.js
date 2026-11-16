@@ -568,3 +568,24 @@ export const translatorFor = async (q, workspaceId, lang) => {
     },
   };
 };
+
+// Another website's sentences with no translation yet, per language that is
+// on (GET /site/microsites/:id; its overview says "ਪੰਜਾਬੀ: 3 waiting").
+// null when no language is on. A sentence the main site also shows counts
+// where the collector met it first.
+export const waitingFor = async (q, ws, settings, siteId) => {
+  const on = settings?.languages?.on || [];
+  if (!on.length) return null;
+  const pages = new Set((await q.query(
+    'select id from site_pages where workspace_id = $1 and site_id = $2 and deleted_at is null', [ws.id, siteId],
+  )).rows.map((r) => r.id));
+  const mine = (await liveStrings(q, ws, { settings })).filter((g) => g.place?.startsWith('page:') && pages.has(g.place.split(':')[1]));
+  const out = {};
+  for (const lang of on) {
+    const have = new Set((await q.query(
+      'select src_hash from site_translations where workspace_id = $1 and lang = $2 and src_hash = any($3::text[])', [ws.id, lang, mine.map((g) => g.hash)],
+    )).rows.map((r) => r.src_hash));
+    out[lang] = mine.filter((g) => !have.has(g.hash)).length;
+  }
+  return out;
+};

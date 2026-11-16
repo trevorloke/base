@@ -263,6 +263,17 @@ test('a plain (no-JavaScript) post on /zh keeps the Simplified words', async () 
   assert.equal(ev.wording, '批准的文字 newsletter Harbour City Together');
 });
 
+test('without JavaScript on /pa: a refused form comes back to its page under /pa, saying why in Punjabi', async () => {
+  const r = await hit('/site/pa/about');
+  const legalV = /name="legal_v" value="([^"]+)"/.exec(r.text)?.[1];
+  const res = await hit('/site/pa/api/forms/newsletter', { method: 'POST', form: { email: 'not an address', consent_email: 'true', legal_v: legalV, module_id: 'news01', page_id: about.id } });
+  assert.equal(res.status, 303);
+  assert.match(res.location, /^\/site\/pa\/about\?error=email&module=news01#m-news01$/);
+  const back = await hit(res.location.replace(/#.*$/, ''));
+  const alert = /<section[^>]*id="m-news01"[\s\S]*?class="form-alert" role="alert"[^>]*>([^<]*)</.exec(back.text)?.[1] || '';
+  assert.ok(alert && !/[A-Za-z]{3,}/.test(alert), `said in Punjabi: ${alert}`);
+});
+
 test('a petition: the statement in English until checked, then translated; the words signed are kept', async () => {
   const page1 = await hit(`/site/pa/act/${petition.slug}`);
   const h = segHash(petition.statement);
@@ -619,6 +630,95 @@ test('donate on /zh: the declaration as approved, Stripe in Chinese with the ite
     for (const [k, v] of Object.entries(keep)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
     await stripe.close();
   }
+});
+
+test('no call to Google while a write is open; a failing hook never fails the publish', async () => {
+  // Every transaction the sweep opens is counted; the fake marks a call that arrives while one is open.
+  let open = 0;
+  const watched = { ...db, transaction: async (fn) => { open += 1; try { return await db.transaction(fn); } finally { open -= 1; } } };
+  await page('buses', 'Buses', [{ id: 'text02', kind: 'text', hidden: false, props: { title: 'Better buses', body: 'More buses on the main road.', tone: 'paper' } }]);
+  fake.reset();
+  fake.set({ holdWhile: () => open > 0 });
+  await sweep(watched, ws);
+  fake.set({ holdWhile: null });
+  assert.ok(fake.calls.length >= 1, 'the new page was sent');
+  assert.ok(fake.calls.every((c) => !c.duringWrite), 'no call while a transaction was open');
+  // The queue can't be written: the publish goes on all the same.
+  await db.query('alter table jobs rename to jobs_away');
+  try {
+    const r = await mgr.action('site.page.publish', { id: (await db.query("select id from site_pages where workspace_id = $1 and slug = 'buses'", [ws])).rows[0].id });
+    assert.equal(r.status, 200, JSON.stringify(r.json));
+  } finally {
+    await db.query('alter table jobs_away rename to jobs');
+  }
+});
+
+test('names: one that comes back changed is a failure; a candidate named after a translation has its sentences made again', async () => {
+  // Google said it keeps names inside translate="no" (the probe), but this time it changes one.
+  await db.query(
+    `insert into site_translate_runtime (workspace_id, probe) values ($1, $2)
+     on conflict (workspace_id) do update set probe = coalesce(site_translate_runtime.probe, '{}'::jsonb) || $2::jsonb`,
+    [ws, JSON.stringify({ namesKept: true })],
+  );
+  const text = 'Harbour City Together plants trees on Fridays.';
+  await page('trees', 'Trees', [{ id: 'text03', kind: 'text', hidden: false, props: { title: 'Trees', body: text, tone: 'paper' } }]);
+  fake.reset();
+  fake.set({ transliterate: true });
+  await sweep(db, ws);
+  fake.set({ transliterate: false });
+  assert.ok(fake.calls.some((c) => c.q.some((q) => q.includes('<span translate="no">Harbour City Together</span>'))), 'the name went as a span');
+  const f = (await db.query("select last_reason from site_translation_failures where workspace_id = $1 and lang = 'pa' and src_hash = $2", [ws, segHash(text)])).rows[0];
+  assert.equal(f?.last_reason, 'A kept name came back changed');
+  assert.equal((await db.query("select count(*)::int as n from site_translations where workspace_id = $1 and lang = 'pa' and src_hash = $2", [ws, segHash(text)])).rows[0].n, 0);
+  await db.query("update site_translate_runtime set probe = probe - 'namesKept' where workspace_id = $1", [ws]);
+
+  // A sentence translated before its person was a candidate: the name came back translated.
+  const line = 'Linda Example will speak at the hall.';
+  await page('hall', 'At the hall', [{ id: 'text04', kind: 'text', hidden: false, props: { title: 'Speakers', body: line, tone: 'paper' } }]);
+  await sweep(db, ws);
+  const row = async () => (await db.query("select text, retranslate from site_translations where workspace_id = $1 and lang = 'pa' and src_hash = $2", [ws, segHash(line)])).rows[0];
+  assert.ok(!(await row()).text.includes('Linda Example'));
+  ok(await mgr.action('candidate.save', { name: 'Linda Example', office: 'Council', race: '' }));
+  assert.equal((await row()).retranslate, true, 'the candidate marks the sentences holding the name');
+  fake.reset();
+  await sweep(db, ws);
+  assert.ok(fake.calls.some((c) => c.target === 'pa' && c.q.some((q) => q.includes('will speak at the hall'))));
+  const after = await row();
+  assert.ok(after.text.includes('Linda Example'), after.text);
+  assert.equal(after.retranslate, false);
+  // A page set to show only checked words: the machine sentence shows in English.
+  const hall = (await db.query("select id from site_pages where workspace_id = $1 and slug = 'hall'", [ws])).rows[0].id;
+  ok(await mgr.action('site.page.save', { id: hall, check_first: true }));
+  ok(await mgr.action('site.page.publish', { id: hall }));
+  cacheClear(ws);
+  const pa = await hit('/site/pa/hall');
+  assert.equal(pa.status, 200);
+  assert.match(pa.text, /lang="en">Linda Example will speak at the hall\.</);
+});
+
+test('another website: its sentences waiting per language; set to show only checked words', async () => {
+  const m = (await db.query('select id from microsites where workspace_id = $1 and deleted_at is null order by created_at limit 1', [ws])).rows[0];
+  const home = (await db.query("select id, published from site_pages where site_id = $1 and slug = 'home'", [m.id])).rows[0];
+  const mods = (typeof home.published === 'string' ? JSON.parse(home.published) : home.published).modules;
+  const line = 'Ferries every hour, all year.';
+  ok(await mgr.action('site.page.save', { id: home.id, modules: [...mods, { id: 'text05', kind: 'text', hidden: false, props: { title: 'Ferries', body: line, tone: 'paper' } }] }));
+  ok(await mgr.action('site.page.publish', { id: home.id }));
+  const before = ok(await mgr.get(`/api/site/microsites/${m.id}`));
+  assert.ok(before.waiting.pa >= 1 && before.waiting['zh-Hans'] >= 1 && before.waiting['zh-Hant'] >= 1, JSON.stringify(before.waiting));
+  await sweep(db, ws);
+  const after = ok(await mgr.get(`/api/site/microsites/${m.id}`));
+  assert.deepEqual(after.waiting, { pa: 0, 'zh-Hans': 0, 'zh-Hant': 0 });
+  const set = ok(await mgr.action('site.microsite.save', { id: m.id, check_first: true }));
+  assert.equal(set.microsite.check_first, true);
+  cacheClear(ws);
+  const { forgetDomains } = await import('../ext/site/store.js');
+  forgetDomains();
+  const checkFirst = await hit('/pa/', { host: 'dougdidnt.example' });
+  assert.match(checkFirst.text, /lang="en">Ferries every hour, all year\.</);
+  ok(await mgr.action('site.microsite.save', { id: m.id, check_first: false }));
+  cacheClear(ws);
+  const plain = await hit('/pa/', { host: 'dougdidnt.example' });
+  assert.ok(!plain.text.includes('Ferries every hour'), 'translated once the setting is off');
 });
 
 test('the privacy policy shows in English, with the approved line saying so, until every word is checked', async () => {

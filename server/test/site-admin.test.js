@@ -53,6 +53,7 @@ test('a volunteer gets 403 on every Website read and write; staff too, until a m
     ['site.microsite.create', { name: 'x' }], ['site.microsite.save', { id: pageId, name: 'x' }], ['site.microsite.domains', { id: pageId, domains: [] }],
     ['site.microsite.live', { id: pageId, live: true }], ['site.microsite.delete', { id: pageId }], ['site.microsite.restore', { id: pageId }],
     ['site.microsite.release', { id: pageId }],
+    ['site.legal.approve', { lang: 'pa', words: {} }], ['site.translate.now', {}],
     ['shift.public', { id: pageId, public: true }],
   ];
   for (const who of [vol.client, staff.client]) {

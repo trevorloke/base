@@ -349,6 +349,8 @@ export const actions = {
     modules: z.array(z.any()).max(60).optional(),
     show_in_nav: z.boolean().optional(),
     nav_order: z.number().int().min(0).max(10000).optional(),
+    // "Show translated only after a person checks it" (TR decision 25).
+    check_first: z.boolean().optional(),
     updated_at: z.string().max(40).optional(),
   }), async (tx, ctx, input, emit) => {
     const ws = ctx.workspaceId;
@@ -366,7 +368,8 @@ export const actions = {
     const title = input.title ?? cur.title;
     const description = input.description === undefined ? (cur.description || '') : (input.description || '');
     const modules = input.modules === undefined ? (draft.modules || []) : checked(input.modules);
-    const next = withImage({ title, description, modules }, input.image === undefined ? draft.image : input.image);
+    const checkFirst = input.check_first ?? draft.checkFirst === true;
+    const next = withImage({ title, description, modules, ...(checkFirst ? { checkFirst: true } : {}) }, input.image === undefined ? draft.image : input.image);
     const showInNav = input.show_in_nav ?? cur.show_in_nav;
     const navOrder = input.nav_order ?? cur.nav_order;
     const row = (await tx.query(
@@ -381,6 +384,7 @@ export const actions = {
     if ((next.image?.url || '') !== (draft.image?.url || '')) changes.image = next.image?.url || '';
     if (showInNav !== cur.show_in_nav) changes.show_in_nav = showInNav;
     if (navOrder !== cur.nav_order) changes.nav_order = navOrder;
+    if (checkFirst !== (draft.checkFirst === true)) changes.check_first = checkFirst;
     emit('site_page', cur.id, 'update', { ...changes, modules: shapeOf(modules), content_hash: hash(next) });
     return { page: pageOut(row) };
   }),
@@ -392,7 +396,7 @@ export const actions = {
     const modules = checked(draft.modules || [], { strict: true });
     const problem = await refsProblem(tx, ws, modules, cur.site_id || null);
     if (problem) throw httpError(400, problem);
-    const live = withImage({ title: cur.title, description: cur.description || '', modules }, draft.image);
+    const live = withImage({ title: cur.title, description: cur.description || '', modules, ...(draft.checkFirst === true ? { checkFirst: true } : {}) }, draft.image);
     const row = (await tx.query(
       `update site_pages set published = $3, draft = $3, version = version + 1, status = 'published', published_at = now(), updated_at = now()
        where id = $1 and workspace_id = $2 returning *`,

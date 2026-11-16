@@ -83,7 +83,7 @@ export const hooks = {
       await tx.query('release savepoint site_hook');
     } catch (e) {
       await tx.query('rollback to savepoint site_hook');
-      console.error(`site: the consent record missed ${meta.action}: ${e.message}`);
+      console.error(`site: the consent record or the translation queue missed ${meta.action}: ${e.message}`);
     }
   },
 };
