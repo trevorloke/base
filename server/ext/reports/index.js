@@ -3,4 +3,4 @@
 // newsletter list, sends), each downloadable, and whole tables as
 // spreadsheets. The full JSON export stays at GET /export.
 export { api } from './api.js';
-export const deskOnlyReads = [/^\/api\/reports(\/|$)/, /^\/api\/export\/[a-z]+(\.csv)?$/];
+export const deskOnlyReads = [/^\/api\/reports(\/|$)/, /^\/api\/export\/[a-z]+(\.csv)?$/, /^\/api\/quick-reports/];

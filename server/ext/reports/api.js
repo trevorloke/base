@@ -10,10 +10,18 @@ import { Hono } from 'hono';
 import { csvResponse } from '../../lib/csv.js';
 import { azKey } from '../../lib/az.js';
 import { loadScale } from '../scale/rules.js';
+import { areasFor } from '../../lib/perms.js';
+import { mountQuick } from './quick.js';
 
 export const api = new Hono();
 const DESK = ['manager', 'treasurer', 'staff'];
 const refuse = (c) => c.json({ error: 'desk only' }, 403);
+// Money takes Donations as well as Data: a desk member a manager denied
+// Donations sees no gift, here or in a download (Quick reports' rule).
+const MONEY_REPORTS = ['donations'];
+const MONEY_DATASETS = ['gifts', 'members'];
+const hasMoney = (ctx) => areasFor(ctx).includes('money');
+const noMoney = (c) => c.json({ error: 'not for you — ask a manager under Admin → Permissions' }, 403);
 const j = (v, d) => { try { return typeof v === 'string' ? JSON.parse(v) : (v ?? d); } catch { return d; } };
 const day = (d) => (d instanceof Date ? d.toISOString().slice(0, 10) : String(d ?? '').slice(0, 10));
 const ratingWord = (scale, code) => scale?.steps?.find((s) => s.code === code)?.word || scale?.candidates?.find((x) => x.code === code)?.name || code;
@@ -104,10 +112,20 @@ const totals = async (db, ws) => {
 api.get('/reports', async (c) => {
   const ctx = c.get('ctx'); const db = c.get('db'); const ws = ctx.workspaceId;
   if (!DESK.includes(ctx.role)) return refuse(c);
+  const money = hasMoney(ctx);
   const out = { totals: await totals(db, ws), reports: {} };
-  for (const [name, fn] of Object.entries(REPORTS)) out.reports[name] = await fn(db, ws, ctx);
+  // Same key and shape without Donations, so a tab still on the old page
+  // (it reads t.donations.cents unguarded) shows $0.00 until it reloads.
+  if (!money) out.totals.donations = { gifts: null, cents: null, donors: null, hidden: true };
+  for (const [name, fn] of Object.entries(REPORTS)) {
+    if (!money && MONEY_REPORTS.includes(name)) continue;
+    out.reports[name] = await fn(db, ws, ctx);
+  }
   return c.json(out);
 });
+
+// Quick reports (quick.js) on their own prefix, before /reports/:name.
+mountQuick(api);
 
 api.get('/reports/:name', async (c) => {
   const ctx = c.get('ctx'); const db = c.get('db');
@@ -115,6 +133,7 @@ api.get('/reports/:name', async (c) => {
   const name = c.req.param('name').replace(/\.csv$/, '');
   const fn = REPORTS[name];
   if (!fn) return c.json({ error: 'no such report' }, 404);
+  if (MONEY_REPORTS.includes(name) && !hasMoney(ctx)) return noMoney(c);
   const r = await fn(db, ctx.workspaceId, ctx);
   return csvResponse(c, `report-${name}`, r.head, r.rows);
 });
@@ -158,6 +177,7 @@ api.get('/export/:dataset', async (c) => {
   const name = c.req.param('dataset').replace(/\.csv$/, '');
   const ds = DATASETS[name];
   if (!ds) return c.json({ error: 'no such export' }, 404);
+  if (MONEY_DATASETS.includes(name) && !hasMoney(ctx)) return noMoney(c);
   const { rows } = await db.query(ds.sql, [ctx.workspaceId]);
   const head = rows.length ? Object.keys(rows[0]).filter((k) => k !== '_id') : [];
   // People: then a column per profile field, named as the field (so People →

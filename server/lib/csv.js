@@ -15,3 +15,31 @@ export const csvResponse = (c, name, head, rows) => {
   c.header('Cache-Control', 'no-store');
   return c.body(csvText(head, rows));
 };
+// The same file, streamed: pages is an async generator of row arrays (each
+// at most a page of a keyset read), so a long report never sits in memory
+// as one string. A failure part way through errors the stream: the browser
+// shows the download as failed, never a short file that looks whole.
+export const csvStream = (c, name, head, pages) => {
+  const enc = new TextEncoder();
+  const it = pages[Symbol.asyncIterator]();
+  const line = (r) => `${r.map(csvCell).join(',')}\r\n`;
+  let started = false;
+  const body = new ReadableStream({
+    async pull(ctrl) {
+      if (!started) { started = true; ctrl.enqueue(enc.encode(`﻿${line(head)}`)); return; }
+      try {
+        const { value, done } = await it.next();
+        if (done) { ctrl.close(); return; }
+        if (value?.length) ctrl.enqueue(enc.encode(value.map(line).join('')));
+      } catch (e) {
+        console.error(`csv ${name}: stopped part way: ${e.message}`);
+        ctrl.error(e);
+      }
+    },
+    cancel() { it.return?.(); },
+  });
+  c.header('Content-Type', 'text/csv; charset=utf-8');
+  c.header('Content-Disposition', `attachment; filename="${csvFileName(name)}"`);
+  c.header('Cache-Control', 'no-store');
+  return c.body(body);
+};
