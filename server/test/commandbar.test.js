@@ -14,7 +14,7 @@ const labels = (items) => items.map((i) => i.label);
 
 test('a manager is offered every job and the settings', () => {
   const { actions, screens } = commandsFor({ role: 'manager', areas: [] }, NAV);
-  assert.deepEqual(labels(actions), ['Add person', 'Log a gift', 'Enter a membership form', 'Draw a turf', 'New shift', 'Write an email', 'Write a text']);
+  assert.deepEqual(labels(actions), ['Add person', 'Log a gift', 'Enter a membership form', 'Draw a turf', 'New shift', 'Write an email', 'Write a text', 'Write a letter']);
   assert.equal(actions.find((a) => a.label === 'New shift').to, '/shifts?add=1', 'the week’s add sheet — by tap — not the long form');
   for (const s of ['Today', 'Donations', 'Members', 'Permissions', 'Services', 'Rating scale', 'Profile fields', 'Your profile']) {
     assert.ok(labels(screens).includes(s), s);

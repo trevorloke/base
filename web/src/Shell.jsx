@@ -28,6 +28,7 @@ import {
 import OfflineSheet from './components/OfflineSheet.jsx';
 import { useThisDevice } from './components/queued.js';
 import { forgetPhoneCopies, keepOnlyMine } from './components/OfflineCache.js';
+import { letterDraftCount, setLetterScope } from './components/letterDrafts.js';
 import { useKeptTime } from './components/KeptCopies.js';
 import { useTextingStatus } from './components/TextingStatus.js';
 import { useShareLocation } from './components/ShareLocation.js';
@@ -269,7 +270,7 @@ function AccountMenu({ me, mode, signingOut, confirmLeft, onSignOut, onCancelSig
   }, [open, close]);
   // The "send first?" question only lives while the menu is open.
   useEffect(() => {
-    if (confirmLeft > 0) { setOpen(true); stayRef.current?.focus(); }
+    if (confirmLeft?.length) { setOpen(true); stayRef.current?.focus(); }
   }, [confirmLeft]);
 
   return (
@@ -296,9 +297,10 @@ function AccountMenu({ me, mode, signingOut, confirmLeft, onSignOut, onCancelSig
         {mode === 'admin' && <a href={fieldHref('/')} className="acct-item">Field app ↗</a>}
         {mode === 'admin' && me.role === 'manager' && <NavLink to="/settings" className="acct-item">Settings</NavLink>}
         {mode === 'admin' && me.role === 'manager' && <NavLink to="/rating-scale" className="acct-item">Rating scale</NavLink>}
-        {confirmLeft > 0 ? (
+        {confirmLeft?.length ? (
           <div className="acct-confirm" role="group" aria-label="Sign out">
-            <p>{confirmLeft} not sent yet. Sign out and delete {confirmLeft === 1 ? 'it' : 'them'}?</p>
+            <p>{confirmLeft.map((l) => `${l.words}.`).join(' ')} {confirmLeft.length === 1 && confirmLeft[0].words.endsWith('not sent yet')
+              ? `Sign out and delete ${confirmLeft[0].count === 1 ? 'it' : 'them'}?` : 'Sign out anyway?'}</p>
             <div className="acct-confirm__row">
               <button type="button" className="btn acct-danger" onClick={() => onSignOut(true)} disabled={signingOut}>
                 {signingOut ? 'Signing out…' : 'Sign out'}
@@ -327,6 +329,7 @@ function SignedInShell({ who, mode }) {
   // are listed and sent while they're signed in (idempotent, so here, before
   // any screen reads the outbox).
   setOutboxOwner(who);
+  setLetterScope(who); // a letter typed here is theirs too (components/letterDrafts.js)
   // Phone copies (components/OfflineCache.js) of anyone else who signed in
   // on this phone go, and any this person kept under another role or more
   // than a day ago; the rest stay for the screens (once per sign-in and
@@ -386,8 +389,9 @@ function SignedInShell({ who, mode }) {
   // question changed meanwhile): said once, until dismissed.
   const [leftOut, setLeftOut] = useState(null);
   const [signingOut, setSigningOut] = useState(false);
-  const [confirmLeft, setConfirmLeft] = useState(0);
-  const cancelSignOut = useCallback(() => setConfirmLeft(0), []);
+  // The sign-out confirm's lines: [{ count, words }], or null.
+  const [confirmLeft, setConfirmLeft] = useState(null);
+  const cancelSignOut = useCallback(() => setConfirmLeft(null), []);
   const onFlushed = useCallback((r) => {
     for (const queryKey of FLUSHED_KEYS) queryClient.invalidateQueries({ queryKey });
     // Knocks just went out, so the signal is back: an old "needs signal" note is stale.
@@ -466,8 +470,14 @@ function SignedInShell({ who, mode }) {
         if (r.sent) onFlushed(r);
       }
       const left = unsentCount();
-      if (left > 0 && !force) {
-        setConfirmLeft(left);
+      // One confirm, one line per kind of thing not sent (a feature with
+      // its own unsent things adds a line here, never a second dialog).
+      const lines = [
+        { count: left, words: `${left} not sent yet` },
+        { count: letterDraftCount(), words: `${letterDraftCount()} ${letterDraftCount() === 1 ? 'letter' : 'letters'} not sent` },
+      ].filter((l) => l.count > 0);
+      if (lines.length && !force) {
+        setConfirmLeft(lines);
         return;
       }
       await apiPost('/auth/logout');
@@ -476,7 +486,7 @@ function SignedInShell({ who, mode }) {
       // What this phone kept for them (doors, calls, shifts, walk lists) goes too.
       forgetPhoneCopies();
       if (left > 0) clearOutbox(); // the next person on this phone must not send them as theirs
-      setConfirmLeft(0);
+      setConfirmLeft(null);
       navigate('/login');
     } catch {
       setNotice('Couldn’t sign out — check your signal and try again');

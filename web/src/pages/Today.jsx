@@ -51,6 +51,8 @@ import { useTextingStatus } from '../components/TextingStatus.js';
 import { NeedsSignal, useOnline } from '../components/NoSignal.jsx';
 import { phoneCopy, useKeepCopy } from '../components/OfflineCache.js';
 import { useRequestsCount } from '../components/RequestsCount.js';
+import { useLettersCount } from '../components/LettersCount.js';
+import { hasArea } from '../Shell.jsx';
 import { MineAllTime } from '../components/FieldReportBits.jsx';
 import { turfNames } from '../components/ShiftTurfs.jsx';
 import { whenText, zoneOf } from '../components/shiftTime.js';
@@ -379,6 +381,13 @@ function LinkRow({ to, state, main, chip, chipCls = 'chip', end, title }) {
 // A screen opened from here says so on its back link ("← Today").
 const FROM_TODAY = { from: { to: '/', label: 'Today' } };
 
+// Letters to the editor (ext/letters): always there for a writer, with
+// the campaign's replies they haven't read (brief.letters).
+function LettersRow({ b }) {
+  const n = Number(b.letters?.unseen) || 0;
+  return <LinkRow to="/letters" main={n > 0 ? <>Your letters · <strong className="mono">{n}</strong> {n === 1 ? 'reply' : 'replies'}</> : 'Letters to the editor'} />;
+}
+
 // ── GOTV mode (ext/voted): on by hand, or by itself on an advance-voting day
 // and election day. The day's one job, for everyone: the supporters who
 // haven't voted yet — call them, or find their doors.
@@ -416,6 +425,8 @@ function NeedsYou({ b, me }) {
   const newVols = prospects.data?.persons?.length ?? 0;
   const followups = useFollowupCount(); // ladder follow-ups for staff
   const requests = useRequestsCount(); // asked for at the doors (ext/requests)
+  // Letters and op-eds volunteers sent in (ext/letters): the desk's, with Media.
+  const letters = useLettersCount(hasArea(me, 'media'));
   // Texts waiting to be read: replies to yours, and numbers that wrote in.
   const newTexts = Number(useTextingStatus(me).data?.unread) || 0;
   const flagged = b.flagged ?? [];
@@ -431,7 +442,7 @@ function NeedsYou({ b, me }) {
   const signs = Number(b.signs?.requested) || 0;
   const shownFlags = flagged.length > 3 ? flagged.slice(0, 2) : flagged;
   const moreFlags = flagged.length - shownFlags.length;
-  const empty = !flagged.length && !newVols && !shortShifts.length && !signs && !followups.n && !newTexts && !requests.n;
+  const empty = !flagged.length && !newVols && !shortShifts.length && !signs && !followups.n && !newTexts && !requests.n && !letters.n;
 
   return (
     <section className="today-section" aria-labelledby="today-needs-h">
@@ -439,7 +450,7 @@ function NeedsYou({ b, me }) {
       {(b.serverWarnings ?? []).map((w) => <p key={w} className="banner today-warning" role="alert">{w}</p>)}
       {empty ? (
         // Don't say "All caught up" before the volunteer count is in.
-        prospects.isPending || followups.pending || requests.pending ? <p className="today-empty" aria-hidden="true">&nbsp;</p> : <p className="today-empty">All caught up.</p>
+        prospects.isPending || followups.pending || requests.pending || letters.pending ? <p className="today-empty" aria-hidden="true">&nbsp;</p> : <p className="today-empty">All caught up.</p>
       ) : (
         <ul className="today-rows">
           {shownFlags.map((g) => (
@@ -464,6 +475,9 @@ function NeedsYou({ b, me }) {
           {followups.n > 0 && (
             <LinkRow to="/follow-ups" state={FROM_TODAY} main={<><strong className="mono">{followups.n}</strong> {plural(followups.n, 'follow-up')}</>}
               chip={followups.overdue > 0 ? `${followups.overdue} overdue` : null} chipCls="chip chip-danger" />
+          )}
+          {letters.n > 0 && (
+            <LinkRow to="/media/letters" state={FROM_TODAY} main={<><strong className="mono">{letters.n}</strong> {plural(letters.n, 'letter')}</>} />
           )}
           {requests.n > 0 && (
             <LinkRow to="/requests" state={FROM_TODAY} main={<><strong className="mono">{requests.n}</strong> {plural(requests.n, 'request')} from the doors</>} />
@@ -775,6 +789,7 @@ function VolunteerToday({ b, me }) {
           <LinkRow to="/share" state={FROM_TODAY}
             main={<>Share · <strong className="mono">{b.share.kits}</strong> {plural(b.share.kits, 'post')}</>} />
         )}
+        <LettersRow b={b} />
       </ul>
 
       <MineLine you={mine.doors} team={f.doors} noun="door" />
@@ -912,8 +927,7 @@ function CandidateToday({ b, me }) {
       )}
       {candTurf && <MapWindow me={me} turfId={candTurf.id} meta={walkMeta(candTurf, doorsLeft(turfStats[candTurf.id]))} />}
 
-      {/* No rows at all: no empty box either. */}
-      {(calling || !ready || next || week > 0 || Number(b.myPeople) > 0 || Number(b.share?.kits) > 0) && <ul className="today-rows today-next">
+      <ul className="today-rows today-next">
         {calling && <LinkRow to="/mainstreet" main="Met someone" />}
         {!ready && <li className="today-need today-row--wait muted" role="status">Loading…</li>}
         {ready && next && (
@@ -932,7 +946,8 @@ function CandidateToday({ b, me }) {
           <LinkRow to="/share" state={FROM_TODAY}
             main={<>Share · <strong className="mono">{num(b.share.kits)}</strong> {plural(Number(b.share.kits), 'post')}</>} />
         )}
-      </ul>}
+        <LettersRow b={b} />
+      </ul>
 
       <YourRace home={home} offline={offline} />
 
@@ -1034,6 +1049,7 @@ function DeskToday({ b, me, toast }) {
           <LinkRow to="/surveys" main="Surveys" />
           <LinkRow to="/scripts" main="Scripts" />
           <LinkRow to="/mainstreet" main="Mainstreeting" />
+          <LinkRow to="/letters" main={Number(b.letters?.unseen) > 0 ? <>Your letters · <strong className="mono">{num(b.letters.unseen)}</strong> {Number(b.letters.unseen) === 1 ? 'reply' : 'replies'}</> : 'Your letters'} />
           {isManager && <LinkRow to="/settings" main={<>Settings <span className="muted">· members, teams, permissions</span></>} />}
           {b.providers && (!b.providers.email || !b.providers.text) && (
             <LinkRow to="/outreach/connect" main="Connect email & texting" />

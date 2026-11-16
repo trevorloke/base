@@ -35,6 +35,9 @@ const PREFIX = `${NS}copy:v1:`;
 // The walk list's own copies (pages/Turfs.jsx) are forgotten with these.
 const FIELD_PREFIX = `${NS}field:v1:`;
 const TTL = 24 * 3600 * 1000;
+// A letter typed on this phone (components/letterDrafts.js) is kept two
+// weeks: a half-written op-ed must survive a weekend.
+const LETTERS_TTL = 14 * 24 * 3600 * 1000;
 const ENTRY_MAX = 1_500_000; // characters of JSON
 const TOTAL_MAX = 3_000_000;
 
@@ -194,7 +197,7 @@ const forget = (keep) => {
         if (keep && !keep.all && rest.startsWith(keep.scope)) {
           const name = rest.slice(keep.scope.length);
           const madeAs = /^q:([a-z]+):/.exec(name)?.[1];
-          const old = name !== 'scale' && !(Date.now() - atOf(store.getItem(k)) < TTL);
+          const old = name !== 'scale' && !(Date.now() - atOf(store.getItem(k)) < (name.startsWith('letters:') ? LETTERS_TTL : TTL));
           if (!old && (!madeAs || madeAs === keep.role)) continue;
         }
         store.removeItem(k);

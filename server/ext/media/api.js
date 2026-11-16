@@ -4,10 +4,17 @@
 // anyone else both are null, after the volunteer rule (lib/viewer.js).
 //
 //   GET /media/contacts       { contacts: [{ person, kind, outlet, beat, note,
-//                             reachable, why, last }], counts: { media,
-//                             influencer, emailable: { media, influencer, all } } }
+//                             lists, reachable, why, last }], counts: { media,
+//                             influencer, emailable: { media, influencer, all },
+//                             lists: { op_ed, letters, show } } }
 //                             why: the first reason a release won't reach
-//                             them (lib/reach.js). At most 2,000.
+//                             them (lib/reach.js). At most 2,000. ?list=
+//                             op_ed|letters|show: that list's live contacts
+//                             only; with &emails=1 (the desk's "Copy
+//                             emails") { emails } — only addresses a release
+//                             may reach.
+//   GET /media/outlets        the live outlets, every field, and who last
+//                             checked their rules (confirmed_by_name)
 //   GET /media/releases       the press releases, newest first (200), with
 //                             GET /blasts' counting fields and opened,
 //                             clicked, bounced, ab_status, from_addr
@@ -31,7 +38,8 @@ import { attachmentsOf } from '../abtests/attach.js';
 import { toWords } from '@starbase/shared/email/words';
 import { sendStats, statsBody } from '../abtests/stats.js';
 import { emailConfigured } from '../../lib/notify.js';
-import { isDesk, kindOf, onMedia } from './rules.js';
+import { LISTS, isDesk, kindOf, listsOf, onLists, onMedia } from './rules.js';
+import { outletOut } from './actions.js';
 
 export const api = new Hono();
 
@@ -55,12 +63,31 @@ const shown = (ctx) => {
   };
 };
 
+// On a list and still on the media list: every list read goes through this.
+const onListSql = (list) => `exists (select 1 from media_contacts ml where ml.workspace_id = p.workspace_id and ml.person_id = p.id and ${onLists('ml', [list])})`;
+
 api.get('/media/contacts', async (c) => {
   const ctx = c.get('ctx');
   if (!mayRead(ctx)) return refuse(c);
   const db = c.get('db');
+  const list = c.req.query('list');
+  if (list !== undefined && !LISTS.includes(list)) return c.json({ error: 'no such list' }, 400);
+  if (c.req.query('emails') === '1') {
+    // Copy emails: the desk's own, for a one-off pitch from their own mail —
+    // only who a release would reach (no do-not-email, bounced, unsubscribed).
+    if (!isDesk(ctx)) return c.json({ error: 'only the desk copies emails' }, 403);
+    if (!list) return c.json({ error: 'pick a list' }, 400);
+    const emails = (await db.query(
+      `select distinct lower(p.email) as email from persons p
+       where p.workspace_id = $1 and p.deleted_at is null and ${onMedia('p')} and ${onListSql(list)}
+         and ${mayReach('email', 'press', P)}
+       order by 1 limit ${CONTACTS_MAX}`,
+      [ctx.workspaceId],
+    )).rows.map((r) => r.email);
+    return c.json({ emails });
+  }
   const { rows } = await db.query(
-    `select p.id, p.name, p.email, p.phone, p.socials, p.tags, m.outlet, m.beat, m.note,
+    `select p.id, p.name, p.email, p.phone, p.socials, p.tags, m.outlet, m.beat, m.note, m.lists,
             ${whyNotSql('email', 'press', P)} as why, l.*
      from persons p
      left join media_contacts m on m.workspace_id = p.workspace_id and m.person_id = p.id
@@ -73,7 +100,7 @@ api.get('/media/contacts', async (c) => {
        where r.workspace_id = p.workspace_id and r.person_id = p.id and b.kind = 'press' and r.status = 'sent'
        order by b.created_at desc limit 1
      ) l on true
-     where p.workspace_id = $1 and p.deleted_at is null and ${onMedia('p')}
+     where p.workspace_id = $1 and p.deleted_at is null and ${onMedia('p')} ${list ? `and ${onListSql(list)}` : ''}
      order by case when ${onMedia('p', ['media'])} then 0 else 1 end, lower(coalesce(m.outlet, '')) = '', lower(m.outlet), ${azKey('p')}
      limit ${CONTACTS_MAX}`,
     [ctx.workspaceId],
@@ -83,7 +110,8 @@ api.get('/media/contacts', async (c) => {
             (count(*) filter (where not ${onMedia('p', ['media'])}))::int as influencer,
             (count(*) filter (where ok and ${onMedia('p', ['media'])}))::int as e_media,
             (count(*) filter (where ok and ${onMedia('p', ['influencer'])}))::int as e_influencer,
-            (count(*) filter (where ok))::int as e_all
+            (count(*) filter (where ok))::int as e_all,
+            ${LISTS.map((k) => `(count(*) filter (where ${onListSql(k)}))::int as l_${k}`).join(', ')}
      from persons p cross join lateral (select ${mayReach('email', 'press', P)} as ok) x
      where p.workspace_id = $1 and p.deleted_at is null and ${onMedia('p')}`,
     [ctx.workspaceId],
@@ -94,7 +122,7 @@ api.get('/media/contacts', async (c) => {
       const tags = parseJ(r.tags, []);
       const p = see({ id: r.id, name: r.name, email: r.email, phone: r.phone, socials: parseJ(r.socials, {}) || {}, tags });
       return {
-        person: p, kind: kindOf(tags), outlet: r.outlet, beat: r.beat, note: r.note,
+        person: p, kind: kindOf(tags), outlet: r.outlet, beat: r.beat, note: r.note, lists: listsOf(parseJ(r.lists, [])),
         reachable: !r.why, why: r.why || null,
         last: r.release_id ? { release_id: r.release_id, subject: toWords(r.subject), sent_at: r.sent_at, opened: !!r.opened, bounced: !!r.bounced_at } : null,
       };
@@ -102,8 +130,21 @@ api.get('/media/contacts', async (c) => {
     counts: {
       media: counts.media, influencer: counts.influencer,
       emailable: { media: counts.e_media, influencer: counts.e_influencer, all: counts.e_all },
+      lists: Object.fromEntries(LISTS.map((k) => [k, counts[`l_${k}`]])),
     },
   });
+});
+
+// Outlets: public facts, for anyone holding Media; edits are the desk's.
+api.get('/media/outlets', async (c) => {
+  const ctx = c.get('ctx');
+  if (!mayRead(ctx)) return refuse(c);
+  const rows = (await c.get('db').query(
+    `select o.*, u.name as confirmed_by_name from media_outlets o left join users u on u.id = o.confirmed_by
+     where o.workspace_id = $1 and o.deleted_at is null order by lower(o.name), o.id`,
+    [ctx.workspaceId],
+  )).rows;
+  return c.json({ outlets: rows.map((r) => ({ ...outletOut(r), confirmed_by_name: r.confirmed_by_name || null })) });
 });
 
 // The same counts per send as GET /blasts (routes/api.js says what each

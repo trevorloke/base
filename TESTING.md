@@ -530,6 +530,35 @@ one tap away under **More**.
   Server tests: `server/test/site-*.test.js`; in a browser:
   `e2e-site-server.mjs`.
 
+- **Letters and Media's lists** — `server/test/letters.test.js`: a letter
+  from New to Published, the desk's suggestion beside the writer's text,
+  Keep mine, agreement only on the newest writer draft, sends always
+  recorded and flagged while an exclusive paper has it (same newsroom
+  not), Not published back to Ready, who may read and act (another
+  writer's letter is 404, a volunteer granted Media 403 on the queue, staff
+  denied Media still write), no words in the log, no sign-off in the
+  export, the 30-day purge and Today's counts.
+  `server/test/letters-checks.test.js`: the campaign's share of an agreed
+  letter (a rewrite taken in full ≥ 0.9, Keep mine 0, never on the log),
+  repeats of the talking points or a release of the last 60 days shown to
+  the writer, other writers' shared runs to the desk only (same newsroom
+  first), and the reply email (once an hour, with the link and none of the
+  letter; not when turned off or bounced). `server/test/letters-shared.test.js`:
+  shared/letters.js — counting (Punjabi, Chinese), the change-by-change
+  round trip, the share, the 8-word / 20-character runs and the mailto: link.
+  `server/test/media-lists.test.js`: outlets (rename carries contacts,
+  name taken 409, checked), the three lists, Copy emails, a release to one
+  list, the merge's union and the migration run twice.
+  In a browser: `node e2e-letters.mjs` (PORT 5480, SHOTS; the stand-in
+  sender on PORT+1) — an outlet and a contact on two lists, Copy emails and
+  a release's *Only:*; a volunteer's letter written with its route blocked
+  (kept through a reload, sent once back, the paper removed meanwhile →
+  *Pick a paper again*), a refused letter's *Copy text* and *Back to
+  draft*, a suggestion taken change by change, *Keep mine*, *This is my
+  final text* with the campaign's share, *Send it* (the mail link and the
+  clipboard, a paper greyed while another still has it, a form paper), the
+  talking points and another writer's shared words, sign-out with an
+  unsent letter, and a volunteer granted Media (no queue, no Copy emails).
 - **Media and From addresses** — Settings → Services → Email → *From
   addresses*: add an address at MAIL_FROM's domain (another domain is
   refused) and make it the press default; a release then goes from it.

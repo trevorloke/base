@@ -1005,6 +1005,68 @@ their profile, to message them) and each release's page: who got it,
 opened it or bounced, Try again, and Copy links (the video, the Drive
 folder) to paste into a message to an influencer.
 
+**Media's outlets and lists.** An outlet is a paper, station or show with
+its letters and op-ed address or web form, its length limits (in words or
+characters), whether it wants a letter only for itself, local writers
+only, no candidates, a word about working with a campaign, and what it asks
+a writer for (phone, address); "I checked these today" stamps its rules.
+The list starts empty and only the desk edits it (`media.outlet.save`,
+`.remove`); anyone holding Media reads it. Contacts link to an outlet by
+its name, any capitals, and a rename carries them. A contact may be on
+**Op-ed editors**, **Letters editors** and **Show hosts** (hosts and
+producers: radio, TV, podcasts), any or all; only contacts still on the
+media list count. A release's *Only:* sends to some of the lists — it
+narrows the audience, never widens it — and the desk can copy a list's
+emails, only those a release may reach (`GET /api/media/contacts?list=…&emails=1`).
+
+**Letters to the editor and op-eds** (`server/ext/letters`). A volunteer
+writes a letter or an op-ed, picks up to three papers that take it and
+sends it to the campaign; it goes through the phone's outbox
+(`myletter.submit`), and a paper removed meanwhile is dropped, never a
+refusal. The desk (staff and managers with Media, never a volunteer
+whatever they were granted: the queue holds writers' addresses and phones)
+writes notes and suggests edits (`letter.*`); the writer keeps their words
+or takes changes, and only they can say "This is my final text" (Ready).
+They send it themselves, from their own email — base.win never sends a
+letter for them — and say so (`myletter.sent`, always recorded; sent
+while an exclusive paper still had it, the desk sees which). A paper that
+didn't print it sends it back to Ready for another. The event log holds
+which draft was agreed (its sha256), never a letter's words; the export
+leaves the sign-off out; the sign-off is read from the writer's own record
+and kept on a letter only where they changed it, and the address and phone
+typed for it go 30 days after it closes (at once when withdrawn).
+Talking points for writers: `letter.points`; the wait before another paper
+(10 days by default): `letter.settings`, managers. A writer whose letter
+repeats eight words in a row (twenty Chinese characters) of the talking
+points or a press release of the last 60 days is told "These words are the
+campaign's — say it your way" (`campaign_words`; never a block); the desk
+also sees other writers' letters of the last 60 days that share such a run
+(the same paper or newsroom first), and how much of a letter is the
+campaign's suggested words (`campaign_share`; kept on the letter when the
+writer agrees, never on the log). After the desk suggests, writes, declines
+or marks it published, the writer gets one email, "The campaign replied
+about your letter" — the link, never the letter's words, a note or a
+paper's name — at most one an hour, unless they turned it off on the
+letter; with no email connected nothing is sent. Counting, the comparison
+and the email link are `shared/letters.js`, shared with the field app.
+
+On screen: the field app's **Letters** (a Today row, "Your letters · 1
+reply" when the campaign wrote back; `/letters`): *Write a letter* (Letter
+or Op-ed, the papers with each one's rules, the count against its limit, a
+headline idea, the sign-off under *More details*), a letter's page (each
+suggested change marked in place with *Take* or *Leave*; *Keep mine*;
+*This is my final text*, which says how much of it is the campaign's words
+when that's 20% or more), and *Send it* — it copies the text and opens the
+writer's own email with the paper's address, a subject they can change and
+the agreed text (the text alone when the link would be too long), or the
+paper's web form; then *I sent it*. What's typed is kept on the phone for
+that sign-in (two weeks) until the server has it, and sign-out counts an
+unsent letter. The desk: Media → **Letters** (the queue, a letter in place:
+*Suggest an edit*, notes, *Assign to…*, *Decline*, *They told us they sent
+it*, *Published: paste the link*; *Ideas for writers* under More), Media →
+**Outlets**, "N letters" in Today's *Needs you*, and *Write a letter* in
+the command bar; Settings → Campaign → *Wait before another paper*.
+
 **From addresses.** Settings → Services → Email → *From addresses*: a
 manager adds up to ten addresses at MAIL_FROM's own domain (a name and an
 address; anything else is refused) and picks the default for email and
