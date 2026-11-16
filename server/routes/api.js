@@ -28,12 +28,14 @@ import { forViewer, loginEmail } from '../lib/viewer.js';
 import { geoBox } from '../lib/org.js';
 import { RATING_CODE_RE } from '@starbase/shared/scale';
 import { personsWhere, joinWhere } from '../lib/audience.js';
+import { azKey, azAfter } from '../lib/az.js';
 import { mayReach, address, person, person as personCols, noCallSql, whyNotSql, NO_CONTACT } from '../lib/reach.js';
 // Which saved newsletter / press rows Try again would reach (ext/abtests).
 import { goingRow, repeatRow, retryable, sendJobOn } from '../ext/abtests/send.js';
 import { notSuppressed } from '../lib/mail/index.js';
 import { attachmentsOf } from '../ext/abtests/attach.js';
 import { onMedia } from '../ext/media/rules.js';
+import { toWords } from '@starbase/shared/email/words';
 // The open pass (ext/passes) and the door rule it shares with the phone.
 import { openPass, listedWhere } from '../ext/passes/rule.js';
 import { doorState, inPass } from '@starbase/shared/passes';
@@ -180,8 +182,7 @@ const personRow = (r) => ({
 // list, its count and every send agree. Anything else names nobody.
 const REACH_SQL = { call: () => mayReach('call', 'bank', person('p', '$1')), text: () => mayReach('text', 'list', person('p', '$1')) };
 const reachSql = (want) => (!want ? '' : REACH_SQL[want] ? ` and ${REACH_SQL[want]()}` : ' and false');
-// A person's place in the name order, for ?after= and ?until= ($n: their id).
-const byName = (n) => `(select lower(a.name), a.id from persons a where a.id = $${n} and a.workspace_id = $1)`;
+// ?after= and ?until= page in the A–Z order (lib/az.js), the ORDER BY's own key.
 
 app.get('/persons', async (c) => {
   const ctx = c.get('ctx');
@@ -201,7 +202,7 @@ app.get('/persons', async (c) => {
     if (!id) continue;
     if (!UUID_RE.test(id)) { from += ' and false'; continue; }
     params.push(id);
-    from += ` and (lower(p.name), p.id) ${op} ${byName(params.length)}`;
+    from += ` and ${azAfter('p', params.length, op)}`;
   }
   // note: their own words from the volunteer form (attrs.note), so the call
   // card needs no per-person fetch. Nothing else from attrs is exposed.
@@ -211,7 +212,7 @@ app.get('/persons', async (c) => {
     `select p.id, p.kind, p.name, p.first_name, p.middle_name, p.last_name, p.email, p.phone, p.address, p.house_number, p.unit, p.city, p.postal,
             p.lat, p.lng, p.tags, p.socials, p.rating, p.rated_at, p.voted_at, p.attrs->>'note' as note${withFollowers ? ', p.followers' : ''}
      from persons p where ${where}${reachSql(c.req.query('reach'))}${from}
-     order by lower(p.name), p.id limit $4`,
+     order by ${azKey('p')} limit $4`,
     params,
   );
   return c.json({ persons: rows.slice(0, limit).map(personRow).map(forViewer(ctx)), more: rows.length > limit });
@@ -263,13 +264,16 @@ const bboxParam = (v) => {
 const DOOR_COLS = 'id, name, phone, email, address, house_number, unit, lat, lng, rating, rated_at, voted_at, tags';
 
 // The doors inside the turfs someone walks (and their own record): read by
-// the turfs' corners, then kept to the outlines.
-const turfDoors = async (db, ctx) => {
-  const rings = (await db.query(
-    `select t.polygon from turfs t join turf_members m on m.turf_id = t.id and m.user_id = $2
-     where t.workspace_id = $1 and t.deleted_at is null`,
+// the turfs' corners, then kept to the outlines. { signs: false } skips the
+// signs (the front page's map draws none).
+const turfDoors = async (db, ctx, { signs: withSigns = true } = {}) => {
+  const outlines = (await db.query(
+    `select t.id, t.name, t.color, t.polygon from turfs t join turf_members m on m.turf_id = t.id and m.user_id = $2
+     where t.workspace_id = $1 and t.deleted_at is null order by t.created_at`,
     [ctx.workspaceId, ctx.user.id],
-  )).rows.map((t) => parseJson(t.polygon, []).map(([lat, lng]) => [Number(lat), Number(lng)])).filter((r) => r.length >= 3);
+  )).rows.map((t) => ({ id: t.id, name: t.name, color: t.color, polygon: parseJson(t.polygon, []).map(([lat, lng]) => [Number(lat), Number(lng)]) }))
+    .filter((t) => t.polygon.length >= 3);
+  const rings = outlines.map((t) => t.polygon);
   const inTurf = (lat, lng) => lat != null && rings.some((r) => pointInPolygon(Number(lat), Number(lng), r));
   const mine = loginEmail(ctx);
   const boxes = rings.map(boxOf).filter(Boolean);
@@ -292,6 +296,7 @@ const turfDoors = async (db, ctx) => {
     .sort(byAddress).slice(0, 20000);
   // A sign is theirs if it stands in a turf, or belongs to someone who
   // lives there (a sign asked for before its person had a pin has none).
+  if (!withSigns) return { rings, outlines, persons, signs: [] };
   const ids = new Set(persons.map((p) => p.id));
   const signs = (await db.query(
     `select id, person_id, address, lat, lng, kind, status from signs where workspace_id = $1 and status <> 'removed'`,
@@ -396,6 +401,15 @@ app.use('/map/doors', (c, next) => (c.req.query('bbox') ? gzip(c, next) : next()
 app.get('/map/doors', async (c) => {
   const ctx = c.get('ctx');
   const db = c.get('db');
+  // ?mine=1 — the front page's map window: the doors of the caller's own
+  // turfs (and their own record) and those turfs' outlines, for any role.
+  // Read by the turfs' boxes and the email index only: never the counts
+  // over the whole list below, which at 300,000 people would run on every
+  // visit to Today.
+  if (c.req.query('mine') === '1') {
+    const { rings, outlines, persons } = await turfDoors(db, ctx, { signs: false });
+    return c.json({ persons: persons.map(forViewer(ctx)), unlocated: 0, scope: 'mine', turfs: rings.length, outlines });
+  }
   if (turfsOnly(ctx)) {
     // Only the turfs they walk (and their own record).
     const { rings, persons, signs } = await turfDoors(db, ctx);
@@ -539,9 +553,10 @@ app.get('/persons/:id', async (c) => {
   const donor = await tierFor(db, ctx.workspaceId, person.id);
   // dnc: asked not to be contacted (any capitals) — the desk's key line leaves them out.
   const household = (await db.query(
-    `select id, name, rating, lower(tags::text) like $5 as dnc from persons
-     where workspace_id = $1 and deleted_at is null and id <> $2 and address is not null
-       and lower(address) = lower($3) and coalesce(unit, '') = coalesce($4, '')`,
+    `select p.id, p.name, p.rating, lower(p.tags::text) like $5 as dnc from persons p
+     where p.workspace_id = $1 and p.deleted_at is null and p.id <> $2 and p.address is not null
+       and lower(p.address) = lower($3) and coalesce(p.unit, '') = coalesce($4, '')
+     order by ${azKey('p')}`,
     [ctx.workspaceId, person.id, person.address || '', person.unit || null, `%"${NO_CONTACT}"%`],
   )).rows;
   if (ctx.role === 'volunteer') {
@@ -878,7 +893,7 @@ app.get('/shifts/board', async (c) => {
     `select a.id, a.shift_id, a.person_id, a.status, p.name
      from shift_assignments a join persons p on p.id = a.person_id
      where a.workspace_id = $1 and a.shift_id = any($2::uuid[]) and a.status in ('assigned', 'confirmed', 'completed')
-     order by lower(p.name)`,
+     order by ${azKey('p')}`,
     [ctx.workspaceId, ids],
   )).rows : [];
   const people = (await db.query(
@@ -897,7 +912,7 @@ app.get('/shifts/board', async (c) => {
                     where r.workspace_id = p.workspace_id and r.person_id = p.id and r.kind = 'volunteer' and r.done_at is null) as asked
      from persons p join ids on ids.id = p.id
      where p.workspace_id = $1 and p.deleted_at is null
-     order by lower(p.name), p.id limit 1000`,
+     order by ${azKey('p')} limit 1000`,
     [ctx.workspaceId],
   )).rows.map((p) => ({ ...p, roles: typeof p.roles === 'string' ? JSON.parse(p.roles) : p.roles, asked: !!p.asked }));
   return c.json({ shifts, assignments, people });
@@ -919,7 +934,7 @@ app.get('/shifts/:id', async (c) => {
     `select a.id as assignment_id, a.status, a.notified_at, a.notify_email, a.notify_text, a.arrive_at, a.leave_at,
             p.id, p.name, p.email, p.phone, ${noCallSql('p')} as no_call, (lower(p.email) = $3) as is_me
      from shift_assignments a join persons p on p.id = a.person_id
-     where a.shift_id = $1 and a.workspace_id = $2 order by p.name`,
+     where a.shift_id = $1 and a.workspace_id = $2 order by ${azKey('p')}`,
     [shift.id, ctx.workspaceId, myEmail],
   )).rows.map((a) => ({ ...a, is_me: !!a.is_me }));
   // Volunteers see who else is on the shift, not how to reach them, nor the
@@ -1005,7 +1020,9 @@ app.get('/blasts', async (c) => {
   const files = await attachmentsOf(c.get('db'), ctx.workspaceId);
   const parseJ = (v) => { try { return typeof v === 'string' ? JSON.parse(v) : v; } catch { return null; } };
   return c.json({
-    blasts: rows.map((b) => ({ ...b, audience: parseJ(b.audience) || null, attachments: files[b.id] || [] })),
+    // The subject in words ("Thank you, [first name]"), as the compose shows
+    // it — and as an older screen compares it to what was typed.
+    blasts: rows.map((b) => ({ ...b, subject: toWords(b.subject), audience: parseJ(b.audience) || null, attachments: files[b.id] || [] })),
     mediaContacts: media, emailConfigured: emailConfigured(), textConfigured: textConfigured(),
   });
 });
@@ -1098,9 +1115,13 @@ app.get('/brief', async (c) => {
     }
     await nameMaybes(db, ws, flagged, (g) => g.maybe_same_donor);
   }
-  const people = (await db.query(
+  // The whole list's numbers (people on file, the support picture) are the
+  // desk's: a volunteer's Today shows neither, and at 300,000 people each
+  // count costs every visit.
+  const wholeList = ctx.role !== 'volunteer';
+  const people = wholeList ? (await db.query(
     `select count(*)::int as total from persons where workspace_id = $1 and deleted_at is null`, [ws],
-  )).rows[0];
+  )).rows[0] : null;
   // Field, over the last 7 days (rolling): doors are DISTINCT doors knocked —
   // a household rated twice, or a rating changed, is still one door; the key
   // is the address + unit (the walk list's grouping), or the person when they
@@ -1123,10 +1144,10 @@ app.get('/brief', async (c) => {
        where c.workspace_id = $1 and c.created_at >= now() - interval '7 days'
      ) w`, [ws, ctx.user.id],
   )).rows[0];
-  const ratings = (await db.query(
+  const ratings = wholeList ? (await db.query(
     `select rating, count(*)::int as n from persons
      where workspace_id = $1 and deleted_at is null and rating is not null group by rating`, [ws],
-  )).rows;
+  )).rows : [];
   const shifts = (await db.query(
     `select s.id, s.title, s.starts_at, s.location, s.capacity, s.kind, s.need,
             (select count(*)::int from shift_assignments a where a.shift_id = s.id and a.status in ('assigned', 'confirmed', 'completed')) as filled,

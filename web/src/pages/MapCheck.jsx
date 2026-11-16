@@ -8,22 +8,46 @@
 // which trouble a manager is looking at. Whether the services behind the
 // map answer (Google's tiles, address lookup) is asked apart — it waits on
 // them, up to 8 s — so the other lines never wait for it.
-//   facts()  what the page knows now: { build, look, tilesFrom, tiles, size, zoom }
+//   facts()  what the page knows now: { build, look, tilesFrom, tiles, size, zoom, picture }
+//   onAgain()  Check again, on the page: the street map asked afresh
+// Under the Street map line, the tile under the map's middle as this phone
+// gets it (an image, never read as markup): "API KEY REQUIRED", a block
+// notice or real streets can be read straight off a screenshot.
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiGet } from '../api.js';
 import { clockText } from '../offline.js';
 import { checkLines, timeOfDay } from './mapView.js';
 import './mapservices.css';
+import './mapcheckpic.css';
 
-export default function MapCheck({ facts, onClose }) {
+function TilePicture({ picture }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => { setFailed(false); }, [picture.src]);
+  if (picture.small) {
+    return failed ? null : (
+      <span className="map-check__picture map-check__picture--small">
+        <img src={picture.src} alt={picture.alt} title={picture.label} width="36" height="36" onError={() => setFailed(true)} />
+      </span>
+    );
+  }
+  return (
+    <dd className="map-check__picture">
+      <span>{picture.label}</span>
+      {failed ? <span className="map-check__nopic">{picture.failed}</span>
+        : <img src={picture.src} alt={picture.alt} width="128" height="128" onError={() => setFailed(true)} />}
+    </dd>
+  );
+}
+
+export default function MapCheck({ facts, onClose, onAgain }) {
   // Asked for each time the sheet opens: a check is about now.
   const q = useQuery({ queryKey: ['mapCheck'], queryFn: () => apiGet('/map/check'), staleTime: 0, gcTime: 0, retry: 1 });
   const sq = useQuery({ queryKey: ['mapCheckServices'], queryFn: () => apiGet('/map/check/services'), staleTime: 0, gcTime: 0, retry: 0 });
   const services = sq.data && !sq.isFetching ? { state: 'ok', data: sq.data }
     : sq.fetchStatus === 'paused' ? { state: 'offline' }
       : sq.isError && !sq.isFetching ? { state: 'error' } : { state: 'pending' };
-  const again = () => { q.refetch(); sq.refetch(); };
+  const again = () => { q.refetch(); sq.refetch(); onAgain?.(); };
   // The page's own facts move under the sheet (tiles arrive, the map is
   // dragged): looked at again every second.
   const [page, setPage] = useState(facts);
@@ -51,8 +75,9 @@ export default function MapCheck({ facts, onClose }) {
               {lines.map((l) => (
                 <div key={l.key} data-key={l.key} className={`map-check__row${l.warn ? ' is-warn' : ''}`}>
                   <dt>{l.warn && <span className="map-check__flag" role="img" aria-label="Look here">!</span>}<span>{l.label}</span></dt>
-                  <dd className="map-check__value">{l.value}</dd>
+                  <dd className="map-check__value">{l.picture?.small && <TilePicture picture={l.picture} />}{l.value}</dd>
                   {l.note && <dd className="map-check__note">{l.note}</dd>}
+                  {l.picture && !l.picture.small && <TilePicture picture={l.picture} />}
                 </div>
               ))}
             </dl>

@@ -46,8 +46,31 @@ test('one answer says who is on the map, who is not and why, and what the map is
   assert.deepEqual(r.area.box, [49.002, -122.92, 49.222, -122.67]);
   assert.equal(r.turfs, 1);
   assert.deepEqual([r.placing.state, r.placing.remaining, r.placing.retryAt, r.placing.off], ['idle', 2, null, false]);
-  assert.deepEqual([r.tiles.source, r.tiles.custom, r.tiles.clean], ['OpenStreetMap', false, true]);
+  // No CARTO key: Clean isn't offered (it was, before CARTO began sending a
+  // notice instead of streets to requests with no key).
+  assert.deepEqual([r.tiles.source, r.tiles.custom, r.tiles.clean, r.tiles.cartoKey], ['OpenStreetMap', false, false, false]);
   assert.ok('build' in r && 'commit' in r);
+});
+
+test('with the campaign’s CARTO key Clean is offered, and the key itself is never in either answer', async () => {
+  const prev = process.env.STARBASE_TILE_CARTO_KEY;
+  process.env.STARBASE_TILE_CARTO_KEY = ' carto-secret ';
+  try {
+    const r = ok(await mgr.get('/api/map/check'));
+    assert.deepEqual([r.tiles.clean, r.tiles.cartoKey], [true, true]);
+    // (No outside service is asked: every fetch refused here.)
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = () => Promise.reject(new Error('no outside service in this test'));
+    let s;
+    try { s = ok(await mgr.get('/api/map/check/services')); } finally { globalThis.fetch = realFetch; }
+    assert.doesNotMatch(JSON.stringify([r, s]), /carto-secret/);
+    process.env.STARBASE_TILE_CLEAN = 'off';
+    const off = ok(await mgr.get('/api/map/check'));
+    assert.deepEqual([off.tiles.clean, off.tiles.cartoKey], [false, true], 'STARBASE_TILE_CLEAN=off: no Clean, key or not');
+  } finally {
+    delete process.env.STARBASE_TILE_CLEAN;
+    if (prev === undefined) delete process.env.STARBASE_TILE_CARTO_KEY; else process.env.STARBASE_TILE_CARTO_KEY = prev;
+  }
 });
 
 test('it says when address lookup is turned off, and which street map a campaign set', async () => {

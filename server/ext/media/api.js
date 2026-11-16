@@ -23,10 +23,12 @@
 import { Hono } from 'hono';
 import { areasFor } from '../../lib/perms.js';
 import { forViewer } from '../../lib/viewer.js';
+import { azKey } from '../../lib/az.js';
 import { mayReach, person, whyNotSql } from '../../lib/reach.js';
 import { notSuppressed } from '../../lib/mail/index.js';
 import { deliveredRow, goingRow, repeatRow, retryable, sendJobOn } from '../abtests/send.js';
 import { attachmentsOf } from '../abtests/attach.js';
+import { toWords } from '@starbase/shared/email/words';
 import { sendStats, statsBody } from '../abtests/stats.js';
 import { emailConfigured } from '../../lib/notify.js';
 import { isDesk, kindOf, onMedia } from './rules.js';
@@ -72,7 +74,7 @@ api.get('/media/contacts', async (c) => {
        order by b.created_at desc limit 1
      ) l on true
      where p.workspace_id = $1 and p.deleted_at is null and ${onMedia('p')}
-     order by case when ${onMedia('p', ['media'])} then 0 else 1 end, lower(coalesce(m.outlet, '')) = '', lower(m.outlet), lower(p.name), p.id
+     order by case when ${onMedia('p', ['media'])} then 0 else 1 end, lower(coalesce(m.outlet, '')) = '', lower(m.outlet), ${azKey('p')}
      limit ${CONTACTS_MAX}`,
     [ctx.workspaceId],
   );
@@ -94,7 +96,7 @@ api.get('/media/contacts', async (c) => {
       return {
         person: p, kind: kindOf(tags), outlet: r.outlet, beat: r.beat, note: r.note,
         reachable: !r.why, why: r.why || null,
-        last: r.release_id ? { release_id: r.release_id, subject: r.subject, sent_at: r.sent_at, opened: !!r.opened, bounced: !!r.bounced_at } : null,
+        last: r.release_id ? { release_id: r.release_id, subject: toWords(r.subject), sent_at: r.sent_at, opened: !!r.opened, bounced: !!r.bounced_at } : null,
       };
     }),
     counts: {
@@ -140,7 +142,9 @@ const releases = (where) => `select ${RELEASE_COLS}
 
 const releaseOut = (b, files) => {
   const { body, ...rest } = b;
-  return { ...rest, audience: parseJ(b.audience, null), attachments: files[b.id] || [] };
+  // The subject in words ("[first name]"), as GET /blasts answers it: what
+  // the compose's lost-answer check compares with what was typed.
+  return { ...rest, subject: toWords(b.subject), audience: parseJ(b.audience, null), attachments: files[b.id] || [] };
 };
 
 api.get('/media/releases', async (c) => {
@@ -177,7 +181,7 @@ api.get('/media/releases/:id', async (c) => {
      left join persons p on p.id = r.person_id and p.workspace_id = r.workspace_id
      left join media_contacts m on m.workspace_id = r.workspace_id and m.person_id = r.person_id
      where r.workspace_id = $1 and r.blast_id = $2
-     order by lower(coalesce(p.name, r.name, '')), r.id`,
+     order by person_fold(coalesce(p.last_name, p.name, r.name, '')) collate "C", person_fold(coalesce(p.name, r.name, '')) collate "C", r.id`,
     [ctx.workspaceId, id],
   )).rows;
   const files = await attachmentsOf(db, ctx.workspaceId);

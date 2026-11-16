@@ -5,6 +5,7 @@
 // recipients and a phone bank: 'email' one row per address, 'phone' (a
 // text) one row per number, 'call' everyone with a number.
 import { personsWhere, joinWhere } from '../../lib/audience.js';
+import { azKey, azAfter } from '../../lib/az.js';
 import { mayReach, person, emailKey, last10 } from '../../lib/reach.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -67,28 +68,29 @@ export const peopleOf = async (db, ctx, { list = null, filter = null, reach = nu
   params.push(limit, offset);
   const { rows } = await db.query(
     `select p.id, p.name, p.email, p.phone, p.address, p.unit, p.city, p.postal, p.rating, p.tags, p.created_at, count(*) over()::int as total
-     from persons p where ${where} order by lower(p.name), p.id limit $${params.length - 1} offset $${params.length}`,
+     from persons p where ${where} order by ${azKey('p')} limit $${params.length - 1} offset $${params.length}`,
     params,
   );
   return { people: rows.map((r) => ({ ...r, tags: parseJ(r.tags, []) })), total: rows[0]?.total ?? 0 };
 };
 
-// One page of everyone a list names, in name order, after a person's place
-// (after: { key, id } of the last one sent — key is Postgres's own
-// lower(name), so the order and the cursor always agree — or null):
-// the keyset the Google Sheets export reads a big list by, with no cap.
+// One page of everyone a list names, A–Z by last name (azKey, the order of
+// People and the list's CSV), after a person's place (after: { key, id } of
+// the last one sent — the place is read from the id, so a cursor saved
+// before A–Z carries on — or null): the keyset the Google Sheets export
+// reads a big list by, with no cap.
 export const peoplePage = async (db, ctx, { list, after = null, limit = 1000 }) => {
   const w = await whereFor(db, ctx, { list });
   let where = w.where;
   const params = [...w.params];
   if (after) {
-    params.push(String(after.key), after.id);
-    where += ` and (lower(p.name), p.id) > ($${params.length - 1}::text, $${params.length}::uuid)`;
+    params.push(after.id);
+    where += ` and ${azAfter('p', params.length, '>')}`;
   }
   params.push(limit);
   const { rows } = await db.query(
     `select p.id, p.name, p.email, p.phone, p.address, p.unit, p.city, p.postal, p.rating, p.tags, p.created_at, lower(p.name) as _key
-     from persons p where ${where} order by lower(p.name), p.id limit $${params.length}`,
+     from persons p where ${where} order by ${azKey('p')} limit $${params.length}`,
     params,
   );
   return rows.map((r) => ({ ...r, tags: parseJ(r.tags, []) }));
@@ -173,14 +175,14 @@ export const listCounts = async (db, ctx, list, { fresh = false } = {}) => {
 };
 
 // The recipients of a send: one per address or number, the first person
-// (by name) to carry it.
+// (A–Z by last name) to carry it.
 export const recipientsOf = async (db, ctx, { list = null, filter = null, reach }) => {
   const { where, params } = await whereFor(db, ctx, { list, filter });
   const key = reach === 'email' ? emailKey('p.email') : last10('p.phone');
   const { rows } = await db.query(
     `select distinct on (${key}) p.id, p.name, p.email, p.phone
      from persons p where ${where} and ${REACH[reach]()}
-     order by ${key}, lower(p.name), p.id`,
+     order by ${key}, ${azKey('p')}`,
     params,
   );
   return rows;

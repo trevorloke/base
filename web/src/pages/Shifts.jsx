@@ -61,11 +61,12 @@
 // drag volunteers on, onto its turfs, "No walk list", or back off.
 //
 // Also exports two small building blocks:
-//   <PersonPicker onPick={(person) => …} />   type-ahead over /api/persons?q= (Signs uses it)
+//   <PersonPicker onPick={(person) => …} />   the person search's dropdown (Signs uses it)
 //   <FillBar filled={n} capacity={m} />       filled / capacity meter
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useOutletContext, useParams, useSearchParams } from 'react-router-dom';
-import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { PersonPicker } from '../components/PersonPicker.jsx';
 import { VOLUNTEER_ROLES, SHIFT_STATUSES, noCalls, noCallsWord } from '@starbase/shared/canvass';
 import { dayOf, fromInput, toInput } from '@starbase/shared/dayparts';
 import { isPinName, kindOf, pinPoint, placeLabel, shortBy } from '@starbase/shared/shiftkinds';
@@ -172,157 +173,9 @@ export function FillBar({ filled = 0, capacity }) {
   );
 }
 
-// ── Person picker: type-ahead over /api/persons?q=, arrow keys, inline create ──
-// roleHint: a VOLUNTEER_ROLES code; people holding it are listed first with
-// that role as a chip. excludeIds: shown but not pickable (already on it).
-export function PersonPicker({
-  id,
-  onPick,
-  roleHint = null,
-  excludeIds = [],
-  excludeLabel = 'already added',
-  allowCreate = true,
-  placeholder = 'Start typing a name…',
-  meta = (p) => p.email || p.phone || p.address,
-  disabled = false,
-  autoFocus = false,
-}) {
-  const queryClient = useQueryClient();
-  const [q, setQ] = useState('');
-  const [open, setOpen] = useState(false);
-  const [active, setActive] = useState(0);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState(null);
-  const boxRef = useRef(null);
-  const listId = `${id}-options`;
-  const enc = encodeURIComponent;
-
-  const general = useQuery({
-    queryKey: ['persons', 'search', q],
-    queryFn: () => apiGet(`/persons?q=${enc(q)}&limit=8`),
-    enabled: open,
-    placeholderData: keepPreviousData,
-  });
-  const matching = useQuery({
-    queryKey: ['persons', 'search', q, 'role', roleHint],
-    queryFn: () => apiGet(`/persons?q=${enc(q)}&role=${enc(roleHint)}&limit=8`),
-    enabled: open && !!roleHint,
-    placeholderData: keepPreviousData,
-  });
-
-  const excludeKey = excludeIds.join(',');
-  const items = useMemo(() => {
-    const taken = new Set(excludeKey ? excludeKey.split(',') : []);
-    const seen = new Set();
-    const out = [];
-    const add = (p, match) => {
-      if (seen.has(p.id)) return;
-      seen.add(p.id);
-      out.push({ ...p, _match: match, _taken: taken.has(p.id) });
-    };
-    for (const p of (roleHint ? matching.data?.persons : null) ?? []) add(p, true);
-    for (const p of general.data?.persons ?? []) add(p, false);
-    const trimmed = q.trim();
-    if (allowCreate && trimmed && !out.some((p) => p.name.toLowerCase() === trimmed.toLowerCase())) {
-      out.push({ id: '__create__', name: trimmed });
-    }
-    return out;
-  }, [general.data, matching.data, roleHint, excludeKey, q, allowCreate]);
-
-  useEffect(() => {
-    setActive((a) => Math.min(a, Math.max(items.length - 1, 0)));
-  }, [items.length]);
-
-  useEffect(() => {
-    const onDown = (e) => {
-      if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false);
-    };
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, []);
-
-  const choose = async (item) => {
-    if (!item || item._taken || busy) return;
-    setError(null);
-    setBusy(true);
-    try {
-      let person = item;
-      if (item.id === '__create__') {
-        const res = await action('person.create', { name: item.name });
-        queryClient.invalidateQueries({ queryKey: ['persons'] });
-        queryClient.invalidateQueries({ queryKey: ['brief'] });
-        person = res.person;
-      }
-      setQ('');
-      setOpen(false);
-      await onPick?.(person);
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const onKeyDown = (e) => {
-    if (e.key === 'ArrowDown') { e.preventDefault(); setOpen(true); setActive((a) => Math.min(a + 1, items.length - 1)); }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); setActive((a) => Math.max(a - 1, 0)); }
-    else if (e.key === 'Enter') { if (open && items.length) { e.preventDefault(); choose(items[active]); } }
-    else if (e.key === 'Escape') { setOpen(false); }
-  };
-
-  return (
-    <div className="picker ops-picker" ref={boxRef}>
-      <input
-        id={id}
-        className="input"
-        role="combobox"
-        aria-expanded={open && items.length > 0}
-        aria-controls={listId}
-        aria-autocomplete="list"
-        aria-activedescendant={open && items[active] ? `${listId}-${active}` : undefined}
-        autoComplete="off"
-        autoFocus={autoFocus}
-        placeholder={placeholder}
-        value={q}
-        disabled={disabled || busy}
-        onChange={(e) => { setQ(e.target.value); setOpen(true); setActive(0); }}
-        onFocus={() => setOpen(true)}
-        onKeyDown={onKeyDown}
-      />
-      {open && items.length > 0 && (
-        <ul className="picker-list" id={listId} role="listbox">
-          {items.map((item, i) => (
-            <li
-              key={item.id}
-              id={`${listId}-${i}`}
-              role="option"
-              aria-selected={i === active}
-              aria-disabled={item._taken || undefined}
-              className={(i === active ? 'active ' : '') + (item.id === '__create__' ? 'create' : '')}
-              onMouseEnter={() => setActive(i)}
-              onMouseDown={(e) => { e.preventDefault(); choose(item); }}
-            >
-              {item.id === '__create__' ? (
-                <>+ Add new person “{item.name}”</>
-              ) : (
-                <>
-                  <span>{item.name}</span>
-                  {item._match && <span className="chip chip-ok">{roleLabel(roleHint)}</span>}
-                  {item._taken && <span className="chip">{excludeLabel}</span>}
-                  {meta(item) && <span className="meta">{meta(item)}</span>}
-                </>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-      {open && items.length === 0 && q.trim() && general.isSuccess && !general.isPlaceholderData && (
-        <div className="ops-picker-hint" role="status">No one matches “{q.trim()}”.</div>
-      )}
-      {error && <p className="error">{error}</p>}
-    </div>
-  );
-}
+// ── Person picker: the box and dropdown over the person search
+// (components/PersonPicker.jsx); kept exported here, where Signs finds it. ──
+export { PersonPicker };
 
 // ── "More options": the long form. Three fields, the rest under "More
 // details" — a limit on sign-ups among them: nothing asks how many people.

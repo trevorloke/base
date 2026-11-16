@@ -22,7 +22,9 @@
     "./ics": "./ics.js",
     "./contactsfile": "./contactsfile.js",
     "./shifthours": "./shifthours.js",
-    "./site/*": "./site/*.js"
+    "./site/*": "./site/*.js",
+    "./fillwords": "./fillwords.js",
+    "./email/*": "./email/*.js"
   },
   "dependencies": {
     "htm": "^3.1.1",

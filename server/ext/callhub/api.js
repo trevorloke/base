@@ -9,6 +9,7 @@
 // would not take, or still holds though nobody here blocks it now.
 import { Hono } from 'hono';
 import { jobRunnerOn } from '../../lib/jobs.js';
+import { azKey } from '../../lib/az.js';
 import { timeZone } from '../../lib/org.js';
 import { toLocal } from '../../lib/tzsql.js';
 import { callhubOn } from './callhub.js';
@@ -144,7 +145,7 @@ const named = (people) => ({ people: people.slice(0, NAMED), more: Math.max(0, p
 const refusedPeople = async (db, ws, pushId) => (await db.query(
   `select p.id, p.name from callhub_contacts c join persons p on p.id = c.person_id and p.deleted_at is null
     where c.push_id = $1 and c.workspace_id = $2 and c.refused is not null and c.first_on_number
-    order by lower(p.name), p.id limit ${NAMED}`, [pushId, ws],
+    order by ${azKey('p')} limit ${NAMED}`, [pushId, ws],
 )).rows.map((r) => ({ id: r.id, name: r.name }));
 
 // The campaign's do-not-call numbers CallHub would not take: how many, its

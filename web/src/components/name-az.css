@@ -1,0 +1,9 @@
+/* People's rows and the profile's Knows draw the whole name bold, so the
+   surname's own bold (person-search.css) didn't show. Where a name carries
+   one, the rest drops a step and the surname goes up one. */
+.pp-row__name:has(> .name-az),
+.pp-table__name a:has(> .name-az),
+.rel-knows__who a:has(> .name-az) { font-weight: 500; }
+.pp-row__name .name-az,
+.pp-table__name .name-az,
+.rel-knows__who .name-az { font-weight: 700; }

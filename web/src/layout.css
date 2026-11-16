@@ -8,3 +8,15 @@
 @media (max-width: 720px) {
   .page.page--map { padding-bottom: 64px; }
 }
+/* On a desk the Map has no margins and no frame: the whole window beside
+   the menu (the menu keeps its words). The vh line first: a browser without
+   dvh drops the second. measure() (Map.jsx) writes --nav-h on .map-page
+   itself — 0 on a desk. */
+@media (min-width: 721px) {
+  .page.page--map { padding: 0; max-width: none; }
+  .page--map .map-page {
+    height: calc(100vh - var(--nav-h, 0px));
+    height: calc(100dvh - var(--nav-h, 0px));
+    min-height: 0; margin: 0; border: 0; border-radius: 0;
+  }
+}

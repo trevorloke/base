@@ -188,7 +188,7 @@ test('the public address, the address service, the database and Google tiles ans
   assert.equal(toGoogle(), calls);
   resetTiles();
   process.env.GOOGLE_MAPS_TILES = 'off';
-  assert.equal(byKey(await list()).tiles.name, 'Map background (OpenStreetMap and CARTO)');
+  assert.equal(byKey(await list()).tiles.name, 'Map background (OpenStreetMap)');
   assert.match((await check('tiles')).said, /Going live §5/);
   process.env.GOOGLE_MAPS_TILES = '1';
   process.env.GEOCODER = 'off';
@@ -226,12 +226,41 @@ test('the tiles row reads the map’s own setting: the Stadia preset is named, r
     assert.match(u.detail, /STARBASE_TILE_PROVIDER=mapbox isn’t known — use stadia/);
     delete process.env.STARBASE_TILE_PROVIDER;
     const d = byKey(await list()).tiles;
-    assert.deepEqual([d.name, d.state], ['Map background (OpenStreetMap and CARTO)', 'default']);
+    assert.deepEqual([d.name, d.state], ['Map background (OpenStreetMap)', 'default']);
   } finally {
     delete process.env.STARBASE_TILE_PROVIDER;
     delete process.env.STARBASE_TILE_KEY;
     if (google != null) process.env.GOOGLE_MAPS_TILES = google;
     if (key != null) process.env.GOOGLE_MAPS_SERVER_KEY = key;
+  }
+});
+
+test('the free map row says which free map, and why Clean is missing (a choice, never flagged)', async () => {
+  for (const k of ['GOOGLE_MAPS_TILES', 'GOOGLE_MAPS_SERVER_KEY', 'STARBASE_TILE_CARTO_KEY', 'STARBASE_TILE_CLEAN', 'STARBASE_TILE_URL', 'STARBASE_TILE_PROVIDER']) delete process.env[k];
+  const FIRST = 'OpenStreetMap’s free tiles — not for a large team in election week (see Going live §5)';
+  try {
+    let t = byKey(await list()).tiles;
+    assert.deepEqual([t.name, t.state, t.detail], ['Map background (OpenStreetMap)', 'default', `${FIRST} · Clean is off: CARTO’s free map needs a key (STARBASE_TILE_CARTO_KEY)`]);
+    assert.equal((await check('tiles')).said, 'OpenStreetMap’s tiles come straight to each phone · to choose a provider, see Going live §5');
+    process.env.STARBASE_TILE_CARTO_KEY = 'carto-secret';
+    t = byKey(await list()).tiles;
+    assert.deepEqual([t.name, t.state, t.detail], ['Map background (OpenStreetMap and CARTO)', 'default', 'OpenStreetMap’s and CARTO’s free tiles — not for a large team in election week (see Going live §5)']);
+    assert.equal((await check('tiles')).said, 'OpenStreetMap’s and CARTO’s tiles come straight to each phone · to choose a provider, see Going live §5');
+    process.env.STARBASE_TILE_CLEAN = 'off';
+    t = byKey(await list()).tiles;
+    assert.deepEqual([t.name, t.state, t.detail], ['Map background (OpenStreetMap)', 'default', `${FIRST} · Clean is off (STARBASE_TILE_CLEAN=off)`]);
+    assert.doesNotMatch(JSON.stringify(await list()), /carto-secret/);
+    // An address of the campaign's own on CARTO, with no key: not shown as ready.
+    for (const k of ['STARBASE_TILE_CARTO_KEY', 'STARBASE_TILE_CLEAN']) delete process.env[k];
+    process.env.STARBASE_TILE_URL = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+    t = byKey(await list()).tiles;
+    assert.deepEqual([t.name, t.state, t.detail], ['Map background (CARTO)', 'default', 'CARTO needs a key now (STARBASE_TILE_CARTO_KEY)']);
+    // With the key, it is the campaign's own provider, ready.
+    process.env.STARBASE_TILE_CARTO_KEY = 'carto-secret';
+    t = byKey(await list()).tiles;
+    assert.deepEqual([t.name, t.state, t.detail], ['Map background (CARTO)', 'ready', 'CARTO, straight to the phones']);
+  } finally {
+    for (const k of ['STARBASE_TILE_CARTO_KEY', 'STARBASE_TILE_CLEAN', 'STARBASE_TILE_URL']) delete process.env[k];
   }
 });
 
@@ -243,7 +272,7 @@ test('Google’s map row: on with only a key, the offline trade-off said; GOOGLE
   for (const k of ['GOOGLE_MAPS_TILES', 'GOOGLE_MAPS_SERVER_KEY']) delete process.env[k];
   resetTiles();
   let t = byKey(await list()).tiles;
-  assert.deepEqual([t.name, t.state], ['Map background (OpenStreetMap and CARTO)', 'default'], 'nothing set: the free row, unflagged');
+  assert.deepEqual([t.name, t.state], ['Map background (OpenStreetMap)', 'default'], 'nothing set: the free row, unflagged');
   process.env.GOOGLE_MAPS_TILES = '1';
   t = byKey(await list()).tiles;
   assert.deepEqual([t.name, t.state, t.missing], ['Map background (Google Map Tiles)', 'missing', ['GOOGLE_MAPS_SERVER_KEY']], 'turned on with no key: a mistake, shown');
@@ -255,7 +284,15 @@ test('Google’s map row: on with only a key, the offline trade-off said; GOOGLE
     'Google roadmap tiles, through this server · On because a Google key is set · GOOGLE_MAPS_TILES=off turns it off',
     'Phones don’t keep Google’s map for no-signal areas (Google’s terms)',
     'Today: 0 tiles',
+    'While Google isn’t answering: OpenStreetMap’s free map',
   ]);
+  // The free map behind Google: CARTO's with its key, OpenStreetMap's with STARBASE_TILE_CLEAN=off.
+  process.env.STARBASE_TILE_CARTO_KEY = 'ck';
+  assert.equal(byKey(await list()).tiles.detail.split('\n')[3], 'While Google isn’t answering: CARTO’s free map');
+  process.env.STARBASE_TILE_CLEAN = 'off';
+  assert.equal(byKey(await list()).tiles.detail.split('\n')[3], 'While Google isn’t answering: OpenStreetMap’s free map');
+  delete process.env.STARBASE_TILE_CLEAN;
+  delete process.env.STARBASE_TILE_CARTO_KEY;
   process.env.GOOGLE_TILES_DAILY_MAX = '20000';
   assert.equal(byKey(await list()).tiles.detail.split('\n')[2], 'Today: 0 tiles of 20,000 (then the free map until midnight)');
   process.env.GOOGLE_TILES_DAILY_MAX = 'lots';

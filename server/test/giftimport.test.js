@@ -735,7 +735,8 @@ test('a donor is found through an index, never by reading the whole list', async
   assert.equal(seen.length, 2, 'one read by email, one by name');
   const plans = [];
   for (const s of seen) plans.push((await db.query(`explain ${s.sql}`, s.params)).rows.map((r) => Object.values(r)[0]).join('\n'));
-  assert.match(plans[0], /persons_ws_email_idx/, plans[0]);
+  // (or the person search's prefix index on the same lower(email), when the planner prefers it)
+  assert.match(plans[0], /persons_ws_email_(prefix_)?idx/, plans[0]);
   assert.match(plans[1], /persons_same_donor_idx/, plans[1]);
   for (const plan of plans) assert.doesNotMatch(plan, /Seq Scan on persons/, plan);
 });

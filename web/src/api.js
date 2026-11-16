@@ -50,8 +50,12 @@ export const noSignalWords = (write) => (offlineNow()
   : 'No answer — check your signal');
 const unreached = (write) => () => { throw new NoSignalError(noSignalWords(write)); };
 
-export const apiGet = (path) =>
-  fetch(at(`/api${path}`), { credentials: 'same-origin' }).catch(unreached(false)).then(handle);
+// signal: a search's own cancel (a newer term replaced it). A cancelled ask
+// rethrows its AbortError as it is, so it never reads as "No signal".
+export const apiGet = (path, { signal } = {}) =>
+  fetch(at(`/api${path}`), { credentials: 'same-origin', signal })
+    .catch((err) => { if (err?.name === 'AbortError') throw err; return unreached(false)(); })
+    .then(handle);
 
 export const apiPost = (path, body) =>
   fetch(at(`/api${path}`), {

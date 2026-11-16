@@ -1,0 +1,58 @@
+/* The front page's map (MapWindow.jsx): a row that folds and opens it, the
+   map, and one line under it when the street map isn't right. Every height
+   in dvh has the same in vh before it (a browser without dvh drops it). */
+.mapwindow {
+  margin: var(--s-4) 0;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-card);
+  background: var(--paper-0);
+  overflow: hidden;
+}
+.mapwindow__toggle {
+  display: flex; align-items: center; gap: var(--s-2);
+  width: 100%; min-height: 48px; padding: 0 var(--s-4);
+  border: 0; background: none; color: var(--text-1);
+  font: inherit; font-size: 15px; text-align: left; cursor: pointer;
+}
+.mapwindow__toggle:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: -2px; }
+@media (hover: hover) { .mapwindow__toggle:hover { background: var(--paper-1); } }
+.mapwindow__meta {
+  flex: 1; min-width: 0; color: var(--text-3); font-size: 14px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mapwindow__chev { flex: none; color: var(--text-3); transition: transform 0.15s; }
+.mapwindow__toggle[aria-expanded="true"] .mapwindow__chev { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) { .mapwindow__chev { transition: none; } }
+
+.mapwindow__body { border-top: 1px solid var(--rule); }
+.mapwindow__frame { position: relative; background: var(--paper-2); }
+.mapwindow--window .mapwindow__frame { height: min(45vh, 360px); height: min(45dvh, 360px); }
+.mapwindow--band .mapwindow__frame { height: clamp(320px, 50vh, 560px); height: clamp(320px, 50dvh, 560px); }
+.mapwindow__wait { margin: 0; padding: var(--s-4); color: var(--text-3); font-size: 14px; }
+
+/* The Leaflet map, under everything else in the box (z-index: 0 makes its
+   own stacking context, so Leaflet's panes stay inside it). It never takes
+   a swipe: the page scrolls through it. */
+.mapwindow__canvas { position: absolute; inset: 0; z-index: 0; background: var(--paper-2); touch-action: pan-x pan-y; }
+.mapwindow__canvas.leaflet-container { background: var(--paper-2); cursor: pointer; }
+.mapwindow--muted .leaflet-tile-pane { filter: grayscale(1) contrast(0.9) brightness(1.08); }
+.mapwindow--dark .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(0.85) contrast(0.9); }
+.mapwindow__link { position: absolute; inset: 0; z-index: 1; }
+.mapwindow__credit {
+  position: absolute; left: 0; bottom: 0; z-index: 2; max-width: calc(100% - 150px);
+  padding: 1px 6px; font: 10px/1.4 var(--font-mono); color: var(--text-2);
+  background: color-mix(in srgb, var(--paper-0) 85%, transparent);
+  border-top-right-radius: var(--r-sm);
+}
+.mapwindow__credit a { color: var(--text-1); }
+.mapwindow__open { position: absolute; right: var(--s-2); bottom: var(--s-2); z-index: 2; min-height: 48px; background: var(--paper-0); }
+.mapwindow__over {
+  position: absolute; left: 50%; top: var(--s-3); z-index: 2; transform: translateX(-50%);
+  display: flex; align-items: center; gap: var(--s-2); margin: 0; padding: var(--s-1) var(--s-3);
+  white-space: nowrap; /* centred by a transform, it would shrink to fit and break "Try again" */
+  border-radius: var(--r-ctrl); background: var(--paper-0); color: var(--text-2); font-size: 14px;
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--ink) 18%, transparent);
+}
+.mapwindow__retry, .mapwindow__fail .btn { min-height: 48px; }
+.mapwindow__fail { display: flex; align-items: center; gap: var(--s-3); margin: 0; padding: var(--s-3) var(--s-4); color: var(--text-2); font-size: 14px; }
+.mapwindow__note { margin: 0; padding: var(--s-2) var(--s-4); border-top: 1px solid var(--rule); color: var(--text-2); font-size: 14px; }

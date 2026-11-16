@@ -12,6 +12,7 @@
 // Cells are as read (a Date stays a Date): the CSV and the Sheet each
 // write them their own way.
 import { loadScale } from '../scale/rules.js';
+import { azAfter, azCols, azKey } from '../../lib/az.js';
 
 const j = (v, d) => { try { return typeof v === 'string' ? JSON.parse(v) : (v ?? d); } catch { return d; } };
 const day = (d) => (d instanceof Date ? d.toISOString().slice(0, 10) : String(d ?? '').slice(0, 10));
@@ -86,10 +87,12 @@ export const REPORTS = {
 };
 
 // Whole tables, every column a spreadsheet can hold; never a secret token.
-// order: its order, ending in a tie-breaker. People's keyset is ($3, $4);
+// order: its order, ending in a tie-breaker. People's place is $3 (the last one's id, lib/az.js azAfter);
 // the others' keys are their order, each { expression, type, direction },
 // none null (null-safe expressions where a column may be).
 const k = (expr, type, dir = 'asc') => ({ expr, type, dir });
+// People A–Z by last name (lib/az.js), as two text keys.
+const az = (a) => azCols(a).map((expr) => k(expr, 'text'));
 const by = (keys) => ({ keys, order: keys.map((x) => `${x.expr}${x.dir === 'desc' ? ' desc' : ''}`).join(', ') });
 const PEOPLE_COLS = `p.first_name, p.middle_name, p.last_name, p.name, p.email, p.phone, p.unit, p.house_number,
       case when p.house_number is not null and p.address like p.house_number || ' %' then substr(p.address, length(p.house_number) + 2) else p.address end as street,
@@ -98,7 +101,8 @@ const PEOPLE_COLS = `p.first_name, p.middle_name, p.last_name, p.name, p.email, 
 export const DATASETS = {
   // Columns People → Import reads back (a round trip into another campaign).
   people: { sql: `select ${PEOPLE_COLS} from persons p where p.workspace_id = $1 and p.deleted_at is null`,
-    order: 'lower(p.name), p.id', keyset: '(lower(p.name), p.id)', tags: true, fields: true,
+    // A–Z by last name (lib/az.js); the cursor's place is read from its id.
+    order: azKey('p'), keyset: 'az', tags: true, fields: true,
     count: 'select count(*)::int as n from persons p where p.workspace_id = $1 and p.deleted_at is null' },
   // Everyone who has been a member: each term, paper or website.
   members: { sql: `select p.first_name, p.last_name, p.email, p.phone, p.address, p.city, p.postal,
@@ -106,10 +110,10 @@ export const DATASETS = {
       case when m.ends_on >= current_date then 'current' else 'lapsed' end as status,
       m.youth, m.citizenship, m.source, to_char(m.declaration_on, 'YYYY-MM-DD') as declaration_on
     from member_terms m join persons p on p.id = m.person_id and p.deleted_at is null
-    where m.workspace_id = $1 and m.voided_at is null`, ...by([k('m.ends_on', 'date', 'desc'), k('lower(p.name)', 'text'), k('m.id', 'uuid')]) },
+    where m.workspace_id = $1 and m.voided_at is null`, ...by([k('m.ends_on', 'date', 'desc'), ...az('p'), k('m.id', 'uuid')]) },
   volunteers: { sql: `select p.name, p.email, p.phone, string_agg(v.role || coalesce(' (' || nullif(v.detail, '') || ')', ''), '; ' order by v.role) as roles
     from volunteer_roles v join persons p on p.id = v.person_id and p.deleted_at is null where v.workspace_id = $1 group by p.id, p.name, p.email, p.phone`,
-  ...by([k('lower(p.name)', 'text'), k('p.id', 'uuid')]) },
+  ...by([...az('p'), k('p.id', 'uuid')]) },
   signs: { sql: `select s.address, s.kind, s.status, p.name as supporter, p.phone, s.note, s.lat, s.lng, s.created_at
     from signs s left join persons p on p.id = s.person_id where s.workspace_id = $1`,
   // s.address, nulls last.
@@ -130,7 +134,7 @@ export const DATASETS = {
   ...by([k('c.created_at', 'timestamptz', 'desc'), k('c.id', 'uuid')]) },
   lists: { sql: `select l.name as list, l.kind, p.name, p.email, p.phone from list_members m join lists l on l.id = m.list_id join persons p on p.id = m.person_id
     where m.workspace_id = $1 and l.deleted_at is null`,
-  ...by([k('lower(l.name)', 'text'), k('lower(p.name)', 'text'), k('m.list_id', 'uuid'), k('m.person_id', 'uuid')]) },
+  ...by([k('lower(l.name)', 'text'), ...az('p'), k('m.list_id', 'uuid'), k('m.person_id', 'uuid')]) },
 };
 // _id, _key (people's keyset) and _k0, _t0… (the others'): never a column.
 const hidden = (key) => key.startsWith('_');
@@ -190,8 +194,8 @@ export const datasetPage = async (db, ws, name, { cursor = null, limit = 1000 } 
   let rows;
   if (ds.keyset) {
     rows = (await db.query(
-      `${ds.sql}${cursor ? ` and ${ds.keyset} > ($3::text, $4::uuid)` : ''} order by ${ds.order} limit $2`,
-      cursor ? [ws, limit, cursor.key, cursor.id] : [ws, limit],
+      `${ds.sql}${cursor ? ` and ${azAfter('p', 3, '>')}` : ''} order by ${ds.order} limit $2`,
+      cursor ? [ws, limit, cursor.id] : [ws, limit],
     )).rows;
   } else if (byOffset) {
     rows = (await db.query(`${ds.sql} order by ${ds.order} limit $2 offset $3`, [ws, limit, Number(cursor.offset) || 0])).rows;

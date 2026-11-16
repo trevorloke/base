@@ -15,7 +15,7 @@
 //   turfs    how many
 //   placing  the background run (ext/geocoding status), and off: address
 //            lookup is turned off (GEOCODER=off)
-//   tiles    { source, custom, ignored, clean } — which street map the
+//   tiles    { source, custom, ignored, clean, cartoKey } — which street map the
 //            server names (ext/offline), never its whole address
 //   build    the web build this server hands out (lib/build.js); commit
 //
@@ -37,7 +37,7 @@ import { Hono } from 'hono';
 import { geoBox } from '../../lib/org.js';
 import { currentBuild } from '../../lib/build.js';
 import { status as placingStatus } from '../geocoding/index.js';
-import { tileConfig, tileSource, TILE_DEFAULTS } from '../offline/index.js';
+import { tileConfig, tileSource, TILE_DEFAULTS, cartoView } from '../offline/index.js';
 import { googleTilesOn, probeTiles, tilesHealth } from '../../lib/gtiles.js';
 import { probeLookup } from '../../lib/geocode.js';
 import { googleKey } from '../../lib/gtiles.js';
@@ -73,8 +73,10 @@ api.get('/map/check', async (c) => {
     placing: { ...(await placingStatus(db, ws)), off: (process.env.GEOCODER || '').toLowerCase() === 'off' },
     tiles: {
       source: tileSource(t.url), custom: t.url !== TILE_DEFAULTS.url, ignored: t.ignored,
-      // The Clean look (CARTO's tiles) is offered beside the standard ones.
-      clean: t.url === TILE_DEFAULTS.url && process.env.STARBASE_TILE_CLEAN !== 'off',
+      // The Clean look (CARTO's tiles) is offered beside the standard ones —
+      // only with the campaign's CARTO key (said apart: never the key itself).
+      clean: t.url === TILE_DEFAULTS.url && Boolean(cartoView()),
+      cartoKey: Boolean(String(process.env.STARBASE_TILE_CARTO_KEY ?? '').trim()),
     },
     build: currentBuild(),
     commit: String(process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || '').slice(0, 7) || null,

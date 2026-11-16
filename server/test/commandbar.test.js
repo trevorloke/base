@@ -60,6 +60,11 @@ test('what’s typed: the label’s start first, then a word in it, then its oth
   // Once something is typed the bar lists the screens that fit before the jobs (CommandBar.jsx): were a
   // screen to answer to "gift", Enter would open it instead of the gift form.
   assert.deepEqual(labels(rank(screens, 'gift')), [], 'no screen answers to “gift”');
+  // The same for email: "newsletter" or "email" + Enter writes one; "templates" opens Templates.
+  assert.equal(rank(all, 'newsletter')[0].label, 'Write an email');
+  assert.equal(rank(all, 'email')[0].label, 'Write an email');
+  assert.deepEqual(labels(rank(screens, 'newsletter')), [], 'no screen answers to “newsletter”');
+  assert.equal(rank(all, 'templates')[0].label, 'Templates');
   assert.ok(labels(rank(screens, 'import')).includes('Import donations') && labels(rank(screens, 'donations file')).includes('Import donations'));
   assert.equal(rank(all, 'turf')[0].label, 'Turfs and walk lists');
   assert.ok(labels(rank(all, 'turf')).includes('Draw a turf'));
@@ -114,6 +119,18 @@ test('the quick search keeps People’s rules: a volunteer never matches on an e
   await mgr.action('permission.member.set', { user_id: j.json.user.id, grant: [], deny: ['people'] });
   assert.equal((await staff.get('/api/search/people?q=lena')).status, 403);
   assert.equal((await new Client().get('/api/search/people?q=lena')).status, 401);
+});
+
+test('the quick search: a name either way round, an accent not typed, and “more” past its six', async () => {
+  await mgr.createPerson('Kevin Smith');
+  await mgr.createPerson('José Example');
+  for (const f of ['Ada', 'Ben', 'Cy', 'Dev', 'Eve', 'Fay', 'Gus']) await mgr.createPerson(`${f} Morename`);
+  const ask = async (q) => (await mgr.get(`/api/search/people?q=${encodeURIComponent(q)}`)).json;
+  assert.deepEqual((await ask('smith kevin')).persons.map((p) => p.name), ['Kevin Smith']);
+  assert.deepEqual((await ask('jose')).persons.map((p) => p.name), ['José Example']);
+  const more = await ask('morename');
+  assert.deepEqual([more.persons.length, more.more, more.total, more.many], [6, true, 7, false]);
+  assert.deepEqual([(await ask('lena')).more, (await ask('lena')).total], [false, 1]);
 });
 
 test('people: a phone typed any way finds them, digits against digits', async () => {

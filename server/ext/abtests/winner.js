@@ -33,12 +33,13 @@ import { runAction } from '../../lib/events.js';
 import { emailConfigured, sendEmail } from '../../lib/notify.js';
 import { enqueueJob, runJobsSoon } from '../../lib/jobs.js';
 import {
-  NO_PROVIDER, WINNER_JOB, composeBlast, decide, findLinks, groupStats, newToken, outcomeOf,
+  NO_PROVIDER, WINNER_JOB, composeBlast, decide, footOf, findLinks, groupStats, newToken, outcomeOf,
   recordOutcome, saveLinks, sendKey, settleBlast, stoppedRow, subjectFor,
 } from './send.js';
 import { loadAttachments } from './attach.js';
 import { whyNot } from '../../lib/reach.js';
 import { onMediaTags } from '../media/rules.js';
+import { fillText, firstOf } from '@starbase/shared/email/words';
 
 const BATCH = 10;
 const perRun = () => Number(process.env.STARBASE_AB_SEND_PER_RUN) || 200;
@@ -75,6 +76,7 @@ export const pickWinner = async (db, job) => {
   const ctx = { workspaceId, workspace: { name: ws?.name || '', settings: typeof ws?.settings === 'string' ? JSON.parse(ws.settings) : (ws?.settings || {}) }, publicUrl: base };
   const links = findLinks(blast.body);
   const attachments = await loadAttachments(db, workspaceId, { blastId });
+  const foot = await footOf(db, workspaceId);
   const unsubFor = (r) => (r.subscriptionId ? `${base}/u/${r.subscriptionId}`
     : blast.kind === 'eblast' || blast.kind === 'press' ? `${base}/bu/${r.id}` : null);
   const subject = subjectFor(blast, 'rest');
@@ -87,7 +89,7 @@ export const pickWinner = async (db, job) => {
     const { result: claim } = await act('blast.ab_rest', async (tx, emit) => {
       const rows = (await tx.query(
         `select r.id, r.email, r.token, r.send_tries, r.person_id, ${stoppedRow('r')} as stopped,
-                coalesce(p.tags, '[]'::jsonb) as tags
+                coalesce(p.tags, '[]'::jsonb) as tags, r.name, p.first_name
          from blast_recipients r left join persons p on p.id = r.person_id and p.workspace_id = r.workspace_id and p.deleted_at is null
          where r.blast_id = $1 and r.workspace_id = $2 and r.ab_group = 'rest' and r.status = 'queued'
          order by r.created_at, r.id limit $3 for update of r skip locked`,
@@ -141,11 +143,12 @@ export const pickWinner = async (db, job) => {
     if (claim.empty) break;
     for (const r of claim.go) {
       run.claimed += 1;
+      const fill = { first: firstOf(r), campaign: ctx.workspace.name };
       const res = await sendEmail({
         from: blast.from_addr || undefined,
         to: r.email,
-        subject,
-        ...composeBlast(ctx, { kind: blast.kind, body: blast.body, unsubscribeUrl: unsubFor(r), token: r.token, links, attachments }),
+        subject: fillText(subject, fill),
+        ...composeBlast(ctx, { kind: blast.kind, body: blast.body, unsubscribeUrl: unsubFor(r), token: r.token, links, attachments, fill, foot }),
         idempotencyKey: sendKey(blastId, r),
         ref: r.id,
       });

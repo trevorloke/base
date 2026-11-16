@@ -38,6 +38,9 @@ import { Unavailable } from './AudienceBits.jsx';
 import { RatingChip } from './RatingButtons.jsx';
 import { phoneCopy, useKeepCopy } from './OfflineCache.js';
 import { NeedsSignal, NoSignal, noSignal, useOnline } from './NoSignal.jsx';
+import { usePersonSearch } from './usePersonSearch.js';
+import PersonResults from './PersonResults.jsx';
+import NameAz from './NameAz.jsx';
 import '../pages/relationships.css';
 import '../pages/relationships-key.css';
 
@@ -151,18 +154,12 @@ function AddKnown({ person, known, onClose }) {
   const [note, setNote] = useState('');
   const inputId = useId();
   const noteId = useId();
+  const boxRef = useRef(null);
   const act = useRun();
   const online = useOnline();
-  const term = q.trim();
-  const found = useQuery({
-    queryKey: ['persons', 'pick', term],
-    queryFn: () => apiGet(`/persons?${new URLSearchParams({ q: term, limit: '12' })}`),
-    enabled: term.length >= 2,
-    staleTime: 30_000,
-  });
-  const list = (found.data?.persons || []).filter((p) => p.id !== person.id && !known.has(p.id)).slice(0, 6);
-  // No signal: the search can't answer and the link can't go — said once, in place.
-  const off = !online || (term.length >= 2 && noSignal(found));
+  // Everyone the server finds, A–Z, a page at a time; those already linked
+  // are drawn as "Already linked", never dropped (so the list is never short).
+  const found = usePersonSearch(q, { limit: 25, not: person.id });
   const add = async (kind) => {
     const res = await act.run('relationship.add', { from_id: person.id, person_id: pick.id, kind, note: note.trim() || undefined });
     if (res) onClose();
@@ -190,21 +187,12 @@ function AddKnown({ person, known, onClose }) {
   return (
     <div className="rel-add">
       <label className="rel-add__q" htmlFor={inputId}>Who do they know?</label>
-      <input id={inputId} className="input" type="search" autoFocus autoComplete="off" placeholder="Search by name"
+      <input id={inputId} ref={boxRef} className="input" type="search" autoFocus autoComplete="off" placeholder="Name, phone or email"
         value={q} onChange={(e) => setQ(e.target.value)} />
-      {off ? <NeedsSignal className="pf-empty">{NEEDS}</NeedsSignal> : list.length > 0 && (
-        <ul className="rel-picks">
-          {list.map((p) => (
-            <li key={p.id}>
-              <button type="button" className="rel-pick" onClick={() => setPick(p)}>
-                <span className="rel-pick__name">{p.name}</span>
-                <RatingChip code={p.rating} who />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-      {!off && term.length >= 2 && found.isSuccess && list.length === 0 && <p className="pf-empty">No one matches.</p>}
+      {online ? (
+        <PersonResults search={found} boxRef={boxRef} onPick={setPick} taken={known} takenLabel="Already linked"
+          rowClass="rel-pick" desk offlineWords={NEEDS} />
+      ) : <NeedsSignal className="pf-empty">{NEEDS}</NeedsSignal>}
       <button type="button" className="btn btn-quiet pp-btn" onClick={onClose}>Cancel</button>
     </div>
   );
@@ -255,7 +243,7 @@ export function PersonKnows({ person, query, me = null }) {
           {knows.map((k) => (
             <li key={k.id}>
               <span className="rel-knows__who">
-                <Link to={`/people/${k.person.id}`}>{k.person.name}</Link>
+                <Link to={`/people/${k.person.id}`}><NameAz person={k.person} /></Link>
                 <span className="rel-knows__kind">{linkWords(k)}</span>
               </span>
               <span className="rel-knows__end">

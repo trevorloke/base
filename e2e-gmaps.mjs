@@ -191,7 +191,14 @@ const free = { asked: 0 };
 const contexts = [];
 const newContext = async (opts = {}, { sw = false } = {}) => {
   const c = await browser.newContext({ deviceScaleFactor: 1, timezoneId: 'America/Vancouver', serviceWorkers: sw ? 'allow' : 'block', ...DESK, ...opts });
-  await c.route(/basemaps\.cartocdn\.com|tile\.openstreetmap\.org/, (route) => { free.asked += 1; return route.fulfill({ status: 200, contentType: 'image/svg+xml', body: tileSvg }); });
+  // Each tile a picture of its own address, readable by the page: the map's
+  // notice probe (tileProbe.js) takes one picture for every place to be a
+  // provider's notice, not streets, and leaves that map.
+  await c.route(/basemaps\.cartocdn\.com|tile\.openstreetmap\.org/, (route) => {
+    free.asked += 1;
+    const body = tileSvg.replace('</svg>', `<!-- ${new URL(route.request().url()).pathname} --></svg>`);
+    return route.fulfill({ status: 200, contentType: 'image/svg+xml', headers: { 'access-control-allow-origin': '*' }, body });
+  });
   await c.route('**://*.google.com/**', (r) => r.abort());
   await c.route('**://*.googleapis.com/**', (r) => r.abort());
   await c.route('**://*.gov.bc.ca/**', (r) => r.abort());

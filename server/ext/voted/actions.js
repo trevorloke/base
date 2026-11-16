@@ -13,6 +13,7 @@
 import { z } from 'zod';
 import { httpError } from '../../actions/util.js';
 import { newId } from '../../lib/events.js';
+import { forgetCounts } from './brief.js';
 
 const ALL_ROLES = ['manager', 'treasurer', 'staff', 'volunteer'];
 const MANAGER_ONLY = ['manager'];
@@ -74,6 +75,8 @@ export const actions = {
       emit('person', input.person_id, 'update', { voted_at, source: input.source });
       return { person_id: input.person_id, voted: input.voted, voted_at };
     },
+    // Committed: the volunteers' kept GOTV numbers count again (brief.js).
+    after: async (db, ctx, result) => { forgetCounts(ctx.workspaceId); return { result }; },
   },
 
   'vote.settings': {

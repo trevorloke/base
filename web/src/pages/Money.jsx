@@ -40,11 +40,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useOutletContext, useSearchParams } from 'react-router-dom';
 import {
-  useInfiniteQuery, useQuery, useQueryClient, keepPreviousData,
+  useInfiniteQuery, useQuery, useQueryClient,
 } from '@tanstack/react-query';
 import { apiGet, action, fmtMoney, fmtDate, todayISO, dollarsToCents } from '../api.js';
 import { SLATES as FALLBACK_SLATES, slateLabel } from '@starbase/shared/canvass';
 import ReceiptsGiftLine from '../components/ReceiptsGiftLine.jsx';
+import { PersonPicker } from '../components/PersonPicker.jsx';
 import { AddressRow, VoidNoticeAsk, receiptOf, receiptNote } from '../components/ReceiptsNeeds.jsx';
 import { NoSignal, noSignal, useOnline, NeedsSignalLine } from '../components/NoSignal.jsx';
 import { usePayments, PaymentNeedRow, OnlineChips, MonthlyDonors, OnlinePayments } from '../components/PaymentsBits.jsx';
@@ -97,72 +98,8 @@ const localDay = (ts) => {
   return Number.isNaN(d.getTime()) ? fmtDate(ts) : shortDate(d.toLocaleDateString('en-CA'));
 };
 
-// ── Donor picker: type-ahead against /api/persons?q=, arrow keys, inline create ──
+// ── Donor picker: the person search's dropdown (A–Z, Show more), inline create ──
 function DonorPicker({ value, onChange }) {
-  const queryClient = useQueryClient();
-  const [q, setQ] = useState('');
-  const [open, setOpen] = useState(false);
-  const [active, setActive] = useState(0);
-  const [createError, setCreateError] = useState(null);
-  const [creating, setCreating] = useState(false);
-  const boxRef = useRef(null);
-
-  const search = useQuery({
-    queryKey: ['persons', 'search', q],
-    queryFn: () => apiGet(`/persons?q=${encodeURIComponent(q)}&limit=8`),
-    enabled: open,
-    placeholderData: keepPreviousData,
-  });
-  const matches = search.data?.persons ?? [];
-  const trimmed = q.trim();
-  const canCreate = trimmed.length > 0
-    && !matches.some((p) => p.name.toLowerCase() === trimmed.toLowerCase());
-  const items = canCreate
-    ? [...matches, { id: '__create__', name: trimmed }]
-    : matches;
-
-  useEffect(() => {
-    setActive((a) => Math.min(a, Math.max(items.length - 1, 0)));
-  }, [items.length]);
-
-  useEffect(() => {
-    const onDown = (e) => {
-      if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false);
-    };
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, []);
-
-  const choose = async (item) => {
-    if (!item || creating) return;
-    setCreateError(null);
-    if (item.id === '__create__') {
-      setCreating(true);
-      try {
-        const res = await action('person.create', { name: item.name.slice(0, 300) });
-        queryClient.invalidateQueries({ queryKey: ['persons'] });
-        queryClient.invalidateQueries({ queryKey: ['brief'] });
-        onChange(res.person);
-      } catch (e) {
-        setCreateError(e.message); // keep the typed name so they can retry
-        return;
-      } finally {
-        setCreating(false);
-      }
-    } else {
-      onChange(item);
-    }
-    setQ('');
-    setOpen(false);
-  };
-
-  const onKeyDown = (e) => {
-    if (e.key === 'ArrowDown') { e.preventDefault(); setOpen(true); setActive((a) => Math.min(a + 1, items.length - 1)); }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); setActive((a) => Math.max(a - 1, 0)); }
-    else if (e.key === 'Enter') { if (open && items.length) { e.preventDefault(); choose(items[active]); } }
-    else if (e.key === 'Escape') { setOpen(false); }
-  };
-
   if (value) {
     return (
       <div className="ops-picked">
@@ -171,44 +108,7 @@ function DonorPicker({ value, onChange }) {
       </div>
     );
   }
-
-  return (
-    <div className="picker ops-picker" ref={boxRef}>
-      <input
-        id="gift-donor"
-        className="input"
-        role="combobox"
-        aria-expanded={open}
-        aria-controls="donor-options"
-        aria-autocomplete="list"
-        autoComplete="off"
-        placeholder="Start typing a name…"
-        value={q}
-        onChange={(e) => { setQ(e.target.value); setOpen(true); setActive(0); }}
-        onFocus={() => setOpen(true)}
-        onKeyDown={onKeyDown}
-      />
-      {open && items.length > 0 && (
-        <ul className="picker-list" id="donor-options" role="listbox">
-          {items.map((item, i) => (
-            <li
-              key={item.id}
-              role="option"
-              aria-selected={i === active}
-              className={(i === active ? 'active ' : '') + (item.id === '__create__' ? 'create' : '')}
-              onMouseEnter={() => setActive(i)}
-              onMouseDown={(e) => { e.preventDefault(); choose(item); }}
-            >
-              {item.id === '__create__'
-                ? <>+ Add new person “{item.name}”</>
-                : <>{item.name}{item.email && <span className="meta">{item.email}</span>}</>}
-            </li>
-          ))}
-        </ul>
-      )}
-      {createError && <p className="error">{createError}</p>}
-    </div>
-  );
+  return <PersonPicker id="gift-donor" onPick={onChange} />;
 }
 
 // ── Log a gift: donor, amount, date — the rest under "More details" ──

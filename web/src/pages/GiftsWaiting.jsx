@@ -15,10 +15,12 @@
 // and one that takes the donor over is said here and listed under Needs you.
 import { useEffect, useRef, useState } from 'react';
 import { Link, Navigate, useLocation, useOutletContext } from 'react-router-dom';
-import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { action, apiGet, fmtMoney } from '../api.js';
 import { NoSignal, noSignal, useOnline, NeedsSignalLine } from '../components/NoSignal.jsx';
 import { Unavailable, giftWord, invalidateGifts } from '../components/GiftImportBits.jsx';
+import { usePersonSearch } from '../components/usePersonSearch.js';
+import PersonResults from '../components/PersonResults.jsx';
 import './shifts.css';
 import '../components/gift-import.css';
 
@@ -32,38 +34,19 @@ const whoIs = (donor) => donor.name || donor.email || 'No name';
 // Where a record lives, in a few words: enough to tell two people apart.
 const tell = (p) => [p.address, p.postal, p.email, p.phone].filter(Boolean).slice(0, 2).join(' · ');
 
-// Find someone already on file by name, email or phone.
+// Find someone already on file by name, email or phone: everyone the
+// server finds, A–Z by last name, more as the list scrolls.
 function FindPerson({ id, onPick }) {
   const [q, setQ] = useState('');
-  const words = q.trim();
-  const search = useQuery({
-    queryKey: ['persons', 'search', words],
-    queryFn: () => apiGet(`/persons?q=${encodeURIComponent(words)}&limit=8`),
-    enabled: words.length >= 2,
-    placeholderData: keepPreviousData,
-  });
-  const found = words.length >= 2 ? (search.data?.persons ?? []) : [];
+  const boxRef = useRef(null);
+  const found = usePersonSearch(q, { limit: 25 });
   return (
     <div className="gw-find">
       <div className="field">
         <label htmlFor={id}>Their name, email or phone</label>
-        <input id={id} className="input" autoComplete="off" autoFocus value={q} onChange={(e) => setQ(e.target.value)} />
+        <input id={id} ref={boxRef} className="input" type="search" autoComplete="off" autoFocus value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
-      {words.length >= 2 && search.isPending && <p className="ops-meta" role="status">Loading…</p>}
-      {words.length >= 2 && search.isError && <p className="error" role="alert">{search.error.message}</p>}
-      {words.length >= 2 && search.isSuccess && found.length === 0 && <p className="ops-meta" role="status">No one on file by that.</p>}
-      {found.length > 0 && (
-        <ul className="gw-cands">
-          {found.map((p) => (
-            <li key={p.id}>
-              <button type="button" className="btn ops-tap gw-cand" onClick={() => onPick(p)}>
-                <span className="gw-cand__name">{p.name}</span>
-                {tell(p) && <span className="gw-cand__why">{tell(p)}</span>}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+      <PersonResults search={found} boxRef={boxRef} onPick={onPick} desk offlineWords="Finding someone needs signal" />
     </div>
   );
 }

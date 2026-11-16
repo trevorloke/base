@@ -17,6 +17,7 @@
 //                                       after the numbers already there
 import { mayReach, person } from '../../lib/reach.js';
 import { loadList, onListSql } from '../lists/audience.js';
+import { azKey } from '../../lib/az.js';
 
 export const stillOn = async (db, ctx, bank, params) => {
   params.push(ctx.workspaceId);
@@ -58,7 +59,7 @@ export const addFromList = async (tx, ctx, bank, list) => {
   const on = await onListSql(tx, ctx, list, params);
   const r = await tx.query(
     `insert into call_bank_numbers (bank_id, workspace_id, person_id, position)
-     select $1::uuid, p.workspace_id, p.id, $3::int + row_number() over (order by lower(p.name), p.id)
+     select $1::uuid, p.workspace_id, p.id, $3::int + row_number() over (order by ${azKey('p')})
        from persons p
       where p.workspace_id = $2::uuid and p.deleted_at is null and ${on}
         and ${mayReach('call', 'bank', person('p', '$2::uuid'))}

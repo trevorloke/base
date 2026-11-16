@@ -122,7 +122,7 @@ const PASSWORD = 'surrey-forward-2026';
 let signedUp = false;
 const context = async (opts = {}) => {
   const ctx = await browser.newContext({ viewport: { width: 1360, height: 900 }, timezoneId: 'America/Vancouver', ...opts });
-  await ctx.route(/tile\.openstreetmap\.org|basemaps\.cartocdn\.com/, (route) => route.fulfill({ status: 200, contentType: 'image/svg+xml', headers: { 'access-control-allow-origin': '*' }, body: tileSvg }));
+  await ctx.route(/tile\.openstreetmap\.org|basemaps\.cartocdn\.com/, (route) => route.fulfill({ status: 200, contentType: 'image/svg+xml', headers: { 'access-control-allow-origin': '*' }, body: tileSvg.replace('</svg>', `<!-- ${new URL(route.request().url()).pathname} --></svg>`) }));
   const r = signedUp
     ? await ctx.request.post(`${BASE}/api/auth/login`, { data: { email: EMAIL, password: PASSWORD } })
     : await ctx.request.post(`${BASE}/api/auth/signup`, { data: { name: 'Riley Manager', email: EMAIL, password: PASSWORD, workspaceName: 'Deploy day', jurisdiction: 'bc-municipal' } });

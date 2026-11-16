@@ -7,6 +7,7 @@
 //     and the first by name is the one sent (and the one results land on)
 // Nothing here writes, and nothing here talks to CallHub.
 import { httpError } from '../../actions/util.js';
+import { azKey } from '../../lib/az.js';
 import { loadList, whereFor } from '../lists/audience.js';
 import { e164, last10, NO_CONTACT_TAG, NO_CALL_TAG, PHONE_DIGITS_SQL } from '../texting/rules.js';
 
@@ -34,7 +35,7 @@ export const sourceOf = async (q, ctx, { list_id: listId = null, bank_id: bankId
     if (n > MAX_PEOPLE) {
       throw httpError(409, `This list names ${n.toLocaleString('en-CA')} people. CallHub takes 3,600 a day — send a list of ${MAX_PEOPLE.toLocaleString('en-CA')} or fewer`);
     }
-    const { rows } = await q.query(`select ${COLS} from persons p where ${where} order by lower(p.name), p.id`, params);
+    const { rows } = await q.query(`select ${COLS} from persons p where ${where} order by ${azKey('p')}`, params);
     return { kind: 'list', id: list.id, name: list.name, rows };
   }
   if (!UUID.test(String(bankId || ''))) throw httpError(404, 'phone bank not found');
@@ -46,7 +47,7 @@ export const sourceOf = async (q, ctx, { list_id: listId = null, bank_id: bankId
   const { rows } = await q.query(
     `select ${COLS} from call_bank_numbers n join persons p on p.id = n.person_id
       where n.bank_id = $1 and n.workspace_id = $2 and n.done_at is null and p.deleted_at is null
-      order by lower(p.name), p.id`, [bank.id, ws],
+      order by ${azKey('p')}`, [bank.id, ws],
   );
   return { kind: 'bank', id: bank.id, name: bank.name, rows };
 };
@@ -77,9 +78,9 @@ export const peopleOn = async (q, ws, phones) => {
   if (!phones.length) return [];
   const numbers = new Set(phones);
   const { rows } = await q.query(
-    `select id, name, phone, tags from persons
+    `select p.id, p.name, p.phone, p.tags from persons p
       where workspace_id = $1 and deleted_at is null and ${PHONE_DIGITS_SQL('phone')} = any($2::text[])
-      order by lower(name), id limit 5000`,
+      order by ${azKey('p')} limit 5000`,
     [ws, [...new Set(phones.map(last10))]],
   );
   return rows.map((p) => ({ id: p.id, name: p.name, number: e164(p.phone), tags: lowTags(p) })).filter((p) => numbers.has(p.number));

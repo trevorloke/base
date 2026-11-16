@@ -65,6 +65,15 @@ BC campaign will need in 2030.
   sends its email inside its write; the candidate invite already sends
   after it — Team's should move the same way.
 
+- **Person search, next.** The release after it ships: drop the two old
+  name indexes it no longer reads (`persons_ws_name_prefix_idx`,
+  `persons_ws_last_prefix_idx`). Then, if the owner finds names still
+  missed: names stored in composed form on import and save (a decomposed
+  accent doesn't fold today), Jr/Sr/II in the names trigger (Kevin Smith Jr
+  sorts under J), two-letter folds (ß → ss, æ → ae) as a new
+  `person_fold2`, and the middle of a word or sound-alikes (pg_trgm or a
+  phonetic key).
+
 - **Governed AI.** "Ask base.win" (plain words → a filter you can see and
   edit), reply triage in the texting inbox, drafting and translation that a
   person approves. Runs under the asker's permissions; every write in the

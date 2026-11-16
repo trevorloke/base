@@ -552,6 +552,28 @@ one tap away under **More**.
   sideways scroll, no word running into the next column); `e2e-mail.mjs` runs
   *From addresses* and Outreach → Email's From line.
 
+Email templates: `server/test/templates.test.js` — save, update, copy,
+remove and restore (the stale-edit check on a real round trip, the name
+clash, the 200 limit), a template's use fixed and checked on the stored
+row, every role × Email/Media read and write, hiding a ready-made one, the
+log never holding a body, the ready-made templates' own checks (no facts,
+each refused until filled), [first name] and [campaign] filled per
+subscriber, person, A/B winner and test (a name typed as a link or in bold
+stays words), what stops a send and what only asks, the footer lines
+escaped in both parts (and as before with none set), Use again.
+`e2e-templates.mjs` (ports 5400–5402, `PORT`/`SHOTS` optional) drives it on
+screen as a manager, staff and a volunteer granted Media, at 1440 and 390:
+Start from, the one line under the Message, Link on a `[link: …]`
+placeholder and "Link to…", + First name, the confirm's "Still has [sic]",
+the mail as sent ("Hi Sam", "Hi friend", "Hi John", a name typed as a link
+only words), "No mailing address yet" and the Preview footer, Save as
+template and Update twice, the Templates page (a stale save in a second tab,
+copy, Remove → Undo, Hide → Show), Use again, the command bar, Media's
+release templates, a pick reading a template's current words, and no signal
+(an unread pick says "Needs signal" at once and never lands later over
+what was typed; Use again with no signal loads the past email when signal
+comes back, or asks if words were typed meanwhile).
+
 - **Candidates** (Settings → Candidates) — a manager adds and invites
   candidates; each joins as a volunteer with a seat; their phone opens on
   Your day (Met someone, their booked shift, their week, Your race); the
@@ -836,7 +858,9 @@ one tap away under **More**.
 - **Shifts** — the long form (**New shift → More → More options**: what,
   when, where; role, end, instructions, link, turfs and *Limit sign-ups to*
   under *More details*),
-  **Add volunteer**, then **Notify everyone** (email + text). Without email/text connected the
+  **Add volunteer** (type two letters: a drivers' shift lists *Has this role:
+  Driver* first, then everyone A–Z, 8 at a time by **Show more**, with *+ Add
+  new person* at the foot; `e2e-search.mjs`), then **Notify everyone** (email + text). Without email/text connected the
   button says *Save — nothing sends*; once connected, *Notify again* reaches
   them. Nothing on any screen claims to be sent unless it was.
   **Edit** under the title opens the shift filled in; move its time or
@@ -939,6 +963,31 @@ one tap away under **More**.
   Maps* with the plain words, *Google said* and the Recipe B step. Staff and
   volunteers see no *Why?*. (`ONLY=google node e2e-map.mjs` runs this
   against a stand-in Google; `GOOGLE_PORT`, `GPORT` pick its ports.)
+- **Map, a street map that shows no streets** — with no CARTO key the map
+  opens on *Standard* from OpenStreetMap and nothing is asked of CARTO
+  (Show → Map has no *Clean*). With `STARBASE_TILE_CARTO_KEY` set and CARTO
+  sending "API KEY REQUIRED" instead of streets, a line says *The street map
+  wasn’t showing streets — switched to Muted*; a manager's *Why?* opens the
+  Map check, whose top line is *Clean · CARTO — sends a notice, not streets*
+  with the picture this phone got under it. (`node e2e-maplive.mjs` runs
+  this with a notice stand-in — one PNG for every tile — and a good one, a
+  picture per tile, on its own servers at :5410–:5414; `ONLY=` picks steps.
+  The other map suites' stand-ins are a picture per tile too, since the same
+  picture everywhere is now a notice.)
+- **More room for the map** — on a desk the Map has no margins or frame
+  (its canvas 1208 × 900 at 1440 × 900, the menu with its words); field
+  Today has the map window under *Start canvassing* for anyone with a walk
+  list with doors left: open the first time, the turf's doors from
+  `/api/map/doors?mine=1` only, the row folds it (and reloading keeps it
+  folded, with no Leaflet asked for), *Open the map* goes to the Map on that
+  turf, and a swipe on it scrolls the page. Offline it keeps the doors and
+  says *No signal*; the doors unreadable, or its chunk failing to load, it
+  says *Unavailable — Try again* in the box and the rest of Today stays.
+  (`ONLY=stage2 node e2e-maplive.mjs`, and `ONLY=basepath2` under
+  `BASE_PATH`; the desk band's steps run once Today carries it: they say
+  SKIP before HOME's desk Today is there, and fail if it is there without
+  the band, or with `REQUIRE_BAND=1`.) The window asks for no street tiles
+  until it knows where it looks, so no city-wide tiles are thrown away.
 - **Map, the street map not loading** — block `basemaps.cartocdn.com` in
   the browser's network tools and reload: within a moment a line says *The
   street map wasn’t loading — switched to Muted* and the streets are there.
@@ -988,7 +1037,9 @@ one tap away under **More**.
 - **Who knows whom** — **People → More → Most connected**: the sample's
   *Priya Nair* is first (*knows 6 · 1 supporter*). Open *Jasmine Wong*
   (undecided): under the rating, *Ask Priya Nair — they know each other*.
-  **Knows** lists who someone knows; **+ Someone they know** → search → *how
+  **Knows** lists who someone knows; **+ Someone they know** → search (a
+  count, A–Z with the surname in bold, more as you scroll, *Already linked*
+  on whoever is linked; `e2e-search.mjs`) → *how
   do they know each other?* links them both ways; *Remove? Yes · No* takes
   it off. *Sofia Petrova → Knows* says *Brought in by Priya Nair*. Someone
   tagged *do-not-contact* gets no nudge and is never the one suggested. A
@@ -1011,6 +1062,55 @@ one tap away under **More**.
   merge, housemates), `server/test/ties-rank.test.js` (which ties come
   first) and `server/test/audience-scale.test.js` (`knows=` through indexes
   among 300,000 people).
+- **Finding a person, and A–Z** — `server/test/search.test.js` (each way in:
+  *kevin smith*, *smith kevin*, *Smith, Kevin*, *kev smi*, *jose*/*josé*,
+  *berg*, *gill*, *d'souza*, *anne*, *jean luc*, a phone with and without
+  its area code, a house number, an email's start on the desk only; not
+  found: *ena*, *der*, *luc*, *society*; pages with no repeats or gaps; past
+  a lowered cap; `role=`, `not=`, `list=`; the fold the same in the server
+  and the browser; each way's index), `server/test/az.test.js` (every list
+  of people in last-name order, the browser's `azSort` agreeing; parts of
+  People meeting with no overlap or gap; over a real Postgres —
+  `DATABASE_URL=postgres://…/scratch node --test server/test/az.test.js` —
+  it runs again in a database collated en_US, libc's where the server has
+  it, else ICU's with spaces and hyphens skipped, and must agree there too;
+  PGlite and `test:pg` skip that part and say so), `server/test/people-search.test.js`
+  (People's box, online and offline), `server/test/search-scale.test.js`
+  (300,000 made-up people in PGlite: no search reads the table end to end;
+  `SEARCH_PEOPLE` for a smaller file). The speed check is
+  `node scripts/bench-search.mjs postgres://…/search_bench` on a scratch
+  Postgres (it refuses any database whose name doesn't say bench or
+  scratch). On a local Postgres 16, 300,000 made-up people (one surname on
+  8%, a second on 6% and the middle name of 3% more), warm, median of five,
+  cap 5,000:
+
+  | Term | Before (ms) | After, page 1 | After, page 5 | Plan |
+  |---|---:|---:|---:|---|
+  | `smith` | 10 (finds no Smith) | 21 | 26 | exact, 2,020 |
+  | `kevin smith` | 789 | 20 | — | exact, 24 |
+  | `smith kevin` | 847 (finds no one) | 23 | — | exact, 24 |
+  | `si` | 4 | 29 | 35 | more than 5,000 |
+  | `ka` | 3 | 30 | 35 | more than 5,000 |
+  | `zzq` | 762 | 3 | — | none |
+  | `jose` | 770 | 27 | 27 | exact, 1,448 |
+  | `555 01` | 4 | 21 | 26 | exact, 2,431 |
+  | `ksmith` | 395 | 4 | — | exact, 28 |
+  | `145` | 3 | 23 | 32 | exact, 3,386 |
+  | `14520 72` | 1,094 | 3 | — | exact, 4 |
+  | `singh` (8% of the file) | 8 | 9 | 9 | more than 5,000 |
+  | `kaur` (6%, and 3% as a middle name) | 2 | 17 | 22 | more than 5,000 |
+  | `kevin singh` | 467 | 25 | 25 | exact, 284 |
+  | `singh kaur` | 776 | 22 | 22 | more than 5,000 |
+
+  No single run of a new search took longer than 39 ms (budget: median 50,
+  none over 150), so the cap shipped is 5,000. "Before" is the
+  relationship editor’s old ask (any part of the name,
+  address, phone, email or a handle, 12 by first name). People's count for
+  *smith* went from 572 to 319 ms (it no longer unpacks empty socials), and
+  its box finds *smith kevin* (24 people, 338 ms; before, none). The eight
+  new indexes took 0.05–0.6 s each to build on that file (the A–Z one 0.6 s
+  and 22 MB, the rest 0.1–5.7 MB); importing 50,000 rows took 40.6 s with
+  them and 40.9 s without.
 - **Desk with no signal** — with wifi, open Today, People, a profile,
   Shifts, Signs, Donations and the Inbox. Turn wifi off and reload: each shows
   what it had and the strip says *No signal · from 2:14 pm*. Search People —
@@ -1235,8 +1335,8 @@ latest).
   (`googleHere()` in `web/src/components/google.js`).
   *Result: not yet run.*
 
-- Map tiles come from CARTO (the *Clean* look the map opens on) and
-  OpenStreetMap, both free and neither for heavy use; choose a provider the
+- Map tiles come from OpenStreetMap (and CARTO for the *Clean* look, only
+  with the campaign's free CARTO key), both free and neither for heavy use; choose a provider the
   campaign has an agreement with before election week: Google Maps
   (`GOOGLE_MAPS_TILES=1` and a `GOOGLE_MAPS_SERVER_KEY` with the Map Tiles
   API enabled), Stadia Maps (`STARBASE_TILE_PROVIDER=stadia`) or any
