@@ -354,10 +354,10 @@ check('an A/B release with nothing gone: "saved … — not sent yet", not "firs
 
 // ── 9. The desk table at laptop widths with long words: no sideways scroll ──
 for (let i = 0; i < 20; i += 1) await act('media.contact.add', { name: `Reporter ${i} Example`, kind: 'media', email: `reporter${i}@example.org`, outlet: 'Surrey Now-Leader', phone: '604-555-0170' });
-await act('media.contact.add', { name: 'Jennifer Thompson Example', kind: 'media', email: 'jennifer.thompson@surreynowleader.example.org', outlet: 'Surrey Now-Leader', beat: 'Politics and transportation', phone: '604-555-0171' });
+await act('media.contact.add', { name: 'Jennifer Thompson Example', kind: 'media', email: 'jennifer.thompson@surreynowleader.example.org', outlet: 'Surrey Now-Leader', beat: 'Politics and transportation', phone: '604-555-0171', lists: ['letters'] });
 await act('media.contact.add', { name: 'Food Example', kind: 'influencer', email: 'food@example.org', socials: { instagram: '@surrey.food.adventures', tiktok: '@surreyfoodie' } });
-await act('media.contact.add', { name: 'Alexandra Konstantinopoulou-Whitfield Example', kind: 'media', email: 'alexandra@example.org', outlet: 'Independent', phone: '+16045550199' });
-for (const width of [1000, 1100, 1200, 1280, 1440]) {
+await act('media.contact.add', { name: 'Alexandra Konstantinopoulou-Whitfield Example', kind: 'media', email: 'alexandra@example.org', outlet: 'Independent', phone: '+16045550199', lists: ['letters', 'op_ed', 'show'] });
+for (const width of [1000, 1100, 1199, 1200, 1280, 1366, 1440]) {
   await page.setViewportSize({ width, height: 900 });
   await go(page, '/media/contacts');
   const o = await page.evaluate(() => {
@@ -390,7 +390,28 @@ for (const width of [1000, 1100, 1200, 1280, 1440]) {
     if (!td) return null; const r = document.createRange(); r.selectNodeContents(td); return r.getClientRects().length;
   });
   check(`the desk table at ${width}: a one-word outlet reads whole, not "Independen / t"`, outletLines === 1, String(outletLines));
-  if (width === 1000 || width === 1280) await shot(page, `13-contacts-long-${width}`);
+  // No word breaks mid-word: a phone number reads on one line, a long
+  // surname breaks only after its hyphen, a list's chip only at its space.
+  const split = await page.evaluate(() => {
+    const out = [];
+    const walk = document.createTreeWalker(document.querySelector('.md-table'), NodeFilter.SHOW_TEXT);
+    for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+      const re = /\S+/g;
+      for (let m = re.exec(n.textContent); m; m = re.exec(n.textContent)) {
+        let prev = null; let at = ''; const whole = n.parentElement.closest('td.md-one');
+        for (let i = 0; i < m[0].length; i += 1) {
+          const r = document.createRange(); r.setStart(n, m.index + i); r.setEnd(n, m.index + i + 1);
+          const top = Math.round(r.getClientRects()[0]?.top ?? 0);
+          if (prev !== null && top !== prev && (whole || m[0][i - 1] !== '-')) at = `${m[0].slice(0, i)} / ${m[0].slice(i)}`;
+          prev = top;
+        }
+        if (at) out.push(at);
+      }
+    }
+    return out;
+  });
+  check(`the desk table at ${width}: no word breaks mid-word (phone numbers whole, a surname at its hyphen)`, split.length === 0, split.slice(0, 6).join(' | '));
+  if ([1000, 1280, 1366].includes(width)) await shot(page, `13-contacts-long-${width}`);
 }
 await page.setViewportSize({ width: 1440, height: 900 });
 

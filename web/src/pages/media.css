@@ -173,20 +173,33 @@
 .md-table:not(.is-desk) .md-c-socials { width: 15%; }
 .md-table:not(.is-desk) .md-c-last { width: 14%; }
 .md-table .md-on .chip { white-space: nowrap; }
-/* A laptop: an outlet is one or two words read whole ("Independent") and
-   "On" holds a list's chip, so both keep room for them; an address ends
-   in "…", a phone number may wrap and a beat ends in "…", so Email,
-   Phone and Beat give that room up. A chip still too wide wraps at
-   its space ("Letters / editors"), never mid-word or into Beat. */
+/* Every desk width: a list's chip starts at its column's edge (its gap
+   to the left would push it past the right edge) and, if still too wide,
+   wraps at its space ("Letters / editors"), never into Beat. */
+.md-table .md-who .md-kind, .md-table .md-on .md-kind { margin-left: 0; }
+.md-table .md-on .chip { white-space: normal; overflow-wrap: normal; max-width: 100%; }
+/* From 1,200 px the table is 900–1,100 px wide: a long surname breaks only
+   at its hyphen, a phone number and an outlet read whole, and "On" holds
+   "Letters editors" on one line; an address, a beat and a handle end in
+   "…" with the whole of it in the title. */
+.md-table.is-desk .md-c-name { width: 18%; }
+.md-table.is-desk .md-c-outlet { width: 12.5%; }
+.md-table.is-desk .md-c-on { width: 15%; }
+.md-table.is-desk .md-c-beat { width: 9%; }
+.md-table.is-desk .md-c-email { width: 14.5%; }
+.md-table.is-desk .md-c-phone { width: 14%; }
+.md-table.is-desk .md-c-socials { width: 8.5%; }
+.md-table.is-desk .md-c-last { width: 8.5%; }
+/* A laptop under 1,200 px (a 700–900 px table): the same promises, in
+   13 px type with narrower gutters; a list's chip may wrap at its space. */
 @media (max-width: 1199px) {
-  .md-table.is-desk .md-c-name { width: 14%; }
-  .md-table.is-desk .md-c-outlet { width: 17%; }
-  .md-table.is-desk .md-c-on { width: 17%; }
-  .md-table.is-desk .md-c-beat { width: 9%; }
-  .md-table.is-desk .md-c-email { width: 12%; }
-  .md-table.is-desk .md-c-phone { width: 11%; }
-  .md-table .md-on .chip { white-space: normal; overflow-wrap: normal; max-width: 100%; }
-  /* A chip under a name or in "On" starts at the column's edge: its gap
-     to the left would push it past the column's right edge. */
-  .md-table .md-who .md-kind, .md-table .md-on .md-kind { margin-left: 0; }
+  .md-table.is-desk th, .md-table.is-desk td { padding-left: 6px; padding-right: 6px; font-size: 13px; }
+  .md-table.is-desk .md-c-name { width: 20.5%; }
+  .md-table.is-desk .md-c-outlet { width: 13.5%; }
+  .md-table.is-desk .md-c-on { width: 12%; }
+  .md-table.is-desk .md-c-beat { width: 8%; }
+  .md-table.is-desk .md-c-email { width: 11.5%; }
+  .md-table.is-desk .md-c-phone { width: 15.5%; }
+  .md-table.is-desk .md-c-socials { width: 9%; }
+  .md-table.is-desk .md-c-last { width: 10%; }
 }
