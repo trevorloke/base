@@ -10,12 +10,14 @@
 //   rules.js    the arithmetic: win number, pace, trend, the score (pure)
 //   numbers.js  the counting, in SQL
 //   actions.js  pathtowin.save (managers)
+//   brief.js    Today's goal (GET /api/brief)
 //   api.js      GET /pathtowin (the Data area: desk roles, or anyone given
 //               it; a minute's kept copy of the counts)
 export { sql } from './sql.js';
 export { actions } from './actions.js';
 export { api } from './api.js';
 import { forget } from './api.js';
+import { briefGoal } from './brief.js';
 
 // The kept counts go when the turfs change, or a list or the sample comes in
 // or goes (everything moves at once); single knocks and ratings simply wait
@@ -24,7 +26,8 @@ const BULK = /^(import\.|sample\.)/;
 const dropKept = async (tx, meta, events) => {
   if (BULK.test(String(meta.action || '')) || events.some((e) => e.entityType === 'turf')) forget(meta.workspaceId);
 };
-export const hooks = { events: dropKept };
+// Today's Supporters number against the win number (brief.js).
+export const hooks = { events: dropKept, brief: briefGoal };
 
 // In the full export: the campaign's numbers.
 export const exportTables = ['path_to_win'];
