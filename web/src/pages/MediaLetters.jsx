@@ -72,6 +72,10 @@ function useQueueWide() {
   return wide;
 }
 
+// Waiting on the desk: only while it's the desk's to do (a Ready letter is
+// the writer's to send; the server says the same since this release).
+const waits = (l) => Boolean(l.waiting) && ['new', 'working'].includes(l.status);
+
 export function LettersTab({ me }) {
   const navigate = useNavigate();
   const wide = useQueueWide();
@@ -110,7 +114,7 @@ export function LettersTab({ me }) {
                 <td className="mono">{fmt(l.size)}</td>
                 <td>{l.assigned_to_name || '—'}</td>
                 <td>{ago(l.last_at)}</td>
-                <td>{l.waiting && <span className="lt-reply"><span className="lt-dot" aria-hidden="true" />Waiting</span>}</td>
+                <td>{waits(l) && <span className="lt-reply"><span className="lt-dot" aria-hidden="true" />Waiting</span>}</td>
               </tr>
             ))}
           </tbody>
@@ -125,7 +129,7 @@ export function LettersTab({ me }) {
                   <span className="ot-row__sub"><span>{[l.writer.name, papers(l)].filter(Boolean).join(' · ')}</span></span>
                   {flagsOf(l).length > 0 && <span className="lt-flags">{flagsOf(l).map(([c, w]) => <span key={w} className={c}>{w}</span>)}</span>}
                 </span>
-                {l.waiting && <span className="lt-dot" aria-label="Waiting for you" />}
+                {waits(l) && <span className="lt-dot" aria-label="Waiting for you" />}
                 <span className="chip">{STATUS_WORDS[l.status]}</span>
               </Link>
             </li>

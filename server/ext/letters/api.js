@@ -265,7 +265,8 @@ api.get('/letters/outlets', async (c) => {
 });
 
 // ── The desk's ──
-const WAITING = `(l.status in ('new','working','ready') and l.last_side = 'writer' and l.last_at > coalesce(l.desk_seen_at, 'epoch'::timestamptz))`;
+// Ready is the writer's to send: nothing waits on the desk there.
+const WAITING = `(l.status in ('new','working') and l.last_side = 'writer' and l.last_at > coalesce(l.desk_seen_at, 'epoch'::timestamptz))`;
 
 api.get('/media/letters/count', async (c) => {
   const ctx = c.get('ctx');

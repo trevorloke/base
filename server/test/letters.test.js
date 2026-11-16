@@ -207,6 +207,12 @@ test('sends: agreement first; an exclusive paper still out flags a send elsewher
   const s1 = ok(await vic.action('myletter.sent', { id: l.id, outlet_id: a.id, how: 'email', client_id: key })).send;
   assert.equal((await vic.action('myletter.sent', { id: l.id, outlet_id: a.id, how: 'email', client_id: key })).json.duplicate, true);
   assert.equal((await row(l.id)).status, 'sent');
+  // Out at a paper: the writer can still stop (or start) the reply emails —
+  // and only that: where it goes and how it's signed are settled.
+  ok(await vic.action('myletter.details', { id: l.id, email_me: false }));
+  assert.equal((await row(l.id)).email_me, false);
+  ok(await vic.action('myletter.details', { id: l.id, email_me: true }));
+  no(await vic.action('myletter.details', { id: l.id, title: 'Another', email_me: false }), 409);
   let w = await mine(vic, l.id);
   const ours = (bl) => bl.filter((x) => [a.id, sister.id, b.id].includes(x.outlet_id));
   assert.deepEqual(ours(w.blocked).map((x) => [x.outlet_id, x.by]), [[b.id, a.name]], 'the sister paper is the same newsroom; the other is blocked');

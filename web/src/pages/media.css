@@ -156,3 +156,24 @@
 .md-table:not(.is-desk) .md-c-beat { width: 14%; }
 .md-table:not(.is-desk) .md-c-socials { width: 15%; }
 .md-table:not(.is-desk) .md-c-last { width: 13%; }
+
+/* "On": its lists as chips that never break mid-name, in a column wide
+   enough for two of them (people on several lists are the point). */
+.md-table .md-c-on { width: 15%; }
+.md-table.is-desk .md-c-name { width: 14%; }
+.md-table.is-desk .md-c-outlet { width: 12%; }
+.md-table.is-desk .md-c-beat { width: 10%; }
+.md-table.is-desk .md-c-email { width: 16%; }
+.md-table.is-desk .md-c-phone { width: 13%; }
+.md-table.is-desk .md-c-socials { width: 10%; }
+.md-table.is-desk .md-c-last { width: 10%; }
+.md-table:not(.is-desk) .md-c-name { width: 22%; }
+.md-table:not(.is-desk) .md-c-outlet { width: 20%; }
+.md-table:not(.is-desk) .md-c-beat { width: 14%; }
+.md-table:not(.is-desk) .md-c-socials { width: 15%; }
+.md-table:not(.is-desk) .md-c-last { width: 14%; }
+.md-table .md-on .chip { white-space: nowrap; }
+@media (max-width: 1199px) {
+  .md-table.is-desk .md-c-outlet { width: 12%; }
+  .md-table.is-desk .md-c-email { width: 16%; }
+}

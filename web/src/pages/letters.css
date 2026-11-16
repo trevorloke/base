@@ -79,3 +79,12 @@
   button.lt-chip, .lt-take button.chip { min-height: 48px; }
   .lt-noteform { flex-direction: column; align-items: stretch; }
 }
+
+/* A whole control tall with a mouse too (40 px; 48 on touch, below), as the
+   Media filter chips: Letter / Op-ed, the papers, Take / Leave. */
+button.lt-chip, .lt-take button.chip { min-height: var(--ctl); padding-inline: var(--s-3); display: inline-flex; align-items: center; }
+/* The desk queue takes the page's whole width, as Contacts' table does, and
+   its short cells stay on one line. */
+@media (min-width: 1000px) { .md-page:has(.lt-queue) { max-width: 1100px; } }
+.lt-queue td:nth-child(2), .lt-queue td:nth-child(5), .lt-queue td:nth-child(7), .lt-queue td:nth-child(8) { white-space: nowrap; }
+.lt-emailme { margin-bottom: var(--s-2); }

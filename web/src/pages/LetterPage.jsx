@@ -99,7 +99,7 @@ function Letter({ me, l, outletsQ, said, setSaid, refresh }) {
   return (
     <Page>
       <div className="lt-head">
-        <h1>{l.title || KIND_WORDS[l.kind]}</h1>
+        <h1>{l.title || firstWords((agreed || mineNow || firstMine)?.body) || KIND_WORDS[l.kind]}</h1>
         <span className={`chip${notPrinted ? ' chip-warn' : ''}`}>{chip}</span>
       </div>
       {l.outlets.length > 0 && <p className="ops-meta">{l.outlets.map((o) => o.name).join(' · ')}</p>}
@@ -158,7 +158,6 @@ function Suggestion({ l, mine, theirs, onEdit, onSaid }) {
   const [all, setAll] = useState(false);
   const [busy, setBusy] = useState(false);
   const changes = hunks.map((h, k) => (h.kind === 'change' ? k : null)).filter((k) => k != null);
-  const note = [...(l.notes || [])].reverse().find((n) => n.side === 'campaign' && new Date(n.created_at) >= new Date(theirs.created_at) - 5000);
   const flip = (k, on) => setTaken((t) => { const n = new Set(t); if (on) n.add(k); else n.delete(k); return n; });
   const textOf = (ps) => ps.map((p) => p.text).join('');
   const keepMine = async () => {
@@ -184,11 +183,10 @@ function Suggestion({ l, mine, theirs, onEdit, onSaid }) {
           </span>
         )))}
       </div>
-      {note && <p className="lt-note-campaign"><span className="ops-meta">Campaign{note.by ? ` · ${note.by}` : ''}</span> {note.body}</p>}
       <div className="ops-actions">
         <button type="button" className="btn btn-primary ops-tap" onClick={() => onEdit({ body: applyHunks(mine.body, theirs.body, taken), from_version: taken.size ? theirs.id : null })}>Save my letter</button>
       </div>
-      <More>
+      <More label="More choices">
         {!all ? (
           <div className="ops-actions">
             <button type="button" className="btn ops-tap" onClick={() => setAll(true)}>Take all</button>
@@ -396,7 +394,7 @@ function SendSheet({ me, l, agreed, outletsQ, onClose, onSent }) {
       {o && blocked && (
         <div className="lt-remind">
           <p>Still out at {blocked.by} until {dayWords(blocked.until)}. Wait for them, or say they didn’t print it.</p>
-          <button type="button" className="btn ops-tap" onClick={() => notOut(blocked)}>Mark Not published</button>
+          <button type="button" className="btn ops-tap" onClick={() => notOut(blocked)}>They didn’t print it</button>
         </div>
       )}
       {o && !blocked && (
@@ -561,7 +559,7 @@ function PickAgain({ l, dropped, outletsQ, onDone }) {
   );
 }
 
-// ── More: withdraw, delete ──
+// ── More: the reply emails, withdraw, delete ──
 function LetterMore({ l, onDone }) {
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -570,7 +568,16 @@ function LetterMore({ l, onDone }) {
   const [error, setError] = useState(null);
   const canWithdraw = !['published', 'withdrawn'].includes(l.status);
   const canDelete = (l.sends || []).length === 0;
-  if (!canWithdraw && !canDelete) return null;
+  const [emailMe, setEmailMe] = useState(l.email_me !== false);
+  const [emailBusy, setEmailBusy] = useState(false);
+  const flipEmail = async (on) => {
+    setError(null); setEmailBusy(true); setEmailMe(on);
+    try {
+      await action('myletter.details', { id: l.id, email_me: on });
+      qc.invalidateQueries({ queryKey: ['letters', 'mine', l.id] });
+      onDone(on ? 'We’ll email you when the campaign replies' : 'No more emails about this letter');
+    } catch (err) { setEmailMe(!on); setError(err.message); } finally { setEmailBusy(false); }
+  };
   const go = async (what) => {
     setError(null);
     try {
@@ -582,7 +589,11 @@ function LetterMore({ l, onDone }) {
   const words = { withdraw: 'Withdraw this letter? The campaign stops working on it.', delete: 'Delete this letter and its drafts?' };
   return (
     <More>
-      {!asking ? (
+      <label className="lt-check lt-emailme">
+        <input type="checkbox" checked={emailMe} disabled={emailBusy || !online} onChange={(e) => flipEmail(e.target.checked)} />
+        <span>Email me when the campaign replies</span>
+      </label>
+      {!asking ? (canWithdraw || canDelete) && (
         <div className="ops-actions">
           {canWithdraw && <button type="button" className="btn btn-quiet ops-tap" onClick={() => setAsking('withdraw')}>Withdraw</button>}
           {canDelete && <button type="button" className="btn btn-quiet ops-tap" onClick={() => setAsking('delete')}>Delete</button>}

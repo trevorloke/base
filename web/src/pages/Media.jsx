@@ -162,14 +162,17 @@ function ReleasesTab({ creating, onClose }) {
             <span className="ops-meta">Anyone who asked not to be emailed or contacted is left out.</span>
           </div>
           <More>
-            <span className="md-label" id="md-only">Only</span>
-            <div className="md-chips" role="group" aria-labelledby="md-only">
-              {LISTS.map(([k, w]) => (
-                <button key={k} type="button" aria-pressed={only.includes(k)} className={`chip md-chip${only.includes(k) ? ' is-on' : ''}`}
-                  onClick={() => setOnly(only.includes(k) ? only.filter((x) => x !== k) : [...only, k])}>{w}</button>
-              ))}
+            {/* One field, as "To" above: the label sits on its chips. */}
+            <div className="field">
+              <span className="md-label" id="md-only">Only</span>
+              <div className="md-chips" role="group" aria-labelledby="md-only">
+                {LISTS.map(([k, w]) => (
+                  <button key={k} type="button" aria-pressed={only.includes(k)} className={`chip md-chip${only.includes(k) ? ' is-on' : ''}`}
+                    onClick={() => setOnly(only.includes(k) ? only.filter((x) => x !== k) : [...only, k])}>{w}</button>
+                ))}
+              </div>
+              {only.length > 0 && <span className="ops-meta">Only {pick.noun[1]} on {only.map((k) => listWord[k]).join(' or ')}.</span>}
             </div>
-            {only.length > 0 && <span className="ops-meta">Only {pick.noun[1]} on {only.map((k) => listWord[k]).join(' or ')}.</span>}
           </More>
         </div>
       )}
@@ -507,7 +510,7 @@ function ContactsTab({ desk, adding, onCloseAdd, toast }) {
                       <WontGet c={c} />
                     </td>
                     <td className="md-outlet">{c.outlet || ''}</td>
-                    <td className="md-on">{(c.lists || []).map((k) => listWord[k]).join(', ')}</td>
+                    <td className="md-on"><span className="md-on-chips">{(c.lists || []).map((k) => <span key={k} className="chip md-kind">{listWord[k]}</span>)}</span></td>
                     <td className="md-cut md-beat" title={c.beat || undefined}>{c.beat || ''}</td>
                     {desk && <td className="md-cut" title={c.person.email || undefined}>{c.person.email || '—'}</td>}
                     {desk && <td className="md-one">{c.person.phone || '—'}</td>}

@@ -180,7 +180,7 @@ await page.click('.md-form button[type="submit"]');
 await settle(page);
 let dana = (await api(page, '/media/contacts')).json.contacts.find((c) => c.person.name === 'Dana Example');
 check('Dana is on Letters editors and Show hosts', JSON.stringify(dana?.lists) === '["letters","show"]', JSON.stringify(dana?.lists));
-check('the desk table has an "On" column with her lists', /On/.test(await words(page.locator('.md-table thead'))) && /Letters editors, Show hosts/.test(await words(page.locator('.md-table tbody'))));
+check('the desk table has an "On" column with her lists', /On/.test(await words(page.locator('.md-table thead'))) && /Letters editors\s*Show hosts/.test(await words(page.locator('.md-table tbody'))));
 await page.click('.md-filter button:has-text("Letters editors")');
 await settle(page);
 const copyBtn = page.locator('button:has-text("Copy emails")');
@@ -349,7 +349,8 @@ await both(vp, '15-letters-list');
 await goField(vp, `/letters/${letter1}`);
 check('the suggestion: two changes, each with Take and Leave (Leave chosen)', (await vp.locator('.lt-take').count()) === 2
   && (await vp.locator('.lt-take button[aria-checked="true"]:has-text("Leave")').count()) === 2, `${await vp.locator('.lt-take').count()} · ${await words(vp.locator('.lt-diff'))}`.slice(0, 600));
-check('…and the note under it', /Two ideas — keep what you like\./.test(await words(vp.locator('.lt-sugg'))));
+check('…and the note, once (in Notes, not again under the suggestion)', ((await words(vp.locator('.lt-page'))).match(/Two ideas — keep what you like\./g) || []).length === 1, await words(vp.locator('.lt-page')));
+check('the suggestion’s own disclosure says “More choices”', (await vp.locator('.lt-sugg button.disclose').innerText()).trim() === 'More choices');
 await phoneOk(vp, 'A letter with a suggestion');
 await both(vp, '16-suggestion');
 await vp.locator('.lt-take').nth(1).locator('button:has-text("Take")').click();

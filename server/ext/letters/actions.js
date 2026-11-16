@@ -393,7 +393,10 @@ export const actions = {
     }),
     handler: async (tx, ctx, input, emit) => {
       const l = await load(tx, ctx, input.id, { mine: true });
-      if (OUT.includes(l.status)) throw httpError(409, 'It’s already out');
+      // Once it's out, only the reply emails can change (the reply email
+      // says to turn them off on the letter, at any time).
+      const emailOnly = Object.keys(input).every((k) => k === 'id' || k === 'email_me');
+      if (OUT.includes(l.status) && !emailOnly) throw httpError(409, 'It’s already out');
       const set = { ...signSet(input.sign) };
       let dropped = [];
       if (input.title !== undefined) set.title = input.title || null;
