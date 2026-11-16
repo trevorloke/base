@@ -517,6 +517,61 @@ Stripe setup):
   reads `GET /api/payments` (money roles) and writes `payment.ack`
   (area *money*).
 
+## Languages (`server/ext/site/translate.js`, `shared/site/languages.js`)
+
+Every page of every website can be read in **English · ਪੰਜਾਬੀ · 简体 · 繁體**:
+a switch at the very top (after the skip link) links the same page in each
+offered language. A language lives under its own prefix — `/pa/…`, `/zh/…`,
+`/zh-hant/…` on a site's domain, `/site/pa/…` and `/site/sites/<key>/pa/…`
+on the app's address — and every link and form on its pages stays under it.
+`robots.txt`, `sitemap.xml`, `/preferences`, `/unsubscribe` and previews
+answer the 404 under a prefix.
+
+- **Offered** when all hold: `languages.on` has it (a manager's choice;
+  Chinese turns on both scripts); the agent's name is set; its
+  "Authorized by" is approved by a manager and still the code's English;
+  its first essential translation is done (`site_language_state.ready_at`).
+  A language not offered sends its pages to English (302, no-store) and
+  refuses its form posts.
+- **Made ahead of time.** A publish (or a settings, post, petition, website,
+  shift or candidate write) queues one sweep per 30 seconds; one sweep runs
+  per campaign at a time, sends only new English segments (a heading, a
+  paragraph, a Markdown block — `shared/site/segments.js`) to Google Cloud
+  Translation in batches outside any transaction, and writes each answer by
+  an action (`site.translations.machine`, one event per batch). Traditional
+  is converted from Simplified on the server (opencc, Taiwan character
+  forms). A segment that won't come back whole is tried again after an hour
+  and six hours, then not again. The month's characters are reserved before
+  each call (`site_translate_usage`, default 450,000).
+- **Drawn like English.** A page looks its words up in a per-language memo
+  (reloaded only when the language's `rev` moves); a missing segment shows
+  in English with `lang="en"` on its element. Fixed words are
+  `shared/site/ui-words.js` keys (`rc.w`); islands get theirs in their
+  props. Names are drawn as written, with a manager's approved rendering
+  beside them.
+- **The words the law needs** (`LEGAL_ENGLISH` in `shared/site/wording.js`)
+  are never machine words: a manager approves them per language
+  (`site.legal.approve`, `site_legal_words`). The footer carries
+  "Authorized by" in English and, under it, in the page's language. A key
+  whose English changed since its approval shows in English (and is kept
+  in English) until approved again; `server/test/legal-english.test.js`
+  holds the English's hash and `docs/RELEASE-CHECKLIST.md` names changes.
+- **Forms keep what was shown.** A form on a translated page carries
+  `legal_v` (the approval and the release's legal English) and a petition
+  `statement_v` (the statement's version); the server keeps those exact
+  words with their language — `consent_events.lang` and `wording_en`,
+  `site_actions.lang`, a signature's `statement_shown`, a declaration as
+  `{ text, lang, english }` — or answers "This page changed — please
+  reload it and send again". The language comes from the address, never the
+  body.
+- **Remembered.** A language page sets `site_lang` (never on a prefetch);
+  only the home page `/` redirects to it; English's `?lang=en` forgets it.
+  `/preferences` and `/unsubscribe` follow `?lang=` or the cookie.
+- Search engines see a language only when a manager turns on its listing
+  (`languages.index`): until then its pages say `noindex` and the
+  alternates and sitemap leave it out.
+- Ladders: a website trigger may name a language (`trigger_lang`).
+
 ## Settings (`site_settings`, `server/ext/site/shape.js`)
 
 What each section holds (the renderer gets them as `site.*`; every `href`
