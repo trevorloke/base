@@ -178,7 +178,8 @@ const BASE = await start(PORT, { STARBASE_BRAND: 'base', STARBASE_ENV: 'staging'
   await page.waitForSelector('#ws-name', { timeout: 8000 });
   check('Settings → Campaign shows the campaign’s name', (await page.inputValue('#ws-name')) === 'Demo Campaign');
   await page.fill('#ws-name', 'Riverside Demo');
-  await page.getByRole('button', { name: 'Save' }).click();
+  // The campaign's own Save (Letters' "Wait before another paper" has one too).
+  await page.locator('form', { has: page.locator('#ws-name') }).getByRole('button', { name: 'Save' }).click();
   await page.waitForSelector('text=✓ Saved', { timeout: 8000 });
   await sleep(500);
   check('renamed: the sidebar shows the new name at once', /Riverside Demo/.test(await page.innerText('.brand-org')), await page.innerText('.brand-org'));

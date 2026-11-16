@@ -185,6 +185,12 @@ try {
   const text = async (p, sel = 'body') => ((await p.innerText(sel).catch(() => '')) || '').replace(/\s+/g, ' ');
   const settle = async (p, ms = 400) => { await p.waitForLoadState('networkidle').catch(() => {}); await sleep(ms); };
   const go = async (p, path) => { await p.goto(`${ADMIN}${path}`, { waitUntil: 'domcontentloaded' }); await settle(p); };
+  // Reports opens on the quick reports; the tables (and their Take it out)
+  // are under the closed "More: numbers and exports" (REP).
+  const openMore = async (p) => {
+    await p.getByRole('button', { name: 'More: numbers and exports' }).click();
+    await p.locator('.rp-sec h2', { hasText: 'Cities' }).waitFor({ timeout: 10000 });
+  };
   const api = (p, path, body) => p.evaluate(async ([u, b]) => {
     const r = await fetch(u, b === undefined ? {} : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) });
     return { status: r.status, json: await r.json().catch(() => null) };
@@ -428,6 +434,7 @@ try {
   const toolsOff = await m.locator('.ls-tools > *:visible').count();
   check('Sheets "No one": the list shows Download CSV exactly as before, no Take it out', (await m.getByRole('link', { name: 'Download CSV' }).count()) === 1 && (await m.getByText('Take it out').count()) === 0);
   await go(m, '/reports');
+  await openMore(m);
   check('Sheets "No one": Reports has no Take it out and no Google Sheets', (await m.getByText('Take it out').count()) === 0 && (await m.getByRole('button', { name: 'Google Sheets' }).count()) === 0);
 
   // ── Managers may send ──
@@ -483,6 +490,7 @@ try {
 
   // ── Reports: a report's Take it out ──
   await go(m, '/reports');
+  await openMore(m);
   const tagsSec = m.locator('.rp-sec', { has: m.locator('h2', { hasText: 'Cities' }) });
   await tagsSec.getByRole('button', { name: 'Take it out' }).click();
   await tagsSec.getByRole('button', { name: 'Send to Google Sheets' }).click();
