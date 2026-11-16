@@ -11,6 +11,7 @@ import { at } from '../base.js';
 import { fmt } from '../components/AudienceBits.jsx';
 import NameAz from '../components/NameAz.jsx';
 import { NeedsSignal, noSignal, useOnline } from '../components/NoSignal.jsx';
+import { zoneOf } from '../components/shiftTime.js';
 import { isDesk } from '../Shell.jsx';
 import './shifts.css';
 import './quick.css';
@@ -31,7 +32,9 @@ export const dayWords = (ymd) => {
   if (!m) return String(ymd || '');
   return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], 12)).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 };
-export const todayWords = () => new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+// Today on the campaign's calendar (settings.tz), as the CSV's file name
+// has it — never the device's, which can be a day off abroad or near midnight.
+export const todayWords = (me) => new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: zoneOf(me) });
 const show = (v, type) => {
   if (v == null || v === '') return '';
   if (type === 'money') return fmtMoney(Math.round(Number(v) * 100));
@@ -101,7 +104,7 @@ export default function QuickReport() {
       <Link className="ops-back qr-noprint" to="/reports">← Reports</Link>
       <div className="qr-printonly">
         <strong>{me?.workspace?.name}</strong> · {d?.title}{d?.said ? ` · ${d.said}` : ''}
-        <br />Printed {todayWords()}{me?.user?.name ? ` by ${me.user.name}` : ''} · {d ? countWords(name, d.total) : ''}
+        <br />Printed {todayWords(me)}{me?.user?.name ? ` by ${me.user.name}` : ''} · {d ? countWords(name, d.total) : ''}
       </div>
       <div className="ops-head">
         <h1>{title}</h1>

@@ -151,6 +151,8 @@ await mk('eve', 'Eve', 'Example', '7150 124 St', 49.1300, -122.8530, { phone: '6
 await mk('fay', 'Fay', 'Nowhere', '15000 88 Ave', null, null);
 // The one door in Fleetwood West: its sheet says "1 door · 1 person".
 await mk('gus', 'Gus', 'Example', '16010 92 Ave', 49.1650, -122.7950);
+// A rural route with no house number, in Newton East: one "Other addresses" heading.
+await mk('hal', 'Hal', 'Example', 'RR 2 Site 5', 49.1320, -122.8450);
 const turf = (await act('turf.create', {
   name: 'Newton East', polygon: [[49.125, -122.860], [49.140, -122.860], [49.140, -122.838], [49.125, -122.838]],
 })).turf;
@@ -308,6 +310,21 @@ check('the script filled with the campaign’s name', sheet.includes(`Hi [their 
 check('street headings with capitals kept', (await page.$$eval('.ws-street th', (th) => th.map((x) => x.innerText))).includes('72 Ave'));
 check('Last: Lean yes; Last: voting for Locke', /Last: Lean yes/.test(sheet) && /Last: voting for Locke/.test(sheet));
 check('Do not contact — skip', /Do not contact — skip/.test(sheet));
+const streets = await page.$$eval('.ws-street th', (th) => th.map((x) => x.innerText.trim()));
+check('a door with no house number sits under "Other addresses", not under itself', streets.includes('Other addresses') && !streets.includes('RR 2 Site 5') && /RR 2 Site 5/.test(sheet), streets.join('|'));
+// The printed date is the campaign's (Vancouver), not the device's: a
+// laptop on Kiritimati time (UTC+14) prints the same day the CSV is named for.
+{
+  const want = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'America/Vancouver' });
+  const far = await browser.newContext({ viewport: WIDE, timezoneId: 'Pacific/Kiritimati', storageState: await dctx.storageState() });
+  const fp = await far.newPage();
+  await fp.goto(page.url(), { waitUntil: 'domcontentloaded' });
+  await fp.waitForSelector('.ws-sheet', { timeout: 8000 });
+  const sub = await fp.innerText('.ws-sub');
+  const head = await fp.$eval('.qr-print > .qr-printonly', (el) => el.textContent);
+  check('the printed date is the campaign’s day, not the device’s', sub.includes(`printed ${want}`) && head.includes(`Printed ${want}`), `${want} | ${sub} | ${head}`);
+  await far.close();
+}
 check('no phone, no email, no "not on the map", no two-letter code', !/555-01|@example\.org|not on the map/i.test(sheet) && !/\b(NH|NA)\b/.test(sheet) && !/\b[1-4][A-Z]\b/.test(sheet));
 check('Still to knock: Eve’s door (done) left off', !/7150/.test(sheet));
 await page.click('.qr-chip:has-text("Every door")'); await sleep(900);
@@ -402,6 +419,12 @@ await vol.H.go('/reports/walk');
 check('a volunteer: the desk’s address says Not for your role, no sheet', /Not for your role/.test(await vol.H.text()) && (await vol.pg.locator('.ws-turfs, .ws-sheet').count()) === 0);
 const vr = await vol.H.api('/quick-reports-menu');
 check('a volunteer: the server says desk only', vr.status === 403);
+// A volunteer granted Data and Map reaches Reports: a plain line, not a retry.
+const val = await join('volunteer', 'Val', { grant: ['data', 'map'] });
+await val.H.go('/reports');
+const valMenu = await settled(val.pg, '.rp-quick');
+check('a volunteer granted Data: "No quick reports for you here.", no Try again', /No quick reports for you here\./.test(valMenu) && !/Try again|Unavailable/.test(valMenu), valMenu);
+await val.H.shot('vol-data-reports');
 
 check('no page errors', errors.length === 0, errors.join(' | '));
 await browser.close();

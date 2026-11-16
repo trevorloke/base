@@ -6,7 +6,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { apiGet, fmtMoney } from '../api.js';
+import { apiGet, ApiError, fmtMoney } from '../api.js';
 import { NoSignal, noSignal } from '../components/NoSignal.jsx';
 import { fmt } from '../components/AudienceBits.jsx';
 import './shifts.css'; // the ops-* pieces (the head, the page column, the buttons)
@@ -63,11 +63,14 @@ function QuickCount({ name }) {
 function QuickReports() {
   const q = useQuery({ queryKey: ['quick', 'menu'], queryFn: () => apiGet('/quick-reports-menu'), retry: false });
   const mine = (q.data?.reports || []).filter((r) => r.can);
+  // Refused (a volunteer granted Data: "desk only") — trying again can't help.
+  const refused = q.error instanceof ApiError && q.error.status >= 400 && q.error.status < 500;
   return (
     <section className="rp-quick" aria-labelledby="rp-quick-h">
       <h2 id="rp-quick-h">Quick reports</h2>
       {noSignal(q) ? <NoSignal />
         : q.isPending ? <p className="ops-meta" role="status">Loading…</p>
+        : refused ? <p className="ops-meta">No quick reports for you here.</p>
         : q.isError ? <p className="ops-meta" role="alert">Unavailable — <button type="button" className="btn btn-quiet ops-tap" onClick={() => q.refetch()}>Try again</button></p>
         : !mine.length ? <p className="ops-meta">No quick reports for you here.</p>
         : (

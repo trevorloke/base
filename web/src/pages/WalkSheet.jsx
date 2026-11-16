@@ -77,17 +77,21 @@ function Chooser() {
   );
 }
 
-function Sheet({ s, script }) {
+function Sheet({ s, script, me }) {
   const steps = s.scale?.steps || [];
   const heads = [...steps.map((x) => x.word), ...TICKS];
   const cands = (s.scale?.candidates || []).map((c) => `${String(c.code).replace(/^4/, '')} ${c.name}`);
   const cols = heads.length + 2;
+  // A door with no house number (a rural route, a site) would head its
+  // own street and then repeat under it: those go last, under one heading.
+  const doors = [...s.doors.filter((d) => d.house_number), ...s.doors.filter((d) => !d.house_number)];
   let street = null;
   const body = [];
-  s.doors.forEach((d, i) => {
-    if (d.street !== street) {
-      street = d.street;
-      body.push(<tbody key={`s${i}`}><tr className="ws-street"><th colSpan={cols} scope="colgroup">{d.street || 'No street'}</th></tr></tbody>);
+  doors.forEach((d, i) => {
+    const head = d.house_number ? (d.street || 'No street') : 'Other addresses';
+    if (head !== street) {
+      street = head;
+      body.push(<tbody key={`s${i}`}><tr className="ws-street"><th colSpan={cols} scope="colgroup">{head}</th></tr></tbody>);
     }
     const done = d.state === 'done';
     body.push(
@@ -118,7 +122,7 @@ function Sheet({ s, script }) {
   return (
     <div className="ws-sheet">
       <h2>{s.turf.name} — walking list</h2>
-      <p className="ws-sub">{[s.pass?.name, `${fmt(s.counts.doors)} ${s.counts.doors === 1 ? 'door' : 'doors'}`, `${fmt(s.counts.people)} ${s.counts.people === 1 ? 'person' : 'people'}`, `printed ${todayWords()}`].filter(Boolean).join(' · ')}</p>
+      <p className="ws-sub">{[s.pass?.name, `${fmt(s.counts.doors)} ${s.counts.doors === 1 ? 'door' : 'doors'}`, `${fmt(s.counts.people)} ${s.counts.people === 1 ? 'person' : 'people'}`, `printed ${todayWords(me)}`].filter(Boolean).join(' · ')}</p>
       <p className="ws-fill">{'Canvasser ____________  Date ________  Back to the office by ________'}</p>
       {cands.length > 0 && <p className="ws-who">If Opposed, write the letter of who they’re voting for: {cands.join(' · ')}</p>}
       {script && <div className="ws-script"><b>Script</b>{script}</div>}
@@ -171,7 +175,7 @@ function WalkOne({ turf }) {
       <Link className="ops-back qr-noprint" to="/reports/walk">← Choose another turf</Link>
       <div className="qr-printonly">
         <strong>{s?.campaign || me?.workspace?.name}</strong> · Walking list
-        <br />Printed {todayWords()}{me?.user?.name ? ` by ${me.user.name}` : ''}{s ? ` · ${fmt(s.counts.doors)} ${s.counts.doors === 1 ? 'door' : 'doors'}` : ''}
+        <br />Printed {todayWords(me)}{me?.user?.name ? ` by ${me.user.name}` : ''}{s ? ` · ${fmt(s.counts.doors)} ${s.counts.doors === 1 ? 'door' : 'doors'}` : ''}
       </div>
       {/* On paper the sheet's own head says the turf. */}
       <div className="ops-head qr-noprint">
@@ -207,7 +211,7 @@ function WalkOne({ turf }) {
         : tooBig ? <p className="qr-state qr-state--bad" role="alert">{q.error.message}. <Link to={`/map?turf=${encodeURIComponent(turf)}`}>Open the map</Link></p>
         : q.isError && refused(q.error) ? <p className="qr-state qr-state--bad" role="alert">{q.error.status === 404 ? 'No such turf.' : q.error.message}</p>
         : q.isError ? <p className="qr-state qr-state--bad" role="alert">Unavailable — <button type="button" className="btn btn-quiet ops-tap" onClick={() => q.refetch()}>Try again</button></p>
-        : <Sheet s={s} script={script} />}
+        : <Sheet s={s} script={script} me={me} />}
     </div>
   );
 }
