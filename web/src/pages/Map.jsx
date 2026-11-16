@@ -2868,6 +2868,7 @@ export default function MapPage() {
             me={me}
             canCreate={canCreate}
             canAddHere={canCreate || Boolean(mineKeys?.has(selectedDoor.key))}
+            allowGoogle={isGoogleLook(tiles?.url)}
           />
         </div>
       )}

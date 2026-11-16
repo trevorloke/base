@@ -421,7 +421,9 @@ export function Directions({ to, words, mode, className = 'btn btn-quiet door-ac
 // Mount with key={door.key} so per-door state (optimistic ratings, pending
 // call log, note) resets naturally when the user moves to another door.
 // canAddHere: "+ Person at this door" (desk: anywhere; a volunteer: a door in a turf they walk).
-export default function DoorCard({ door, selectedId, onSelect, onClose, toast, me, canCreate = true, canAddHere = canCreate }) {
+// allowGoogle: the map under the card is Google's (Google's address rows
+// only over Google's map, as AddDoorForm).
+export default function DoorCard({ door, selectedId, onSelect, onClose, toast, me, canCreate = true, canAddHere = canCreate, allowGoogle = false }) {
   const queryClient = useQueryClient();
   const location = useLocation();
   // The profile's back link reads this: "← Map", back to this door (the URL
@@ -689,7 +691,7 @@ export default function DoorCard({ door, selectedId, onSelect, onClose, toast, m
           <OutcomeButtons items={channel === 'door' ? [...OUTCOMES, LIT] : OUTCOMES} disabled={busy} onPick={(code) => log(sel, channel, code)} />
           {moving && (
             <MovePanel key={moving.cid || moving.person.id} person={{ ...moving.person, address: moving.person.address ?? door.address, unit: moving.person.unit ?? door.unit }}
-              desk={DESK_ROLES.includes(me?.role)} contactClientId={moving.cid} oldDoor={persons.filter((p) => !p.pending)} where="door"
+              desk={DESK_ROLES.includes(me?.role)} contactClientId={moving.cid} oldDoor={persons.filter((p) => !p.pending)} where="door" allowGoogle={allowGoogle}
               toast={(text) => toast(text)}
               onClose={({ sent }) => { const m = moving; setMoving(null); if (sent || !m.queued) refresh(); }} />
           )}

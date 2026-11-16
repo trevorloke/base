@@ -23,7 +23,8 @@
 //      unit, city and postal code and is placed by B.C.; then Google refusing
 //      Places: B.C.'s rows, no logo, one refused call, and Services flagged.
 //   C  ADDRESS_SUGGEST=google and Google refusing tiles: the free map, and
-//      New door asks with nogoogle=1 and gets no Google rows.
+//      New door and a door card's Moved → New address ask with nogoogle=1
+//      and get no Google rows.
 //   D  GOOGLE_MAPS_TILES=off: every Directions link is still there.
 //
 //   (cd web && npm run build) && node e2e-gmaps.mjs     (ports PORT, PORT+1, PORT+2; PORT default 5340)
@@ -703,6 +704,22 @@ if (want('C')) {
   check('C6: over the free map New door asks with nogoogle=1 — no Google rows, no logo, no autocomplete',
     asks.length > 0 && asks.every((u) => /nogoogle=1/.test(u)) && !l.logo && o.every((x) => !/Surrey, BC, Canada$/.test(x)) && g.autocomplete.length === a0,
     JSON.stringify({ asks: asks.slice(-1), o, google: g.autocomplete.length - a0 }));
+  // The door card's Moved → New address box over the same free map.
+  asks.length = 0;
+  await openMap(p, `/admin/map?person=${s.people[1].id}`);
+  await p.waitForSelector('aside.door-card', { timeout: 10000 }).catch(() => {});
+  await p.click('aside.door-card .fk-out:has-text("Moved")');
+  await p.waitForSelector('aside.door-card .mv-panel', { timeout: 6000 }).catch(() => {});
+  await p.click('aside.door-card .mv-choice:has-text("New address")');
+  const box = 'aside.door-card .mv-panel input[role="combobox"]';
+  await p.waitForSelector(box, { timeout: 5000 }).catch(() => {});
+  const a1 = g.autocomplete.length;
+  await typeAddress(p, box, '13450 104');
+  const o2 = await options(p);
+  const l2 = await logoAfterList(p);
+  check('C6: …and so does the door card’s Moved → New address box — nogoogle=1, no Google rows, no logo, no autocomplete',
+    asks.length > 0 && asks.every((u) => /nogoogle=1/.test(u)) && !l2.logo && o2.every((x) => !/Surrey, BC, Canada$/.test(x)) && g.autocomplete.length === a1,
+    JSON.stringify({ asks: asks.slice(-1), o: o2, google: g.autocomplete.length - a1 }));
   await p.close();
 }
 g.tiles = 'ok';

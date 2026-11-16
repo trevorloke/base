@@ -13,6 +13,8 @@
 //              at the old address when there's no signal to ask
 //     where    'door' ("— off this door" in the toast) or 'profile'
 //     toast(text, tone)   tone: 'ok' | 'queued' | 'error'
+//     allowGoogle  false over a map that isn't Google's (the Map's door
+//              card): the address box asks for rows with a pin only
 //     onClose({ sent, moved })   sent: something reached the server with
 //              signal; moved: the ids of others moved from here meanwhile
 //
@@ -42,7 +44,7 @@ const OFFICE_MS = 4000;
 
 // The choice and the address: shared by the panel and a row's "Moved out".
 // onSave(input) → a promise of an error sentence, or null when it's saved.
-function WhereForm({ who, city, onSave, onLater = null, only = null, idPrefix }) {
+function WhereForm({ who, city, onSave, onLater = null, only = null, idPrefix, allowGoogle = true }) {
   const online = useOnline();
   const qid = useId();
   const [choice, setChoice] = useState(only);
@@ -81,7 +83,7 @@ function WhereForm({ who, city, onSave, onLater = null, only = null, idPrefix })
       )}
       {choice === 'new' && (
         <div className="mv-fields">
-          <AddressField id={`${idPrefix}-address`} value={form.address} placed={Boolean(pin)} autoFocus
+          <AddressField id={`${idPrefix}-address`} value={form.address} placed={Boolean(pin)} autoFocus allowGoogle={allowGoogle}
             hint={online ? 'Found on the map when you save' : 'Saved on this phone — placed on the map once it sends'}
             onChange={(v) => { setForm((f) => ({ ...f, address: v })); setPin(null); }}
             onPick={(a) => {
@@ -154,7 +156,7 @@ function useDoorLists(personId, cid, enabled) {
 }
 
 export default function MovePanel({
-  person, desk = false, contactClientId = null, mode = 'tap', oldDoor = [], where = 'door', toast = () => {}, onClose,
+  person, desk = false, contactClientId = null, mode = 'tap', oldDoor = [], where = 'door', toast = () => {}, onClose, allowGoogle = true,
 }) {
   const [phase, setPhase] = useState('ask'); // ask · lists · office
   const [saved, setSaved] = useState(null); // { input, result | null, cid, queued }
@@ -219,11 +221,11 @@ export default function MovePanel({
     <section className="mv-panel" aria-label={`Where did ${first || 'they'} go?`}>
       {phase === 'ask' && (
         <WhereForm who={person.name} city={person.city} idPrefix={`mv-${person.id.slice(0, 8)}`}
-          only={mode === 'add' ? 'new' : null} onSave={onSave} onLater={close} />
+          only={mode === 'add' ? 'new' : null} onSave={onSave} onLater={close} allowGoogle={allowGoogle} />
       )}
       {phase === 'office' && <p className="mv-office" role="status">{OFFICE}</p>}
       {phase === 'lists' && saved && (
-        <Lists person={person} desk={desk} saved={saved} was={was} mode={mode}
+        <Lists person={person} desk={desk} saved={saved} was={was} mode={mode} allowGoogle={allowGoogle}
           rowOpen={rowOpen} setRowOpen={setRowOpen} onSent={() => { sent.current = true; }} toast={toast}
           onMoved={(id) => { movedIds.current = [...movedIds.current, id]; }} />
       )}
@@ -237,7 +239,7 @@ export default function MovePanel({
 }
 
 // "Who lives at 9800 King George Blvd now?" and "Did anyone else move from …?"
-function Lists({ person, desk, saved, was, mode, rowOpen, setRowOpen, onSent, onMoved, toast }) {
+function Lists({ person, desk, saved, was, mode, rowOpen, setRowOpen, onSent, onMoved, toast, allowGoogle }) {
   const { input } = saved;
   const unknown = Boolean(input.unknown);
   // Saved with no signal: the lists come once the outbox has sent it.
@@ -247,7 +249,7 @@ function Lists({ person, desk, saved, was, mode, rowOpen, setRowOpen, onSent, on
   return (
     <div className="mv-lists" aria-live="polite">
       {!unknown && (
-        <There person={person} desk={desk} input={input} res={res} later={saved.result ? null : later}
+        <There person={person} desk={desk} input={input} res={res} later={saved.result ? null : later} allowGoogle={allowGoogle}
           rowOpen={rowOpen} setRowOpen={setRowOpen} onSent={onSent} toast={toast} />
       )}
       {left.length > 0 && (
@@ -264,7 +266,7 @@ function useRows() {
   return [rows, patch];
 }
 
-function There({ person, desk, input, res, later, rowOpen, setRowOpen, onSent, toast }) {
+function There({ person, desk, input, res, later, rowOpen, setRowOpen, onSent, toast, allowGoogle }) {
   // The city the server kept when none was typed: the people added or moved
   // here get the same one, so they're found at this address.
   const to = { ...input.to, city: input.to.city || res?.person?.city || person.city || undefined };
@@ -327,7 +329,7 @@ function There({ person, desk, input, res, later, rowOpen, setRowOpen, onSent, t
               )}
               {open && (
                 <div className="mv-sub">
-                  <WhereForm who={p.name} city={to.city || person.city} idPrefix={`mv-row-${p.id.slice(0, 8)}`}
+                  <WhereForm who={p.name} city={to.city || person.city} idPrefix={`mv-row-${p.id.slice(0, 8)}`} allowGoogle={allowGoogle}
                     onSave={(choice) => movedOut(p, choice)} />
                 </div>
               )}
