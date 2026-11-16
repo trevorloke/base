@@ -9,7 +9,10 @@
 //                  the person goes to the new address — or, unknown, off
 //                  every door, the map and walk lists, the old address kept
 //                  on the move. A replay of the phone's client_id is the
-//                  same move, never a second.
+//                  same move, never a second. A newer Moved knock answered
+//                  with what's on file closes without changing anything;
+//                  a move tapped on an address the office has changed
+//                  since (seen) is refused.
 //   person.unmove  desk only (and a volunteer granted People): the newest
 //                  move, while the address is still what it left.
 import { z } from 'zod';
@@ -21,6 +24,7 @@ import { NAME_ADDR } from '../../lib/matchkeys.js';
 import { DOOR_FIELDS } from '../fields/people.js';
 import { inMyTurf } from '../core/index.js';
 import { doorLists, mayMoveAnyone } from './lists.js';
+import { movedOpenWhere } from './open.js';
 
 const ALL_ROLES = ['manager', 'treasurer', 'staff', 'volunteer'];
 const PEOPLE_ROLES = ['manager', 'treasurer', 'staff'];
@@ -31,6 +35,20 @@ const low = (s) => String(s ?? '').trim().toLowerCase();
 
 const PICK = 'Pick a new address or Address unknown';
 const OFFICE = 'Only the office can change this address';
+const CHANGED = 'The address changed since — check the profile';
+
+// A newer Moved knock on someone a move already settled ("Needs an address"
+// again) whose answer is what's on file: Address unknown again, or the
+// address an earlier move gave. Kept as a move that changes nothing, so the
+// knock closes; anything else that changes nothing is still refused.
+const confirms = async (tx, ctx, cur, unknown) => {
+  if (!unknown && !(await tx.query(
+    'select 1 from person_moves where workspace_id = $1 and person_id = $2 and undone_at is null limit 1', [ctx.workspaceId, cur.id],
+  )).rows[0]) return false;
+  return !!(await tx.query(
+    `select 1 from persons p where p.workspace_id = $1 and p.id = $2 and ${movedOpenWhere('p', '$1')}`, [ctx.workspaceId, cur.id],
+  )).rows[0];
+};
 
 const moveInput = z.object({
   person_id: z.uuid(),
@@ -43,6 +61,12 @@ const moveInput = z.object({
     lng: z.number().min(-180).max(180).nullish(),
   }).optional(),
   unknown: z.literal(true).optional(),
+  // What the phone had on file when Moved was tapped (a queued move can
+  // land after the office changed the address). Older phones send none.
+  seen: z.object({
+    address: z.string().max(1000).nullish(),
+    unit: z.string().max(1000).nullish(),
+  }).optional(),
   client_id: z.uuid().nullish(),
   contact_client_id: z.uuid().nullish(),
 });
@@ -95,6 +119,7 @@ export const applyMove = async (tx, ctx, cur, input, emit) => {
   const desk = mayMoveAnyone(ctx);
   let next;
   let keepPin = false;
+  let same = false; // the answer is what's on file already (confirms)
   if (input.to) {
     const to = input.to;
     const s = settleAddress(cur, { address: to.address, unit: to.unit || null });
@@ -110,21 +135,30 @@ export const applyMove = async (tx, ctx, cur, input, emit) => {
       city, postal: to.postal || null,
     };
     if (low(next.address) === low(cur.address) && low(next.unit) === low(cur.unit) && low(next.city) === low(cur.city)) {
-      throw httpError(409, 'That’s the address on file already');
+      same = await confirms(tx, ctx, cur, false);
+      if (!same) throw httpError(409, 'That’s the address on file already');
     }
     if (to.lat != null && to.lng != null) {
       keepPin = desk || await pinOnFile(tx, ctx, cur.id, next, to.lat, to.lng);
     }
     Object.assign(next, keepPin ? { lat: to.lat, lng: to.lng } : { lat: null, lng: null }, { address_status: null });
   } else {
-    if (cur.address == null && cur.address_status === 'unknown') throw httpError(409, 'Address unknown is on file already');
+    if (cur.address == null && cur.address_status === 'unknown') {
+      same = await confirms(tx, ctx, cur, true);
+      if (!same) throw httpError(409, 'Address unknown is on file already');
+    }
     next = { address: null, house_number: null, unit: null, city: null, postal: null, lat: null, lng: null, address_status: 'unknown' };
+  }
+  // Tapped on an address the office has changed since: the newer one stands.
+  const { seen } = input;
+  if (!same && seen && (('address' in seen && low(seen.address) !== low(cur.address)) || ('unit' in seen && low(seen.unit) !== low(cur.unit)))) {
+    throw httpError(409, CHANGED);
   }
   const contactId = input.contact_client_id ? (await tx.query(
     'select id from contacts where workspace_id = $1 and person_id = $2 and client_id = $3 limit 1',
     [ctx.workspaceId, cur.id, input.contact_client_id],
   )).rows[0]?.id || null : null;
-  const fromDoor = await takeDoorFields(tx, ctx, cur.id, emit);
+  const fromDoor = same ? [] : await takeDoorFields(tx, ctx, cur.id, emit);
   const id = newId();
   const result = input.to ? 'new' : 'unknown';
   const move = (await tx.query(
@@ -132,22 +166,23 @@ export const applyMove = async (tx, ctx, cur, input, emit) => {
         from_address, from_house_number, from_unit, from_city, from_postal, from_lat, from_lng, from_status, from_key, from_door,
         to_address, to_house_number, to_unit, to_city, to_postal, contact_id, client_id, created_by)
      select $1::uuid, $2::uuid, p.id, 'moved', $4::text, p.address, p.house_number, p.unit, p.city, p.postal, p.lat, p.lng, p.address_status,
-            case when p.address is null then null else ${NAME_ADDR('p.name', 'p.address')} end, $5::jsonb,
+            case when p.address is null or $14::boolean then null else ${NAME_ADDR('p.name', 'p.address')} end, $5::jsonb,
             $6::text, $7::text, $8::text, $9::text, $10::text, $11::uuid, $12::uuid, $13::uuid
        from persons p where p.id = $3 and p.workspace_id = $2
      returning *`,
     [id, ctx.workspaceId, cur.id, result, JSON.stringify(fromDoor),
      input.to ? next.address : null, input.to ? next.house_number : null, input.to ? next.unit : null,
-     input.to ? next.city : null, input.to ? next.postal : null, contactId, input.client_id || null, ctx.user?.id || null],
+     input.to ? next.city : null, input.to ? next.postal : null, contactId, input.client_id || null, ctx.user?.id || null, same],
   )).rows[0];
+  const { from_key: _key, ...logged } = move;
+  emit('person_move', id, 'create', { ...logged, from_door: parseJ(move.from_door, []) });
+  if (same) return move;
   await tx.query(
     `update persons set address = $3, house_number = $4, unit = $5, city = $6, postal = $7, lat = $8, lng = $9,
         address_status = $10, updated_at = now()
       where id = $1 and workspace_id = $2`,
     [cur.id, ctx.workspaceId, next.address, next.house_number, next.unit, next.city, next.postal, next.lat, next.lng, next.address_status],
   );
-  const { from_key: _key, ...logged } = move;
-  emit('person_move', id, 'create', { ...logged, from_door: parseJ(move.from_door, []) });
   emit('person', cur.id, 'update', {
     address: next.address, house_number: next.house_number, unit: next.unit, city: next.city, postal: next.postal,
     address_status: next.address_status, source: 'move', move_id: id,

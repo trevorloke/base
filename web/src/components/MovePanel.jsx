@@ -180,7 +180,15 @@ export default function MovePanel({
   const was = lineOf(person);
 
   const onSave = async (choice) => {
-    const input = { person_id: person.id, ...choice, ...(contactClientId ? { contact_client_id: contactClientId } : {}) };
+    // What this screen had on file: a queued move that lands after the
+    // office changed the address is refused, not written over it.
+    const seen = {};
+    if ('address' in person) seen.address = person.address ?? null;
+    if ('unit' in person) seen.unit = person.unit ?? null;
+    const input = {
+      person_id: person.id, ...choice, ...(contactClientId ? { contact_client_id: contactClientId } : {}),
+      ...('address' in seen ? { seen } : {}),
+    };
     const r = await sendMove(input, person.name);
     if (!r.ok) {
       if (r.office) {

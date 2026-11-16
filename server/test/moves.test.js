@@ -388,6 +388,60 @@ test('Needs an address and Address unknown: People, the counts and the ids agree
   assert.equal(ok(await mgr.get('/api/persons?moved=unknown&limit=500')).persons.every((p) => p.address_status === undefined || p.address_status === 'unknown'), true);
 });
 
+test('a Moved knock on someone already moved closes with the same answer: Address unknown again, or the address the move gave', async () => {
+  const ora = await atDoor('Ora Example');
+  ok(await knock(mgr, ora));
+  ok(await mgr.action('person.move', { person_id: ora.id, unknown: true }));
+  ok(await mgr.action('contact.log', { person_id: ora.id, channel: 'phone', outcome: 'moved' }));
+  assert.ok((await openIds()).includes(ora.id), 'a newer Moved knock: open again');
+  const cid = randomUUID();
+  // (Off the map now, so a volunteer's phone gets “the office will finish”.)
+  assert.equal((await vol.action('person.move', { person_id: ora.id, unknown: true })).status, 403);
+  const r = ok(await granted.action('person.move', { person_id: ora.id, unknown: true, client_id: cid }), 'unknown again closes it');
+  assert.deepEqual([r.move.result, r.there, r.left], ['unknown', null, []]);
+  assert.ok(!(await openIds()).includes(ora.id));
+  assert.equal(ok(await granted.action('person.move', { person_id: ora.id, unknown: true, client_id: cid })).duplicate, true);
+  const p = await row(ora.id);
+  assert.deepEqual([p.address, p.address_status], [null, 'unknown'], 'nothing on the person changes');
+
+  const pia = await atDoor('Pia Example');
+  const housemate = await mgr.createPerson('Rue Example', { address: '4410 Fraser Hwy', city: 'Surrey' });
+  ok(await knock(mgr, pia));
+  ok(await mgr.action('person.move', { person_id: pia.id, to: { address: '4410 Fraser Hwy' } }));
+  const before = await row(pia.id);
+  ok(await knock(vol, pia));
+  assert.ok((await openIds()).includes(pia.id));
+  const again = ok(await mgr.action('person.move', { person_id: pia.id, to: { address: '4410 fraser hwy', city: 'Surrey' } }), 'the same address closes it');
+  assert.deepEqual(again.left, [], 'nobody left behind at the address they’re still at');
+  assert.deepEqual(again.there.map((x) => x.id), [housemate.id]);
+  assert.ok(!(await openIds()).includes(pia.id));
+  const after = await row(pia.id);
+  assert.deepEqual([after.address, after.city, String(after.updated_at)], [before.address, before.city, String(before.updated_at)]);
+  const rows = (await db.query('select from_key from person_moves where person_id = $1 order by created_at', [pia.id])).rows;
+  assert.equal(rows.length, 2);
+  assert.equal(rows[1].from_key, null, 'no old door to find them by');
+  // With no knock open, the same answer is still refused.
+  assert.equal((await mgr.action('person.move', { person_id: pia.id, to: { address: '4410 Fraser Hwy' } })).status, 409);
+});
+
+test('a move made from an address that has changed since (a queued one) is refused, not written over the newer address', async () => {
+  const quin = await atDoor('Quin Example');
+  const seen = { address: quin.address, unit: null };
+  ok(await knock(vol, quin));
+  ok(await mgr.action('person.update', { id: quin.id, address: '200 Newer St' }));
+  const r = await granted.action('person.move', { person_id: quin.id, unknown: true, seen, client_id: randomUUID() });
+  assert.equal(r.status, 409);
+  assert.equal(r.json.error, 'The address changed since — check the profile');
+  assert.equal((await row(quin.id)).address, '200 Newer St');
+  const t = await mgr.action('person.move', { person_id: quin.id, to: { address: '300 Other St' }, seen });
+  assert.equal(t.status, 409);
+  // What the phone saw is what's on file (spaces and capitals aside): it goes.
+  ok(await granted.action('person.move', { person_id: quin.id, unknown: true, seen: { address: ' 200 NEWER st', unit: '' } }));
+  // An older phone sends nothing about what it saw: as before.
+  const ray = await atDoor('Ray Example');
+  ok(await vol.action('person.move', { person_id: ray.id, unknown: true }));
+});
+
 test('every write is on the hash chain', async () => {
   assert.equal((await verifyChain(db, ws)).ok, true);
 });

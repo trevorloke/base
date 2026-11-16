@@ -41,7 +41,12 @@ const shape = (desk) => (r) => {
 // move: a person_moves row. → { there, left, there_hidden }
 export const doorLists = async (db, ctx, move) => {
   const desk = mayMoveAnyone(ctx);
-  const left = (await at(db, ctx, move.person_id, move.from_address, move.from_unit, move.from_city)).map(shape(desk));
+  // A move that only confirmed the address on file (ext/moves/actions.js
+  // confirms) left no old door behind.
+  const low = (v) => String(v ?? '').trim().toLowerCase();
+  const stayed = move.result === 'new' && low(move.from_address) === low(move.to_address)
+    && low(move.from_unit) === low(move.to_unit) && low(move.from_city) === low(move.to_city);
+  const left = stayed ? [] : (await at(db, ctx, move.person_id, move.from_address, move.from_unit, move.from_city)).map(shape(desk));
   if (move.result !== 'new') return { there: null, left, there_hidden: false };
   const rows = await at(db, ctx, move.person_id, move.to_address, move.to_unit, move.to_city);
   if (!desk) {
