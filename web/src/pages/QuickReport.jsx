@@ -66,7 +66,9 @@ export default function QuickReport() {
   const q = useQuery({
     queryKey: ['quick', name, qs],
     queryFn: () => apiGet(`/quick-reports/${encodeURIComponent(name)}${qs ? `?${qs}` : ''}`),
-    placeholderData: keepPreviousData,
+    // A chip keeps the sheet on screen while the next one loads; another
+    // report never shows this one's rows.
+    placeholderData: (prev, prevQuery) => (prevQuery?.queryKey?.[1] === name ? keepPreviousData(prev) : undefined),
     retry: (n, err) => !refused(err) && n < 1,
   });
   // Donors: the period's dollars beside the number.
