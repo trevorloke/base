@@ -1092,6 +1092,53 @@ comes back, or asks if words were typed meanwhile).
   new indexes took 0.05–0.6 s each to build on that file (the A–Z one 0.6 s
   and 22 MB, the rest 0.1–5.7 MB); importing 50,000 rows took 40.6 s with
   them and 40.9 s without.
+- **Quick reports (server)** — `server/test/quick-reports.test.js`: the
+  menu of seven in order and who may pull each (a staff member denied
+  Donations gets no Donors or Members; Map alone gets the walking list; a
+  volunteer, even granted Data, gets none); Donors for each period (a
+  voided gift is no gift, an imported one counts, *Lapsed* is Stewardship’s
+  lapsed people, *This year* is People’s `gave=year`), totals, tiers, A–Z
+  (*Van Sample* under V) and Largest first; *Do not contact* in reach.js’s
+  words (the Phone or Email shows the reason on screen; the CSV keeps the
+  number with the reason beside it); Interested in being a candidate (the
+  paper form’s tick; a renamed field answers *Unavailable*, never a broken
+  file); Members (ending in 60 days, a voided term ignored); Signs in
+  walking order; Moved equal to People’s `moved=open`; keyset pages with no
+  gap or overlap across one surname; 5,101 volunteers all in the CSV, the
+  id set read once; the walking list (the walk list’s own doors and order,
+  names apart, no phone, email or tags on any person, Still to knock, the
+  scale’s words and its live candidates, 1,500 doors and `more`, a turf
+  round the city refused before anyone in it is read, the CSV’s Street
+  with its capitals); the streamed CSV (BOM, CRLF, formulas, an empty last
+  page, a failure part way errors the download); and the plans (no pass
+  over persons). `server/test/reports.test.js`: the gifts, members and
+  donations downloads need Donations. The speed check is
+  `node --expose-gc scripts/bench-quick.mjs postgres://…/quick_bench` on a
+  scratch Postgres. On a local Postgres 16, 300,000 made-up people (20,000
+  donors, 2,000 interested in running, 3,000 volunteers, ~2,250 current
+  members, 2,000 signs, 2,000 Moved marks), warm, median of five:
+
+  | Read | Median (ms) | Slowest (ms) | Budget (ms) |
+  |---|---:|---:|---|
+  | Donors count (10,000 this year) | 34 | 36 | 150 / 400 |
+  | Interested in being a candidate count | 28 | 33 | 150 / 400 |
+  | Volunteers count (one pass over persons for the tag) | 47 | 67 | 150 / 400 |
+  | Members count | 8 | 9 | 150 / 400 |
+  | Signs count | 2 | 2 | 150 / 400 |
+  | Moved count | 10 | 10 | 150 / 400 |
+  | Volunteers count, one role | 3 | 3 | 150 / 400 |
+  | Donors, a page of 2,000 with its total | 129 | 143 | 300 / 800 |
+  | Interested in being a candidate, 2,000 | 166 | 192 | 300 / 800 |
+  | Volunteers, 2,000 (the id set and one page) | 96 | 165 | 300 / 800 |
+  | Members, 2,000 | 41 | 51 | 300 / 800 |
+  | Signs, 2,000 | 146 | 163 | 300 / 800 |
+  | Moved, 2,000 | 150 | 271 | 300 / 800 |
+  | Donors, largest first, 2,000 | 150 | 206 | 300 / 800 |
+  | Walking list, one turf (330 doors) | 27 | 27 | 300 |
+  | Walking list, a turf round the city (the 409; the walk list never read) | 26 | 29 | 100 |
+
+  The Donors CSV of 20,000 rows streamed in 1.5 s, and the heap grew by
+  20 MB while it ran (budget 50).
 - **Desk with no signal** — with wifi, open Today, People, a profile,
   Shifts, Signs, Donations and the Inbox. Turn wifi off and reload: each shows
   what it had and the strip says *No signal · from 2:14 pm*. Search People —
