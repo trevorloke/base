@@ -16,7 +16,7 @@ import { NeedsSignal, noSignal, useOnline } from '../components/NoSignal.jsx';
 import { useScripts } from '../components/ScriptLine.jsx';
 import { useVotedMode } from '../components/Voted.jsx';
 import { azSort } from '@starbase/shared/names';
-import { isDesk } from '../Shell.jsx';
+import { hasArea, isDesk } from '../Shell.jsx';
 import { todayWords } from './QuickReport.jsx';
 import './shifts.css';
 import './quick.css';
@@ -36,6 +36,7 @@ const fillForPaper = (body, campaign) => String(body || '')
 const lastWord = (w) => (/^Voting for /.test(w) ? `voting for ${w.slice(11)}` : w);
 
 function Chooser() {
+  const { me } = useOutletContext() ?? {};
   const [find, setFind] = useState('');
   const turfs = useQuery({ queryKey: ['turfs', 'outline'], queryFn: () => apiGet('/turfs?outline=1') });
   const unplaced = useQuery({ queryKey: ['quick', 'walk', 'unplaced'], queryFn: () => apiGet('/quick-reports/walk/unplaced'), retry: false });
@@ -44,7 +45,8 @@ function Chooser() {
   const shown = f ? list.filter((t) => String(t.name).toLowerCase().includes(f)) : list;
   return (
     <div className="ops-page qr-page">
-      <Link className="ops-back" to="/reports">← Reports</Link>
+      {/* Map alone (no Data): Reports isn't theirs, so back to the turfs. */}
+      {hasArea(me, 'data') ? <Link className="ops-back" to="/reports">← Reports</Link> : <Link className="ops-back" to="/turfs">← Turfs</Link>}
       <div className="ops-head"><h1>Walking list</h1></div>
       {noSignal(turfs) ? <p className="qr-state"><NeedsSignal className="" /></p>
         : turfs.isPending ? <p className="qr-state" role="status">Loading…</p>
@@ -171,7 +173,8 @@ function WalkOne({ turf }) {
         <strong>{s?.campaign || me?.workspace?.name}</strong> · Walking list
         <br />Printed {todayWords()}{me?.user?.name ? ` by ${me.user.name}` : ''}{s ? ` · ${fmt(s.counts.doors)} doors` : ''}
       </div>
-      <div className="ops-head">
+      {/* On paper the sheet's own head says the turf. */}
+      <div className="ops-head qr-noprint">
         <h1>{s?.turf?.name || (q.isError ? 'Walking list' : 'Loading…')}</h1>
         <div className="ops-head__actions qr-noprint">
           <button type="button" className="btn btn-primary ops-tap" disabled={!canPrint || tooBig} onClick={() => window.print()}>Print</button>

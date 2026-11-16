@@ -249,6 +249,14 @@ check('Make it a list opens /lists/new with the filter', new RegExp(`/lists/new\
 await D.go('/reports/quick/running');
 await settled(page, '.qr-page');
 await both(page, D, 'running');
+// Renamed, the field is not found: the sentence in place, Print off.
+await act('field.update', { id: cand?.id, name: 'Might run' });
+await D.go('/reports/quick/running');
+t = await settled(page, '.qr-page');
+check('after a rename: Unavailable, in place, and Print off', /Unavailable — the profile field “Interested in being a candidate” was renamed/.test(t)
+  && await page.locator('.btn-primary:has-text("Print")').isDisabled(), t.slice(0, 200));
+await both(page, D, 'running-renamed');
+await act('field.update', { id: cand?.id, name: 'Interested in being a candidate' });
 for (const name of ['volunteers', 'members', 'signs', 'moved']) {
   await D.go(`/reports/quick/${name}`);
   const s = await settled(page, '.qr-page');
@@ -353,6 +361,10 @@ check('Map only: the bar offers Print a walking list, not Reports nor Donors', m
 await max.pg.keyboard.press('Enter');
 await sleep(900);
 check('Map only: the bar opens the walking list', /\/reports\/walk$/.test(max.pg.url()) && /Walking list/.test(await max.H.text('h1')), max.pg.url());
+check('Map only: back goes to Turfs, not Reports', (await max.pg.locator('.ops-back').innerText()).includes('Turfs'));
+await max.pg.click('.ws-turfs a:has-text("Newton East")');
+await max.pg.waitForSelector('.ws-sheet', { timeout: 8000 });
+check('Map only: the sheet opens', /Newton East — walking list/.test(await max.H.text('.ws-sheet')));
 await max.H.go('/reports');
 check('Map only: Reports itself goes home', !/\/reports$/.test(max.pg.url()), max.pg.url());
 

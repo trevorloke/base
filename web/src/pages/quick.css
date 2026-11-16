@@ -103,6 +103,8 @@
   .qr-print .qr-noprint { display: none !important; }
   html:has(.qr-print), body:has(.qr-print) { background: white !important; color: black !important; }
   body:has(.qr-print) .page { padding: 0; margin: 0; max-width: none; }
+  /* The desk's side nav is hidden; so is the room kept for it. */
+  body:has(.qr-print) #root.has-nav { padding-left: 0 !important; }
   .qr-print, .qr-print * { color: black !important; background: transparent !important; box-shadow: none !important; }
   .qr-print { font-size: 10.5pt; max-width: none; }
   .qr-print .qr-printonly { display: block; margin: 0 0 6pt; }
@@ -121,6 +123,7 @@
   .qr-print .ws-table .ws-tickh, .qr-print .ws-table .ws-tick, .qr-print .ws-table .ws-noteh, .qr-print .ws-table .ws-note { display: table-cell; }
   .qr-print .ws-table th, .qr-print .ws-table td { border-bottom: 0.5pt solid black; }
   .qr-print .ws-door__addr td { font-size: 14pt; }
+  .qr-print .ws-table td.ws-person, .qr-print .ws-table thead th:first-child { width: 32%; }
   .qr-print .ws-box { border-color: black; }
   .qr-print .ws-line { border-color: black; }
   .qr-print .ws-script { border-color: black; }
