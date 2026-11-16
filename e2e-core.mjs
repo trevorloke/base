@@ -255,7 +255,7 @@ check('volunteer brief: no first steps (one is about gifts), no money', vb.activ
 check('desk brief: first steps still there', (await D.api('/brief')).json.activation?.steps?.some((s) => s.key === 'gift' && s.done));
 await V.api('/actions/contact.log', { person_id: P.tom.id, channel: 'text', outcome: 'contacted' });
 await V.go('/');
-await vp.click('.today-morebox__toggle').catch(() => {});
+await vp.click('.today-morebox:not(.today-activity) > .today-morebox__toggle').catch(() => {});
 await sleep(400);
 t = await V.text();
 check('Today → More: "You 1 · Team 1 text this week" (a text logged by hand)', /You 1 · Team 1 text this week/.test(t), (t.match(/You \d+ · Team \d+ texts? this week/g) || []).join(' | '));

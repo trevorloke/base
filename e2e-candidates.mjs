@@ -150,7 +150,7 @@ check('Your race · City council: Supporters, Needed, Days left', /City council/
 const m2 = await measure(cleo.p, 'main');
 check('at 390: no sideways scroll, one primary, taps ≥ 48px', m2.overflow <= 0 && m2.primaries === 1 && m2.minTap >= 48, JSON.stringify(m2));
 await cleo.p.screenshot({ path: `${SHOTS}/03-candidate-today-390.png`, fullPage: true });
-await cleo.p.click('.today-morebox__toggle');
+await cleo.p.click('.today-morebox:not(.today-activity) > .today-morebox__toggle');
 const more = await cleo.p.innerText('.today-morebox__body');
 check('More: Start canvassing, Calls, Signs', /Start canvassing/.test(more) && /Calls/.test(more) && /Signs/.test(more));
 await cleo.p.screenshot({ path: `${SHOTS}/04-candidate-today-more-390.png`, fullPage: true });

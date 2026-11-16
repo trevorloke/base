@@ -156,7 +156,7 @@ check('GET /voted/status for every role: off', (await V.api('/voted/status')).js
 
 // ── 3. The manager turns it on: Today → More → Election day ──
 await D.go('/');
-await page.click('.today-morebox__toggle');
+await page.click('.today-morebox:not(.today-activity) > .today-morebox__toggle');
 await sleep(300);
 const rowOff = await page.$('a.today-row[href="/admin/voted"]');
 const rowOffText = rowOff ? (await rowOff.$eval('.today-row__main', (el) => el.innerText)).replace(/\s+/g, ' ').trim() : '(no row)';
@@ -225,7 +225,7 @@ check('a volunteer’s own marks carry no names', JSON.stringify((await V.api(`/
 
 // ── 5. Today (desk): "Election day · 1 of 2 supporters voted" ──
 await D.go('/');
-await page.click('.today-morebox__toggle');
+await page.click('.today-morebox:not(.today-activity) > .today-morebox__toggle');
 await sleep(300);
 const rowOn = ((await page.innerText('a.today-row[href="/admin/voted"] .today-row__main').catch(() => '')) || '').replace(/\s+/g, ' ').trim();
 const brief = (await D.api('/brief')).json.voted;

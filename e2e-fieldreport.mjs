@@ -274,8 +274,8 @@ await PP.full('03-field-report-phone');
 
 // ── 8. The volunteer: Today → More → All time ──
 await V.go('/');
-await vpage.waitForSelector('.today-morebox__toggle', { timeout: 8000 }).catch(() => {});
-await vpage.tap('.today-morebox__toggle');
+await vpage.waitForSelector('.today-morebox:not(.today-activity) > .today-morebox__toggle', { timeout: 8000 }).catch(() => {});
+await vpage.tap('.today-morebox:not(.today-activity) > .today-morebox__toggle');
 await sleep(400);
 const mine = (await V.api('/brief')).json.field?.mine_all;
 check('brief: the volunteer’s all time is 3 doors, 2 talks, 2 supporters found, 1 day out', JSON.stringify(mine) === JSON.stringify({ doors: 3, talked: 2, support_found: 2, days_out: 1 }), JSON.stringify(mine));
@@ -289,8 +289,8 @@ check('the volunteer typing /field-report lands on Today', new URL(vpage.url()).
 const vReady = await swReady(vpage);
 await vctx.setOffline(true);
 await V.go('/');
-await vpage.waitForSelector('.today-morebox__toggle', { timeout: 8000 }).catch(() => {});
-await vpage.tap('.today-morebox__toggle').catch(() => {});
+await vpage.waitForSelector('.today-morebox:not(.today-activity) > .today-morebox__toggle', { timeout: 8000 }).catch(() => {});
+await vpage.tap('.today-morebox:not(.today-activity) > .today-morebox__toggle').catch(() => {});
 await sleep(400);
 line = await vpage.innerText('.today-morebox__body').catch(() => '');
 check('…and with no signal, the same line from the kept Today', vReady && /All time: 3 doors · 2 talks · 2 supporters found/.test(line.replace(/\s+/g, ' ')), `${vReady} · ${line.slice(0, 160)}`);

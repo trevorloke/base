@@ -315,8 +315,8 @@ check('Team with no signal: "No signal", never "Members 0"; Get invite link off 
     && await page.locator('.ot-invite button[type="submit"]').isDisabled().catch(() => false) && /Inviting, changing roles and removing need signal/.test(t), `${await D.kept()} · ${t.slice(0, 200)}`);
 await simple(D, 'Team, no signal (1360)');
 await D.go('/');
-await page.waitForSelector('.today-morebox__toggle', { timeout: 8000 }).catch(() => {});
-await page.click('.today-morebox__toggle').catch(() => {});
+await page.waitForSelector('.today-morebox:not(.today-activity) > .today-morebox__toggle', { timeout: 8000 }).catch(() => {});
+await page.click('.today-morebox:not(.today-activity) > .today-morebox__toggle').catch(() => {});
 check('Today → More with no signal: Clear sample data is off — "Needs signal"',
   await page.locator('.today-sample-clear button:has-text("Clear sample data")').isDisabled().catch(() => false) && /Needs signal/.test(await page.innerText('.today-sample-clear').catch(() => '')));
 // A shift never opened here: nothing kept for it — and the strip claims no

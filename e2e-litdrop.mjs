@@ -174,8 +174,8 @@ await vpage.locator('.walk-door.is-open .walk-door__head').click();
 // ── 4. Today: "You 1 · Team 1 door lit this week" ──
 const todayLit = async () => {
   await V.go('/');
-  await vpage.waitForSelector('.today-morebox__toggle', { timeout: 8000 });
-  await vpage.click('.today-morebox__toggle');
+  await vpage.waitForSelector('.today-morebox:not(.today-activity) > .today-morebox__toggle', { timeout: 8000 });
+  await vpage.click('.today-morebox:not(.today-activity) > .today-morebox__toggle');
   await sleep(300);
   return vpage.$$eval('.today-mine', (els) => els.map((e) => e.innerText.replace(/\s+/g, ' ').trim()).find((t) => / lit this week$/.test(t)) || '').catch(() => '');
 };

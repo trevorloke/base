@@ -214,6 +214,14 @@ const pickOnes = async (page, base, paths) => {
   const out = [];
   for (const path of paths) {
     await page.goto(`${base}${path}`, { waitUntil: 'networkidle' });
+    // Today keeps the managers' dashboard (and its pick-one) folded under
+    // Activity: open it, so its choices are measured too.
+    const fold = page.locator('.today-activity > .today-morebox__toggle[aria-expanded="false"]');
+    if (await fold.count()) {
+      await fold.click();
+      await page.waitForSelector('.today-activity .dash-seg, .today-activity .dash-periods', { timeout: 15000 }).catch(() => {});
+      await page.waitForLoadState('networkidle');
+    }
     out.push(...await page.evaluate(() => [...document.querySelectorAll('.ops-seg, .ot-seg, .dash-seg, .dash-periods, .channel-toggle, .cl-toggle, .door-channel, .rq-pills, .fk-tabs, .ot-tabs, .ws-tabs')].map((g) => {
       const r = g.getBoundingClientRect();
       const choices = [...g.children].filter((c) => c.matches('button, a')).map((c) => c.getBoundingClientRect());

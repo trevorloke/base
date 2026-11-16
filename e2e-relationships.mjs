@@ -321,7 +321,7 @@ await D.go(`/people/${jasmine.id}`);
 check('the desk’s History says "In person"', /^In person/.test(await tc(page, '.timeline li .what')), await tc(page, '.timeline li .what'));
 check('the nudge is gone now Jasmine is a strong yes', !(await page.$('.rel-nudge')));
 await D.go('/');
-await page.click('.today-morebox__toggle');
+await page.click('.today-morebox:not(.today-activity) > .today-morebox__toggle');
 await sleep(300);
 check('desk Today → More: "· 1 in person" this week', /· 1 in person/.test(await page.innerText('.today-morebox__body').catch(() => '')));
 

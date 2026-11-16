@@ -173,7 +173,20 @@
 .md-table:not(.is-desk) .md-c-socials { width: 15%; }
 .md-table:not(.is-desk) .md-c-last { width: 14%; }
 .md-table .md-on .chip { white-space: nowrap; }
+/* A laptop: an outlet is one or two words read whole ("Independent") and
+   "On" holds a list's chip, so both keep room for them; an address ends
+   in "…", a phone number may wrap and a beat ends in "…", so Email,
+   Phone and Beat give that room up. A chip still too wide wraps at
+   its space ("Letters / editors"), never mid-word or into Beat. */
 @media (max-width: 1199px) {
-  .md-table.is-desk .md-c-outlet { width: 12%; }
-  .md-table.is-desk .md-c-email { width: 16%; }
+  .md-table.is-desk .md-c-name { width: 14%; }
+  .md-table.is-desk .md-c-outlet { width: 17%; }
+  .md-table.is-desk .md-c-on { width: 17%; }
+  .md-table.is-desk .md-c-beat { width: 9%; }
+  .md-table.is-desk .md-c-email { width: 12%; }
+  .md-table.is-desk .md-c-phone { width: 11%; }
+  .md-table .md-on .chip { white-space: normal; overflow-wrap: normal; max-width: 100%; }
+  /* A chip under a name or in "On" starts at the column's edge: its gap
+     to the left would push it past the column's right edge. */
+  .md-table .md-who .md-kind, .md-table .md-on .md-kind { margin-left: 0; }
 }
