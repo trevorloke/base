@@ -75,7 +75,10 @@ export default function GoogleCard() {
   const shown = d.purposes.filter((p) => p.mine && !p.ownCard);
   const domain = d.rules.domain;
   const linkHref = googleStart('link', { app, back });
-  const reconnectHref = grant?.purposes?.[0] ? googleStart('connect', { app, back, purpose: grant.purposes[0] }) : null;
+  // Reconnect through a purpose this person may still use here (one kept
+  // for another campaign would be refused).
+  const usable = grant?.purposes?.find((k) => d.purposes.some((p) => p.key === k && !['not-allowed', 'domain'].includes(p.state)));
+  const reconnectHref = usable ? googleStart('connect', { app, back, purpose: usable }) : null;
   const say = (words) => setNote(words);
 
   return (

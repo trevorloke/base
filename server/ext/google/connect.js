@@ -34,7 +34,12 @@ export const connectBack = async (c, db, flow, who, tokens) => {
     await runAction(db, { workspaceId: flow.workspace_id, actorId: flow.user_id, action: 'google.connect' }, async (tx, emit) => {
       const row = await grantRowOf(tx, flow.user_id, { lock: true });
       if (row && row.sub !== who.sub) throw new OtherAccount();
-      const purposes = [...new Set([...(row?.purposes || []), purpose.key])];
+      // Only purposes whose scopes Google handed back this time: after the
+      // person removed base.win at Google, a Reconnect for one purpose brings
+      // back that one alone, and the others show "Connect" again rather
+      // than a "connected" that has no scope behind it.
+      const kept = (row?.purposes || []).filter((k) => purposeOf(k)?.scopes.every((s) => scopes.includes(s)));
+      const purposes = [...new Set([...kept, purpose.key])];
       if (row) {
         await tx.query(
           `update google_grants set refresh_sealed = $2, scopes = $3, purposes = $4, email = $5, hd = $6,

@@ -429,6 +429,27 @@ test('a revoke queued before the same Google account connected again never revok
   assert.equal((await googleFetch(db, await grantFor(db, { userId: w.id, workspaceId: M.ws }, 'test.other'), api())).ok, true);
 });
 
+test('removed at Google, then connected again for one purpose: only purposes whose scopes came back stay', async () => {
+  const u = await join(M.b, `rv.${tag}@example.org`, 'staff');
+  assert.equal((await connect(u.b, 'test.other', A[23].sub)).google, 'connected');
+  assert.equal((await connect(u.b, 'test.purpose', A[23].sub)).google, 'connected');
+  assert.deepEqual((await grantRow(u.id)).purposes, ['test.other', 'test.purpose']);
+  fake.revokeAll(A[23].sub);
+  const g = await grantFor(db, { userId: u.id, workspaceId: M.ws }, 'test.other');
+  assert.equal((await googleFetch(db, g, api())).trouble.code, 'reconnect');
+  // The card's Reconnect asks for one purpose; nothing else comes back.
+  assert.equal((await connect(u.b, 'test.other', A[23].sub)).google, 'connected');
+  const row = await grantRow(u.id);
+  assert.equal(row.state, 'ok');
+  assert.deepEqual(row.purposes, ['test.other'], 'test.purpose has no scope now: shown as not connected, not as working');
+  assert.equal(await grantFor(db, { userId: u.id, workspaceId: M.ws }, 'test.purpose'), null);
+  const ev = (await events('google_grant')).filter((e) => e.payload.user_id === u.id).at(-1);
+  assert.deepEqual(ev.payload.purposes, ['test.other']);
+  // Connecting it again brings both back (Google adds the earlier scope).
+  assert.equal((await connect(u.b, 'test.purpose', A[23].sub)).google, 'connected');
+  assert.deepEqual((await grantRow(u.id)).purposes, ['test.other', 'test.purpose']);
+});
+
 test('a revoke that keeps failing is tried five times, then parked as failed', async () => {
   const sealed = sealToken('1//not-a-real-token');
   await revokeIfUnshared(db, { workspaceId: M.ws, sub: `nobody-${tag}`, sealed });
