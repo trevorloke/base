@@ -13,6 +13,7 @@ import { domainFor } from '../../lib/google/purposes.js';
 import { grantFor } from '../../lib/google/tokens.js';
 import { DESK, gmailSettings, sentToday } from './actions.js';
 import { apiOffNow, clock, dailyMax } from './send.js';
+import { gmailPeople } from './service.js';
 
 export const api = new Hono();
 
@@ -35,13 +36,7 @@ api.get('/gmail', async (c) => {
     apiOff: apiOffNow(),
   };
   if (ctx.role === 'manager') {
-    out.people = (await db.query(
-      `select u.name, g.email from google_grants g
-       join memberships m on m.user_id = g.user_id and m.workspace_id = $1
-       join users u on u.id = g.user_id
-       where 'gmail.send' = any(g.purposes) order by u.name`,
-      [ctx.workspaceId],
-    )).rows.map((r) => ({ name: r.name, email: r.email }));
+    out.people = await gmailPeople(db, ctx.workspaceId);
   }
   return c.json(out);
 });

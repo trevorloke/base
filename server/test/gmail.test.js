@@ -15,7 +15,7 @@ import { _resetTokensForTest } from '../lib/google/tokens.js';
 import { _resetGmailForTest, _setGmailTimeoutForTest, sendUrl } from '../ext/gmail/send.js';
 import { _resetLimiterForTest } from '../ext/gmail/actions.js';
 import { forViewer } from '../lib/viewer.js';
-import { acct, join, restoreEnv, signup, startGoogle, tag } from './google-helpers.js';
+import { Browser, acct, join, restoreEnv, signup, startGoogle, tag } from './google-helpers.js';
 
 const GMAIL = 'https://www.googleapis.com/auth/gmail.send';
 definePurpose('test.gmailother', { label: 'Test other', scopes: ['https://www.googleapis.com/auth/test.gmailother'], roles: ['manager', 'staff'], area: null });
@@ -384,6 +384,18 @@ test('roles and areas: volunteers and staff denied Outreach get 403; only manage
   const g = ok(await M.b.get('/api/gmail'));
   assert.ok(g.people.some((p) => p.name === 'Sam Example' && p.email === A[0].email));
   assert.ok(!('people' in ok(await S.b.get('/api/gmail'))));
+  // Staff in another campaign, a volunteer here: their grant keeps Gmail,
+  // but here they can't send — not listed, not counted, no address shown.
+  const Y = await staffer('yan');
+  const inv = ok(await M2.b.action('member.invite', { email: Y.email, role: 'staff' }));
+  assert.equal((await new Browser().post('/api/auth/join', { token: inv.joinUrl.split('/join/')[1], password: 'google-2026-pass' })).status, 200);
+  const count = async () => ok(await M.b.get('/api/connections')).services.find((x) => x.key === 'gmail').lines[0];
+  const was = await count();
+  ok(await M.b.action('member.setRole', { user_id: Y.id, role: 'volunteer' }));
+  assert.ok((await grant(Y.id)).purposes.includes('gmail.send'), 'kept for the other campaign');
+  const after = ok(await M.b.get('/api/gmail'));
+  assert.ok(!after.people.some((p) => p.name === 'yan Example'), JSON.stringify(after.people));
+  assert.notEqual(await count(), was, `${was} counts only who can send here`);
   // Staff denied Outreach: GSI's connections follow the team, so Gmail
   // goes from their grant at once (here their only purpose: the grant goes).
   const W = await staffer('wes');
