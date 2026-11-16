@@ -1139,6 +1139,23 @@ comes back, or asks if words were typed meanwhile).
 
   The Donors CSV of 20,000 rows streamed in 1.5 s, and the heap grew by
   22 MB while it ran (budget 50).
+- **Quick reports (screens)** — `PORT=5460 SHOTS=/tmp/qr node
+  e2e-quickreports.mjs`, and again with `BASE_PATH=/imaginesurrey PORT=5461`.
+  Reports opens on Quick reports (counts from *Loading…* to numbers;
+  *Field, by turf →* still one plain link; the old numbers under *More*, read
+  only when opened; the turfs' own counts untouched); Donors (chips in the
+  address, Largest first, Print the one primary, the CSV with its BOM, *Do
+  not call* in a Phone cell, *Make it a list* on This year and Lapsed only,
+  the phone stack); Interested in being a candidate (rows, *Make it a list*,
+  *Unavailable* after a rename); the walking list (the chooser, the sheet's
+  head, heads and tick boxes in the scale's words, the *If Opposed* line, the
+  script filled, streets with capitals, no phone, email or two-letter code,
+  Still to knock and Every door, Script Off, print media, PDFs of the sheet
+  and of Donors); Print from a turf's walk list at the desk and none in the
+  field app; staff denied Donations, Map-only staff through the command bar,
+  a volunteer; no signal; one primary, no sideways scroll and 48 px targets
+  on every screen at both sizes. `server/test/commandbar.test.js`: an entry
+  needing several areas, and the three report entries per role.
 - **Desk with no signal** — with wifi, open Today, People, a profile,
   Shifts, Signs, Donations and the Inbox. Turn wifi off and reload: each shows
   what it had and the strip says *No signal · from 2:14 pm*. Search People —

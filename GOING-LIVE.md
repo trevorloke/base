@@ -273,6 +273,13 @@ what volunteers get, and what you see under *Field app ↗* in your account menu
    first 50: the name, the address in the list and the one on file (or
    *address unknown*). If the list is right and the team was wrong, fix the
    address on the profile.
+7. **Paper walking lists** (Reports → Quick reports → Walking list, or
+   Print on a turf's walk list at the desk) are for a canvasser without a
+   phone. They show names, addresses and the last support answer, never a
+   phone number or an email, and say *Private — bring this sheet back to
+   the office.* Bring them back, and type the results in on the turf's
+   walk list. A turf with more than 6,000 people in its box must be split
+   on the map before it prints.
 
 ### The street map: choose a provider before election week
 
