@@ -1,0 +1,57 @@
+/* MovePanel — "Where did … go?" after a Moved tap, and the profile's move
+   lines (ProfileMove). In place under the outcome row: a quiet card, full
+   width on a phone, every control var(--ctl) tall (48 px on touch). */
+.mv-panel {
+  margin-top: var(--s-3);
+  padding: var(--s-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-ctrl);
+  background: var(--paper-1);
+  display: grid;
+  gap: var(--s-3);
+  min-width: 0;
+}
+.mv-where, .mv-fields, .mv-lists, .mv-list, .mv-add, .mv-onfile { display: grid; gap: var(--s-2); min-width: 0; }
+.mv-q { margin: 0; font-size: 16px; font-weight: 600; color: var(--text-1); }
+.mv-h { margin: 0; font-size: 15px; font-weight: 600; color: var(--text-1); }
+.mv-hint, .mv-line { margin: 0; font-size: 14px; color: var(--text-3); }
+.mv-office { margin: 0; font-size: 15px; color: var(--text-1); }
+.mv-error { margin: 0; }
+
+.mv-choices { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-2); }
+.mv-choice { min-height: var(--ctl); font-size: 15px; }
+.mv-choice[aria-pressed='true'], .mv-segbtn[aria-pressed='true'] {
+  background: var(--mark-soft);
+  border-color: var(--mark);
+  color: var(--ink);
+}
+
+.mv-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-2); min-width: 0; }
+.mv-row2 .field, .mv-fields .field { margin: 0; min-width: 0; }
+.mv-more { justify-self: start; min-height: var(--ctl); }
+
+.mv-acts { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.mv-act { min-height: var(--ctl); }
+.mv-adds { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; }
+
+.mv-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-2); }
+.mv-person { display: grid; gap: var(--s-2); padding: var(--s-2) 0; border-top: 1px solid var(--rule); min-width: 0; }
+.mv-person:first-child { border-top: 0; }
+.mv-person__top { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; min-width: 0; }
+.mv-name { font-size: 15px; color: var(--text-1); overflow-wrap: anywhere; }
+.mv-seg { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-2); }
+.mv-segbtn { min-height: var(--ctl); font-size: 14px; }
+.mv-sub { padding: var(--s-3); border: 1px solid var(--rule-2); border-radius: var(--r-ctrl); background: var(--paper); }
+
+/* The profile's lines (desk). */
+.mv-profile { display: grid; gap: var(--s-2); margin: var(--s-2) 0; }
+.mv-pline { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); margin: 0; font-size: 14px; color: var(--text-2); }
+
+@media (max-width: 720px) {
+  .mv-panel { padding: var(--s-3) var(--s-2); }
+  .mv-acts .mv-act { flex: 1 1 100%; }
+  .mv-adds .mv-act { flex: 1 1 100%; }
+}
+@media (max-width: 380px) {
+  .mv-row2, .mv-choices { grid-template-columns: 1fr; }
+}

@@ -43,6 +43,8 @@ import NameFields from '../components/NameFields.jsx';
 import VoterNumber from '../components/VoterNumber.jsx';
 import SocialsBlock, { SocialsTyped } from '../components/SocialsBlock.jsx';
 import { PersonTimeline, timelineCount, usePersonTimeline } from '../components/PersonTimeline.jsx';
+import MovePanel from '../components/MovePanel.jsx';
+import ProfileMove, { addressWords } from '../components/ProfileMove.jsx';
 
 const TIER_LABEL = {
   superstar: DONOR_TIERS.superstar.label,
@@ -234,7 +236,17 @@ function Header({ person, donor, me, desk, onLog, contacted, level, onEdit, keyL
 // Rating card: big rating buttons + outcomes → contact.log. The channel is set
 // by the Call / Text tiles (else Door); the manual switch sits under the note.
 // ─────────────────────────────────────────────────────────────────────────────
-function RatingCard({ person, refresh, channel, setChannel, cardRef }) {
+// canMove: a Moved tap opens "Where did … go?" (the desk; a volunteer when
+// the server says may_move); otherwise the office asks.
+// onMoving(open) tells the page a panel is open (the desk's own move lines
+// step aside); elsewhere: the desk's "Where to?" panel is open already, so a
+// Moved tap is logged without a second panel.
+function RatingCard({ person, refresh, channel, setChannel, cardRef, canMove = false, desk = false, household = [], onMoving = () => {}, elsewhere = false }) {
+  const [moving, setMovingState] = useState(null); // the Moved tap's client id, while its panel is open
+  const movingRef = useRef(null);
+  const setMoving = (v) => { movingRef.current = v; setMovingState(v); onMoving(Boolean(v)); };
+  useEffect(() => () => { if (movingRef.current) onMoving(false); }, []);
+  const opensPanel = (outcome) => outcome === 'moved' && canMove && !elsewhere;
   const [note, setNoteState] = useState('');
   const [noteOpen, setNoteOpen] = useState(false);
   // The note lives in a ref too, so leaving the profile can still send it
@@ -262,7 +274,9 @@ function RatingCard({ person, refresh, channel, setChannel, cardRef }) {
   const [said, setSaid] = useState(null);
   const status = said?.text || '';
   const reachId = useId();
-  const act = useAction(refresh);
+  // A Moved tap that opens the panel waits to refetch until the panel
+  // closes: the profile holds still while it's open.
+  const act = useAction((res, name, input) => (opensPanel(input?.outcome) ? null : refresh()));
   const outbox = useOutbox();
   const scale = useScale();
   useEffect(() => {
@@ -294,7 +308,12 @@ function RatingCard({ person, refresh, channel, setChannel, cardRef }) {
       setNoteOpen(false);
       // Not reached yet: the door card's words ("Saved on this phone — sends soon").
       const what = `${CHANNEL_LABEL[channel]} · ${contactWord(scale, { rating, outcome })}${answersTail(answers, res.result)}`;
+      if (outcome === 'moved' && !canMove) {
+        setSaid({ text: res.queued ? `${queuedText(res)} · Moved · the office will ask where` : '✓ Moved · the office will ask where', what, queued: Boolean(res.queued) });
+        return;
+      }
       setSaid({ text: res.queued ? `${queuedText(res)} · ${what}` : `✓ ${what}`, what, queued: Boolean(res.queued) });
+      if (opensPanel(outcome)) setMoving(res.client_id || 'tap');
     }
   };
 
@@ -302,6 +321,11 @@ function RatingCard({ person, refresh, channel, setChannel, cardRef }) {
     <section className="card pf-rate" ref={cardRef} aria-label="Rate">
       <RatingButtons value={person.rating} onPick={(code) => log('contacted', code)} disabled={act.busy} />
       <OutcomeButtons onPick={(o) => log(o)} disabled={act.busy} />
+      {moving && (
+        <MovePanel key={moving} person={person} desk={desk} contactClientId={moving === 'tap' ? null : moving} where="profile"
+          oldDoor={household} toast={(text) => setSaid({ text: `✓ ${text}`, what: text, queued: false })}
+          onClose={() => { setMoving(null); refresh(); }} />
+      )}
       <SurveyQuestions key={`questions-${person.id}`} survey={survey} disabled={act.busy} onSave={() => log('contacted')} />
       <div className="pf-rate__foot">
         {noteOpen ? (
@@ -468,7 +492,7 @@ function EditDetailsForm({ person, refresh, onClose, focus = 'name' }) {
 
 // editing: null, or the field the form opens on (the header's Edit, a tap on
 // a line, or "Edit details" — the page holds it so the header can open it).
-function Details({ person, household, refresh, desk, me, editing, setEditing }) {
+function Details({ person, household, refresh, desk, me, editing, setEditing, move = null }) {
   const [saved, setSaved] = useState(null);
   // The number dials from your own phone only when calls through the campaign are off.
   const ownDialler = textingOn(useTextingStatus(me)).voice === false;
@@ -506,7 +530,7 @@ function Details({ person, household, refresh, desk, me, editing, setEditing }) 
         )}
         <li>
           <span className="k">Address</span>
-          <span className="v addr-lines">{addr.length ? addr.map((l, i) => <div key={i}>{l}</div>) : none}</span>
+          <span className="v addr-lines">{addressWords(person, move, desk) || (addr.length ? addr.map((l, i) => <div key={i}>{l}</div>) : none)}</span>
           {person.address && (
             <span className="act">
               <Link className="btn btn-quiet pp-btn" to={`/map?person=${person.id}`}>
@@ -801,6 +825,10 @@ export default function Person() {
   // "3 more" on the Calls card's key line opens their Knows (#knows).
   const [open, setOpen] = useState(() => (desk ? { history: true, ...(location.hash === '#knows' ? { knows: true } : {}) } : { details: true }));
   const [editing, setEditing] = useState(null); // the details form, open on this field (desk)
+  // Which "Where did … go?" panel is open: the rate card's (after a Moved
+  // tap) or the desk's move lines' — one at a time.
+  const [movePanel, setMovePanel] = useState(null); // 'rate' | 'lines' | null
+  useEffect(() => { setMovePanel(null); }, [id]);
   const ratingRef = useRef(null);
   const toggle = (key) => () => setOpen((o) => ({ ...o, [key]: !o[key] }));
   const scale = useScale();
@@ -898,7 +926,15 @@ export default function Person() {
         <p className="ds-waiting" role="status">Saved on {device} — {online ? 'sends soon' : 'sends when you’re back online'}</p>
       )}
 
-      <RatingCard key={person.id} person={person} refresh={refresh} channel={channel} setChannel={setChannel} cardRef={ratingRef} />
+      {/* Moved: Needs an address, Address unknown, Moved here — the desk's lines and their Undo. */}
+      {desk && (
+        <ProfileMove key={`move-${person.id}`} person={person} move={profile.data.latest_move || null} open={Boolean(profile.data.move_open)}
+          contacts={contacts} household={household} refresh={refresh} hidden={movePanel === 'rate'}
+          onPanel={(on) => setMovePanel(on ? 'lines' : null)} />
+      )}
+      <RatingCard key={person.id} person={person} refresh={refresh} channel={channel} setChannel={setChannel} cardRef={ratingRef}
+        canMove={desk || profile.data.may_move === true} desk={desk} household={household}
+        onMoving={(on) => setMovePanel(on ? 'rate' : null)} elsewhere={movePanel === 'lines'} />
       {/* Undecided or not rated: a supporter who knows them (desk). */}
       {desk && <KnowsNudge query={knows} person={person} />}
 
@@ -911,7 +947,8 @@ export default function Person() {
 
       <div className="pf-sections">
         <Section title="Details" open={!!open.details} onToggle={toggle('details')}>
-          <Details person={person} household={household} refresh={refresh} desk={desk} me={me} editing={editing} setEditing={setEditing} />
+          <Details person={person} household={household} refresh={refresh} desk={desk} me={me} editing={editing} setEditing={setEditing}
+            move={profile.data.latest_move || null} />
         </Section>
         {/* The campaign's own fields (People → More → Profile fields); with no signal and no copy, it says so.
             The desk always has it: the voter number lives here (ext/voternumber). */}

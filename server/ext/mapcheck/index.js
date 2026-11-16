@@ -8,7 +8,8 @@
 //   people   { total, onMap, waiting, noAddress } — on file; with a pin;
 //            an address but no pin yet; neither. Nobody is placed by
 //            guessing: a person with no address stays off the map and is
-//            counted here.
+//            counted here — not one the team marked Address unknown
+//            (ext/moves): that case is settled, not work still to do.
 //   area     { box: [south, west, north, east], inside, outside } — of those
 //            on the map, how many are inside the campaign's own box
 //            (STARBASE_GEO_BOUNDS)
@@ -54,7 +55,7 @@ api.get('/map/check', async (c) => {
     `select count(*)::int as total,
             count(*) filter (where lat is not null and lng is not null)::int as on_map,
             count(*) filter (where lat is null and address is not null)::int as waiting,
-            count(*) filter (where lat is null and address is null)::int as no_address
+            count(*) filter (where lat is null and address is null and address_status is null)::int as no_address
      from persons where workspace_id = $1 and deleted_at is null`,
     [ws],
   )).rows[0];

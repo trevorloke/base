@@ -697,6 +697,29 @@ function OtherNumbers({ count, rows, answer, onAnswer }) {
   );
 }
 
+// People your team marked moved (ext/moves) whose row still has the old
+// address: the import keeps what the team found, and says so.
+function MovedKept({ count, rows }) {
+  return (
+    <div className="vn-other">
+      <p className="vn-other__head">
+        {plural(count, 'person on file has', 'people on file have')} moved — the list still has their old address. We kept what your team found.
+      </p>
+      <Reveal label="Show">
+        <ul className="imp-matches__list">
+          {rows.map((x) => (
+            <li key={`${x.row}-${x.id}`}>
+              <Link to={`/people/${x.id}`}>{x.name}</Link>
+              <span className="muted"> · list: {x.in_file} · on file: {x.on_file || 'address unknown'}</span>
+            </li>
+          ))}
+        </ul>
+        {count > rows.length && <p className="imp-hint imp-hint--sm">First {fmtN(rows.length)} of {fmtN(count)}.</p>}
+      </Reveal>
+    </div>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // The screen: 1 Choose a file · 2 Match columns (then check) · 3 Import
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1067,7 +1090,7 @@ function ImportFlow() {
   // (again): the last check stays on screen, its counts giving way to
   // "Checking…", so the question — and the keyboard's place in it — stays put.
   const runCheck = async (numbers = otherNumber, { again = false } = {}) => {
-    const acc = { ...ZERO, invalid: [], matches: [], otherNumbers: 0, others: [], handleRows: [] };
+    const acc = { ...ZERO, invalid: [], matches: [], otherNumbers: 0, others: [], handleRows: [], movedKept: 0, movedRows: [] };
     const parts = Math.ceil(total / CHECK_CHUNK);
     const run = (checkRun.current += 1);
     const show = (next) => { if (run === checkRun.current) setCheck(next); };
@@ -1088,6 +1111,10 @@ function ImportFlow() {
           }
         }
         acc.otherNumbers += r.other_numbers || 0;
+        acc.movedKept += r.moved_kept || 0;
+        for (const x of r.moved_rows || []) {
+          if (acc.movedRows.length < 50) acc.movedRows.push({ ...x, row: part[x.row - 1]?.row ?? x.row });
+        }
         acc.handles += r.handles_left_out || 0;
         for (const x of r.handles_left_out_rows || []) {
           if (acc.handleRows.length < 5) acc.handleRows.push({ ...x, row: part[x.row - 1]?.row ?? x.row });
@@ -1574,6 +1601,7 @@ function ImportFlow() {
                   <OtherNumbers count={check.otherNumbers} rows={check.others} answer={otherNumber}
                     onAnswer={(v) => { setOtherNumber(v); runCheck(v, { again: true }); }} />
                 )}
+                {check.movedKept > 0 && <MovedKept count={check.movedKept} rows={check.movedRows} />}
                 {!check.again && check.matches.length > 0 && (
                   <Reveal label="See matches">
                     <p className="imp-hint imp-hint--sm">

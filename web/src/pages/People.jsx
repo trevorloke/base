@@ -360,8 +360,12 @@ const followersWord = (v) => `${Number(v).toLocaleString('en-CA')}+ followers`;
 // field: <field id>:<value> (profile fields); the field cuts (FieldCuts.jsx);
 // what they gave, joined, answered and came to, another list, added since
 // (AudienceBits.jsx RULE_KEYS — the desk's: for a volunteer they match nobody).
-const FILTER_KEYS = ['q', 'tag', 'rating', 'role', 'field', ...CUT_KEYS, ...RULE_KEYS, 'followers'];
-const MORE_KEYS = [...CUT_KEYS, ...RULE_KEYS, 'followers'];
+// moved=open | unknown: "Needs an address" and "Address unknown" (ext/moves) — the desk's.
+const FILTER_KEYS = ['q', 'tag', 'rating', 'role', 'field', ...CUT_KEYS, ...RULE_KEYS, 'followers', 'moved'];
+const MORE_KEYS = [...CUT_KEYS, ...RULE_KEYS, 'followers', 'moved'];
+const MOVED = [['open', 'Needs an address'], ['unknown', 'Address unknown']];
+// The two chips' counts (GET /api/moves/counts, the desk's).
+const useMovedCounts = (on) => useQuery({ queryKey: ['persons', 'moved-counts'], queryFn: () => apiGet('/moves/counts'), enabled: on, staleTime: 30_000 });
 const addRules = (qs, f) => { for (const k of RULE_KEYS) if (f[k]) qs.set(k, f[k]); return qs; };
 // The server didn't answer (no signal, or it's down behind its proxy) —
 // not the same as an answer that says something went wrong.
@@ -458,6 +462,7 @@ function FilterChips({ f, update, keys = ['rating', 'tag', 'role', 'has'], extra
     keys.includes('has') && f.has && HAS_LABEL[f.has] && { key: 'has', label: HAS_LABEL[f.has], name: HAS_LABEL[f.has] },
     keys.includes('has') && /^\d+$/.test(f.followers || '') && { key: 'followers', label: followersWord(f.followers), name: followersWord(f.followers) },
     keys.includes('q') && f.q && { key: 'q', label: `“${f.q}”`, name: `search ${f.q}` },
+    desk && f.moved && { key: 'moved', label: MOVED.find(([v]) => v === f.moved)?.[1] || f.moved, name: MOVED.find(([v]) => v === f.moved)?.[1] || f.moved },
     ...cutChips(f, turfs, web).map((c) => ({ ...c, name: c.label })),
     ...ruleChips(f, lists, choices, knowsName).map((c) => ({ ...c, name: c.label })),
   ].filter(Boolean);
@@ -553,6 +558,7 @@ function FilterSheet({ f, update, tagOptions, onClose, phone, desk = true }) {
               <div className="pp-group__opts">{FOLLOWING.map(([v, label]) => chip('followers', v, label))}</div>
             </fieldset>
           )}
+          {desk && <MovedGroup chip={chip} />}
           {tagOptions.length > 0 && (
             <fieldset className="pp-group">
               <legend className="eyebrow">Tag</legend>
@@ -586,6 +592,20 @@ function FilterSheet({ f, update, tagOptions, onClose, phone, desk = true }) {
         </div>
       </section>
     </>
+  );
+}
+
+// "Moved": Needs an address (the team's Moved taps with no address yet) and
+// Address unknown, each with its count — the desk works the queue from here.
+function MovedGroup({ chip }) {
+  const counts = useMovedCounts(true);
+  const n = (v) => (counts.data ? ` · ${Number(counts.data[v] || 0).toLocaleString('en-CA')}` : '');
+  return (
+    <fieldset className="pp-group">
+      <legend className="eyebrow">Moved</legend>
+      <div className="pp-group__opts">{MOVED.map(([v, label]) => chip('moved', v, `${label}${n(v)}`))}</div>
+      {counts.isError && <p className="pf-empty">Counts unavailable — <button type="button" className="fk-link" onClick={() => counts.refetch()}>Try again</button></p>}
+    </fieldset>
   );
 }
 
@@ -749,6 +769,7 @@ function PeopleList() {
   if (f.has) qs.set('has', f.has);
   if (f.field) qs.set('field', f.field);
   if (f.followers) qs.set('followers', f.followers);
+  if (desk && f.moved) qs.set('moved', f.moved);
   addCuts(qs, f);
   addRules(qs, f);
   const qsKey = qs.toString();

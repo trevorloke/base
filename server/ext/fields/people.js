@@ -183,6 +183,11 @@ export const SURREY_LANGUAGES = ['English', 'Punjabi', 'Hindi', 'Urdu', 'Mandari
 // The membership form's interests, in its order (Interests, Pick several).
 export const FORM_INTERESTS = ['Safer streets', 'Faster commutes', 'Smarter investments', 'Lower costs', 'Stronger services', 'Homes I can afford', 'Support for small business', 'Healthier communities', 'Better schools / school board issues', 'Climate / parks', 'Metro Vancouver / regional issues'];
 
+// The fields that describe a door, not the person: a move takes them off
+// (they describe the old door) and Undo puts them back (ext/moves). By name,
+// lower case, as the standard fields name them.
+export const DOOR_FIELDS = ['house notes', 'building notes', 'access type', 'dwelling type'];
+
 // Imagine Surrey's standard fields: one for every column of the campaign's
 // list that the core person record has no home for. Named exactly as the
 // list's columns, so the import maps them by name with no thought. Made

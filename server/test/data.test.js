@@ -151,6 +151,13 @@ test('sample data: loads a full Surrey campaign, safe contacts only, then clears
   assert.deepEqual(tiers, ['superstar', 'star']);
   const walk = (await fresh.get(`/api/turfs/${brief.myTurfs[0].id}/walk`)).json;
   assert.ok(walk.doors.length >= 7, 'Newton turf holds the Newton block');
+  // Three movers (ext/moves): one at another sample door, one Address
+  // unknown, one waiting for an address.
+  const names = async (q) => (await fresh.get(`/api/persons?${q}&limit=50`)).json.persons.map((p) => p.name);
+  assert.deepEqual(await names('moved=open'), ['George Bell']);
+  assert.deepEqual(await names('moved=unknown'), ['Noah Wilson']);
+  const [owen, yuki] = await Promise.all(['Owen Price', 'Yuki Tanaka'].map(async (n) => (await fresh.get(`/api/persons?q=${encodeURIComponent(n)}`)).json.persons[0]));
+  assert.deepEqual([owen.address, owen.lat], [yuki.address, yuki.lat]);
 
   const mine = await fresh.createPerson('Real Person', { email: 'real@example.org' });
   const clear = await fresh.req('DELETE', '/api/data/sample');
@@ -182,10 +189,11 @@ test('sample data: each rated person’s rated_at is their sample knock’s time
   const db = await getDb();
   const rows = (await db.query(
     `select p.id, p.name, p.rating, p.rated_at,
-            (select max(c.created_at) from contacts c where c.person_id = p.id) as last_contact_at,
-            (select count(*)::int from contacts c where c.person_id = p.id) as contacts
+            (select max(c.created_at) from contacts c where c.person_id = p.id and c.outcome <> 'moved') as last_contact_at,
+            (select count(*)::int from contacts c where c.person_id = p.id and c.outcome <> 'moved') as contacts
      from persons p where p.workspace_id = $1`, [s.json.workspace.id],
   )).rows;
+  // (The sample's three movers were tapped Moved after: ext/moves.)
   const rated = rows.filter((r) => r.rating);
   assert.ok(rated.length >= 20, 'plenty of rated sample people');
   for (const r of rated) {
@@ -196,7 +204,7 @@ test('sample data: each rated person’s rated_at is their sample knock’s time
   // Spread across the week, never all "now": profiles show different days.
   assert.ok(new Set(rated.map((r) => new Date(r.rated_at).toISOString().slice(0, 10))).size >= 3);
   // And the profile agrees with itself: "Rated" and "Last contact" are the same moment.
-  const p = (await fresh.get(`/api/persons/${rated[0].id}`)).json;
+  const p = (await fresh.get(`/api/persons/${rated.find((r) => !['Owen Price', 'Noah Wilson', 'George Bell'].includes(r.name)).id}`)).json;
   assert.equal(new Date(p.person.rated_at).toISOString(), new Date(p.contacts[0].created_at).toISOString());
   assert.equal(p.contacts[0].rating, p.person.rating);
 });
@@ -496,4 +504,41 @@ test('sample clear: a request from the doors and a Voted mark on a sample person
   assert.equal((await db.query('select count(*)::int as n from voted_marks where person_id = $1', [dev.id])).rows[0].n, 1, 'the mark stays');
   assert.ok((await m.get(`/api/persons/${dev.id}`)).json.person.voted_at, 'Dev still reads voted');
   assert.equal((await m.get('/api/audit/verify')).json.ok, true);
+});
+
+test('import after a move: the list’s old address never puts them back or makes a second person; counted and shown', async () => {
+  const db = await getDb();
+  const ok = (r) => { assert.equal(r.status, 200, JSON.stringify(r.json)); return r.json; };
+  const count = async (name) => (await db.query('select count(*)::int as n from persons where workspace_id = $1 and name = $2 and deleted_at is null', [ws, name])).rows[0].n;
+  const file = [
+    { name: 'Moe Mover', address: '14 Example Ave', city: 'Surrey' },
+    { name: 'Una Known', address: '15 Example Ave', city: 'Surrey', lat: 49.1, lng: -122.8 },
+    { name: 'Vee Number', address: '16 Example Ave', city: 'Surrey', voter_number: 'V-90016' },
+  ];
+  ok(await imp(file));
+  const [moe, una, vee] = await Promise.all(['Moe Mover', 'Una Known', 'Vee Number'].map(async (n) => (await mgr.get(`/api/persons?q=${encodeURIComponent(n)}`)).json.persons[0]));
+  const toMoe = ok(await mgr.action('person.move', { person_id: moe.id, to: { address: '900 New Rd' } }));
+  ok(await mgr.action('person.move', { person_id: una.id, unknown: true }));
+  ok(await mgr.action('person.move', { person_id: vee.id, to: { address: '901 New Rd' } }));
+
+  const dry = ok(await imp(file, { dryRun: true }));
+  assert.equal(dry.moved_kept, 3);
+  assert.equal(dry.created, 0, 'nobody made again at the old door');
+  const real = ok(await imp(file));
+  assert.equal(real.created, 0);
+  assert.equal(real.moved_kept, 3);
+  const byName = Object.fromEntries(real.moved_rows.map((r) => [r.name, r]));
+  assert.deepEqual(byName['Moe Mover'], { row: 1, name: 'Moe Mover', id: moe.id, in_file: '14 Example Ave', on_file: '900 New Rd', status: null });
+  assert.deepEqual([byName['Una Known'].on_file, byName['Una Known'].status], [null, 'unknown']);
+  for (const n of ['Moe Mover', 'Una Known', 'Vee Number']) assert.equal(await count(n), 1, n);
+  const rows = Object.fromEntries((await db.query('select name, address, lat, address_status from persons where id = any($1::uuid[])', [[moe.id, una.id, vee.id]])).rows.map((r) => [r.name, r]));
+  assert.equal(rows['Moe Mover'].address, '900 New Rd');
+  assert.deepEqual([rows['Una Known'].address, rows['Una Known'].lat, rows['Una Known'].address_status], [null, null, 'unknown'], 'Address unknown stays unknown');
+  assert.equal(rows['Vee Number'].address, '901 New Rd', 'matched by voter number: the same holds');
+
+  // Undone: the next import is as it always was.
+  ok(await mgr.action('person.unmove', { move_id: toMoe.move.id }));
+  const after = ok(await imp(file.slice(0, 1)));
+  assert.deepEqual([after.created, after.moved_kept], [0, 0]);
+  assert.equal(await count('Moe Mover'), 1);
 });

@@ -72,3 +72,21 @@ test('voted=no|yes: who still has to vote (GOTV), and who has', async () => {
   assert.equal(ok(await mgr.get('/api/persons?q=Gotv&voted=maybe')).persons.length, 0, 'a value it doesn’t know matches nobody');
   void p1;
 });
+
+test('moved=open|unknown: Needs an address and Address unknown (ext/moves); a saved list keeps it', async () => {
+  const mo = await mgr.createPerson('Mo Mover', { address: '13240 72 Ave', city: 'Surrey', lat, lng });
+  ok(await mgr.action('contact.log', { person_id: mo.id, channel: 'door', outcome: 'moved' }));
+  assert.deepEqual(await names('moved=open'), ['Mo Mover'], 'tapped Moved, no address yet');
+  const m = ok(await mgr.action('person.move', { person_id: mo.id, unknown: true })).move;
+  assert.deepEqual(await names('moved=open'), [], 'a move since the tap');
+  assert.deepEqual(await names('moved=unknown'), ['Mo Mover']);
+  const list = ok(await mgr.action('list.create', { name: 'Address unknown', kind: 'filter', filter: { moved: 'unknown' } })).list;
+  assert.deepEqual(list.filter, { moved: 'unknown' });
+  assert.deepEqual(ok(await mgr.get(`/api/lists/${list.id}`)).people.map((p) => p.name), ['Mo Mover']);
+  ok(await mgr.action('person.unmove', { move_id: m.id }));
+  assert.deepEqual(await names('moved=open'), ['Mo Mover'], 'undone: back in the queue');
+  assert.deepEqual(await names('moved=unknown'), []);
+  ok(await mgr.action('contact.log', { person_id: mo.id, channel: 'door', outcome: 'no_answer' }));
+  assert.deepEqual(await names('moved=open'), [], 'a later knock that isn’t Moved takes them out');
+  assert.deepEqual(await names('moved=nonsense'), []);
+});
