@@ -129,6 +129,7 @@ export const liveStrings = async (q, ws, { settings = null, now = Date.now() } =
   field('text', s.seo?.description, { ...st, place: 'settings:seo' });
   field('text', s.seo?.shareImage?.alt, { ...st, place: 'settings:seo' });
   field('text', s.org?.platformLabel, { ...st, place: 'settings:footer' });
+  for (const a of s.social?.accounts || []) field('text', a?.cta, { ...st, place: 'settings:social' });
   const theme = parseJ(s.theme, {}) || {};
   field('text', theme?.logo?.alt, { ...st, place: 'settings:logo' });
 

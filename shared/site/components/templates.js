@@ -57,7 +57,7 @@ function CampaignView({ rc, campaign }) {
             <p className="eyebrow">${rc.w(pledge ? 'act.thePledge' : 'act.thePetition')}</p>
             <${Paras} text=${c.statement} />
           </blockquote>` : null}
-          <${GoalBar} count=${count} goal=${c.goal} kind=${c.kind} />
+          <${GoalBar} count=${count} goal=${c.goal} kind=${c.kind} w=${rc.lang !== 'en' ? rc.w : null} />
           <${Island} name="share" props=${share} />
         </div>
         <div className="act-form">

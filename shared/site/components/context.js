@@ -303,6 +303,7 @@ function translateSite(rc, s, d) {
   s.announcement = { ...s.announcement, text: tt(s.announcement.text), link: label(s.announcement.link) };
   s.seo = { ...s.seo, title: tt(s.seo.title), description: tt(s.seo.description), image: { ...s.seo.image, alt: tt(s.seo.image.alt) } };
   s.org = { ...s.org, platformLabel: tt(s.org.platformLabel) };
+  s.social = s.social.map((a) => ({ ...a, cta: tt(a.cta) }));
   // The consent lines are the approved words only.
   s.consent = Object.fromEntries(['email', 'sms', 'newsletter'].map((k) => [k, rc.legal(k).text]));
   s.consentLang = Object.fromEntries(['email', 'sms', 'newsletter'].map((k) => [k, rc.legal(k).lang]));
