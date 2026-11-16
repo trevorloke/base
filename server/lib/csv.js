@@ -28,9 +28,13 @@ export const csvStream = (c, name, head, pages) => {
     async pull(ctrl) {
       if (!started) { started = true; ctrl.enqueue(enc.encode(`﻿${line(head)}`)); return; }
       try {
-        const { value, done } = await it.next();
-        if (done) { ctrl.close(); return; }
-        if (value?.length) ctrl.enqueue(enc.encode(value.map(line).join('')));
+        // An empty page enqueues nothing, and a pull that enqueues nothing
+        // is never called again: read on until there is something, or the end.
+        for (;;) {
+          const { value, done } = await it.next();
+          if (done) { ctrl.close(); return; }
+          if (value?.length) { ctrl.enqueue(enc.encode(value.map(line).join(''))); return; }
+        }
       } catch (e) {
         console.error(`csv ${name}: stopped part way: ${e.message}`);
         ctrl.error(e);

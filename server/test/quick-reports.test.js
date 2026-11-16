@@ -298,6 +298,9 @@ test('csvStream: BOM, CRLF, formulas made harmless; a failure part way errors th
   assert.equal(good.headers.get('cache-control'), 'no-store');
   assert.match(good.headers.get('content-disposition'), /filename="fine\.csv"/);
   assert.equal(await bytes(good), '﻿A,B\r\n\'=1+1,x\r\n"a,b",y\r\n');
+  // A last page that comes back empty (the rows were an exact number of pages).
+  h.get('/even', (c) => csvStream(c, 'even', ['A'], (async function* () { yield [['one']]; yield []; yield [['two']]; yield []; })()));
+  assert.equal(await bytes(await h.request('/even')), '﻿A\r\none\r\ntwo\r\n');
   const bad = await h.request('/bad');
   const real = console.error; console.error = () => {};
   try { await assert.rejects(bad.text()); } finally { console.error = real; }
