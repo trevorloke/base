@@ -521,3 +521,110 @@ test('a segment that won\u2019t translate: retried after 1 h and 6 h, then never
   // Still ready: a used-up segment counts as done.
   assert.ok((await db.query("select ready_at from site_language_state where workspace_id = $1 and lang = 'pa'", [ws])).rows[0].ready_at);
 });
+
+test('Traditional: never sent; a person’s edit in Traditional is not replaced when the Simplified changes', async () => {
+  const { convertRow } = await import('../ext/site/translate.js');
+  const row = (await db.query("select src_hash, src from site_translations where workspace_id = $1 and lang = 'zh-Hant' limit 1", [ws])).rows[0];
+  await db.query("update site_translations set origin = 'edited', text = '人工改的' where workspace_id = $1 and lang = 'zh-Hant' and src_hash = $2", [ws, row.src_hash]);
+  await db.transaction((tx) => convertRow(tx, ws, row.src_hash, row.src, '新的简体', null));
+  const after = (await db.query("select text, origin, checked_at from site_translations where workspace_id = $1 and lang = 'zh-Hant' and src_hash = $2", [ws, row.src_hash])).rows[0];
+  assert.equal(after.text, '人工改的');
+  assert.equal(after.checked_at, null, 'back under To check');
+  const legal = (await db.query("select words from site_legal_words where workspace_id = $1 and lang = 'zh-Hant' limit 1", [ws])).rows[0];
+  assert.ok(legal);
+});
+
+test('a page miss with an unchanged rev reads no translations; a cold /pa page draws quickly, a warm one at once', async () => {
+  const seen = [];
+  const q = { query: (sql, p) => { seen.push(sql); return db.query(sql, p); } };
+  await translatorFor(q, ws, 'pa');
+  seen.length = 0;
+  await translatorFor(q, ws, 'pa');
+  assert.ok(seen.every((s) => !/from site_translations/.test(s)), seen.join('\n'));
+  const time = async (fn) => { const t = process.hrtime.bigint(); await fn(); return Number(process.hrtime.bigint() - t) / 1e6; };
+  const median = (xs) => xs.sort((a, b) => a - b)[Math.floor(xs.length / 2)];
+  const cold = [];
+  const warm = [];
+  for (let i = 0; i < 20; i += 1) {
+    cacheClear(ws);
+    cold.push(await time(() => hit('/site/pa/about')));
+    warm.push(await time(() => hit('/site/pa/about')));
+  }
+  console.log(`# /pa/about cold median ${median(cold).toFixed(1)} ms, warm median ${median(warm).toFixed(1)} ms`);
+  assert.ok(median(cold) < 150, `cold ${median(cold)}`);
+  assert.ok(median(warm) < 10 || process.env.STARBASE_TEST_PG, `warm ${median(warm)}`);
+});
+
+test('another website: the switch, and /pa/ on its own domain and under /site/sites/<key>/pa', async () => {
+  const s = await settingsNow();
+  ok(await mgr.action('site.settings.save', { org: { ...s.org, privacyUrl: '/privacy' } }));
+  const m = ok(await mgr.action('site.microsite.create', { name: 'Doug Didn’t Example', domain: 'https://dougdidnt.example/' })).microsite;
+  const homeRow = (await db.query('select id from site_pages where site_id = $1', [m.id])).rows[0];
+  ok(await mgr.action('site.page.publish', { id: homeRow.id }));
+  const live = await mgr.action('site.microsite.live', { id: m.id, live: true });
+  assert.equal(live.status, 200, JSON.stringify(live.json));
+  await sweep(db, ws);
+  cacheClear(ws);
+  const { forgetDomains } = await import('../ext/site/store.js');
+  forgetDomains();
+  const en = await hit('/', { host: 'dougdidnt.example' });
+  assert.equal(en.status, 200);
+  assert.match(en.text, /href="\/pa\/"[^>]*>ਪੰਜਾਬੀ</);
+  const pa = await hit('/pa/', { host: 'dougdidnt.example' });
+  assert.equal(pa.status, 200);
+  assert.match(pa.text, /<html lang="pa"/);
+  assert.match(pa.text, /Doug Didn’t Example|Doug Didn&#x27;t Example|Doug Didn't Example/, 'its name kept as written');
+  const app = await hit(`/site/sites/${m.key}/pa/`);
+  assert.equal(app.status, 200);
+  assert.match(app.text, new RegExp(`action="/site/sites/${m.key}/pa/api/forms/`));
+});
+
+test('cost guard: the month’s limit stops the sweep before the call; reservations never pass it together; a refusal gives back', async () => {
+  const { reserveChars, usageMonth } = await import('../ext/site/translate.js');
+  // A second campaign on a database of its own (the last test: the site at /site/ moves to it).
+  const other = await campaign('Second Example Campaign');
+  const w2 = other.ws;
+  const db = other.db;
+  const month = usageMonth({});
+  const both = await Promise.all([reserveChars(db, w2, month, 6000, 10000), reserveChars(db, w2, month, 6000, 10000)]);
+  assert.deepEqual(both.sort(), [false, true]);
+  await db.query('delete from site_translate_usage where workspace_id = $1', [w2]);
+  // The smallest limit, a fresh campaign: some of Punjabi's essentials go, then it stops.
+  const s2 = ok(await other.mgr.get('/api/site')).settings;
+  ok(await other.mgr.action('site.settings.save', { languages: { ...s2.languages, on: ['pa', 'zh-Hans'], monthlyChars: 10000 } }));
+  fake.reset();
+  const out = await sweep(db, w2);
+  assert.equal(out.stopped, 'limit');
+  const sent = fake.calls.reduce((n, c) => n + c.chars, 0);
+  assert.ok(sent > 0 && sent <= 10000, `sent ${sent}`);
+  assert.ok(fake.calls.every((c) => c.target === 'pa'), 'Punjabi first; Simplified waits');
+  const st = (await db.query("select last_error from site_language_state where workspace_id = $1 and lang = 'pa'", [w2])).rows[0];
+  assert.equal(st.last_error, 'monthly-limit');
+  const used = Number((await db.query('select chars from site_translate_usage where workspace_id = $1', [w2])).rows[0].chars);
+  assert.ok(used <= 10000);
+  // A refusal Google answered gives its reservation back.
+  ok(await other.mgr.action('site.settings.save', { languages: { ...s2.languages, on: ['pa', 'zh-Hans'], monthlyChars: 5000000 } }));
+  fake.set({ fail: 403 });
+  await assert.rejects(sweep(db, w2));
+  fake.set({ fail: 0 });
+  const after = Number((await db.query('select chars from site_translate_usage where workspace_id = $1', [w2])).rows[0].chars);
+  assert.equal(after, used);
+  // A timeout's stands (Google may have billed it), and the job parks after five tries with plain words.
+  const { _setCallMsForTest } = await import('../lib/translate.js');
+  _setCallMsForTest(100);
+  fake.set({ stall: 400 });
+  await db.query("delete from jobs where workspace_id = $1 and kind = 'site.translate'", [w2]);
+  ok(await other.mgr.action('site.translate.now', {}));
+  for (let i = 0; i < 5; i += 1) {
+    await db.query("update jobs set run_at = now() where workspace_id = $1 and kind = 'site.translate' and status = 'pending'", [w2]);
+    await runDueJobs(db, { workspaceId: w2 }).catch(() => {});
+  }
+  fake.set({ stall: 0 });
+  _setCallMsForTest(0);
+  const job = (await db.query("select status, attempts, last_error from jobs where workspace_id = $1 and kind = 'site.translate' order by created_at desc limit 1", [w2])).rows[0];
+  assert.equal(job.status, 'failed');
+  assert.equal(job.last_error, 'Google Translation didn’t answer in time.');
+  const timedOut = Number((await db.query('select chars from site_translate_usage where workspace_id = $1', [w2])).rows[0].chars);
+  assert.ok(timedOut > after, 'a timed-out call keeps its reservation');
+  await new Promise((r) => { setTimeout(r, 500); });
+});

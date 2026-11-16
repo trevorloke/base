@@ -29,7 +29,8 @@ export const translateBase = () => String(process.env.GOOGLE_TRANSLATE_API_BASE 
 export const translateKey = () => String(process.env.GOOGLE_TRANSLATE_KEY || '').trim();
 export const MAX_SEGMENTS = 128;
 export const MAX_CHARS = 25_000;
-export const CALL_MS = 15_000;
+export let CALL_MS = 15_000;
+export const _setCallMsForTest = (ms) => { CALL_MS = ms || 15_000; };
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const reEsc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
