@@ -213,9 +213,11 @@ const answer = async (tx, ctx, l, { sendId, outcome, url = null, on = null }, si
   let status = l.status;
   if (outcome === 'published') status = 'published';
   else if (l.status === 'sent' || l.status === 'published') {
-    // Back to Ready unless another send is still waiting for an answer.
-    const open = (await tx.query('select 1 from letter_sends where letter_id = $1 and outcome is null limit 1', [l.id])).rows[0];
-    status = open ? 'sent' : 'ready';
+    // A letter another paper printed stays published (and its purge stands);
+    // otherwise back to Ready unless another send is still waiting.
+    const ran = (await tx.query(`select 1 from letter_sends where letter_id = $1 and outcome = 'published' limit 1`, [l.id])).rows[0];
+    const open = !ran && (await tx.query('select 1 from letter_sends where letter_id = $1 and outcome is null limit 1', [l.id])).rows[0];
+    status = ran ? 'published' : open ? 'sent' : 'ready';
   }
   const next = await touch(tx, l, side, {
     status, closed_at: status === 'published' ? (l.closed_at || new Date().toISOString()) : null,

@@ -439,3 +439,29 @@ test('Editors here: live contacts on the matching list at a wanted outlet; talki
   ok(await mgr.action('letter.assign', { id: l.id, user_id: me }));
   assert.equal(ok(await mgr.get('/api/media/letters')).letters.find((x) => x.id === l.id).assigned_to_name, 'Avery Chen');
 });
+
+test('printed at one paper: a later No from another paper leaves it published, and the purge still runs', async () => {
+  const a = await outlet();
+  const b = await outlet();
+  const sign = { address: '210 Example Ave', phone: '604-555-0151' };
+  const l = ok(await submit(vic, { outlet_ids: [a.id, b.id], sign })).letter;
+  ok(await ready(vic, l.id));
+  const sa = ok(await vic.action('myletter.sent', { id: l.id, outlet_id: a.id, how: 'email', client_id: cid() })).send;
+  const sb = ok(await vic.action('myletter.sent', { id: l.id, outlet_id: b.id, how: 'email', client_id: cid() })).send;
+  ok(await mgr.action('letter.published', { id: l.id, send_id: sa.id, url: 'https://example.org/letters/ran' }));
+  const closed = (await row(l.id)).closed_at;
+  ok(await vic.action('myletter.not_published', { id: l.id, send_id: sb.id, client_id: cid() }));
+  let r = await row(l.id);
+  assert.deepEqual([r.status, String(r.closed_at)], ['published', String(closed)], 'it ran at the first paper');
+  ok(await mgr.action('letter.not_published', { id: l.id, send_id: sb.id }));
+  assert.equal((await row(l.id)).status, 'published');
+  no(await vic.action('myletter.sent', { id: l.id, outlet_id: b.id, how: 'email', client_id: cid() }), 409);
+  await db.query(`update letters set closed_at = closed_at - interval '31 days' where id = $1`, [l.id]);
+  await db.query(`update jobs set run_at = now() - interval '1 minute' where workspace_id = $1 and kind = 'letters.purge' and status = 'pending'`, [ws]);
+  await runDueJobs(db, { workspaceId: ws });
+  r = await row(l.id);
+  assert.deepEqual([r.sign_address, r.sign_phone], [null, null], 'gone 30 days after it ran');
+  // A correction on the one paper that ran it: back to Ready, as before.
+  ok(await mgr.action('letter.not_published', { id: l.id, send_id: sa.id }));
+  assert.deepEqual([(await row(l.id)).status, (await row(l.id)).closed_at], ['ready', null]);
+});
