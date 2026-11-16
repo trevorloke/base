@@ -123,7 +123,8 @@ export default function PersonResults({
     if (list.getBoundingClientRect().bottom <= window.innerHeight - bottomBar) return;
     const topBar = [...document.querySelectorAll('.topbar, .nav')].map((e) => e.getBoundingClientRect())
       .filter((r) => r.top <= 0 && r.bottom > 0 && r.width > window.innerWidth / 2).reduce((h, r) => Math.max(h, r.bottom), 0);
-    window.scrollBy({ top: box.getBoundingClientRect().top - topBar - 16 });
+    const by = box.getBoundingClientRect().top - topBar - 16;
+    if (by > 0) window.scrollBy({ top: by });
   });
 
   // ↑ ↓ and Esc anywhere in the list or its footer (the box has its own).
