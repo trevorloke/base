@@ -146,3 +146,28 @@ test('people: a phone typed any way finds them, digits against digits', async ()
   assert.deepEqual(await find('lena@'), ['Lena Example'], 'email');
   assert.deepEqual(await find('omar'), ['Omar Example'], 'name');
 });
+
+test('quick reports: an entry needing several areas is offered only with all of them', async () => {
+  const { allowed } = await import('../../web/src/components/commands.js');
+  const item = { label: 'x', areas: ['data', 'money'] };
+  assert.equal(allowed({ role: 'staff', areas: ['data', 'money'] }, item), true);
+  assert.equal(allowed({ role: 'staff', areas: ['data'] }, item), false);
+  assert.equal(allowed({ role: 'staff', areas: ['money'] }, item), false);
+  assert.equal(allowed({ role: 'manager', areas: [] }, item), true, 'a manager has every area');
+  assert.equal(allowed({ role: 'staff', areas: ['map'] }, { label: 'y', area: 'map' }), true, 'one area works as before');
+
+  const offered = (me) => labels(commandsFor(me, []).screens);
+  const all = ['Print a walking list', 'Donors report', 'Interested in being a candidate'];
+  assert.deepEqual(all.filter((s) => offered({ role: 'manager', areas: [] }).includes(s)), all);
+  const noData = offered({ role: 'staff', areas: ['people', 'map', 'shifts', 'money', 'signs', 'outreach'] });
+  assert.ok(!noData.includes('Donors report') && !noData.includes('Interested in being a candidate'), 'denied Data: neither report');
+  assert.ok(noData.includes('Print a walking list'), 'the sheet needs Map alone');
+  const noMoney = offered({ role: 'staff', areas: ['people', 'map', 'shifts', 'signs', 'outreach', 'data'] });
+  assert.ok(!noMoney.includes('Donors report') && noMoney.includes('Interested in being a candidate'), 'denied Donations: no Donors report');
+  const mapOnly = offered({ role: 'staff', areas: ['map'] });
+  assert.deepEqual(all.filter((s) => mapOnly.includes(s)), ['Print a walking list']);
+  assert.ok(!mapOnly.includes('Reports'), 'nor Reports itself');
+  const vol = offered({ role: 'volunteer', areas: ['map', 'data', 'money', 'people'] });
+  assert.deepEqual(all.filter((s) => vol.includes(s)), [], 'a volunteer, even granted the areas: desk only');
+  assert.equal(rank(commandsFor({ role: 'manager', areas: [] }, []).screens, 'walking list')[0].label, 'Print a walking list');
+});
