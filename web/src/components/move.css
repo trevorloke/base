@@ -55,3 +55,12 @@
 @media (max-width: 380px) {
   .mv-row2, .mv-choices { grid-template-columns: 1fr; }
 }
+
+/* A move panel open on a phone (MovePanel.jsx sets body.mv-open): toasts
+   sit under the top bar, never over the panel's buttons and fields; a field
+   with focus keeps clear of the bottom bar. */
+@media (max-width: 720px) {
+  body.mv-open .toast,
+  body.mv-open .toast.walk-toast.is-raised { top: calc(56px + var(--s-2) + env(safe-area-inset-top, 0px)); bottom: auto; }
+  .mv-panel input, .mv-panel button { scroll-margin-bottom: 96px; }
+}

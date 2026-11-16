@@ -106,6 +106,26 @@ export default function PersonResults({
     return () => io.disconnect();
   });
 
+  // The list's first answer, with its end below the window (a box low on
+  // the page, as Knows' on a profile): the page scrolls once to bring the
+  // box near the top, so the list, its end and "Show more" are in view —
+  // never a scroll area with most of it off screen.
+  const shownRef = useRef(false);
+  const hasRows = all.length > 0;
+  useEffect(() => {
+    if (!hasRows) { shownRef.current = false; return; }
+    if (shownRef.current || !fresh) return;
+    shownRef.current = true;
+    const box = boxRef?.current;
+    const list = listRef.current;
+    if (!box || !list || typeof window === 'undefined') return;
+    const bottomBar = document.querySelector('.tabbar')?.getBoundingClientRect().height || 0;
+    if (list.getBoundingClientRect().bottom <= window.innerHeight - bottomBar) return;
+    const topBar = [...document.querySelectorAll('.topbar, .nav')].map((e) => e.getBoundingClientRect())
+      .filter((r) => r.top <= 0 && r.bottom > 0 && r.width > window.innerWidth / 2).reduce((h, r) => Math.max(h, r.bottom), 0);
+    window.scrollBy({ top: box.getBoundingClientRect().top - topBar - 16 });
+  });
+
   // ↑ ↓ and Esc anywhere in the list or its footer (the box has its own).
   const onNavKey = (e) => {
     const nav = navOf();
@@ -141,7 +161,9 @@ export default function PersonResults({
   const row = (p, chip = null) => {
     const off = isTaken(p);
     // The phone kept whole: on a phone the line wraps after " · ", never inside the number.
-    const place = whereLine(p, false);
+    // Marked moved with no new address yet: said, so a door's picker never
+    // takes them for someone with no line at all.
+    const place = whereLine(p, false) || (p.address_status === 'unknown' ? 'Address unknown' : '');
     const phone = desk && p.phone ? p.phone : '';
     return (
       <li key={p.id}>

@@ -205,24 +205,26 @@ await page.keyboard.press('Enter');
 check('↓ ↓ Enter picks the second row', (await tc('.rel-add__q')) === `${want[1]} — how do they know each other?`, await tc('.rel-add__q'));
 await page.click('.rel-add button:has-text("Back")');
 
-// No stale pick: "smith" on screen (Kevin Smith Jr first: the names
-// trigger gives him the last name "Jr", a known follow-up); " a" typed and
-// Enter at once must pick Aaron Smith, never the stale first row.
+// No stale pick: "smith" on screen, A–Z by last name (Aaron Smith first;
+// Kevin Smith Jr's surname is "Smith Jr", so he comes after the Smiths);
+// " jr" typed and Enter at once must pick Kevin Smith Jr, never the stale
+// first row.
 await typeIn('smith');
 await until(async () => (await freshRows()).length === 5);
-check('"smith": Kevin Smith Jr first, then Aaron Smith', /^Kevin Smith Jr/.test((await freshRows())[0] || '') && /^Aaron Smith/.test((await freshRows())[1] || ''), (await freshRows()).slice(0, 2).join(' | '));
-await page.route(/search\/people\?q=smith(\+|%20)a/, async (route) => { await sleep(900); await route.continue(); });
+const smiths = await freshRows();
+check('"smith": Aaron Smith first, Kevin Smith Jr last', /^Aaron Smith/.test(smiths[0] || '') && /^Kevin Smith Jr/.test(smiths[4] || ''), smiths.join(' | '));
+await page.route(/search\/people\?q=smith(\+|%20)jr/, async (route) => { await sleep(900); await route.continue(); });
 await page.focus(box);
-await page.keyboard.type(' a');
+await page.keyboard.type(' jr');
 await page.keyboard.press('Enter');
 const pressed = Date.now();
 await sleep(400);
-check('Enter before the "smith a" answer picks no one yet', (await page.locator(box).count()) === 1 && !/how do they know/.test(await tc('.rel-add__q')));
+check('Enter before the "smith jr" answer picks no one yet', (await page.locator(box).count()) === 1 && !/how do they know/.test(await tc('.rel-add__q')));
 await until(async () => /how do they know/.test(await tc('.rel-add__q')), 6000);
 const pickedQ = await tc('.rel-add__q');
-const skAsk = asks.find((a) => a.url.searchParams.get('q') === 'smith a');
-check('…then Aaron Smith is picked, after the "smith a" answer', /^Aaron Smith — /.test(pickedQ) && skAsk?.done && skAsk.done >= pressed, `${pickedQ} · answered ${skAsk?.done ? skAsk.done - pressed : '?'} ms after Enter`);
-await page.unroute(/search\/people\?q=smith(\+|%20)a/);
+const skAsk = asks.find((a) => a.url.searchParams.get('q') === 'smith jr');
+check('…then Kevin Smith Jr is picked, after the "smith jr" answer', /^Kevin Smith Jr — /.test(pickedQ) && skAsk?.done && skAsk.done >= pressed, `${pickedQ} · answered ${skAsk?.done ? skAsk.done - pressed : '?'} ms after Enter`);
+await page.unroute(/search\/people\?q=smith(\+|%20)jr/);
 await page.click('.rel-add button:has-text("Back")');
 
 // Fast typing: one ask.

@@ -170,7 +170,9 @@ function Dialog({ me, nav, onClose }) {
   const count = flat.filter((it) => it.kind !== 'all').length;
   const status = !q ? ''
     : people.busy && q.length >= 2 ? 'Searching…'
-      : count ? `${count} ${count === 1 ? 'result' : 'results'}` : 'Nothing found';
+      // More people than shown: never a count that reads as the total.
+      : people.more && people.q === q ? `Showing ${count} — see all below`
+        : count ? `${count} ${count === 1 ? 'result' : 'results'}` : 'Nothing found';
 
   return (
     <div className="cmd-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(true); }}>

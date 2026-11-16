@@ -91,7 +91,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const DESK = ['manager', 'treasurer', 'staff'];
 const escLike = (s) => s.replace(/[%_\\]/g, (m) => `\\${m}`);
 const parseJ = (v, d) => (typeof v === 'string' ? JSON.parse(v) : (v ?? d));
-const COLS = 'p.id, p.kind, p.name, p.first_name, p.middle_name, p.last_name, p.email, p.phone, p.address, p.house_number, p.unit, p.city, p.postal, p.tags, p.rating';
+const COLS = 'p.id, p.kind, p.name, p.first_name, p.middle_name, p.last_name, p.email, p.phone, p.address, p.house_number, p.unit, p.city, p.postal, p.tags, p.rating, p.address_status';
 // The first column of the A–Z order (lib/az.js), as persons_ws_az_idx has it.
 const AZ1 = 'person_fold(coalesce(p.last_name, p.name)) collate "C"';
 

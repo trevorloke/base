@@ -123,3 +123,4 @@
 @media (hover: hover) { .rel-pick:hover { background: var(--paper-1); } }
 .rel-pick:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: -2px; }
 .rel-pick__name { font-weight: 600; overflow-wrap: anywhere; }
+.rel-knows__where { flex-basis: 100%; color: var(--text-3); font-size: 13px; overflow-wrap: anywhere; }

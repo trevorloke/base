@@ -41,6 +41,7 @@ import { NeedsSignal, NoSignal, noSignal, useOnline } from './NoSignal.jsx';
 import { usePersonSearch } from './usePersonSearch.js';
 import PersonResults from './PersonResults.jsx';
 import NameAz from './NameAz.jsx';
+import { streetLine } from './people.js';
 import '../pages/relationships.css';
 import '../pages/relationships-key.css';
 
@@ -230,6 +231,10 @@ export function PersonKnows({ person, query, me = null }) {
   if (query.isError) return <p className="error">{query.error.message}</p>;
   const { knows = [], brought_in_by: by = null } = query.data || {};
   const known = new Set(knows.map((k) => k.person.id));
+  // Two of the same name: each says where they live, as the search did.
+  const named = new Map();
+  for (const k of knows) { const n = String(k.person.name || '').trim().toLowerCase(); named.set(n, (named.get(n) || 0) + 1); }
+  const twin = (p) => named.get(String(p.name || '').trim().toLowerCase()) > 1;
   const remove = async (id) => {
     const res = await act.run('relationship.remove', { id });
     if (res) setConfirm(null);
@@ -245,6 +250,9 @@ export function PersonKnows({ person, query, me = null }) {
               <span className="rel-knows__who">
                 <Link to={`/people/${k.person.id}`}><NameAz person={k.person} /></Link>
                 <span className="rel-knows__kind">{linkWords(k)}</span>
+                {twin(k.person) && (
+                  <span className="rel-knows__where">{[streetLine(k.person), k.person.city].filter(Boolean).join(', ') || 'No address'}</span>
+                )}
               </span>
               <span className="rel-knows__end">
                 <span className="rk-rate"><RatingChip code={k.person.rating} who /></span>
@@ -358,7 +366,8 @@ export function KeyTies({ ties = [], n = null, max = 3, housemates = [], state =
   ].filter(Boolean);
   return (
     <p className="rk-line" ref={ref}>
-      {shown.length ? null : <>{head} </>}
+      {/* Only housemates: "Same address: …" alone, never "Knows Same address: …". */}
+      {shown.length || !more ? null : <>{head} </>}
       {entries.map((e, i) => (
         <Fragment key={e.key}>
           {e}

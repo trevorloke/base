@@ -8,7 +8,8 @@
 //                     word the last name (with a van, de, von… before it:
 //                     "Jo Van Sample" → Jo · Van Sample), any words between
 //                     the middle name ("Mary Anne Example" → Mary · Anne ·
-//                     Example); one word is a first name
+//                     Example); a suffix stays with the surname ("Kevin
+//                     Smith Jr" → Kevin · Smith Jr); one word is a first name
 // A first name with a second word or an initial ("Mary Anne", "John A.")
 // is offered as first + middle where a name is typed or imported
 // (shared/names.js) — the database keeps whatever it is given.
@@ -32,6 +33,11 @@ begin
   if n = 0 then return array[null, null, null]::text[]; end if;
   if n = 1 then return array[words[1], null, null]::text[]; end if;
   k := n;
+  -- A suffix stays with the surname: "Kevin Smith Jr" is Kevin · Smith Jr
+  -- (filed under S, A–Z), never a last name of "Jr".
+  if n >= 3 and lower(words[n]) = any (array['jr', 'jr.', 'sr', 'sr.', 'ii', 'iii', 'iv']) then
+    k := n - 1;
+  end if;
   while k - 1 > 1 and lower(words[k - 1]) = any (array['van', 'von', 'de', 'da', 'das', 'dos', 'del', 'della', 'der', 'den', 'di', 'du', 'la', 'le', 'st', 'st.', 'ten', 'ter']) loop
     k := k - 1;
   end loop;
@@ -85,6 +91,15 @@ update persons set first_name = s[1], middle_name = s[2], last_name = s[3]
   from (select id as pid, persons_split_name(name) as s from persons
          where first_name is null and last_name is null and kind <> 'org' and coalesce(trim(name), '') <> '') x
  where persons.id = x.pid;
+
+-- Once: people split before a suffix stayed with the surname ("Kevin Smith
+-- Jr" filed as last name "Jr"). Only where the parts read back as the
+-- whole name; a name written apart from its parts is left alone.
+update persons set middle_name = s[2], last_name = s[3]
+  from (select id as pid, persons_split_name(name) as s from persons
+         where kind <> 'org' and lower(last_name) = any (array['jr', 'jr.', 'sr', 'sr.', 'ii', 'iii', 'iv'])
+           and regexp_replace(trim(name), '\\s+', ' ', 'g') = concat_ws(' ', first_name, middle_name, last_name)) x
+ where persons.id = x.pid and persons.last_name is distinct from x.s[3];
 
 create trigger persons_names before insert or update on persons for each row execute function persons_names();
 `;

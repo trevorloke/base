@@ -97,6 +97,24 @@ test('the one-time split leaves a name exactly as written', async () => {
   assert.deepEqual({ ...(await names(p.id)) }, { name: 'Jo  Van Sample', first_name: 'Jo', middle_name: null, last_name: 'Van Sample' });
 });
 
+test('a suffix stays with the surname (A–Z files "Kevin Smith Jr" under S); people split before are split again, once', async () => {
+  const jr = await mgr.createPerson('Kevin Smith Jr');
+  assert.deepEqual({ ...(await names(jr.id)) }, { name: 'Kevin Smith Jr', first_name: 'Kevin', middle_name: null, last_name: 'Smith Jr' });
+  const iii = await mgr.createPerson('Ana Maria Example III');
+  assert.deepEqual([(await names(iii.id)).middle_name, (await names(iii.id)).last_name], ['Maria', 'Example III']);
+  assert.equal((await names((await mgr.createPerson('Sam Jr')).id)).last_name, 'Jr', 'two words: a first and a last name, as written');
+  // Split the old way (last name "Jr"), and one typed apart on purpose.
+  const old = await mgr.createPerson('Lee Example Sr');
+  const typed = ok(await mgr.action('person.create', { kind: 'person', first_name: 'Dee', middle_name: 'Example', last_name: 'Jr' })).person;
+  await db.query('alter table persons disable trigger persons_names');
+  await db.query("update persons set middle_name = 'Example', last_name = 'Sr' where id = $1", [old.id]);
+  await db.query('alter table persons enable trigger persons_names');
+  const { sql } = await import('../ext/names/index.js');
+  await db.exec(sql);
+  assert.deepEqual({ ...(await names(old.id)) }, { name: 'Lee Example Sr', first_name: 'Lee', middle_name: null, last_name: 'Example Sr' });
+  assert.equal((await names(typed.id)).last_name, 'Example Jr', 'the same words read back as the name: split again too');
+});
+
 test('splitFirst: a second word or an initial is a middle name; hyphenated or bracketed is not', async () => {
   const { splitFirst } = await import('@starbase/shared/names');
   assert.deepEqual(splitFirst('Mary Anne'), { first: 'Mary', middle: 'Anne' });

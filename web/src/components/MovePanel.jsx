@@ -164,6 +164,12 @@ export default function MovePanel({
   const closed = useRef(false);
   const timer = useRef(null);
   useEffect(() => () => clearTimeout(timer.current), []);
+  // While the panel is open, a phone's toasts go to the top (move.css): at
+  // the bottom they sit on Later, Unit and City, where the thumb is.
+  useEffect(() => {
+    document.body.classList.add('mv-open');
+    return () => document.body.classList.remove('mv-open');
+  }, []);
   const close = () => {
     if (closed.current) return;
     closed.current = true;
