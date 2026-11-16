@@ -1,4 +1,4 @@
-// A simple front page (HOME, stage 1) — browser suite. Fresh in-memory
+// A simple front page (HOME) — browser suite. Fresh in-memory
 // campaigns of made-up people, at 1440x900 and 390x844, as a manager, staff,
 // staff denied Data, staff denied Map, a treasurer denied Outreach and a
 // volunteer:
@@ -7,6 +7,10 @@
 //   "N walk lists"), Today reads nothing of /api/map/doors or /density; it
 //   folds, stays folded on a reload and asks no Leaflet while folded;
 //   "Activity ›" opens /activity; staff denied Map see no band;
+//   Activity (empty and with data): its title and period pills, the tiles,
+//   the chart, the map as a band (≥ 1,000 wide, ≤ 560 tall) with the people
+//   under it, By team, Latest; a 500 says "Unavailable" with Try again, no
+//   signal says the No signal line; the search finds and opens it;
 //   Supporters: "of N needed" with the brief's numbers, the breakdown in
 //   place (support=1) with the win number's lines, the band legend and
 //   "Path to win ›"; with no win number the manager sees "Set it on Path to
@@ -161,6 +165,10 @@ try {
     // Before the sample: an empty campaign's Today (the before/after pair's "after" for a new campaign).
     await deskToday(M);
     await M.shot('0-manager-empty-1440');
+    await M.go('/activity');
+    await page.waitForSelector('[data-testid="dashboard"] .dash-figs', { timeout: 15000 }).catch(() => {});
+    await sleep(800);
+    await M.shot('3-activity-empty-1440', true);
     const sample = await M.api('/data/sample', {});
     check('the sample loads', sample.status === 200, JSON.stringify(sample.json).slice(0, 200));
     // A second walk list, and the manager walks the sample's.
@@ -210,6 +218,56 @@ try {
     await page.click('.today-under-band a');
     await page.waitForSelector('[data-testid="dashboard"]', { timeout: 10000 }).catch(() => {});
     check('“Activity ›” opens /activity, the old dashboard', /\/activity$/.test(new URL(page.url()).pathname) && Boolean(await page.$('[data-testid="dashboard"]')), page.url());
+
+    // ── Activity: the rest of the dashboard, its own screen ──
+    await page.waitForSelector('.dash-map .leaflet-tile-pane img', { timeout: 10000 }).catch(() => {});
+    await sleep(1000);
+    const h1 = await page.$eval('main h1', (e) => e.innerText.trim()).catch(() => '');
+    const pills = await page.$$eval('.ops-head [role="radiogroup"] [role="radio"]', (els) => els.map((e) => e.innerText.trim()));
+    const figs = await page.$$eval('.dash-figs [role="listitem"]', (els) => els.length).catch(() => 0);
+    const actText = await M.text();
+    check('Activity: “Activity”, the period pills, the overview tiles, the chart, By team and Latest',
+      h1 === 'Activity' && pills.join('|') === 'Today|7 days|30 days|All time' && figs >= 6 && Boolean(await page.$('.dash svg'))
+      && /By team/.test(actText) && /Latest/.test(actText) && !/Dashboard/.test(await page.$$eval('main h2', (els) => els.map((e) => e.innerText).join(' '))),
+      JSON.stringify({ h1, pills, figs }));
+    const amap = await rectOf(page, '.dash-map');
+    const plist = await rectOf(page, '.dash-people');
+    check('Activity: the map is a band (≥ 1,000 wide, ≤ 560 tall), the people list under it',
+      amap && amap.w >= 1000 && amap.h <= 560 && amap.h >= 300 && plist && plist.y >= amap.bottom, JSON.stringify({ amap, plist }));
+    const zoom = await page.evaluate(() => document.querySelector('.dash-map')?.classList.contains('leaflet-container'));
+    check('Activity: the map is drawn, with its one-line note', zoom && /Dots: the period’s contacts · Initials: who canvassed/.test(actText), '');
+    await M.shot('3-activity-1440', true);
+    await page.setViewportSize(PHONE); await sleep(600);
+    const am = await measure(page, '.dash-period, .dash-prow');
+    check('Activity at 390: no sideways scroll', am.overflow <= 0, JSON.stringify(am));
+    await M.shot('3-activity-390', true);
+    await page.setViewportSize(WIDE);
+    // A failed read: "Unavailable" and Try again, never the raw message.
+    await page.route(/\/api\/dashboard/, (r) => r.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'boom: relation dashboard_x' }) }));
+    await M.go('/activity');
+    await page.waitForSelector('.dash-unavail', { timeout: 15000 }).catch(() => {});
+    const failed = await M.text();
+    check('Activity, a 500: “Unavailable” and Try again, no raw text', /Unavailable/.test(failed) && Boolean(await page.$('.dash-unavail button:has-text("Try again")')) && !/boom|relation/.test(failed), failed.slice(0, 200));
+    await M.shot('3-activity-unavailable-1440');
+    await page.unroute(/\/api\/dashboard/);
+    await page.click('.dash-unavail button');
+    await page.waitForSelector('.dash-figs', { timeout: 15000 }).catch(() => {});
+    check('Activity: Try again loads it', Boolean(await page.$('.dash-figs')));
+    // No signal and nothing loaded: the shared line.
+    await page.route(/\/api\/dashboard/, (r) => r.abort('internetdisconnected'));
+    await M.go('/activity');
+    await page.waitForSelector('.dash .no-signal', { timeout: 15000 }).catch(() => {});
+    check('Activity with no signal and nothing loaded: the No signal line', /No signal — this loads when you’re back online/.test(await M.text()), (await M.text()).slice(0, 200));
+    await page.unroute(/\/api\/dashboard/);
+    // From the search.
+    await deskToday(M);
+    await page.click('.today-goto__search');
+    await page.waitForSelector('.cmd [role="combobox"]', { timeout: 5000 }).catch(() => {});
+    await page.locator('.cmd [role="combobox"]').fill('activity');
+    await sleep(400);
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('[data-testid="dashboard"]', { timeout: 10000 }).catch(() => {});
+    check('the search: “activity” ↵ opens Activity', /\/activity$/.test(new URL(page.url()).pathname), page.url());
 
     // ── Supporters, no win number yet ──
     await deskToday(M);

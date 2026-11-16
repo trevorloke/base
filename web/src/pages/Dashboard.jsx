@@ -1,4 +1,6 @@
-// The managers' dashboard, at the top of Today (GET /api/dashboard):
+// Activity: the managers' dashboard, its own screen (GET /api/dashboard,
+// managers only). Reached from Today, under the map band ("Activity ›"), and
+// from the search. What it shows:
 //   Overview        contacts in the period — how many, doors, calls & texts,
 //                   people reached, support, who is out now — each with
 //                   today's and all-time figures underneath
@@ -19,14 +21,18 @@
 //                   members are out; "No team" for the rest
 //   Latest          the last twenty contacts, who logged what where
 // Today · 7 days · 30 days · All time is one filter row for everything but
-// Latest (always the last twenty). Refreshes itself every minute while open.
+// Latest (always the last twenty). Refreshes itself every minute while open
+// (only here: Today no longer carries it). The map is a wide band, framed on
+// the campaign's own data (dashFrame.js).
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { apiGet, initials } from '../api.js';
-import { DEFAULT_TILES, SURREY_BOUNDS, safeAttribution } from '../components/tiles.js';
+import { DEFAULT_TILES, SURREY, safeAttribution } from '../components/tiles.js';
+import { NoSignal, noSignal } from '../components/NoSignal.jsx';
+import { frameOf } from './dashFrame.js';
 import { isGoogleUrl } from './mapView.js';
 import { OUTCOME_LABEL } from '../components/RatingButtons.jsx';
 import './dashboard.css';
@@ -94,21 +100,25 @@ export default function Dashboard() {
   if (tiles && isGoogleUrl(tiles.url)) tiles = (tilesQ.data?.views ?? []).find((v) => v.fallback) || DEFAULT_TILES;
   const d = q.data;
   const [sel, setSel] = useState(null); // user id picked in the field list
-  const headId = useId();
 
   return (
-    <section className="dash" aria-labelledby={headId} data-testid="dashboard">
-      <header className="dash-head">
-        <h2 className="today-h" id={headId}>Dashboard</h2>
+    <div className="ops-page dash-page">
+      <div className="ops-head">
+        <h1>Activity</h1>
         <div className="dash-periods" role="radiogroup" aria-label="Period">
           {PERIODS.map((p) => (
             <button key={p.key} type="button" role="radio" aria-checked={period === p.key}
               className={`dash-period${period === p.key ? ' is-on' : ''}`} onClick={() => setPeriod(p.key)}>{p.label}</button>
           ))}
         </div>
-      </header>
-      {q.isError && !d && <p className="error" role="alert">Couldn’t load the dashboard — {q.error.message}</p>}
-      {!d && !q.isError && <p className="muted">Loading…</p>}
+      </div>
+      <section className="dash" aria-label="Activity" data-testid="dashboard">
+      {!d && (noSignal(q) ? <NoSignal /> : q.isError ? (
+        <p className="dash-unavail" role="alert">
+          <span className="muted">Unavailable</span>
+          <button type="button" className="btn ops-tap" onClick={() => q.refetch()} disabled={q.isFetching}>Try again</button>
+        </p>
+      ) : <p className="muted">Loading…</p>)}
       {d && (
         <div className={q.isFetching && q.data?.period !== period ? 'dash-stale' : undefined}>
           <Overview d={d} period={period} />
@@ -118,7 +128,8 @@ export default function Dashboard() {
           <Latest d={d} />
         </div>
       )}
-    </section>
+      </section>
+    </div>
   );
 }
 
@@ -312,18 +323,27 @@ function Field({ d, tiles, sel, onSel, period }) {
   const boxRef = useRef(null);
   const mapRef = useRef(null);
   const layersRef = useRef(null);
-  // The whole city, every time nobody is picked (the map stands portrait,
-  // as Surrey does — dashboard.css); a resize refits it.
-  const fitCity = (map) => map.fitBounds(SURREY_BOUNDS, { padding: [6, 6] });
+  // The campaign's own frame, every time nobody is picked (dashFrame.js:
+  // turfs, else the period's contacts and who was seen today, else the
+  // city); a resize refits it. dataRef: the effect below reads the latest.
+  const dataRef = useRef(d);
+  dataRef.current = d;
+  const fitCity = (map) => {
+    const x = dataRef.current;
+    const box = frameOf({ turfs: x?.turfs, dots: x?.pins, people: x?.people, today: Date.now() });
+    if (box) map.fitBounds(box, { padding: [16, 16], maxZoom: 16, animate: false });
+    else map.setView(SURREY, 12, { animate: false });
+  };
   const selected = d.people.find((p) => p.id === sel) || null;
   const selRef = useRef(sel);
   const wasSelRef = useRef(false);
+  const framedRef = useRef(false);
   const headId = useId();
 
   useEffect(() => {
     const el = boxRef.current;
     if (!el || mapRef.current) return undefined;
-    const map = L.map(el, { zoomControl: true, attributionControl: true, scrollWheelZoom: true, zoomSnap: 1 }); // whole zooms: no hairline seams between tiles
+    const map = L.map(el, { zoomControl: true, attributionControl: true, scrollWheelZoom: false, zoomSnap: 1 }); // whole zooms: no hairline seams between tiles; the wheel scrolls the page past the band
     fitCity(map);
     const layers = { turfs: L.layerGroup().addTo(map), pins: L.layerGroup().addTo(map), trail: L.layerGroup().addTo(map), people: L.layerGroup().addTo(map) };
     mapRef.current = map; layersRef.current = layers;
@@ -387,8 +407,9 @@ function Field({ d, tiles, sel, onSel, period }) {
     }
     if (selected?.where) {
       map.setView([selected.where.lat, selected.where.lng], Math.max(map.getZoom(), 15));
-    } else if (wasSelRef.current) {
-      fitCity(map); // back from one person to the whole city
+    } else if (wasSelRef.current || !framedRef.current) {
+      fitCity(map); // the first data, or back from one person: the same frame
+      framedRef.current = true;
     }
     wasSelRef.current = !!selected;
     selRef.current = sel;
@@ -440,7 +461,7 @@ function Field({ d, tiles, sel, onSel, period }) {
           </ul>
         </div>
       </div>
-      <p className="dash-note">Dots are the period’s contacts at the person’s door — tap one for who, what and by whom. Volunteers share their location from the map (Show → Share my location while I’m out); a position is kept while they share it, a trail for the day.</p>
+      <p className="dash-note">Dots: the period’s contacts · Initials: who canvassed, a ring while they share their location</p>
     </section>
   );
 }
