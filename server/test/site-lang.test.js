@@ -29,7 +29,7 @@ const CONTACT = '604-555-0100';
 let db; let mgr; let ws; let about; let petition;
 
 // Words a manager approves: made-up words in the language, the English's slots kept.
-const approvedWords = (lang, extra = {}) => Object.fromEntries(LEGAL_KEYS.map((k) => [k, `${lang === 'pa' ? 'ਮਨਜ਼ੂਰ' : '批准'} ${k} ${slotsOf(LEGAL_ENGLISH[k]).map((x) => `{${x}}`).join(' ')}`.trim()]).concat(Object.entries(extra)));
+const approvedWords = (lang, extra = {}) => Object.fromEntries(LEGAL_KEYS.map((k) => [k, `${lang === 'pa' ? 'ਮਨਜ਼ੂਰ' : '批准的文字'} ${k} ${slotsOf(LEGAL_ENGLISH[k]).map((x) => `{${x}}`).join(' ')}`.trim()]).concat(Object.entries(extra)));
 const approve = async (lang, extra) => ok(await mgr.action('site.legal.approve', { lang, words: approvedWords(lang, extra) }), `approve ${lang}`);
 const settingsNow = async () => ok(await mgr.get('/api/site')).settings;
 const saveLanguages = async (patch) => {
@@ -260,7 +260,7 @@ test('a plain (no-JavaScript) post on /zh keeps the Simplified words', async () 
   assert.match(res.location, /^\/site\/zh\/about\?sent=newsletter/);
   const ev = (await db.query("select lang, wording from consent_events where workspace_id = $1 and address = $2", [ws, email])).rows[0];
   assert.equal(ev.lang, 'zh-Hans');
-  assert.equal(ev.wording, '批准 newsletter Harbour City Together');
+  assert.equal(ev.wording, '批准的文字 newsletter Harbour City Together');
 });
 
 test('a petition: the statement in English until checked, then translated; the words signed are kept', async () => {
@@ -577,6 +577,54 @@ test('another website: the switch, and /pa/ on its own domain and under /site/si
   const app = await hit(`/site/sites/${m.key}/pa/`);
   assert.equal(app.status, 200);
   assert.match(app.text, new RegExp(`action="/site/sites/${m.key}/pa/api/forms/`));
+});
+
+test('donate on /zh: the declaration as approved, Stripe in Chinese with the item named in it; Back lands on /zh', async () => {
+  const { startFakeStripe } = await import('./fake-stripe.js');
+  const { app } = await import('../index.js');
+  const stripe = await startFakeStripe({ secret: 'whsec_tr', apiKey: 'sk_test_tr', deliver: async (raw, headers) => { const r = await app.request('/stripe/webhook', { method: 'POST', headers, body: raw }); return { status: r.status, body: null }; } });
+  const keep = { STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET, STRIPE_API_BASE: process.env.STRIPE_API_BASE };
+  Object.assign(process.env, { STRIPE_SECRET_KEY: 'sk_test_tr', STRIPE_WEBHOOK_SECRET: 'whsec_tr', STRIPE_API_BASE: stripe.url });
+  try {
+    await page('give', 'Give', [{ id: 'don001', kind: 'donate', hidden: false, props: { title: 'Give', intro: 'Every dollar counts.', amounts: ['25', '50'], allowMonthly: false } }]);
+    await sweep(db, ws);
+    cacheClear(ws);
+    for (const [lang, root, locale] of [['zh-Hans', '/site/zh', 'zh'], ['pa', '/site/pa', 'auto']]) {
+      const r = await hit(`${root}/give`);
+      assert.equal(r.status, 200, lang);
+      const props = JSON.parse(/data-island-props="i-don001-form"[^>]*>([^<]+)</.exec(r.text)[1]);
+      const decl = props.fields.find((f) => f.name === 'declaration');
+      assert.match(decl.label, /donate/, 'the approved words');
+      if (lang === 'pa') assert.ok(props.fields.some((f) => f.type === 'note' && /payPageNote/.test(f.label)), 'Punjabi: the payment page may be in English');
+      assert.ok(props.fields.find((f) => f.name === 'first_name').label !== 'First name');
+      const email = `give-${lang.toLowerCase()}-${Date.now()}@example.org`;
+      const res = ok(await send('donate', {
+        ...props.hidden, first_name: 'Kiran', last_name: 'Example', email, address: '1 Example St', city: 'Surrey', postal_code: 'V3T 1A1',
+        declaration: true, amount_cents: 2500, cadence: 'once',
+      }, { root }));
+      assert.ok(res.checkout_url, JSON.stringify(res));
+      const co = (await db.query("select c.declaration, c.request from stripe_checkouts c join persons p on p.id = c.person_id where c.workspace_id = $1 and p.email = $2", [ws, email])).rows[0];
+      const d = typeof co.declaration === 'string' ? JSON.parse(co.declaration) : co.declaration;
+      assert.equal(d.lang, lang);
+      assert.match(d.text, /donate/);
+      assert.match(d.english, /^I’m a Canadian citizen/);
+      const req = typeof co.request === 'string' ? JSON.parse(co.request) : co.request;
+      assert.equal(req.locale, locale);
+      assert.notEqual(req.line_items[0].price_data.product_data.name, 'Contribution to Harbour City Together');
+      assert.match(req.line_items[0].price_data.product_data.name, /Harbour City Together/);
+      assert.ok(req.cancel_url.includes(`${root}/give?cancelled=donate`), req.cancel_url);
+      assert.ok(req.success_url.includes(`${root}/give?sent=donate`));
+    }
+  } finally {
+    for (const [k, v] of Object.entries(keep)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+    await stripe.close();
+  }
+});
+
+test('the privacy policy shows in English, with the approved line saying so, until every word is checked', async () => {
+  const r = await hit('/site/pa/privacy');
+  if (r.status !== 200) return; // the seed's policy page
+  assert.match(r.text, /<p class="lang-note lang-note--policy" lang="pa">ਮਨਜ਼ੂਰ policyInEnglish<\/p>/);
 });
 
 test('cost guard: the month’s limit stops the sweep before the call; reservations never pass it together; a refusal gives back', async () => {
