@@ -25,7 +25,7 @@
 // unavailable, reconnect, paused, denied, not-allowed, domain.
 import { runAction } from '../events.js';
 import { enqueueJob } from '../jobs.js';
-import { openToken, sealToken } from './seal.js';
+import { openToken, sealToken, tokenKeyReady } from './seal.js';
 import { tokenCall, revokeCall, scrubbed, tokenTimeoutMs } from './flow.js';
 import { domainFor, mayUse, purposeOf } from './purposes.js';
 
@@ -108,6 +108,10 @@ export const markReconnect = async (db, grant, said) => {
 const refresh = async (db, grant, scope = null) => {
   const row = (await db.query('select refresh_sealed from google_grants where id = $1', [grant.id])).rows[0];
   if (!row) return { trouble: trouble('reconnect') };
+  // No usable key on this server (unset, or too short): the setting's
+  // fault, not the token's — refused as not set up, the grant kept, so it
+  // works again once the key is back.
+  if (!tokenKeyReady()) return { trouble: trouble('client') };
   const open = openToken(row.refresh_sealed);
   if (!open) {
     await markReconnect(db, grant, SAID_KEY_CHANGED);
@@ -247,7 +251,7 @@ const shared = async (q, sub) => Boolean((await q.query('select 1 from google_gr
 
 export const revokeIfUnshared = async (q, { workspaceId, sub, sealed }) => {
   if (sub && await shared(q, sub)) return { still_at_google: true };
-  await enqueueJob(q, { workspaceId, kind: 'google.revoke', payload: { sealed, purposes: [], revoke: true } });
+  await enqueueJob(q, { workspaceId, kind: 'google.revoke', payload: { sealed, sub: sub || null, purposes: [], revoke: true } });
   return { still_at_google: false };
 };
 
@@ -270,11 +274,11 @@ export const removePurposes = async (tx, emit, row, purposes, { workspaceId }) =
   const cleanups = gone.filter((k) => purposeOf(k)?.onRevoke);
   if (cleanups.length && jobsOff()) {
     for (const k of cleanups) await purposeOf(k).onRevoke(tx, { userId: row.user_id, workspaceId, fetch: null });
-    if (revoke) await enqueueJob(tx, { workspaceId, kind: 'google.revoke', payload: { sealed: row.refresh_sealed, purposes: [], revoke: true } });
+    if (revoke) await enqueueJob(tx, { workspaceId, kind: 'google.revoke', payload: { sealed: row.refresh_sealed, sub: row.sub, purposes: [], revoke: true } });
   } else if (revoke || cleanups.length) {
     await enqueueJob(tx, {
       workspaceId, kind: 'google.revoke',
-      payload: { sealed: row.refresh_sealed, userId: row.user_id, workspaceId, purposes: cleanups, revoke },
+      payload: { sealed: row.refresh_sealed, sub: row.sub, userId: row.user_id, workspaceId, purposes: cleanups, revoke },
     });
   }
   return { removed: gone, deleted: !left.length, still_at_google: !revoke };
@@ -291,11 +295,13 @@ export const dropPurpose = async (db, { workspaceId, actorId }, grant, purpose) 
 };
 
 // ── The google.revoke job ──
-// payload { sealed, userId?, workspaceId?, purposes: [with onRevoke], revoke }.
+// payload { sealed, sub?, userId?, workspaceId?, purposes: [with onRevoke], revoke }.
 // Clean-up first (each purpose's onRevoke, with a bounded fetch carrying an
 // access token from the sealed refresh token), then /revoke when asked. A
 // throw is retried by the runner (5 tries); on the last, it revokes anyway
-// and calls onRevoke once more with fetch: null.
+// and calls onRevoke once more with fetch: null. Revoking at Google ends the
+// whole grant for that account, so it is skipped when a row holds the same
+// account again by the time the job runs (connected again meanwhile).
 const JOB_MAX_ATTEMPTS = 5; // lib/jobs.js MAX_ATTEMPTS
 const boundedFetch = (refreshToken) => {
   let token = null;
@@ -310,9 +316,13 @@ const boundedFetch = (refreshToken) => {
 };
 
 export const revokeJob = async (db, job) => {
-  const { sealed, userId = null, workspaceId = null, purposes = [], revoke = true } = job.payload || {};
+  const { sealed, sub = null, userId = null, workspaceId = null, purposes = [] } = job.payload || {};
+  let { revoke = true } = job.payload || {};
   const last = Number(job.attempts) >= JOB_MAX_ATTEMPTS;
+  if (revoke && sub && await shared(db, sub)) revoke = false;
   const cleanups = purposes.map(purposeOf).filter((p) => p?.onRevoke);
+  // No key on this server for now: try again later rather than drop it.
+  if (!tokenKeyReady() && !last) throw new Error('google revoke: GOOGLE_TOKEN_KEY isn’t set');
   const open = openToken(sealed);
   if (!open) {
     // Nothing can be revoked: the features still mark their own rows.

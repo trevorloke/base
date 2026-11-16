@@ -407,6 +407,28 @@ test('two people on one Google account: one disconnecting never revokes the othe
   assert.equal(fake.counts.refresh, 1);
 });
 
+test('a revoke queued before the same Google account connected again never revokes the new connection', async () => {
+  const u = await join(M.b, `rc.${tag}@example.org`, 'staff');
+  assert.equal((await connect(u.b, 'test.other', A[22].sub)).google, 'connected');
+  assert.equal((await u.b.action('google.disconnect', { purpose: 'test.other' })).json.still_at_google, false);
+  // Connected again before the job runner's next tick.
+  assert.equal((await connect(u.b, 'test.other', A[22].sub)).google, 'connected');
+  fake.resetCounts();
+  await jobs();
+  assert.equal(fake.counts.revoke, 0);
+  _resetTokensForTest();
+  const g = await grantFor(db, { userId: u.id, workspaceId: M.ws }, 'test.other');
+  assert.equal((await googleFetch(db, g, api())).ok, true, 'the new connection still works');
+  // Someone else connecting the same account meanwhile: the same.
+  const w = await join(M.b, `rc2.${tag}@example.org`, 'staff');
+  assert.equal((await u.b.action('google.disconnect', { purpose: 'test.other' })).json.still_at_google, false);
+  assert.equal((await connect(w.b, 'test.other', A[22].sub)).google, 'connected');
+  await jobs();
+  assert.equal(fake.counts.revoke, 0);
+  _resetTokensForTest();
+  assert.equal((await googleFetch(db, await grantFor(db, { userId: w.id, workspaceId: M.ws }, 'test.other'), api())).ok, true);
+});
+
 test('a revoke that keeps failing is tried five times, then parked as failed', async () => {
   const sealed = sealToken('1//not-a-real-token');
   await revokeIfUnshared(db, { workspaceId: M.ws, sub: `nobody-${tag}`, sealed });
@@ -513,6 +535,21 @@ test('key rotation reseals on refresh; a lost key means reconnect', async () => 
   assert.equal(r.trouble.code, 'reconnect');
   assert.equal((await grantRow(u.id)).said, 'Connect again — this server’s Google key changed');
   await markReconnect(db, g, 'Connect again — this server’s Google key changed');
+});
+
+test('no usable GOOGLE_TOKEN_KEY: a fetch is refused as not set up and the grant is kept; it works when the key is back', async () => {
+  const u = await join(M.b, `nk.${tag}@example.org`, 'volunteer');
+  assert.equal((await connect(u.b, 'test.other', A[21].sub)).google, 'connected');
+  const g = await grantFor(db, { userId: u.id, workspaceId: M.ws }, 'test.other');
+  for (const missing of [undefined, 'too-short']) {
+    if (missing) process.env.GOOGLE_TOKEN_KEY = missing; else delete process.env.GOOGLE_TOKEN_KEY;
+    _resetTokensForTest();
+    const r = await googleFetch(db, g, api());
+    assert.equal(r.trouble.code, 'client');
+    assert.equal((await grantRow(u.id)).state, 'ok');
+  }
+  process.env.GOOGLE_TOKEN_KEY = TOKEN_KEY;
+  assert.equal((await googleFetch(db, await grantFor(db, { userId: u.id, workspaceId: M.ws }, 'test.other'), api())).ok, true);
 });
 
 test('payloads pinned; access tokens in no table, job or event', async () => {
