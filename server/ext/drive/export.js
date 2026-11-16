@@ -303,6 +303,13 @@ export const runExportJob = async (db, job) => {
   try {
     out = await part(db, { ...ex, status: 'sending' }, ctx, g, rules, src);
   } catch (e) {
+    if (!(e instanceof NoAnswer) && e?.status >= 400 && e.status < 500) {
+      // The source refused its own page (a quick report's set changed past
+      // its cursor): not Google's doing, and trying again won't help.
+      const now = (await db.query('select * from drive_exports where id = $1', [ex.id])).rows[0];
+      if (now && ['waiting', 'sending'].includes(now.status)) await end(db, now, 'failed', 'What was being sent changed while sending — send it again');
+      return undefined;
+    }
     if (!(e instanceof NoAnswer)) {
       // The runner gives up after this try: failed, so Try again shows (and works).
       if (Number(job.attempts) >= MAX_ATTEMPTS) {

@@ -274,9 +274,25 @@ const ID_CHUNK = 1000;
 const azIds = async (db, where, params) => (await db.query(
   `select p.id from persons p where ${live} and ${where} order by ${AZ}`, params,
 )).rows.map((r) => r.id);
+// Where a page starts: after `after`. A Sheets export reads the set again
+// for each part, and the row it stopped at may have left it since (a new
+// address, a role taken off): then the set's rows that sort before it, in
+// the set's own order (order: ids → that order, with `after` among them).
+const GONE = 'That page is gone — start again';
+const startAfter = async (ids, after, order) => {
+  if (!after) return 0;
+  const at = ids.indexOf(after);
+  if (at >= 0) return at + 1;
+  const all = await order([...ids, after]);
+  const place = all.indexOf(after);
+  if (place < 0) throw new Refusal(400, GONE);
+  return place;
+};
+const inAz = (db, ctx) => async (ids) => (await db.query(
+  `select p.id from persons p where p.workspace_id = $1 and p.id = any($2::uuid[]) order by ${AZ}`, [ctx.workspaceId, ids],
+)).rows.map((r) => r.id);
 const idPage = async (db, ctx, ids, { after, limit }, extra) => {
-  let from = 0;
-  if (after) { from = ids.indexOf(after) + 1; if (!from) throw new Refusal(400, 'That page is gone — start again'); }
+  const from = await startAfter(ids, after, inAz(db, ctx));
   const slice = ids.slice(from, from + limit);
   const rows = [];
   for (let i = 0; i < slice.length; i += ID_CHUNK) {
@@ -397,8 +413,10 @@ const signs = {
   },
   async rows(db, ctx, opts, { after = null, limit = PAGE_MAX, ids } = {}) {
     const set = ids || await this.idsFor(db, ctx, opts);
-    let from = 0;
-    if (after) { from = set.indexOf(after) + 1; if (!from) throw new Refusal(400, 'That page is gone — start again'); }
+    const from = await startAfter(set, after, async (some) => walkOrder((await db.query(
+      'select s.id, s.address from signs s where s.workspace_id = $1 and s.id = any($2::uuid[]) order by s.created_at, s.id',
+      [ctx.workspaceId, some],
+    )).rows.map((x) => ({ address: x.address || '', id: x.id }))).map((d) => d.id));
     const slice = set.slice(from, from + limit);
     if (!slice.length) return { rows: [], next: null };
     const rows = (await db.query(

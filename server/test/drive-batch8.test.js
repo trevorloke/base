@@ -175,6 +175,47 @@ test('a quick report with an id set reads it once for the whole job, however man
   } finally { RECIPES.volunteers.idsFor = real; }
 });
 
+test('a quick report sent in several parts carries on when the row it stopped at leaves the set between parts', async () => {
+  const M = await campaign();
+  const ids = [];
+  for (const [f, l] of [['Ann', 'Ames'], ['Bo', 'Bell'], ['Cy', 'Cole'], ['Di', 'Dunn']]) {
+    const id = await person(M.ws, f, l, { address: `${ids.length + 1} Example St`, city: 'Surrey' });
+    ok(await M.b.action('contact.log', { person_id: id, channel: 'door', outcome: 'moved' }));
+    ids.push(id);
+  }
+  const signAt = async (address, ageMin) => {
+    const id = randomUUID();
+    await db.query(`insert into signs (id, workspace_id, address, kind, created_at) values ($1, $2, $3, 'lawn', now() - make_interval(mins => $4))`, [id, M.ws, address, ageMin]);
+    return id;
+  };
+  for (const [a, m] of [['10 Example St', 4], ['12 Example St', 3], ['14 Example St', 2], ['16 Example St', 1]]) await signAt(a, m);
+  _setLimitsForTest({ pageRows: 1, sliceMs: 0 });
+  // One part, then the row at the cursor leaves: a new address; a sign put up.
+  const partThenLeave = async (ref, leave) => {
+    const ex = ok(await send(M.b, 'quick', ref)).export;
+    for (let i = 0; i < 10 && !(await exportRow(ex.id)).cursor?.page?.after; i += 1) await runDueJobs(db, { workspaceId: M.ws });
+    const at = (await exportRow(ex.id)).cursor.page.after;
+    await leave(at);
+    await drain(M.ws);
+    return ex.id;
+  };
+  const m = await partThenLeave('moved', (at) => M.b.action('person.move', { person_id: at, to: { address: '99 New St' } }));
+  assert.deepEqual((await sheetRows(m)).slice(1).map((r) => r[0]), ['Ames', 'Bell', 'Cole', 'Dunn'], 'every row once, A–Z');
+  const sg = await partThenLeave('signs?kind=all', (at) => db.query(`update signs set status = 'installed' where id = $1`, [at]));
+  assert.equal((await sheetRows(sg)).length - 1, 4, 'every sign once');
+  // Gone from the database altogether: stopped in plain words, not Google's fault.
+  for (const [f, l] of [['Ed', 'Eby'], ['Flo', 'Fox']]) {
+    const id = await person(M.ws, f, l);
+    await db.query(`insert into volunteer_roles (id, workspace_id, person_id, role) values ($1, $2, $3, 'canvass')`, [randomUUID(), M.ws, id]);
+  }
+  const v = await partThenLeave('volunteers?role=all', async (at) => {
+    await db.query('delete from volunteer_roles where person_id = $1', [at]);
+    await db.query('delete from persons where id = $1', [at]);
+  });
+  const row = await exportRow(v);
+  assert.deepEqual([row.status, row.said], ['failed', 'What was being sent changed while sending — send it again']);
+});
+
 test('a People filter of moved people (moved=open, moved=unknown) sends the same people to Sheets, A–Z', async () => {
   const M = await campaign();
   const ana = await person(M.ws, 'Ana', 'Souza', { address: '1 Example St', city: 'Surrey' });
