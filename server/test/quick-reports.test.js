@@ -279,6 +279,12 @@ test('volunteers: more than 5,000, all in the CSV; the id set built once; the ro
   const d = ok(await mgr.get('/api/quick-reports/volunteers?role=driver'));
   assert.deepEqual(d.rows.map((r) => [r.last_name, r.roles]), [['Beta', 'Driver']]);
   assert.equal(d.said, 'Driver');
+  // The chips: Everyone, then the roles in use (one Driver), in VOLUNTEER_ROLES order.
+  assert.deepEqual(d.options[0].choices.map((c) => c.words), ['Everyone', 'Driver']);
+  // A role nobody holds, asked for by URL, stays a chip so it can be seen and left.
+  const none = ok(await mgr.get('/api/quick-reports/volunteers?role=scrutineer'));
+  assert.deepEqual(none.options[0].choices.map((c) => c.words), ['Everyone', 'Driver', 'Scrutineer']);
+  assert.equal(none.total, 0);
   const ids = [];
   let after = '';
   for (let n = 0; n < 5; n++) {

@@ -290,6 +290,14 @@ const volunteers = {
   what: 'Names, phones and what they do',
   areas: ['data', 'shifts'],
   choices: { role: opt([['all', 'Everyone'], ...VOLUNTEER_ROLES.map((r) => [r.code, r.label])], 'all') },
+  // The chips: Everyone, then the roles someone holds (and the one in
+  // force), in VOLUNTEER_ROLES order. Any role is still a valid choice.
+  async chipsFor(db, ctx, opts) {
+    const held = new Set((await db.query('select distinct role from volunteer_roles where workspace_id = $1', [ctx.workspaceId])).rows.map((r) => r.role));
+    held.add(opts.role);
+    const o = this.choices.role;
+    return { role: { ...o, choices: o.choices.filter(([c]) => c === 'all' || held.has(c)) } };
+  },
   // The roster's own union (ext/volunteers VOLUNTEER_IDS_SQL), with no cap.
   // Its tag arm reads persons once; a role reads volunteer_roles alone.
   idsFor: (db, ctx, opts) => (opts.role === 'all'
@@ -612,7 +620,7 @@ export const mountQuick = (api) => {
       return c.json({
         name, title: r.title, said, head, total, next: page.next,
         // The chips: each option's choices in words, and the one in force.
-        options: Object.entries(optionsOf(r)).map(([key, o]) => ({ key, value: opts[key], choices: o.choices.map(([code, words]) => ({ code, words })) })),
+        options: Object.entries(r.chipsFor ? await r.chipsFor(db, ctx, opts) : optionsOf(r)).map(([key, o]) => ({ key, value: opts[key], choices: o.choices.map(([code, words]) => ({ code, words })) })),
         // On screen, the words in place of a number or address someone
         // asked not to be reached at (the CSV keeps them, with the column).
         rows: page.rows.map(({ mask, _total, ...x }) => ({
