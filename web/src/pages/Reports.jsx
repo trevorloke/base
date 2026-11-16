@@ -1,11 +1,17 @@
-// Reports — the campaign in numbers, each table downloadable as CSV, and
-// the exports: any table as a spreadsheet, or everything as JSON.
+// Reports — first the quick reports (a short menu of ready-made lists of
+// people, each to print or download: QuickReport.jsx, WalkSheet.jsx), then
+// "Field, by turf", then under More the campaign in numbers, each table
+// downloadable as CSV, and the exports: any table as a spreadsheet, or
+// everything as JSON. The numbers are read only once More is opened.
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { apiGet, fmtMoney } from '../api.js';
 import { NoSignal, noSignal } from '../components/NoSignal.jsx';
+import { fmt } from '../components/AudienceBits.jsx';
 import './shifts.css'; // the ops-* pieces (the head, the page column, the buttons)
 import './reports.css';
+import './quick.css';
 import { at } from '../base.js';
 
 const TITLES = {
@@ -38,23 +44,65 @@ function Report({ name, r }) {
   );
 }
 
-export default function Reports() {
+// One menu row's number: turfs for the walking list (names only, under
+// their own key — never the shared ['turfs'], which holds counted turfs),
+// else the report's own count. Loading…, the number, or Unavailable.
+function QuickCount({ name }) {
+  const walk = name === 'walk';
+  const q = useQuery({
+    queryKey: walk ? ['turfs', 'outline'] : ['quick', name, 'count', ''],
+    queryFn: () => apiGet(walk ? '/turfs?outline=1' : `/quick-reports/${name}/count`),
+    retry: false,
+  });
+  if (q.isError) return <span className="rp-quick__n">Unavailable</span>;
+  if (!q.data) return <span className="rp-quick__n">Loading…</span>;
+  if (walk) { const n = q.data.turfs?.length || 0; return <span className="rp-quick__n">{fmt(n)} {n === 1 ? 'turf' : 'turfs'}</span>; }
+  return <span className="rp-quick__n">{fmt(q.data.count)}</span>;
+}
+
+function QuickReports() {
+  const q = useQuery({ queryKey: ['quick', 'menu'], queryFn: () => apiGet('/quick-reports-menu'), retry: false });
+  const mine = (q.data?.reports || []).filter((r) => r.can);
+  return (
+    <section className="rp-quick" aria-labelledby="rp-quick-h">
+      <h2 id="rp-quick-h">Quick reports</h2>
+      {noSignal(q) ? <NoSignal />
+        : q.isPending ? <p className="ops-meta" role="status">Loading…</p>
+        : q.isError ? <p className="ops-meta" role="alert">Unavailable — <button type="button" className="btn btn-quiet ops-tap" onClick={() => q.refetch()}>Try again</button></p>
+        : !mine.length ? <p className="ops-meta">No quick reports for you here.</p>
+        : (
+          <ul className="rp-quick__list">
+            {mine.map((r) => (
+              <li key={r.name}>
+                <Link className="rp-quick__i" to={r.name === 'walk' ? '/reports/walk' : `/reports/quick/${r.name}`}>
+                  <span className="rp-quick__t"><span className="rp-quick__name">{r.title}</span><span className="rp-quick__what">{r.what}</span></span>
+                  <QuickCount name={r.name} />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+    </section>
+  );
+}
+
+// The numbers and the exports, as they were — one tap down.
+function Numbers() {
   const q = useQuery({ queryKey: ['reports'], queryFn: () => apiGet('/reports') });
   const t = q.data?.totals;
   return (
-    <div className="ops-page rp-page">
-      <div className="ops-head"><h1>Reports</h1></div>
+    <div className="rp-more__body" id="rp-more-b">
       {noSignal(q) && <NoSignal />}
+      {q.isPending && !noSignal(q) && <p className="ops-meta" role="status">Loading…</p>}
       {q.isError && !noSignal(q) && <p className="error">{q.error.message}</p>}
       {t && (
         <div className="rp-totals" role="list">
-          <span role="listitem"><strong className="mono">{t.people.total}</strong> people <span className="muted">· {t.people.rated} rated · {t.people.with_email} with email · {t.people.with_phone} with phone</span></span>
-          <span role="listitem"><strong className="mono">{t.contacts.week}</strong> contacts this week <span className="muted">· {t.contacts.total} all time</span></span>
-          <span role="listitem"><strong className="mono">{fmtMoney(t.donations.cents)}</strong> raised this year <span className="muted">· {t.donations.gifts} gifts from {t.donations.donors} donors</span></span>
-          <span role="listitem"><strong className="mono">{t.newsletter.subscribed}</strong> subscribers <span className="muted">· {t.newsletter.unsubscribed} left</span></span>
+          <span role="listitem"><strong className="mono">{fmt(t.people.total)}</strong> people <span className="muted">· {fmt(t.people.rated)} rated · {fmt(t.people.with_email)} with email · {fmt(t.people.with_phone)} with phone</span></span>
+          <span role="listitem"><strong className="mono">{fmt(t.contacts.week)}</strong> contacts this week <span className="muted">· {fmt(t.contacts.total)} all time</span></span>
+          {!t.donations?.hidden && <span role="listitem"><strong className="mono">{fmtMoney(t.donations.cents)}</strong> raised this year <span className="muted">· {fmt(t.donations.gifts)} gifts from {fmt(t.donations.donors)} donors</span></span>}
+          <span role="listitem"><strong className="mono">{fmt(t.newsletter.subscribed)}</strong> subscribers <span className="muted">· {fmt(t.newsletter.unsubscribed)} left</span></span>
         </div>
       )}
-      <p className="rp-links"><Link className="btn ops-tap" to="/field-report">Field, by turf →</Link></p>
       {q.data && Object.entries(q.data.reports).map(([name, r]) => <Report key={name} name={name} r={r} />)}
       <section className="rp-sec" aria-labelledby="rp-exports">
         <div className="rp-sec__head"><h2 id="rp-exports">Exports</h2></div>
@@ -64,6 +112,21 @@ export default function Reports() {
           <li><a className="btn btn-quiet ops-tap" href={at('/api/export')}>Everything (JSON)</a></li>
         </ul>
       </section>
+    </div>
+  );
+}
+
+export default function Reports() {
+  const [more, setMore] = useState(false);
+  return (
+    <div className="ops-page rp-page">
+      <div className="ops-head"><h1>Reports</h1></div>
+      <QuickReports />
+      <p className="rp-links"><Link className="btn ops-tap" to="/field-report">Field, by turf →</Link></p>
+      <div className="rp-more">
+        <button type="button" className="disclose" aria-expanded={more} aria-controls="rp-more-b" onClick={() => setMore((v) => !v)}>More: numbers and exports</button>
+        {more && <Numbers />}
+      </div>
     </div>
   );
 }

@@ -115,6 +115,10 @@ test('donors: each period, totals and tier, A–Z (Van Sample under V) and large
   assert.deepEqual(lasts(yr), ['Alpha', 'Import', 'Monthly', 'Van Sample'], 'live gifts this year, A–Z; a voided gift is no gift');
   assert.equal(yr.total, 4);
   assert.equal(yr.said, 'This year · A–Z by last name');
+  // The screen's chips come with the page, in the words above.
+  assert.deepEqual(yr.options.map((o) => [o.key, o.value, o.choices.map((x) => x.words).join(' · ')]), [
+    ['period', 'year', 'This year · Last year · All time · Lapsed · Monthly'], ['order', 'az', 'A–Z by last name · Largest first'],
+  ]);
   const ann = yr.rows[0];
   assert.deepEqual([ann.first_name, ann.total, ann.gifts, ann.last_gift, ann.last_amount, ann.monthly, ann.tier], ['Ann', '80.00', 2, today, '30.00', '', '']);
   assert.equal(yr.rows[1].tier, 'Star', 'an imported $1,000 this year');

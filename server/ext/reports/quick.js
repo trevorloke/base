@@ -611,6 +611,8 @@ export const mountQuick = (api) => {
       const said = wordsOf(r, opts).join(' · ');
       return c.json({
         name, title: r.title, said, head, total, next: page.next,
+        // The chips: each option's choices in words, and the one in force.
+        options: Object.entries(optionsOf(r)).map(([key, o]) => ({ key, value: opts[key], choices: o.choices.map(([code, words]) => ({ code, words })) })),
         // On screen, the words in place of a number or address someone
         // asked not to be reached at (the CSV keeps them, with the column).
         rows: page.rows.map(({ mask, _total, ...x }) => ({
