@@ -50,8 +50,11 @@ and never crowds the screen.
 
 - **Volunteer** — Today is one big "Start canvassing" (their walk list, or
   the map) plus their next shift. Tabs: Today · Map · Calls · Shifts.
-- **Staff / treasurer / manager** — Today is the campaign at a glance in
-  numbers; tabs: Today · Map · People · Shifts · Money · Signs · Outreach
+- **Staff / treasurer / manager** — Today is three numbers (supporters
+  against the win number, doors this week, money raised), a map of your
+  walk lists across the page that folds away, what needs you, what's coming
+  up, and Go to: six places in one tap and a search for everything else;
+  tabs: Today · Map · People · Shifts · Money · Signs · Outreach
   (on a phone: the first four, and *More* for the rest).
 
 ## How we check

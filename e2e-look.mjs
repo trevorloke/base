@@ -207,21 +207,16 @@ const DESK_PHONE = (s) => ['/', '/people', `/people/${s.person}`, '/shifts', `/s
   '/settings', '/settings/permissions', '/settings/services', '/settings/brand', '/path-to-win', '/profile'].map((p) => `/admin${p === '/' ? '' : p}`);
 const FIELD = (s) => ['/', '/map', '/shifts', `/shifts/${s.shift}`, '/calls', '/turfs', `/turfs/${s.turf}`, '/imagineu', '/profile', '/mainstreet', '/my-people'];
 // The screens that carry the most of the brand: enough to judge a colour by.
-const CORE = (s) => ['/admin', '/admin/people', `/admin/people/${s.person}`, '/admin/shifts', '/admin/money', '/admin/signs', '/admin/website', '/admin/settings', '/admin/settings/brand'];
+const CORE = (s) => ['/admin', '/admin/activity', '/admin/people', `/admin/people/${s.person}`, '/admin/shifts', '/admin/money', '/admin/signs', '/admin/website', '/admin/settings', '/admin/settings/brand'];
 // Every pick-one control on these screens (app.css §13): how tall it is, how
 // many rows its choices take, and its shortest choice.
 const pickOnes = async (page, base, paths) => {
   const out = [];
   for (const path of paths) {
     await page.goto(`${base}${path}`, { waitUntil: 'networkidle' });
-    // Today keeps the managers' dashboard (and its pick-one) folded under
-    // Activity: open it, so its choices are measured too.
-    const fold = page.locator('.today-activity > .today-morebox__toggle[aria-expanded="false"]');
-    if (await fold.count()) {
-      await fold.click();
-      await page.waitForSelector('.today-activity .dash-seg, .today-activity .dash-periods', { timeout: 15000 }).catch(() => {});
-      await page.waitForLoadState('networkidle');
-    }
+    // The managers' dashboard is its own screen, Activity: its period pills
+    // load with it.
+    if (/\/activity$/.test(path)) await page.waitForSelector('.dash-seg, .dash-periods', { timeout: 15000 }).catch(() => {});
     out.push(...await page.evaluate(() => [...document.querySelectorAll('.ops-seg, .ot-seg, .dash-seg, .dash-periods, .channel-toggle, .cl-toggle, .door-channel, .rq-pills, .fk-tabs, .ot-tabs, .ws-tabs')].map((g) => {
       const r = g.getBoundingClientRect();
       const choices = [...g.children].filter((c) => c.matches('button, a')).map((c) => c.getBoundingClientRect());

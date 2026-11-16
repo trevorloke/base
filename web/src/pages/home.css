@@ -42,3 +42,4 @@ p.today-goal { margin-bottom: var(--s-3); }
   .today-goto__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .today-goto__i { min-height: 44px; }
 }
+.today-support-links { display: flex; flex-wrap: wrap; justify-content: flex-end; column-gap: var(--s-4); }

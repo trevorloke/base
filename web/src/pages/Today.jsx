@@ -342,8 +342,10 @@ function SupportDetail({ pic, id, goal }) {
       )}
       <div className="today-support-foot">
         <span className="mono muted">{num(total)} rated</span>
-        <Link to="/map" className="today-more-link">Open the map <Chevron /></Link>
-        {goal && <Link to="/path-to-win" className="today-more-link">Path to win <Chevron /></Link>}
+        <span className="today-support-links">
+          <Link to="/map" className="today-more-link">Open the map <Chevron /></Link>
+          {goal && <Link to="/path-to-win" className="today-more-link">Path to win <Chevron /></Link>}
+        </span>
       </div>
     </section>
   );
