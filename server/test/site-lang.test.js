@@ -552,7 +552,7 @@ test('a page miss with an unchanged rev reads no translations; a cold /pa page d
   }
   console.log(`# /pa/about cold median ${median(cold).toFixed(1)} ms, warm median ${median(warm).toFixed(1)} ms`);
   assert.ok(median(cold) < 150, `cold ${median(cold)}`);
-  assert.ok(median(warm) < 10 || process.env.STARBASE_TEST_PG, `warm ${median(warm)}`);
+  assert.ok(median(warm) < 10, `warm ${median(warm)}`);
 });
 
 test('another website: the switch, and /pa/ on its own domain and under /site/sites/<key>/pa', async () => {
