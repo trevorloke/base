@@ -149,6 +149,11 @@ export const nextSweepAt = (tz, now = Date.now()) => {
 };
 export const ensureSweep = async (tx, ws, tz) => {
   const { day, at } = nextSweepAt(tz);
+  // One sweep pending at a time: a sweep queued under the campaign's old time
+  // zone (another day's key) goes, or the day the zone changes could sweep
+  // twice and push every calendar twice. Deleted, not cancelled, so its key is
+  // free again if the zone changes back.
+  await tx.query(`delete from jobs where workspace_id = $1 and kind = 'gcal.sweep' and status = 'pending' and key <> $2`, [ws, `gcal-sweep-${day}`]);
   await enqueueJob(tx, { workspaceId: ws, kind: 'gcal.sweep', runAt: at.toISOString(), key: `gcal-sweep-${day}` });
 };
 

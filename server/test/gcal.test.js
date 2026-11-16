@@ -16,7 +16,7 @@ import { _resetPausesForTest, _setTokenTimeoutForTest } from '../lib/google/flow
 import { EXTENSIONS } from '../ext.js';
 import { areaOfAction } from '../lib/perms.js';
 import { ACTIONS } from '../actions/index.js';
-import { _resetGcalForTest, _setGcalForTest, desiredFor, nextSweepAt } from '../ext/gcal/push.js';
+import { _resetGcalForTest, _setGcalForTest, desiredFor, nextSweepAt, ensureSweep } from '../ext/gcal/push.js';
 import { ID_RE } from '../ext/gcal/google.js';
 import { cleanUp } from '../ext/gcal/stop.js';
 import { Browser, TOKEN_KEY, acct, join, restoreEnv, signup, startGoogle, tag } from './google-helpers.js';
@@ -513,6 +513,20 @@ test('jobs: one pending push whatever the writes; the sweep once a date marks ev
   await jobs();
   assert.equal((await db.query(`select count(*)::int as n from gcal_links where workspace_id = $1 and dirty_at is not null`, [M.ws])).rows[0].n, 0, `${n} links pushed`);
   assert.equal(calls(), 0, 'nothing drifted');
+});
+
+test('a time-zone change leaves one sweep: the old zone\u2019s date goes, and can come back', async () => {
+  const pending = async () => (await db.query(`select key from jobs where workspace_id = $1 and kind = 'gcal.sweep' and status = 'pending' order by key`, [M.ws])).rows.map((r) => r.key);
+  // The sweep the last test ran early holds today's key; start clean.
+  await db.query(`delete from jobs where workspace_id = $1 and kind = 'gcal.sweep'`, [M.ws]);
+  await db.transaction((tx) => enqueueJob(tx, { workspaceId: M.ws, kind: 'gcal.sweep', runAt: new Date(Date.now() + 3_600_000).toISOString(), key: 'gcal-sweep-2000-01-01' }));
+  await db.transaction((tx) => ensureSweep(tx, M.ws, 'America/Edmonton'));
+  assert.deepEqual(await pending(), [`gcal-sweep-${nextSweepAt('America/Edmonton').day}`]);
+  // Another zone (most hours another date), then back: still exactly one.
+  await db.transaction((tx) => ensureSweep(tx, M.ws, 'Pacific/Kiritimati'));
+  assert.deepEqual(await pending(), [`gcal-sweep-${nextSweepAt('Pacific/Kiritimati').day}`]);
+  await db.transaction((tx) => ensureSweep(tx, M.ws, 'America/Edmonton'));
+  assert.deepEqual(await pending(), [`gcal-sweep-${nextSweepAt('America/Edmonton').day}`]);
 });
 
 test('stop: the calendar goes with its rows; the Calendar permission goes; revoked only with nothing else left', async () => {
