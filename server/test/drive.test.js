@@ -473,6 +473,45 @@ test('export, Google not answering the same way 20 times, a wrong client, a full
   await db.query(`update drive_exports set status = 'sending', touched_at = now() - interval '16 minutes' where id = $1`, [d.id]);
   const shown = ok(await M.b.get(`/api/drive/exports/${d.id}`)).export;
   assert.deepEqual([shown.status, shown.said], ['failed', 'It stopped part-way — Try again']);
+  // …and it acts as shown: it holds no room, and Try again carries it on.
+  const fresh = ok(await send(M.b, 'list', list)).export;
+  await drain(M.ws);
+  assert.equal((await exportRow(fresh.id)).status, 'done', 'a stale row holds no room');
+  await db.query(`update drive_exports set status = 'sending', touched_at = now() - interval '16 minutes' where id = $1`, [d.id]);
+  ok(await M.b.action('drive.export.retry', { id: d.id }));
+  await drain(M.ws);
+  assert.equal((await exportRow(d.id)).status, 'done');
+
+  // A part that throws something else on the job's last try: failed, so Try again shows and works.
+  const e = ok(await send(M.b, 'list', list)).export;
+  const { runExportJob } = await import('../ext/drive/export.js');
+  await drain(M.ws);
+  // Back to its start, its job's last try still to come.
+  await db.query(`update drive_exports set status = 'waiting', file_id = null, url = null, done_rows = 0, cursor = null, done_at = null where id = $1`, [e.id]);
+  const ej = (await db.query(`select * from jobs where workspace_id = $1 and payload->>'id' = $2 order by created_at desc limit 1`, [M.ws, e.id])).rows[0];
+  // The database fails on the part's first write (inside the runner's transaction).
+  const failing = (q) => new Proxy(q, {
+    get(t, k) {
+      if (k === 'query') return async (sql, args) => { if (String(sql).includes('file_id = $3, url = $4')) throw new Error('database went away'); return t.query(sql, args); };
+      if (k === 'transaction') return (fn) => t.transaction((tx) => fn(failing(tx)));
+      const v = t[k];
+      return typeof v === 'function' ? v.bind(t) : v;
+    },
+  });
+  const broken = failing(db);
+  await assert.rejects(runExportJob(broken, { ...ej, attempts: MAX_ATTEMPTS }), /database went away/);
+  assert.equal((await exportRow(e.id)).status, 'failed');
+  ok(await M.b.action('drive.export.retry', { id: e.id }));
+  await drain(M.ws);
+  assert.equal((await exportRow(e.id)).status, 'done');
+
+  // With no background work on this server, Send to Google Sheets says so rather than wait forever.
+  process.env.STARBASE_JOBS = 'off';
+  try {
+    no(await send(M.b, 'list', list), 409, 'Background work is off on this server — Send to Google Sheets can’t run');
+  } finally {
+    delete process.env.STARBASE_JOBS;
+  }
 });
 
 test('export, the other edges: no cap, profile fields, too big, empty, replayed, one at a time, three a campaign, who may send, leaving', async () => {

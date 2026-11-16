@@ -21,7 +21,7 @@ import { deskOnly, driveGrant, gate, grantWords, refused, usableGrant } from './
 import { getFile, FOLDER, refusal } from './files.js';
 import { attachActions } from './attach.js';
 import { linkActions } from './links.js';
-import { JOB, LIMITS, checkSource, ctxFor, landing, mayStillSend, sendWords, sourceOf } from './export.js';
+import { JOB, LIMITS, STALE_SQL, checkSource, ctxFor, landing, mayStillSend, sendWords, sourceOf } from './export.js';
 
 const EVERYONE = ['manager', 'treasurer', 'staff', 'volunteer'];
 const MANAGER = ['manager'];
@@ -33,10 +33,19 @@ const managerOnly = (ctx) => {
   if (ctx.role !== 'manager') throw httpError(403, 'Only a manager can change this');
 };
 const settingsOf = async (tx, ws) => parse((await tx.query('select settings from workspaces where id = $1 for update', [ws])).rows[0].settings);
+// One stopped part-way with nothing left to run it (STALE_SQL, shown as
+// failed) holds no room.
 const running = async (tx, ws, userId) => (await tx.query(
-  `select count(*) filter (where user_id = $2)::int as mine, count(*)::int as all_
-     from drive_exports where workspace_id = $1 and status in ('waiting','sending')`, [ws, userId],
+  `select count(*) filter (where e.user_id = $2)::int as mine, count(*)::int as all_
+     from drive_exports e where e.workspace_id = $1 and e.status in ('waiting','sending') and not ${STALE_SQL}`, [ws, userId],
 )).rows[0];
+// Stopped: failed or stopped, or stale (what GET /api/drive/exports shows as failed).
+const stoppedRow = (q, id, ws, lock = '') => q.query(
+  `select e.*, ${STALE_SQL} as stale from drive_exports e where e.id = $1 and e.workspace_id = $2${lock}`, [id, ws],
+);
+const isStopped = (ex) => ['failed', 'stopped'].includes(ex.status) || ex.stale;
+const NO_JOBS = 'Background work is off on this server — Send to Google Sheets can’t run';
+const jobsOff = () => process.env.STARBASE_JOBS === 'off';
 const roomFor = async (tx, ws, userId) => {
   const n = await running(tx, ws, userId);
   if (n.mine) throw httpError(409, 'You’re already sending one to Google Sheets — wait for it to finish');
@@ -120,6 +129,7 @@ export const actions = {
     // written and Google is not called when one fails.
     before: async (db, ctx, input) => {
       const rules = gate(ctx);
+      if (jobsOff()) throw httpError(409, NO_JOBS);
       const no = sendWords(ctx, rules);
       if (no) throw httpError(...no);
       const src = await sourceOf(db, ctx, input.source, input.ref);
@@ -164,11 +174,12 @@ export const actions = {
     // It carries on as the person who started it, with their grant.
     before: async (db, ctx, input) => {
       gate(ctx);
-      const ex = (await db.query('select e.*, u.name as by_name from drive_exports e join users u on u.id = e.user_id where e.id = $1 and e.workspace_id = $2', [input.id, ctx.workspaceId])).rows[0];
+      if (jobsOff()) throw httpError(409, NO_JOBS);
+      const ex = (await db.query(`select e.*, u.name as by_name, ${STALE_SQL} as stale from drive_exports e join users u on u.id = e.user_id where e.id = $1 and e.workspace_id = $2`, [input.id, ctx.workspaceId])).rows[0];
       if (!ex) throw httpError(404, 'That export isn’t here');
       const mine = ex.user_id === ctx.user.id;
       if (!mine && ctx.role !== 'manager') throw httpError(403, 'Only the person who sent it, or a manager, can try again');
-      if (!['failed', 'stopped'].includes(ex.status)) throw httpError(409, 'It isn’t stopped');
+      if (!isStopped(ex)) throw httpError(409, 'It isn’t stopped');
       const them = mine ? ctx : await ctxFor(db, ctx.workspaceId, ex.user_id);
       const only = `Only ${ex.by_name || 'the person who sent it'} can carry this on`;
       const rules = driveRules(ctx.workspace.settings);
@@ -186,8 +197,8 @@ export const actions = {
     handler: async (tx, ctx, input, emit, ready) => {
       deskOnly(ctx);
       const ws = ctx.workspaceId;
-      const ex = (await tx.query('select * from drive_exports where id = $1 and workspace_id = $2 for update', [input.id, ws])).rows[0];
-      if (!ex || !['failed', 'stopped'].includes(ex.status)) throw httpError(409, 'It isn’t stopped');
+      const ex = (await stoppedRow(tx, input.id, ws, ' for update of e')).rows[0];
+      if (!ex || !isStopped(ex)) throw httpError(409, 'It isn’t stopped');
       await roomFor(tx, ws, ready.owner);
       await tx.query(
         `update drive_exports set status = 'waiting', retries = retries + 1, waits = 0, said = null, done_at = null, touched_at = now()

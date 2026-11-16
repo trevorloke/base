@@ -298,7 +298,14 @@ export const runExportJob = async (db, job) => {
   try {
     out = await part(db, { ...ex, status: 'sending' }, ctx, g, rules);
   } catch (e) {
-    if (!(e instanceof NoAnswer)) throw e;
+    if (!(e instanceof NoAnswer)) {
+      // The runner gives up after this try: failed, so Try again shows (and works).
+      if (Number(job.attempts) >= MAX_ATTEMPTS) {
+        const now = (await db.query('select * from drive_exports where id = $1', [ex.id])).rows[0];
+        if (now && ['waiting', 'sending'].includes(now.status)) await end(db, now, 'failed', carriesOn(now));
+      }
+      throw e;
+    }
     const now = (await db.query('select * from drive_exports where id = $1', [ex.id])).rows[0];
     if (Number(job.attempts) >= MAX_ATTEMPTS) { await end(db, now, 'failed', carriesOn(now)); return undefined; }
     await step(db, now, 'said = $3', ['Google didn’t answer — trying again']);
