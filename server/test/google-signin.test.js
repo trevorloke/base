@@ -322,6 +322,30 @@ test('the right address: signing in elsewhere goes to the public one; linking th
   assert.equal(l.headers.get('location'), '/admin/profile?google=wrong-address');
 });
 
+test('behind a host that ends TLS (Render): https from X-Forwarded-Proto is the public address; no loop', async () => {
+  const host = 'http://starbase.example.org';
+  process.env.STARBASE_PUBLIC_URL = 'https://starbase.example.org';
+  const forwarded = (url, init) => app.request(url, { ...init, headers: { ...init.headers, 'x-forwarded-proto': 'https' } });
+  try {
+    const b = new Browser({ fetch: forwarded, origin: host });
+    const s = await b.send('GET', '/api/auth/google/start?do=signin&app=field');
+    assert.ok(s.headers.get('location').startsWith(fake.base), `to Google, not round again: ${s.headers.get('location')}`);
+    const m = new Browser({ fetch: forwarded, origin: host });
+    m.jar = M.b.jar;
+    const l = await m.send('GET', '/api/auth/google/start?do=link&app=desk&back=/admin/profile');
+    assert.ok(l.headers.get('location').startsWith(fake.base), l.headers.get('location'));
+    const c = await m.send('GET', '/api/auth/google/start?do=connect&for=gmail.send&app=desk&back=/admin/profile');
+    assert.ok(!/wrong-address/.test(c.headers.get('location')), c.headers.get('location'));
+    assert.equal((await m.get('/api/google')).json.at.right, true);
+    // Plain http with no forwarded https is still not the public address.
+    const plain = new Browser({ origin: host });
+    const p = await plain.send('GET', '/api/auth/google/start?do=signin&app=field');
+    assert.equal(p.headers.get('location'), 'https://starbase.example.org/api/auth/google/start?do=signin&app=field');
+  } finally {
+    process.env.STARBASE_PUBLIC_URL = PUBLIC;
+  }
+});
+
 test('under BASE_PATH: paths and cookies under the client’s path, the return at /imaginesurrey/desk/', async () => {
   const fetch = mountAt(app, '/imaginesurrey');
   process.env.STARBASE_PUBLIC_URL = `${PUBLIC}/imaginesurrey`;

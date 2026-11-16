@@ -61,9 +61,13 @@ const goTo = (c, location) => {
 };
 
 // The address the browser used: the door's, when the door vouches for the
-// request; else this request's own; and the client's path.
+// request; else this request's own; and the client's path. A host that ends
+// TLS (Render) forwards plain http and says https in X-Forwarded-Proto, as
+// the website's isHttps reads it; the host itself is the request's own.
 const browserAddress = (c) => {
-  let origin = new URL(c.req.url).origin;
+  const url = new URL(c.req.url);
+  const https = String(c.req.header('x-forwarded-proto') || '').split(',')[0].trim() === 'https';
+  let origin = https ? `https://${url.host}` : url.origin;
   if (doorClientIp(c)) {
     const proto = String(c.req.header('x-forwarded-proto') || 'https').split(',')[0].trim();
     const host = String(c.req.header('x-forwarded-host') || '').split(',')[0].trim();
