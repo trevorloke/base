@@ -44,7 +44,7 @@ import { More, useScale } from '../components/RatingButtons.jsx';
 import GeocodeButton from '../components/GeocodeButton.jsx';
 import { DEFAULT_TILES, safeAttribution } from '../components/tiles.js';
 import { DotLayer, DensityLayer, cellAt, nearest } from './mapDots.js';
-import { DOT_ZOOM, LONE_PIN_ZOOM, PIN_ZOOM, MARK, TILE_WAIT_MS, css, cellOf, cellsFrom, defaultLook, dotsFrom, drawnFor, inBox, mapLooks, pickLook, placingPoll, rowsBudget, streetMove, tileAt, tileHealth, tileHost, TURF_COLORS, turfColor, viewBox } from './mapView.js';
+import { DOT_ZOOM, LONE_PIN_ZOOM, PIN_ZOOM, MARK, markTheme, TILE_WAIT_MS, css, cellOf, cellsFrom, defaultLook, dotsFrom, drawnFor, inBox, mapLooks, pickLook, placingPoll, rowsBudget, streetMove, tileAt, tileHealth, tileHost, TURF_COLORS, turfColor, viewBox } from './mapView.js';
 import { askNotice, forgetNotice, knownNotice } from './tileProbe.js';
 import { TURFS_OUTLINE, TURFS_WHOLE, VIEW_PREF, readViewPref, tellServiceWorker } from './mapQueries.js';
 import { useSharePref } from '../components/ShareLocation.js';
@@ -310,6 +310,8 @@ const KEY_ROOM = 60;
 // "Not asked yet" and undecided's darker edge for map.css (pins, bubbles,
 // the filter's dot): the same as the canvas dots'.
 const MARK_VARS = { '--door-unrated': css(MARK.unratedPin), '--door-undecided-edge': css(MARK.undecidedEdge.light) };
+// Over Satellite: "Not asked yet" white with an ink edge (map.css), so it reads on dark imagery.
+const MARK_VARS_IMAGERY = { ...MARK_VARS, '--door-unrated': css(MARK.unrated.imagery.slice(0, 3)), '--door-edge': css(MARK.edge) };
 
 // (The service worker keeps tiles from the map's provider once they've been
 // seen, never fetched ahead — tile servers' rules: mapQueries.js tellServiceWorker.)
@@ -1066,12 +1068,11 @@ function useSlow(on, ms = 400) {
 
 // The line under the count: what the colours mean, and — where the marks
 // aren't doors you can read off — what a mark is.
-function MapKey({ squares, dark, words }) {
-  const theme = dark ? 'dark' : 'light';
+function MapKey({ squares, theme, words }) {
   // As on the map: its own colour, its white ring, undecided's darker edge.
   const mark = (band) => ({
     background: css(band === 'unrated' ? MARK.unrated[theme] : MARK[band]),
-    boxShadow: `${band === 'undecided' ? `inset 0 0 0 1px ${css(MARK.undecidedEdge[theme])}, ` : ''}0 0 0 1.5px ${css(MARK.ring[theme])}`,
+    boxShadow: `${band === 'undecided' ? `inset 0 0 0 1px ${css(MARK.undecidedEdge[theme])}, ` : ''}${band === 'unrated' && theme === 'imagery' ? `inset 0 0 0 1px ${css(MARK.edge)}, ` : ''}0 0 0 1.5px ${css(MARK.ring[theme])}`,
   });
   return (
     <div className={`map-key${squares ? ' map-key--squares' : ''}`}>
@@ -1361,6 +1362,8 @@ export default function MapPage() {
   // Over Google's tiles no shade at all: its Streets.
   const lookWant = drawnAuto ? lookPick : look;
   const view = providerView || SHADES.some((s) => s.key === lookWant) ? lookWant : 'standard';
+  // Imagery under the doors: the Satellite look, or Google's standard map set to satellite.
+  const imagery = view === 'satellite' || (view === 'standard' && tilesQ.data?.standardLabel === 'Satellite');
   // Show → Map: with Google drawn, Streets · Satellite · Terrain (mapView.js mapLooks).
   const looks = useMemo(
     () => mapLooks({ shades: SHADES, views, standardLabel: tilesQ.data?.standardLabel, shadeAllowed }),
@@ -2286,9 +2289,9 @@ export default function MapPage() {
     const layers = layersRef.current;
     if (!layers) return;
     dotItemsRef.current = { doors: dotDoors, lean: leanShown, cells: densityCells };
-    layers.dots.setItems(dotItems, { dark: view === 'dark', flagged: (d) => Boolean(d.signs?.some(signOk)) });
+    layers.dots.setItems(dotItems, { dark: view === 'dark', imagery, flagged: (d) => Boolean(d.signs?.some(signOk)) });
     layers.density.setItems(densityCells, { dark: view === 'dark' });
-  }, [dotItems, dotDoors, leanShown, densityCells, view, signOk]);
+  }, [dotItems, dotDoors, leanShown, densityCells, view, imagery, signOk]);
   useEffect(() => {
     const layers = layersRef.current;
     if (!layers) return;
@@ -2573,10 +2576,10 @@ export default function MapPage() {
   const drawCount = draft.points.length;
   // The look's class sits on the page, never on Leaflet's own element: React
   // rewriting that element's classes would wipe the ones Leaflet added.
-  const pageCls = ['map-page', `map-view--${view}`, hasSheet && 'has-sheet', mode && 'is-moded', mode === 'draw' && 'is-drawing'].filter(Boolean).join(' ');
+  const pageCls = ['map-page', `map-view--${view}`, hasSheet && 'has-sheet', mode && 'is-moded', mode === 'draw' && 'is-drawing', imagery && 'is-imagery'].filter(Boolean).join(' ');
 
   return (
-    <div className={pageCls} ref={pageRef} style={MARK_VARS}>
+    <div className={pageCls} ref={pageRef} style={imagery ? MARK_VARS_IMAGERY : MARK_VARS}>
       {/* For tests: how many doors are drawn (pins and dots), the zoom, what a
           big list is drawn as (density · dots · rows), and whether the street
           map's tiles are coming (ok · down). */}
@@ -2739,7 +2742,7 @@ export default function MapPage() {
             {mayCheck && <span className="map-tilenote__acts"><button type="button" className="btn btn-quiet map-tilenote__btn map-tilenote__why" onClick={openCheck}>Why?</button></span>}
           </div>
         ) : null}
-        {showKey && !mode && <MapKey squares={patches} dark={view === 'dark'} words={keyWords} />}
+        {showKey && !mode && <MapKey squares={patches} theme={imagery ? 'imagery' : markTheme(view)} words={keyWords} />}
       </div>
 
       {filterOpen && !mode && (

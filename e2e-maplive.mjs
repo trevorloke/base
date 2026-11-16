@@ -466,7 +466,7 @@ try {
     await pg.screenshot({ path: `${SHOTS}/9-window-open-${label.replace(/\W+/g, '-')}-390.png`, fullPage: true });
     check(`${label}: field Today 390 — the map window is open the first time, under the one button, doors and outline drawn, streets in`,
       w.open === 'true' && w.afterGo && w.paths >= 3 && w.tiles > 0 && !w.note, JSON.stringify(w));
-    check(`${label}: its row reads “Example block · N doors left”`, /^Example block · \d[\d,]* doors? left$/.test(w.meta || ''), w.meta);
+    check(`${label}: its row says nothing the walk list’s line above it already says`, !w.meta, w.meta);
     check(`${label}: the only doors read is /api/map/doors?mine=1`, doorAsks.length >= 1 && doorAsks.every((u) => /\/api\/map\/doors\?mine=1$/.test(u)), JSON.stringify(doorAsks));
     // Streets only once it knows where it looks: no city-wide tiles asked
     // for while the doors are on their way (OpenStreetMap's servers are

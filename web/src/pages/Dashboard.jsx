@@ -27,6 +27,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { apiGet, initials } from '../api.js';
 import { DEFAULT_TILES, SURREY_BOUNDS, safeAttribution } from '../components/tiles.js';
+import { isGoogleUrl } from './mapView.js';
 import { OUTCOME_LABEL } from '../components/RatingButtons.jsx';
 import './dashboard.css';
 import { adminHref } from '../mode.js';
@@ -87,7 +88,10 @@ export default function Dashboard() {
     placeholderData: (prev) => prev,
   });
   const tilesQ = useQuery({ queryKey: ['mapConfig'], queryFn: () => apiGet('/map/config'), staleTime: 10 * 60_000, retry: 1 });
-  const tiles = tilesQ.data?.tiles || (tilesQ.isError ? DEFAULT_TILES : null);
+  // Never Google's billed tiles here (as the front page's map): over Google,
+  // the free map the config always offers beside it.
+  let tiles = tilesQ.data?.tiles || (tilesQ.isError ? DEFAULT_TILES : null);
+  if (tiles && isGoogleUrl(tiles.url)) tiles = (tilesQ.data?.views ?? []).find((v) => v.fallback) || DEFAULT_TILES;
   const d = q.data;
   const [sel, setSel] = useState(null); // user id picked in the field list
   const headId = useId();
@@ -319,7 +323,7 @@ function Field({ d, tiles, sel, onSel, period }) {
   useEffect(() => {
     const el = boxRef.current;
     if (!el || mapRef.current) return undefined;
-    const map = L.map(el, { zoomControl: true, attributionControl: true, scrollWheelZoom: true, zoomSnap: 0.25 });
+    const map = L.map(el, { zoomControl: true, attributionControl: true, scrollWheelZoom: true, zoomSnap: 1 }); // whole zooms: no hairline seams between tiles
     fitCity(map);
     const layers = { turfs: L.layerGroup().addTo(map), pins: L.layerGroup().addTo(map), trail: L.layerGroup().addTo(map), people: L.layerGroup().addTo(map) };
     mapRef.current = map; layersRef.current = layers;

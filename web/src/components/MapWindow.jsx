@@ -3,7 +3,8 @@
 //                   outlines of the turfs the person walks
 //   shape="band"    desk Today, the page's full width under the numbers:
 //                   every turf's outline, nothing else
-// One row, always there and cheap: "Map", a short meta, a chevron. Tapping
+// One row, always there and cheap: "Map", a short meta (the band: how many
+// walk lists; the window: "Show the map" while folded), a chevron. Tapping
 // it folds or opens the map in place; open or folded is kept per browser
 // (open the first time). The map itself (MapWindowMap.jsx, with Leaflet) is
 // loaded only while open, so a browser that keeps it folded never downloads
@@ -46,7 +47,7 @@ function BandMeta({ me }) {
   return q.isError ? 'Unavailable' : 'Loading…';
 }
 
-export default function MapWindow({ me, shape = 'window', turfId = null, meta = null }) {
+export default function MapWindow({ me, shape = 'window', turfId = null }) {
   const band = shape === 'band';
   const key = `${NS}today:${band ? 'band' : 'map'}`;
   const [open, setOpen] = useState(() => readOpen(key));
@@ -56,7 +57,9 @@ export default function MapWindow({ me, shape = 'window', turfId = null, meta = 
     <section className={`mapwindow mapwindow--${band ? 'band' : 'window'}`} aria-label="Map">
       <button type="button" className="mapwindow__toggle" aria-expanded={open} aria-controls={bodyId} onClick={flip}>
         <strong>Map</strong>
-        <span className="mapwindow__meta">{band ? <BandMeta me={me} /> : meta}</span>
+        {/* The window sits under the walk list's own line (its name, its doors
+            left): it says nothing more while open, and how to open it while folded. */}
+        <span className="mapwindow__meta">{band ? <BandMeta me={me} /> : open ? null : 'Show the map'}</span>
         <svg className="mapwindow__chev" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
           <path d="M3.5 6 8 10.5 12.5 6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
         </svg>

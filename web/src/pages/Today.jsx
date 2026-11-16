@@ -12,11 +12,11 @@
 //     "Signs" row (always — the sign crew's way to /signs and "Add a sign"),
 //     other turfs sit under "More". With no signal, "Start canvassing" opens the walk list kept on
 //     this phone (Turfs.jsx's offline copy), else the turf list.
-//   Desk: managers get the dashboard first (pages/Dashboard.jsx: every
-//     team's contacts, the chart, who is out where) — then, for every desk
-//     role, three big numbers (doors this week · support · total raised). Doors
+//   Desk: for every desk role, three big numbers (doors this week · support · total raised). Doors
 //     and money are taps to their screens (›); support opens its breakdown in
-//     place (+), opposed by candidate ("McCallum 3 · Locke 2"). Then "Needs
+//     place (+), opposed by candidate ("McCallum 3 · Locke 2"). Under them
+//     MAP's map band (with the Map area), and for managers the old dashboard
+//     (pages/Dashboard.jsx) folded as "Activity". Then "Needs
 //     you" (gifts over the limit, new volunteers, short shifts, signs to
 //     put up, new texts — replies
 //     and texts from numbers nobody texted, → the Inbox) — name first, the
@@ -624,7 +624,6 @@ const doorsLeft = (stats) => {
   return { doors, done, left: doors - done, pct: doors ? Math.round((done / doors) * 100) : 0, again: Number(stats.doorsAgain) || 0 };
 };
 // The map window's row: "North block · 1,204 doors left".
-const walkMeta = (t, d) => `${t.name}${d && d.doors > 0 ? ` · ${num(d.left)} ${plural(d.left, 'door')} left` : ''}`;
 const leftLabel = (d) => {
   if (!d) return null;
   if (d.doors === 0) return 'No doors yet';
@@ -683,6 +682,33 @@ function NoSignalToday({ me }) {
         </section>
       )}
     </div>
+  );
+}
+
+// The managers' old dashboard, folded under the map band. Nothing of it is
+// asked for (no dashboard read, no Leaflet, no tiles) until it is opened;
+// open or folded is kept per browser.
+const ACTIVITY_KEY = `${NS}today:activity`;
+function ActivityFold() {
+  const [open, setOpen] = useState(() => { try { return localStorage.getItem(ACTIVITY_KEY) === 'open'; } catch { return false; } });
+  const id = useId();
+  const flip = () => setOpen((o) => {
+    try { localStorage.setItem(ACTIVITY_KEY, o ? 'closed' : 'open'); } catch { /* storage blocked */ }
+    return !o;
+  });
+  return (
+    <section className="today-morebox today-activity">
+      <button type="button" className="today-morebox__toggle disclose" aria-expanded={open} aria-controls={id} onClick={flip}>
+        Activity: the chart, who’s out and the teams
+      </button>
+      {open && (
+        <div className="today-morebox__body" id={id}>
+          <Suspense fallback={<p className="muted" role="status">Loading…</p>}>
+            <Dashboard />
+          </Suspense>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -770,7 +796,7 @@ function VolunteerToday({ b, me }) {
         </section>
       )}
       {/* Their walk list on a map that folds away (only with doors left). */}
-      {firstOpen && !done && <MapWindow me={me} turfId={firstOpen.id} meta={walkMeta(firstOpen, d)} />}
+      {firstOpen && !done && <MapWindow me={me} turfId={firstOpen.id} />}
 
       <ul className="today-rows today-next">
         <VolunteerShiftRow shifts={b.shifts ?? []} me={me} turfs={b.shiftTurfs} />
@@ -925,7 +951,7 @@ function CandidateToday({ b, me }) {
           )}
         </section>
       )}
-      {candTurf && <MapWindow me={me} turfId={candTurf.id} meta={walkMeta(candTurf, doorsLeft(turfStats[candTurf.id]))} />}
+      {candTurf && <MapWindow me={me} turfId={candTurf.id} />}
 
       <ul className="today-rows today-next">
         {calling && <LinkRow to="/mainstreet" main="Met someone" />}
@@ -1001,13 +1027,13 @@ function DeskToday({ b, me, toast }) {
       {/* Their own people to reach within the day, before the dashboard. */}
       <FollowupsToday me={me} />
 
-      {isManager && (
-        <Suspense fallback={<p className="muted">Loading the dashboard…</p>}>
-          <Dashboard />
-        </Suspense>
-      )}
-
       <Numbers b={b} pic={pic} />
+
+      {/* MAP's band: the walk lists' outlines, across the page, folding away.
+          The old dashboard (its chart, its portrait map, who is out) stays one
+          tap away for managers, folded, until HOME gives it its own screen. */}
+      {hasArea(me, 'map') && <MapWindow me={me} shape="band" />}
+      {isManager && <ActivityFold />}
 
       <NeedsYou b={b} me={me} />
 

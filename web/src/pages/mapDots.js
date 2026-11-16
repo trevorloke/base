@@ -31,10 +31,12 @@ const BucketLayer = L.GridLayer.extend({
     this._items = [];
     this._buckets = new Map();
     this._dark = false;
+    this._imagery = false;
   },
-  setItems(items, { dark = false, flagged = null } = {}) {
+  setItems(items, { dark = false, imagery = false, flagged = null } = {}) {
     this._items = items;
     this._dark = dark;
+    this._imagery = imagery; // Satellite: white "Not asked yet", rings at every zoom
     this._flagged = flagged; // (door) → true: it has a sign (a little flag on its dot)
     this._buckets.clear();
     if (this._map) this.redraw();
@@ -99,9 +101,9 @@ const BucketLayer = L.GridLayer.extend({
 // written on its dot.
 export const DotLayer = BucketLayer.extend({
   _draw(ctx, doors, z, ox, oy, { size }) {
-    const theme = this._dark ? 'dark' : 'light';
+    const theme = this._imagery ? 'imagery' : this._dark ? 'dark' : 'light';
     const r0 = dotRadius(z);
-    const ring = ringedAt(z);
+    const ring = this._imagery || ringedAt(z);
     const at = (d) => [d._p[z].x - ox, d._p[z].y - oy];
     const reach = r0 + 12; // a dot, its ring, its flag
     const shown = doors.filter((d) => {
@@ -116,8 +118,8 @@ export const DotLayer = BucketLayer.extend({
         ctx.beginPath();
         ctx.arc(x, y, r0, 0, Math.PI * 2);
         ctx.fill();
-        if (band === 'undecided') {
-          ctx.strokeStyle = css(MARK.undecidedEdge[theme]);
+        if (band === 'undecided' || (band === 'unrated' && this._imagery)) {
+          ctx.strokeStyle = css(band === 'undecided' ? MARK.undecidedEdge[theme] : MARK.edge);
           ctx.lineWidth = 1;
           ctx.beginPath();
           ctx.arc(x, y, r0 - 0.5, 0, Math.PI * 2);

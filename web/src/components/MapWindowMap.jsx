@@ -82,7 +82,8 @@ export default function MapWindowMap({ me, band, turfId }) {
     const el = boxRef.current;
     if (!el) return undefined;
     const map = L.map(el, {
-      center: SURREY, zoom: 12, zoomSnap: 0.25, zoomControl: false, attributionControl: false,
+      center: SURREY, zoom: 12, zoomSnap: 1, // whole zooms: no hairline seams between tiles
+      zoomControl: false, attributionControl: false,
       dragging: false, touchZoom: false, scrollWheelZoom: false, doubleClickZoom: false, boxZoom: false, keyboard: false, tap: false,
     });
     const layers = { turfs: L.layerGroup().addTo(map), doors: L.layerGroup().addTo(map) };
@@ -114,20 +115,20 @@ export default function MapWindowMap({ me, band, turfId }) {
         radius: 4, color: 'rgb(255, 255, 255)', weight: 1, fillColor: dotColor(d.band), fillOpacity: 0.95, interactive: false,
       }).addTo(ly.doors);
     }
-    // The turf "Start canvassing" points to: its doors, else its outline;
-    // else every door (and outline) drawn. Nothing to frame on: the point
-    // the Map itself opens on.
+    // The turf "Start canvassing" points to: its outline and its doors
+    // together (so the walk list's edge is never cut off); else every door
+    // and outline drawn. Nothing to frame on: the point the Map itself opens on.
     const target = !band && turfId ? outlines.find((t) => t.id === turfId) : null;
     const tr = target ? ring(target.polygon) : [];
     const inTarget = tr.length >= 3 ? L.latLngBounds(tr) : null;
     const pts = inTarget ? doors.filter((d) => inTarget.contains([d.lat, d.lng])).map((d) => [d.lat, d.lng]) : [];
-    const frame = pts.length ? pts : tr.length >= 3 ? tr
+    const frame = tr.length >= 3 ? [...tr, ...pts]
       : [...doors.map((d) => [d.lat, d.lng]), ...outlines.flatMap((t) => ring(t.polygon))];
     fitRef.current = () => {
       if (!frame.length) { map.setView(SURREY, 12, { animate: false }); return; }
       // "Open the map" sits over the bottom-right corner (48 px and its
       // gap): frame the doors above it, so none hides under the button.
-      map.fitBounds(L.latLngBounds(frame), { paddingTopLeft: [16, 16], paddingBottomRight: [16, 64], maxZoom: 17, animate: false });
+      map.fitBounds(L.latLngBounds(frame), { paddingTopLeft: [24, 24], paddingBottomRight: [24, 64], maxZoom: 17, animate: false });
     };
     fitRef.current();
   }, [outlines, doors, band, turfId]);

@@ -1094,3 +1094,11 @@
   @media (hover: hover) { .map-mode .btn.map-mode__go:hover { background: var(--mark); border-color: var(--mark); filter: brightness(1.08); } }
   .map-fab--add.is-on { background: var(--mark); color: var(--mark-ink); border-color: var(--mark); }
 }
+
+/* Over Satellite's imagery (.is-imagery, Map.jsx): "Not asked yet" is
+   white (--door-unrated, set with the page's look) with an ink edge, so
+   it reads on dark roofs and trees; a group's white share keeps its edge. */
+.map-page.is-imagery .map-pin--unrated,
+.map-page.is-imagery .map-dot--unrated { box-shadow: 0 0 0 1.5px var(--door-edge), 0 1px 3px rgba(0, 0, 0, 0.45); }
+.map-page.is-imagery .map-pin--unrated::after { filter: drop-shadow(0 1px 0 var(--door-edge)); }
+.map-page.is-imagery .map-cluster { box-shadow: 0 0 0 1.5px var(--door-edge), 0 1px 4px rgba(0, 0, 0, 0.45); }

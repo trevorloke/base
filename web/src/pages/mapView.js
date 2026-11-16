@@ -85,11 +85,17 @@ export const MARK = {
   support: [19, 138, 82],
   undecided: [232, 150, 12],
   opposed: [212, 60, 60],
-  unrated: { light: [45, 58, 84, 0.85], dark: [205, 216, 238, 0.55] },
+  // imagery: over Satellite's dark roofs and trees, slate (or a pale wash)
+  // disappears — "Not asked yet" is white with an ink edge, and every dot
+  // wears its white ring at every zoom.
+  unrated: { light: [45, 58, 84, 0.85], dark: [205, 216, 238, 0.55], imagery: [255, 255, 255, 0.95] },
   unratedPin: [77, 88, 110], // the same slate where it can't be see-through: a pin, a bubble's ring, the filter's dot
-  undecidedEdge: { light: [160, 100, 0], dark: [232, 150, 12] },
-  ring: { light: [255, 255, 255, 0.95], dark: [20, 26, 38, 0.9] },
+  undecidedEdge: { light: [160, 100, 0], dark: [232, 150, 12], imagery: [160, 100, 0] },
+  ring: { light: [255, 255, 255, 0.95], dark: [20, 26, 38, 0.9], imagery: [255, 255, 255, 0.95] },
+  edge: [22, 26, 46], // the ink edge of a white mark over imagery
 };
+// The theme dots, pins and the key draw in, by the look under them.
+export const markTheme = (view) => (view === 'satellite' ? 'imagery' : view === 'dark' ? 'dark' : 'light');
 export const css = ([r, g, b, a = 1]) => (a >= 1 ? `rgb(${r}, ${g}, ${b})` : `rgba(${r}, ${g}, ${b}, ${a})`);
 
 // A dot's radius (CSS px) as drawn on a tile of whole zoom z, big enough
