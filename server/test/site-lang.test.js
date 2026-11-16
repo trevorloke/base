@@ -423,3 +423,101 @@ test('the job runner runs a queued sweep, and a draft save queues none', async (
   const segs = await liveStrings(db, { id: ws });
   assert.ok(segs.length > 50);
 });
+
+test('ladders: a web trigger in Punjabi starts for a sign-up on /pa, not on English; one with no language for both', async () => {
+  const mk = async (name, trigger) => {
+    const l = ok(await mgr.action('ladder.create', { name, trigger, steps: [{ kind: 'tag', tag: name.toLowerCase().replace(/\W+/g, '-') }] })).ladder;
+    ok(await mgr.action('ladder.setActive', { id: l.id, active: true }));
+    return l;
+  };
+  assert.equal((await mgr.action('ladder.create', { name: 'x', trigger: { kind: 'tag', ref: 'a', lang: 'pa' } })).status, 400);
+  const pa = await mk('Punjabi welcome', { kind: 'web', ref: 'newsletter', lang: 'pa' });
+  assert.equal(pa.trigger.lang, 'pa');
+  const any = await mk('Any welcome', { kind: 'web', ref: 'newsletter' });
+  const runs = async (l) => (await db.query('select person_id from ladder_runs where workspace_id = $1 and ladder_id = $2', [ws, l.id])).rows.map((r) => r.person_id);
+  const r = await hit('/site/pa/about');
+  const p = JSON.parse(/data-island-props="i-news01-form"[^>]*>([^<]+)</.exec(r.text)[1]);
+  const e1 = `lad-pa-${Date.now()}@example.org`;
+  ok(await send('newsletter', { email: e1, consent_email: true, ...p.hidden }, { root: '/site/pa' }));
+  const e2 = `lad-en-${Date.now()}@example.org`;
+  ok(await send('newsletter', { email: e2, consent_email: true }));
+  const id = async (e) => (await db.query('select id from persons where workspace_id = $1 and email = $2', [ws, e])).rows[0].id;
+  const [p1, p2] = [await id(e1), await id(e2)];
+  assert.deepEqual(await runs(pa), [p1]);
+  assert.deepEqual((await runs(any)).sort(), [p1, p2].sort());
+});
+
+test('sweeps: one at a time; a claim taken or 7 minutes gone stops new calls; 429 hands back; the header refused, the body works', async () => {
+  // Something new to send: a post.
+  const post = ok(await mgr.action('site.post.save', { title: 'A new post about buses', excerpt: 'Short words about the buses.', body: 'One.\n\nTwo.\n\nThree.' })).post;
+  ok(await mgr.action('site.post.publish', { id: post.id }));
+  fake.reset();
+  fake.set({ stall: 300 });
+  const [a, b] = await Promise.all([sweep(db, ws), sweep(db, ws)]);
+  fake.set({ stall: 0 });
+  assert.ok((a.again && b.done) || (a.done && b.again), 'one sweep ran, the other was handed back');
+  const first = fake.calls.length;
+  assert.ok(first >= 1);
+  // Nothing left: a second sweep sends nothing.
+  fake.reset();
+  await sweep(db, ws);
+  assert.equal(fake.calls.length, 0, 'only new English is ever sent');
+  // A clock past 7 minutes starts no call.
+  ok(await mgr.action('site.post.save', { id: post.id, title: 'A newer post about buses', excerpt: 'Short words about the buses.', body: 'One.\n\nTwo.\n\nThree.' }));
+  let t = Date.now();
+  const late = await sweep(db, ws, { clock: () => { t += 8 * 60_000; return t; } });
+  assert.equal(late.stopped, 'time');
+  assert.equal(fake.calls.length, 0);
+  // Google busy: handed back, nothing written, no try counted.
+  fake.set({ fail: 429 });
+  const busy = await sweep(db, ws);
+  assert.equal(busy.again, 60_000);
+  fake.set({ fail: 0 });
+  // Google refuses the header key: sent once more with the key in a form body, and kept so.
+  fake.reset();
+  fake.set({ headerKey: false });
+  await sweep(db, ws);
+  assert.deepEqual(fake.calls.map((c) => c.keyIn).slice(0, 2), ['header', 'body']);
+  const probe = (await db.query('select probe from site_translate_runtime where workspace_id = $1', [ws])).rows[0].probe;
+  assert.equal(probe.keyIn, 'body');
+  for (const c of fake.calls) assert.ok(!c.url.includes('key='));
+  fake.set({ headerKey: true });
+  // A one-paragraph change of a three-paragraph post sends only that paragraph.
+  ok(await mgr.action('site.post.save', { id: post.id, title: 'A newer post about buses', excerpt: 'Short words about the buses.', body: 'One.\n\nTwo changed.\n\nThree.' }));
+  fake.reset();
+  await sweep(db, ws);
+  const sent = fake.calls.flatMap((c) => c.q);
+  assert.ok(sent.some((q) => q.includes('Two changed')));
+  assert.ok(!sent.some((q) => q === 'One.' || q === 'Three.'));
+});
+
+test('a segment that won\u2019t translate: retried after 1 h and 6 h, then never; shown in English; typing it clears it', async () => {
+  // The fake loses the kept name's placeholder in this one sentence, every time.
+  fake.set({ drop: { contains: 'safer walk with', what: 'x' } });
+  const text = 'A safer walk with Harbour City Together.';
+  ok(await mgr.action('site.campaign.save', { id: petition.id, kind: 'petition', title: 'Fix the crossing', statement: petition.statement, excerpt: text }));
+  const h = segHash(text);
+  const tries = async () => (await db.query("select tries, next_try_at, last_reason from site_translation_failures where workspace_id = $1 and lang = 'pa' and src_hash = $2", [ws, h])).rows[0];
+  const sentAgain = async () => { fake.calls.length = 0; await sweep(db, ws); return fake.calls.some((c) => c.target === 'pa' && c.q.some((q) => q.includes('safer walk with'))); };
+  assert.equal(await sentAgain(), true);
+  let f = await tries();
+  assert.equal(f.tries, 1);
+  assert.equal(f.last_reason, 'A kept name came back changed');
+  assert.equal(await sentAgain(), false, 'not before an hour');
+  await db.query("update site_translation_failures set next_try_at = now() - interval '1 second' where workspace_id = $1 and src_hash = $2", [ws, h]);
+  assert.equal(await sentAgain(), true);
+  assert.equal((await tries()).tries, 2);
+  await db.query("update site_translation_failures set next_try_at = now() - interval '1 second' where workspace_id = $1 and src_hash = $2", [ws, h]);
+  assert.equal(await sentAgain(), true);
+  f = await tries();
+  assert.equal(f.tries, 3);
+  assert.equal(f.next_try_at, null);
+  assert.equal(await sentAgain(), false, 'never after the third try');
+  fake.set({ drop: null });
+  // Shown in English, with lang="en" on its paragraph.
+  cacheClear(ws);
+  const page2 = await hit(`/site/pa/act/${petition.slug}`);
+  assert.match(page2.text, /<p class="lede" lang="en">A safer walk with Harbour City Together\.<\/p>/);
+  // Still ready: a used-up segment counts as done.
+  assert.ok((await db.query("select ready_at from site_language_state where workspace_id = $1 and lang = 'pa'", [ws])).rows[0].ready_at);
+});
