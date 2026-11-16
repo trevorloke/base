@@ -54,8 +54,9 @@
 //   account({ sub, email, hd, name })   add a test account
 //   cal.next(kind, { route?, sub?, reason?, retryAfter?, ms? })   the next
 //                                 Calendar answer: 404, 410, 403 (reason),
-//                                 429, 500, slow — for one route
-//                                 (calendars.insert, calendars.patch,
+//                                 429, 500, slow, lost (calendars.insert:
+//                                 made, then a 500) — for one route
+//                                 (calendars.insert, calendarList.list, calendars.patch,
 //                                 calendars.delete, events.insert,
 //                                 events.update, events.delete) or user
 //   cal.calendars(sub) · cal.dropCalendar(id) · cal.dropEvent(cal, eid) ·
@@ -105,6 +106,7 @@ export const startFakeGoogle = async ({ port = 0, clientId, secret, redirectUris
     const m = req.method;
     let route = null;
     if (parts[0] === 'calendars' && parts.length === 1 && m === 'POST') route = 'calendars.insert';
+    else if (parts.join('/') === 'users/me/calendarList' && m === 'GET') route = 'calendarList.list';
     else if (parts[0] === 'calendars' && parts.length === 2 && m === 'PATCH') route = 'calendars.patch';
     else if (parts[0] === 'calendars' && parts.length === 2 && m === 'DELETE') route = 'calendars.delete';
     else if (parts[0] === 'calendars' && parts[2] === 'events' && parts.length === 3 && m === 'POST') route = 'events.insert';
@@ -129,9 +131,19 @@ export const startFakeGoogle = async ({ port = 0, clientId, secret, redirectUris
     if (knob?.kind === '429') return json(res, 429, { error: { code: 429, message: 'Rate Limit Exceeded', errors: [{ reason: 'rateLimitExceeded' }] } }, knob.retryAfter ? { 'retry-after': String(knob.retryAfter) } : {});
     if (knob?.kind === '500') return err(500, 'backendError', 'Backend Error');
     const body = raw ? JSON.parse(raw) : {};
+    if (route === 'calendarList.list') {
+      // Under calendar.app.created: only the calendars this app made.
+      const mine = [...cals.values()].filter((c) => !c.deleted && c.sub === t.sub);
+      const size = Number(query.maxResults) || 250;
+      const from = Number(query.pageToken || 0);
+      const page = mine.slice(from, from + size).map((c) => ({ kind: 'calendar#calendarListEntry', id: c.id, accessRole: 'owner', ...c.body }));
+      return json(res, 200, { kind: 'calendar#calendarList', items: page, ...(from + size < mine.length ? { nextPageToken: String(from + size) } : {}) });
+    }
     if (route === 'calendars.insert') {
       const id = `${randomBytes(12).toString('hex')}@group.calendar.example`;
       cals.set(id, { id, sub: t.sub, body, deleted: false, events: new Map() });
+      // Made, then the answer lost: Google answers 500 after committing.
+      if (knob?.kind === 'lost') return err(500, 'backendError', 'Backend Error');
       return json(res, 200, { kind: 'calendar#calendar', id, ...body });
     }
     const cal = cals.get(parts[1]);

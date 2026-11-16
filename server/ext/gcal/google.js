@@ -38,11 +38,33 @@ export const toGoogle = (e, id) => ({
   end: e.allDay ? { date: e.end } : { dateTime: e.end },
 });
 
-export const calBody = (name, tz) => ({
+// ref: this link's own mark in the description (refOf), so a calendar
+// Google made but whose answer was lost can be found again (findMade).
+export const calBody = (name, tz, ref) => ({
   summary: `${name} — my shifts (base.win)`,
   timeZone: tz,
-  description: 'Kept up to date by base.win.',
+  description: `Kept up to date by base.win.${ref ? ` Ref ${ref}` : ''}`,
 });
+export const refOf = (ws, userId) => createHash('sha256').update(`gcal-link ${ws} ${userId}`).digest('hex').slice(0, 12);
+
+// cal_hash while a create has been asked for and its id isn't known yet.
+export const CREATING = 'creating';
+
+// The calendar this link's create made, by its ref: one of the calendars
+// this app made (all calendar.app.created lists). get(path) → googleFetch's
+// answer. → { id } (found), {} (none), or { r } (Google's refusal).
+export const findMade = async (get, ref) => {
+  let page = '';
+  for (let i = 0; i < 5; i += 1) {
+    const r = await get(`/users/me/calendarList?minAccessRole=owner&maxResults=250${page ? `&pageToken=${encodeURIComponent(page)}` : ''}`);
+    if (!r.ok) return { r };
+    const hit = (r.body?.items || []).find((c) => String(c.description || '').includes(`Ref ${ref}`));
+    if (hit?.id) return { id: String(hit.id) };
+    page = r.body?.nextPageToken;
+    if (!page) return {};
+  }
+  return {};
+};
 
 export const hashOf = (body) => createHash('sha256').update(canonical(body)).digest('hex');
 

@@ -15,7 +15,7 @@
 import { runAction } from '../../lib/events.js';
 import { enqueueJob } from '../../lib/jobs.js';
 import { dropPurpose, googleFetch, grantFor } from '../../lib/google/tokens.js';
-import { calBase } from './google.js';
+import { calBase, CREATING, findMade, refOf } from './google.js';
 import { PURPOSE, SAID } from './push.js';
 
 const MAX_ATTEMPTS = 5; // lib/jobs.js
@@ -74,7 +74,7 @@ const stopRun = async (db, job) => {
   let calls = 0;
   let retry = false;
   const links = (await db.query(
-    `select user_id, calendar_id, busy_until > now() as busy from gcal_links where workspace_id = $1 and state = 'stopping' order by updated_at`, [ws],
+    `select user_id, calendar_id, cal_hash, busy_until > now() as busy from gcal_links where workspace_id = $1 and state = 'stopping' order by updated_at`, [ws],
   )).rows;
   let held = false;
   for (const link of links) {
@@ -87,6 +87,13 @@ const stopRun = async (db, job) => {
     }
     const grant = await usableGrant(db, ws, link.user_id);
     if (!grant) { await leaveLink(db, ws, link.user_id, 'gcal.stop'); continue; }
+    // A create whose answer was lost: find what it may have made.
+    if (!link.calendar_id && link.cal_hash === CREATING) {
+      calls += 1;
+      const f = await findMade((path) => googleFetch(db, grant, `${calBase()}${path}`, {}, { retry: 'auth-only' }), refOf(ws, link.user_id));
+      if (f.r && !last && (!f.r.trouble || ['unavailable', 'paused', 'client'].includes(f.r.trouble.code))) { retry = true; continue; }
+      if (f.id) link.calendar_id = f.id;
+    }
     if (link.calendar_id) {
       calls += 1;
       const r = await googleFetch(db, grant, `${calBase()}/calendars/${enc(link.calendar_id)}`, { method: 'DELETE' }, { retry: 'auth-only' });
@@ -121,13 +128,23 @@ export const cleanUp = async (db, { userId, fetch }) => {
     'select 1 from google_grants where user_id = $1 and $2 = any(purposes)', [userId, PURPOSE],
   )).rows[0]);
   const links = (await db.query(
-    `select workspace_id, calendar_id, busy_until > now() as busy from gcal_links where user_id = $1 and (not $2::boolean or state in ('stopping', 'left'))`, [userId, back],
+    `select workspace_id, calendar_id, cal_hash, busy_until > now() as busy from gcal_links where user_id = $1 and (not $2::boolean or state in ('stopping', 'left'))`, [userId, back],
   )).rows;
   // A push still holds one (its calendar maybe on its way): GSI's job is
   // tried again, the token not yet revoked.
   if (fetch && links.some((l) => l.busy)) throw new Error('gcal: a push is still running; cleaning up later');
   for (const link of links) {
     const ws = link.workspace_id;
+    // A create whose answer was lost: find what it may have made (a
+    // refusal or no answer throws, and GSI's job is tried again).
+    if (!link.calendar_id && link.cal_hash === CREATING && fetch) {
+      const f = await findMade(async (path) => {
+        const r = await fetch(`${calBase()}${path}`);
+        return { ok: r.ok, status: r.status, body: r.ok ? await r.json() : null };
+      }, refOf(ws, userId));
+      if (f.r) throw new Error(`gcal: Google answered ${f.r.status} listing calendars`);
+      if (f.id) link.calendar_id = f.id;
+    }
     if (link.calendar_id && fetch) {
       // A timeout or a 5xx throws: GSI's job is tried again.
       const r = await fetch(`${calBase()}/calendars/${enc(link.calendar_id)}`, { method: 'DELETE' });

@@ -25,7 +25,7 @@ import { decide, permsOf } from '../../lib/perms.js';
 import { googleFetch, grantFor, markReconnect } from '../../lib/google/tokens.js';
 import { filingDays, isDesk, myShifts, seesMoney, votingDays } from '../calendar/content.js';
 import {
-  calBase, calBody, dayIn, eventIdOf, hashOf, nextDay, reasonOf, SCOPE_REASONS, toGoogle, wallToUtc,
+  calBase, calBody, CREATING, dayIn, eventIdOf, findMade, hashOf, nextDay, reasonOf, refOf, SCOPE_REASONS, toGoogle, wallToUtc,
 } from './google.js';
 
 export const PURPOSE = 'calendar.mine';
@@ -334,10 +334,25 @@ const pushOne = async (db, ws, c, link, st) => {
 
 const reconcile = async (db, ws, c, link, st, grant) => {
   const userId = link.user_id;
-  const cal = calBody(c.name, c.tz);
+  const ref = refOf(ws, userId);
+  const cal = calBody(c.name, c.tz, ref);
   const calHash = hashOf(cal);
   let calId = link.calendar_id;
+  // An earlier create was asked and its answer lost (a timeout, a 5xx): it
+  // may have been made. Look for it before making another. A refusal to
+  // list (denied) falls back to making one, as before.
+  if (!calId && link.cal_hash === CREATING) {
+    const found = await findMade((path) => call(db, st, grant, 'GET', path), ref);
+    if (found.r && found.r.trouble?.code !== 'denied') {
+      const stop = await personTrouble(db, ws, st, grant, found.r);
+      if (stop) throw stop;
+    }
+    if (found.id) calId = found.id;
+  }
   if (!calId || link.cal_hash !== calHash) {
+    if (!calId) {
+      await db.query(`update gcal_links set cal_hash = $3 where workspace_id = $1 and user_id = $2 and calendar_id is null`, [ws, userId, CREATING]);
+    }
     const r = calId
       ? await call(db, st, grant, 'PATCH', `/calendars/${enc(calId)}`, cal)
       : await call(db, st, grant, 'POST', '/calendars', cal);

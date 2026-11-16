@@ -127,7 +127,7 @@ test('first link: a connect with Calendar makes the link and one push makes the 
   const cals = calOf(2);
   assert.equal(cals.length, 1);
   assert.equal(cals[0].body.summary, `Gcal Campaign ${tag} — my shifts (base.win)`);
-  assert.equal(cals[0].body.description, 'Kept up to date by base.win.');
+  assert.match(cals[0].body.description, /^Kept up to date by base.win. Ref [0-9a-f]{12}$/);
   assert.equal(cals[0].body.timeZone, 'America/Vancouver');
   assert.equal(fake.cal.counts['calendars.insert'], 1);
   await jobs();
@@ -741,6 +741,35 @@ test('with no background work: a disconnect or the switch going off leaves the l
   delete process.env.STARBASE_JOBS;
   ok(await V.b.action('gcal.stop', {}));
   ok(await M.b.action('gcal.settings', { on: true }));
+});
+
+test('a calendar Google made but whose answer was lost is found, never made twice; Stop deletes it, even before the next push', async () => {
+  ok(await M.b.action('gcal.settings', { on: true }));
+  const again = async () => { _resetTokensForTest(); await due(); await jobs(); };
+  // Made, the answer lost; the next push finds it rather than making another.
+  const u = await join(M.b, `lost.${tag}@example.org`, 'volunteer', 'Lou Example');
+  fake.cal.next('lost', { route: 'calendars.insert', sub: A[9].sub });
+  assert.equal((await connect(u, 9)).google, 'connected');
+  await jobs();
+  assert.equal(calOf(9).length, 1);
+  assert.equal((await linkRow(u.id)).calendar_id, null);
+  await again();
+  assert.equal(calOf(9).length, 1, 'one base.win calendar in Google');
+  assert.equal((await linkRow(u.id)).calendar_id, calOf(9)[0].id);
+  assert.equal(fake.cal.counts['calendars.insert'], 1);
+  ok(await u.b.action('gcal.stop', {}));
+  await again(); await again();
+  assert.equal(calOf(9).length, 0, 'Stop deletes it');
+  // Stopped before any push found it: the stop finds it and deletes it.
+  const u2 = await join(M.b, `lost2.${tag}@example.org`, 'volunteer', 'Lia Example');
+  fake.cal.next('lost', { route: 'calendars.insert', sub: A[10].sub });
+  assert.equal((await connect(u2, 10)).google, 'connected');
+  await jobs();
+  assert.equal(calOf(10).length, 1);
+  ok(await u2.b.action('gcal.stop', {}));
+  await again(); await again();
+  assert.equal(calOf(10).length, 0, 'nothing left in Google');
+  assert.equal(await linkRow(u2.id), null);
 });
 
 test('hygiene: gcal_link events carry only a state; no calendar id, event id, email, token or Google’s text anywhere; not exported; the chain holds', async () => {
