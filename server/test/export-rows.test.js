@@ -90,3 +90,37 @@ test('page by page, the rows are the download’s rows, none twice and none miss
     assert.equal(await datasetCount(db, ws, name), w.rows.length, name);
   }
 });
+
+test('every dataset pages as it downloads; rows added or removed between pages never repeat or drop another', async () => {
+  const { DATASETS, datasetRows, datasetPage } = await import('../ext/reports/rows.js');
+  const pages = async (name, between = async () => {}) => {
+    const rows = [];
+    for (let cursor = null, n = 0; n < 50; n += 1) {
+      const page = await datasetPage(db, ws, name, { cursor, limit: 3 });
+      rows.push(...page.rows);
+      if (!(cursor = page.next)) break;
+      await between(n);
+    }
+    return rows;
+  };
+  // Signs with and without an address, gifts on one day and none: each key kind runs with a cursor.
+  const pid = (await db.query('select id from persons where workspace_id = $1 limit 1', [ws])).rows[0].id;
+  for (const [i, address] of [[1, '9 Example St'], [2, null], [3, '9 Example St'], [4, null], [5, '1 Example St']].entries()) {
+    await db.query(`insert into signs (id, workspace_id, person_id, address, kind) values (gen_random_uuid(), $1, $2, $3, 'lawn')`, [ws, pid, address[1] ?? null]);
+    await db.query(`insert into gifts (id, workspace_id, person_id, amount_cents, date, method) values (gen_random_uuid(), $1, $2, $3, $4, 'cheque')`,
+      [ws, pid, 1000 + i, i % 2 ? '2026-04-01' : '2026-04-02']);
+  }
+  for (const name of Object.keys(DATASETS)) assert.deepEqual(await pages(name), (await datasetRows(db, ws, name)).rows, name);
+  // Subscribers, newest first: one joins and one already sent leaves while it runs.
+  const sub = (i, at) => db.query(
+    `insert into subscriptions (id, workspace_id, email, name, created_at) values (gen_random_uuid(), $1, $2, $3, $4)`,
+    [ws, `p${i}.${tag}@example.org`, `p${i}`, at],
+  );
+  for (let i = 0; i < 9; i += 1) await sub(i, `2026-05-0${i + 1}T12:00:00.123456Z`);
+  const was = (await datasetRows(db, ws, 'subscribers')).rows.map((r) => r[1]);
+  const got = (await pages('subscribers', async (n) => {
+    if (n === 0) await sub(99, '2026-06-01T00:00:00Z');
+    if (n === 1) await db.query('delete from subscriptions where workspace_id = $1 and name = $2', [ws, 'p8']);
+  })).map((r) => r[1]);
+  assert.deepEqual(got, was, 'each row once, in order; the newcomer, ahead of the pages, waits for the next send');
+});
