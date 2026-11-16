@@ -256,7 +256,7 @@ for (const [key, env, campaign] of [['base', { STARBASE_BRAND: 'base' }, 'Rivers
         shell.side === 'rgb(243, 244, 246)' && shell.edge === '1px' && shell.shadow === 'none' && /^["']?Inter/.test(shell.h1) && shell.caps === 'none' && shell.sub === 'base.win' && shell.lead, JSON.stringify(shell));
       check(`${key}: with a mouse a button and a field are 40px and a table row 44`, shell.btn === 40 && shell.field === 40 && shell.row >= 44 && shell.row <= 46, JSON.stringify({ btn: shell.btn, field: shell.field, row: shell.row }));
       await dp.screenshot({ path: `${SHOTS}/${key}-people-desk.png` });
-      const picks = await pickOnes(dp, base, ['/admin', '/admin/outreach', '/admin/settings']);
+      const picks = await pickOnes(dp, base, ['/admin/activity', '/admin/outreach', '/admin/settings']);
       check(`${key}: with a mouse every choice in a pick-one control is 40px, and so is the control`, wholeControl(picks, 40), JSON.stringify(picks));
     }
     await d.close();
@@ -277,7 +277,7 @@ for (const [key, env, campaign] of [['base', { STARBASE_BRAND: 'base' }, 'Rivers
       });
       check(`${key}, on a phone: light bars, four tabs and More, and 48px controls`, bars.top === 'rgb(255, 255, 255)' && bars.tabs === 'rgb(255, 255, 255)' && bars.n === 5 && bars.more && bars.btn >= 48 && bars.field >= 48, JSON.stringify(bars));
       await mp.screenshot({ path: `${SHOTS}/${key}-people-phone.png` });
-      const picks = await pickOnes(mp, base, ['/admin', '/admin/outreach', '/admin/settings']);
+      const picks = await pickOnes(mp, base, ['/admin/activity', '/admin/outreach', '/admin/settings']);
       check(`${key}, on a phone: every choice in a pick-one control is 48px — a row of them is 48, and tabs that wrap keep 48 a row`, wholeControl(picks, 48), JSON.stringify(picks));
     }
     await m.close();
