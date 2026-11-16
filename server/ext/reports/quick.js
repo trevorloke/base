@@ -27,6 +27,7 @@ import { movedCounts, movedOpenWhere } from '../moves/index.js';
 // import here would be a cycle (ext.js: features never import routes/*).
 const walkRoute = () => import('../../routes/api.js');
 import { walkOrder } from '../../lib/geo.js';
+import { civic } from '../../lib/address.js';
 import { VOLUNTEER_ROLES, SIGN_KINDS, donorTier, DONOR_TIERS } from '@starbase/shared/canvass';
 import { azSort } from '@starbase/shared/names';
 
@@ -512,7 +513,9 @@ const walkSheet = async (db, ctx, query) => {
   const kept = w.doors.filter((d) => doors === 'all' || d.state === 'open' || d.state === 'again');
   const shown = kept.slice(0, WALK_DOORS_MAX);
   const out = shown.map((d) => {
-    const number = d.persons.find((p) => p.house_number)?.house_number || '';
+    // The stored number, else the one on the front of the address: people
+    // saved before the column existed (and the sample data) have only that.
+    const number = d.persons.find((p) => p.house_number)?.house_number || civic({ address: d.address }).house_number || '';
     return {
       address: d.address || '', unit: d.unit || '', house_number: number, street: streetOf(d.address, number), state: d.state,
       // Never an email, a phone, a tag or a contact column on paper.

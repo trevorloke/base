@@ -336,6 +336,9 @@ test('the walking list: the turf’s doors, names apart, no phone or email; left
   assert.deepEqual(all0.doors.map((d) => d.address), before.doors.map((d) => d.address), 'the same doors in the same order');
   ok(await mgr.action('pass.start', { name: 'First pass', kind: 'id' }));
   ok(await mgr.action('contact.log', { person_id: P.w4.id, channel: 'door', outcome: 'contacted', rating: '1' }));
+  // Someone saved before house numbers had their own column (and the sample
+  // data) has the number only on the front of the address: it is still read.
+  await db.query('update persons set house_number = null where id = $1', [P.w3.id]);
   const walkList = ok(await mgr.get(`/api/turfs/${turf.id}/walk`));
   const every = ok(await mgr.get(`/api/quick-reports/walk?turf=${turf.id}&doors=all`));
   assert.deepEqual(every.doors.map((d) => [d.address, d.state]), walkList.doors.map((d) => [d.address, d.state]));
