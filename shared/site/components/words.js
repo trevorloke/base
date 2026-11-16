@@ -5,8 +5,12 @@
 import { createElement, useEffect, useState } from 'react';
 import { html } from './h.js';
 import { Icon } from './icons.js';
+import { wordsIn } from '../ui-words.js';
 
-export function RotatingWords({ prefix = '', words = [], level = 1, interval = 2600 }) {
+// lang: 'en' when a translated page fell back to the English headline;
+// w: the page's words for the pause button.
+export function RotatingWords({ prefix = '', words = [], level = 1, interval = 2600, lang, w }) {
+  const W = wordsIn(w);
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const [reduced, setReduced] = useState(false);
@@ -28,7 +32,7 @@ export function RotatingWords({ prefix = '', words = [], level = 1, interval = 2
   }, [moving, interval]);
 
   const word = words.length ? words[index % words.length] : '';
-  const heading = createElement(`h${level === 1 ? 1 : 2}`, { className: 'hero-title display' },
+  const heading = createElement(`h${level === 1 ? 1 : 2}`, { className: 'hero-title display', lang },
     prefix,
     prefix && word ? html`<br />` : null,
     word ? html`<span className="hero-word-wrap" aria-live="off"><span key=${index} className="hero-word">${word}</span></span>` : null);
@@ -36,7 +40,7 @@ export function RotatingWords({ prefix = '', words = [], level = 1, interval = 2
   return html`<div className="hero-headline">
     ${heading}
     ${words.length > 1 && !reduced ? html`<button type="button" className="rotate-toggle" aria-pressed=${paused ? 'true' : 'false'}
-        aria-label="Pause the rotating words" title=${paused ? 'Play the rotating words' : 'Pause the rotating words'} onClick=${() => setPaused((p) => !p)}>
+        aria-label=${W('words.pause')} title=${W(paused ? 'words.play' : 'words.pause')} onClick=${() => setPaused((p) => !p)}>
       <${Icon} name=${paused ? 'play' : 'pause'} size=${16} stroke=${2.6} />
     </button>` : null}
   </div>`;

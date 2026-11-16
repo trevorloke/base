@@ -68,14 +68,14 @@ const TRANSLATED = new Set(['text', 'textarea', 'markdown', 'words', 'link', 'im
 const flagOf = (f) => (f.translate === undefined ? true : f.translate);
 
 // Every translatable piece of one module's props, for the collector:
-// [{ text, cls: 'content' | 'check-first', field }] — composed headlines
+// [{ text, cls: 'content' | 'check-first', field, kind }] — composed headlines
 // already composed.
 export const moduleSegments = (kind, props) => {
   const def = MODULE_BY_KIND[kind];
   if (!def) return [];
   const p = props && typeof props === 'object' ? props : {};
   const out = [];
-  const add = (texts, cls, field) => { for (const text of texts) out.push({ text, cls, field }); };
+  const add = (texts, cls, field, kind = 'plain') => { for (const text of texts) out.push({ text, cls, field, kind }); };
   const walk = (fields, obj, path) => {
     for (const f of fields) {
       const flag = flagOf(f);
@@ -90,11 +90,11 @@ export const moduleSegments = (kind, props) => {
       const cls = flag === 'check-first' ? 'check-first' : 'content';
       if (f.type === 'link') add(segmentsOf('text', v?.label), cls, `${where}.label`);
       else if (f.type === 'image') add(segmentsOf('text', v?.alt), cls, `${where}.alt`);
-      else add(segmentsOf(f.type, v), cls, where);
+      else add(segmentsOf(f.type, v), cls, where, f.type === 'markdown' ? 'markdown' : 'plain');
     }
   };
   walk(def.fields, p, '');
-  if (kind === 'hero') add(heroSegments(p.titlePrefix, p.words), 'content', 'headline');
-  if (kind === 'band') add([bandSegment(p.title, p.highlight)].filter(Boolean), 'content', 'headline');
+  if (kind === 'hero') add(heroSegments(p.titlePrefix, p.words), 'content', 'headline', 'composed');
+  if (kind === 'band') add([bandSegment(p.title, p.highlight)].filter(Boolean), 'content', 'headline', p.highlight ? 'composed' : 'plain');
   return out;
 };

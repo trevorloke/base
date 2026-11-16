@@ -3,8 +3,11 @@
 // site lives, and the helpers that turn a typed link into a safe one. See
 // SITE.md "Rendering" for the shapes accepted.
 import { checkTheme } from '../theme.js';
-import { authorizedBy, consentName, consentWords } from '../wording.js';
-import { renderMarkdown } from '../../markdown.js';
+import { authorizedBy, consentName, consentWords, LEGAL_ENGLISH, fillSlots } from '../wording.js';
+import { renderMarkdown, blocksOf, drawBlocks } from '../../markdown.js';
+import { LANG_BY_CODE, isOther } from '../languages.js';
+import { UI_WORDS, fillWords, wordsFor } from '../ui-words.js';
+import { blockText, normSeg } from '../segments.js';
 import { arr, obj, str, cleanRef, cleanSource, DEFAULT_TIME_ZONE } from './util.js';
 import { absolute, imageFor, linkFor, locFrom, safeUrl } from './links.js';
 
@@ -161,8 +164,61 @@ export function renderContext({ kind = 'page', site, page, post, campaign, data,
   // Is this module (an error's, from the address) on this page? A
   // petition's own page has one form, 'campaign'.
   const onPage = (id) => (kind === 'campaign' ? id === 'campaign' : mods.some((m) => m && m.id === id));
+  // The page's language (TR): ctx.lang, with ctx.tr.look(english, { check })
+  // the server's words for it, ctx.legal the approved legal words and
+  // ctx.names the approved renderings of kept names. English: none of it.
+  const lang = isOther(c.lang) && c.tr && typeof c.tr.look === 'function' ? c.lang : 'en';
+  const tr = lang === 'en' ? null : c.tr;
+  const enShown = new Set();
+  const legal = obj(c.legal);
+  const renderings = Object.entries(obj(c.names)).filter(([n, r]) => str(n).trim() && str(r).trim());
+  const reEsc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const nameRe = renderings.length ? new RegExp(`(?<![\\p{L}\\p{N}])(${renderings.map(([n]) => reEsc(n)).sort((a, b) => b.length - a.length).join('|')})(?![\\p{L}\\p{N}（(])`, 'gu') : null;
+  const rendered = Object.fromEntries(renderings);
+  // A kept name with an approved rendering reads "Linda Chen（陳美玲）" in
+  // Chinese, "Linda Chen (ਲਿੰਡਾ ਚੇਨ)" in Punjabi: the English form first.
+  const withNames = (text) => (lang === 'en' || !nameRe ? text : String(text).replace(nameRe, (m) => (lang.startsWith('zh') ? `${m}（${rendered[m]}）` : `${m} (${rendered[m]})`)));
+  // Every string of this page shown translated only once checked (a page's
+  // or a website's "check first"); the privacy policy drawn in English.
+  const checkAll = Boolean(c.checkFirst);
+  let english = Boolean(c.englishPage);
+  const look = (text, { check = false } = {}) => {
+    const t = str(text);
+    if (!tr || english || !t.trim()) return { text: t, lang: 'en' };
+    const r = tr.look(t, { check: check || checkAll });
+    if (r.lang === 'en') { enShown.add(t.trim()); return { text: t, lang: 'en', v: r.v }; }
+    return { text: withNames(r.text), lang, v: r.v };
+  };
   const rc = {
     kind,
+    lang,
+    locale: lang === 'en' ? 'en-CA' : LANG_BY_CODE[lang].locale,
+    enShown,
+    get englishPage() { return english; },
+    setEnglishPage: (v) => { english = Boolean(v); },
+    // { text, lang }: the translation, or the English (lang 'en').
+    t: look,
+    // Its words only.
+    tt: (text, o) => look(text, o).text,
+    // A fixed word (shared/site/ui-words.js), its slots filled.
+    w: (key, slots) => {
+      const en = UI_WORDS[key] ?? key;
+      if (!tr) return fillWords(en, slots);
+      const r = tr.look(en);
+      if (r.lang === 'en') { const out = fillWords(en, slots); enShown.add(out.trim()); return out; }
+      return fillWords(r.text, slots);
+    },
+    // A legal line (decision 28): only approved words, else the English.
+    legal: (key, slots = {}) => {
+      const all = { ...obj(legal.slots), ...slots };
+      const tidy = (x) => x.replace(/[\s,，、]+$/u, '').replace(/\s+/g, ' ').trim();
+      if (lang !== 'en' && arr(legal.current).includes(key) && str(obj(legal.words)[key]).trim()) return { text: tidy(fillSlots(legal.words[key], all)), lang };
+      return { text: tidy(fillSlots(LEGAL_ENGLISH[key], all)), lang: 'en' };
+    },
+    names: withNames,
+    // An island's own words, translated, in its props (none on English pages).
+    islandWords: (name) => (lang === 'en' ? {} : { w: wordsFor(name, (k) => rc.w(k)) }),
+    langs: { offered: arr(c.offered).filter(isOther), roots: obj(c.langRoots) },
     loc,
     site: s,
     data: d,
@@ -194,12 +250,12 @@ export function renderContext({ kind = 'page', site, page, post, campaign, data,
           if (FORM_ERRORS[error.field] && !FORM_ERRORS[error.field].includes(formKind)) return null;
         } else if (!fieldNames.includes(error.field)) return null;
       }
-      const message = error.message || ERROR_WORDS[error.field] || 'Please check the form and try again.';
+      const message = error.message || (ERROR_WORDS[error.field] ? rc.w(`err.${error.field}`) : rc.w('err.check'));
       return fieldNames.includes(error.field) ? { field: error.field, message } : { field: '', message };
     },
     // Markdown, sanitized (shared/markdown.js), with its site links put
     // under the site's root like every other link.
-    markdown: (text) => renderMarkdown(text).replace(/<a href="(\/(?!\/)[^"]*)"/g, (m, url) => {
+    markdown: (text) => (tr && !english ? translatedMarkdown(text) : renderMarkdown(text)).replace(/<a href="(\/(?!\/)[^"]*)"/g, (m, url) => {
       const to = linkFor(loc, url.replace(/&amp;/g, '&'));
       return to ? `<a href="${to.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}"` : m;
     }),
@@ -210,7 +266,61 @@ export function renderContext({ kind = 'page', site, page, post, campaign, data,
       return m ? `#m-${m.id}` : null;
     },
   };
+  // Markdown block by block: each block its translation, or its English
+  // with lang="en" on it.
+  function translatedMarkdown(text) {
+    const blocks = blocksOf(text).map((b) => {
+      if (b.t === 'list') return { ...b, items: b.items.map((i) => { const r = look(normSeg(i.text)); return r.lang === 'en' ? { text: i.text, lang: 'en' } : { text: r.text }; }) };
+      if (b.t === 'hr') return b;
+      const r = look(normSeg(blockText(b)));
+      if (r.lang === 'en') return { ...b, lang: 'en' };
+      return b.t === 'h' ? { ...b, text: r.text } : { ...b, lines: r.text.split('\n') };
+    });
+    return drawBlocks(blocks);
+  }
   rc.post = post || null;
   rc.campaign = campaign || null;
+  if (tr) translateSite(rc, s, d);
   return rc;
+}
+
+// A translated page's settings and live data: labels, the announcement,
+// posts' and petitions' titles, events' titles — the same segments the
+// server translates (server/ext/site/translate.js liveStrings).
+function translateSite(rc, s, d) {
+  const tt = (x) => rc.tt(x);
+  const label = (l) => ({ ...l, label: tt(l.label) });
+  s.nav.items = s.nav.items.map(label);
+  s.nav.bar = s.nav.bar.map(label);
+  if (s.nav.cta) s.nav.cta = label(s.nav.cta);
+  s.footer.links = s.footer.links.map(label);
+  s.footer.logo = { ...s.footer.logo, alt: tt(s.footer.logo.alt) };
+  s.theme = { ...s.theme, logo: { ...s.theme.logo, alt: tt(s.theme.logo?.alt) } };
+  s.announcement = { ...s.announcement, text: tt(s.announcement.text), link: label(s.announcement.link) };
+  s.seo = { ...s.seo, title: tt(s.seo.title), description: tt(s.seo.description), image: { ...s.seo.image, alt: tt(s.seo.image.alt) } };
+  s.org = { ...s.org, platformLabel: tt(s.org.platformLabel) };
+  // The consent lines are the approved words only.
+  s.consent = Object.fromEntries(['email', 'sms', 'newsletter'].map((k) => [k, rc.legal(k).text]));
+  s.consentLang = Object.fromEntries(['email', 'sms', 'newsletter'].map((k) => [k, rc.legal(k).lang]));
+  d.posts = d.posts.map((p) => ({ ...p, title: tt(p.title), excerpt: tt(p.excerpt), image: { ...obj(p.image), alt: tt(obj(p.image).alt) } }));
+  d.events = d.events.map((e) => ({ ...e, title: tt(e.title) }));
+  d.shifts = d.shifts.map((e) => ({ ...e, title: tt(e.title) }));
+  d.campaigns = Object.fromEntries(Object.entries(d.campaigns).map(([id, c]) => [id, campaignIn(rc, c)]));
+  if (rc.post) rc.post = { ...rc.post, title: tt(rc.post.title), excerpt: tt(rc.post.excerpt), image: { ...obj(rc.post.image), alt: tt(obj(rc.post.image).alt) } };
+  if (rc.campaign) rc.campaign = campaignIn(rc, rc.campaign);
+}
+// A petition or pledge in the page's language: its statement only once a
+// person checked it (statement_v names the words drawn).
+export function campaignIn(rc, c) {
+  const x = obj(c);
+  if (!x.title && !x.statement) return x;
+  const st = str(x.statement).trim() ? rc.t(x.statement, { check: true }) : null;
+  return {
+    ...x,
+    title: rc.tt(x.title),
+    excerpt: rc.tt(x.excerpt),
+    statement: st ? st.text : str(x.statement),
+    statementLang: st ? st.lang : undefined,
+    statementV: st ? st.v : undefined,
+  };
 }

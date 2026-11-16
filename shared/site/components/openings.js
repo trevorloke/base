@@ -6,6 +6,7 @@
 // visit only (sessionStorage), with a "Not you?" to change them.
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { html, cx } from './h.js';
+import { wordsIn } from '../ui-words.js';
 import { Icon } from './icons.js';
 import { Hidden, Honeypot, TextField } from './fields.js';
 import { FormSmall, ME_KEY, rememberMe } from './form.js';
@@ -30,18 +31,18 @@ function DateBadge({ day, mon, small }) {
 
 // After a sign-up: three plain links (no script needed to follow them),
 // each a 48 px target on a phone (site.css .rsvp-cal).
-function CalLine({ cal }) {
+function CalLine({ cal, W }) {
   if (!cal || !cal.ics) return null;
   const links = [
     cal.google ? { label: 'Google', href: cal.google, away: true } : null,
     cal.outlook ? { label: 'Outlook', href: cal.outlook, away: true } : null,
-    { label: 'Apple & others', href: cal.ics },
+    { label: W('open.appleOthers'), href: cal.ics },
   ].filter(Boolean);
-  return html`<p className="rsvp-cal"><span className="rsvp-cal-say">Add it to your calendar:</span>${links.map((l, i) => html`<${Fragment} key=${l.label}>
+  return html`<p className="rsvp-cal"><span className="rsvp-cal-say">${W('open.addCal')}</span>${links.map((l, i) => html`<${Fragment} key=${l.label}>
     ${i ? html`<span aria-hidden="true">·</span>` : ' '}<a href=${l.href} target=${l.away ? '_blank' : undefined} rel=${l.away ? 'noopener noreferrer' : undefined}>${l.label}</a><//>`)}</p>`;
 }
 
-function Rsvp({ uid, item, action, hidden, privacy, me, setMe, state, setState, primary }) {
+function Rsvp({ uid, item, action, hidden, privacy, me, setMe, state, setState, primary, W, w }) {
   const st = state || { status: 'idle', errors: {} };
   const set = (patch) => setState(item.id, { ...st, ...patch });
   // The form's own action, as the page has it (with any path the server put
@@ -65,21 +66,21 @@ function Rsvp({ uid, item, action, hidden, privacy, me, setMe, state, setState, 
         return;
       }
       const field = str(json?.field);
-      const message = str(json?.error) || (res.status === 429 ? 'Too many tries from here. Please wait a minute.' : 'That didn’t go through. Please try again.');
+      const message = str(json?.error) || W(res.status === 429 ? 'open.busy' : 'open.failed');
       set({ status: 'open', open: true, errors: field && ['first_name', 'email', 'phone'].includes(field) ? { [field]: message } : {}, alert: message });
     } catch {
-      set({ status: 'open', open: true, alert: 'We couldn’t send that. Check your connection and try again.' });
+      set({ status: 'open', open: true, alert: W('form.offline') });
     }
   }
 
   if (st.status === 'done') {
     return html`<${Fragment}><div className="rsvp-done" role="status">
       <${Icon} name="check" size=${18} stroke=${3} />
-      <span>You’re signed up${me?.first_name ? `, ${me.first_name}` : ''}. See you there!</span>
+      <span>${me?.first_name ? W('open.signedUpName', { name: me.first_name }) : W('open.signedUp')}</span>
     </div>
-    <${CalLine} cal=${item.cal} /><//>`;
+    <${CalLine} cal=${item.cal} W=${W} /><//>`;
   }
-  if (item.full) return html`<p className="rsvp-full">This one is full.</p>`;
+  if (item.full) return html`<p className="rsvp-full">${W('open.full')}</p>`;
 
   const onSummary = (e) => {
     if (me && st.status === 'idle') {
@@ -98,9 +99,9 @@ function Rsvp({ uid, item, action, hidden, privacy, me, setMe, state, setState, 
       website: str(fd.get('website')),
     };
     const errors = {};
-    if (!body.first_name) errors.first_name = 'Enter your first name';
-    if (body.email && !EMAIL_RE.test(body.email)) errors.email = 'Enter an email address like name@example.org';
-    if (!body.email && !body.phone) errors.email = 'Enter your email or a phone number';
+    if (!body.first_name) errors.first_name = W('open.firstName');
+    if (body.email && !EMAIL_RE.test(body.email)) errors.email = W('form.emailLike');
+    if (!body.email && !body.phone) errors.email = W('form.emailOrPhone');
     if (Object.keys(errors).length) {
       set({ errors, open: true });
       const first = e.currentTarget.elements.namedItem(Object.keys(errors)[0]);
@@ -113,17 +114,17 @@ function Rsvp({ uid, item, action, hidden, privacy, me, setMe, state, setState, 
   const id = `${uid}-${item.id}`;
   return html`<details className="rsvp" open=${Boolean(st.open)} onToggle=${(e) => { if (e.currentTarget.open !== Boolean(st.open)) set({ open: e.currentTarget.open }); }}>
     <summary className=${cx('btn rsvp-toggle', primary ? 'btn--primary' : 'btn--outline')} onClick=${onSummary} aria-busy=${st.status === 'pending' ? 'true' : undefined}>
-      ${st.status === 'pending' ? 'Signing you up…' : me ? 'Sign me up' : 'Sign up'}<span className="visually-hidden">: ${item.title}</span>
+      ${W(st.status === 'pending' ? 'open.signingUp' : me ? 'open.signMeUp' : 'open.signUp')}<span className="visually-hidden">: ${item.title}</span>
     </summary>
     <form ref=${formRef} className="rsvp-form" method="post" action=${action} noValidate=${me !== undefined || undefined} onSubmit=${onSubmit}>
-      <${Honeypot} id=${id} />
+      <${Honeypot} id=${id} W=${w ? W : null} />
       <${Hidden} values=${{ ...hidden, shift_id: item.id }} />
-      <${TextField} id=${`${id}-first`} name="first_name" label="First name" required autoComplete="given-name" error=${st.errors?.first_name} />
-      <${TextField} id=${`${id}-email`} name="email" type="email" label="Email" autoComplete="email" inputMode="email" error=${st.errors?.email} />
-      <${TextField} id=${`${id}-phone`} name="phone" type="tel" label="Mobile number" optional autoComplete="tel" inputMode="tel" error=${st.errors?.phone} />
+      <${TextField} id=${`${id}-first`} name="first_name" label=${W('field.first')} required autoComplete="given-name" error=${st.errors?.first_name} W=${w ? W : null} />
+      <${TextField} id=${`${id}-email`} name="email" type="email" label=${W('field.email')} autoComplete="email" inputMode="email" error=${st.errors?.email} W=${w ? W : null} />
+      <${TextField} id=${`${id}-phone`} name="phone" type="tel" label=${W('field.phone')} optional autoComplete="tel" inputMode="tel" error=${st.errors?.phone} W=${w ? W : null} />
       ${st.alert ? html`<div className="form-alert" role="alert">${st.alert}</div>` : null}
-      <button type="submit" className="btn btn--primary btn--block">I’ll be there</button>
-      <${FormSmall} privacy=${privacy?.href} keeper=${privacy?.keeper} />
+      <button type="submit" className="btn btn--primary btn--block">${W('open.there')}</button>
+      <${FormSmall} privacy=${privacy?.href} keeper=${privacy?.keeper} privacyLine=${privacy?.privacyLine} privacyLang=${privacy?.privacyLang} w=${w} />
     </form>
   </details>`;
 }
@@ -132,7 +133,8 @@ function Rsvp({ uid, item, action, hidden, privacy, me, setMe, state, setState, 
 // ({ field, message }, context.js errorFor) — above the openings.
 // sentItem: after a plain sign-up, the opening it was for (when named).
 // privacy: { href, keeper } for the small print under each form (form.js FormSmall).
-export function Openings({ uid, variant = 'shifts', action, hidden = {}, privacy = null, items = [], sent = false, sentItem = '', error = null }) {
+export function Openings({ uid, variant = 'shifts', action, hidden = {}, privacy = null, items = [], sent = false, sentItem = '', error = null, w }) {
+  const W = wordsIn(w);
   const [me, setMe] = useState(undefined);
   const [states, setStates] = useState({});
   // Who signed up before in this visit, read once the page is live
@@ -148,18 +150,18 @@ export function Openings({ uid, variant = 'shifts', action, hidden = {}, privacy
     setMe(null);
   };
   const rsvp = (item, primary) => html`<${Rsvp} uid=${uid} item=${item} action=${action} hidden=${hidden} privacy=${privacy} me=${me} setMe=${setMe}
-    state=${states[item.id]} setState=${setState} primary=${primary} />`;
+    state=${states[item.id]} setState=${setState} primary=${primary} W=${W} w=${w} />`;
 
   // A place with no words of its own (a pin nobody has named) is its map.
   const whereLine = (it) => (it.where || it.map ? html`<p className="event-where">
-    ${it.map ? html`<a href=${it.map} target="_blank" rel="noopener noreferrer"><${Icon} name="pin" size=${16} />${it.where || 'See the map'}<span className="visually-hidden"> (map, opens in a new tab)</span></a>` : it.where}
+    ${it.map ? html`<a href=${it.map} target="_blank" rel="noopener noreferrer"><${Icon} name="pin" size=${16} />${it.where || W('open.seeMap')}<span className="visually-hidden">${W('open.mapNewTab')}</span></a>` : it.where}
   </p>` : null);
 
   return html`<div className=${cx('openings', `openings--${variant}`)}>
-    ${sent ? html`<p className="rsvp-done rsvp-done--page" role="status"><${Icon} name="check" size=${18} stroke=${3} /><span>You’re signed up. See you there!</span></p>` : null}
-    ${sentOne ? html`<${CalLine} cal=${sentOne.cal} />` : null}
+    ${sent ? html`<p className="rsvp-done rsvp-done--page" role="status"><${Icon} name="check" size=${18} stroke=${3} /><span>${W('open.signedUp')}</span></p>` : null}
+    ${sentOne ? html`<${CalLine} cal=${sentOne.cal} W=${W} />` : null}
     ${!sent && str(error?.message) ? html`<p className="form-alert" role="alert">${error.message}</p>` : null}
-    ${me ? html`<p className="rsvp-me">Signing up as <strong>${me.first_name}</strong>. <button type="button" className="link-button" onClick=${forget}>Not you?</button></p>` : null}
+    ${me ? html`<p className="rsvp-me">${W('open.signingAs')} <strong>${me.first_name}</strong>. <button type="button" className="link-button" onClick=${forget}>${W('open.notYou')}</button></p>` : null}
     ${variant === 'events' && items[0] ? html`<article className="event-feature">
       <${DateBadge} day=${items[0].day} mon=${items[0].mon} />
       <div className="info">

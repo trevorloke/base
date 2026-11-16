@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from 'react';
 import { html, cx } from './h.js';
 import { Icon } from './icons.js';
 import { SHARE_CHANNELS, shareLinks, str } from './util.js';
+import { wordsIn } from '../ui-words.js';
 
 const OUTSIDE = new Set(['whatsapp', 'facebook', 'x']);
 
@@ -15,7 +16,9 @@ const OUTSIDE = new Set(['whatsapp', 'facebook', 'x']);
 // else a path, completed here from the page's own address. here: this page's
 // path as the server drew it, so a path in front of it that the browser sees
 // (the client's, under BASE_PATH) is kept.
-export function ShareSheet({ uid, url, here, text, subject, label = 'Share', tone }) {
+export function ShareSheet({ uid, url, here, text, subject, label: given, tone, w }) {
+  const W = wordsIn(w);
+  const label = given ?? W('share.label');
   const [full, setFull] = useState(str(url));
   const [status, setStatus] = useState('');
   const input = useRef(null);
@@ -31,11 +34,11 @@ export function ShareSheet({ uid, url, here, text, subject, label = 'Share', ton
     try {
       if (!navigator.clipboard?.writeText) throw new Error('no clipboard');
       await navigator.clipboard.writeText(links.copy);
-      setStatus('Link copied.');
+      setStatus(W('share.copied'));
     } catch {
       input.current?.focus();
       input.current?.select();
-      setStatus('The link is selected: press Ctrl+C (or long-press) to copy it.');
+      setStatus(W('share.selected'));
     }
   }
 
@@ -45,19 +48,19 @@ export function ShareSheet({ uid, url, here, text, subject, label = 'Share', ton
       ${SHARE_CHANNELS.filter((c) => c.key !== 'copy').map((c) => html`<li key=${c.key}>
         <a className=${`share-sheet__link share-sheet__link--${c.key}`} href=${links[c.key]} target=${OUTSIDE.has(c.key) ? '_blank' : undefined} rel=${OUTSIDE.has(c.key) ? 'noopener noreferrer' : undefined}>
           <${Icon} name=${c.key} />
-          <span>${c.label}</span>
-          ${OUTSIDE.has(c.key) ? html`<span className="visually-hidden"> (opens in a new tab)</span>` : null}
+          <span>${w ? W(`share.${c.key}`) : c.label}</span>
+          ${OUTSIDE.has(c.key) ? html`<span className="visually-hidden">${W('share.newTab')}</span>` : null}
         </a>
       </li>`)}
       <li className="js-only">
         <button type="button" className="share-sheet__link share-sheet__link--copy" onClick=${copy}>
           <${Icon} name="copy" />
-          <span>Copy link</span>
+          <span>${W('share.copy')}</span>
         </button>
       </li>
     </ul>
     <div className="share-sheet__field">
-      <label className="visually-hidden" htmlFor=${`${uid}-url`}>The link to share</label>
+      <label className="visually-hidden" htmlFor=${`${uid}-url`}>${W('share.link')}</label>
       <input ref=${input} id=${`${uid}-url`} className="input share-sheet__url" readOnly value=${links.copy} onFocus=${(e) => e.currentTarget.select()} />
     </div>
     <p className="share-sheet__status" role="status">${status}</p>

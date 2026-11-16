@@ -13,6 +13,9 @@ import { Island } from './islands.js';
 import { arr, dateOnly, initials, money, obj, paragraphs, str, thousands, when } from './util.js';
 import { pagePath } from './links.js';
 import { DONATE_DECLARATION, JOIN_DECLARATION } from '../wording.js';
+import { LANG_BY_CODE } from '../languages.js';
+import { heroSegments, bandSegment, splitMark } from '../segments.js';
+import { enLang } from './lang.js';
 import { googleLink, outlookLink, shiftEvent } from '../../ics.js';
 
 const TONES = new Set(['paper', 'surface', 'brand', 'accent', 'ink']);
@@ -55,9 +58,9 @@ export function Section({ m, tone = 'paper', className, labelled = true, childre
 
 // A heading, or nothing when its words were left empty (no empty headings).
 const blank = (c) => c == null || c === false || (typeof c === 'string' && !c.trim()) || (Array.isArray(c) && c.every(blank));
-export function Heading({ level = 2, id, className = 'display', children }) {
+export function Heading({ level = 2, id, className = 'display', lang, children }) {
   if (blank(children)) return null;
-  return createElement(`h${Math.min(6, Math.max(1, level))}`, { id, className }, children);
+  return createElement(`h${Math.min(6, Math.max(1, level))}`, { id, className, lang: lang || enLang(children) }, children);
 }
 
 export function Md({ rc, text, className }) {
@@ -68,7 +71,7 @@ export function Md({ rc, text, className }) {
 
 // A paragraph field: blank lines make paragraphs.
 export function Paras({ text, className }) {
-  return paragraphs(text).map((t, i) => html`<p key=${i} className=${className}>${t}</p>`);
+  return paragraphs(text).map((t, i) => html`<p key=${i} className=${className} lang=${enLang(t)}>${t}</p>`);
 }
 
 export function Button({ rc, link, className, children }) {
@@ -91,23 +94,35 @@ export function Img({ rc, image, className, width, height, eager, alt }) {
 // The words a visitor ticks are the words the server keeps: the consent
 // boxes' from site.consent (context.js), the declarations from
 // shared/site/wording.js — never written here.
-const F = {
-  first: (o) => ({ name: 'first_name', label: 'First name', autoComplete: 'given-name', required: true, msg: 'Enter your first name', half: true, max: 80, ...o }),
-  last: (o) => ({ name: 'last_name', label: 'Last name', autoComplete: 'family-name', required: true, msg: 'Enter your last name', half: true, max: 80, ...o }),
-  email: (o) => ({ name: 'email', label: 'Email', type: 'email', inputMode: 'email', autoComplete: 'email', required: true, msg: 'Enter your email address', half: true, max: 200, ...o }),
-  phone: (o) => ({ name: 'phone', label: 'Mobile number', type: 'tel', inputMode: 'tel', autoComplete: 'tel', optional: true, half: true, max: 30, ...o }),
-  postal: (o) => ({ name: 'postal_code', label: 'Postal code', autoComplete: 'postal-code', required: true, msg: 'Enter your postal code', half: true, max: 7, ...o }),
-  address: (o) => ({ name: 'address', label: 'Street address', autoComplete: 'street-address', required: true, msg: 'Enter your street address', max: 200, ...o }),
-  city: (o) => ({ name: 'city', label: 'City', autoComplete: 'address-level2', required: true, msg: 'Enter your city', half: true, max: 80, ...o }),
-  consentEmail: (rc) => ({ name: 'consent_email', type: 'check', label: rc.site.consent.email }),
-  consentSms: (rc) => ({ name: 'consent_sms', type: 'check', label: rc.site.consent.sms }),
-  declaration: (label) => ({ name: 'declaration', type: 'check', required: true, msg: 'Tick the box to confirm', label }),
-};
+// On a translated page the labels and messages are the page's language
+// (rc.w); a legal line that isn't approved there carries lang 'en'.
+const langOf = (rc, l) => (rc.lang !== 'en' && l === 'en' ? { labelLang: 'en' } : {});
+const makeF = (rc) => ({
+  first: (o) => ({ name: 'first_name', label: rc.w('field.first'), autoComplete: 'given-name', required: true, msg: rc.w('err.first_name'), half: true, max: 80, ...o }),
+  last: (o) => ({ name: 'last_name', label: rc.w('field.last'), autoComplete: 'family-name', required: true, msg: rc.w('err.last_name'), half: true, max: 80, ...o }),
+  email: (o) => ({ name: 'email', label: rc.w('field.email'), type: 'email', inputMode: 'email', autoComplete: 'email', required: true, msg: rc.w('err.emailAddress'), half: true, max: 200, ...o }),
+  phone: (o) => ({ name: 'phone', label: rc.w('field.phone'), type: 'tel', inputMode: 'tel', autoComplete: 'tel', optional: true, half: true, max: 30, ...o }),
+  postal: (o) => ({ name: 'postal_code', label: rc.w('field.postal'), autoComplete: 'postal-code', required: true, msg: rc.w('err.postal'), half: true, max: 7, ...o }),
+  address: (o) => ({ name: 'address', label: rc.w('field.address'), autoComplete: 'street-address', required: true, msg: rc.w('err.address'), max: 200, ...o }),
+  city: (o) => ({ name: 'city', label: rc.w('field.city'), autoComplete: 'address-level2', required: true, msg: rc.w('err.city'), half: true, max: 80, ...o }),
+  consentEmail: () => ({ name: 'consent_email', type: 'check', label: rc.site.consent.email, ...langOf(rc, rc.site.consentLang?.email) }),
+  consentSms: () => ({ name: 'consent_sms', type: 'check', label: rc.site.consent.sms, ...langOf(rc, rc.site.consentLang?.sms) }),
+  declaration: (key, english) => {
+    const d = rc.lang === 'en' ? { text: english, lang: 'en' } : rc.legal(key);
+    return { name: 'declaration', type: 'check', required: true, msg: rc.w('err.declaration'), label: d.text, ...langOf(rc, d.lang) };
+  },
+});
 const orgName = (rc) => rc.site.org.shortName || rc.site.org.name || 'the campaign';
 const privacyHref = (rc) => (rc.site.org.privacy ? rc.link(rc.site.org.privacy) : null);
 // Whose the data is, for the line under every form (form.js FormSmall).
 const keeper = (rc) => rc.site.org.name || orgName(rc);
-const privacyOf = (rc) => ({ href: privacyHref(rc), keeper: keeper(rc) });
+// The privacy line on a translated page: the approved words only.
+const privacyLine = (rc) => {
+  if (rc.lang === 'en') return {};
+  const l = rc.legal('privacy');
+  return { privacyLine: l.text, privacyLang: l.lang === 'en' ? 'en' : undefined };
+};
+const privacyOf = (rc) => ({ href: privacyHref(rc), keeper: keeper(rc), ...privacyLine(rc) });
 
 // The island's props for a module's form: the fields, where it posts, the
 // hidden ids, and — after a plain post — its thank-you or its error.
@@ -119,6 +134,8 @@ function formProps(rc, m, kind, o) {
     // Every form: the privacy line and the main site's privacy policy.
     privacy: privacyHref(rc),
     keeper: keeper(rc),
+    ...privacyLine(rc),
+    ...rc.islandWords('form'),
     kind,
     action: rc.action(kind),
     hidden: rc.hidden(m.id, o.hidden),
@@ -130,22 +147,40 @@ function formProps(rc, m, kind, o) {
 function NotReady({ rc, what, verb }) {
   const email = rc.site.org.email;
   return html`<div className="notice" role="note">
-    <p className="notice-title">${`Online ${what} isn’t set up yet.`}</p>
-    ${email ? html`<p>${`To ${verb} now, email `}<a href=${`mailto:${email}`}>${email}</a>.</p>` : html`<p>Please check back soon.</p>`}
+    <p className="notice-title">${rc.w(what === 'membership' ? 'mod.notReadyMembership' : 'mod.notReadyGiving')}</p>
+    ${email ? html`<p>${`${rc.w(verb === 'join' ? 'mod.notReadyJoin' : 'mod.notReadyGive')} `}<a href=${`mailto:${email}`}>${email}</a>.</p>` : html`<p>${rc.w('mod.checkBackSoon')}</p>`}
   </div>`;
 }
 
 // ── Text and pictures ──
 
-function Hero({ m, p, rc, level }) {
+// The hero's headline on a translated page (decision 23): one row per
+// rotating word, "{prefix} <b>{word}</b>". The same text before every <b>:
+// the translated prefix and words, as in English. Otherwise each whole
+// sentence rotates (no prefix). Any row missing: the English, lang="en".
+function heroWords(rc, p) {
   const words = arr(p.words).map(str).map((w) => w.trim()).filter(Boolean);
   const title = str(p.titlePrefix).trim();
+  if (rc.lang === 'en') return { title, words };
+  if (!words.length) { const r = rc.t(title); return { title: r.text, words, lang: r.lang === 'en' ? 'en' : undefined }; }
+  const rows = heroSegments(title, words).map((x) => rc.t(x));
+  if (rows.some((r) => r.lang === 'en')) return { title, words, lang: 'en' };
+  const parts = rows.map((r) => /^([\s\S]*?)<b>([\s\S]*?)<\/b>([\s\S]*)$/.exec(r.text));
+  if (parts.every(Boolean) && parts.every((x) => !x[3].trim() && x[1].trim() === parts[0][1].trim())) {
+    return { title: parts[0][1].trim(), words: parts.map((x) => x[2].trim()) };
+  }
+  return { title: '', words: rows.map((r) => r.text.replace(/<\/?b>/g, '').replace(/\s+/g, ' ').trim()) };
+}
+
+function Hero({ m, p, rc, level }) {
+  const { title, words, lang } = heroWords(rc, p);
+  const wl = rc.lang !== 'en' ? { ...(lang ? { lang } : {}), ...rc.islandWords('words') } : {};
   return html`<${Section} m=${m} tone="brand" className="hero" labelled=${false}>
     <div className="container hero-inner">
       <div className="hero-copy">
         ${words.length
-          ? html`<${Island} name="words" props=${{ uid: `${m.id}-words`, prefix: title, words, level }} />`
-          : html`<div className="hero-headline"><${Heading} level=${level} className="hero-title display">${title}<//></div>`}
+          ? html`<${Island} name="words" props=${{ uid: `${m.id}-words`, prefix: title, words, level, ...wl }} />`
+          : html`<div className="hero-headline"><${Heading} level=${level} className="hero-title display" lang=${lang}>${title}<//></div>`}
         <${Paras} text=${p.text} className="hero-text" />
         <div className="btn-row">
           <${Button} rc=${rc} link=${p.primaryCta} className="btn btn--primary btn--lg" />
@@ -177,7 +212,7 @@ function Picture({ m, p, rc }) {
     <figure className="container picture-figure">
       ${has
         ? html`<${Img} rc=${rc} image=${p.image} className="wide-image" width=${1600} height=${900} />`
-        : html`<div className="picture-empty" role="img" aria-label="No picture chosen yet"></div>`}
+        : html`<div className="picture-empty" role="img" aria-label=${rc.w('mod.noPicture')}></div>`}
       ${str(p.caption).trim() ? html`<figcaption>${p.caption}</figcaption>` : null}
     </figure>
   <//>`;
@@ -206,9 +241,9 @@ function Video({ m, p, rc, level }) {
     <div className="container narrow stack">
       ${title ? html`<${Heading} level=${level} id=${titleId(m)}>${title}<//>` : null}
       ${embed
-        ? html`<div className="video-frame"><iframe src=${embed.src} title=${title || str(p.caption).trim() || `${embed.provider} video`} loading="lazy"
+        ? html`<div className="video-frame"><iframe src=${embed.src} title=${title || str(p.caption).trim() || rc.w('mod.video', { provider: embed.provider })} loading="lazy"
             allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen referrerPolicy="strict-origin-when-cross-origin"></iframe></div>`
-        : href ? html`<p><a className="text-link" href=${href}>Watch the video</a></p>` : null}
+        : href ? html`<p><a className="text-link" href=${href}>${rc.w('mod.watchVideo')}</a></p>` : null}
       ${str(p.caption).trim() ? html`<p className="caption">${p.caption}</p>` : null}
     </div>
   <//>`;
@@ -239,11 +274,30 @@ function Columns({ m, p, rc, level }) {
   <//>`;
 }
 
+// The band's heading drawn whole (decision 23): the translated row split at
+// its <u> part, which may come first or last; no row: the English, lang="en".
+function bandParts(rc, p) {
+  const title = str(p.title);
+  const hl = str(p.highlight).trim();
+  if (rc.lang === 'en' || !hl) {
+    if (rc.lang === 'en' || !title.trim()) return { before: title, inside: hl, after: '' };
+    const r = rc.t(title);
+    return { before: r.text, inside: '', after: '', lang: r.lang === 'en' ? 'en' : undefined };
+  }
+  const r = rc.t(bandSegment(title, hl));
+  const parts = r.lang === 'en' ? null : splitMark(r.text, 'u');
+  if (!parts) return { before: title, inside: hl, after: '', lang: 'en' };
+  return parts;
+}
+
 function Band({ m, p, rc, level }) {
   const tone = toneOf(p.tone, 'accent');
+  const b = bandParts(rc, p);
   return html`<${Section} m=${m} tone=${tone} className="band">
     <div className="container band-inner">
-      <${Heading} level=${level} id=${titleId(m)}>${p.title}${str(p.highlight).trim() ? ' ' : null}${str(p.highlight).trim() ? html`<span className="underline">${p.highlight}</span>` : null}<//>
+      ${rc.lang === 'en'
+        ? html`<${Heading} level=${level} id=${titleId(m)}>${p.title}${str(p.highlight).trim() ? ' ' : null}${str(p.highlight).trim() ? html`<span className="underline">${p.highlight}</span>` : null}<//>`
+        : html`<${Heading} level=${level} id=${titleId(m)} lang=${b.lang}>${b.inside && b.lang === 'en' ? `${b.before.trimEnd()} ` : b.before}${b.inside ? html`<span className="underline">${b.inside}</span>` : null}${b.after}<//>`}
       <${Button} rc=${rc} link=${p.cta} className="btn btn--primary btn--xl" />
     </div>
   <//>`;
@@ -274,7 +328,7 @@ function Quote({ m, p, rc }) {
       ${str(p.name).trim() || str(p.role).trim() ? html`<figcaption>
         <${Img} rc=${rc} image=${p.photo} className="quote-photo" width=${96} height=${96} />
         <span className="quote-who">
-          ${str(p.name).trim() ? html`<span className="quote-name">${p.name}</span>` : null}
+          ${str(p.name).trim() ? html`<span className="quote-name">${rc.names(p.name)}</span>` : null}
           ${str(p.role).trim() ? html`<span className="quote-role">${p.role}</span>` : null}
         </span>
       </figcaption>` : null}
@@ -286,10 +340,11 @@ function Quote({ m, p, rc }) {
 
 function Newsletter({ m, p, rc, level }) {
   const tone = toneOf(p.tone, 'surface');
+  const F = makeF(rc);
   const fields = [
     F.first({ required: false, optional: true, msg: undefined }),
     F.email(),
-    ...(p.askPhone ? [F.phone(), F.consentSms(rc)] : []),
+    ...(p.askPhone ? [F.phone(), F.consentSms()] : []),
   ];
   return html`<${Section} m=${m} tone=${tone} className="newsletter">
     <div className="container">
@@ -302,11 +357,12 @@ function Newsletter({ m, p, rc, level }) {
           layout: 'inline',
           fields,
           impliedConsent: 'consent_email',
-          submit: str(p.buttonLabel).trim() || 'Sign up',
+          submit: str(p.buttonLabel).trim() || rc.w('form.signUp'),
           submitClass: 'btn--brand',
           // Sending this form is the yes to email: these words, as the server keeps them.
           small: rc.site.consent.newsletter,
-          thanks: { title: 'You’re on the list', body: 'Thanks for signing up. Watch your inbox for the next one.' },
+          ...(rc.lang !== 'en' && rc.site.consentLang?.newsletter === 'en' ? { smallLang: 'en' } : {}),
+          thanks: { title: rc.w('form.newsletterThanks'), body: rc.w('form.newsletterThanksBody') },
         })} />
       </div>
     </div>
@@ -324,24 +380,26 @@ function membershipAmounts(rc) {
 function Join({ m, p, rc, level }) {
   const pay = rc.data.payments;
   const presets = membershipAmounts(rc);
+  const F = makeF(rc);
   const form = pay.ready
     ? html`<${Island} name="form" props=${formProps(rc, m, 'join', {
-      title: 'Join online',
+      title: rc.w('form.joinOnline'),
       fields: [
         F.first(), F.last(), F.email(), F.phone(),
         F.address(), F.city(), F.postal(),
-        { name: 'birth_date', label: 'Date of birth', type: 'date', autoComplete: 'bday', required: true, msg: 'Enter your date of birth', half: true },
-        { name: 'citizenship', label: 'Citizenship', type: 'radios', required: true, msg: 'Choose one', options: [{ value: 'citizen', label: 'Canadian citizen' }, { value: 'pr', label: 'Permanent resident' }] },
-        { name: 'term', label: 'How long', type: 'radios', number: true, required: true, msg: 'Choose how long', value: 1, options: [{ value: 1, label: '1 year' }, { value: 4, label: '4 years' }] },
+        { name: 'birth_date', label: rc.w('field.birth'), type: 'date', autoComplete: 'bday', required: true, msg: rc.w('err.birth_date'), half: true },
+        { name: 'citizenship', label: rc.w('field.citizenship'), type: 'radios', required: true, msg: rc.w('err.citizenship'), options: [{ value: 'citizen', label: rc.w('join.citizen') }, { value: 'pr', label: rc.w('join.pr') }] },
+        { name: 'term', label: rc.w('field.term'), type: 'radios', number: true, required: true, msg: rc.w('err.term'), value: 1, options: [{ value: 1, label: rc.w('field.oneYear') }, { value: 4, label: rc.w('field.fourYears') }] },
         { type: 'amount' },
-        F.declaration(JOIN_DECLARATION),
-        F.consentEmail(rc), F.consentSms(rc),
+        ...payNote(rc),
+        F.declaration('join', JOIN_DECLARATION),
+        F.consentEmail(), F.consentSms(),
       ],
-      amount: { presets, monthly: false, cadence: false, limit: pay.limit_cents, defaultCents: presets[0] || null, min: pay.membership_min_cents || 100, legend: str(p.amountTitle).trim() || 'Your membership contribution', note: str(p.amountNote).trim() },
-      submit: 'Join and pay',
+      amount: { presets, monthly: false, cadence: false, limit: pay.limit_cents, defaultCents: presets[0] || null, min: pay.membership_min_cents || 100, legend: str(p.amountTitle).trim() || rc.w('form.membershipAmount'), note: str(p.amountNote).trim() },
+      submit: rc.w('form.joinPay'),
       privacy: privacyHref(rc),
-      small: 'You’ll pay on the next page by card, Apple Pay or Google Pay.',
-      thanks: { title: 'Welcome aboard', body: 'Thanks for joining. Watch your inbox for a note from us.' },
+      ...smallOf(rc, 'donateSmallNoLimit', {}, 'You’ll pay on the next page by card, Apple Pay or Google Pay.'),
+      thanks: { title: rc.w('form.joinThanks'), body: rc.w('form.joinThanksBody') },
     })} />`
     : html`<${NotReady} rc=${rc} what="membership" verb="join" />`;
   return html`<${Section} m=${m} tone="surface" className="join">
@@ -373,21 +431,25 @@ function Donate({ m, p, rc, level }) {
   const presets = arr(p.amounts).map((a) => Math.round(Number(str(a).replace(/[$,\s]/g, '')) * 100))
     .filter((c) => Number.isFinite(c) && c >= 100 && (!limit || c <= limit));
   const unique = [...new Set(presets)];
+  const F = makeF(rc);
   const form = pay.ready
     ? html`<${Island} name="form" props=${formProps(rc, m, 'donate', {
       fields: [
         { type: 'amount' },
-        { type: 'section', label: 'Your details' },
+        ...payNote(rc),
+        { type: 'section', label: rc.w('field.details') },
         F.first(), F.last(), F.email(), F.phone(),
         F.address(), F.city(), F.postal(),
-        F.declaration(DONATE_DECLARATION),
-        F.consentEmail(rc), F.consentSms(rc),
+        F.declaration('donate', DONATE_DECLARATION),
+        F.consentEmail(), F.consentSms(),
       ],
       amount: { presets: unique, monthly: p.allowMonthly === true, cadence: true, limit, monthlyMax: pay.monthly_max_cents || Math.floor(limit / 12 / 100) * 100, defaultCents: unique[Math.min(1, unique.length - 1)] ?? null, monthlyNote: str(p.monthlyNote).trim() },
-      submit: 'Donate',
+      submit: rc.w('form.donate'),
       privacy: privacyHref(rc),
-      small: `${limit ? `The most anyone can give in a year is ${money(limit)}. ` : ''}You’ll pay on the next page by card, Apple Pay or Google Pay.`,
-      thanks: { title: 'Thank you', body: 'Your gift is on its way. Watch your inbox for the receipt.' },
+      ...(limit
+        ? smallOf(rc, 'donateSmall', { limit: money(limit) }, `The most anyone can give in a year is ${money(limit)}. You’ll pay on the next page by card, Apple Pay or Google Pay.`)
+        : smallOf(rc, 'donateSmallNoLimit', {}, 'You’ll pay on the next page by card, Apple Pay or Google Pay.')),
+      thanks: { title: rc.w('form.donateThanks'), body: rc.w('form.donateThanksBody') },
     })} />`
     : html`<${NotReady} rc=${rc} what="giving" verb="give" />`;
   return html`<${Section} m=${m} tone="paper" className="donate">
@@ -403,13 +465,13 @@ function Donate({ m, p, rc, level }) {
   <//>`;
 }
 
-export function GoalBar({ count, goal, kind }) {
+export function GoalBar({ count, goal, kind, w }) {
   const g = Math.round(Number(goal) || 0);
   if (g <= 0) return null;
   const n = Math.max(0, Math.round(Number(count) || 0));
   return html`<div className="goal">
-    <p className="goal-label"><strong>${thousands(n)}</strong>${` ${kind === 'pledge' ? 'have signed' : 'signatures'}`}<span className="goal-of">${` of ${thousands(g)}`}</span></p>
-    <progress className="goal-bar" max=${g} value=${Math.min(n, g)} aria-label=${`${thousands(n)} of ${thousands(g)}`}></progress>
+    <p className="goal-label"><strong>${thousands(n)}</strong>${` ${w ? w(kind === 'pledge' ? 'act.signers' : 'act.signatures') : kind === 'pledge' ? 'have signed' : 'signatures'}`}<span className="goal-of">${` ${w ? w('act.of', { goal: thousands(g) }) : `of ${thousands(g)}`}`}</span></p>
+    <progress className="goal-bar" max=${g} value=${Math.min(n, g)} aria-label=${w ? w('act.ofTotal', { count: thousands(n), goal: thousands(g) }) : `${thousands(n)} of ${thousands(g)}`}></progress>
   </div>`;
 }
 
@@ -419,23 +481,25 @@ export function campaignForm(rc, m, c, { idPrefix } = {}) {
   const kind = pledge ? 'pledge' : 'petition';
   const path = `/act/${str(c.slug)}`;
   const shareUrl = rc.abs(rc.link(path) || path);
+  const F = makeF(rc);
   return formProps(rc, m, kind, {
     uid: `${idPrefix || m.id}-form`,
-    title: pledge ? 'Sign the pledge' : 'Add your name',
-    hidden: { campaign: str(c.id) },
+    title: rc.w(pledge ? 'form.signPledge' : 'form.addName'),
+    // The statement's words as drawn (decision 37): the server keeps exactly these.
+    hidden: { campaign: str(c.id), ...(rc.lang !== 'en' && c.statementV ? { statement_v: c.statementV } : {}) },
     fields: [
       F.first(), F.last(), F.email(), F.postal(), F.phone(),
-      { name: 'comment', label: pledge ? 'Why you’re signing' : 'Add a comment', type: 'textarea', optional: true, max: 1000, rows: 3 },
-      F.consentEmail(rc), F.consentSms(rc),
+      { name: 'comment', label: rc.w(pledge ? 'field.whySigning' : 'field.comment'), type: 'textarea', optional: true, max: 1000, rows: 3 },
+      F.consentEmail(), F.consentSms(),
     ],
-    submit: pledge ? 'Sign the pledge' : 'Add my name',
+    submit: rc.w(pledge ? 'form.signPledge' : 'form.addMyName'),
     // Who keeps the details is the form's privacy line (wording.js
     // PRIVACY_LINE): no second sentence saying it again.
     privacy: privacyHref(rc),
     thanks: {
-      title: pledge ? 'You’ve signed the pledge' : 'Your name is on the petition',
-      body: 'Thank you. It counts for more when friends sign too — share it with a neighbour:',
-      share: { url: shareUrl, here: pagePath(rc.loc), text: `I signed “${str(c.title)}”. Add your name:`, subject: str(c.title), label: 'Share it' },
+      title: rc.w(pledge ? 'form.signedPledge' : 'form.signedPetition'),
+      body: rc.w('form.signedBody'),
+      share: { url: shareUrl, here: pagePath(rc.loc), text: rc.w('act.signedShare', { title: str(c.title) }), subject: str(c.title), label: rc.w('share.it') },
     },
   });
 }
@@ -445,11 +509,11 @@ function Petition({ m, p, rc, level }) {
   const tone = toneOf(p.tone);
   if (!c.id && !c.title) {
     return html`<${Section} m=${m} tone=${tone} className="petition" labelled=${false}>
-      <div className="container"><p className="empty-state">${rc.preview ? 'Choose a petition or pledge for this module.' : 'This petition isn’t available any more.'}</p></div>
+      <div className="container"><p className="empty-state">${rc.w(rc.preview ? 'act.choose' : 'act.gonePetition')}</p></div>
     <//>`;
   }
   const pledge = c.kind === 'pledge';
-  const eyebrow = str(p.eyebrow).trim() || (pledge ? 'The pledge' : 'Petition');
+  const eyebrow = str(p.eyebrow).trim() || rc.w(pledge ? 'act.thePledge' : 'act.petition');
   const closed = c.status === 'closed';
   return html`<${Section} m=${m} tone=${tone} className=${cx('petition', DARK.has(tone) && 'petition--dark')}>
     <div className="container">
@@ -458,13 +522,13 @@ function Petition({ m, p, rc, level }) {
           <p className="eyebrow">${eyebrow}</p>
           <${Heading} level=${level} id=${titleId(m)} className="campaign-title">${str(c.title)}<//>
           ${str(c.excerpt).trim() ? html`<p className="lede">${c.excerpt}</p>` : null}
-          ${str(c.statement).trim() ? html`<blockquote className="statement"><${Paras} text=${c.statement} /></blockquote>` : null}
-          <${GoalBar} count=${c.count} goal=${c.goal} kind=${c.kind} />
-          ${str(c.slug).trim() ? html`<a className="text-link" href=${rc.link(`/act/${c.slug}`)}>More about this ${pledge ? 'pledge' : 'petition'}</a>` : null}
+          ${str(c.statement).trim() ? html`<blockquote className="statement" lang=${rc.lang !== 'en' && c.statementLang === 'en' ? 'en' : undefined}><${Paras} text=${c.statement} /></blockquote>` : null}
+          <${GoalBar} count=${c.count} goal=${c.goal} kind=${c.kind} w=${rc.lang !== 'en' ? rc.w : null} />
+          ${str(c.slug).trim() ? html`<a className="text-link" href=${rc.link(`/act/${c.slug}`)}>${rc.lang === 'en' ? html`More about this ${pledge ? 'pledge' : 'petition'}` : rc.w(pledge ? 'act.morePledge' : 'act.morePetition')}</a>` : null}
         </div>
         <div className="campaign-form">
           ${closed
-            ? html`<div className="notice" role="note"><p className="notice-title">${`This ${pledge ? 'pledge' : 'petition'} is closed.`}</p><p>Thank you to everyone who signed.</p></div>`
+            ? html`<div className="notice" role="note"><p className="notice-title">${rc.w(pledge ? 'act.closedPledge' : 'act.closedPetition')}</p><p>${rc.w('act.thanksSigned')}</p></div>`
             : html`<${Island} name="form" props=${campaignForm(rc, m, c)} />`}
         </div>
       </div>
@@ -476,6 +540,7 @@ function Volunteer({ m, p, rc, level }) {
   const tone = toneOf(p.tone);
   const roles = arr(p.roles).map(str).filter(Boolean);
   const list = roles.length ? roles : rc.data.roles;
+  const F = makeF(rc);
   return html`<${Section} m=${m} tone=${tone} className="volunteer">
     <div className="container split">
       <div className="stack volunteer-copy">
@@ -486,14 +551,15 @@ function Volunteer({ m, p, rc, level }) {
         <${Island} name="form" props=${formProps(rc, m, 'volunteer', {
           fields: [
             F.first(), F.last(), F.email(), F.phone(), F.postal({ required: false, optional: true, msg: undefined }),
-            ...(list.length ? [{ name: 'roles', label: 'What would you like to do?', type: 'checks', optional: true, columns: true, options: list.map((r) => ({ value: r, label: r })) }] : []),
-            ...(p.askAvailability ? [{ name: 'availability', label: 'When are you free?', type: 'textarea', optional: true, max: 300, rows: 2, hint: 'For example: weekday evenings, Saturday mornings' }] : []),
-            { name: 'note', label: 'Anything else we should know?', type: 'textarea', optional: true, max: 1000, rows: 3 },
-            F.consentEmail(rc), F.consentSms(rc),
+            // The value stays English (the desk, ladders and filters match it); only the label is the page's language.
+            ...(list.length ? [{ name: 'roles', label: rc.w('field.roles'), type: 'checks', optional: true, columns: true, options: list.map((r) => ({ value: r, label: rc.tt(r) })) }] : []),
+            ...(p.askAvailability ? [{ name: 'availability', label: rc.w('field.availability'), type: 'textarea', optional: true, max: 300, rows: 2, hint: rc.w('field.availabilityHint') }] : []),
+            { name: 'note', label: rc.w('field.note'), type: 'textarea', optional: true, max: 1000, rows: 3 },
+            F.consentEmail(), F.consentSms(),
           ],
-          submit: 'Sign me up',
+          submit: rc.w('form.signMeUp'),
           privacy: privacyHref(rc),
-          thanks: { title: 'Thanks for offering to help', body: 'An organizer will be in touch within a day.' },
+          thanks: { title: rc.w('form.volunteerThanks'), body: rc.w('form.volunteerThanksBody') },
         })} />
       </div>
     </div>
@@ -503,7 +569,7 @@ function Volunteer({ m, p, rc, level }) {
 // Openings and events: the loaders' shifts, as the island shows them.
 function openingItems(rc, list, limit) {
   return arr(list).slice(0, Math.max(1, Number(limit) || 6)).map((e) => {
-    const w = when(e.starts_at, e.ends_at, rc.timeZone);
+    const w = when(e.starts_at, e.ends_at, rc.timeZone, rc.locale);
     const left = e.spots_left == null || e.spots_left === '' ? null : Math.max(0, Math.round(Number(e.spots_left) || 0));
     const lat = Number(e.lat);
     const lng = Number(e.lng);
@@ -529,12 +595,12 @@ function openingItems(rc, list, limit) {
       mon: w?.mon || '',
       date: w?.date || '',
       // After the date, lower case: "Sunday, November 15, drop in 4:00–8:00 p.m."
-      time: w?.time ? `${e.drop_in ? 'drop in ' : ''}${w.time}` : '',
+      time: w?.time ? `${e.drop_in ? `${rc.w('open.dropIn')} ` : ''}${w.time}` : '',
       where: str(e.location).trim(),
       map,
       full: left === 0,
       low: left !== null && left > 0 && left <= 3,
-      spots: left === null || left === 0 ? '' : `${left} ${left === 1 ? 'spot' : 'spots'} left`,
+      spots: left === null || left === 0 ? '' : rc.w(left === 1 ? 'open.spot' : 'open.spots', { count: left }),
     };
   }).filter((it) => it.title && it.date);
 }
@@ -549,9 +615,9 @@ function Shifts({ m, p, rc, level }) {
         <${Paras} text=${p.intro} className="lede" />
       </div>
       ${items.length
-        ? html`<${Island} name="openings" props=${{ uid: `${m.id}-openings`, variant: 'shifts', action: rc.action('rsvp'), hidden: rc.hidden(m.id), privacy: privacyOf(rc), items, sent: rc.sentFor('rsvp', m.id), sentItem: rc.sentItem(), error: rc.errorFor('rsvp', m.id, RSVP_FIELDS) }} />`
-        : html`<p className="empty-state">No openings right now. ${volunteer ? html`<a href=${volunteer}>Tell us how you’d like to help</a>` : 'New ones are added every week.'}</p>`}
-      ${p.showMap && items.some((it) => it.map) ? html`<p className="small">Tap a place to see it on a map.</p>` : null}
+        ? html`<${Island} name="openings" props=${{ uid: `${m.id}-openings`, variant: 'shifts', action: rc.action('rsvp'), hidden: rc.hidden(m.id), privacy: privacyOf(rc), items, sent: rc.sentFor('rsvp', m.id), sentItem: rc.sentItem(), error: rc.errorFor('rsvp', m.id, RSVP_FIELDS), ...rc.islandWords('openings') }} />`
+        : html`<p className="empty-state">${`${rc.w('mod.noOpenings')} `}${volunteer ? html`<a href=${volunteer}>${rc.w('mod.tellUs')}</a>` : rc.w('mod.newEveryWeek')}</p>`}
+      ${p.showMap && items.some((it) => it.map) ? html`<p className="small">${rc.w('mod.mapHint')}</p>` : null}
     </div>
   <//>`;
 }
@@ -559,6 +625,7 @@ function Shifts({ m, p, rc, level }) {
 function Contact({ m, p, rc, level }) {
   const topics = arr(p.topics).map(str).filter(Boolean);
   const { email, phone } = rc.site.org;
+  const F = makeF(rc);
   return html`<${Section} m=${m} tone="paper" className="contact">
     <div className="container split">
       <div className="stack contact-copy">
@@ -573,13 +640,13 @@ function Contact({ m, p, rc, level }) {
         <${Island} name="form" props=${formProps(rc, m, 'contact', {
           fields: [
             F.first(), F.last({ required: false, optional: true, msg: undefined }), F.email(), F.phone(),
-            ...(topics.length ? [{ name: 'topic', label: 'What it’s about', type: 'select', optional: true, options: topics.map((t) => ({ value: t.slice(0, 60), label: t })) }] : []),
-            { name: 'message', label: 'Your message', type: 'textarea', required: true, msg: 'Write your message', max: 4000, rows: 5 },
-            F.consentEmail(rc),
+            ...(topics.length ? [{ name: 'topic', label: rc.w('field.topic'), type: 'select', optional: true, options: topics.map((t) => ({ value: t.slice(0, 60), label: rc.tt(t) })) }] : []),
+            { name: 'message', label: rc.w('field.message'), type: 'textarea', required: true, msg: rc.w('err.message'), max: 4000, rows: 5 },
+            F.consentEmail(),
           ],
-          submit: 'Send',
+          submit: rc.w('form.send'),
           privacy: privacyHref(rc),
-          thanks: { title: 'Thanks, your message is on its way', body: 'Someone from the campaign will get back to you soon.' },
+          thanks: { title: rc.w('form.contactThanks'), body: rc.w('form.contactThanksBody') },
         })} />
       </div>
     </div>
@@ -601,12 +668,12 @@ function ActNow({ m, p, rc, level }) {
       <div className="rail-head"><${Heading} level=${level} id=${titleId(m)} className="rail-title">${p.title}<//></div>
       <div className="rail-grid">
         <div className="stack stack--sm">
-          <h3 className="rail-subtitle">Next up</h3>
+          <h3 className="rail-subtitle">${rc.w('mod.nextUp')}</h3>
           <ul className="next-list">
             ${next.map((ev) => html`<li key=${ev.id} className="next-card">
               <div className="date-badge date-badge--sm" aria-hidden="true"><span className="day">${ev.day}</span><span className="mon">${ev.mon}</span></div>
               <div className="next-info">
-                <p className="eyebrow">Event</p>
+                <p className="eyebrow">${rc.w('mod.event')}</p>
                 <a className="next-title" href=${rc.anchorFor('events') || volunteer}>${ev.title}</a>
                 <p className="next-meta">${ev.date}, ${ev.time}${ev.where ? ` · ${ev.where}` : ''}</p>
               </div>
@@ -614,25 +681,25 @@ function ActNow({ m, p, rc, level }) {
             <li className="next-card">
               <div className="next-icon" aria-hidden="true"><${Icon} name="hand" size=${22} /></div>
               <div className="next-info">
-                <p className="eyebrow">Volunteer</p>
-                <a className="next-title" href=${volunteer}>Pick a volunteer shift</a>
-                <p className="next-meta">Door-knocking, phone banks and events, a few hours at a time.</p>
+                <p className="eyebrow">${rc.w('mod.volunteer')}</p>
+                <a className="next-title" href=${volunteer}>${rc.w('mod.pickShift')}</a>
+                <p className="next-meta">${rc.w('mod.shiftHint')}</p>
               </div>
             </li>
           </ul>
         </div>
         <div className="stack stack--sm">
-          <h3 className="rail-subtitle">${showCounts ? 'So far' : 'Latest'}</h3>
+          <h3 className="rail-subtitle">${rc.w(showCounts ? 'mod.soFar' : 'mod.latest')}</h3>
           ${showCounts ? html`<ul className="counts">
-            ${members != null ? html`<li><span className="count">${thousands(members)}</span><span className="count-label">members</span></li>` : null}
-            ${signed > 0 ? html`<li><span className="count">${thousands(signed)}</span><span className="count-label">signatures</span></li>` : null}
+            ${members != null ? html`<li><span className="count">${thousands(members)}</span><span className="count-label">${rc.w('mod.members')}</span></li>` : null}
+            ${signed > 0 ? html`<li><span className="count">${thousands(signed)}</span><span className="count-label">${rc.w('mod.signatures')}</span></li>` : null}
           </ul>` : null}
           ${open.slice(0, 2).map((c) => html`<div key=${c.id} className="rail-post">
-            <p className="eyebrow">${c.kind === 'pledge' ? 'Pledge' : 'Petition'}${p.showCounts !== false && Number(c.count) > 0 ? ` · ${thousands(c.count)} signed` : ''}</p>
+            <p className="eyebrow">${rc.w(c.kind === 'pledge' ? 'act.pledge' : 'act.petition')}${p.showCounts !== false && Number(c.count) > 0 ? ` · ${rc.w('act.signedCount', { count: thousands(c.count) })}` : ''}</p>
             <a className="next-title" href=${rc.link(`/act/${str(c.slug)}`)}>${str(c.title)}</a>
           </div>`)}
           ${post ? html`<div className="rail-post">
-            <p className="eyebrow">${dateOnly(post.published_at, rc.timeZone) || 'News'}</p>
+            <p className="eyebrow">${dateOnly(post.published_at, rc.timeZone, rc.locale) || rc.w('mod.newsWord')}</p>
             <a className="next-title" href=${rc.link(`/news/${post.slug}`)}>${post.title}</a>
           </div>` : null}
         </div>
@@ -648,19 +715,19 @@ function Events({ m, p, rc, level }) {
     <div className="container stack">
       <div className="section-head">
         <div className="stack stack--xs">
-          <p className="eyebrow">${items.length ? 'Next event' : 'Events'}</p>
+          <p className="eyebrow">${rc.w(items.length ? 'mod.nextEvent' : 'mod.events')}</p>
           <${Heading} level=${level} id=${titleId(m)} className="display pop-alt">${p.title}<//>
         </div>
       </div>
       ${items.length
-        ? html`<${Fragment}><${Island} name="openings" props=${{ uid: `${m.id}-events`, variant: 'events', action: rc.action('rsvp'), hidden: rc.hidden(m.id), privacy: privacyOf(rc), items, sent: rc.sentFor('rsvp', m.id), sentItem: rc.sentItem(), error: rc.errorFor('rsvp', m.id, RSVP_FIELDS) }} />
-          <p className="small events-ics"><a href=${rc.link('/events.ics')}>Get our events in your calendar</a></p><//>`
+        ? html`<${Fragment}><${Island} name="openings" props=${{ uid: `${m.id}-events`, variant: 'events', action: rc.action('rsvp'), hidden: rc.hidden(m.id), privacy: privacyOf(rc), items, sent: rc.sentFor('rsvp', m.id), sentItem: rc.sentItem(), error: rc.errorFor('rsvp', m.id, RSVP_FIELDS), ...rc.islandWords('openings') }} />
+          <p className="small events-ics"><a href=${rc.link('/events.ics')}>${rc.w('mod.eventsCalendar')}</a></p><//>`
         : html`<div className="event-feature">
           <div className="info">
-            <h3>New events are on the way</h3>
-            <p className="summary">${newsletter ? 'Get the newsletter and we’ll tell you as soon as the next one is booked.' : 'Check back soon.'}</p>
+            <h3>${rc.w('mod.eventsSoon')}</h3>
+            <p className="summary">${rc.w(newsletter ? 'mod.eventsNewsletter' : 'mod.checkBack')}</p>
           </div>
-          ${newsletter ? html`<a className="btn btn--primary btn--lg" href=${newsletter}>Get the newsletter</a>` : null}
+          ${newsletter ? html`<a className="btn btn--primary btn--lg" href=${newsletter}>${rc.w('mod.getNewsletter')}</a>` : null}
         </div>`}
     </div>
   <//>`;
@@ -672,17 +739,17 @@ function News({ m, p, rc, level }) {
     <div className="container stack">
       <div className="section-head">
         <${Heading} level=${level} id=${titleId(m)}>${p.title}<//>
-        <a className="text-link" href=${rc.link('/news')}>All news</a>
+        <a className="text-link" href=${rc.link('/news')}>${rc.w('news.all')}</a>
       </div>
       ${posts.length ? html`<div className="card-grid">
         ${posts.map((post) => html`<article key=${post.slug} className="card">
           <${Img} rc=${rc} image=${post.image} className="news-card-image" width=${1200} height=${675} alt="" />
-          <p className="eyebrow">${dateOnly(post.published_at, rc.timeZone)}</p>
+          <p className="eyebrow">${dateOnly(post.published_at, rc.timeZone, rc.locale)}</p>
           <h3 className="h3">${post.title}</h3>
           ${str(post.excerpt).trim() ? html`<p>${post.excerpt}</p>` : null}
-          <a className="text-link card-link" href=${rc.link(`/news/${post.slug}`)}>Read more<span className="visually-hidden">: ${post.title}</span></a>
+          <a className="text-link card-link" href=${rc.link(`/news/${post.slug}`)}>${rc.w('news.readMore')}<span className="visually-hidden">: ${post.title}</span></a>
         </article>`)}
-      </div>` : html`<p className="empty-state">News will appear here as soon as it’s published.</p>`}
+      </div>` : html`<p className="empty-state">${rc.w('news.empty')}</p>`}
     </div>
   <//>`;
 }
@@ -696,9 +763,9 @@ export const PROMISE_STATUSES = [
 ];
 const STATUS_LABEL = Object.fromEntries(PROMISE_STATUSES.map((s) => [s.value, s.label]));
 
-export function StatusStamp({ status }) {
+export function StatusStamp({ status, rc }) {
   const s = STATUS_LABEL[status] ? status : 'pending';
-  return html`<span className=${`status-badge status-${s}`}><${Icon} name=${s} size=${14} stroke=${2.6} />${STATUS_LABEL[s]}</span>`;
+  return html`<span className=${`status-badge status-${s}`}><${Icon} name=${s} size=${14} stroke=${2.6} />${rc ? rc.w(`tracker.${s}`) : STATUS_LABEL[s]}</span>`;
 }
 
 function Tracker({ m, p, rc, level }) {
@@ -710,8 +777,8 @@ function Tracker({ m, p, rc, level }) {
         <${Heading} level=${level} id=${titleId(m)}>${p.title}<//>
         <${Paras} text=${p.intro} className="lede" />
       </div>
-      ${counts.length ? html`<ul className="score-legend" aria-label="Promises by status">
-        ${counts.map((s) => html`<li key=${s.value}><span className="score-count">${s.n}</span><${StatusStamp} status=${s.value} /></li>`)}
+      ${counts.length ? html`<ul className="score-legend" aria-label=${rc.w('mod.promisesBy')}>
+        ${counts.map((s) => html`<li key=${s.value}><span className="score-count">${s.n}</span><${StatusStamp} status=${s.value} rc=${rc} /></li>`)}
       </ul>` : null}
       ${items.length ? html`<ol className="promise-list">
         ${items.map((it, i) => {
@@ -722,22 +789,22 @@ function Tracker({ m, p, rc, level }) {
               <span className="promise-number" aria-hidden="true">${i + 1}</span>
               <div className="promise-main">
                 <div className="promise-meta">
-                  <${StatusStamp} status=${status} />
-                  ${str(it.due).trim() ? html`<span className="promise-due">Due ${it.due}</span>` : null}
+                  <${StatusStamp} status=${status} rc=${rc} />
+                  ${str(it.due).trim() ? html`<span className="promise-due">${rc.lang === 'en' ? html`Due ${it.due}` : rc.w('mod.due', { due: it.due })}</span>` : null}
                 </div>
                 <h3 className="promise-title">${it.title}</h3>
               </div>
             </div>
             ${str(it.note).trim() || source ? html`<details className="promise-detail">
-              <summary>What happened<span className="visually-hidden">: ${it.title}</span></summary>
+              <summary>${rc.w('mod.whatHappened')}<span className="visually-hidden">: ${it.title}</span></summary>
               <div className="promise-body">
                 <${Paras} text=${it.note} />
-                ${source ? html`<p><a href=${source}>Source</a></p>` : null}
+                ${source ? html`<p><a href=${source}>${rc.w('mod.source')}</a></p>` : null}
               </div>
             </details>` : null}
           </li>`;
         })}
-      </ol>` : html`<p className="empty-state">Promises will be listed here.</p>`}
+      </ol>` : html`<p className="empty-state">${rc.w('mod.promisesSoon')}</p>`}
     </div>
   <//>`;
 }
@@ -764,9 +831,9 @@ function People({ m, p, rc, level }) {
               : letters ? html`<div className="avatar" aria-hidden="true">${letters}</div>`
               : html`<div className="avatar avatar--open" aria-hidden="true"><${Icon} name="plus" size=${22} /></div>`}
             ${str(seat.role).trim() ? html`<p className="eyebrow">${seat.role}</p>` : null}
-            <h3 className="h3">${name || 'Seat open'}</h3>
+            <h3 className="h3">${name ? rc.names(name) : rc.w('mod.seatOpen')}</h3>
             ${str(seat.bio).trim() ? html`<p className="seat-bio">${seat.bio}</p>` : null}
-            ${!name && join ? html`<a className="text-link" href=${join}>Put your name forward<span className="visually-hidden">: ${str(seat.role)}</span></a>` : null}
+            ${!name && join ? html`<a className="text-link" href=${join}>${rc.w('mod.putName')}<span className="visually-hidden">: ${str(seat.role)}</span></a>` : null}
           </article>`;
         })}
       </div>` : null}
@@ -800,13 +867,13 @@ function Social({ m, p, rc, level }) {
   return html`<${Section} m=${m} tone="paper" className="social-follow">
     <div className="container stack">
       <div className="intro">
-        <${Heading} level=${level} id=${titleId(m)}>Follow along<//>
+        <${Heading} level=${level} id=${titleId(m)}>${rc.w('mod.followAlong')}<//>
         <${Paras} text=${p.intro} className="lede" />
       </div>
       ${accounts.length ? html`<div className="social-grid">
         ${accounts.map((a, i) => html`<article key=${i} className="social-card">
           <div className="head"><h3>${a.name}</h3>${str(a.handle).trim() ? html`<span className="handle">${a.handle}</span>` : null}</div>
-          <a className="btn btn--outline" href=${rc.link(a.url)} rel="noopener noreferrer">${str(a.cta).trim() || `Follow on ${a.name}`}</a>
+          <a className="btn btn--outline" href=${rc.link(a.url)} rel="noopener noreferrer">${str(a.cta).trim() || rc.w('mod.followOn', { network: a.name })}</a>
         </article>`)}
       </div>` : null}
     </div>
@@ -844,5 +911,52 @@ export function Module({ m, rc, level = 2 }) {
   if (!Component) return null;
   const id = str(String(m.id ?? '')).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64) || 'module';
   const mod = { ...m, id };
-  return html`<${Component} m=${mod} p=${propsFor(mod)} rc=${rc} level=${level} />`;
+  const p = propsFor(mod);
+  return html`<${Component} m=${mod} p=${rc.lang === 'en' ? p : translateProps(mod.kind, p, rc)} rc=${rc} level=${level} />`;
+}
+
+// A module's words in the page's language (decision 22), walked by the
+// catalogue's field types the way the server collects them
+// (shared/site/segments.js): text, a paragraph field paragraph by
+// paragraph, words, a link's label, a picture's words. Markdown is
+// translated as it is drawn (rc.markdown); names, handles and amounts never;
+// 'label' fields (roles, topics) keep their English, labelled where drawn;
+// 'composed' headlines are drawn whole by the hero and the band.
+export function translateProps(kind, p, rc) {
+  const def = MODULE_BY_KIND[kind];
+  if (!def) return p;
+  const one = (type, v, check) => {
+    if (type === 'text') return rc.tt(v, { check });
+    if (type === 'textarea') return paragraphs(v).map((x) => rc.tt(x, { check })).join('\n\n');
+    if (type === 'words') return arr(v).map((x) => rc.tt(x, { check }));
+    if (type === 'link') return { ...obj(v), label: rc.tt(obj(v).label, { check }) };
+    if (type === 'image') return { ...obj(v), alt: rc.tt(obj(v).alt, { check }) };
+    return v;
+  };
+  const walk = (fields, o) => {
+    const out = { ...obj(o) };
+    for (const f of fields) {
+      const flag = f.translate === undefined ? true : f.translate;
+      if (flag === false || flag === 'label' || flag === 'composed') continue;
+      if (f.type === 'list') out[f.key] = arr(out[f.key]).map((item) => walk(f.of, item));
+      else out[f.key] = one(f.type, out[f.key], flag === 'check-first');
+    }
+    return out;
+  };
+  return walk(def.fields, p);
+}
+
+// Under the amounts, where Stripe has no page in this language (Punjabi):
+// "The payment page may be in English."
+function payNote(rc) {
+  if (rc.lang === 'en' || LANG_BY_CODE[rc.lang]?.stripe !== 'auto') return [];
+  const n = rc.legal('payPageNote');
+  return [{ type: 'note', label: n.text, ...(n.lang === 'en' ? { labelLang: 'en' } : {}) }];
+}
+// The small print under donate and join: the approved words on a
+// translated page, else as it always read.
+function smallOf(rc, key, slots, english) {
+  if (rc.lang === 'en') return { small: english };
+  const l = rc.legal(key, slots);
+  return { small: l.text, ...(l.lang === 'en' ? { smallLang: 'en' } : {}) };
 }
