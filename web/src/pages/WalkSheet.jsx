@@ -69,8 +69,9 @@ function Chooser() {
       {unplaced.isError ? <p className="ws-unplaced">Unavailable</p>
         : unplaced.data?.count > 0 && (
           <p className="ws-unplaced">
-            {fmt(unplaced.data.count)} {unplaced.data.count === 1 ? 'person with an address isn’t' : 'people with an address aren’t'} on the map yet, so they’re on no walking list.{' '}
-            <Link to="/map">Map → Not on the map</Link>
+            {fmt(unplaced.data.count)} {unplaced.data.count === 1 ? 'person with an address isn’t' : 'people with an address aren’t'} on the map yet, so they’re on no walking list.
+            {/* Its own line, a whole control tall: the one way to the fix. */}
+            <Link className="btn btn-quiet ops-tap ws-unplaced__go" to="/map">Map → Not on the map</Link>
           </p>
         )}
     </div>

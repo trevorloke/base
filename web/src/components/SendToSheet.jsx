@@ -92,7 +92,11 @@ export function Progress({ e, online }) {
   );
 }
 
-export function SendToSheet({ source, of, name, count = null, head = [], noun = 'people', label = 'Send to Google Sheets', csvHref = null }) {
+// blocked: why this can't go to Sheets as it stands (said in place of the
+// question, with no Send); onUnblock, with unblockLabel: the one change that
+// lets it ("A–Z by last name" for a report on Largest first).
+export function SendToSheet({ source, of, name, count = null, head = [], noun = 'people', label = 'Send to Google Sheets', csvHref = null,
+  blocked = null, onUnblock = null, unblockLabel = null }) {
   const d = useDrive();
   const online = useOnline();
   const qc = useQueryClient();
@@ -139,7 +143,16 @@ export function SendToSheet({ source, of, name, count = null, head = [], noun = 
         <div className="drv-panel" role="group" aria-label="Google Sheets">
           {open && !connected && <DriveConnect />}
           {open && connected && count === 0 && <p role="status">Nothing to send yet</p>}
-          {open && connected && count !== 0 && (
+          {open && connected && count !== 0 && blocked && (
+            <div className="drv-ask">
+              <p className="drv-ask__q" role="status">{blocked}</p>
+              <div className="drv-acts">
+                {onUnblock && <button type="button" className="btn btn-quiet ops-tap" onClick={onUnblock}>{unblockLabel}</button>}
+                <button type="button" className="btn btn-quiet ops-tap" onClick={close}>Cancel</button>
+              </div>
+            </div>
+          )}
+          {open && connected && count !== 0 && !blocked && (
             <div className="drv-ask">
               <p className="drv-ask__q">Send {what} to a new Google Sheet in {whereSheetsGo(d.data.land)}?</p>
               {contact && <p className="drv-line">It includes people who asked not to be contacted.</p>}

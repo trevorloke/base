@@ -132,3 +132,11 @@
 /* A turf's walk list on the desk: Print beside Map, both on the right. */
 .walk-nav:has(.walk-print) .btn.walk-map { margin-left: auto; margin-right: 0; }
 .btn.walk-print { margin-right: -14px; }
+
+/* The header keeps its shape whatever "Take it out" shows: the title stays
+   at the top left, level with Print; the actions take the rest of the row,
+   so the Sheets panel opens under the buttons across that width. */
+.qr-page .ops-head { align-items: flex-start; }
+.qr-page .ops-head h1 { display: flex; align-items: center; min-height: var(--ctl); }
+.qr-page .ops-head__actions { flex: 1 1 0; min-width: min(100%, 300px); justify-content: flex-end; }
+.ws-unplaced__go { display: flex; width: fit-content; margin-top: var(--s-2); }

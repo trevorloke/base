@@ -50,6 +50,12 @@ export function ExportItem({ k, label, me, csvClass = 'btn ops-tap', download = 
 
 const cell = (v) => (v instanceof Date || /^\d{4}-\d{2}-\d{2}T/.test(String(v)) ? String(v).slice(0, 10) : typeof v === 'number' && !Number.isInteger(v) ? v.toFixed(2) : String(v ?? ''));
 
+// A column in dollars ("Total ($)"): written as money on screen, as the
+// totals above it are ("$3,284.70"); the CSV keeps plain numbers.
+const isDollars = (h) => /\(\$\)$/.test(String(h));
+const dollars = (v) => (v === '' || v == null || !Number.isFinite(Number(v)) ? cell(v)
+  : `$${Number(v).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+
 function Report({ name, r }) {
   return (
     <section className="rp-sec" aria-labelledby={`rp-${name}`}>
@@ -62,7 +68,7 @@ function Report({ name, r }) {
         <div className="rp-table-wrap">
           <table className="rp-table">
             <thead><tr>{r.head.map((h) => <th key={h}>{h}</th>)}</tr></thead>
-            <tbody>{r.rows.map((row, i) => <tr key={i}>{row.map((v, j) => <td key={j} className={typeof v === 'number' ? 'mono num' : ''}>{cell(v)}</td>)}</tr>)}</tbody>
+            <tbody>{r.rows.map((row, i) => <tr key={i}>{row.map((v, j) => <td key={j} className={typeof v === 'number' || isDollars(r.head[j]) ? 'mono num' : ''}>{isDollars(r.head[j]) ? dollars(v) : cell(v)}</td>)}</tr>)}</tbody>
           </table>
         </div>
       )}

@@ -103,6 +103,7 @@ export default function QuickReport() {
   // The Sheet's ref: the name and the choices in force, in the report's own order.
   const sheetRef = d ? [name, new URLSearchParams((d.options || []).map((o) => [o.key, o.value])).toString()].filter(Boolean).join('?') : name;
   const title = d?.title || (q.isError ? 'Report' : 'Loading…');
+  const largest = d?.options?.find((o) => o.key === 'order')?.value === 'largest';
 
   return (
     <div className="ops-page qr-page qr-print">
@@ -118,7 +119,9 @@ export default function QuickReport() {
           {/* No file to give while the report is loading or was refused. */}
           {d && !q.isError
             ? <TakeItOut csvHref={csv} source="quick" of={sheetRef} name={[d.title, d.said].filter(Boolean).join(' · ')}
-                count={d.total} noun={(NOUN[name] || ['row', 'rows'])[d.total === 1 ? 0 : 1]} head={d.head.map((h) => h.label)} />
+                count={d.total} noun={(NOUN[name] || ['row', 'rows'])[d.total === 1 ? 0 : 1]} head={d.head.map((h) => h.label)}
+                // Sheets pages are A–Z only: said before Send, never refused after it.
+                blocked={largest ? 'Choose A–Z to send to Sheets' : null} onUnblock={() => pick('order', 'az')} unblockLabel="A–Z by last name" />
             : <button type="button" className="btn btn-quiet ops-tap" disabled>Download CSV</button>}
         </div>
       </div>
@@ -147,7 +150,9 @@ export default function QuickReport() {
                           const v = show(r[h.key], h.type);
                           const lead = !nameCols && h.key === LEAD[name];
                           // A blank fact is left off the phone block, not shown as a bare label.
-                          const fact = !lead && v !== '' && (h.key === 'phone' || h.key === MAIN[name]);
+                          // Volunteers with no shift booked: what they do is the fact, in its place.
+                          const main = name === 'volunteers' && !r.next_shift ? 'roles' : MAIN[name];
+                          const fact = !lead && v !== '' && (h.key === 'phone' || h.key === main);
                           const cls = [h.type === 'money' || h.type === 'count' ? 'num' : '', masked ? 'qr-masked' : '', fact ? 'qr-fact' : '', lead ? 'qr-lead' : ''].filter(Boolean).join(' ');
                           return <td key={h.key} className={cls || undefined} data-label={h.label}>{v}</td>;
                         })}
