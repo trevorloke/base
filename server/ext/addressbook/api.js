@@ -40,7 +40,8 @@ api.post('/addressbook/check', async (c) => {
   if (perUser(ctx.user.id)) return c.json({ error: 'That’s a lot of checking — wait an hour, or use a smaller file' }, 429);
   const ws = ctx.workspaceId;
   const rows = parsed.data.rows;
-  const cols = 'id, name, address, unit, rating';
+  // last_name: the screen lists them A–Z by last name (shared/names.js azSort).
+  const cols = 'id, name, last_name, address, unit, rating';
 
   // 1. By email (persons_ws_email_idx), oldest first.
   const emails = [...new Set(rows.map((r) => String(r.email || '').toLowerCase()).filter(Boolean))];
@@ -85,7 +86,7 @@ api.post('/addressbook/check', async (c) => {
   return c.json({
     rows: out.map(({ ref, person: p, how }) => ({
       ref, how, mine: linked.has(p.id),
-      person: { id: p.id, name: p.name, address: p.address ?? null, unit: p.unit ?? null, rating: p.rating ?? null },
+      person: { id: p.id, name: p.name, last_name: p.last_name ?? null, address: p.address ?? null, unit: p.unit ?? null, rating: p.rating ?? null },
     })),
     checked: rows.length,
   });

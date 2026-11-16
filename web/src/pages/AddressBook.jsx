@@ -12,12 +12,14 @@ import { useRef, useState } from 'react';
 import { Link, Navigate, useOutletContext } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { readContacts } from '@starbase/shared/contactsfile';
+import { azSort } from '@starbase/shared/names';
 import { action, apiPost, ApiError } from '../api.js';
 import { adminHref } from '../mode.js';
 import { hasArea, isDesk } from '../Shell.jsx';
 import { decodeBytes, isSpreadsheetBinary, readTable, shapeTable } from '../components/csv.js';
 import { NeedsSignal, useOnline } from '../components/NoSignal.jsx';
 import { RatingChip } from '../components/RatingButtons.jsx';
+import NameAz from '../components/NameAz.jsx';
 import { MINE_KEY } from '../components/RelationshipsBits.jsx';
 import './shifts.css';
 import './addressbook.css';
@@ -259,7 +261,8 @@ function Finder() {
 
           {found.length > 0 && (
             <ul className="ops-rows ab-rows" aria-label="On our list">
-              {found.map((f) => {
+              {/* A–Z by last name, as every list of people (PS), whatever order the file had. */}
+              {[...found].sort((a, b) => azSort(a.person, b.person)).map((f) => {
                 const p = f.person;
                 const where = [p.unit && `${p.unit}-`, p.address].filter(Boolean).join('') || f.email;
                 const id = `ab-${p.id}`;
@@ -273,7 +276,7 @@ function Finder() {
                         </label>
                       )}
                       <span className="ab-row__main">
-                        <a className="ops-row__name ab-name" href={adminHref(`/people/${p.id}`)} target="_blank" rel="noopener noreferrer">{p.name}</a>
+                        <a className="ops-row__name ab-name" href={adminHref(`/people/${p.id}`)} target="_blank" rel="noopener noreferrer"><NameAz person={p} /></a>
                         {where && <span className="ops-row__sub">{where}</span>}
                       </span>
                       <span className="ab-row__end">

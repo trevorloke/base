@@ -108,7 +108,7 @@ test('check: matches only, by email and by name + phone; a deleted person never;
   assert.equal(by['Bo Lee Sample'].how, 'email', 'case does not matter');
   assert.equal(by['Cy Example'].how, 'phone');
   assert.equal(by['Cy Example'].person.id, P.cy, 'the name decides between two with the phone');
-  assert.deepEqual(Object.keys(by['Ann Example'].person).sort(), ['address', 'id', 'name', 'rating', 'unit']);
+  assert.deepEqual(Object.keys(by['Ann Example'].person).sort(), ['address', 'id', 'last_name', 'name', 'rating', 'unit']);
   assert.ok(!JSON.stringify(r).includes('dee.example'), 'no row for anyone not on the list');
   assert.ok(!r.rows.some((x) => x.person.id === P.gone));
   assert.deepEqual(await counts(), before, 'nothing written anywhere');
