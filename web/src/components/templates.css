@@ -38,3 +38,14 @@
   .tp-body { padding: var(--s-3) var(--s-2) var(--s-4); }
   .tp-keep__row .btn, .tp-acts .btn { min-height: 48px; }
 }
+
+/* The way back, and the compose's "Add it": a whole control tall on touch. */
+.tp-back { display: inline-flex; align-items: center; min-height: var(--ctl); }
+@media (pointer: coarse) {
+  .tp-warn a { display: inline-flex; align-items: center; min-height: 48px; padding: 0 var(--s-1); }
+}
+/* On a phone a row's facts stack, so a wrap never leaves a "·" at a line's end. */
+@media (max-width: 500px) {
+  .tp-page .ot-row__sub { flex-direction: column; align-items: flex-start; gap: 2px; }
+  .tp-page .ot-row__sub > span:not(.chip):not(:last-child)::after { content: none; }
+}

@@ -500,6 +500,7 @@ export function ComposeCard({
   const [senderId, setSenderId] = useState(undefined);
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
+  const [discarding, setDiscarding] = useState(false); // "Discard this email?" in place of the buttons
   const [confirming, setConfirming] = useState(false);
   // Files uploaded for this send: [{ id, filename, bytes }], bound on Send.
   const [files, setFiles] = useState([]);
@@ -821,7 +822,14 @@ export function ComposeCard({
       {act.error && <p className="error">{act.error}</p>}
       {empty && emptyReason && <p className="ot-note">{emptyReason}</p>}
       <div className="ot-foot">
-        {confirming ? (
+        {discarding ? (
+          // Cancel with words written: asked first, in place — nothing keeps a draft.
+          <div className="ot-confirm" role="group" aria-label="Discard this email">
+            <span>Discard this {isText ? 'text' : 'email'}?</span>
+            <button type="button" className="btn ot-btn-tap" onClick={onCancel}>Yes, discard</button>
+            <button type="button" className="btn btn-quiet ot-btn-tap" autoFocus onClick={() => setDiscarding(false)}>No</button>
+          </div>
+        ) : confirming ? (
           <div className="ot-confirm" role="group" aria-label="Confirm send">
             {own.length > 0 && <span className="tp-own">Still has {named(own)} — send as written?</span>}
             <span>{testing && !offline ? abAsk(plan, ab.wait_hours)
@@ -848,7 +856,8 @@ export function ComposeCard({
               </button>
             )}
             <span className="spacer" />
-            <button type="button" className="btn btn-quiet ot-btn-tap" onClick={onCancel}>Cancel</button>
+            <button type="button" className="btn btn-quiet ot-btn-tap"
+              onClick={() => (subject.trim() || body.trim() ? setDiscarding(true) : onCancel())}>Cancel</button>
           </>
         )}
       </div>

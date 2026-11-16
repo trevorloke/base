@@ -170,7 +170,8 @@ export function SaveAsTemplate({ kind, subject, body, startedFrom, onUpdated }) 
           <input id={`${kind}-tp-name`} className="input tp-keep__name" value={name} maxLength={NAME_MAX} autoFocus
             onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') save(e); }} />
           <button type="button" className="btn ot-btn-tap" disabled={off || !name.trim()} onClick={save}>{busy ? 'Saving…' : 'Save'}</button>
-          <button type="button" className="btn btn-quiet ot-btn-tap" onClick={() => setOpen(false)}>Cancel</button>
+          {/* Not "Cancel": the compose's own Cancel sits just below, and throws the email away. */}
+          <button type="button" className="btn btn-quiet ot-btn-tap" onClick={() => setOpen(false)}>Don’t save</button>
         </div>
       ) : (
         <div className="tp-keep__row">
@@ -399,7 +400,7 @@ export function TemplatesScreen({ use }) {
         )}
         {data?.canSave && !busy && !online && <NeedsSignal />}
       </div>
-      <p className="ot-note"><Link to={w.back[0]}>{w.back[1]}</Link></p>
+      <p className="ot-note"><Link className="tp-back" to={w.back[0]}>{w.back[1]}</Link></p>
       {q.isPending && <p className="ot-note" role="status">{LOADING}</p>}
       {q.isError && !data && <p className="error" role="alert"><Unavailable onRetry={() => q.refetch()} /></p>}
       {making && (
@@ -414,7 +415,7 @@ export function TemplatesScreen({ use }) {
           {(data.canSave || data.mine.length > 0) && <section className="ot-sec" aria-label="Your templates">
             <h2 className="ot-sec-h">Your templates <span className="ot-count">{fmt(data.mine.length)}</span></h2>
             {data.mine.length === 0 ? (
-              <p className="ot-empty">No templates of your own yet. <span className="ops-meta">Save one from any email, or copy a ready-made one.</span></p>
+              <p className="ot-empty">No templates of your own yet. <span className="ops-meta">Save one from any {use === 'press' ? 'release' : 'email'}, or copy a ready-made one.</span></p>
             ) : (
               <ul className="ot-list">
                 {data.mine.map((t) => (
