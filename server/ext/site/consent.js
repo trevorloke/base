@@ -31,15 +31,21 @@ const NO_TEXT = 'do-not-text';
 const NO_CONTACT = 'do-not-contact';
 const lower = (s) => String(s ?? '').trim().toLowerCase();
 
-export const recordConsent = async (tx, ws, { personId = null, channel, granted, source, wording = null, address = null }, emit) => {
+// lang: the language the words were shown in (TR); wordingEn: the approved
+// English they stand for, for staff who don't read it (none on English).
+export const recordConsent = async (tx, ws, { personId = null, channel, granted, source, wording = null, address = null, lang = 'en', wordingEn = null }, emit) => {
   const id = newId();
+  const l = lang || 'en';
   // clock_timestamp(): two in one write keep their order (now() is the write's start).
   await tx.query(
-    `insert into consent_events (id, workspace_id, person_id, channel, granted, source, wording, address, created_at)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, clock_timestamp())`,
-    [id, ws, personId, channel, granted, source || null, wording, address],
+    `insert into consent_events (id, workspace_id, person_id, channel, granted, source, wording, address, created_at, lang, wording_en)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, clock_timestamp(), $9, $10)`,
+    [id, ws, personId, channel, granted, source || null, wording, address, l, l === 'en' ? null : wordingEn],
   );
-  emit('consent_event', id, 'create', { person_id: personId, channel, granted, source: source || null, address, wording });
+  emit('consent_event', id, 'create', {
+    person_id: personId, channel, granted, source: source || null, address, wording,
+    ...(l !== 'en' ? { lang: l, wording_en: wordingEn } : {}),
+  });
   return id;
 };
 
@@ -112,6 +118,9 @@ const subscribe = async (tx, ws, email, name, source, emit, { again = false } = 
 
 // ── A form's ticked boxes ──
 // → { email: 'yes' | 'held' | null, sms: 'yes' | 'held' | null }
+// wording: { email, sms } as the page showed them — or, on a translated
+// page, { email: { text, lang, en }, sms: … }.
+const shownOf = (w) => (w && typeof w === 'object' ? { wording: w.text, lang: w.lang || 'en', wordingEn: w.en ?? null } : { wording: w });
 export const consentFromForm = async (tx, ws, { personId, name, email, phone, wantsEmail, wantsSms, source, wording }, emit) => {
   const out = { email: null, sms: null };
   const em = lower(email);
@@ -119,7 +128,7 @@ export const consentFromForm = async (tx, ws, { personId, name, email, phone, wa
     if (await emailHeld(tx, ws, em, personId)) out.email = 'held';
     else {
       await subscribe(tx, ws, em, name, source, emit);
-      await recordConsent(tx, ws, { personId, channel: 'email', granted: true, source, wording: wording.email, address: em }, emit);
+      await recordConsent(tx, ws, { personId, channel: 'email', granted: true, source, ...shownOf(wording.email), address: em }, emit);
       await setOptIn(tx, ws, personId, 'email', true, emit);
       out.email = 'yes';
     }
@@ -127,7 +136,7 @@ export const consentFromForm = async (tx, ws, { personId, name, email, phone, wa
   if (wantsSms && phone) {
     if (await smsHeld(tx, ws, phone, personId)) out.sms = 'held';
     else {
-      await recordConsent(tx, ws, { personId, channel: 'sms', granted: true, source, wording: wording.sms, address: e164(phone) || phone }, emit);
+      await recordConsent(tx, ws, { personId, channel: 'sms', granted: true, source, ...shownOf(wording.sms), address: e164(phone) || phone }, emit);
       await setOptIn(tx, ws, personId, 'sms', true, emit);
       out.sms = 'yes';
     }
@@ -162,7 +171,7 @@ export const emailOff = async (tx, ws, { personId, email, source }, emit) => {
   await setOptIn(tx, ws, personId, 'email', false, emit);
 };
 
-export const emailOn = async (tx, ws, { personId, name, email, source, wording }, emit) => {
+export const emailOn = async (tx, ws, { personId, name, email, source, wording, lang = 'en', wordingEn = null }, emit) => {
   const em = lower(email);
   if (!em) return;
   await subscribe(tx, ws, em, name, source, emit, { again: true });
@@ -176,7 +185,7 @@ export const emailOn = async (tx, ws, { personId, name, email, source, wording }
     await tx.query('update persons set tags = $3, updated_at = now() where id = $1 and workspace_id = $2', [p.id, ws, JSON.stringify(next)]);
     emit('person', p.id, 'update', { tags: next, source });
   }
-  await recordConsent(tx, ws, { personId, channel: 'email', granted: true, source, wording, address: em }, emit);
+  await recordConsent(tx, ws, { personId, channel: 'email', granted: true, source, wording, address: em, lang, wordingEn }, emit);
   await setOptIn(tx, ws, personId, 'email', true, emit);
 };
 
@@ -195,7 +204,7 @@ export const smsOff = async (tx, ws, { personId, phone, source }, emit) => {
   await setOptIn(tx, ws, personId, 'sms', false, emit);
 };
 
-export const smsOn = async (tx, ws, { personId, phone, source, wording }, emit) => {
+export const smsOn = async (tx, ws, { personId, phone, source, wording, lang = 'en', wordingEn = null }, emit) => {
   const num = e164(phone);
   if (num && await isOptedOut(tx, ws, num)) await applyOptOut(tx, emit, ws, num, { out: false, keyword: 'WEBSITE' });
   const p = (await tx.query('select id, tags from persons where id = $1 and workspace_id = $2 and deleted_at is null', [personId, ws])).rows[0];
@@ -204,7 +213,7 @@ export const smsOn = async (tx, ws, { personId, phone, source, wording }, emit) 
     await tx.query('update persons set tags = $3, updated_at = now() where id = $1 and workspace_id = $2', [p.id, ws, JSON.stringify(next)]);
     emit('person', p.id, 'update', { tags: next, source });
   }
-  await recordConsent(tx, ws, { personId, channel: 'sms', granted: true, source, wording, address: num || phone }, emit);
+  await recordConsent(tx, ws, { personId, channel: 'sms', granted: true, source, wording, address: num || phone, lang, wordingEn }, emit);
   await setOptIn(tx, ws, personId, 'sms', true, emit);
 };
 

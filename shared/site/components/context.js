@@ -233,7 +233,11 @@ export function renderContext({ kind = 'page', site, page, post, campaign, data,
     img: (u) => imageFor(loc, u),
     abs: (p) => absolute(loc, p),
     action: (formKind) => `${loc.root}api/forms/${formKind}`,
-    hidden: (moduleId, extra = {}) => ({ page_id: kind === 'page' ? str(obj(page).id) : '', module_id: moduleId, ref: cleanRef(c.referral), source: cleanSource(c.source), ...extra }),
+    hidden: (moduleId, extra = {}) => ({
+      page_id: kind === 'page' ? str(obj(page).id) : '', module_id: moduleId, ref: cleanRef(c.referral), source: cleanSource(c.source), ...extra,
+      // A translated page's form names the legal words it drew (decision 37).
+      ...(lang !== 'en' && legal.id ? { legal_v: `${legal.id}.${str(legal.hash)}` } : {}),
+    }),
     sentFor: (formKind, moduleId) => Boolean(sent && sent.kind === formKind && (!sent.module || sent.module === moduleId)),
     // The opening a plain sign-up was for ('' when not named).
     sentItem: () => (sent && sent.kind === 'rsvp' ? sent.shift : ''),

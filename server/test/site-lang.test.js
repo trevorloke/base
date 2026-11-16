@@ -1,0 +1,425 @@
+// The website in Punjabi and Chinese (TR, SITE.md "Languages"): each
+// language at its own prefix (/pa, /zh, /zh-hant), offered only once it is
+// on, "Authorized by" is approved in it and its first translation is done;
+// the switch on every page; forms that keep the words shown in the
+// language shown; the visitor's language remembered; nothing ever
+// translated while a visitor waits. Every call goes to the fake Google
+// (fake-translate.js), never a real one.
+import { test, before, after } from 'node:test';
+import assert from 'node:assert/strict';
+import { startFakeTranslate } from './fake-translate.js';
+
+const fake = await startFakeTranslate();
+const ENV = { GOOGLE_TRANSLATE_KEY: 'test-translate-key-123', GOOGLE_TRANSLATE_API_BASE: fake.url };
+const saved = Object.fromEntries(Object.keys(ENV).map((k) => [k, process.env[k]]));
+Object.assign(process.env, ENV);
+delete process.env.SITE_HOSTS;
+
+const helpers = await import('./site-helpers.js');
+const { send, ok, campaign, member } = helpers;
+const hit = async (...a) => { const r = await helpers.hit(...a); return { ...r, text: r.text.replace(/<!-- -->/g, '') }; };
+const { sweep, segHash, liveStrings, translatorFor } = await import('../ext/site/translate.js');
+const { LEGAL_ENGLISH, LEGAL_KEYS, slotsOf } = await import('../../shared/site/wording.js');
+const { LEGAL_ENGLISH_HASH } = await import('../ext/site/legal.js');
+const { cacheClear } = await import('../ext/site/cache.js');
+const { runDueJobs } = await import('../lib/jobs.js');
+
+const AGENT = 'Ada Example';
+const CONTACT = '604-555-0100';
+let db; let mgr; let ws; let about; let petition;
+
+// Words a manager approves: made-up words in the language, the English's slots kept.
+const approvedWords = (lang, extra = {}) => Object.fromEntries(LEGAL_KEYS.map((k) => [k, `${lang === 'pa' ? 'ਮਨਜ਼ੂਰ' : '批准'} ${k} ${slotsOf(LEGAL_ENGLISH[k]).map((x) => `{${x}}`).join(' ')}`.trim()]).concat(Object.entries(extra)));
+const approve = async (lang, extra) => ok(await mgr.action('site.legal.approve', { lang, words: approvedWords(lang, extra) }), `approve ${lang}`);
+const settingsNow = async () => ok(await mgr.get('/api/site')).settings;
+const saveLanguages = async (patch) => {
+  const s = await settingsNow();
+  return mgr.action('site.settings.save', { languages: { ...s.languages, ...patch } });
+};
+const page = async (slug, title, modules) => {
+  const r = ok(await mgr.action('site.page.create', { title, slug, modules }));
+  ok(await mgr.action('site.page.publish', { id: r.page.id }));
+  return r.page;
+};
+const textOf = (html) => html.replace(/<script[\s\S]*?<\/script>/g, '').replace(/<style[\s\S]*?<\/style>/g, '');
+
+before(async () => {
+  ({ db, mgr, ws } = await campaign('Harbour City Together'));
+  const s = await settingsNow();
+  ok(await mgr.action('site.settings.save', { org: { ...s.org, name: 'Harbour City Together', shortName: '', agentName: AGENT, agentContact: CONTACT } }));
+  about = await page('about', 'About us', [
+    { id: 'band01', kind: 'band', hidden: false, props: { title: 'When we organize,', highlight: 'we win', cta: { label: 'Join us', href: '/join' }, tone: 'accent' } },
+    { id: 'text01', kind: 'text', hidden: false, props: { title: 'Our story', body: 'First paragraph about the work.\n\n- One list item\n- Another list item with Q&A <3\n\nSecond line\nkeeps its break.', tone: 'paper' } },
+    { id: 'news01', kind: 'newsletter', hidden: false, props: { title: 'Get the newsletter', intro: 'News and events.', askPhone: true, buttonLabel: 'Sign up', tone: 'surface' } },
+  ]);
+  const c = ok(await mgr.action('site.campaign.save', { kind: 'petition', title: 'Fix the crossing', statement: 'We ask the city to fix the crossing at Main Street.', excerpt: 'A safer walk to school.' }));
+  petition = c.campaign;
+});
+
+after(async () => {
+  await fake.close();
+  for (const [k, v] of Object.entries(saved)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+});
+
+test('no language on: no switch, nothing queued, /pa goes to the English page', async () => {
+  const home = await hit('/site/about');
+  assert.equal(home.status, 200);
+  assert.ok(!home.text.includes('lang-switch'));
+  assert.match(home.text, /<html lang="en"/);
+  const pa = await hit('/site/pa/about');
+  assert.equal(pa.status, 302);
+  assert.equal(pa.location, '/site/about');
+  assert.equal(pa.headers.get('cache-control'), 'no-store');
+  const jobs = (await db.query("select count(*)::int as n from jobs where workspace_id = $1 and kind = 'site.translate'", [ws])).rows[0].n;
+  assert.equal(jobs, 0);
+});
+
+test('the language prefixes are kept for the site itself', async () => {
+  for (const slug of ['en', 'pa', 'zh', 'zh-hant']) {
+    const r = await mgr.action('site.page.create', { title: `A page ${slug}`, slug });
+    assert.equal(r.status, 400, slug);
+    assert.match(r.json.error, /kept for the site itself/);
+  }
+});
+
+test('only a manager turns a language on', async () => {
+  const staff = await member(mgr, 'staff', 'Sam Example');
+  ok(await mgr.action('permission.member.set', { user_id: staff.id, grant: ['site'], deny: [] }));
+  const s = await settingsNow();
+  const r = await staff.client.action('site.settings.save', { languages: { ...s.languages, on: ['pa'] } });
+  assert.equal(r.status, 403);
+  assert.equal(r.json.error, 'Only a manager can do this');
+  const budget = await staff.client.action('site.settings.save', { languages: { ...s.languages, monthlyChars: 900000 } });
+  assert.equal(budget.status, 403);
+  const legal = await staff.client.action('site.legal.approve', { lang: 'pa', words: approvedWords('pa') });
+  assert.equal(legal.status, 403);
+});
+
+test('turned on: a publish queues one sweep per 30 seconds, and the sweep fills each language', async () => {
+  ok(await saveLanguages({ on: ['pa', 'zh-Hans', 'zh-Hant'] }));
+  const jobs = (await db.query("select key from jobs where workspace_id = $1 and kind = 'site.translate'", [ws])).rows;
+  assert.equal(jobs.length, 1, 'the settings save queued one sweep');
+  // A draft save queues nothing more in the same window; a publish is the same window's job.
+  ok(await mgr.action('site.page.save', { id: about.id, title: 'About us' }));
+  assert.equal((await db.query("select count(*)::int as n from jobs where workspace_id = $1 and kind = 'site.translate'", [ws])).rows[0].n, 1);
+
+  fake.reset();
+  const out = await sweep(db, ws);
+  assert.equal(out.done, true);
+  assert.ok(fake.calls.length >= 2, 'Punjabi and Simplified were sent');
+  for (const c of fake.calls) {
+    assert.notEqual(c.target, 'zh-TW', 'Traditional is never sent');
+    assert.ok(c.q.length <= 128);
+    assert.ok(c.chars <= 25000);
+    assert.equal(c.keyIn, 'header');
+    assert.ok(!c.url.includes('key='), 'the key is never in the address');
+    assert.equal(c.headers['x-goog-api-key'], ENV.GOOGLE_TRANSLATE_KEY);
+  }
+  const counts = Object.fromEntries((await db.query(
+    'select lang, count(*)::int as n from site_translations where workspace_id = $1 group by lang', [ws],
+  )).rows.map((r) => [r.lang, r.n]));
+  assert.ok(counts.pa > 50 && counts['zh-Hans'] > 50);
+  assert.equal(counts['zh-Hant'], counts['zh-Hans'], 'each Simplified row makes a Traditional one');
+  const st = Object.fromEntries((await db.query('select lang, ready_at, rev from site_language_state where workspace_id = $1', [ws])).rows.map((r) => [r.lang, r]));
+  for (const l of ['pa', 'zh-Hans', 'zh-Hant']) assert.ok(st[l]?.ready_at, `${l} ready`);
+  const events = (await db.query("select payload from events where workspace_id = $1 and entity_type = 'site_translation_batch'", [ws])).rows;
+  assert.ok(events.length >= 2);
+});
+
+test('ready but no Authorized by approved: still not offered; approved: the switch appears', async () => {
+  cacheClear(ws);
+  assert.equal((await hit('/site/pa/about')).status, 302);
+  assert.ok(!(await hit('/site/about')).text.includes('lang-switch'));
+  // Approval needs every key, with its slots.
+  const words = approvedWords('pa');
+  const bad = await mgr.action('site.legal.approve', { lang: 'pa', words: { ...words, authorizedBy: 'ਮਨਜ਼ੂਰ {agent}' } });
+  assert.equal(bad.status, 400);
+  assert.match(bad.json.error, /Keep \{agent\} and \{contact\}/);
+  const missing = await mgr.action('site.legal.approve', { lang: 'pa', words: { ...words, donate: '' } });
+  assert.equal(missing.status, 400);
+  await approve('pa', { names: { [AGENT]: 'ਐਡਾ' } });
+  await approve('zh-Hans');
+  await approve('zh-Hant');
+  const en = await hit('/site/about');
+  assert.match(en.text, /class="lang-switch"/);
+  assert.match(en.text, /<a href="\/site\/about\?lang=en" hrefLang="en" lang="en" aria-current="true">English<\/a>/i);
+  assert.match(en.text, /href="\/site\/pa\/about"[^>]*>ਪੰਜਾਬੀ</);
+  assert.match(en.text, /href="\/site\/zh\/about"[^>]*>简体</);
+  assert.match(en.text, /href="\/site\/zh-hant\/about"[^>]*>繁體</);
+  // The skip link stays first.
+  assert.match(en.text, /<body><a class="skip-link"/);
+  assert.equal(en.headers.get('speculation-rules'), '"/site-assets/lang-rules.json"');
+});
+
+test('a Punjabi page: lang, links under /pa, the footer twice, fallbacks in English', async () => {
+  const r = await hit('/site/pa/about');
+  assert.equal(r.status, 200);
+  assert.match(r.text, /<html lang="pa"/);
+  assert.match(r.text, /property="og:locale" content="pa_IN"/);
+  assert.match(r.text, /<meta name="robots" content="noindex">/, 'not listed in search until a manager says so');
+  // Every site link and form stays in Punjabi.
+  for (const m of r.text.matchAll(/(?:href|action)="(\/site\/[^"]*)"/g)) {
+    if (m[1].startsWith('/site/pa') || m[1].includes('lang=en') || /^\/site\/(about|zh|zh-hant)/.test(m[1]) || m[1] === '/site/') continue;
+    if (/^\/site\/(?!site-assets)/.test(m[1])) assert.fail(`a link left Punjabi: ${m[1]}`);
+  }
+  assert.match(r.text, /action="\/site\/pa\/api\/forms\/newsletter"/);
+  // The footer: the English line as always, then the approved Punjabi with the names as typed.
+  assert.match(r.text, new RegExp(`<p class="footer-authorization" lang="en">Authorized by ${AGENT}, ${CONTACT}</p><p class="footer-authorization" lang="pa">ਮਨਜ਼ੂਰ authorizedBy ${AGENT} ${CONTACT}</p>`));
+  // The translated note, with the official English a link away (no ?lang=en).
+  assert.match(r.text, /<p class="lang-note"><span lang="pa">ਮਨਜ਼ੂਰ translatedNote<\/span> <a href="\/site\/about" hrefLang="en" lang="pa">/);
+  // The band drawn whole, its underlined part kept.
+  assert.match(r.text, /<h2 id="m-band01-title" class="display">[^<]+<span class="underline">[^<]+<\/span>/);
+  assert.ok(!r.text.includes('When we organize'), 'the band is translated');
+  // Markdown: a list item each, a line break kept, "Q&A <3" back as written.
+  const pa = await translatorFor(db, ws, 'pa');
+  const qa = pa.look('Another list item with Q&A <3');
+  assert.equal(qa.lang, 'pa');
+  assert.match(qa.text, /&/);
+  assert.match(qa.text, /<3/);
+  assert.ok(!/&#39;|&amp;|&quot;/.test(qa.text), 'entities decoded before storing');
+  const two = pa.look('Second line\nkeeps its break.');
+  assert.equal(two.lang, 'pa');
+  assert.match(two.text, /\n/);
+  // The island's props carry their words.
+  const props = /data-island-props="i-news01-form"[^>]*>([^<]+)</.exec(r.text);
+  assert.ok(props, 'the newsletter island');
+  const p = JSON.parse(props[1]);
+  assert.ok(p.w && p.w['form.sending'] && p.w['form.sending'] !== 'Sending…');
+  assert.match(p.hidden.legal_v, new RegExp(`^[0-9a-f-]{36}\\.${LEGAL_ENGLISH_HASH}$`));
+});
+
+test('the site’s own addresses answer 404 under a prefix; routes answer on /zh and /zh-hant', async () => {
+  for (const pth of ['/site/pa/robots.txt', '/site/pa/sitemap.xml', '/site/pa/preferences', '/site/pa/unsubscribe']) {
+    assert.equal((await hit(pth)).status, 404, pth);
+  }
+  assert.equal((await hit('/site/zh/')).status, 200);
+  const act = await hit(`/site/zh-hant/act/${petition.slug}`);
+  assert.equal(act.status, 200);
+  assert.match(act.text, /<html lang="zh-Hant"/);
+  assert.equal((await hit('/site/zh/news')).status, 200);
+});
+
+test('remembered: a /pa page sets site_lang, a prefetch doesn’t; / redirects, ?lang=en forgets', async () => {
+  const r = await hit('/site/pa/about');
+  assert.match(r.headers.get('set-cookie') || '', /site_lang=pa; Max-Age=31536000; Path=\/site; SameSite=Lax/);
+  const pre = await hit('/site/pa/about', { headers: { 'sec-purpose': 'prefetch;prerender' } });
+  assert.equal(pre.headers.get('set-cookie'), null);
+  const pre2 = await hit('/site/pa/about', { headers: { purpose: 'prefetch' } });
+  assert.equal(pre2.headers.get('set-cookie'), null);
+  const back = await hit('/site/', { headers: { cookie: 'site_lang=pa' } });
+  assert.equal(back.status, 302);
+  assert.equal(back.location, '/site/pa/');
+  assert.equal(back.headers.get('cache-control'), 'no-store');
+  assert.equal((await hit('/site/about', { headers: { cookie: 'site_lang=pa' } })).status, 200, 'only the home page redirects');
+  assert.equal((await hit('/site/', { headers: { 'accept-language': 'pa-IN,pa;q=0.9' } })).status, 200, 'never by browser language');
+  const en = await hit('/site/about?lang=en', { headers: { cookie: 'site_lang=pa' } });
+  assert.equal(en.status, 200);
+  assert.match(en.headers.get('set-cookie') || '', /site_lang=;/);
+  assert.equal(en.headers.get('cache-control'), 'no-store');
+  const rules = await hit('/site-assets/lang-rules.json');
+  assert.equal(rules.headers.get('content-type'), 'application/speculationrules+json');
+  assert.match(rules.text, /\?lang=/);
+});
+
+test('a newsletter on /pa keeps the approved Punjabi words, its language and the English', async () => {
+  const r = await hit('/site/pa/about');
+  const p = JSON.parse(/data-island-props="i-news01-form"[^>]*>([^<]+)</.exec(r.text)[1]);
+  const email = `nl-${Math.random().toString(36).slice(2, 7)}@example.org`;
+  ok(await send('newsletter', { first_name: 'Kiran', email, consent_email: true, ...p.hidden, lang: 'en' }, { root: '/site/pa' }));
+  const ev = (await db.query("select * from consent_events where workspace_id = $1 and address = $2 and channel = 'email'", [ws, email])).rows[0];
+  assert.equal(ev.lang, 'pa', 'the address’s language, never the body’s');
+  assert.equal(ev.wording, 'ਮਨਜ਼ੂਰ newsletter Harbour City Together');
+  assert.match(ev.wording_en, /^By signing up you agree to get email from Harbour City Together/);
+  const e = (await db.query("select payload from events where workspace_id = $1 and entity_type = 'consent_event' and entity_id = $2", [ws, ev.id])).rows[0];
+  assert.equal(e.payload.lang, 'pa');
+  assert.equal(e.payload.wording_en, ev.wording_en);
+  const act = (await db.query("select lang from site_actions where workspace_id = $1 and kind = 'newsletter' order by created_at desc limit 1", [ws])).rows[0];
+  assert.equal(act.lang, 'pa');
+  // Another language's approval, another release's English, none: refused, nothing kept.
+  const zhId = (await db.query("select id from site_legal_words where workspace_id = $1 and lang = 'zh-Hans'", [ws])).rows[0].id;
+  for (const legal_v of [`${zhId}.${LEGAL_ENGLISH_HASH}`, `${p.hidden.legal_v.split('.')[0]}.000000000000`, '']) {
+    const e2 = `nl-${Math.random().toString(36).slice(2, 7)}@example.org`;
+    const bad = await send('newsletter', { email: e2, consent_email: true, ...p.hidden, legal_v }, { root: '/site/pa' });
+    assert.equal(bad.status, 400, legal_v);
+    assert.equal((await db.query('select count(*)::int as n from consent_events where workspace_id = $1 and address = $2', [ws, e2])).rows[0].n, 0);
+  }
+  // After a newer approval, the older page's legal_v still keeps the older words.
+  await approve('pa', { names: { [AGENT]: 'ਐਡਾ' }, newsletter: 'ਨਵਾਂ newsletter {org}' });
+  const e3 = `nl-${Math.random().toString(36).slice(2, 7)}@example.org`;
+  ok(await send('newsletter', { email: e3, consent_email: true, ...p.hidden }, { root: '/site/pa' }));
+  assert.equal((await db.query("select wording from consent_events where workspace_id = $1 and address = $2", [ws, e3])).rows[0].wording, 'ਮਨਜ਼ੂਰ newsletter Harbour City Together');
+});
+
+test('a plain (no-JavaScript) post on /zh keeps the Simplified words', async () => {
+  const r = await hit('/site/zh/about');
+  const legalV = /name="legal_v" value="([^"]+)"/.exec(r.text)?.[1];
+  assert.ok(legalV);
+  const email = `plain-${Math.random().toString(36).slice(2, 7)}@example.org`;
+  const res = await hit('/site/zh/api/forms/newsletter', { method: 'POST', form: { email, consent_email: 'true', legal_v: legalV, module_id: 'news01', page_id: about.id } });
+  assert.equal(res.status, 303);
+  assert.match(res.location, /^\/site\/zh\/about\?sent=newsletter/);
+  const ev = (await db.query("select lang, wording from consent_events where workspace_id = $1 and address = $2", [ws, email])).rows[0];
+  assert.equal(ev.lang, 'zh-Hans');
+  assert.equal(ev.wording, '批准 newsletter Harbour City Together');
+});
+
+test('a petition: the statement in English until checked, then translated; the words signed are kept', async () => {
+  const page1 = await hit(`/site/pa/act/${petition.slug}`);
+  const h = segHash(petition.statement);
+  assert.match(page1.text, /<blockquote class="act-statement" lang="en">/);
+  assert.ok(page1.text.includes(`statement_v&quot;:&quot;en:${h}`) || page1.text.includes(`"statement_v":"en:${h}"`) || page1.text.includes(`en:${h}`));
+  // A person checks it.
+  await db.query("update site_translations set checked_at = now(), checked_by = $3 where workspace_id = $1 and lang = 'pa' and src_hash = $2", [ws, h, null]);
+  await db.query("update site_language_state set rev = rev + 1 where workspace_id = $1 and lang = 'pa'", [ws]);
+  cacheClear(ws);
+  const page2 = await hit(`/site/pa/act/${petition.slug}`);
+  assert.ok(!/<blockquote class="act-statement" lang="en">/.test(page2.text));
+  const v = (await db.query("select version_id, text from site_translations where workspace_id = $1 and lang = 'pa' and src_hash = $2", [ws, h])).rows[0];
+  assert.ok(page2.text.includes(v.version_id));
+  const legalV = /legal_v&quot;:&quot;([^&]+)&quot;|"legal_v":"([^"]+)"/.exec(page2.text);
+  const lv = legalV[1] || legalV[2];
+  // A reviewer corrects the statement after the page was drawn: the old page's signature keeps the old words.
+  await db.query("update site_translations set text = 'ਨਵੇਂ ਸ਼ਬਦ' where workspace_id = $1 and lang = 'pa' and src_hash = $2", [ws, h]);
+  const email = `sig-${Math.random().toString(36).slice(2, 7)}@example.org`;
+  ok(await send('petition', { first_name: 'Jas', last_name: 'Example', email, postal_code: 'V3T 1A1', campaign: petition.id, legal_v: lv, statement_v: v.version_id }, { root: '/site/pa' }));
+  const a = (await db.query("select payload, lang from site_actions where workspace_id = $1 and kind = 'petition' order by created_at desc limit 1", [ws])).rows[0];
+  assert.equal(a.lang, 'pa');
+  assert.equal(a.payload.statement_shown, v.text);
+  assert.equal(a.payload.statement_lang, 'pa');
+  // Another petition's or language's version: refused.
+  const zhv = (await db.query("select version_id from site_translations where workspace_id = $1 and lang = 'zh-Hans' and src_hash = $2", [ws, h])).rows[0].version_id;
+  const bad = await send('petition', { first_name: 'Jas', email: `x${email}`, postal_code: 'V3T 1A1', campaign: petition.id, legal_v: lv, statement_v: zhv }, { root: '/site/pa' });
+  assert.equal(bad.status, 400);
+});
+
+test('a key whose English changed shows in English and keeps English; Authorized-by changed withdraws the language', async () => {
+  // As if a release changed the newsletter's English since the approval.
+  await db.query("update site_legal_words set english = jsonb_set(english, '{newsletter}', '\"old words\"') where workspace_id = $1 and lang = 'zh-Hans'", [ws]);
+  await db.query("update site_language_state set rev = rev + 1 where workspace_id = $1", [ws]);
+  cacheClear(ws);
+  const r = await hit('/site/zh/about');
+  assert.equal(r.status, 200);
+  const p = JSON.parse(/data-island-props="i-news01-form"[^>]*>([^<]+)</.exec(r.text)[1]);
+  assert.equal(p.smallLang, 'en');
+  assert.match(p.small, /^By signing up you agree/);
+  const email = `st-${Math.random().toString(36).slice(2, 7)}@example.org`;
+  ok(await send('newsletter', { email, consent_email: true, ...p.hidden }, { root: '/site/zh' }));
+  const ev = (await db.query('select lang, wording from consent_events where workspace_id = $1 and address = $2', [ws, email])).rows[0];
+  assert.equal(ev.lang, 'en');
+  assert.match(ev.wording, /^By signing up/);
+  await db.query("update site_legal_words set english = jsonb_set(english, '{authorizedBy}', '\"Paid for by {agent}, {contact}\"') where workspace_id = $1 and lang = 'zh-Hans'", [ws]);
+  cacheClear(ws);
+  assert.equal((await hit('/site/zh/about')).status, 302);
+  assert.ok(!(await hit('/site/about')).text.includes('>简体<'));
+  // Put back for the tests after.
+  await approve('zh-Hans');
+});
+
+test('a volunteer form on /pa keeps English role values; a contact on /zh files the English topic', async () => {
+  const vol = await page('helpers', 'Help out', [
+    { id: 'vol001', kind: 'volunteer', hidden: false, props: { title: 'Volunteer', intro: '', roles: ['Knock on doors'], askAvailability: false, tone: 'paper' } },
+    { id: 'con001', kind: 'contact', hidden: false, props: { title: 'Write to us', intro: '', topics: ['Housing'] } },
+  ]);
+  ok(await sweep(db, ws).then((x) => ({ status: 200, json: x })));
+  cacheClear(ws);
+  const r = await hit('/site/pa/helpers');
+  assert.equal(r.status, 200);
+  const props = JSON.parse(/data-island-props="i-vol001-form"[^>]*>([^<]+)</.exec(r.text)[1]);
+  const roles = props.fields.find((f) => f.name === 'roles');
+  assert.equal(roles.options[0].value, 'Knock on doors');
+  assert.notEqual(roles.options[0].label, 'Knock on doors');
+  ok(await send('volunteer', { first_name: 'Raj', last_name: 'Example', email: `v${Date.now()}@example.org`, roles: ['Knock on doors'], ...props.hidden }, { root: '/site/pa' }));
+  const a = (await db.query("select payload from site_actions where workspace_id = $1 and kind = 'volunteer' order by created_at desc limit 1", [ws])).rows[0];
+  assert.deepEqual(a.payload.roles, ['Knock on doors']);
+  assert.ok(vol);
+});
+
+test('preferences in the visitor’s language: approved words, kept with the language', async () => {
+  const { personToken } = await import('../ext/site/public.js');
+  const email = `pref-${Math.random().toString(36).slice(2, 7)}@example.org`;
+  ok(await send('newsletter', { email, consent_email: true }));
+  const person = (await db.query('select id from persons where workspace_id = $1 and email = $2', [ws, email])).rows[0];
+  const t = await personToken(ws, person.id);
+  const g = await hit(`/site/preferences?t=${encodeURIComponent(t)}&lang=pa`);
+  assert.equal(g.status, 200);
+  assert.match(g.text, /<html lang="pa"/);
+  assert.match(g.text, /ਮਨਜ਼ੂਰ email Harbour City Together/);
+  const legalV = /name="legal_v" value="([^"]+)"/.exec(g.text)[1];
+  // Off, then on again from the Punjabi page.
+  await hit(`/site/preferences?t=${encodeURIComponent(t)}&lang=pa`, { method: 'POST', form: { t, legal_v: legalV } });
+  const on = await hit(`/site/preferences?t=${encodeURIComponent(t)}&lang=pa`, { method: 'POST', form: { t, legal_v: legalV, email: 'on' } });
+  assert.equal(on.status, 200);
+  const ev = (await db.query("select lang, wording, wording_en from consent_events where workspace_id = $1 and person_id = $2 and source = 'preferences' and granted order by created_at desc limit 1", [ws, person.id])).rows[0];
+  assert.equal(ev.lang, 'pa');
+  assert.equal(ev.wording, 'ਮਨਜ਼ੂਰ email Harbour City Together');
+  assert.match(ev.wording_en, /^Yes, Harbour City Together can email me/);
+  // The cookie does the same when there is no ?lang.
+  const viaCookie = await hit(`/site/unsubscribe?t=${encodeURIComponent(t)}`, { headers: { cookie: 'site_lang=pa' } });
+  assert.match(viaCookie.text, /<html lang="pa"/);
+});
+
+test('<head> and the sitemap: alternates only for languages search may list', async () => {
+  let en = await hit('/site/about', { host: 'localhost' });
+  assert.ok(!/hreflang="pa"/.test(en.text));
+  ok(await saveLanguages({ index: { pa: true, 'zh-Hans': false, 'zh-Hant': false } }));
+  en = await hit('/site/about');
+  assert.match(en.text, /<link rel="alternate" hreflang="en" href="http:\/\/localhost\/site\/about">/);
+  assert.match(en.text, /<link rel="alternate" hreflang="pa" href="http:\/\/localhost\/site\/pa\/about">/);
+  assert.match(en.text, /<link rel="alternate" hreflang="x-default" href="http:\/\/localhost\/site\/about">/);
+  assert.ok(!/hreflang="zh-Hans"/.test(en.text));
+  const pa = await hit('/site/pa/about');
+  assert.ok(!/name="robots" content="noindex"/.test(pa.text));
+  assert.match(pa.text, /<link rel="canonical" href="http:\/\/localhost\/site\/pa\/about">/);
+  const sm = await hit('/site/sitemap.xml');
+  assert.match(sm.text, /xmlns:xhtml/);
+  const urls = [...sm.text.matchAll(/<url>([\s\S]*?)<\/url>/g)].map((m) => m[1]);
+  const aboutUrls = urls.filter((u) => /<loc>[^<]*\/about<\/loc>/.test(u));
+  assert.equal(aboutUrls.length, 2, 'English and Punjabi');
+  for (const u of aboutUrls) {
+    assert.match(u, /hreflang="en"/);
+    assert.match(u, /hreflang="pa"/);
+    assert.match(u, /hreflang="x-default"/);
+  }
+  const robots = await hit('/site/robots.txt');
+  assert.match(robots.text, /Disallow: \/site\/pa\/api\//);
+});
+
+test('the referral cookie set on /pa/r/<code> belongs to the whole site', async () => {
+  const r = await hit('/site/pa/r/abcdef12');
+  assert.equal(r.status, 302);
+  assert.equal(r.location, '/site/pa/');
+  assert.match(r.headers.get('set-cookie') || '', /site_ref=abcdef12;[^,]*Path=\/site;/);
+});
+
+test('the export carries the language tables', async () => {
+  const r = ok(await mgr.get('/api/export'));
+  for (const t of ['site_translations', 'site_translation_versions', 'site_translation_failures', 'site_legal_words', 'site_language_state', 'site_translate_usage']) {
+    assert.ok(Array.isArray(r[t] || r.tables?.[t]), t);
+  }
+});
+
+test('a language turned off answers 302 to English and its form post 400 with nothing kept', async () => {
+  ok(await saveLanguages({ on: ['pa', 'zh-Hans'] }));
+  cacheClear(ws);
+  const r = await hit('/site/zh-hant/about');
+  assert.equal(r.status, 302);
+  assert.equal(r.location, '/site/about');
+  const en = await hit('/site/about');
+  assert.match(en.text, />中文</, 'one Chinese left: 中文');
+  const email = `off-${Math.random().toString(36).slice(2, 7)}@example.org`;
+  const post = await send('newsletter', { email, consent_email: true }, { root: '/site/zh-hant' });
+  assert.equal(post.status, 400);
+  assert.equal(post.json.error, 'This page changed — please reload it and send again');
+  assert.equal((await db.query('select count(*)::int as n from persons where workspace_id = $1 and email = $2', [ws, email])).rows[0].n, 0);
+  ok(await saveLanguages({ on: ['pa', 'zh-Hans', 'zh-Hant'] }));
+});
+
+test('the job runner runs a queued sweep, and a draft save queues none', async () => {
+  await db.query("delete from jobs where workspace_id = $1 and kind = 'site.translate'", [ws]);
+  ok(await mgr.action('site.translate.now', {}));
+  await db.query("update jobs set run_at = now() where workspace_id = $1 and kind = 'site.translate'", [ws]);
+  const out = await runDueJobs(db, { workspaceId: ws });
+  assert.equal(out.ran, 1);
+  const segs = await liveStrings(db, { id: ws });
+  assert.ok(segs.length > 50);
+});

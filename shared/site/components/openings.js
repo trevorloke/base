@@ -154,7 +154,7 @@ export function Openings({ uid, variant = 'shifts', action, hidden = {}, privacy
 
   // A place with no words of its own (a pin nobody has named) is its map.
   const whereLine = (it) => (it.where || it.map ? html`<p className="event-where">
-    ${it.map ? html`<a href=${it.map} target="_blank" rel="noopener noreferrer"><${Icon} name="pin" size=${16} />${it.where || W('open.seeMap')}<span className="visually-hidden">${W('open.mapNewTab')}</span></a>` : it.where}
+    ${it.map ? html`<a href=${it.map} target="_blank" rel="noopener noreferrer"><${Icon} name="pin" size=${16} />${it.where || W('open.seeMap')}<span className="visually-hidden">${` ${W('open.mapNewTab')}`}</span></a>` : it.where}
   </p>` : null);
 
   return html`<div className=${cx('openings', `openings--${variant}`)}>

@@ -45,10 +45,12 @@ import { newId, canonical } from '../../lib/events.js';
 import { httpError } from '../../actions/util.js';
 import { readUpload } from '../abtests/media.js';
 import { brandKey } from '../../lib/brand.js';
-import { SECTIONS, slugify, slugProblem, SYSTEM_SLUGS, RESERVED_SLUGS, hostOf } from './shape.js';
+import { SECTIONS, sectionOf, slugify, slugProblem, SYSTEM_SLUGS, RESERVED_SLUGS, hostOf } from './shape.js';
 import { ensureSiteTx, parseJ, pageOut, postOut, campaignOut, forgetDomains, isAppHost, envHosts, appHostSeen, usedWhy } from './store.js';
 import { cacheClear } from './cache.js';
 import { micrositeActions, hostProblem, takeHeld, roomForPage } from './microsites.js';
+import { languageActions } from './language-actions.js';
+import { markRetranslate } from './translate.js';
 
 const MANAGER = ['manager'];
 const DESK = ['manager', 'treasurer', 'staff'];
@@ -193,12 +195,24 @@ export const actions = {
     theme: z.record(z.string(), z.any()).optional(),
     nav: z.any().optional(), footer: z.any().optional(), announcement: z.any().optional(),
     seo: z.any().optional(), org: z.any().optional(), social: z.any().optional(),
+    languages: z.any().optional(),
     domains: z.array(z.string().max(300)).max(10).optional(),
   }), async (tx, ctx, input, emit) => {
     const ws = ctx.workspaceId;
     const sets = [];
     const params = [ws];
     const changed = {};
+    // The website's languages (TR): turning one on publishes election
+    // advertising in it, and the budget is a campaign expense — a manager's.
+    let langWas = null;
+    if (input.languages !== undefined) {
+      langWas = sectionOf('languages', parseJ((await tx.query('select languages from site_settings where workspace_id = $1', [ws])).rows[0]?.languages, {}));
+      const next = SECTIONS.languages.safeParse(input.languages);
+      if (next.success && ctx.role !== 'manager') {
+        const same = (k) => JSON.stringify(next.data[k]) === JSON.stringify(langWas[k]);
+        if (!['on', 'index', 'monthlyChars', 'oldPosts'].every(same)) throw httpError(403, 'Only a manager can do this');
+      }
+    }
     // Who authorized the site, when a save leaves it out (a desk build from
     // before it was asked for): as it was, never wiped.
     if (input.org && typeof input.org === 'object') {
@@ -286,6 +300,11 @@ export const actions = {
     if (!sets.length) throw httpError(400, 'Nothing to save');
     await tx.query(`update site_settings set ${sets.join(', ')}, updated_at = now() where workspace_id = $1`, params);
     emit('site_settings', ws, 'update', changed);
+    if (changed.languages && langWas) {
+      // A name kept from now on: machine words holding it are made again.
+      const added = changed.languages.keep.filter((n) => !langWas.keep.includes(n));
+      if (added.length) await markRetranslate(tx, ws, added);
+    }
     const row = (await tx.query('select updated_at from site_settings where workspace_id = $1', [ws])).rows[0];
     return { saved: Object.keys(changed), updated_at: iso(row.updated_at) };
   }),
@@ -628,5 +647,6 @@ export const actions = {
 };
 
 Object.assign(actions, micrositeActions(siteAction));
+Object.assign(actions, languageActions(siteAction));
 
 const SIG = `(select count(distinct a.person_id)::int from site_actions a where a.workspace_id = c.workspace_id and a.campaign_id = c.id and a.kind in ('petition', 'pledge'))`;

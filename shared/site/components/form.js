@@ -325,7 +325,7 @@ export function SiteForm(props) {
     }
   };
 
-  const total = cents ? ` ${money(cents)}${amount?.monthly && cadence === 'monthly' ? W('form.aMonth') : ''}` : '';
+  const total = cents ? ` ${money(cents)}${amount?.monthly && cadence === 'monthly' ? ` ${W('form.aMonth')}` : ''}` : '';
   return html`<form className=${cx('site-form', layout === 'inline' ? 'site-form--inline' : 'form-card')} method="post" action=${action}
       noValidate=${live || undefined} onSubmit=${onSubmit} onChange=${edited} aria-busy=${pending ? 'true' : undefined} aria-labelledby=${title ? `${uid}-title` : undefined}>
     ${title ? html`<h3 className="form-title" id=${`${uid}-title`}>${title}</h3>` : null}

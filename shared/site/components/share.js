@@ -49,7 +49,7 @@ export function ShareSheet({ uid, url, here, text, subject, label: given, tone, 
         <a className=${`share-sheet__link share-sheet__link--${c.key}`} href=${links[c.key]} target=${OUTSIDE.has(c.key) ? '_blank' : undefined} rel=${OUTSIDE.has(c.key) ? 'noopener noreferrer' : undefined}>
           <${Icon} name=${c.key} />
           <span>${w ? W(`share.${c.key}`) : c.label}</span>
-          ${OUTSIDE.has(c.key) ? html`<span className="visually-hidden">${W('share.newTab')}</span>` : null}
+          ${OUTSIDE.has(c.key) ? html`<span className="visually-hidden">${` ${W('share.newTab')}`}</span>` : null}
         </a>
       </li>`)}
       <li className="js-only">

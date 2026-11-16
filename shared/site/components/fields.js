@@ -11,11 +11,11 @@ const describedBy = (...ids) => ids.filter(Boolean).join(' ') || undefined;
 // and the English as it always read.
 export function FieldError({ id, error, W }) {
   if (!error) return null;
-  return html`<p className="field-error" id=${id}><span className="visually-hidden">${W ? W('field.error') : 'Error: '}</span>${error}</p>`;
+  return html`<p className="field-error" id=${id}><span className="visually-hidden">${W ? `${W('field.error')} ` : 'Error: '}</span>${error}</p>`;
 }
 
 function Label({ id, label, optional, W }) {
-  return html`<label htmlFor=${id}>${label}${optional ? html`<span className="opt">${W ? W('field.optional') : ' (optional)'}</span>` : null}</label>`;
+  return html`<label htmlFor=${id}>${label}${optional ? html`<span className="opt">${W ? ` ${W('field.optional')}` : ' (optional)'}</span>` : null}</label>`;
 }
 
 // text, email, tel, date and textarea.
@@ -73,7 +73,7 @@ export function Check({ id, name, label, required, error, hint, value = 'true', 
 export function Choices({ id, name, legend, options = [], type = 'checkbox', required, optional, error, value, columns, W }) {
   const errId = error ? `${id}-error` : null;
   return html`<fieldset className="group" id=${id} aria-describedby=${describedBy(errId)}>
-    <legend>${legend}${optional ? html`<span className="opt">${W ? W('field.optional') : ' (optional)'}</span>` : null}</legend>
+    <legend>${legend}${optional ? html`<span className="opt">${W ? ` ${W('field.optional')}` : ' (optional)'}</span>` : null}</legend>
     <div className=${cx('choices', columns && 'choices--grid')}>
       ${options.map((o, i) => html`<label key=${o.value} className="check" htmlFor=${`${id}-${i}`}>
         <input type=${type} id=${`${id}-${i}`} name=${name} value=${o.value} required=${type === 'radio' && required ? true : undefined} defaultChecked=${value != null && String(value) === String(o.value) ? true : undefined} aria-invalid=${error ? 'true' : undefined} />

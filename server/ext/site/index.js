@@ -51,6 +51,8 @@ export { actions } from './actions.js';
 export { api } from './api.js';
 export { publicRoutes, siteGate, personToken } from './public.js';
 import { consentFromEvents, consentEventsToRead } from './consent.js';
+import { queueFromHook, translationEvents, translateJob } from './translate.js';
+import { translateKey } from '../../lib/translate.js';
 
 // A record merged into another (ext/duplicates moves every person_id column;
 // a referrer is site_actions.referrer_id): the referrals follow it.
@@ -69,11 +71,15 @@ const referralsFollowMerge = async (tx, meta, events) => {
 // here never costs the write it rides on — it is logged, and the write goes on.
 export const hooks = {
   events: async (tx, meta, events) => {
-    if (!consentEventsToRead(meta, events).length && !merges(events).length) return;
+    // A publish (or a settings, post, petition, website, shift or candidate
+    // write) queues the translation sweep when a language is on (TR).
+    const translating = Boolean(translateKey()) && translationEvents(meta, events).length > 0;
+    if (!consentEventsToRead(meta, events).length && !merges(events).length && !translating) return;
     await tx.query('savepoint site_hook');
     try {
       await consentFromEvents(tx, meta, events);
       await referralsFollowMerge(tx, meta, events);
+      if (translating) await queueFromHook(tx, meta, events);
       await tx.query('release savepoint site_hook');
     } catch (e) {
       await tx.query('rollback to savepoint site_hook');
@@ -84,5 +90,8 @@ export const hooks = {
 
 // In GET /api/export (rows of this campaign). site_keys holds the server's
 // signing secret and is never exported.
+// The translation sweep (translate.js): one at a time per campaign.
+export const jobs = { 'site.translate': translateJob };
+
 export const exportTables = ['site_settings', 'site_pages', 'site_posts', 'site_campaigns', 'site_actions', 'consent_events', 'microsites',
   'site_translations', 'site_translation_versions', 'site_translation_failures', 'site_legal_words', 'site_language_state', 'site_translate_usage'];
