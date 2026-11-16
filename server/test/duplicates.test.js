@@ -549,17 +549,24 @@ test('a volunteer granted People still can’t read the duplicates (raw emails, 
   ok(await mgr.action('permission.role.set', { role: 'volunteer', grant: [], deny: [] }));
 });
 
-test('a merge into someone marked Address unknown keeps it unknown; the moves follow the kept record', async () => {
+test('a merge into someone marked Address unknown: the door they left stays left, a new address is taken; the moves follow the kept record', async () => {
   const keep = await mgr.createPerson('Una Moved', { address: '70 Example Ave', city: 'Surrey', lat: 49.13, lng: -122.85 });
   const drop = await mgr.createPerson('Una Moved', { address: '71 Example Ave', city: 'Surrey', lat: 49.14, lng: -122.86 });
   ok(await mgr.action('person.move', { person_id: keep.id, unknown: true }));
   ok(await mgr.action('person.move', { person_id: drop.id, to: { address: '72 Example Ave' } }));
   ok(await mgr.action('person.merge', { keep: keep.id, drop: drop.id }));
-  const p = (await db.query('select address, lat, address_status from persons where id = $1', [keep.id])).rows[0];
-  assert.deepEqual([p.address, p.lat, p.address_status], [null, null, 'unknown'], 'drop’s address and pin don’t bring them back');
+  const p = (await db.query('select address, city, address_status from persons where id = $1', [keep.id])).rows[0];
+  assert.deepEqual([p.address, p.city, p.address_status], ['72 Example Ave', 'Surrey', null], 'drop’s new address is where they live now');
   const moves = (await db.query('select person_id from person_moves where person_id = any($1::uuid[])', [[keep.id, drop.id]])).rows;
   assert.equal(moves.length, 2);
   assert.ok(moves.every((m) => m.person_id === keep.id));
+  // A second record at the door keep left (the list of electors again): still unknown.
+  const k1 = await mgr.createPerson('Uma Moved', { address: '74 Example Ave', city: 'Surrey', lat: 49.13, lng: -122.85 });
+  const d1 = await mgr.createPerson('Uma Moved', { address: '74 example ave', city: 'Surrey', lat: 49.13, lng: -122.85 });
+  ok(await mgr.action('person.move', { person_id: k1.id, unknown: true }));
+  ok(await mgr.action('person.merge', { keep: k1.id, drop: d1.id }));
+  const q1 = (await db.query('select address, lat, address_status from persons where id = $1', [k1.id])).rows[0];
+  assert.deepEqual([q1.address, q1.lat, q1.address_status], [null, null, 'unknown'], 'the old door and pin don’t bring them back');
   // Keep with no address at all takes drop's Address unknown.
   const k2 = await mgr.createPerson('Vic Blank');
   const d2 = await mgr.createPerson('Vic Blank', { address: '73 Example Ave', city: 'Surrey', lat: 49.13, lng: -122.85 });

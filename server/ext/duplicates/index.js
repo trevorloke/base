@@ -166,6 +166,20 @@ const isLoginEmail = async (tx, ws, email) => {
 const FILL = ['email', 'phone', 'address', 'house_number', 'unit', 'city', 'postal', 'rating', 'rated_at', 'voted_at', 'voter_number'];
 const ADDRESS_KEYS = ['address', 'house_number', 'unit', 'city', 'postal'];
 
+// Keep marked Address unknown with no address, drop with one: drop's is
+// new to keep unless it is a door keep's own moves left (undone ones
+// aside), which would only bring the old address back.
+const sameDoor = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+const newAddressFrom = async (tx, ws, keep, drop) => {
+  if (keep.address_status !== 'unknown' || (keep.address != null && keep.address !== '')) return false;
+  if (drop.address == null || drop.address === '') return false;
+  const left = (await tx.query(
+    'select from_address, from_unit from person_moves where workspace_id = $1 and person_id = $2 and undone_at is null and from_address is not null',
+    [ws, keep.id],
+  )).rows;
+  return !left.some((m) => sameDoor(m.from_address, drop.address) && sameDoor(m.from_unit, drop.unit));
+};
+
 // Drop's "Not the same" rulings become keep's: whoever the desk said isn't
 // drop isn't keep either (never keep and keep). Then drop's go.
 const moveRulings = async (tx, ws, keep, drop) => {
@@ -244,13 +258,17 @@ export const actions = {
       // Keep marked Address unknown (ext/moves): that was found at the door,
       // so drop's old address and pin don't bring them back. Keep with no
       // address of its own takes drop's mark.
+      // But drop at an address keep never moved away from is where they
+      // live now (a petition or website join after the door): taken.
       const filled = {};
-      const settled = keep.address_status ? ADDRESS_KEYS : [];
+      const found = await newAddressFrom(tx, ws, keep, drop);
+      const settled = keep.address_status && !found ? ADDRESS_KEYS : [];
       for (const k of FILL) {
         if (settled.includes(k)) continue;
         if ((keep[k] == null || keep[k] === '') && drop[k] != null && drop[k] !== '') filled[k] = drop[k];
       }
-      if (keep.lat == null && drop.lat != null && !keep.address_status) { filled.lat = drop.lat; filled.lng = drop.lng; }
+      if (keep.lat == null && drop.lat != null && (!keep.address_status || found)) { filled.lat = drop.lat; filled.lng = drop.lng; }
+      if (found) filled.address_status = drop.address_status ?? null;
       if (!keep.address_status && drop.address_status && !keep.address && !filled.address) filled.address_status = drop.address_status;
       const tags = [...new Set([...parseJ(keep.tags, []), ...parseJ(drop.tags, [])])];
       const socials = { ...parseJ(drop.socials, {}), ...parseJ(keep.socials, {}) };
