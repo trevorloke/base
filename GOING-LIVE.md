@@ -182,6 +182,35 @@ documentation and has not been run against a real account: before the
 first calling night, make one test call and see its result arrive on the
 person (INTEGRATIONS.md has the steps and what is not confirmed).
 
+Google sign-in: the one client, set up once, before Gmail, Drive or
+Calendar (each adds its own permission and API to it afterwards):
+1. At console.cloud.google.com, create **one project** for the campaign
+   (for example "base.win – Imagine Surrey"). With Google Workspace,
+   create it inside the imaginesurrey.ca organization, so it belongs to
+   the campaign, not to one person. Staging gets its own second project.
+2. Google Auth Platform → **Branding**: the app name people see
+   ("base.win" or the campaign's), a support email the campaign controls,
+   and a home page and privacy policy on the domain of
+   `STARBASE_PUBLIC_URL`. Add that domain under **Authorized domains** and
+   verify it in Google Search Console. The privacy policy is the
+   campaign's to write: it says what base.win does with Google sign-in,
+   Gmail, Drive, Calendar and Maps, and that its use of Google data
+   follows Google's API Services User Data Policy, including the Limited
+   Use requirements.
+3. **Audience**: *Internal* only if everyone signs in with an
+   @imaginesurrey.ca Workspace account; otherwise *External* and
+   **Publish app**. Never leave production in *Testing* (connections end
+   every 7 days).
+4. **Data access**: add `openid`, `.../auth/userinfo.email` and
+   `.../auth/userinfo.profile`.
+5. **Clients → Create client → Web application**, named "base.win", with
+   the one redirect address **Settings → Services → Google** shows
+   (`<STARBASE_PUBLIC_URL>/api/auth/google/back`) and no JavaScript
+   origins. Copy the client id and secret into Render at once
+   (`GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`; Google shows
+   the secret only once), and set `GOOGLE_TOKEN_KEY`.
+6. **Settings → Services → Google → Check**.
+
 Gmail (one email to one person, from a staff member's own Gmail), after
 the Google client above, in the same Google Cloud project:
 1. APIs & Services → Library → enable **Gmail API**. (Skipped, every send
