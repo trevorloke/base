@@ -192,7 +192,13 @@ try {
   check('2. the checklist: key ticked, Authorized by to fill, approval to do', /Translation key/.test(checklist) && /Authorized by \(the agent’s name\)/.test(checklist)
     && (await page.locator('.lg-check[data-done]', { hasText: 'Translation key' }).count()) === 1
     && (await page.locator('.lg-check:not([data-done])', { hasText: 'agent’s name' }).count()) === 1, checklist);
+  check('2. the checklist keeps its spaces ("in ਪੰਜਾਬੀ")', /Authorized by, in ਪੰਜਾਬੀ, approved/.test(checklist), checklist);
   await both('language-getting-ready');
+  // Preview before visitors see it: the home page's draft in Punjabi.
+  const [pv] = await Promise.all([page.context().waitForEvent('page'), page.getByRole('button', { name: /^Preview/ }).click()]);
+  await pv.waitForURL(/__preview\/.*lang=pa/, { timeout: 15000 });
+  check('2. Preview while getting ready opens the home page in ਪੰਜਾਬੀ', await pv.locator('html').getAttribute('lang') === 'pa', pv.url());
+  await pv.close();
   await page.locator('.lg-check a', { hasText: 'agent’s name' }).click();
   await page.waitForURL(/\/website\/settings/);
   await page.locator('#wb-s-agent').waitFor();

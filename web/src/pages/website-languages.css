@@ -84,3 +84,9 @@
 
 /* Possible names: a hint, folded away until asked for */
 .lg-more summary { cursor: pointer; min-height: 48px; display: flex; align-items: center; }
+
+/* A note here says who acts next ("waiting for a second person"): on a
+   phone it wraps to two lines rather than losing its end. */
+@media (max-width: 640px) {
+  .lg-page .toast.wb-toast > span { white-space: normal; overflow: visible; }
+}

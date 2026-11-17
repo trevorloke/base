@@ -105,7 +105,7 @@ export default function WebsiteLanguages() {
   const q = useLanguages();
   const d = q.data;
   return (
-    <div className="wb-page">
+    <div className="wb-page lg-page">
       <div className="ops-head"><h1>Languages</h1></div>
       <WebsiteTabs />
       <p className="wb-help">The website in ਪੰਜਾਬੀ and 中文, translated when you publish and checked by people.</p>
@@ -437,7 +437,7 @@ export function WebsiteLanguage() {
   };
   const label = LANGS[code].label;
   return (
-    <div className="wb-page">
+    <div className="wb-page lg-page">
       <p className="ops-back-row"><Link className="ops-back" to="/website/languages">← Languages</Link></p>
       <div className="ops-head lg-head">
         <h1><span lang={code}>{label}</span> <span className="lg-head__name">{LANGS[code].name}</span></h1>
