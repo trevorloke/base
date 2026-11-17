@@ -139,12 +139,15 @@ export function Footer({ rc }) {
       <div className="footer-bottom">
         ${rc.lang === 'en'
           ? html`<p>© ${year} ${org.name}${org.authorization ? html`<span className="footer-authorization">${org.authorization}</span>` : null}</p>`
-          : html`<p>© ${year} ${org.name}</p>${org.authorization ? html`<p className="footer-authorization" lang="en">${org.authorization}</p>` : null}${(() => {
-            // The line again in the page's language, as a manager approved it
-            // (B.C.'s rule for advertising in another language).
-            const a = rc.legal('authorizedBy');
-            return a.lang !== 'en' ? html`<p className="footer-authorization" lang=${a.lang}>${a.text}</p>` : null;
-          })()}`}
+          : html`<p>© ${year} ${org.name}</p>`}
+        ${rc.lang !== 'en' && org.authorization ? html`<p className="footer-authorization" lang="en">${org.authorization}</p>` : null}
+        ${rc.lang !== 'en' ? (() => {
+          // The line again in the page's language, as a manager approved it
+          // (B.C.'s rule for advertising in another language). One element
+          // per slot: an array here would need keys.
+          const a = rc.legal('authorizedBy');
+          return a.lang !== 'en' ? html`<p className="footer-authorization" lang=${a.lang}>${a.text}</p>` : null;
+        })() : null}
         ${privacy ? html`<p className="footer-legal"><a href=${privacy}>${rc.w('shell.privacy')}</a></p>` : null}
         ${parent ? (() => { const [before, after] = around(rc, 'shell.websiteBy', 'name'); return html`<p className="footer-parent">${before}<a href=${parent.url}>${parent.name}</a>${after}</p>`; })() : null}
       </div>

@@ -334,3 +334,18 @@ test('History: a gift declared in ਪੰਜਾਬੀ shows the words and the Eng
   const signed = t.entries.find((e) => e.kind === 'web');
   assert.match(signed.detail, /Signed in ਪੰਜਾਬੀ: ਅਸੀਂ ਸ਼ਹਿਰ ਨੂੰ ਲਾਂਘਾ ਠੀਕ ਕਰਨ ਲਈ ਕਹਿੰਦੇ ਹਾਂ।/);
 });
+
+test('Preview: the home page in a language that is on, before visitors see it', async () => {
+  const r = ok(await vol.client.get('/api/site/languages/pa/preview'));
+  const u = new URL(r.url, 'http://localhost');
+  assert.match(u.pathname, /^\/site\/__preview\//);
+  assert.equal(u.searchParams.get('lang'), 'pa');
+  const page = await hit(`${u.pathname}${u.search}`);
+  assert.equal(page.status, 200);
+  assert.match(page.text, /<html[^>]* lang="pa"/);
+  assert.match(page.text, /noindex/);
+  ok(await saveLanguages({ on: ['pa', 'zh-Hans'] }));
+  const off = await vol.client.get('/api/site/languages/zh-Hant/preview');
+  assert.equal(off.status, 409);
+  ok(await saveLanguages({ on: ['pa', 'zh-Hans', 'zh-Hant'] }));
+});

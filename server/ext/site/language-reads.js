@@ -13,11 +13,14 @@
 //   GET /site/languages/:code/edits     ?after= the last 50 edits by people
 //   GET /site/languages/:code/legal     the English, the draft, the approved
 //                                       words, the stale keys, the names
+//   GET /site/languages/:code/preview   a half-hour link to the home page's
+//                                       draft in a language that is on
 import { LEGAL_ENGLISH, LEGAL_KEYS, fillSlots } from '../../../shared/site/wording.js';
 import { LANG_BY_CODE, OTHER_CODES } from '../../../shared/site/languages.js';
 import { MODULE_BY_KIND } from '../../../shared/site/catalogue.js';
 import { prepare, translateKey } from '../../lib/translate.js';
 import { here } from '../../lib/mount.js';
+import { sign, PREVIEW_TTL } from './tokens.js';
 import { readSettings, parseJ } from './store.js';
 import { latestLegal, staleKeys, legalSlots } from './legal.js';
 import { liveStrings, languageState, offeredLanguages, keptNames, usageMonth, segHash, convertToTraditional, MAX_NAMES } from './translate.js';
@@ -190,6 +193,20 @@ export const mountLanguageReads = (api, opened) => {
       if (g.essential) essential += n;
     }
     return c.json({ code, converted: false, essential, all, usage });
+  });
+
+  // Preview (decision 35): the home page in that language, so a reviewer
+  // sees the words in place before visitors are offered it.
+  api.get('/site/languages/:code/preview', async (c) => {
+    const code = codeOf(c);
+    if (!code) return c.json({ error: 'No such language' }, 404);
+    const wsId = await opened(c);
+    const db = c.get('db');
+    if (!(await readSettings(db, wsId)).languages.on.includes(code)) return c.json({ error: 'Turn it on first' }, 409);
+    const home = (await db.query("select id from site_pages where workspace_id = $1 and site_id is null and slug = 'home' and deleted_at is null", [wsId])).rows[0];
+    if (!home) return c.json({ error: 'The website has no home page yet' }, 404);
+    const t = await sign('preview', { w: wsId, p: home.id }, PREVIEW_TTL);
+    return c.json({ url: here(c, `/site/__preview/${home.id}?t=${encodeURIComponent(t)}&lang=${encodeURIComponent(code)}`) });
   });
 
   api.get('/site/languages/:code/sentences', async (c) => {

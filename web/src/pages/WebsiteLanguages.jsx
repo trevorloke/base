@@ -177,8 +177,29 @@ function Tick({ done, children, to }) {
     <li className="lg-check" data-done={done ? '' : undefined}>
       <span className="lg-check__mark" aria-hidden="true">{done ? '✓' : '○'}</span>
       <span className="ws-sr">{done ? 'Done: ' : 'To do: '}</span>
-      {done || !to ? children : <Link to={to}>{children}</Link>}
+      {done || !to ? <span>{children}</span> : <Link to={to}><span>{children}</span></Link>}
     </li>
+  );
+}
+
+// Preview before visitors see the language (decision 35): a half-hour link
+// to the home page in it, asked for on the tap (the tab opens first, so no
+// pop-up blocker stops it).
+function DraftPreview({ code, say }) {
+  const open = async () => {
+    const w = window.open('about:blank', '_blank');
+    try {
+      const r = await apiGet(`/site/languages/${code}/preview`);
+      if (w) w.location.href = r.url; else window.location.href = r.url;
+    } catch (e) {
+      if (w) w.close();
+      say(e.message || 'Couldn’t open the preview — try again');
+    }
+  };
+  return (
+    <button type="button" className="btn btn-quiet ops-tap" onClick={open}>
+      Preview<span aria-hidden="true"> ↗</span><span className="ws-sr"> (opens a new tab)</span>
+    </button>
   );
 }
 
@@ -216,7 +237,7 @@ function Sentence({ s, code, mayLive, onDone, say }) {
     setBusy(false);
   };
   const chip = s.suggestion ? ['Suggested', 'chip-warn'] : s.failure ? ['Couldn’t translate', 'chip-warn'] : s.checked_at ? ['Checked', 'chip-ok'] : ORIGIN[s.origin];
-  const save = (e) => { e.preventDefault(); run('site.translation.save', { lang: code, src_hash: s.src_hash, text }, mayLive ? 'Saved — it’s on the site now' : 'Suggested — someone else checks it before it shows'); };
+  const save = (e) => { e.preventDefault(); run('site.translation.save', { lang: code, src_hash: s.src_hash, text }, mayLive ? 'Saved — it’s on the site now' : 'Suggested — waiting for a second person'); };
   const looksRight = () => run('site.translation.check', { lang: code, src_hashes: [s.src_hash] }, 'Checked');
   const rows = Math.min(10, Math.max(2, Math.ceil(((s.text || s.src).length) / 50)));
   return (
@@ -451,6 +472,7 @@ export function WebsiteLanguage() {
           <div className="lg-links">
             <Link className="btn btn-quiet ops-tap" to={`/website/languages/${code}/legal`}>Words the law needs</Link>
             {l.offered && <a className="btn btn-quiet ops-tap" href={`${d.site || '/site'}${LANGS[code].path}/`} target="_blank" rel="noopener">Preview<span aria-hidden="true"> ↗</span><span className="ws-sr"> (opens a new tab)</span></a>}
+            {l.on && !l.offered && <DraftPreview code={code} say={say} />}
             {l.on && l.counts?.waiting > 0 && <button type="button" className="btn btn-quiet ops-tap" onClick={now}>Translate now</button>}
           </div>
           {(l.on || l.counts) && <Sentences code={code} mayLive={mayLive} say={say} failedCount={l.counts?.failed || 0} />}
