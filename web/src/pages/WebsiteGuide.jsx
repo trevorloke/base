@@ -20,6 +20,7 @@ import { DEFAULT_TILES } from '../components/tiles.js';
 import './shifts.css';
 import '../editor.css';
 import './website.css';
+import './surveys.css'; // the Closed today switch (.sv-switch)
 import './vote-guide.css';
 
 const PlaceMap = lazy(() => import('./SchedulePlaceMap.jsx').catch(() => ({ default: () => <p className="wg-err" role="alert">The map didn’t load</p> })));

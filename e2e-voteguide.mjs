@@ -290,6 +290,7 @@ try {
   const gp = pages.find((p) => p.slug === 'voter-guide');
   check('4. the guide page is made as a draft', gp && gp.status !== 'published');
   const moreSaid = await text(mpage, '.wg-more');
+  await mpage.locator('.wg-more').screenshot({ path: `${SHOTS}/04b-more-draft-page-1440.png` }).catch(() => {});
   check('4. More then links to the draft page, and Add the guide page is gone', /Voter guide \(draft\) — open in the builder/.test(moreSaid) && (await mpage.locator('button:has-text("Add the guide page")').count()) === 0, moreSaid.slice(0, 200));
   await act(mpage, 'site.page.publish', { id: gp.id });
   const pub = watch(await (await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 })).newPage(), 'public');
@@ -385,20 +386,24 @@ try {
   check('8. Today’s first row is “Where to vote”', (await vol.page.locator('ul.today-next > li').first().innerText().catch(() => '')).includes('Where to vote'));
   await shot(vol.page, '10-today-row-390');
   const doorOf = (name) => `.walk-door:has(.walk-door__names:has-text("${name}"))`;
+  let tapAt = 0; // the request log's length when "Where to vote" is tapped
   const openDoor = async (name) => {
     await go(vol.page, `${FIELD}/turfs/${turf.id}`);
     await vol.page.waitForSelector('.walk-door', { timeout: 10000 }).catch(() => {});
     if (!(await vol.page.$(`${doorOf(name)}.is-open`))) await vol.page.click(`${doorOf(name)} .walk-door__head`);
     await sleep(500);
     await vol.page.click(`${doorOf(name)} .walk-panel button:has-text("More")`).catch(() => {});
-    await sleep(400);
+    await sleep(800);
+    tapAt = reqs.length;
     await vol.page.click(`${doorOf(name)} .walk-panel button:has-text("Where to vote")`);
     await vol.page.waitForURL(/\/vote-info$/, { timeout: 8000 }).catch(() => {});
     await vol.page.waitForSelector('.vi-page h1', { timeout: 8000 }).catch(() => {});
     await sleep(500);
   };
-  const reqStart = reqs.length;
   await openDoor('Maya Example');
+  // From the tap on "Where to vote" (the walk list's own reads before it —
+  // the door's requests, its people — are the walk list's, not the guide's).
+  const reqStart = tapAt;
   const vi = await text(vol.page, '.vi-page');
   check('8. “Nearest to 12530 Example Street” with three rows', /Nearest to 12530 Example Street/.test(vi) && (await vol.page.locator('#vi-near-h + .vi-places > li').count()) === 3, vi.slice(0, 160));
   check('8. the address bar is /vote-info, nothing more', new URL(vol.page.url()).search === '' && new URL(vol.page.url()).hash === '', vol.page.url());
@@ -407,7 +412,8 @@ try {
   await vol.page.click('button:has-text("Show the voter")');
   await vol.page.waitForSelector('.vi-qr', { timeout: 5000 }).catch(() => {});
   const links = (await api(vol.page, '/guide')).json?.links || {};
-  const expected = `${links.en}?near=${far.lat.toFixed(2)},${far.lng.toFixed(2)}`;
+  // Maya's Language field says Punjabi: the code opens the Punjabi page.
+  const expected = `${links.pa || links.en}?near=${far.lat.toFixed(2)},${far.lng.toFixed(2)}`;
   const drawn = await vol.page.evaluate(() => {
     const svg = document.querySelector('.vi-qr'); if (!svg) return null;
     const size = Number(svg.getAttribute('viewBox').split(' ')[2]);
@@ -430,7 +436,7 @@ try {
   check('8. a reload opens “Where to vote” without the door', /Voting places/.test(await text(vol.page, '.vi-page')) && !/Nearest to/.test(await text(vol.page, '.vi-page')));
   const plain = (u) => { try { return decodeURIComponent(u); } catch { return u; } };
   const leaked = reqs.slice(reqStart).filter((u) => /12530|Example Street|Example\+Street|49\.1253|122\.8012/i.test(plain(u)) || u.includes(maya.id));
-  check('8. from the door to “Where to vote”, the code and a reload, no request carried the door’s address, its full pin or a person id', leaked.length === 0, leaked.join(' '));
+  check('8. from the tap on “Where to vote” to the code and a reload, no request carried the door’s address, its full pin or a person id', leaked.length === 0, leaked.join(' '));
 
   // ── 9. Near a voting place ──
   await openDoor('Harjit Example');
@@ -459,6 +465,7 @@ try {
   await mpage.click('#wg-places [role=switch]:has-text("Closed today")');
   check('7. the switch reads on', (await mpage.getAttribute('#wg-places [role=switch]:has-text("Closed today")', 'aria-checked')) === 'true');
   await shot(mpage, '15a-place-editor-1440');
+  await mpage.locator('#wg-places .wg-place').screenshot({ path: `${SHOTS}/15a2-place-editor-whole-1440.png` }).catch(() => {});
   await mpage.fill('input[aria-label="Why it’s closed"]', 'Power outage — use Sample Secondary School');
   await mpage.click('#wg-places .wg-place button:has-text("Save")');
   await sleep(1200);
@@ -472,6 +479,20 @@ try {
   const closedRow = await text(pub, '.vg-place--closed');
   check('7. the public page: struck, its note, “Changed …”', (await pub.locator('.vg-place--closed').count()) === 1 && /Closed: Power outage/.test(closedRow) && /Changed \d/.test(closedRow), `${await pub.locator('.vg-place--closed').count()} | ${closedRow} | ${pubClosed.slice(pubClosed.indexOf('Example Community Hall') - 20, pubClosed.indexOf('Example Community Hall') + 200)}`);
   await shot(pub, '15b-closed-public-390', true);
+  // The same editor on a phone: the list's row opens it, the switch reads on.
+  await mpage.setViewportSize({ width: 390, height: 844 });
+  await go(mpage, `${DESK}/website/guide`);
+  await mpage.waitForSelector('#wg-places .wg-list', { timeout: 10000 }).catch(() => {});
+  await mpage.click('#wg-places .wg-list .wg-rowbtn:has-text("Example Community Hall")').catch(() => {});
+  await sleep(500);
+  const phoneLook = await mpage.evaluate(() => {
+    const sw = document.querySelector('#wg-places .wg-place [role=switch]');
+    const track = sw?.querySelector('.sv-switch__track');
+    return { track: track ? Math.round(track.getBoundingClientRect().width) : 0, on: sw?.getAttribute('aria-checked') };
+  });
+  check('7. on a phone the editor’s switch shows Closed today on', phoneLook.track >= 24 && phoneLook.on === 'true', JSON.stringify(phoneLook));
+  await mpage.locator('#wg-places .wg-place').screenshot({ path: `${SHOTS}/15c-place-editor-390.png` }).catch(() => {});
+  await mpage.setViewportSize({ width: 1440, height: 900 });
   await openDoor('Harjit Example');
   check('9. the same door when the place is closed today: no warning', !(await vol.page.$('.vi-warn')));
 
