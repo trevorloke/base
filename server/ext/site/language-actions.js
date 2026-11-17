@@ -32,15 +32,18 @@ import { areasFor } from '../../lib/perms.js';
 import { keptNames, queueSweep, bumpRev, liveStrings, convertRow, markRetranslate } from './translate.js';
 import { parseJ } from './store.js';
 import { sectionOf } from './shape.js';
+import { LEGAL_LABELS } from './language-reads.js';
 
 export const legalProblem = (words, kept) => {
+  // Each line by the name its card carries on the screen, never its key.
   for (const k of LEGAL_KEYS) {
     const v = String(words?.[k] ?? '').trim();
-    if (!v) return `Fill in every line (${k} is empty)`;
-    if (v.length > 1000) return `${k} is too long — 1,000 characters at most`;
+    const name = LEGAL_LABELS[k] || k;
+    if (!v) return `Fill in ${name}`;
+    if (v.length > 1000) return `${name} is too long — 1,000 characters at most`;
     const want = slotsOf(LEGAL_ENGLISH[k]);
     const got = slotsOf(v);
-    if (want.join() !== got.join()) return `Keep ${want.map((x) => `{${x}}`).join(' and ') || 'no slots'} in the line (${k})`;
+    if (want.join() !== got.join()) return `Keep ${want.map((x) => `{${x}}`).join(' and ') || 'no slots'} in ${name}`;
   }
   const names = words?.names;
   if (names !== undefined && names !== null) {

@@ -90,3 +90,24 @@
 @media (max-width: 640px) {
   .lg-page .toast.wb-toast > span { white-space: normal; overflow: visible; }
 }
+
+/* Words the law needs: the arrow and the language apart (a flex back link
+   drops the space between them); a waiting note; the card a refusal names. */
+.lg-back__name { margin-left: 0.3em; }
+.lg-wait { margin: 0; padding: var(--s-3) var(--s-4); border: 1px solid var(--rule); border-radius: var(--r-card); background: var(--paper-1); color: var(--text-2); font-size: 14px; }
+.lg-key--bad { border-color: var(--danger); }
+.lg-key--bad .lg-key__box { border-color: var(--danger); }
+/* Possible names opens like every More: a + that turns to − when open. */
+.lg-more summary { list-style: none; gap: var(--s-3); }
+.lg-more summary::-webkit-details-marker { display: none; }
+.lg-more summary::after {
+  content: ''; flex: none; width: 14px; height: 14px; margin-left: auto;
+  background:
+    linear-gradient(currentColor, currentColor) center / 14px 2px no-repeat,
+    linear-gradient(currentColor, currentColor) center / 2px 14px no-repeat;
+}
+.lg-more[open] summary::after { background: linear-gradient(currentColor, currentColor) center / 14px 2px no-repeat; }
+@media (forced-colors: active) {
+  .lg-more summary::after { content: '+'; background: none; width: auto; height: auto; }
+  .lg-more[open] summary::after { content: '−'; }
+}
