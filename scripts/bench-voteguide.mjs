@@ -146,6 +146,14 @@ try {
   say('the phones cost ≤ 13 rev reads a minute', perMinute <= 13, `${c2.rev} rev reads in ${SECONDS} s (${perMinute} a minute) for ${pollTimes.length} polls; guide rows read ${c2.rows} times`);
   say('every phone saw the new rev on its next poll', seen.size === 500 && Math.max(...seen.values()) <= 5500, `${seen.size} phones, slowest ${Math.max(0, ...seen.values())} ms`);
 
+  // ── 3. One address asking 35 times: 429 past 30 a minute ──
+  const mine = [];
+  for (let i = 0; i < 35; i += 1) {
+    const r = await fetch(`${ORIGIN}/site/api/guide/find`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': '10.9.9.9' }, body: JSON.stringify({ address: `${i + 1} Example Ave` }) });
+    const j = await r.json().catch(() => ({}));
+    mine.push(r.status === 429 && !/^Busy/.test(j.error || '') ? 'limited' : r.ok ? 'found' : String(r.status));
+  }
+  say('one address: 429 past 30 a minute', mine.slice(0, 30).every((x) => x === 'found') && mine.slice(30).every((x) => x === 'limited'), mine.join(' '));
   // ── 3. Finds from 200 addresses, 50 a second ──
   lookups = [];
   let perAddress = 0; let busy = 0; let found = 0; let other = 0;

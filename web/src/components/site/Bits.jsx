@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { NavLink, useOutletContext } from 'react-router-dom';
 import { clock } from './useSite.js';
+import './tabs.css';
 
 const TABS = [
   ['/website', 'Overview', true],

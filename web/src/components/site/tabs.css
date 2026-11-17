@@ -1,0 +1,5 @@
+/* Website's tabs (nine with the voter guide) stay on one row at desk
+   widths: a little less padding each side than other segmented rows. */
+@media (min-width: 761px) {
+  .wb-tabs > a.ws-tab { padding-inline: 10px; }
+}

@@ -933,13 +933,17 @@ page). It ships empty: no dates, places, rules or names of its own.
 - **Embed:** `<root>/embed/voter-guide`, framed only by the saved addresses
   (`frame-ancestors`, no `X-Frame-Options`), never cached, with the
   authorization line; `site-assets/embed.js` sets the frame's height.
-- **Field read:** `GET /api/guide?rev=` (every role; `{ same: true }` when
-  unchanged; `?draft=1` for the Website area).
+- **Field read:** `GET /api/guide?rev=&tag=` (every role; `{ same: true }`
+  when neither the guide nor its links changed — `tag` names the links, so
+  a guide page published or a language approved since reaches the phone;
+  `?draft=1` for the Website area, `draft: true` only when it served one).
 - **The desk:** Website → Voter guide (`/website/guide`): the checklist,
   then cards for days, places (typed, or pasted and previewed, "Closed
   today" with its note, a pin put by hand), the ballot (the slate's names
   ticked Ours by themselves), what to bring and the office's link; More
-  holds the mail and ride lines, the banner switch, the guide page, the
+  holds the mail and ride lines, the banner switch, the guide page (Add
+  the guide page while no page holds the module; then a link to it in the
+  builder, draft or not), the
   embed snippet, "See it as a canvasser", Unpublish and Clear. One primary
   button: Publish (a manager) or View guide (live).
 - **The field:** "Where to vote" (`/vote-info`) from Today (while the guide
@@ -948,4 +952,8 @@ page). It ships empty: no dates, places, rules or names of its own.
   leaves the history entry once read. Nearest three with Directions;
   within 150 m of an open place a warning, no QR and no names; "Show the
   voter" draws a QR code on the phone (`shared/qr.js`) with `?near=` at 2
-  decimals. The read is kept on the phone for every role.
+  decimals, in the person's language when their Language field says
+  Punjabi, Mandarin or Cantonese (the walk list's row carries it as
+  `guide_lang`, only where volunteers may see the field — nothing about the
+  person is asked for on the way). The read is kept on the phone for every
+  role.

@@ -1592,4 +1592,7 @@ PORT=5511`) on a file-backed database and restarts it with the clock moved to wa
 the guide from not out to over; a fake address service on 5513 and a framing page
 on 5514. `e2e-voted.mjs` checks GOTV's "The voter guide has other days" line;
 `e2e-site-render.mjs` draws the module in every state. Load, by hand:
-`node scripts/bench-voteguide.mjs` (`SECONDS=10` for a quick look).
+`node scripts/bench-voteguide.mjs` (`SECONDS=10` for a quick look): its server runs
+in a child process over the Postgres wire protocol (`DATABASE_URL`, else PGlite's
+socket server on 5514) and counts the database's queries — page draws per
+address, the guide's rev reads a minute (`BENCH_KINDS=1` lists the commonest).
