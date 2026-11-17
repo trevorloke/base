@@ -97,7 +97,7 @@ Every outside service, its settings and where each key comes from is in
 [INTEGRATIONS.md](INTEGRATIONS.md). The campaign's own values
 (`STARBASE_ORG_NAME`, `_JURISDICTION`, `_TZ`, `_CITY`, `_SLATES`) are in
 `render.yaml` already; change them there for another client. So is the
-brand: staging is `STARBASE_BRAND=base` with the name *Demo Campaign*, so it
+brand: staging is `STARBASE_BRAND=base` with the name *Sample Campaign* in Vancouver, so it
 can be shown to anyone; production is `imagine-surrey`. That is the look each
 starts from: once a manager saves the campaign's own in **Settings → Brand**,
 that one stays, whatever the setting says. A campaign already set up keeps
