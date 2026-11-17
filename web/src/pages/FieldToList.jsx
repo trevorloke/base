@@ -75,8 +75,8 @@ function Plan({ f, words, online, onStarted }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const list = words.words;
-  // Which rows a person must look at: decided once, from the starting list,
-  // so a row doesn't jump while it's being picked.
+  // Which rows a person must look at: from the standard list, not the
+  // choices being typed, so a row doesn't jump while it's being picked.
   const needs = useMemo(() => new Set(list.filter((w) => !guessChoice(f.name, w.word, standard || [])).map((w) => w.word)), [list]); // eslint-disable-line react-hooks/exhaustive-deps
   // A word that is a choice in any spelling always goes to it (the server does the same).
   const toOf = (w) => {
@@ -214,6 +214,9 @@ export default function FieldToList({ id, fields, online, onBack }) {
     staleTime: 0,
   });
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['fields'] });
+  // After a Stop the words on file are new: drop the old ones so the form
+  // starts from what's there now, not from the copy read before it ran.
+  const afterStop = () => { queryClient.removeQueries({ queryKey: ['fields', id, 'words'] }); setStopped(true); setStarted(false); refresh(); };
   const head = (
     <>
       <button type="button" className="ops-back fl-back" onClick={onBack}>← Profile fields</button>
@@ -224,7 +227,7 @@ export default function FieldToList({ id, fields, online, onBack }) {
   let body;
   if (!f) body = <p className="muted">That field isn’t here any more.</p>;
   else if (f.kind === 'choice' && started) body = <p className="ops-done" role="status">✓ {f.name} is now a list</p>;
-  else if (f.converting) body = <Running f={f} online={online} onStopped={() => { setStopped(true); setStarted(false); refresh(); }} />;
+  else if (f.converting) body = <Running f={f} online={online} onStopped={afterStop} />;
   else if (f.kind === 'choice') body = <p className="ops-done" role="status">✓ {f.name} is a list</p>;
   else if (!isText) body = <p className="muted">Only a Text field can be turned into a list.</p>;
   else if (started) body = <p className="muted" role="status">Turning into a list…</p>;
@@ -240,7 +243,9 @@ export default function FieldToList({ id, fields, online, onBack }) {
     body = (
       <>
         {stopped && <p className="ops-done" role="status">Stopped — what was done stays done. Turn into a list again to finish.</p>}
-        <Plan key={`${words.dataUpdatedAt}`} f={f} words={words.data} online={online}
+        {/* Keyed on the field, not the read: a reload of the words (every
+            refetch) updates the counts and never wipes what's been picked. */}
+        <Plan key={f.id} f={f} words={words.data} online={online}
           onStarted={() => { setStarted(true); setStopped(false); refresh(); }} />
       </>
     );

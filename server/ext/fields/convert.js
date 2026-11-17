@@ -27,6 +27,10 @@ import { LIST_SEEDS } from './people.js';
 
 export const CHUNK = 1000;
 const CHUNKS_PER_RUN = 10;
+// The browser suite's handle (e2e-picklists.mjs): smaller chunks and a
+// pause between them, so a person can press Stop while one runs.
+const PACE = { size: CHUNK, waitMs: 0 };
+export const _setPaceForTest = ({ size = CHUNK, waitMs = 0 } = {}) => { PACE.size = size; PACE.waitMs = waitMs; };
 const KEY = CHOICE_KEY_SQL("v.value #>> '{}'");
 export const ONLY_TEXT = 'Only a Text field can be turned into a list';
 export const DOESNT_SUIT = 'Its words are mostly different — it doesn’t suit a list';
@@ -190,7 +194,7 @@ const chunk = async (tx, ws, fieldId, key, emit) => {
     `select v.id, v.person_id, v.value, ${KEY} as k from person_field_values v
       where v.workspace_id = $1 and v.field_id = $2 and not (v.value in (select jsonb_array_elements($3::jsonb)))
         ${after ? 'and (v.value, v.id) > ($4::jsonb, $5::uuid)' : ''}
-      order by v.value, v.id limit ${CHUNK} for update skip locked`,
+      order by v.value, v.id limit ${PACE.size} for update skip locked`,
     after ? [ws, f.id, JSON.stringify(plan.choices), JSON.stringify(after.value), after.id] : [ws, f.id, JSON.stringify(plan.choices)],
   )).rows;
   if (!rows.length) return 'empty';
@@ -284,6 +288,7 @@ export const stepJob = async (db, job) => {
   if (!plan || plan.key !== key) return {};
   const act = (fn) => runAction(db, { workspaceId: ws, actorId: plan.by || null, action: 'field.list.step' }, fn);
   for (let i = 0; i < CHUNKS_PER_RUN; i += 1) {
+    if (PACE.waitMs && i) await new Promise((r) => { setTimeout(r, PACE.waitMs); });
     const { result } = await act((tx, emit) => chunk(tx, ws, fieldId, key, emit));
     if (result === 'stop') return {};
     if (result === 'empty') {
