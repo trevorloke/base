@@ -215,6 +215,24 @@ check('…and never in the browser’s lasting storage (no gift amounts, no Toda
 const tomBefore = (await D.api(`/persons/${tom.id}`)).json;
 const tagEventsBefore = (await D.api('/events?since=0&limit=5000')).json.events.filter((e) => e.action === 'person.tag').length;
 
+// The campaign's website opened on the app's address (a team member looking
+// at it): never kept as the app's page for no signal.
+{
+  const site = await ctx.newPage();
+  const r = await site.goto(`${BASE}/site/`, { waitUntil: 'domcontentloaded' }).catch(() => null);
+  await sleep(1500); // the worker's background work, had it adopted the page
+  const shell = await site.evaluate(async () => {
+    const names = await caches.keys();
+    for (const n of names.filter((x) => /-shell-/.test(x))) {
+      const hit = await (await caches.open(n)).match('/index.html');
+      if (hit) return (await hit.text()).includes('<div id="root"');
+    }
+    return null;
+  }).catch((e) => String(e));
+  check('the website opened on the app’s address: the app stays the page kept for no signal', r && r.status() === 200 && shell === true, `${r && r.status()} ${shell}`);
+  await site.close();
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 // 2. No signal: every desk screen reloads from its copy
 // ════════════════════════════════════════════════════════════════════════════
