@@ -199,6 +199,13 @@ test('money stays in the tab whatever role the tab thinks it has; a desk’s Peo
     await assert.rejects(qc.fetchQuery({ queryKey: ['persons', 'list', `q=&limit=300&${cut}`], queryFn: async () => { throw new api.ApiError(503, 'request failed (503)'); } }),
       /503/, `${cut}: not the whole list`);
   }
+  // A list picked by a profile field (Faith = Sikh): never kept, by name or
+  // by its rows — no laptop's browser storage holds anyone's faith.
+  const faith = `q=&limit=300&field=${someList}%3ASikh`;
+  await qc.fetchQuery({ queryKey: ['persons', 'list', faith], queryFn: async () => ({ persons: [{ id: 'p2', name: 'Amar Example', address: '1 Main' }] }) });
+  await sleep(900);
+  assert.ok(![...session.m.keys(), ...local.m.keys()].some((k) => /field=/.test(k)), 'a field-picked list is not kept');
+  assert.ok(![...session.m.values(), ...local.m.values()].some((v) => /Amar Example/.test(v)));
   // A refusal is still a refusal.
   qc.removeQueries({ queryKey: ['persons'] });
   await assert.rejects(qc.fetchQuery({ queryKey: ['persons', 'list', 'q=&limit=300'], queryFn: async () => { throw new api.ApiError(403, 'not yours'); } }), /not yours/);

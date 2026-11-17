@@ -90,9 +90,14 @@ function planFor(key, me) {
       return key.length === 3 && (k2 === 'fields' || k2 === 'knows') ? q(`person:${k1}:${k2}`, money) : null;
     // A search isn't kept (each one typed would be another copy, pushing the
     // whole list out): with no signal it's answered from the kept list. A
-    // desk's lists carry donor tags: this tab only.
-    case 'persons': return k1 === 'list' && key.length === 3
-      ? { ...q(`persons:${k2}`, money), keep: !(new URLSearchParams(String(k2)).get('q') || '').trim() } : null;
+    // desk's lists carry donor tags: this tab only. A list picked by a
+    // profile field isn't kept either: the field may be Private (Faith), and
+    // the copy would say who has it.
+    case 'persons': {
+      if (k1 !== 'list' || key.length !== 3) return null;
+      const p = new URLSearchParams(String(k2));
+      return { ...q(`persons:${k2}`, money), keep: !(p.get('q') || '').trim() && !p.has('field') };
+    }
     case 'signs': return key.length === 1 ? q('signs', 'local') : null;
     case 'texting': return (k1 === 'inbox' || k1 === 'thread') && key.length === 3 ? q(`texting:${k1}:${k2}`, 'local') : null;
     case 'shifts': return key.length === 1 ? { name: 'shifts', tier: 'local', field: true } : null;
