@@ -9,6 +9,7 @@
 //        with their status and pins, and a token the save takes (a read:
 //        the addresses are looked up here, outside any transaction)
 import { Hono } from 'hono';
+import { createHash } from 'node:crypto';
 import { now } from '../../lib/clock.js';
 import { areasFor } from '../../lib/perms.js';
 import { basePath } from '../../lib/mount.js';
@@ -20,7 +21,7 @@ import { LANG_BY_CODE } from '../../../shared/site/languages.js';
 import { readSettings, mainAddress } from '../site/store.js';
 import { languagesFor } from '../site/translate.js';
 import { sign } from '../site/tokens.js';
-import { guideFor, publicGuide, withNow, checklist, deskState, changedSinceChecked } from './read.js';
+import { guideFor, holdsGuide, publicGuide, withNow, checklist, deskState, changedSinceChecked } from './read.js';
 import { previewHash } from './actions.js';
 
 export const api = new Hono();
@@ -45,6 +46,23 @@ export const guideLink = async (db, ws, lang = 'en', fallbackRoot = '') => {
 
 const siteRoot = (c) => `${new URL(c.req.url).origin}${basePath()}/site`;
 
+// The links change without rev moving (a page published, a language
+// approved, an address saved — every one a Website action, which makes the
+// memo a new object), so they are worked out once per memo and address, and
+// the phone sends their tag back with rev: "same" only when both match.
+const LINKS = new WeakMap(); // the memo's guide → Map(root → { links, tag })
+const linksFor = async (db, ws, guide, root) => {
+  let byRoot = LINKS.get(guide);
+  if (!byRoot) { byRoot = new Map(); LINKS.set(guide, byRoot); }
+  if (!byRoot.has(root)) {
+    const links = await guideLinks(db, ws, guide, root);
+    const tag = createHash('sha256').update(JSON.stringify(links)).digest('base64url').slice(0, 10);
+    if (byRoot.size > 20) byRoot.clear();
+    byRoot.set(root, { links, tag });
+  }
+  return byRoot.get(root);
+};
+
 api.get('/guide', async (c) => {
   const ctx = c.get('ctx');
   const db = c.get('db');
@@ -54,11 +72,14 @@ api.get('/guide', async (c) => {
   const t = now();
   const draft = c.req.query('draft') === '1' && areasFor(ctx).includes('site');
   const rev = c.req.query('rev');
-  if (rev !== undefined && rev !== '' && Number(rev) === guide.rev && !draft) return c.json({ same: true, rev: guide.rev, now: t });
-  if (guide.status !== 'published' && !draft) return c.json({ rev: guide.rev, now: t, status: 'not_out' });
+  const shown = guide.status === 'published' || draft;
+  const { links, tag } = shown ? await linksFor(db, ws, guide, siteRoot(c)) : { links: {}, tag: 'none' };
+  if (rev !== undefined && rev !== '' && Number(rev) === guide.rev && c.req.query('tag') === tag && !draft) return c.json({ same: true, rev: guide.rev, tag, now: t });
+  if (!shown) return c.json({ rev: guide.rev, tag, now: t, status: 'not_out' });
   const g = publicGuide(guide, t, { draft });
   const { page: _p, pageModule: _m, banner: _b, ...rest } = g;
-  return c.json({ ...rest, links: await guideLinks(db, ws, guide, siteRoot(c)) });
+  // draft: true only when this answer is the draft (the desk's chip).
+  return c.json({ ...rest, links, tag, draft: draft && guide.status !== 'published' });
 });
 
 api.get('/site/guide', async (c) => {
@@ -80,7 +101,15 @@ api.get('/site/guide', async (c) => {
     checklist: checklist(guide, authorizedBy(settings?.org || {}), t),
     changed_since_checked: changedSinceChecked(guide),
     asked,
-    pages: guide.pages.map((p) => ({ id: p.id, path: p.slug === 'home' ? '/' : `/${p.slug}`, site_id: p.site_id })),
+    // Every page holding the module, drafts too (the desk links to them).
+    pages: (await db.query(
+      `select id, title, slug, site_id, status, draft, published from site_pages
+        where workspace_id = $1 and deleted_at is null and (draft::text like '%"voterguide"%' or published::text like '%"voterguide"%')
+        order by nav_order, created_at`, [ws.id],
+    )).rows.filter(holdsGuide).map((p) => ({
+      id: p.id, title: p.title, path: p.slug === 'home' ? '/' : `/${p.slug}`, site_id: p.site_id || null,
+      published: guide.pages.some((g2) => g2.id === p.id),
+    })),
     site: mainAddress(settings, siteRoot(c)),
     gotv: {
       election_day: gotv?.election_day ? (gotv.election_day instanceof Date ? gotv.election_day.toISOString().slice(0, 10) : String(gotv.election_day).slice(0, 10)) : null,

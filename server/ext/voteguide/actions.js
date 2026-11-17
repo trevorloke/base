@@ -29,7 +29,7 @@ import { siteAction, actions as siteActions } from '../site/actions.js';
 import { readSettings, isAppHost } from '../site/store.js';
 import { verify } from '../site/tokens.js';
 import { saveVotingDays } from '../voted/actions.js';
-import { readRows, buildGuide, tzOf, checklist, deskState, RULE_KEYS, SECTIONS, forgetGuide } from './read.js';
+import { readRows, holdsGuide, buildGuide, tzOf, checklist, deskState, RULE_KEYS, SECTIONS, forgetGuide } from './read.js';
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const HM = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -480,6 +480,11 @@ export const actions = {
   // "Add the guide page" (decision 20): a draft, voter-guide (or -2 …).
   'site.guide.page': guideAction(z.object({}).strict(), async (tx, ctx, input, emit) => {
     const ws = ctx.workspaceId;
+    const held = (await tx.query(
+      `select draft, published from site_pages where workspace_id = $1 and deleted_at is null
+          and (draft::text like '%"voterguide"%' or published::text like '%"voterguide"%')`, [ws],
+    )).rows;
+    if (held.some(holdsGuide)) throw httpError(409, 'A page already holds the guide — open it in Pages');
     let slug = 'voter-guide';
     for (let n = 2; (await tx.query('select 1 from site_pages where workspace_id = $1 and slug = $2 and site_id is null and deleted_at is null', [ws, slug])).rows[0]; n += 1) slug = `voter-guide-${n}`;
     const create = siteActions['site.page.create'].handler;

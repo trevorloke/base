@@ -247,27 +247,48 @@ test('a published place edited carries before and after and changed_at; closed i
   moveBack();
 });
 
-test('the field read: published with links and moments; same rev; draft only for Website staff; no person in it', async () => {
+test('the guide page: the desk lists it as a draft; a second one is refused; a phone sees it once published', async () => {
+  const g0 = ok(await vol.get('/api/guide'));
+  assert.equal(g0.status, 'published');
+  assert.deepEqual(g0.links, {}, 'no published page holds the module yet');
+  assert.ok(g0.tag, 'the answer names its links');
   const pg = ok(await mgr.action('site.guide.page', {}));
+  const desk = ok(await mgr.get('/api/site/guide'));
+  assert.deepEqual(desk.pages.map((p) => ({ id: p.id, title: p.title, path: p.path, published: p.published })), [{ id: pg.page.id, title: 'Voter guide', path: '/voter-guide', published: false }]);
+  no(await mgr.action('site.guide.page', {}), 409);
   ok(await mgr.action('site.page.publish', { id: pg.page.id }));
+  assert.equal(ok(await mgr.get('/api/site/guide')).pages[0].published, true);
+  // Publishing a page doesn't move rev, but the phone's links are out of date.
+  const g1 = ok(await vol.get(`/api/guide?rev=${g0.rev}&tag=${g0.tag}`));
+  assert.notEqual(g1.same, true, 'a page published since: not the same');
+  assert.match(g1.links.en, /\/voter-guide$/);
+  assert.equal(ok(await vol.get(`/api/guide?rev=${g1.rev}&tag=${g1.tag}`)).same, true);
+  // An older phone that sends no tag gets the whole guide.
+  assert.notEqual(ok(await vol.get(`/api/guide?rev=${g1.rev}`)).same, true);
+});
+
+test('the field read: published with links and moments; same rev; draft only for Website staff; no person in it', async () => {
   const g = ok(await vol.get('/api/guide'));
   assert.ok(g.rev > 0);
   assert.ok(Number.isFinite(g.now));
   assert.ok(g.times.days.every((d) => Number.isFinite(d.opensAt) && Number.isFinite(d.closesAt)));
   assert.match(g.links.en, /\/voter-guide$/);
   assert.equal(JSON.stringify(g).includes('email'), false);
-  assert.equal(ok(await vol.get(`/api/guide?rev=${g.rev}`)).same, true);
+  assert.equal(ok(await vol.get(`/api/guide?rev=${g.rev}&tag=${g.tag}`)).same, true);
   // A correction moves rev; the next read with the old rev gets the guide.
   const hall = g.places.find((p) => p.name === 'Example Community Hall');
   ok(await mgr.action('site.guide.place.save', { id: hall.id, ...place(hall.name, hall.address, { area: 'Newton' }), closed: true }));
-  const next = ok(await vol.get(`/api/guide?rev=${g.rev}`));
+  const next = ok(await vol.get(`/api/guide?rev=${g.rev}&tag=${g.tag}`));
   assert.ok(next.rev > g.rev);
   assert.ok(next.places.find((p) => p.id === hall.id).closed_on);
   ok(await mgr.action('site.guide.place.save', { id: hall.id, ...place(hall.name, hall.address, { area: 'Newton' }), closed: false }));
+  assert.equal(ok(await staff.get('/api/guide?draft=1')).draft, false, 'a live guide is not called a draft');
   ok(await mgr.action('site.guide.unpublish', {}));
   assert.equal(ok(await vol.get('/api/guide')).status, 'not_out');
   assert.equal(ok(await vol.get('/api/guide?draft=1')).status, 'not_out', 'a volunteer can’t see the draft');
-  assert.equal(ok(await staff.get('/api/guide?draft=1')).status, 'published', 'Website staff see it as a canvasser would');
+  const seen = ok(await staff.get('/api/guide?draft=1'));
+  assert.equal(seen.status, 'published', 'Website staff see it as a canvasser would');
+  assert.equal(seen.draft, true);
 });
 
 test('the public guide: not out (draft too) with its sign-up; the draft in a preview', async () => {

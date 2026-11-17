@@ -5,7 +5,8 @@
 //   useGuide({ poll, side, draft })  GET /api/guide?rev= — the published
 //            guide (no person in it). Kept for every role (KeptCopies
 //            planFor 'guide'), so it opens with no signal. A read with the
-//            same rev answers { same: true } and only the clock moves.
+//            same rev and links' tag answers { same: true } and only the
+//            clock moves.
 //            poll: read again every 5 minutes while the guide is live
 //            (the day before, open, between) and when the app comes back
 //            to the foreground. side: the screen doesn't draw it (the
@@ -34,7 +35,9 @@ export const guideLive = (g, now = guideNow(g)) => {
 const fetchGuide = (qc, key, draft) => async () => {
   const prev = qc.getQueryData(key);
   const t0 = Date.now();
-  const r = await apiGet(`/guide${draft ? '?draft=1' : Number.isFinite(prev?.rev) ? `?rev=${prev.rev}` : ''}`);
+  // rev and the links' tag: a page published or a language approved since
+  // changes the links without moving rev.
+  const r = await apiGet(`/guide${draft ? '?draft=1' : Number.isFinite(prev?.rev) && prev?.tag ? `?rev=${prev.rev}&tag=${encodeURIComponent(prev.tag)}` : ''}`);
   // The server's clock, against this phone's (half the round trip in between).
   const offset = Number(r.now) - Math.round((t0 + Date.now()) / 2);
   if (r.same && prev) return { ...prev, now: r.now, offset };

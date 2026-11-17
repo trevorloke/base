@@ -74,6 +74,9 @@ export const readRows = async (q, wsId) => {
   return { guide, days, places, contests, gotvOnly, pages };
 };
 
+// A page whose draft or published version holds a shown voterguide module.
+export const holdsGuide = (p) => [p.draft, p.published].some((v) => (parseJ(v, {})?.modules || []).some((m) => m?.kind === 'voterguide' && !m.hidden));
+
 // The rows with their moments.
 export const buildGuide = (rows, tz) => {
   const { guide } = rows;
