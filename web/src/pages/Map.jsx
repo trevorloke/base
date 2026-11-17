@@ -3049,7 +3049,7 @@ export default function MapPage() {
               key={selectedDoor.key}
               door={selectedDoor}
               selectedId={personParam}
-              onSelect={(id) => setParamsRef.current({ building: buildingParam, person: id }, { replace: true })}
+              onSelect={(id) => setParamsRef.current({ building: buildingParam, person: id }, { replace: true, state: location.state })}
               onClose={() => select(null)}
               toast={toast}
               me={me}
