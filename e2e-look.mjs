@@ -207,21 +207,16 @@ const DESK_PHONE = (s) => ['/', '/people', `/people/${s.person}`, '/shifts', `/s
   '/settings', '/settings/permissions', '/settings/services', '/settings/brand', '/path-to-win', '/profile'].map((p) => `/admin${p === '/' ? '' : p}`);
 const FIELD = (s) => ['/', '/map', '/shifts', `/shifts/${s.shift}`, '/calls', '/turfs', `/turfs/${s.turf}`, '/imagineu', '/profile', '/mainstreet', '/my-people'];
 // The screens that carry the most of the brand: enough to judge a colour by.
-const CORE = (s) => ['/admin', '/admin/people', `/admin/people/${s.person}`, '/admin/shifts', '/admin/money', '/admin/signs', '/admin/website', '/admin/settings', '/admin/settings/brand'];
+const CORE = (s) => ['/admin', '/admin/activity', '/admin/people', `/admin/people/${s.person}`, '/admin/shifts', '/admin/money', '/admin/signs', '/admin/website', '/admin/settings', '/admin/settings/brand'];
 // Every pick-one control on these screens (app.css §13): how tall it is, how
 // many rows its choices take, and its shortest choice.
 const pickOnes = async (page, base, paths) => {
   const out = [];
   for (const path of paths) {
     await page.goto(`${base}${path}`, { waitUntil: 'networkidle' });
-    // Today keeps the managers' dashboard (and its pick-one) folded under
-    // Activity: open it, so its choices are measured too.
-    const fold = page.locator('.today-activity > .today-morebox__toggle[aria-expanded="false"]');
-    if (await fold.count()) {
-      await fold.click();
-      await page.waitForSelector('.today-activity .dash-seg, .today-activity .dash-periods', { timeout: 15000 }).catch(() => {});
-      await page.waitForLoadState('networkidle');
-    }
+    // The managers' dashboard is its own screen, Activity: its period pills
+    // load with it.
+    if (/\/activity$/.test(path)) await page.waitForSelector('.dash-seg, .dash-periods', { timeout: 15000 }).catch(() => {});
     out.push(...await page.evaluate(() => [...document.querySelectorAll('.ops-seg, .ot-seg, .dash-seg, .dash-periods, .channel-toggle, .cl-toggle, .door-channel, .rq-pills, .fk-tabs, .ot-tabs, .ws-tabs')].map((g) => {
       const r = g.getBoundingClientRect();
       const choices = [...g.children].filter((c) => c.matches('button, a')).map((c) => c.getBoundingClientRect());
@@ -261,7 +256,7 @@ for (const [key, env, campaign] of [['base', { STARBASE_BRAND: 'base' }, 'Rivers
         shell.side === 'rgb(243, 244, 246)' && shell.edge === '1px' && shell.shadow === 'none' && /^["']?Inter/.test(shell.h1) && shell.caps === 'none' && shell.sub === 'base.win' && shell.lead, JSON.stringify(shell));
       check(`${key}: with a mouse a button and a field are 40px and a table row 44`, shell.btn === 40 && shell.field === 40 && shell.row >= 44 && shell.row <= 46, JSON.stringify({ btn: shell.btn, field: shell.field, row: shell.row }));
       await dp.screenshot({ path: `${SHOTS}/${key}-people-desk.png` });
-      const picks = await pickOnes(dp, base, ['/admin', '/admin/outreach', '/admin/settings']);
+      const picks = await pickOnes(dp, base, ['/admin/activity', '/admin/outreach', '/admin/settings']);
       check(`${key}: with a mouse every choice in a pick-one control is 40px, and so is the control`, wholeControl(picks, 40), JSON.stringify(picks));
     }
     await d.close();
@@ -282,7 +277,7 @@ for (const [key, env, campaign] of [['base', { STARBASE_BRAND: 'base' }, 'Rivers
       });
       check(`${key}, on a phone: light bars, four tabs and More, and 48px controls`, bars.top === 'rgb(255, 255, 255)' && bars.tabs === 'rgb(255, 255, 255)' && bars.n === 5 && bars.more && bars.btn >= 48 && bars.field >= 48, JSON.stringify(bars));
       await mp.screenshot({ path: `${SHOTS}/${key}-people-phone.png` });
-      const picks = await pickOnes(mp, base, ['/admin', '/admin/outreach', '/admin/settings']);
+      const picks = await pickOnes(mp, base, ['/admin/activity', '/admin/outreach', '/admin/settings']);
       check(`${key}, on a phone: every choice in a pick-one control is 48px — a row of them is 48, and tabs that wrap keep 48 a row`, wholeControl(picks, 48), JSON.stringify(picks));
     }
     await m.close();

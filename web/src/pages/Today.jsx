@@ -12,19 +12,27 @@
 //     "Signs" row (always — the sign crew's way to /signs and "Add a sign"),
 //     other turfs sit under "More". With no signal, "Start canvassing" opens the walk list kept on
 //     this phone (Turfs.jsx's offline copy), else the turf list.
-//   Desk: for every desk role, three big numbers (doors this week · support · total raised). Doors
-//     and money are taps to their screens (›); support opens its breakdown in
-//     place (+), opposed by candidate ("McCallum 3 · Locke 2"). Under them
-//     MAP's map band (with the Map area), and for managers the old dashboard
-//     (pages/Dashboard.jsx) folded as "Activity". Then "Needs
-//     you" (gifts over the limit, new volunteers, short shifts, signs to
-//     put up, new texts — replies
-//     and texts from numbers nobody texted, → the Inbox) — name first, the
-//     amount on the right, every row a tap to where it's fixed — then the
-//     next shift. Getting started shows only the steps not done,
-//     and only while the campaign is new. Walk lists, team (managers),
-//     providers, "Verify the records", the export and "Clear sample data" sit
-//     under a quiet "More" at the bottom.
+//   Desk: a simple front page, top to bottom (what applies today — the
+//     sample, GOTV, getting started, follow-ups — at the top). Three big
+//     numbers: Supporters (the scale's 1s and 2s; "of 12,000 needed" when
+//     Path to win has a win number and this person may open it — brief.goal;
+//     a tap opens the breakdown in place: the win number's lines, then the
+//     support picture, opposed by candidate), Doors this week ›, Total
+//     raised › (money roles). Under them MAP's map band across the page —
+//     the walk lists' outlines, folding away (with the Map area) — and, for
+//     managers, "Activity ›" (the old dashboard's screen). Then "Needs you"
+//     (gifts over the limit, new volunteers, short shifts, signs to put up,
+//     follow-ups, letters, requests from the doors, new texts, people who
+//     moved, and "Connect email" for managers while email isn't set up) —
+//     name first, the amount on the right, every row a tap to where it's
+//     fixed — then Coming up (the next shift, filing dates), then Go to: six
+//     everyday places one tap each (components/commands.js quickFor) and
+//     "All places and people", which opens the search. Under a closed
+//     "More": the week's and all-time lines, their walk lists, and "Clear
+//     sample data". Getting started shows only the steps not done, and only
+//     while the campaign is new. The page is the window's width (layout.js
+//     page--wide) so the band runs across it; everything else keeps the
+//     1,200 px column (home.css).
 //   Candidate (a volunteer with a seat, me.candidate): "Your day" — one
 //     button, "Met someone →" (Mainstreeting), then only the rows that have
 //     something (their next booked shift, "Your week · 4", "My people · 6"),
@@ -38,7 +46,7 @@
 // A nearly empty campaign gets a one-click sample dataset (managers); a quiet
 // "Sample data is loaded" line stays at the top while it's there. Volunteers
 // never see money.
-import { Suspense, lazy, useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { allCodes, bandOf, ratingByCode } from '@starbase/shared/scale';
@@ -63,9 +71,8 @@ import { at } from '../base.js';
 import { NS } from '../base.js';
 import { BRAND } from '../brand.js';
 import MapWindow from '../components/MapWindow.jsx';
-
-// The managers' dashboard (its map and chart load with it, not with Today).
-const Dashboard = lazy(() => import('./Dashboard.jsx'));
+import { quickFor } from '../components/commands.js';
+import './home.css';
 
 const greeting = () => {
   const h = new Date().getHours();
@@ -280,11 +287,36 @@ function SupportBar({ pic, size }) {
   );
 }
 
-function SupportDetail({ pic, id }) {
+// Where supporters stand against the win number (brief.goal, Path to win's
+// numbers): above the support picture, for whoever may open Path to win.
+function GoalLines({ goal }) {
+  if (!goal) return null;
+  if (goal.unavailable) return <p className="today-goal">Path to win: Unavailable</p>;
+  if (!goal.set) {
+    return goal.can_set ? (
+      <p className="today-goal">No win number yet · <Link to="/path-to-win" className="today-goal__set">Set it on Path to win ›</Link></p>
+    ) : null;
+  }
+  const days = Number(goal.days_left) || 0;
+  return (
+    <div className="today-goal">
+      <p>
+        <strong>{goal.label}:</strong> {num(goal.supporters)} of {num(goal.needed)} supporters · {goal.still > 0 ? `${num(goal.still)} to go` : 'Win number reached ✓'}
+      </p>
+      {days > 0 && (
+        <p>{num(days)} {plural(days, 'day')} left{goal.still > 0 && goal.per_week_needed != null && <> · about {num(goal.per_week_needed)} a week to get there</>}</p>
+      )}
+      {goal.others > 0 && <p className="muted">+ {num(goal.others)} more {plural(goal.others, 'race')} on Path to win</p>}
+    </div>
+  );
+}
+
+function SupportDetail({ pic, id, goal }) {
   const { counts, variants, total, pct } = pic;
   const showVariants = variants.some((v) => v.code !== '4');
   return (
     <section className="card today-support" id={id} aria-label="Support breakdown">
+      <GoalLines goal={goal} />
       {total === 0 ? (
         <p className="today-empty">No ratings yet — every door fills this in.</p>
       ) : (
@@ -310,7 +342,10 @@ function SupportDetail({ pic, id }) {
       )}
       <div className="today-support-foot">
         <span className="mono muted">{num(total)} rated</span>
-        <Link to="/map" className="today-more-link">Open the map <Chevron /></Link>
+        <span className="today-support-links">
+          <Link to="/map" className="today-more-link">Open the map <Chevron /></Link>
+          {goal && <Link to="/path-to-win" className="today-more-link">Path to win <Chevron /></Link>}
+        </span>
       </div>
     </section>
   );
@@ -327,7 +362,13 @@ function Numbers({ b, pic }) {
     setParams(next, { replace: true });
   };
   const doors = Number(b.field?.doors) || 0;
-  const supportPct = pic.total ? `${pic.pct(pic.counts.support)}%` : '—';
+  // Supporters: the scale's 1s and 2s (Path to win's rule), against the win
+  // number when one is set and this person may see it (brief.goal).
+  const supporters = (Number(b.ratings?.['1']) || 0) + (Number(b.ratings?.['2']) || 0);
+  const goal = b.goal?.set ? b.goal : null;
+  const big = goal || pic.total ? num(goal ? goal.supporters : supporters) : '—';
+  const label = goal ? `Supporters ${big} of ${num(goal.needed)} needed`
+    : pic.total ? `Supporters ${big}` : 'Supporters — no ratings yet';
   return (
     <>
       {/* Same shape as the rows: › goes to a screen, + opens here. */}
@@ -336,11 +377,15 @@ function Numbers({ b, pic }) {
           <span className="today-num__n">{num(doors)}</span>
           <span className="today-num__label">Doors this week<span className="today-num__go" aria-hidden="true">›</span></span>
         </Link>
-        <button type="button" className="today-num" aria-expanded={open} aria-controls={detailId} onClick={toggle}
-          aria-label={pic.total ? `Support ${supportPct} of ${num(pic.total)} rated` : 'Support — no ratings yet'}>
-          <span className="today-num__n">{supportPct}</span>
-          <SupportBar pic={pic} size="small" />
-          <span className="today-num__label">Support<span className="today-num__plus" aria-hidden="true" /></span>
+        <button type="button" className="today-num" aria-expanded={open} aria-controls={detailId} onClick={toggle} aria-label={label}>
+          <span className="today-num__n">{big}</span>
+          {goal && (
+            <>
+              <span className="today-progress today-num__bar" aria-hidden="true"><span style={{ width: `${Math.min(100, Math.max(0, Number(goal.pct) || 0))}%` }} /></span>
+              <span className="today-num__sub">of {num(goal.needed)} needed</span>
+            </>
+          )}
+          <span className="today-num__label">Supporters<span className="today-num__plus" aria-hidden="true" /></span>
         </button>
         {b.money && (
           <Link to="/money" className="today-num" aria-label={`Total raised ${fmtMoney(b.money.totalCents)}`}>
@@ -349,7 +394,7 @@ function Numbers({ b, pic }) {
           </Link>
         )}
       </div>
-      {open && <SupportDetail pic={pic} id={detailId} />}
+      {open && <SupportDetail pic={pic} id={detailId} goal={b.goal} />}
     </>
   );
 }
@@ -442,7 +487,15 @@ function NeedsYou({ b, me }) {
   const signs = Number(b.signs?.requested) || 0;
   const shownFlags = flagged.length > 3 ? flagged.slice(0, 2) : flagged;
   const moreFlags = flagged.length - shownFlags.length;
-  const empty = !flagged.length && !newVols && !shortShifts.length && !signs && !followups.n && !newTexts && !requests.n && !letters.n;
+  // Email not set up: the managers' to-do (Settings → Services). Texting is
+  // optional — a campaign that never texts is never asked to.
+  const connectEmail = me?.role === 'manager' && Boolean(b.providers) && !b.providers.email;
+  // People who moved, waiting for a new address (ext/moves: People holders).
+  const moved = Number(b.moved?.open) || 0;
+  // The campaign's replies to letters this person wrote (brief.letters).
+  const replies = Number(b.letters?.unseen) || 0;
+  const empty = !flagged.length && !newVols && !shortShifts.length && !signs && !followups.n && !newTexts && !requests.n && !letters.n
+    && !connectEmail && !moved && !replies;
 
   return (
     <section className="today-section" aria-labelledby="today-needs-h">
@@ -479,12 +532,19 @@ function NeedsYou({ b, me }) {
           {letters.n > 0 && (
             <LinkRow to="/media/letters" state={FROM_TODAY} main={<><strong className="mono">{letters.n}</strong> {plural(letters.n, 'letter')}</>} />
           )}
+          {replies > 0 && (
+            <LinkRow to="/letters" main={<><strong className="mono">{num(replies)}</strong> {plural(replies, 'reply', 'replies')} to your letters</>} />
+          )}
           {requests.n > 0 && (
             <LinkRow to="/requests" state={FROM_TODAY} main={<><strong className="mono">{requests.n}</strong> {plural(requests.n, 'request')} from the doors</>} />
           )}
           {newTexts > 0 && (
             <LinkRow to="/inbox" state={FROM_TODAY} main={<><strong className="mono">{newTexts}</strong> new {plural(newTexts, 'text')}</>} />
           )}
+          {moved > 0 && (
+            <LinkRow to="/people?moved=open" main={<><strong className="mono">{num(moved)}</strong> moved — {moved === 1 ? 'needs' : 'need'} an address</>} />
+          )}
+          {connectEmail && <LinkRow to="/settings/services" main="Connect email" />}
         </ul>
       )}
     </section>
@@ -685,29 +745,28 @@ function NoSignalToday({ me }) {
   );
 }
 
-// The managers' old dashboard, folded under the map band. Nothing of it is
-// asked for (no dashboard read, no Leaflet, no tiles) until it is opened;
-// open or folded is kept per browser.
-const ACTIVITY_KEY = `${NS}today:activity`;
-function ActivityFold() {
-  const [open, setOpen] = useState(() => { try { return localStorage.getItem(ACTIVITY_KEY) === 'open'; } catch { return false; } });
-  const id = useId();
-  const flip = () => setOpen((o) => {
-    try { localStorage.setItem(ACTIVITY_KEY, o ? 'closed' : 'open'); } catch { /* storage blocked */ }
-    return !o;
-  });
+// ── Desk: Go to ──
+// The places used every day, one tap each (commands.js QUICK, cut to six by
+// this person's areas), and one button that opens the search for every
+// other place and every person (the header's command bar, CommandBar.jsx).
+function GoTo({ me, nav, b }) {
+  const places = quickFor(me, nav ?? [], b);
   return (
-    <section className="today-morebox today-activity">
-      <button type="button" className="today-morebox__toggle disclose" aria-expanded={open} aria-controls={id} onClick={flip}>
-        Activity: the chart, who’s out and the teams
-      </button>
-      {open && (
-        <div className="today-morebox__body" id={id}>
-          <Suspense fallback={<p className="muted" role="status">Loading…</p>}>
-            <Dashboard />
-          </Suspense>
-        </div>
+    <section className="today-section today-goto" aria-labelledby="today-goto-h">
+      <h2 className="today-h" id="today-goto-h">Go to</h2>
+      {places.length > 0 && (
+        <ul className="today-goto__grid">
+          {places.map((p) => (
+            <li key={p.to}>
+              <Link to={p.to} className="today-goto__i"><span>{p.label}</span><Chevron /></Link>
+            </li>
+          ))}
+        </ul>
       )}
+      <button type="button" className="btn today-goto__search" aria-haspopup="dialog"
+        onClick={() => window.dispatchEvent(new Event('base:search'))}>
+        All places and people
+      </button>
     </section>
   );
 }
@@ -989,9 +1048,12 @@ function CandidateToday({ b, me }) {
 }
 
 // ── Desk Today ──
-function DeskToday({ b, me, toast }) {
+// Top to bottom: the name; what applies today (the sample, GOTV, getting
+// started, follow-ups); three numbers; the walk lists' map across the page
+// (MAP's band, with the Map area) and, for managers, "Activity ›" under it;
+// Needs you; Coming up; Go to; a closed More. No primary button.
+function DeskToday({ b, me, nav, toast }) {
   const navigate = useNavigate();
-  const [verify, setVerify] = useState(null);
   const isManager = me?.role === 'manager';
   const myTurfs = b.myTurfs ?? [];
   const peopleTotal = Number(b.people?.total) || 0;
@@ -1006,17 +1068,8 @@ function DeskToday({ b, me, toast }) {
   const stepsLeft = (b.activation?.steps ?? []).filter((s) => !s.done);
   const showSteps = !b.activation?.complete && peopleTotal < 5 && stepsLeft.length > 0;
 
-  const onVerify = async () => {
-    setVerify({ busy: true });
-    try {
-      setVerify(await apiGet('/audit/verify'));
-    } catch (e) {
-      setVerify({ error: e.message });
-    }
-  };
-
   return (
-    <div className="today">
+    <div className="today today-desk">
       <span className="eyebrow">{greeting()}</span>
       <h1>{me.workspace.name}</h1>
 
@@ -1024,16 +1077,20 @@ function DeskToday({ b, me, toast }) {
       {b.sampleLoaded && <SampleLine desk />}
       {b.voted?.on && <GotvCard v={b.voted} />}
       {showSteps && <GettingStarted steps={stepsLeft} role={me?.role} navigate={navigate} />}
-      {/* Their own people to reach within the day, before the dashboard. */}
+      {/* Their own people to reach within the day, before the numbers. */}
       <FollowupsToday me={me} />
 
       <Numbers b={b} pic={pic} />
 
       {/* MAP's band: the walk lists' outlines, across the page, folding away.
-          The old dashboard (its chart, its portrait map, who is out) stays one
-          tap away for managers, folded, until HOME gives it its own screen. */}
+          The rest of the old dashboard (who is out, the chart, the teams) is
+          the Activity screen, one tap under it for managers. */}
       {hasArea(me, 'map') && <MapWindow me={me} shape="band" />}
-      {isManager && <ActivityFold />}
+      {isManager && (
+        <p className="today-under-band">
+          <Link to="/activity" className="today-more-link">Activity <Chevron /></Link>
+        </p>
+      )}
 
       <NeedsYou b={b} me={me} />
 
@@ -1051,6 +1108,8 @@ function DeskToday({ b, me, toast }) {
         </ul>
       </section>
 
+      <GoTo me={me} nav={nav} b={b} />
+
       <More>
         <p className="today-fieldline mono">
           This week: {num(f.calls)} {plural(Number(f.calls) || 0, 'call')} · {num(f.texts)} {plural(Number(f.texts) || 0, 'text')}
@@ -1067,28 +1126,6 @@ function DeskToday({ b, me, toast }) {
             <TurfRows turfs={myTurfs} statsById={statsById} />
           </>
         )}
-        <ul className="today-rows">
-          <LinkRow to="/banks" main="Phone banks" />
-          <LinkRow to="/lists" main="Lists" />
-          <LinkRow to="/path-to-win" main="Path to win" />
-          <LinkRow to="/reports" main="Reports" />
-          <LinkRow to="/surveys" main="Surveys" />
-          <LinkRow to="/scripts" main="Scripts" />
-          <LinkRow to="/mainstreet" main="Mainstreeting" />
-          <LinkRow to="/letters" main={Number(b.letters?.unseen) > 0 ? <>Your letters · <strong className="mono">{num(b.letters.unseen)}</strong> {Number(b.letters.unseen) === 1 ? 'reply' : 'replies'}</> : 'Your letters'} />
-          {isManager && <LinkRow to="/settings" main={<>Settings <span className="muted">· members, teams, permissions</span></>} />}
-          {b.providers && (!b.providers.email || !b.providers.text) && (
-            <LinkRow to="/outreach/connect" main="Connect email & texting" />
-          )}
-          <LinkRow to="/voted" main={b.voted?.on ? <>GOTV · <strong className="mono">{b.voted.supporters_voted}</strong> of {b.voted.supporters} supporters voted</> : 'GOTV & voting days'} />
-        </ul>
-        <div className="today-actions today-morebox__tools">
-          <button type="button" className="btn today-tap" onClick={onVerify} disabled={verify?.busy}>Verify the records</button>
-          <a className="btn today-tap" href={at('/api/export')}>Export all data</a>
-        </div>
-        {verify?.ok && <p className="mono ok-text" role="status">✓ {verify.checked} entries check out</p>}
-        {verify?.ok === false && <p className="error" role="alert">The books don’t check out</p>}
-        {verify?.error && <p className="error" role="alert">{verify.error}</p>}
         {b.sampleLoaded && isManager && <SampleClear onToast={toast.show} />}
       </More>
     </div>
@@ -1096,7 +1133,7 @@ function DeskToday({ b, me, toast }) {
 }
 
 export default function Today() {
-  const { me } = useOutletContext();
+  const { me, nav } = useOutletContext();
   const toast = useToast();
   const brief = useQuery({ queryKey: ['brief'], queryFn: () => apiGet('/brief') });
 
@@ -1124,7 +1161,7 @@ export default function Today() {
 
   return (
     <>
-      {desk ? <DeskToday b={b} me={me} toast={toast} />
+      {desk ? <DeskToday b={b} me={me} nav={nav} toast={toast} />
         : me?.candidate ? <CandidateToday b={b} me={me} /> : <VolunteerToday b={b} me={me} />}
       {toast.msg && (
         <div className="toast today-toast" role="status">

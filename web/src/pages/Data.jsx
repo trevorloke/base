@@ -10,7 +10,12 @@
 //   Out:  each table as a spreadsheet (/api/export/<name>.csv — the
 //         People one reads straight back in), and everything as one JSON
 //         file, for a backup or a move (/api/export).
+//   Check: "Verify the records" — the books' hash chain, end to end
+//         (/api/audit/verify; it was under Today's More).
+import { useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
+import { apiGet } from '../api.js';
+import { NeedsSignal, useOnline } from '../components/NoSignal.jsx';
 import { EXPORTS, ExportItem } from './Reports.jsx';
 import DriveSent from '../components/DriveSent.jsx';
 import './shifts.css';
@@ -81,6 +86,36 @@ export default function DataPage() {
       </section>
 
       <DriveSent tz={me?.workspace?.settings?.tz || me?.org?.tz || null} />
+
+      <CheckRecords />
     </div>
+  );
+}
+
+// Every entry in the books, checked link by link (lib/events.js verifyChain).
+function CheckRecords() {
+  const [verify, setVerify] = useState(null);
+  const online = useOnline();
+  const onVerify = async () => {
+    setVerify({ busy: true });
+    try {
+      setVerify(await apiGet('/audit/verify'));
+    } catch (e) {
+      setVerify({ error: e.message });
+    }
+  };
+  return (
+    <section className="dt-sec" aria-labelledby="dt-check">
+      <h2 id="dt-check">Check the records</h2>
+      <div className="ops-actions">
+        <button type="button" className="btn btn-quiet ops-tap" onClick={onVerify} disabled={!online || verify?.busy}>Verify the records</button>
+        {!online && <NeedsSignal />}
+      </div>
+      <div aria-live="polite">
+        {verify?.ok && <p className="mono ok-text" role="status">✓ {Number(verify.checked).toLocaleString('en-CA')} entries check out</p>}
+        {verify?.ok === false && <p className="error" role="alert">The books don’t check out</p>}
+        {verify?.error && <p className="error" role="alert">{verify.error}</p>}
+      </div>
+    </section>
   );
 }

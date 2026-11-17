@@ -553,7 +553,7 @@ function SignedInShell({ who, mode }) {
         {/* A screen that fails to load says so (with Reload); the nav stays. */}
         <ScreenBoundary>
           <Suspense fallback={<p className="muted">Loading…</p>}>
-            <Outlet context={{ me }} />
+            <Outlet context={{ me, nav }} />
           </Suspense>
         </ScreenBoundary>
       </main>

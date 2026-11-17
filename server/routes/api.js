@@ -47,6 +47,7 @@ import { maybesNamed } from '../ext/payments/limits.js';
 import { myBookingSql } from '../ext/schedule/hours.js';
 // Whether a volunteer may move this person (ext/core: a pin in their turf).
 import { inMyTurf } from '../ext/core/index.js';
+import { deskList } from '../ext/todaycounts/index.js';
 
 // Gift rows flagged as maybe one donor (idsOf: the ids a row names, as
 // stored) get maybe_same_as: those records by name, as things stand.
@@ -1155,10 +1156,10 @@ app.get('/brief', async (c) => {
   // The whole list's numbers (people on file, the support picture) are the
   // desk's: a volunteer's Today shows neither, and at 300,000 people each
   // count costs every visit.
+  // Both from one count, kept half a minute per campaign (ext/todaycounts).
   const wholeList = ctx.role !== 'volunteer';
-  const people = wholeList ? (await db.query(
-    `select count(*)::int as total from persons where workspace_id = $1 and deleted_at is null`, [ws],
-  )).rows[0] : null;
+  const list = wholeList ? await deskList(db, ws) : null;
+  const people = list ? { total: list.total } : null;
   // Field, over the last 7 days (rolling): doors are DISTINCT doors knocked —
   // a household rated twice, or a rating changed, is still one door; the key
   // is the address + unit (the walk list's grouping), or the person when they
@@ -1181,10 +1182,7 @@ app.get('/brief', async (c) => {
        where c.workspace_id = $1 and c.created_at >= now() - interval '7 days'
      ) w`, [ws, ctx.user.id],
   )).rows[0];
-  const ratings = wholeList ? (await db.query(
-    `select rating, count(*)::int as n from persons
-     where workspace_id = $1 and deleted_at is null and rating is not null group by rating`, [ws],
-  )).rows : [];
+  const ratings = list ? list.ratings : [];
   const shifts = (await db.query(
     `select s.id, s.title, s.starts_at, s.location, s.capacity, s.kind, s.need,
             (select count(*)::int from shift_assignments a where a.shift_id = s.id and a.status in ('assigned', 'confirmed', 'completed')) as filled,

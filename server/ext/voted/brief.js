@@ -79,9 +79,11 @@ const sharedCounts = async (db, ctx) => {
 
 // A volunteer sees the numbers only on the GOTV card, which shows only while
 // GOTV is on; on other days their Today counts nothing over the whole list.
-// The desk counts afresh every time.
+// The desk shares the same kept count (its Today shows the numbers under
+// More every day); any write to a person or a contact drops it as well
+// (ext/todaycounts), so the desk never waits half a minute for its own.
 export const briefVoted = async (db, ctx, body) => {
   const settings = await settingsOf(db, ctx);
-  const counts = ctx.role !== 'volunteer' ? await countsOf(db, ctx) : settings.on ? await sharedCounts(db, ctx) : {};
+  const counts = ctx.role !== 'volunteer' || settings.on ? await sharedCounts(db, ctx) : {};
   body.voted = { ...settings, ...counts };
 };

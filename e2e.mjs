@@ -377,7 +377,7 @@ check('Today: doors this week', /doors this week/i.test(t));
 await page.click('button.today-num');
 await sleep(300);
 t = await text();
-check('Today: support breakdown opens in place', /support/i.test(t) && /opposed/i.test(t) && /support=1/.test(page.url()));
+check('Today: support breakdown opens in place', /Supporters/.test(t) && /Opposed/.test(t) && /support=1/.test(page.url()));
 check('Today: upcoming shift', /Saturday canvass — Newton/.test(t));
 check('Today: money hero (desk role)', /total raised/i.test(t));
 await shot('9-today');

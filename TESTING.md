@@ -1537,3 +1537,27 @@ Built conservatively; the campaign should confirm these rules with counsel
   reads "do not call" tags them. The CRTC expects a
   campaign to keep and honour its own do-not-call list — **confirm what a
   dialer needs with counsel** before a calling night.
+
+## The front page (HOME)
+
+- **Unit**: `server/test/home.test.js` — Today's win number (`brief.goal`):
+  the same supporters, days and clock as Path to win and a candidate's Your
+  race; GOTV's election day first; the first set race in the race list; who
+  gets it; a failure leaves `goal.unavailable`; at most three queries, none
+  over persons; a desk reloading Today counts nothing over the list, and a
+  write shows at once. `server/test/commandbar.test.js` — Path to win,
+  Activity, Mainstreeting; Phone banks and Turfs gated by People and Map;
+  `quickFor` (Go to: at most six, QUICK's order, by areas, never a tab;
+  "Your letters" takes the last tile for a writer; the search finds it).
+  `server/test/dashframe.test.js` — Activity's map frame: walk lists first,
+  one door at Kelowna does not pull 50 in Newton wide, yesterday's position
+  is ignored, "today" is the campaign's day, nothing opens on the city.
+- **Browser**: `node e2e-home.mjs` (starts its own servers on :5420, :5422
+  with email set, and :5421 under `BASE_PATH`; `ONLY=root,email,basepath`) —
+  the band under the numbers, folding, no doors read; Supporters and its
+  breakdown; Needs you's Connect email and a writer's replies; Go to and
+  the search; More; ≤ 150 words; Activity (its pills, tiles, chart, the map
+  as a wide band with the people under it, a zoom kept when the window gets
+  shorter, Unavailable / Try again on a failed read, No signal);
+  Check the records on Import & export; staff, staff denied Data or
+  Map, a treasurer denied Outreach, a volunteer's field Today.

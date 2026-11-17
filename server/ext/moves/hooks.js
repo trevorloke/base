@@ -14,6 +14,7 @@ import { areasFor } from '../../lib/perms.js';
 import { newId } from '../../lib/events.js';
 import { SAMPLE_MOVERS } from '../../lib/sample.js';
 import { movedCounts } from './open.js';
+import { keptCount } from '../todaycounts/index.js';
 import { applyMove } from './actions.js';
 
 export const clearUnknown = async (tx, meta, events) => {
@@ -35,7 +36,8 @@ export const clearUnknown = async (tx, meta, events) => {
 export const briefMoved = async (db, ctx, body) => {
   if (ctx.role === 'volunteer' || !areasFor(ctx).includes('people')) return;
   try {
-    body.moved = { open: (await movedCounts(db, ctx.workspaceId)).open };
+    // Kept half a minute, dropped by any write to a person (ext/todaycounts).
+    body.moved = { open: (await keptCount(ctx.workspaceId, 'moved', () => movedCounts(db, ctx.workspaceId))).open };
   } catch (e) {
     console.error('brief: moved count unavailable:', e.message);
   }

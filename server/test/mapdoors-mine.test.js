@@ -132,9 +132,11 @@ test('on a voting day volunteers share one count of the voted numbers', async ()
     const after = ok(await vol.get('/api/brief'));
     assert.equal(after.voted.total, first.voted.total + 1, 'a mark shows at once');
     assert.equal(after.voted.today, first.voted.today + 1);
-    // The desk counts afresh.
-    const { asked: deskAsked } = await watched(async () => ok(await mgr.get('/api/brief')));
-    assert.ok(deskAsked.some((q) => /\bfrom persons\b/i.test(q) && /voted_at/i.test(q) && /count\s*\(/i.test(q)));
+    // The desk shares the same kept count (HOME: its Today counts nothing
+    // over the list on a reload), and has the mark.
+    const { answer: desk, asked: deskAsked } = await watched(async () => ok(await mgr.get('/api/brief')));
+    assert.equal(desk.voted.total, after.voted.total);
+    assert.ok(!deskAsked.some((q) => /\bfrom persons\b/i.test(q) && /voted_at/i.test(q) && /count\s*\(/i.test(q)));
   } finally {
     ok(await mgr.action('vote.settings', { on: false }));
   }

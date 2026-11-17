@@ -154,13 +154,12 @@ await openDoor('Harjit Example');
 check('Election day off: an open door has no "Voted ✓"', !!(await vpage.$(`${doorOf('Harjit Example')} .walk-panel .rb-btn`)) && !(await vpage.$('.vt-btn')));
 check('GET /voted/status for every role: off', (await V.api('/voted/status')).json?.on === false);
 
-// ── 3. The manager turns it on: Today → More → Election day ──
+// ── 3. The manager turns it on: Today → Go to → Get out the vote ──
 await D.go('/');
-await page.click('.today-morebox:not(.today-activity) > .today-morebox__toggle');
-await sleep(300);
-const rowOff = await page.$('a.today-row[href="/admin/voted"]');
-const rowOffText = rowOff ? (await rowOff.$eval('.today-row__main', (el) => el.innerText)).replace(/\s+/g, ' ').trim() : '(no row)';
-check('Today → More lists "GOTV & voting days" (off: no count)', !!rowOff && rowOffText === 'GOTV & voting days', rowOffText);
+await page.waitForSelector('.today-goto a', { timeout: 10000 }).catch(() => {});
+const rowOff = await page.$('.today-goto a.today-goto__i[href$="/voted"]');
+const rowOffText = rowOff ? (await rowOff.innerText()).replace('›', '').replace(/\s+/g, ' ').trim() : '(no row)';
+check('Today → Go to lists "Get out the vote"', !!rowOff && rowOffText === 'Get out the vote', rowOffText);
 await rowOff.click();
 await page.waitForURL(`${ADMIN}/voted`, { timeout: 8000 });
 await sleep(700);
@@ -225,11 +224,10 @@ check('a volunteer’s own marks carry no names', JSON.stringify((await V.api(`/
 
 // ── 5. Today (desk): "Election day · 1 of 2 supporters voted" ──
 await D.go('/');
-await page.click('.today-morebox:not(.today-activity) > .today-morebox__toggle');
 await sleep(300);
-const rowOn = ((await page.innerText('a.today-row[href="/admin/voted"] .today-row__main').catch(() => '')) || '').replace(/\s+/g, ' ').trim();
+const rowOn = ((await page.innerText('.today-gotv .today-gotv__n').catch(() => '')) || '').replace(/\s+/g, ' ').trim();
 const brief = (await D.api('/brief')).json.voted;
-check('Today → More: "GOTV · 1 of 2 supporters voted" — the brief agrees', rowOn === 'GOTV · 1 of 2 supporters voted' && brief.supporters_voted === 1 && brief.supporters === 2 && brief.on === true, `${rowOn} · ${JSON.stringify(brief)}`);
+check('Today’s GOTV card: "1 of 2 supporters have voted" — the brief agrees', /^1 of 2 supporters have voted/.test(rowOn) && brief.supporters_voted === 1 && brief.supporters === 2 && brief.on === true, `${rowOn} · ${JSON.stringify(brief)}`);
 const card = ((await page.innerText('.today-gotv').catch(() => '')) || '').replace(/\s+/g, ' ');
 check('Today’s GOTV card: "Election day · 1 of 2 supporters have voted · 1 to go", Call who hasn’t voted', /Election day/i.test(card) && /1 of 2 supporters have voted · 1 to go/.test(card)
   && (await page.getAttribute('.today-gotv a:has-text("Call who hasn")', 'href')) === '/admin/calls?rating=1,2&voted=no', card);

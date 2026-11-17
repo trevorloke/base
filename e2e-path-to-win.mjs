@@ -1,7 +1,7 @@
 // Path to win E2E — one fresh in-memory campaign. A manager signs up and
 // brings in a made-up list (three turfs' doors around Newton, Fleetwood and
 // Guildford, some knocked weeks ago, some rated) and logs one knock today.
-// Today → More → "Path to win" opens the screen: no election day, no win
+// Today → Go to → "Path to win" opens the screen: no election day, no win
 // number yet (one primary button: "Set the win number"); everyone on file by
 // rating, the 12-week trend (and its table), and the turfs ranked best first
 // — on the map (one outline per turf, coloured by priority, rank badges, a
@@ -140,13 +140,14 @@ const guildfordDoor = (await api(`/persons?q=${encodeURIComponent('100 Example R
 const k = await api('/actions/contact.log', { person_id: guildfordDoor?.id, channel: 'door', outcome: 'contacted', rating: '1' });
 check('a knock today with a strong yes', k.status === 200, JSON.stringify(k.json).slice(0, 160));
 
-// ── 2. Today → More → Path to win ──
+// ── 2. Today → Go to → Path to win ──
 await page.goto(`${BASE}/admin/`, { waitUntil: 'domcontentloaded' });
-await page.getByRole('button', { name: 'More', exact: true }).click();
-const row = page.getByRole('link', { name: 'Path to win', exact: true });
-const moreRows = (await page.locator('.today-morebox__body .today-row__main').allInnerTexts()).map((s) => s.trim());
-check('Today → More lists "Path to win" beside Reports', await row.isVisible().catch(() => false)
-  && moreRows.join('|').includes('Path to win|Reports'), moreRows.join(' | '));
+await page.waitForSelector('.today-goto a', { timeout: 15000 });
+const row = page.locator('.today-goto a', { hasText: 'Path to win' });
+const goRows = (await page.locator('.today-goto a').allInnerTexts()).map((s) => s.replace('›', '').trim());
+const at = (l) => goRows.indexOf(l);
+check('Today → Go to lists "Path to win" after Reports, before Get out the vote', await row.isVisible().catch(() => false)
+  && at('Reports') >= 0 && at('Reports') < at('Path to win') && at('Path to win') < at('Get out the vote'), goRows.join(' | '));
 await row.click();
 await page.waitForURL(/\/admin\/path-to-win$/);
 await page.locator('.ptw-turfs').waitFor({ timeout: 20000 });
