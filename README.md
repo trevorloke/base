@@ -1281,7 +1281,12 @@ address ("1203-13450 104 Ave"). `GET /api/buildings/of/<person>` and
 `/api/buildings/at?lat=&lng=` answer a building's units in that order, each
 with its state in the open pass (a pass never shrinks a building: a unit it
 doesn't want is "Not on this round"); the busy map's dots carry each spot's
-unit count.
+unit count. On the map a building is one square with its unit count (a
+square dot further out); tap it and its sheet lists the floors, then the
+units with who lives there and whether they're done; tap a unit (or *Next
+unit*) for its door card, with a bar back to the building and, once a knock
+is logged, *Next unit* as the card's one button. With no signal the sheet is
+built from a walk list kept on the phone.
 
 **The map's look** is each person's own (Show → *Map*, kept on that
 browser, and only when they tap one): *Standard* (what the map opens on);
