@@ -61,21 +61,23 @@ services:
         fromDatabase:
           name: base-win-staging-db
           property: connectionString
-      # Staging starts in base.win's own look with a made-up campaign name, so
-      # it can be shown to anyone (server/lib/brand.js; a brand a manager saves
+      # Staging is a sample campaign in Vancouver: base.win's own look, a
+      # made-up name and no client's brand, so it can be shown to anyone (server/lib/brand.js; a brand a manager saves
       # in Settings → Brand wins over it). The rules below — limits,
       # time zone, city, slates — are the client's, so staging tests what
       # production does.
       - key: STARBASE_BRAND
         value: base
       - key: STARBASE_ORG_NAME
-        value: Demo Campaign
+        value: Sample Campaign
       - key: STARBASE_JURISDICTION
         value: bc-municipal
       - key: STARBASE_TZ
         value: America/Vancouver
       - key: STARBASE_CITY
-        value: Surrey
+        value: Vancouver
+      - key: STARBASE_GEO_BOUNDS     # the City of Vancouver: where the map opens and addresses are looked for
+        value: "49.198,-123.225|49.317,-123.023"
       - key: STARBASE_SLATES
         value: "council:City council,school_board:School board"
       - key: STARBASE_PUBLIC_URL     # this environment's address, e.g. https://starbase-staging.onrender.com
