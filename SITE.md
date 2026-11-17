@@ -582,12 +582,17 @@ answer the 404 under a prefix.
   English changed) and counts, and the month's characters. A language:
   **Turn on** (a manager; with the estimate of what its first translation
   sends), the checklist while it gets ready, the sentences (To check ·
-  Suggested · Couldn't translate · Edited · All), Recent edits with Undo,
-  and the names kept as written (with possible names to keep). **Words the
+  Suggested · Couldn't translate · Edited · All; To check also holds a
+  person's words whose Simplified changed or that now hold a kept name),
+  Recent edits with Undo, the names kept as written (with possible names
+  to keep), and **Preview** (before the language is offered, a half-hour
+  link to the home page's draft in it). **Words the
   law needs** shows each key's English and the approved words or a
   labelled draft; a manager approves them all at once. Reads:
   `GET /api/site/languages` and `/api/site/languages/:code/{estimate,
-  sentences,edits,legal}`. Writes: `site.translation.save` (live at once,
+  sentences,edits,legal,preview}`. History says a gift declared on a
+  translated page ("Declared in ਪੰਜਾਬੀ: … · English: …") and a signature's
+  statement as signed. Writes: `site.translation.save` (live at once,
   unchecked, for someone with the Website; a suggestion for someone with
   only **Website translations**, `site_words`), `site.translation.approve`,
   `.decline`, `.check` (never one's own words; a petition's statement
