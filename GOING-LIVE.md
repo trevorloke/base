@@ -32,7 +32,7 @@ also have `GOOGLE_MAPS_TILES=off` before the release is pushed (§5, Recipe B).
 ## 1 · Deploy
 
 1. Render → **New → Blueprint** → this repo, `main`. `render.yaml` creates
-   `starbase-staging` (from `main`) and `starbase` (from `production`), each
+   `base-win-staging` (from `main`) and `base-win` (from `production`), each
    with its own database.
 2. Wait for the first deploy, then open
    `https://<service>.onrender.com/api/health`. It answers
