@@ -89,6 +89,8 @@ export const SCREENS = [
   { label: 'Path to win', to: '/path-to-win', area: 'data', words: 'win number supporters needed pace goal race' },
   { label: 'Activity', to: '/activity', manager: true, words: 'dashboard out now chart teams latest contacts trail' },
   { label: 'Mainstreeting', to: '/mainstreet', area: 'people', desk: true, words: 'events bus loop met someone' },
+  // The writer's own letters and the campaign's replies (Letters.jsx), for anyone.
+  { label: 'Your letters', to: '/letters', words: 'my letters op-ed oped replies mine sent' },
 ];
 
 // Today's "Go to" (desk): the places used every day, in this order, each
@@ -106,20 +108,26 @@ export const QUICK = [
 ];
 export const QUICK_MAX = 6;
 
-// The first six this person may open, that are not already one of their
-// tabs (nav), and whose brief test (if any) holds.
+// At most six this person may open, that are not already one of their
+// tabs (nav), and whose brief test (if any) holds. A place shown because of
+// the brief ("Your letters") keeps its tile: the last everyday place gives
+// way to it (the search still finds that one), in QUICK's order.
 export function quickFor(me, nav = [], brief = {}) {
   const tabs = new Set(nav.map((n) => n.to));
-  const out = [];
+  const pass = [];
   for (const q of QUICK) {
     const screen = SCREENS.find((s) => s.to === q.to);
     const item = screen ? { ...screen, ...q, label: q.label || screen.label } : q;
     if (!item.label || !allowed(me, item) || tabs.has(item.to)) continue;
     if (item.when && !item.when(brief || {})) continue;
-    out.push({ label: item.label, to: item.to });
-    if (out.length === QUICK_MAX) break;
+    pass.push(item);
   }
-  return out;
+  const kept = Math.max(0, QUICK_MAX - pass.filter((i) => i.when).length);
+  let everyday = 0;
+  return pass
+    .filter((i) => i.when || everyday++ < kept)
+    .slice(0, QUICK_MAX)
+    .map((i) => ({ label: i.label, to: i.to }));
 }
 
 // What this person may open and do. nav: the tabs the Shell shows them

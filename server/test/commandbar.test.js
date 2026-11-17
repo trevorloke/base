@@ -238,3 +238,18 @@ test('Go to: a when entry only when the brief says so; a place with no screen an
   const asTab = quickFor({ role: 'manager', areas: [] }, [...NAV, { to: '/reports', label: 'Reports' }], {});
   assert.ok(!labels(asTab).includes('Reports'), 'Reports as a tab is not offered twice');
 });
+
+test('Go to: a desk member who writes letters gets “Your letters” in place of the last everyday place; the search finds it', () => {
+  for (const me of [{ role: 'manager', areas: [] }, { role: 'staff', areas: ['people', 'map', 'shifts', 'money', 'signs', 'outreach', 'data'] }]) {
+    const got = labels(quickFor(me, NAV, { letters: { has: true, unseen: 1 } }));
+    assert.ok(got.length <= QUICK_MAX);
+    assert.equal(got[got.length - 1], 'Your letters', JSON.stringify(me));
+    assert.equal(got[0], 'Reports');
+    assert.ok(!labels(quickFor(me, NAV, { letters: { has: false } })).includes('Your letters'));
+  }
+  // Typed into the search, for any desk role and a volunteer alike.
+  for (const me of [{ role: 'manager', areas: [] }, { role: 'staff', areas: ['people'] }, { role: 'volunteer', areas: [] }]) {
+    const { screens } = commandsFor(me, NAV);
+    assert.equal(rank(screens, 'your letters')[0]?.to, '/letters', me.role);
+  }
+});

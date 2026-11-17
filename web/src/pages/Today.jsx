@@ -492,8 +492,10 @@ function NeedsYou({ b, me }) {
   const connectEmail = me?.role === 'manager' && Boolean(b.providers) && !b.providers.email;
   // People who moved, waiting for a new address (ext/moves: People holders).
   const moved = Number(b.moved?.open) || 0;
+  // The campaign's replies to letters this person wrote (brief.letters).
+  const replies = Number(b.letters?.unseen) || 0;
   const empty = !flagged.length && !newVols && !shortShifts.length && !signs && !followups.n && !newTexts && !requests.n && !letters.n
-    && !connectEmail && !moved;
+    && !connectEmail && !moved && !replies;
 
   return (
     <section className="today-section" aria-labelledby="today-needs-h">
@@ -529,6 +531,9 @@ function NeedsYou({ b, me }) {
           )}
           {letters.n > 0 && (
             <LinkRow to="/media/letters" state={FROM_TODAY} main={<><strong className="mono">{letters.n}</strong> {plural(letters.n, 'letter')}</>} />
+          )}
+          {replies > 0 && (
+            <LinkRow to="/letters" main={<><strong className="mono">{num(replies)}</strong> {plural(replies, 'reply', 'replies')} to your letters</>} />
           )}
           {requests.n > 0 && (
             <LinkRow to="/requests" state={FROM_TODAY} main={<><strong className="mono">{requests.n}</strong> {plural(requests.n, 'request')} from the doors</>} />
