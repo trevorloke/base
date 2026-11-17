@@ -102,6 +102,18 @@ h2.today-h {
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums lining-nums;
   white-space: nowrap;
+  /* Shrinks with its tile, so "$87,500" or "12,345" fits a phone's third of
+     the width; clipped with an ellipsis only as a last resort. */
+  font-size: min(52px, 22cqi);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.today-num { container-type: inline-size; }
+/* Doors this week for someone without the Map: a number, not a link. */
+.today-num--plain { cursor: default; }
+@media (hover: hover) {
+  .today-num--plain:hover { border: var(--border); }
 }
 .today-num__label {
   margin-top: auto;

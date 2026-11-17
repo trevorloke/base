@@ -2,7 +2,7 @@
 // go exclusively through POST /api/actions/:name. GET /api/events is the
 // sync protocol AND the public API — the same endpoint the app uses — and
 // GET /api/export is the contractual one-click full-fidelity export.
-import { mayRun, decide, decideArea, areaOfPath } from '../lib/perms.js';
+import { mayRun, decide, decideArea, areaOfPath, areasFor } from '../lib/perms.js';
 import { Hono } from 'hono';
 import { getCookie } from 'hono/cookie';
 import { compress } from 'hono/compress';
@@ -1232,6 +1232,16 @@ app.get('/brief', async (c) => {
   // may warn managers of what only they can fix (an account locked by wrong
   // two-step codes: ext/twostep).
   await runHooks('brief', db, ctx, body);
+  // A desk person sees only the areas they have: no gift, donor or total
+  // without Donations, no short shift without Shifts, no sign count without
+  // Signs — Today never shows what a tap there would refuse. (A volunteer's
+  // Today is their own shifts and signs, as before.)
+  if (desk) {
+    const areas = areasFor(ctx);
+    if (!areas.includes('money')) { body.money = null; body.flagged = []; delete body.filing; delete body.filingAll; }
+    if (!areas.includes('shifts')) { body.shifts = []; body.shortShifts = []; }
+    if (!areas.includes('signs')) body.signs = {};
+  }
   // Managers hear about a server problem only they can get fixed.
   const tz = ctx.role === 'manager' ? staleTimeZoneData() : null;
   if (tz) body.serverWarnings = [tz, ...(body.serverWarnings || [])];

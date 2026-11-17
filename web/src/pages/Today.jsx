@@ -311,7 +311,7 @@ function GoalLines({ goal }) {
   );
 }
 
-function SupportDetail({ pic, id, goal }) {
+function SupportDetail({ pic, id, goal, map }) {
   const { counts, variants, total, pct } = pic;
   const showVariants = variants.some((v) => v.code !== '4');
   return (
@@ -343,7 +343,7 @@ function SupportDetail({ pic, id, goal }) {
       <div className="today-support-foot">
         <span className="mono muted">{num(total)} rated</span>
         <span className="today-support-links">
-          <Link to="/map" className="today-more-link">Open the map <Chevron /></Link>
+          {map && <Link to="/map" className="today-more-link">Open the map <Chevron /></Link>}
           {goal && <Link to="/path-to-win" className="today-more-link">Path to win <Chevron /></Link>}
         </span>
       </div>
@@ -352,7 +352,7 @@ function SupportDetail({ pic, id, goal }) {
 }
 
 // ── Desk: the three big numbers ──
-function Numbers({ b, pic }) {
+function Numbers({ b, pic, me }) {
   const [params, setParams] = useSearchParams();
   const open = params.get('support') === '1';
   const detailId = useId();
@@ -373,10 +373,18 @@ function Numbers({ b, pic }) {
     <>
       {/* Same shape as the rows: › goes to a screen, + opens here. */}
       <div className="today-nums">
-        <Link to="/map" className="today-num">
-          <span className="today-num__n">{num(doors)}</span>
-          <span className="today-num__label">Doors this week<span className="today-num__go" aria-hidden="true">›</span></span>
-        </Link>
+        {/* A tile goes to its screen only for someone who may open it. */}
+        {hasArea(me, 'map') ? (
+          <Link to="/map" className="today-num">
+            <span className="today-num__n">{num(doors)}</span>
+            <span className="today-num__label">Doors this week<span className="today-num__go" aria-hidden="true">›</span></span>
+          </Link>
+        ) : (
+          <div className="today-num today-num--plain">
+            <span className="today-num__n">{num(doors)}</span>
+            <span className="today-num__label">Doors this week</span>
+          </div>
+        )}
         <button type="button" className="today-num" aria-expanded={open} aria-controls={detailId} onClick={toggle} aria-label={label}>
           <span className="today-num__n">{big}</span>
           {goal && (
@@ -387,14 +395,14 @@ function Numbers({ b, pic }) {
           )}
           <span className="today-num__label">Supporters<span className="today-num__plus" aria-hidden="true" /></span>
         </button>
-        {b.money && (
+        {b.money && hasArea(me, 'money') && (
           <Link to="/money" className="today-num" aria-label={`Total raised ${fmtMoney(b.money.totalCents)}`}>
             <span className="today-num__n">{fmtBigMoney(b.money.totalCents)}</span>
             <span className="today-num__label">Total raised<span className="today-num__go" aria-hidden="true">›</span></span>
           </Link>
         )}
       </div>
-      {open && <SupportDetail pic={pic} id={detailId} goal={b.goal} />}
+      {open && <SupportDetail pic={pic} id={detailId} goal={b.goal} map={hasArea(me, 'map')} />}
     </>
   );
 }
@@ -474,7 +482,9 @@ function NeedsYou({ b, me }) {
   const letters = useLettersCount(hasArea(me, 'media'));
   // Texts waiting to be read: replies to yours, and numbers that wrote in.
   const newTexts = Number(useTextingStatus(me).data?.unread) || 0;
-  const flagged = b.flagged ?? [];
+  // Each row only for someone who may open its screen (the server sends
+  // none of these without the area; this keeps an older brief honest too).
+  const flagged = hasArea(me, 'money') ? (b.flagged ?? []) : [];
   // Shifts in the next week short of the people they want: by their target
   // (which never turns anyone away), or by their limit on an older shift —
   // the server's list (brief.shortShifts). An older server sends none: then
@@ -482,9 +492,10 @@ function NeedsYou({ b, me }) {
   const shortShifts = (b.shortShifts ?? (b.shifts ?? [])
     .filter((s) => s.capacity && (Number(s.filled) || 0) < s.capacity && withinDays(s.starts_at, 7))
     .map((s) => ({ ...s, short: s.capacity - (Number(s.filled) || 0) })))
-    .slice(0, 2);
+    .slice(0, 2)
+    .filter(() => hasArea(me, 'shifts'));
   const tz = zoneOf(me);
-  const signs = Number(b.signs?.requested) || 0;
+  const signs = hasArea(me, 'signs') ? Number(b.signs?.requested) || 0 : 0;
   const shownFlags = flagged.length > 3 ? flagged.slice(0, 2) : flagged;
   const moreFlags = flagged.length - shownFlags.length;
   // Email not set up: the managers' to-do (Settings → Services). Texting is
@@ -1080,7 +1091,7 @@ function DeskToday({ b, me, nav, toast }) {
       {/* Their own people to reach within the day, before the numbers. */}
       <FollowupsToday me={me} />
 
-      <Numbers b={b} pic={pic} />
+      <Numbers b={b} pic={pic} me={me} />
 
       {/* MAP's band: the walk lists' outlines, across the page, folding away.
           The rest of the old dashboard (who is out, the chart, the teams) is
@@ -1097,7 +1108,7 @@ function DeskToday({ b, me, nav, toast }) {
       <section className="today-section" aria-labelledby="today-next-h">
         <h2 className="today-h" id="today-next-h">Coming up</h2>
         <ul className="today-rows">
-          <ShiftRow shift={(b.shifts ?? [])[0]} tz={zoneOf(me)} />
+          {hasArea(me, 'shifts') && <ShiftRow shift={(b.shifts ?? [])[0]} tz={zoneOf(me)} />}
           {/* The financial agent's filing dates within 30 days (ext/filingdates; money roles):
               what is due, its day under it (as a shift's time is), so a phone shows both whole. */}
           {(b.filing ?? []).map((d) => (
