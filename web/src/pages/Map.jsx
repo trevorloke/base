@@ -28,7 +28,7 @@
 // (OpenStreetMap unless STARBASE_TILE_* say otherwise); the service worker
 // keeps the ones already looked at, so a turf seen with signal still draws.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Link, useOutletContext, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -372,14 +372,18 @@ function clusterIcon(doors, offset) {
 }
 
 // A building's square pin: its count (the units the filter shows) and a bar
-// in the shares of its shown rated people. Never one resident's colour.
+// in the shares of its shown people who are rated each way. Never one
+// resident's colour.
 function buildingIcon(b, selected) {
+  // (Shares of everyone shown, rated or not: 10 supporters in a tower of
+  // 300 is a sliver of green, the rest the edge colour.)
   const c = { support: 0, undecided: 0, opposed: 0 };
   let n = 0;
   for (const d of b.shownDoors) {
     for (const p of d.persons) {
       const band = bandOf(p.rating);
-      if (band in c) { c[band] += 1; n += 1; }
+      if (band in c) c[band] += 1;
+      n += 1;
     }
   }
   const pct = (k) => `${n ? ((k / n) * 100).toFixed(1) : 0}%`;
@@ -389,6 +393,22 @@ function buildingIcon(b, selected) {
     html: `<div class="map-bldg${selected ? ' map-bldg--selected' : ''}" aria-label="${esc(label)}" role="img"><span class="map-bldg__n">${countLabel(b.shown)}</span><span class="map-bldg__bar" style="--a:${pct(c.support)};--b:${pct(c.support + c.undecided)};--c:${pct(c.support + c.undecided + c.opposed)}"></span></div>`,
     iconSize: [48, 48],
     iconAnchor: [24, 24],
+  });
+}
+
+// A pin or a square opens from the keyboard too: Enter or Space on it (it
+// is focusable), as a tap does. (The key is taken, so nothing else acts on it.)
+function byKeyboard(marker, open) {
+  marker.on('add', () => {
+    const el = marker.getElement();
+    if (!el || el.dataset.keys) return;
+    el.dataset.keys = '1';
+    el.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      e.preventDefault();
+      e.stopPropagation();
+      open();
+    });
   });
 }
 
@@ -1123,6 +1143,8 @@ export default function MapPage() {
   // ?building=<person id>: a building's sheet (the anchor; never an address),
   // with &person=<id> while one of its units' door card is open.
   const buildingParam = params.get('building');
+  const navigate = useNavigate();
+  const location = useLocation();
   const turfParam = params.get('turf');
   const drawParam = params.get('draw');
   const showParam = params.get('show'); // ?show=gotv from Today's GOTV card
@@ -1667,7 +1689,9 @@ export default function MapPage() {
       for (const key of ['signs', 'voted', 'gotv']) c[key] = null;
       for (const f of filters) if (f.key.startsWith('r:')) c[f.key] = only === f.key.slice(2) ? (c[f.key] || 0) + dots.length : null;
       if (only) for (const key of ['all', 'support', 'undecided', 'opposed', 'unrated']) c[key] = null;
-      else for (const d of dots) { c.all += 1; c[d.band] += 1; }
+      // (A building's square dot is its units' doors, not one: its band is
+      // one resident's, so only the total counts them.)
+      else for (const d of dots) { c.all += isBuildingDot(d) ? Math.max(1, d.u) : 1; c[d.band] += 1; }
     }
     return c;
     // filters: its keys follow the scale and the doors, both listed here.
@@ -1863,9 +1887,11 @@ export default function MapPage() {
   // A building's sheet: ?building=<anchor person>. A busy view's square dot
   // asks the server which building is there; a dot that only looked like
   // one (or one too big to list) opens a door the old way (openSpot).
+  // (Pushed, not replaced: the phone's Back steps unit card → sheet → map.)
   const openBuilding = (anchorId) => {
     setSignSel(null);
-    setParamsRef.current({ building: anchorId }, { replace: true });
+    if (anchorId === buildingParam && !personParam) return; // already open (a key and a click)
+    setParamsRef.current({ building: anchorId }, { replace: Boolean(buildingParam) });
   };
   const openBuildingAt = async (dot) => {
     const mine = (spotSeqRef.current += 1);
@@ -1888,12 +1914,19 @@ export default function MapPage() {
   };
   // A unit of the open building: its door goes where the map looks (so the
   // card opens at once, signal or not), then the card opens over the sheet.
-  const openUnit = (row) => {
-    const id = seedDoor(queryClient, row);
+  // From the sheet a unit is pushed (Back is the sheet again); Next unit
+  // from a card takes that card's place, so Back is still the sheet.
+  const openUnit = (target) => {
+    const id = seedDoor(queryClient, target);
     if (!id || !buildingParam) return;
-    setParamsRef.current({ building: buildingParam, person: id }, { replace: true });
+    const fromCard = Boolean(personParam);
+    setParamsRef.current({ building: buildingParam, person: id }, { replace: fromCard, state: { unitOfBuilding: true } });
   };
-  const backToBuilding = () => { if (buildingParam) setParamsRef.current({ building: buildingParam }, { replace: true }); };
+  const backToBuilding = () => {
+    if (!buildingParam) return;
+    if (personParam && location.state?.unitOfBuilding) navigate(-1);
+    else setParamsRef.current({ building: buildingParam }, { replace: true });
+  };
   // Not a building after all: its door opens; gone: the line, and it closes.
   useEffect(() => {
     if (!buildingParam || !bld) return;
@@ -2066,6 +2099,7 @@ export default function MapPage() {
       else if (mode) cancelMode();
       else if (pickerOpen) setPickerOpen(false);
       else if (addAt) setAddAt(null);
+      else if (personParam && buildingParam) backToBuilding(); // a unit's card: back to its building
       else if (personParam || turfParam || signSel || buildingParam) select(null);
     };
   });
@@ -2440,6 +2474,7 @@ export default function MapPage() {
         zIndexOffset: selected ? 1000 : 0,
       });
       marker.on('click', () => onPinClickRef.current?.(door));
+      byKeyboard(marker, () => onPinClickRef.current?.(door));
       marker.addTo(layers.doors);
       markersRef.current.set(door.key, marker);
     };
@@ -2454,6 +2489,7 @@ export default function MapPage() {
         zIndexOffset: 300,
       });
       marker.on('click', () => onPinClickRef.current?.(b));
+      byKeyboard(marker, () => onPinClickRef.current?.(b));
       marker.addTo(layers.doors);
       markersRef.current.set(b.key, marker);
     };
@@ -2582,9 +2618,10 @@ export default function MapPage() {
   const showKey = Boolean(doorsQ.data) && !noSignal && (big ? Boolean(drawn) : doors.length > 0);
   // (On "My turf" a volunteer sees their own doors, not the list's patches.)
   const patches = byView && drawn?.kind === 'density';
+  const anySquare = buildingItems.length > 0 || leanShown.some(isBuildingDot);
   const keyWords = nobodyHere || !byView ? null
     : patches ? 'Each square is a block — zoom in for doors'
-      : drawn?.kind === 'dots' || (drawn && !pinsOn) ? 'Each dot is a door' : null;
+      : drawn?.kind === 'dots' || (drawn && !pinsOn) ? (anySquare ? 'Each dot is a door, each square a building' : 'Each dot is a door') : null;
   // First visit (volunteers): "Tap a house to start" under the pill, only on
   // the plain map with houses to tap — never over a card, sheet or mode bar.
   // Opening any door counts as having started.

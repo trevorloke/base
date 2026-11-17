@@ -208,10 +208,16 @@ const SHEET_TAPS = '.bldg-unit, .bldg-floor__head, .bldg-next, .bldg-back, .bldg
 const sheetText = (page) => page.$eval('.bldg-sheet:not([hidden])', (el) => el.innerText.replace(/\s+/g, ' ').trim()).catch(() => '');
 const countLine = (page) => page.$eval('.bldg-sheet .bldg-count__line', (el) => el.innerText.trim()).catch(() => '');
 const leftOf = (line) => Number((/([\d,]+) left/.exec(line) || [])[1]?.replace(/,/g, '') ?? NaN);
+// (A tree without buildings has no floors: nothing to open, no wait.)
 const openFloor = async (page, label) => {
-  const head = page.locator('.bldg-floor__head', { hasText: label }).first();
-  if ((await head.getAttribute('aria-expanded')) !== 'true') await head.click();
+  const head = page.locator('.bldg-sheet:not([hidden]) .bldg-floor__head', { hasText: label }).first();
+  if (!(await head.count())) return false;
+  if ((await head.getAttribute('aria-expanded', { timeout: 3000 }).catch(() => null)) !== 'true') await head.click({ timeout: 3000 }).catch(() => {});
+  return true;
 };
+// The unit's door card (the sheet stays mounted, hidden, under it: it has
+// a .door-card and a .bldg-next of its own).
+const CARD = '.map-sheet:not(.bldg-sheet) .door-card';
 const unitNos = (page) => page.$$eval('.bldg-sheet:not([hidden]) .bldg-unit__no', (els) => els.map((e) => e.innerText.trim()));
 const tapSquare = async (page, addr) => {
   // (No square: the tap that would have been, on the tower's own spot.)
@@ -295,7 +301,14 @@ let anchorId = null;
 if (want(3)) {
   for (const [H, size] of [[D, 'desk'], [MP, 'phone']]) {
     await openTowerOnMap(H);
-    await tapSquare(H.page, A.addr);
+    const sq = H.page.locator(`.leaflet-marker-icon[title^="${A.addr}, building"]`).first();
+    if (size === 'desk' && await sq.count()) {
+      // The desk opens it from the keyboard: the square takes focus, Enter.
+      await sq.focus();
+      await H.page.keyboard.press('Enter');
+      await H.page.waitForSelector('.bldg-sheet:not([hidden]) .bldg-count__line', { timeout: 8000 }).catch(() => {});
+      check('10 desk: the square opens from the keyboard (focus, Enter)', Boolean(new URL(H.page.url()).searchParams.get('building')), H.page.url());
+    } else await tapSquare(H.page, A.addr);
     const line = await countLine(H.page);
     check(`3 ${size}: tap the square → "210 units · 210 left"`, line === '210 units · 210 left', line || await sheetText(H.page));
     const heads = await H.page.$$eval('.bldg-floor__head', (els) => els.map((e) => ({ t: e.innerText.replace(/\s+/g, ' ').trim(), open: e.getAttribute('aria-expanded') === 'true' })));
@@ -323,15 +336,15 @@ if (want(4)) {
   await mp.waitForSelector('.bldg-back', { timeout: 8000 }).catch(() => {});
   const bar = await MP.text('.bldg-back');
   check('4: the card for 201 with "‹ 13450 104 Ave · Floor 2 · Unit 201"', bar === '‹ 13450 104 Ave · Floor 2 · Unit 201', bar);
-  check('4: before a knock nothing competes with the rating buttons (no Next unit)', !(await mp.$('.door-card .bldg-next')));
+  check('4: before a knock nothing competes with the rating buttons (no Next unit)', !(await mp.$(`${CARD} .bldg-next`)));
   await MP.shot('04-card-before-knock-phone');
-  await mp.locator('.door-card .fk-out', { hasText: 'No answer' }).first().click();
-  await mp.waitForSelector('.door-card .bldg-next', { timeout: 8000 }).catch(() => {});
-  const n2 = await mp.$eval('.door-card .bldg-next', (el) => el.innerText.trim()).catch(() => '');
+  await mp.locator(`${CARD} .fk-out`, { hasText: 'No answer' }).first().click();
+  await mp.waitForSelector(`${CARD} .bldg-next`, { timeout: 8000 }).catch(() => {});
+  const n2 = await mp.$eval(`${CARD} .bldg-next`, (el) => el.innerText.trim()).catch(() => '');
   check('4: No answer → "Next unit · 202" appears', n2 === 'Next unit · 202', n2);
   await simple(mp, '4 phone: the card after a knock (Next unit the one primary)', '.bldg-next, .bldg-back', true);
   await MP.shot('04-card-next-unit-phone');
-  await mp.click('.door-card .bldg-next');
+  await mp.click(`${CARD} .bldg-next`);
   await sleep(700);
   const bar2 = await MP.text('.bldg-back');
   check('4: Next unit → the card for 202', /Unit 202$/.test(bar2), bar2);
@@ -341,6 +354,48 @@ if (want(4)) {
   const line = await countLine(mp);
   check('4: ‹ back to the sheet, now "209 left"', line === '210 units · 209 left', line);
   await MP.shot('04-sheet-after-phone');
+  // The phone's Back: a unit's card → its building's sheet → the map.
+  await mp.locator('.bldg-sheet:not([hidden]) .bldg-unit', { hasText: '203' }).first().click();
+  await mp.waitForSelector(`${CARD} .bldg-back`, { timeout: 8000 }).catch(() => {});
+  await mp.goBack();
+  await mp.waitForSelector('.bldg-sheet:not([hidden]) .bldg-count__line', { timeout: 5000 }).catch(() => {});
+  const back1 = new URL(mp.url()).searchParams;
+  check('4: Back from a unit’s card is the building’s sheet', Boolean(back1.get('building')) && !back1.get('person') && Boolean(await mp.$('.bldg-sheet:not([hidden])')), mp.url());
+  await mp.goBack();
+  await sleep(700);
+  const back2 = new URL(mp.url());
+  check('4: Back again is the map (still the map, the sheet closed)', /\/map$/.test(back2.pathname) && !back2.searchParams.get('building') && !(await mp.$('.bldg-sheet')), mp.url());
+  await mp.goForward();
+  await mp.waitForSelector('.bldg-sheet:not([hidden]) .bldg-count__line', { timeout: 5000 }).catch(() => {});
+
+  // One unit written two ways (1203: two people with a Unit column, one
+  // as "1203-13450 104 Ave"): its row opens the first door; once that is
+  // knocked Next unit is 1203 again, the other door, then 1204.
+  const u1203 = S.made.filter((p) => p.tower === 'A' && p.u === '1203');
+  const hyphen1203 = u1203.find((p) => /^1203-/.test(p.address));
+  await openFloor(mp, 'Floor 12');
+  await mp.locator('.bldg-sheet:not([hidden]) .bldg-unit', { hasText: '1203' }).first().click();
+  await mp.waitForSelector(`${CARD} .bldg-back`, { timeout: 8000 }).catch(() => {});
+  const first1203 = await MP.text(CARD);
+  check('4: 1203’s row opens its first door (Unit column)', u1203.filter((p) => !/^1203-/.test(p.address)).every((p) => first1203.includes(p.name.split(' ')[0])) && !first1203.includes(hyphen1203.name), first1203.slice(0, 80));
+  await mp.locator(`${CARD} .fk-out`, { hasText: 'No answer' }).first().click();
+  await mp.waitForSelector(`${CARD} .bldg-next`, { timeout: 8000 }).catch(() => {});
+  const n1203 = await mp.$eval(`${CARD} .bldg-next`, (el) => el.innerText.trim()).catch(() => '');
+  check('4: after the first door, Next unit is 1203 again (its other door)', n1203 === 'Next unit · 1203', n1203);
+  await mp.click(`${CARD} .bldg-next`);
+  await sleep(800);
+  const second1203 = await MP.text(CARD);
+  check('4: …which opens the door written "1203-13450 104 Ave", with its own person', second1203.includes(hyphen1203.name), second1203.slice(0, 80));
+  await mp.locator(`${CARD} .fk-out`, { hasText: 'No answer' }).first().click();
+  await mp.waitForSelector(`${CARD} .bldg-next`, { timeout: 8000 }).catch(() => {});
+  const n1204 = await mp.$eval(`${CARD} .bldg-next`, (el) => el.innerText.trim()).catch(() => '');
+  check('4: both doors knocked: Next unit moves on to 1204', n1204 === 'Next unit · 1204', n1204);
+  await mp.click(`${CARD} .bldg-back`);
+  await mp.waitForSelector('.bldg-sheet:not([hidden])', { timeout: 5000 }).catch(() => {});
+  await sleep(1200);
+  await openFloor(mp, 'Floor 12');
+  const row1203 = await mp.$eval('.bldg-sheet:not([hidden]) .bldg-unit[aria-label^="Unit 1203,"]', (el) => el.getAttribute('aria-label')).catch(() => '');
+  check('4: 1203 is Done once both its doors are, and "left" counts it once', /, Done$/.test(row1203) && (await countLine(mp)) === '210 units · 208 left', `${row1203} · ${await countLine(mp)}`);
   // Dark, desk: the card with its bar.
   const kctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: 'dark', timezoneId: 'America/Vancouver' });
   await tiles(kctx);
@@ -354,6 +409,10 @@ if (want(4)) {
   await K.page.waitForSelector('.bldg-back', { timeout: 8000 }).catch(() => {});
   await K.shot('04-card-bar-desk-dark');
   check('4 desk dark: a unit row opens its card with the bar', /Unit 202$/.test(await K.text('.bldg-back')) && Boolean(two02));
+  await K.page.keyboard.press('Escape');
+  await sleep(600);
+  const esc = new URL(K.page.url()).searchParams;
+  check('4 desk: Escape on a unit’s card goes back to the building’s sheet', Boolean(esc.get('building')) && !esc.get('person') && Boolean(await K.page.$('.bldg-sheet:not([hidden])')), K.page.url());
   await kctx.close();
 }
 
@@ -426,9 +485,9 @@ if (want(8)) {
   await vp.click('.bldg-next');
   await vp.waitForSelector('.bldg-back', { timeout: 8000 }).catch(() => {});
   check('8: Next unit opens 201 with no signal', /Unit 201$/.test(await V.text('.bldg-back')), await V.text('.bldg-back'));
-  await vp.locator('.door-card .fk-out', { hasText: 'No answer' }).first().click();
-  await vp.waitForSelector('.door-card .bldg-next', { timeout: 8000 }).catch(() => {});
-  const n2 = await vp.$eval('.door-card .bldg-next', (el) => el.innerText.trim()).catch(() => '');
+  await vp.locator(`${CARD} .fk-out`, { hasText: 'No answer' }).first().click();
+  await vp.waitForSelector(`${CARD} .bldg-next`, { timeout: 8000 }).catch(() => {});
+  const n2 = await vp.$eval(`${CARD} .bldg-next`, (el) => el.innerText.trim()).catch(() => '');
   check('8: offline knock → Next unit goes to 202', n2 === 'Next unit · 202', n2);
   await vp.click('.bldg-back');
   await sleep(500);
@@ -476,6 +535,8 @@ if (want(7)) {
     check('7: GOTV pass, 3 supporters voted: still "210 units", those 3 "Not on this round", left down by 3',
       /^210 units · /.test(line) && offSupporters.length === 3 && leftOf(line) === before.open - 3, `${line} · before open ${before?.open} · ${offSupporters.length}`);
     await D.shot('07-gotv-sheet-desk');
+    const head2 = await D.page.$eval('.bldg-sheet .bldg-floor__head', (el) => el.innerText.replace(/\s+/g, ' ').trim()).catch(() => '');
+    check('7: a floor with nobody on this round says so, never "done"', /^Floor 2 · not on this round/.test(head2), head2);
     await D.api('/actions/pass.start', { name: 'Persuasion · last', kind: 'persuasion', who: 'all', tries: 1 });
   }
 }

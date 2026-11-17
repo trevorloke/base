@@ -175,7 +175,11 @@ export const unitRows = (building) => {
     if (!byUnit.has(u)) byUnit.set(u, []);
     byUnit.get(u).push(d);
   }
-  return [...byUnit.entries()].map(([unit, doors]) => {
+  return [...byUnit.entries()].map(([unit, list]) => {
+    // (Its doors in one order whatever order they were read in: the one
+    // with its own Unit column first, then by address.)
+    const doors = list.length < 2 ? list : [...list].sort((x, y) => (x.unit ? 0 : 1) - (y.unit ? 0 : 1)
+      || String(x.address || '').localeCompare(String(y.address || '')));
     const inRound = doors.filter((d) => d.in_round !== false);
     const counted = (inRound.length ? inRound : doors).map((d) => d.state || 'open');
     const state = counted.every((s) => s === 'done') ? 'done'
@@ -187,6 +191,14 @@ export const unitRows = (building) => {
     };
   }).sort((a, b) => unitCompare(a.unit, b.unit));
 };
+
+// The doors "Next unit" walks: every door on this round of every row on
+// this round, in unit order — so a unit written two ways (two doors, one
+// row) is two stops, and the second door's people are reached too. Each
+// stop carries its row's unit and floor and its own door's state.
+export const unitStops = (rows) => rows.flatMap((row) => (row.in_round === false ? [] : row.doors
+  .filter((d) => d.in_round !== false)
+  .map((door) => ({ row, door, unit: row.unit, floor: row.floor, state: door.state || 'open' }))));
 
 // The next row from index `from` round the list (never `from` itself; -1:
 // from the top): not knocked first, then the ones to try again (the other

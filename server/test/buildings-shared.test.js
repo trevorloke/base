@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   splitUnit, normAddr, civicOf, unitOf, floorOf, unitCompare, floorsShown,
-  groupBuildings, buildingOf, unitRows, nextDoor, BUILDING_MIN,
+  groupBuildings, buildingOf, unitRows, unitStops, nextDoor, BUILDING_MIN,
 } from '@starbase/shared/buildings';
 
 const LAT = 49.19;
@@ -144,6 +144,26 @@ test('unitRows: one unit written two ways is one row, done only when both doors 
   const r = unitRows(bld).find((x) => x.unit === '1203');
   assert.equal(r.state, 'done');
   assert.equal(r.in_round, true);
+});
+
+test('unitStops: Next unit walks every door of a unit written two ways, then moves on', () => {
+  const hana = door('13450 104 Ave', '1203', { state: 'open', persons: [{ id: 'hana', name: 'Hana Example' }] });
+  const zed = door('1203-13450 104 Ave', null, { state: 'open', persons: [{ id: 'zed', name: 'Zed Example' }] });
+  const off = door('13450 104 Ave', '1205', { state: 'open', in_round: false });
+  const others = ['1201', '1202', '1204'].map((u) => door('13450 104 Ave', u, { state: 'done' }));
+  const [bld] = groupBuildings([zed, hana, off, ...others]).buildings;
+  const stops = () => unitStops(unitRows(bld));
+  // Off this round: never a stop. Every other door is one, in unit order.
+  assert.deepEqual(stops().map((s) => s.unit), ['1201', '1202', '1203', '1203', '1204']);
+  assert.equal(stops()[nextDoor(stops(), -1)].door, hana, 'the Unit-column door of 1203 first, whatever the read order');
+  hana.state = 'done';
+  const s = stops();
+  const at = s.findIndex((x) => x.door === hana);
+  assert.equal(s[nextDoor(s, at)].door, zed, 'after Hana: Zed, at the same unit');
+  assert.equal(s[nextDoor(s, at)].floor, 12);
+  zed.state = 'done';
+  assert.equal(nextDoor(stops(), stops().findIndex((x) => x.door === zed)), -1, 'then every unit is done');
+  assert.equal(unitRows(bld).find((r) => r.unit === '1203').state, 'done');
 });
 
 // The walk list's pickNext as it was (Turfs.jsx), to hold nextDoor to it.

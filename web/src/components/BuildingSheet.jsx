@@ -23,7 +23,7 @@ import { pendingKnocks, useOutbox } from '../offline.js';
 import { doorState, inPass } from '@starbase/shared/passes';
 import { bandOf } from '@starbase/shared/scale';
 import {
-  buildingOf, floorLabel, floorsShown, nextDoor, unitOf, unitRows,
+  buildingOf, floorLabel, floorsShown, nextDoor, unitOf, unitRows, unitStops,
 } from '@starbase/shared/buildings';
 import { overlayPass, waitingTries } from './PassBits.jsx';
 import { pendingVoted } from './Voted.jsx';
@@ -145,7 +145,9 @@ export function useBuilding({ anchorId, me, online, mapDoors, showsDoor, filterO
     const rows = unitRows({ doors });
     // The map's filter, on the building's own doors: the rows it shows.
     const shownRows = filterOn ? rows.filter((r) => r.doors.some(showsDoor)) : rows;
-    const walk = shownRows.filter((r) => r.in_round);
+    // What Next unit walks: each door on this round (a unit written two
+    // ways is two doors, so its second door's people are reached too).
+    const walk = unitStops(shownRows).filter((s) => !filterOn || showsDoor(s.door));
     const left = counted ? rows.filter((r) => r.in_round && r.state !== 'done').length : null;
     const b = source.b;
     return {
@@ -168,12 +170,13 @@ export function useBuilding({ anchorId, me, online, mapDoors, showsDoor, filterO
   }, [anchorId, q.data, q.dataUpdatedAt, q.isError, q.error, q.refetch, refusal, online, me, mapDoors, showsDoor, filterOn, sent, outbox.items]);
 }
 
-// The next unit to knock, after the row holding `doorKeyNow` (or from the
-// top): the walk list's own rule (nextDoor), over the rows on this round
-// that the map's filter shows. null: every unit is done.
+// The next door to knock, after the door `doorKeyNow` (or from the top):
+// the walk list's own rule (nextDoor), over the doors on this round that
+// the map's filter shows — a stop { row, door, unit, floor }. null: every
+// unit is done.
 export const nextUnit = (bld, doorKeyNow = null) => {
   if (!bld?.walk?.length) return null;
-  const from = doorKeyNow ? bld.walk.findIndex((r) => r.doors.some((d) => rowDoorKey(d) === doorKeyNow)) : -1;
+  const from = doorKeyNow ? bld.walk.findIndex((s) => rowDoorKey(s.door) === doorKeyNow) : -1;
   const i = nextDoor(bld.walk, from);
   return i >= 0 ? bld.walk[i] : null;
 };
@@ -240,6 +243,8 @@ export default function BuildingSheet({ bld, hidden, filterLabel, onOpen, onClos
   // A floor heading's own "3 left" (with no counts: how many units).
   const floorLine = (f) => {
     if (!bld.counted) return `${floorLabel(f.floor)} · ${num(f.rows.length)} ${f.rows.length === 1 ? 'unit' : 'units'}`;
+    // (A floor nobody on it is wanted by this round isn't "done": nobody knocked.)
+    if (!f.rows.some((r) => r.in_round)) return `${floorLabel(f.floor)} · not on this round`;
     const left = f.rows.filter((r) => r.in_round && r.state !== 'done').length;
     return `${floorLabel(f.floor)} · ${left ? `${num(left)} left` : 'done'}`;
   };
@@ -347,10 +352,16 @@ export function BuildingBar({ label, onBack }) {
 // "13450 104 Ave · Floor 12 · Unit 1203"
 export const unitLine = (bld, row) => [bld?.address, bld?.floors && row ? floorLabel(row.floor) : null, row ? unitWords(row) : null].filter(Boolean).join(' · ');
 
+// The door a unit row's tap opens: its first door on this round that isn't
+// done (a unit written two ways: the one still to knock), else its first.
+const doorToOpen = (row) => row.doors.find((d) => d.in_round !== false && d.state !== 'done')
+  || row.doors.find((d) => d.in_round !== false) || row.doors[0];
+
 // Before a unit's card opens, its door is put where the map looks for a
 // person's door (as a tapped dot does), so it opens at once, signal or not.
-export const seedDoor = (queryClient, row) => {
-  const d = row.doors[0];
+// target: a unit row (a tap on it) or a stop of Next unit (its own door).
+export const seedDoor = (queryClient, target) => {
+  const d = target.door || doorToOpen(target);
   const first = d?.persons?.[0];
   if (!first) return null;
   queryClient.setQueryData(['doors', 'door', first.id], (was) => was || { persons: placed(d), signs: d.signs || [], scope: 'door' });
