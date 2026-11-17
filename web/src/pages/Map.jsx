@@ -1615,7 +1615,8 @@ export default function MapPage() {
   useEffect(() => { setSentHere({}); }, [buildingParam]);
   const showsDoor = useCallback((d) => shows({ key: rowDoorKey(d), persons: d.persons, signs: d.signs || [], band: householdBand(d.persons) }), [shows]);
   const bld = useBuilding({ anchorId: buildingParam, me, online, mapDoors: doors, showsDoor, filterOn: filter !== 'all', sent: sentHere });
-  const bldSelectedKey = buildingParam ? inBuilding.get(byPerson.get(buildingParam)?.key)?.key || null : null;
+  const bldOfAnchor = buildingParam ? inBuilding.get(byPerson.get(buildingParam)?.key) : null;
+  const bldSelectedKey = bldOfAnchor ? `building:${bldOfAnchor.key}` : null;
   // The dots a big list answered with, less any door the map has whole (the
   // open one, a volunteer's own: drawn from that) — and the ones the filter
   // keeps. Signs, voted and "my turf" need the people: a closer look.
@@ -1859,9 +1860,6 @@ export default function MapPage() {
     }
   };
 
-  // A dot tapped where the people aren't loaded (a busy view): the people at
-  // that spot are asked for, and the nearest one's door opens. More than a
-  // building's worth there: closer first.
   // A building's sheet: ?building=<anchor person>. A busy view's square dot
   // asks the server which building is there; a dot that only looked like
   // one (or one too big to list) opens a door the old way (openSpot).
@@ -1904,6 +1902,9 @@ export default function MapPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bld?.status, buildingParam]);
 
+  // A dot tapped where the people aren't loaded (a busy view): the people at
+  // that spot are asked for, and the nearest one's door opens. More than a
+  // building's worth there: closer first.
   const openSpot = async (dot) => {
     const mine = (spotSeqRef.current += 1);
     setSpotBusy(true);
