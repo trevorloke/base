@@ -99,7 +99,7 @@ const putLive = async (tx, wsId, { lang, hash, src, place, versionId, text, chec
        checked_by = $8, checked_at = case when $8::uuid is null then null else now() end, updated_at = now()`,
     [newId(), wsId, lang, hash, src, text, versionId, checkedBy, place],
   );
-  await tx.query('delete from site_translation_failures where workspace_id = $1 and lang = $2 and src_hash = $3', [wsId, lang === 'zh-Hant' ? 'zh-Hans' : lang, hash]);
+  await tx.query('delete from site_translation_failures where workspace_id = $1 and lang = $2 and src_hash = $3', [wsId, lang, hash]);
   if (lang === 'zh-Hans') { await convertRow(tx, wsId, hash, src, text, place); await bumpRev(tx, wsId, 'zh-Hant'); }
   await bumpRev(tx, wsId, lang);
 };
