@@ -94,7 +94,7 @@ check('Overview: the site is live, at the app’s own /site/ address', /Your sit
 check('Overview: online giving is not set up yet', /Online giving Not set up yet/i.test(t0));
 const tiles = (await page.locator('.wb-tile').allTextContents()).map((x) => x.replace(/\s+/g, ' '));
 check('Overview: pages, news, petitions and this week’s sign-ups are counted', tiles.some((x) => /^Sign-ups this week ?0/.test(x)) && tiles.some((x) => /^Pages ?8/.test(x)) && tiles.some((x) => /^Petitions and pledges ?2/.test(x)), JSON.stringify(tiles).slice(0, 300));
-const otherRow = page.locator('a.ms-home-row');
+const otherRow = page.locator('a.ms-home-row[href$="/website/sites"]');
 check('Overview: one row for the other websites, “None yet”, opening Other websites', /Other websites\s*None yet/.test(await otherRow.innerText().catch(() => '')) && /\/website\/sites$/.test(await otherRow.getAttribute('href').catch(() => '')));
 const viewHref = await page.getByRole('link', { name: /^View site/ }).getAttribute('href');
 check('"View site" opens the site', /\/site\/$/.test(viewHref), viewHref);
