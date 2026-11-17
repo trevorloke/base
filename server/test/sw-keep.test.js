@@ -88,6 +88,9 @@ test('the page names its build, the fonts’ stylesheet and the campaign’s log
   assert.ok(fonts.every((f) => f.startsWith('/fonts/')), fonts.join(' '));
   assert.deepEqual(w.refsIn('@font-face{src:url("/site-assets/fonts/montserrat-latin.woff2")} .x{background:url(//cdn.example/fonts/a.woff2)}', true), [], 'the website’s fonts, and anyone else’s, are not the app’s');
   assert.deepEqual(w.refsIn('<link rel="preload" as="image" href="//evil.example/x.png" data-brand /><link rel="preload" as="image" href="https://evil.example/y.png" data-brand />'), [], 'only this server’s own pictures');
+  // The voter guide's embed code, shown on a desk screen, names the website's
+  // script: not a build file (a missing one would stop old builds ever going).
+  assert.deepEqual(w.refsIn('const s=`<script src="${site}/site-assets/embed.js" async></script>`;import("./Map-x1.js")', true), ['/assets/Map-x1.js'], 'the website’s site-assets are not the app’s');
 });
 
 test('under a client’s path every kept address is the client’s', () => {

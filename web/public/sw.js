@@ -296,8 +296,9 @@ async function adoptIndex(res, previous) {
 // Vite's preload map) and "./Map-x1.js" (a chunk importing its neighbour).
 // The page also names the fonts' stylesheet, which names the font files
 // ("/fonts/…", the client's path in front when there is one), and the
-// campaign's own pictures: the links the server marks data-brand.
-const ASSET_REF = /\/?assets\/[A-Za-z0-9._-]+\.(?:js|css|svg|png|jpe?g|webp|gif|woff2?|ttf)\b/g;
+// campaign's own pictures: the links the server marks data-brand. Never the
+// website's "site-assets/…" (the voter guide's embed code names one).
+const ASSET_REF = /(?<![\w-])\/?assets\/[A-Za-z0-9._-]+\.(?:js|css|svg|png|jpe?g|webp|gif|woff2?|ttf)\b/g;
 const SIBLING_REF = /["'`]\.\/([A-Za-z0-9._-]+\.(?:js|css))["'`]/g;
 const FONT_REF = new RegExp(`["'(](${BASE}/fonts/[A-Za-z0-9._-]+\\.(?:css|woff2?))["')]`, 'g');
 const BRAND_LINK = /<link\b[^>]*\sdata-brand\b[^>]*>/gi;
