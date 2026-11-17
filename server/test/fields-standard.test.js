@@ -25,6 +25,14 @@ test('a new campaign has them: eligibility (Eligible/Ineligible), Language (the 
   assert.equal(F.Notes.kind, 'note');
 });
 
+test('a new campaign has Faith (Pick one, private), Dwelling type (a scroll-down list) and Campus (Pick one), with their seeds', async () => {
+  assert.deepEqual([F.Faith.kind, F.Faith.sensitive, F.Faith.volunteers, F.Faith.choices.length], ['choice', true, false, 29]);
+  assert.deepEqual([F['Dwelling type'].kind, F['Dwelling type'].display, F['Dwelling type'].choices.length], ['choice', 'list', 11]);
+  assert.deepEqual([F.Campus.kind, F.Campus.display, F.Campus.choices], ['choice', 'buttons', ['Kwantlen Polytechnic University – Surrey', 'Kwantlen Polytechnic University – Cloverdale', 'SFU Surrey']]);
+  const seeds = (await db.query('select name from fields_seeded where workspace_id = $1', [ws])).rows.map((r) => r.name);
+  assert.ok(['Faith', 'Dwelling type list', 'Campus list'].every((n) => seeds.includes(n)), seeds.join());
+});
+
 test('on a profile: several languages (in the list’s order), a long note with its lines, eligibility', async () => {
   const p = await mgr.createPerson('Ana Example');
   const note = 'Met at the Newton market.\nPrefers evening calls.\n\n' + 'x'.repeat(1500);
@@ -67,7 +75,7 @@ test('import “Punjabi; hindi”, filter by a language, the People export has t
 test('a campaign from before gets the three once; one renamed or taken off is never put back', async () => {
   const { sql } = await import('../ext/fields/sql.js');
   await db.query(`delete from person_fields where workspace_id = $1 and name in ('Voter eligibility', 'Language', 'Notes')`, [ws]);
-  await db.query('delete from fields_seeded where workspace_id = $1', [ws]);
+  await db.query("delete from fields_seeded where workspace_id = $1 and name in ('Voter eligibility', 'Language', 'Notes')", [ws]);
   await db.exec(sql);
   let names = Object.keys(await fieldsBy());
   assert.ok(['Voter eligibility', 'Language', 'Notes'].every((n) => names.includes(n)), 'added once');

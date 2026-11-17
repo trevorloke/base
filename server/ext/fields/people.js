@@ -17,7 +17,9 @@
 //   sampleCleared  removes exactly those; a sample field you filled in for
 //                  your own people stays (no longer sample), and says so.
 import { newId } from '../../lib/events.js';
-import { FIELDS_MAX, nameKey, parseValue, valueError } from './kinds.js';
+import { httpError } from '../../actions/util.js';
+import { FAITHS, DWELLING_TYPES, CAMPUSES, groupMembers } from '@starbase/shared/fieldlists';
+import { FIELDS_MAX, choicesOf, nameKey, parseValue, valueError } from './kinds.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -34,13 +36,24 @@ export const personsWhere = async (db, ctx, query, w) => {
     'select * from person_fields where id = $1 and workspace_id = $2 and retired_at is null', [id, ctx.workspaceId],
   )).rows[0];
   if (!f || (ctx.role === 'volunteer' && !f.volunteers)) return none();
+  // A Private field never picks people for anyone outside the office
+  // (ctx.forOthers — ext/lists audience.js): refused where a person hands
+  // the list on, nobody where it is read again later for someone else.
+  if (f.sensitive && ctx.forOthers === 'refuse') throw httpError(409, handOnRefusal(f.name));
+  if (f.sensitive && ctx.forOthers) return none();
+  // "Christian – *": any choice in that group (shared/fieldlists.js).
+  const group = f.kind === 'choice' ? groupMembers(choicesOf(f), want) : null;
   // Every param pushed must be used: check the value before pushing any.
-  const p = want === '*' ? null : parseValue(f, want);
+  const p = want === '*' || group ? null : parseValue(f, want);
   if (p && (p.error || p.empty)) return none();
+  if (group && !group.length) return none();
   w.params.push(f.id);
   const fid = `$${w.params.length}`;
   let match = '';
-  if (p) {
+  if (group) {
+    w.params.push(JSON.stringify(group));
+    match = ` and v.value in (select jsonb_array_elements($${w.params.length}::jsonb))`;
+  } else if (p) {
     if (f.kind === 'text') {
       w.params.push(String(p.value).toLowerCase());
       match = ` and lower(v.value #>> '{}') = $${w.params.length}`;
@@ -61,6 +74,11 @@ export const personsWhere = async (db, ctx, query, w) => {
     where v.workspace_id = p.workspace_id and v.person_id = p.id and v.field_id = ${fid}${match})`;
   return undefined;
 };
+
+export const handOnRefusal = (name) => `This list picks people by ${name}, which is private — it can’t be walked, called, sent to CallHub, emailed, texted or copied.`;
+// A field being turned into a list (actions.js field.list.start) takes no
+// new words until it is done.
+export const convertingRefusal = (name) => `“${name}” is being turned into a list — try again later`;
 
 export const importRows = async (db, ctx, extras) => {
   const ws = ctx.workspaceId;
@@ -98,6 +116,7 @@ export const importRows = async (db, ctx, extras) => {
         if (!f && UUID_RE.test(key)) return { error: 'a profile field in this import was removed — set its column to Don’t import' };
         if (!f) return { error: `there’s no field called “${String(key).slice(0, 60)}”` };
         if (out.some((o) => o.f.id === f.id)) return { error: `“${f.name}” is in two columns` };
+        if (f.converting) return { error: convertingRefusal(f.name) };
         const p = parseValue(f, typeof cell === 'number' || typeof cell === 'boolean' || cell === null ? cell : String(cell ?? ''));
         if (p.error) return { error: valueError(f, p.error) };
         if (!p.empty) out.push({ f, value: p.value });
@@ -187,6 +206,11 @@ export const FORM_INTERESTS = ['Safer streets', 'Faster commutes', 'Smarter inve
 // (they describe the old door) and Undo puts them back (ext/moves). By name,
 // lower case, as the standard fields name them.
 export const DOOR_FIELDS = ['house notes', 'building notes', 'access type', 'dwelling type'];
+// The same as SQL over person_fields alias f ($n: DOOR_FIELDS): one of them,
+// or the "<name> as written" field that keeps a door field's words since it
+// became a list ("Dwelling type as written" describes the old door too).
+export const doorFieldSql = (f, n) => `(lower(${f}.name) = any(${n}::text[]) or ${f}.as_written_of in (
+  select d.id from person_fields d where d.workspace_id = ${f}.workspace_id and lower(d.name) = any(${n}::text[])))`;
 
 // Imagine Surrey's standard fields: one for every column of the campaign's
 // list that the core person record has no home for. Named exactly as the
@@ -200,7 +224,7 @@ export const STANDARD_FIELDS = [
   { name: 'House notes', kind: 'text', volunteers: true },
   { name: 'Building notes', kind: 'text', volunteers: true },
   { name: 'Access type', kind: 'text', volunteers: true },
-  { name: 'Dwelling type', kind: 'text', volunteers: true },
+  { name: 'Dwelling type', kind: 'choice', choices: DWELLING_TYPES, display: 'list', volunteers: true },
   { name: 'Interaction status', kind: 'text', volunteers: false },
   { name: 'Interaction date', kind: 'date', volunteers: false },
   { name: 'Organizer', kind: 'text', volunteers: false },
@@ -219,35 +243,111 @@ export const STANDARD_FIELDS = [
   { name: 'Citizenship', kind: 'choice', choices: ['Canadian citizen', 'Permanent resident'], volunteers: false },
   { name: 'Union member', kind: 'yesno', volunteers: false },
   { name: 'Union local', kind: 'text', volunteers: false },
-  { name: 'Campus', kind: 'text', volunteers: false },
+  { name: 'Campus', kind: 'choice', choices: CAMPUSES, volunteers: false },
   { name: 'Other language', kind: 'text', volunteers: true },
+  // Private: the office only, and only what the person says (README).
+  { name: 'Faith', kind: 'choice', choices: FAITHS, sensitive: true, volunteers: false },
   { name: 'Interests', kind: 'choices', choices: FORM_INTERESTS, volunteers: false },
   { name: 'Interested in being a candidate', kind: 'yesno', volunteers: false },
 ];
 
 // → the fields added ({ id, name, kind }); none when every one is there.
-export const addStandardFields = async (tx, ctx, emit) => {
+// auto (the membership form, on every entry): only a field this campaign
+// has never had — none live or taken off by that name, and not one it was
+// given before (fields_seeded) — so a rename or a take-off is never undone.
+// Otherwise (a new campaign, a manager's "Add the standard fields"):
+// anything missing by name on the profile.
+export const addStandardFields = async (tx, ctx, emit, { auto = false } = {}) => {
   const ws = ctx.workspaceId;
-  const live = (await tx.query('select * from person_fields where workspace_id = $1 and retired_at is null', [ws])).rows;
+  const all = (await tx.query('select * from person_fields where workspace_id = $1', [ws])).rows;
+  const live = all.filter((f) => !f.retired_at);
+  const seeded = auto ? new Set((await tx.query('select name from fields_seeded where workspace_id = $1', [ws])).rows.map((r) => nameKey(r.name))) : new Set();
+  const had = auto ? all : live;
   let top = live.reduce((m, f) => Math.max(m, f.position), -1);
   let count = live.length;
   const added = [];
   for (const s of STANDARD_FIELDS) {
-    if (live.some((x) => nameKey(x.name) === nameKey(s.name))) continue;
+    if (had.some((x) => nameKey(x.name) === nameKey(s.name)) || seeded.has(nameKey(s.name))) continue;
     if (count >= FIELDS_MAX) break;
     top += 1; count += 1;
-    const f = { id: newId(), name: s.name, kind: s.kind, choices: s.choices || [], volunteers: s.volunteers, position: top };
+    const f = {
+      id: newId(), name: s.name, kind: s.kind, choices: s.choices || [], volunteers: s.volunteers, position: top,
+      display: s.display || 'buttons', sensitive: !!s.sensitive,
+    };
     await tx.query(
-      `insert into person_fields (id, workspace_id, name, kind, choices, volunteers, position, created_by)
-       values ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [f.id, ws, f.name, f.kind, JSON.stringify(f.choices), f.volunteers, f.position, ctx.user?.id || null],
+      `insert into person_fields (id, workspace_id, name, kind, choices, volunteers, position, display, sensitive, created_by)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      [f.id, ws, f.name, f.kind, JSON.stringify(f.choices), f.volunteers, f.position, f.display, f.sensitive, ctx.user?.id || null],
     );
     emit('person_field', f.id, 'create', { ...f, standard: true });
     added.push({ id: f.id, name: f.name, kind: f.kind });
   }
   return added;
 };
-export const workspaceCreated = (tx, ctx, { emit }) => addStandardFields(tx, ctx, emit);
+// The seeds a campaign set up today already has: the standard fields it
+// was given, and the markers of the upgrades it never needs (sql.js).
+export const LIST_SEEDS = { Faith: 'Faith', 'Dwelling type': 'Dwelling type list', Campus: 'Campus list' };
+const seed = (tx, ws, names) => tx.query(
+  'insert into fields_seeded (workspace_id, name) select $1, unnest($2::text[]) on conflict do nothing', [ws, names],
+);
+export const workspaceCreated = async (tx, ctx, { emit }) => {
+  const added = await addStandardFields(tx, ctx, emit);
+  await seed(tx, ctx.workspaceId, [...added.map((f) => f.name), ...Object.values(LIST_SEEDS)]);
+  return added;
+};
+
+// The profile fields a download carries as columns, in order: every live
+// one, leaving out Private ones unless privateToo (a manager who asked).
+export const fieldColumns = async (db, ws, { privateToo = false } = {}) => (await db.query(
+  `select id, name, kind from person_fields where workspace_id = $1 and retired_at is null
+     ${privateToo ? '' : 'and not sensitive'} order by position, created_at`, [ws],
+)).rows;
+// The ids of the Private fields (taken off too), with the "as written"
+// fields kept for them: what a non-manager's backup and event log leave out.
+export const privateFieldIds = async (db, ws) => (await db.query(
+  `select id, name from person_fields where workspace_id = $1 and (sensitive or as_written_of in (
+     select id from person_fields where workspace_id = $1 and sensitive))`, [ws],
+)).rows;
+
+// The fields Turn into a list upgrades a campaign from before (index.js
+// fields.lists): Faith added, an empty Text Dwelling type and Campus made
+// lists. Each step once (fields_seeded), all through the event log.
+export const upgradeLists = async (tx, ctx, emit) => {
+  const ws = ctx.workspaceId;
+  const seeded = new Set((await tx.query('select name from fields_seeded where workspace_id = $1', [ws])).rows.map((r) => r.name));
+  const all = (await tx.query('select * from person_fields where workspace_id = $1 for update', [ws])).rows;
+  const live = all.filter((f) => !f.retired_at);
+  const done = [];
+  if (!seeded.has('Faith')) {
+    const s = STANDARD_FIELDS.find((x) => x.name === 'Faith');
+    if (!all.some((f) => nameKey(f.name) === 'faith') && live.length < FIELDS_MAX - 2) {
+      const top = live.reduce((m, f) => Math.max(m, f.position), -1) + 1;
+      const f = { id: newId(), name: s.name, kind: s.kind, choices: s.choices, volunteers: false, position: top, display: 'buttons', sensitive: true };
+      await tx.query(
+        `insert into person_fields (id, workspace_id, name, kind, choices, volunteers, position, display, sensitive)
+         values ($1, $2, $3, $4, $5, false, $6, 'buttons', true)`,
+        [f.id, ws, f.name, f.kind, JSON.stringify(f.choices), f.position],
+      );
+      emit('person_field', f.id, 'create', { ...f, standard: true });
+      done.push('Faith');
+    } else if (all.some((f) => nameKey(f.name) === 'faith')) done.push('Faith');
+  }
+  for (const [name, choices, display] of [['Dwelling type', DWELLING_TYPES, 'list'], ['Campus', CAMPUSES, 'buttons']]) {
+    if (seeded.has(LIST_SEEDS[name])) continue;
+    const f = live.find((x) => nameKey(x.name) === nameKey(name) && x.kind === 'text' && !x.converting);
+    if (!f) continue;
+    const used = (await tx.query('select 1 from person_field_values where workspace_id = $1 and field_id = $2 limit 1', [ws, f.id])).rows[0];
+    if (used) continue; // Words on file: a manager turns it into a list (actions.js field.list.start).
+    await tx.query(
+      `update person_fields set kind = 'choice', choices = $3, display = $4, updated_at = now() where id = $1 and workspace_id = $2`,
+      [f.id, ws, JSON.stringify(choices), display],
+    );
+    emit('person_field', f.id, 'update', { kind: 'choice', was: 'text', choices, display, standard: true });
+    done.push(LIST_SEEDS[name]);
+  }
+  if (done.length) await seed(tx, ws, done);
+  return done;
+};
 
 export const sampleLoaded = async (tx, ctx, { people, emit }) => {
   const ws = ctx.workspaceId;

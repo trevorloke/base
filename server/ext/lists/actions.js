@@ -10,7 +10,7 @@ import { newId } from '../../lib/events.js';
 import { httpError } from '../../actions/util.js';
 import { DESK_RULES, cleanFilter, joinWhere } from '../../lib/audience.js';
 import { decide } from '../../lib/perms.js';
-import { loadList, whereFor } from './audience.js';
+import { handOn, loadList, whereFor } from './audience.js';
 
 const DESK = ['manager', 'treasurer', 'staff'];
 const filterInput = () => z.record(z.string().max(40), z.string().max(400)).optional();
@@ -101,7 +101,8 @@ export const actions = {
         [id, ws, input.name, input.note || null, ctx.user.id, ctx.role === 'volunteer'],
       );
       const params = [id];
-      const where = joinWhere(params, await whereFor(tx, ctx, { list: from, filter }));
+      // A copy no longer checks its rule: never one picked by a Private field.
+      const where = joinWhere(params, await whereFor(tx, handOn(ctx), { list: from, filter }));
       const r = await tx.query(
         `insert into list_members (list_id, workspace_id, person_id)
          select $1::uuid, p.workspace_id, p.id from persons p where ${where}`, params,
@@ -122,6 +123,13 @@ export const actions = {
       if (input.filter !== undefined) deskRulesOnly(ctx, filter);
       // Whoever saves the rule, it is read with their eyes from here on.
       const byVolunteer = input.filter !== undefined && cur.kind === 'filter' ? ctx.role === 'volunteer' : cur.by_volunteer;
+      // Walked by the open pass or called by an open phone bank: its new rule
+      // may not pick people by a Private field (ext/fields).
+      if (input.filter !== undefined && cur.kind === 'filter' && (await tx.query(
+        `select 1 from canvass_passes where workspace_id = $1 and list_id = $2 and ended_at is null
+         union all select 1 from call_banks where workspace_id = $1 and list_id = $2 and closed_at is null and deleted_at is null limit 1`,
+        [ctx.workspaceId, cur.id],
+      )).rows[0]) await whereFor(tx, handOn(ctx), { list: { ...cur, filter, by_volunteer: byVolunteer } });
       await tx.query(
         'update lists set name = $3, filter = $4, note = $5, by_volunteer = $6, updated_at = now() where id = $1 and workspace_id = $2',
         [cur.id, ctx.workspaceId, input.name ?? cur.name, JSON.stringify(filter), input.note === undefined ? cur.note : input.note, byVolunteer],

@@ -8,7 +8,7 @@
 // Nothing here writes, and nothing here talks to CallHub.
 import { httpError } from '../../actions/util.js';
 import { azKey } from '../../lib/az.js';
-import { loadList, whereFor } from '../lists/audience.js';
+import { handOn, loadList, whereFor } from '../lists/audience.js';
 import { e164, last10, NO_CONTACT_TAG, NO_CALL_TAG, PHONE_DIGITS_SQL } from '../texting/rules.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -30,7 +30,7 @@ export const sourceOf = async (q, ctx, { list_id: listId = null, bank_id: bankId
   if (listId) {
     const list = await loadList(q, ws, listId);
     if (!list) throw httpError(404, 'list not found');
-    const { where, params } = await whereFor(q, ctx, { list });
+    const { where, params } = await whereFor(q, handOn(ctx), { list });
     const n = (await q.query(`select count(*)::int as n from persons p where ${where}`, params)).rows[0].n;
     if (n > MAX_PEOPLE) {
       throw httpError(409, `This list names ${n.toLocaleString('en-CA')} people. CallHub takes 3,600 a day — send a list of ${MAX_PEOPLE.toLocaleString('en-CA')} or fewer`);

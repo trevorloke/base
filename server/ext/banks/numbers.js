@@ -16,14 +16,14 @@
 //                                       called and isn't in the bank yet,
 //                                       after the numbers already there
 import { mayReach, person } from '../../lib/reach.js';
-import { loadList, onListSql } from '../lists/audience.js';
+import { loadList, onListSql, readFor } from '../lists/audience.js';
 import { azKey } from '../../lib/az.js';
 
 export const stillOn = async (db, ctx, bank, params) => {
   params.push(ctx.workspaceId);
   const ws = `$${params.length}::uuid`;
   const list = bank.list_id ? await loadList(db, ctx.workspaceId, bank.list_id) : null;
-  const on = list ? ` and coalesce(${await onListSql(db, ctx, list, params)}, false)` : '';
+  const on = list ? ` and coalesce(${await onListSql(db, readFor(ctx), list, params)}, false)` : '';
   return `(p.workspace_id = ${ws} and p.deleted_at is null and ${mayReach('call', 'bank', person('p', ws))}${on})`;
 };
 
@@ -56,7 +56,7 @@ export const callersOf = async (db, ctx, bank) => {
 export const addFromList = async (tx, ctx, bank, list) => {
   const start = Number((await tx.query('select coalesce(max(position), 0) as p from call_bank_numbers where bank_id = $1', [bank.id])).rows[0].p);
   const params = [bank.id, ctx.workspaceId, start];
-  const on = await onListSql(tx, ctx, list, params);
+  const on = await onListSql(tx, readFor(ctx), list, params);
   const r = await tx.query(
     `insert into call_bank_numbers (bank_id, workspace_id, person_id, position)
      select $1::uuid, p.workspace_id, p.id, $3::int + row_number() over (order by ${azKey('p')})

@@ -22,7 +22,7 @@ import './shifts.css';
 import './surveys.css';
 import './fields.css';
 
-const CHOICES_MAX = 30;
+const CHOICES_MAX = 40;
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const sameList = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
 

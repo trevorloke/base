@@ -23,6 +23,7 @@ import { pointInPolygon, groupDoors, walkOrder } from '../lib/geo.js';
 import { checkCap } from '../lib/cap.js';
 import { campaignDay } from '../lib/gifts.js';
 import { EXTENSIONS } from '../ext.js';
+import { privateFieldIds } from '../ext/fields/people.js';
 import { runHooks } from '../lib/hooks.js';
 import { forViewer, loginEmail } from '../lib/viewer.js';
 import { geoBox } from '../lib/org.js';
@@ -1095,6 +1096,21 @@ app.get('/records/:type', async (c) => {
   return c.json({ records: rows, next });
 });
 
+// Private profile fields (ext/fields — Faith) are a manager's alone in the
+// event log and the backup: for anyone else a value's words are blanked in
+// its events (their hashes then match the server's log, not these
+// payloads — nothing reads a backup back in) and its rows left out.
+const privateOf = async (db, ctx) => (ctx.role === 'manager' ? [] : privateFieldIds(db, ctx.workspaceId));
+const blankPrivate = (ids) => {
+  const set = new Set(ids.map((f) => f.id));
+  return (e) => {
+    if (!set.size || e.entity_type !== 'person_field_value') return e;
+    const p = typeof e.payload === 'string' ? JSON.parse(e.payload) : e.payload;
+    if (!p || !set.has(p.field_id)) return e;
+    return { ...e, payload: { ...p, value: null, was: null, moved_to: null, private: true } };
+  };
+};
+
 // ── Events: the sync protocol / public API ──
 app.get('/events', async (c) => {
   const ctx = c.get('ctx');
@@ -1105,7 +1121,8 @@ app.get('/events', async (c) => {
      from events where workspace_id = $1 and seq > $2 order by seq limit $3`,
     [ctx.workspaceId, since, limit],
   );
-  return c.json({ events: rows, cursor: rows.length ? Number(rows[rows.length - 1].seq) : since });
+  const blank = blankPrivate(await privateOf(c.get('db'), ctx));
+  return c.json({ events: rows.map(blank), cursor: rows.length ? Number(rows[rows.length - 1].seq) : since });
 });
 
 // ── Audit: verify my books ──
@@ -1251,13 +1268,15 @@ app.get('/export', async (c) => {
   const ctx = c.get('ctx');
   const db = c.get('db');
   const ws = ctx.workspaceId;
+  const hidden = await privateOf(db, ctx);
   const out = {
     format: 'starbase-export',
     version: 1,
     exportedAt: new Date().toISOString(),
     workspace: ctx.workspace,
+    ...(hidden.length ? { left_out: { private_fields: [...new Set(hidden.map((f) => f.name))], why: 'Only a manager’s backup carries private fields' } } : {}),
     persons: (await db.query('select * from persons where workspace_id = $1', [ws])).rows,
-    events: (await db.query('select * from events where workspace_id = $1 order by seq', [ws])).rows,
+    events: (await db.query('select * from events where workspace_id = $1 order by seq', [ws])).rows.map(blankPrivate(hidden)),
   };
   for (const t of Object.values(RECORD_TYPES)) {
     out[t.table] = (await db.query(`select * from ${t.table} where workspace_id = $1`, [ws])).rows;
@@ -1268,6 +1287,10 @@ app.get('/export', async (c) => {
     out[table] = omit.length
       ? rows.map((r) => Object.fromEntries(Object.entries(r).filter(([k]) => !omit.includes(k))))
       : rows;
+  }
+  if (hidden.length && out.person_field_values) {
+    const ids = new Set(hidden.map((f) => f.id));
+    out.person_field_values = out.person_field_values.filter((r) => !ids.has(r.field_id));
   }
   c.header('Content-Disposition', 'attachment; filename="starbase-export.json"');
   return c.json(out);

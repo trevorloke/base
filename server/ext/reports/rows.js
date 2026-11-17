@@ -14,6 +14,7 @@
 import { loadScale } from '../scale/rules.js';
 import { azAfter, azCols, azKey } from '../../lib/az.js';
 import { areasFor } from '../../lib/perms.js';
+import { fieldColumns } from '../fields/people.js';
 
 // Money takes Donations as well as Data: a desk member a manager denied
 // Donations sees no gift, in a download or a Sheet (Quick reports' rule).
@@ -149,10 +150,10 @@ const cell = (v) => (v && typeof v === 'object' && !(v instanceof Date) ? JSON.s
 const fieldCell = (f, v) => (v == null ? '' : Array.isArray(v) ? v.join('; ') : f.kind === 'yesno' ? (v ? 'Yes' : 'No') : cell(v));
 
 // People: then a column per profile field, named as the field (so People →
-// Import maps it back by name); Pick several as "Punjabi; Hindi".
-const fieldsOf = async (db, ws) => (await db.query(
-  'select id, name, kind from person_fields where workspace_id = $1 and retired_at is null order by position, created_at', [ws],
-)).rows;
+// Import maps it back by name); Pick several as "Punjabi; Hindi". Private
+// fields only in a manager's download that asks for them (privateToo) —
+// never in a Google Sheet (datasetPage).
+const fieldsOf = (db, ws, privateToo = false) => fieldColumns(db, ws, { privateToo });
 const valuesOf = async (db, ws, personIds = null) => {
   const valueOf = new Map();
   for (const v of (await db.query(
@@ -173,10 +174,10 @@ const shape = (ds, raw, extra, valueOf) => {
   };
 };
 
-export const datasetRows = async (db, ws, name) => {
+export const datasetRows = async (db, ws, name, { privateToo = false } = {}) => {
   const ds = DATASETS[name];
   const { rows } = await db.query(`${ds.sql} order by ${ds.order}`, [ws]);
-  const extra = ds.fields && rows.length ? await fieldsOf(db, ws) : [];
+  const extra = ds.fields && rows.length ? await fieldsOf(db, ws, privateToo) : [];
   return shape(ds, rows, extra, extra.length ? await valuesOf(db, ws) : new Map());
 };
 

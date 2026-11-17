@@ -174,10 +174,18 @@ export const listCounts = async (db, ctx, list, { fresh = false } = {}) => {
   return r.counts;
 };
 
+// ctx.forOthers: where a list or filter is handed on to someone outside
+// the office — a send, CallHub, a phone bank, a canvass pass, a copy. A
+// rule on a Private field (ext/fields) then refuses ('refuse': a person is
+// handing it on now) or names nobody ('drop': read again later, at a door
+// or a call). A list on a list carries it down (ctx is spread).
+export const handOn = (ctx) => ({ ...ctx, forOthers: 'refuse' });
+export const readFor = (ctx) => ({ ...ctx, forOthers: ctx.forOthers || 'drop' });
+
 // The recipients of a send: one per address or number, the first person
 // (A–Z by last name) to carry it.
 export const recipientsOf = async (db, ctx, { list = null, filter = null, reach }) => {
-  const { where, params } = await whereFor(db, ctx, { list, filter });
+  const { where, params } = await whereFor(db, handOn(ctx), { list, filter });
   const key = reach === 'email' ? emailKey('p.email') : last10('p.phone');
   const { rows } = await db.query(
     `select distinct on (${key}) p.id, p.name, p.email, p.phone

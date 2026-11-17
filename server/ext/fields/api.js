@@ -22,6 +22,9 @@
 // desk-only read (index.js) and the handler checks the role again.
 import { Hono } from 'hono';
 import { fieldOut } from './actions.js';
+import { CHOICE_KEY_SQL } from './kinds.js';
+import { LIST_TOP, LIST_WORDS_MAX } from '@starbase/shared/fieldlists';
+import { DOESNT_SUIT, ONLY_TEXT, suits, wordsOf } from './convert.js';
 
 export const api = new Hono();
 
@@ -53,19 +56,26 @@ api.get('/fields', async (c) => {
     [ws],
   )).rows;
   // What a filter can find (Text, Number): the most common values on people
-  // still on the list — text in any case ("punjabi" and "Punjabi" are one).
-  const common = (await db.query(
-    `select field_id, kind, words, n from (
+  // still on the list — text as choices compare ("punjabi" and "Punjabi"
+  // are one). From the same scan, for Text: how many different words (d)
+  // and how many people the 40 most common cover (top) — whether it suits
+  // a list (convert.js).
+  const grouped = (await db.query(
+    `select field_id, kind, words, n, r::int as r, d::int as d, people::int as people, top::int as top from (
        select v.field_id, f.kind, min(v.value #>> '{}') as words, count(*)::int as n,
-              row_number() over (partition by v.field_id order by count(*) desc, min(v.value #>> '{}')) as r
+              row_number() over (partition by v.field_id order by count(*) desc, min(v.value #>> '{}')) as r,
+              count(*) over (partition by v.field_id) as d,
+              sum(count(*)) over (partition by v.field_id) as people,
+              sum(count(*)) over (partition by v.field_id order by count(*) desc, min(v.value #>> '{}') rows between unbounded preceding and current row) as top
        from person_field_values v
        join persons p on p.id = v.person_id and p.deleted_at is null
        join person_fields f on f.id = v.field_id and f.kind in ('text', 'number')
        where v.workspace_id = $1
-       group by v.field_id, f.kind, case when f.kind = 'text' then lower(v.value #>> '{}') else v.value #>> '{}' end
-     ) t where r <= $2 order by field_id, r`,
-    [ws, COMMON_MAX],
+       group by v.field_id, f.kind, case when f.kind = 'text' then ${CHOICE_KEY_SQL("v.value #>> '{}'")} else v.value #>> '{}' end
+     ) t where r <= $2 or r = least(d, $3) order by field_id, r`,
+    [ws, COMMON_MAX, LIST_TOP],
   )).rows;
+  const common = grouped.filter((r) => r.r <= COMMON_MAX);
   return c.json({
     fields: fields.map((f) => {
       const out = { ...fieldOut(f), filled: f.filled };
@@ -76,8 +86,35 @@ api.get('/fields', async (c) => {
         out.common = common.filter((r) => r.field_id === f.id)
           .map((r) => ({ value: r.kind === 'number' ? Number(r.words) : r.words, n: r.n }));
       }
+      if (f.kind === 'text') {
+        const last = grouped.find((r) => r.field_id === f.id && r.r === Math.min(r.d, LIST_TOP));
+        Object.assign(out, { words: last?.d || 0, top40: last?.top || 0 });
+        out.suits = suits({ distinct: out.words, top40: out.top40, people: last?.people || 0 });
+      }
       return out;
     }),
+  });
+});
+
+// Turn into a list (convert.js): a Text field's words, grouped as choices
+// compare, most people first, at most 500 — managers only.
+api.get('/fields/:id/words', async (c) => {
+  const id = c.req.param('id');
+  if (!UUID_RE.test(id || '')) return c.json({ error: 'not found' }, 404);
+  const ctx = c.get('ctx');
+  if (ctx.role !== 'manager') return c.json({ error: 'only a manager can turn a field into a list' }, 403);
+  const db = c.get('db');
+  const f = (await db.query('select * from person_fields where id = $1 and workspace_id = $2', [id, ctx.workspaceId])).rows[0];
+  if (!f) return c.json({ error: 'not found' }, 404);
+  if (f.retired_at || f.kind !== 'text' || f.as_written_of) return c.json({ error: ONLY_TEXT }, 409);
+  const w = await wordsOf(db, ctx.workspaceId, f.id, LIST_WORDS_MAX);
+  if (!suits(w)) return c.json({ error: DOESNT_SUIT }, 409);
+  const shown = w.words.reduce((m, x) => m + x.n, 0);
+  return c.json({
+    field: { id: f.id, name: f.name, kind: f.kind },
+    people: w.people, distinct: w.distinct,
+    words: w.words.map(({ word, n }) => ({ word, n })),
+    rest: { distinct: w.distinct - w.words.length, people: w.people - shown },
   });
 });
 
@@ -107,7 +144,7 @@ api.get('/persons/:id/fields', async (c) => {
      from person_fields f
      left join person_field_values v on v.field_id = f.id and v.person_id = $2
      left join users u on u.id = v.updated_by
-     where f.workspace_id = $1 and f.retired_at is null ${desk ? '' : 'and f.volunteers and v.id is not null'}
+     where f.workspace_id = $1 and f.retired_at is null ${desk ? '' : 'and f.volunteers and not f.sensitive and v.id is not null'}
      order by f.position, f.created_at`,
     [ctx.workspaceId, person.id],
   )).rows;

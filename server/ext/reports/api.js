@@ -66,7 +66,10 @@ api.get('/export/:dataset', async (c) => {
   const name = c.req.param('dataset').replace(/\.csv$/, '');
   if (!DATASETS[name]) return c.json({ error: 'no such export' }, 404);
   if (MONEY_DATASETS.includes(name) && !hasMoney(ctx)) return noMoney(c);
-  const { head, rows } = await datasetRows(db, ctx.workspaceId, name);
+  // Private profile fields (Faith): a manager's download, when asked for.
+  const privateToo = c.req.query('private') === '1';
+  if (privateToo && ctx.role !== 'manager') return c.json({ error: 'Only a manager can download private fields' }, 403);
+  const { head, rows } = await datasetRows(db, ctx.workspaceId, name, { privateToo });
   return csvResponse(c, `starbase-${name}`, head, rows);
 });
 export const DATASET_NAMES = Object.keys(DATASETS);

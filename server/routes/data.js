@@ -318,9 +318,12 @@ app.post('/import', async (c) => {
   // A past election's profile fields to tag: read here, by id, so their
   // cells never reach the fields as today's values.
   const tagFields = new Map(past?.field_tags?.length ? (await c.get('db').query(
-    'select id, name, kind, choices from person_fields where workspace_id = $1 and id = any($2::uuid[])',
+    'select id, name, kind, choices, sensitive from person_fields where workspace_id = $1 and id = any($2::uuid[])',
     [ctx.workspaceId, past.field_tags],
   )).rows.map((f) => [f.id, f]) : []);
+  // Volunteers see tags: a Private field (ext/fields) never becomes one.
+  const secret = [...tagFields.values()].find((f) => f.sensitive);
+  if (secret) return c.json({ error: `${secret.name} is private — it can’t become a tag` }, 400);
   rows.forEach((raw, i) => {
     let given = raw;
     const fieldTags = [];

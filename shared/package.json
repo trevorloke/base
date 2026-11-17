@@ -25,7 +25,8 @@
     "./site/*": "./site/*.js",
     "./fillwords": "./fillwords.js",
     "./letters": "./letters.js",
-    "./email/*": "./email/*.js"
+    "./email/*": "./email/*.js",
+    "./fieldlists": "./fieldlists.js"
   },
   "dependencies": {
     "htm": "^3.1.1",

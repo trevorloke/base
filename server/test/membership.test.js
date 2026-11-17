@@ -41,7 +41,7 @@ test('a full form: the person, every field, a volunteer and a window sign, a you
   const r = ok(await enter({
     first_name: 'Ana', last_name: 'Example', gender: 'Woman', birth_date: birth,
     email: 'ana.member@example.org', phone: '604-555-0101', address: '13450 104 Ave', city: 'Surrey', postal: 'v3t 1v8',
-    citizenship: 'citizen', union_member: true, union_local: 'CUPE 402', campus: 'Kwantlen',
+    citizenship: 'citizen', union_member: true, union_local: 'CUPE 402', campus: 'Kwantlen Polytechnic University – Surrey',
     volunteer: true, candidate: true, sign: 'window',
     languages: ['English', 'Filipino', 'Tamil'], other_language: '',
     interests: ['Safer streets', 'Homes I can afford'],
@@ -57,7 +57,7 @@ test('a full form: the person, every field, a volunteer and a window sign, a you
   assert.equal(f.Gender, 'Woman');
   assert.equal(f['Birth date'], birth);
   assert.equal(f.Citizenship, 'Canadian citizen');
-  assert.deepEqual([f['Union member'], f['Union local'], f.Campus], [true, 'CUPE 402', 'Kwantlen']);
+  assert.deepEqual([f['Union member'], f['Union local'], f.Campus], [true, 'CUPE 402', 'Kwantlen Polytechnic University – Surrey']);
   assert.deepEqual(f.Language, ['English', 'Filipino', 'Other']);
   assert.equal(f['Other language'], 'Tamil', 'a language not on the list is kept in Other language');
   assert.deepEqual(f.Interests, ['Safer streets', 'Homes I can afford']);
