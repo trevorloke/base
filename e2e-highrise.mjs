@@ -214,7 +214,10 @@ const openFloor = async (page, label) => {
 };
 const unitNos = (page) => page.$$eval('.bldg-sheet:not([hidden]) .bldg-unit__no', (els) => els.map((e) => e.innerText.trim()));
 const tapSquare = async (page, addr) => {
-  await page.locator(`.leaflet-marker-icon[title^="${addr}, building"]`).first().click();
+  // (No square: the tap that would have been, on the tower's own spot.)
+  const sq = page.locator(`.leaflet-marker-icon[title^="${addr}, building"]`).first();
+  if (await sq.count()) await sq.click({ timeout: 5000 }).catch(() => {});
+  else await page.locator(`.leaflet-marker-icon[title*="${addr}"]`).first().click({ timeout: 5000 }).catch(() => {});
   await page.waitForSelector('.bldg-sheet:not([hidden]) .bldg-count__line, .bldg-sheet:not([hidden]) .bldg-line', { timeout: 8000 }).catch(() => {});
   await sleep(400);
 };
