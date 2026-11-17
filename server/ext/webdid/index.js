@@ -6,6 +6,8 @@
 //                           volunteer, rsvp, contact, join, donate)
 //   web=campaign:<id>       signed that petition or took that pledge
 //   web=any                 did anything on the website
+//   web=guide               asked the voter guide to tell them when voting
+//                           information is out (a newsletter sign-up from it)
 //   web=site:<id>           did something on one of the campaign's other
 //                           websites (never by the money forms)
 // Read from the site server's site_actions (SITE.md), which name the person
@@ -19,7 +21,7 @@
 //       no money forms). Empty before the website exists.
 import { Hono } from 'hono';
 import {
-  WEB_KINDS, WEB_WORDS, MONEY_KINDS, campaignOf, campaignWords, campaignsOf, hasTable, siteOfValue,
+  WEB_KINDS, WEB_WORDS, MONEY_KINDS, GUIDE_WORDS, campaignOf, campaignWords, campaignsOf, hasTable, siteOfValue,
 } from './words.js';
 
 const str = (v, max = 80) => String(v ?? '').trim().slice(0, max);
@@ -33,6 +35,10 @@ export const webWhere = (ctx, value, w) => {
   const base = 'select 1 from site_actions a where a.workspace_id = p.workspace_id and a.person_id = p.id';
   if (v === 'any') {
     w.where += ` and exists (${base}${vol ? ` and a.kind <> all(${next([...MONEY_KINDS])}::text[])` : ''})`;
+    return true;
+  }
+  if (v === 'guide') {
+    w.where += ` and exists (${base} and a.kind = 'newsletter' and a.source = 'voter-guide')`;
     return true;
   }
   const campaign = campaignOf(v);
@@ -94,9 +100,16 @@ api.get('/webdid', async (c) => {
       group by m.id, m.name, m.domains, m.created_at order by m.created_at`,
     [ws, [...MONEY_KINDS]],
   )).rows.map((r) => ({ id: r.id, name: r.name, label: `Did something on ${r.domain || r.name}`, n: r.n })) : [];
+  const asked = (await db.query(
+    `select count(distinct a.person_id)::int as n from site_actions a join persons p on p.id = a.person_id and p.deleted_at is null
+      where a.workspace_id = $1 and a.kind = 'newsletter' and a.source = 'voter-guide'`, [ws],
+  )).rows[0].n;
   return c.json({
     sites,
-    kinds: WEB_KINDS.filter((k) => byKind.get(k) && !(vol && MONEY_KINDS.has(k))).map((k) => ({ kind: k, label: WEB_WORDS[k], n: byKind.get(k) })),
+    kinds: [
+      ...WEB_KINDS.filter((k) => byKind.get(k) && !(vol && MONEY_KINDS.has(k))).map((k) => ({ kind: k, label: WEB_WORDS[k], n: byKind.get(k) })),
+      ...(asked ? [{ kind: 'guide', label: GUIDE_WORDS, n: asked }] : []),
+    ],
     campaigns,
   });
 });

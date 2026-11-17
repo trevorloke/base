@@ -42,6 +42,10 @@ import { authorizedBy } from '../../../shared/site/wording.js';
 import { loadData } from './loaders.js';
 import { calendarHeaders, eventsCalendar } from './calendar.js';
 import { cacheKey, cacheGet, cachePut } from './cache.js';
+import { now as clockNow } from '../../lib/clock.js';
+import { guideState } from '../../../shared/voteguide.js';
+import { guideFor } from '../voteguide/read.js';
+import { clockRoute, findRoute } from '../voteguide/public.js';
 import { verify, sign, PERSON_TTL } from './tokens.js';
 import { refCodeFor, CODE_RE } from './people.js';
 import { choicesOf, emailOff, emailOn, smsOff, smsOn } from './consent.js';
@@ -141,7 +145,9 @@ const scriptHashes = (html) => {
   }
   return [...new Set(out)];
 };
-export const cspFor = (html, { preview = false } = {}) => [
+// frameAncestors: the addresses allowed to frame this page (the voter
+// guide's embed, VG decision 21); otherwise nobody (a preview: the app).
+export const cspFor = (html, { preview = false, frameAncestors = [] } = {}) => [
   "default-src 'self'",
   `script-src 'self'${scriptHashes(html).map((h) => ` ${h}`).join('')}`,
   "style-src 'self' 'unsafe-inline'",
@@ -151,23 +157,27 @@ export const cspFor = (html, { preview = false } = {}) => [
   "media-src 'self'",
   `frame-src ${FRAMES}`,
   "form-action 'self' https://checkout.stripe.com",
-  `frame-ancestors ${preview ? "'self'" : "'none'"}`,
+  `frame-ancestors ${preview ? "'self'" : frameAncestors.length ? frameAncestors.join(' ') : "'none'"}`,
   "base-uri 'self'",
   "object-src 'none'",
 ].join('; ');
 
 const staging = () => envName() === 'staging';
-const pageHeaders = (c, site, { csp, preview = false, store = false }) => {
+// geo: the page holds the voter guide, whose "Use my location" asks the
+// browser (never the server) where the visitor is. frame: the voter guide's
+// embed with its saved addresses — framed by them, so no X-Frame-Options
+// (with none saved it is DENY like every page).
+const pageHeaders = (c, site, { csp, preview = false, store = false, geo = false, frame = null }) => {
   c.header('Content-Security-Policy', csp);
-  c.header('X-Frame-Options', preview ? 'SAMEORIGIN' : 'DENY');
+  if (!(frame && frame.length)) c.header('X-Frame-Options', preview ? 'SAMEORIGIN' : 'DENY');
   c.header('X-Content-Type-Options', 'nosniff');
   c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
-  c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+  c.header('Permissions-Policy', `camera=(), microphone=(), geolocation=${geo ? '(self)' : '()'}, payment=()`);
   c.header('Cross-Origin-Opener-Policy', 'same-origin');
   c.header('Cache-Control', store ? 'no-store' : 'no-cache');
   // Not indexed: a draft, staging, or the app's own copy of a site that has
   // its own domain (search engines should find that one).
-  if (preview || staging() || site.mirror) c.header('X-Robots-Tag', 'noindex, nofollow');
+  if (preview || frame || staging() || site.mirror) c.header('X-Robots-Tag', 'noindex, nofollow');
   if (site.https) c.header('Strict-Transport-Security', 'max-age=31536000');
 };
 
@@ -269,23 +279,41 @@ const languageCtx = async (site, settings, { lang = site.lang, preview = false, 
   };
 };
 
-const draw = async (c, site, { kind, page = null, post = null, campaign = null, key, status, ctx: extra = {} }) => {
+// The voter guide's filters from the address (VG decision 19a): ?area= and
+// ?day= only when they are this guide's own (then part of the page's key,
+// so the pages kept are bounded); ?q= is drawn and never kept; ?near= is
+// the island's alone. null when the page holds no guide.
+const guideFilter = async (c, site, page) => {
+  if (!(page?.modules || []).some((m) => m && !m.hidden && m.kind === 'voterguide')) return null;
+  const g = await guideFor(site.db, site.ws);
+  const q = (k) => String(c.req.query(k) ?? '').trim();
+  const area = g.areas.includes(q('area')) ? q('area') : '';
+  const day = g.days.some((d) => d.day === q('day')) || ['today', 'advance', 'general', 'all'].includes(q('day')) ? q('day') : '';
+  return { area, day, q: q('q').slice(0, 80) };
+};
+
+const draw = async (c, site, { kind, page = null, post = null, campaign = null, key, status, frame = null, ctx: extra = {} }) => {
   const settings = await readSettings(site.db, site.ws.id);
-  const ctx = ctxOf(c, site, extra);
+  const vg = kind === 'page' ? await guideFilter(c, site, page) : null;
+  const ctx = ctxOf(c, site, { ...(vg ? { vgFilter: vg } : {}), ...extra });
   const langsOn = (settings.languages?.on || []).length > 0;
   if (langsOn) Object.assign(ctx, await languageCtx(site, settings, { lang: ctx.preview ? extra.lang || 'en' : site.lang, preview: ctx.preview, checkFirst: page?.checkFirst === true }));
-  const keep = key && !ctx.sent && !ctx.error && !ctx.cancelled && !ctx.preview;
+  const keep = key && !ctx.sent && !ctx.error && !ctx.cancelled && !ctx.preview && !vg?.q;
   // Per website too: '/' on two hosts is never the same page.
   const micro = site.micro ? [site.micro.id, new Date(site.micro.updated_at).getTime()] : ['', ''];
-  const fullKey = keep ? cacheKey(site.ws.id, [site.address, site.root, ...micro, kind, ...key, settings.updated_at, ctx.referral || '']) : null;
+  const fullKey = keep ? cacheKey(site.ws.id, [site.address, site.root, ...micro, kind, ...key, settings.updated_at, ctx.referral || '', ...(vg ? ['vg', vg.area, vg.day] : [])]) : null;
   let hit = fullKey ? cacheGet(fullKey) : null;
   if (!hit) {
-    const data = await loadData(site.db, site.ws, { posts: kind === 'page' && page?.slug === 'news' ? 200 : 24 });
+    const now = clockNow();
+    const data = await loadData(site.db, site.ws, { posts: kind === 'page' && page?.slug === 'news' ? 200 : 24, now, draft: ctx.preview, siteId: site.micro?.id || null });
     const out = renderSite({ kind, site: await rendererSite(site, settings), page, post, campaign, data, ctx });
-    hit = { status: status || out.status || 200, html: out.html, csp: cspFor(out.html, { preview: ctx.preview }) };
-    if (fullKey && hit.status === 200) cachePut(fullKey, hit);
+    hit = { status: status || out.status || 200, html: out.html, csp: cspFor(out.html, { preview: ctx.preview, frameAncestors: frame || [] }), geo: / data-module="voterguide"/.test(out.html) };
+    // While the guide is published, never served past its next change.
+    const g = data.guide;
+    const until = g && g.status === 'published' ? guideState(g.times, now, g.places).boundary : null;
+    if (fullKey && hit.status === 200) cachePut(fullKey, hit, { until: until ?? undefined });
   }
-  pageHeaders(c, site, { csp: hit.csp, preview: ctx.preview, store: ctx.preview || Boolean(ctx.sent || ctx.error) });
+  pageHeaders(c, site, { csp: hit.csp, preview: ctx.preview, store: ctx.preview || frame !== null || Boolean(ctx.sent || ctx.error), geo: hit.geo, frame });
   if (langsOn && !ctx.preview) langHeaders(c, site, hit.status);
   return c.html(hit.html, hit.status);
 };
@@ -908,6 +936,28 @@ export const makeSiteApp = (at) => {
     const id = c.req.param('file').slice(0, -4);
     return UUID.test(id) ? id : false;
   }));
+
+  // The voter guide (VG): the server's clock, an address looked up and
+  // forgotten, and the guide alone for another website's frame.
+  app.get(route('/api/guide/clock'), clockRoute);
+  app.post(route('/api/guide/find'), async (c) => {
+    const site = c.get('site');
+    const tr = site.lang !== 'en' ? await translatorFor(site.db, site.ws.id, site.lang) : null;
+    const w = (k) => { const en = UI_WORDS[k]; const r = tr ? tr.look(en) : null; return r && r.lang !== 'en' ? r.text : en; };
+    return findRoute(c, site, w);
+  });
+  app.get(route('/embed/voter-guide'), async (c) => {
+    const site = c.get('site');
+    const g = await guideFor(site.db, site.ws);
+    const at = g.pages.find((p) => (p.site_id || null) === (site.micro?.id || null)) || null;
+    const module = at?.module || { id: 'voter-guide', kind: 'voterguide', hidden: false, props: {} };
+    const page = { id: at?.id || null, slug: at?.slug || 'voter-guide', title: '', description: '', modules: [module] };
+    // Never kept: a change of addresses is in the next answer.
+    return draw(c, site, {
+      kind: 'page', page, key: null, frame: g.embed_origins || [],
+      ctx: { embed: true, ...(at ? { path: at.slug === 'home' ? '/' : `/${at.slug}` } : {}) },
+    });
+  });
 
   app.get(route('/:slug'), async (c) => {
     const site = c.get('site');

@@ -20,6 +20,37 @@ const MANAGER_ONLY = ['manager'];
 const uuid = () => z.uuid();
 const iso = (d) => (d ? new Date(d).toISOString() : null);
 
+// GOTV mode's days, and the switch when `on` is given: the body of
+// vote.settings, shared with the voter guide's publish (ext/voteguide,
+// "Also use these days for GOTV mode"), which leaves the switch as it is.
+// One 'workspace update' event either way — GOTV's listener reads it as a
+// settings commit. Left out: election_day, advance_days and auto stay as
+// they are (null clears election day).
+export const saveVotingDays = async (tx, ctx, input, emit) => {
+  const ws = ctx.workspaceId;
+  const keepDay = input.election_day === undefined;
+  const keepOn = input.on === undefined;
+  const row = (await tx.query(
+    `insert into voted_settings (workspace_id, on_day, election_day, updated_at) values ($1, $2, $3, now())
+     on conflict (workspace_id) do update
+       set on_day = case when $5 then voted_settings.on_day else excluded.on_day end,
+           election_day = case when $4 then voted_settings.election_day else excluded.election_day end,
+           updated_at = now()
+     returning on_day, election_day`,
+    [ws, Boolean(input.on), input.election_day || null, keepDay, keepOn],
+  )).rows[0];
+  const election_day = row.election_day
+    ? (row.election_day instanceof Date ? row.election_day.toISOString().slice(0, 10) : String(row.election_day).slice(0, 10))
+    : null;
+  const extra = {};
+  if (input.advance_days !== undefined) extra.advance_days = [...new Set(input.advance_days)].sort();
+  if (input.auto !== undefined) extra.auto = input.auto;
+  if ('advance_days' in extra) await tx.query('update voted_settings set advance_days = $2 where workspace_id = $1', [ws, JSON.stringify(extra.advance_days)]);
+  if ('auto' in extra) await tx.query('update voted_settings set auto = $2 where workspace_id = $1', [ws, extra.auto]);
+  emit('workspace', ws, 'update', { ...(keepOn ? {} : { election_day_mode: input.on }), election_day, ...extra });
+  return { on: Boolean(row.on_day), election_day, ...extra };
+};
+
 export const actions = {
   'vote.mark': {
     roles: ALL_ROLES,
@@ -90,28 +121,6 @@ export const actions = {
       advance_days: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'a date like 2026-10-08')).max(30).optional(),
       auto: z.boolean().optional(),
     }),
-    handler: async (tx, ctx, input, emit) => {
-      const ws = ctx.workspaceId;
-      const keepDay = input.election_day === undefined;
-      const row = (await tx.query(
-        `insert into voted_settings (workspace_id, on_day, election_day, updated_at) values ($1, $2, $3, now())
-         on conflict (workspace_id) do update
-           set on_day = excluded.on_day,
-               election_day = case when $4 then voted_settings.election_day else excluded.election_day end,
-               updated_at = now()
-         returning on_day, election_day`,
-        [ws, input.on, input.election_day || null, keepDay],
-      )).rows[0];
-      const election_day = row.election_day
-        ? (row.election_day instanceof Date ? row.election_day.toISOString().slice(0, 10) : String(row.election_day).slice(0, 10))
-        : null;
-      const extra = {};
-      if (input.advance_days !== undefined) extra.advance_days = [...new Set(input.advance_days)].sort();
-      if (input.auto !== undefined) extra.auto = input.auto;
-      if ('advance_days' in extra) await tx.query('update voted_settings set advance_days = $2 where workspace_id = $1', [ws, JSON.stringify(extra.advance_days)]);
-      if ('auto' in extra) await tx.query('update voted_settings set auto = $2 where workspace_id = $1', [ws, extra.auto]);
-      emit('workspace', ws, 'update', { election_day_mode: input.on, election_day, ...extra });
-      return { on: Boolean(row.on_day), election_day, ...extra };
-    },
+    handler: async (tx, ctx, input, emit) => saveVotingDays(tx, ctx, input, emit),
   },
 };

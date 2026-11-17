@@ -85,6 +85,10 @@ export const keptNames = async (q, ws, settings = null) => {
       if (m?.kind === 'quote') add(m.props?.name);
     }
   }
+  // The names on the voter guide's ballot (VG), exactly as typed.
+  for (const r of (await q.query('select names from vote_contests where workspace_id = $1 and deleted_at is null order by position', [ws.id])).rows) {
+    for (const n of parseJ(r.names, []) || []) add(n?.name);
+  }
   for (const n of s?.languages?.keep || []) add(n);
   return { names: out.slice(0, MAX_NAMES), tooMany: out.length > MAX_NAMES };
 };
@@ -193,6 +197,30 @@ export const liveStrings = async (q, ws, { settings = null, now = Date.now() } =
   for (const r of (await q.query(
     'select id, title from shifts where workspace_id = $1 and deleted_at is null and public and coalesce(ends_at, starts_at) >= now() order by starts_at limit 200', [ws.id],
   )).rows) field('text', r.title, { rank: 'shift', essential: false, place: `shift:${r.id}` });
+
+  // The voter guide (VG), once published: what to bring, who can vote, the
+  // note under the ballot, the offices and a closed place's note are shown
+  // translated only once a person checked them; a place's note is content.
+  // Place names, addresses, areas, ballot names and links are never sent.
+  const vg = (await q.query("select status, rules, ballot_note from vote_guide where workspace_id = $1", [ws.id])).rows[0];
+  if (vg?.status === 'published') {
+    const o = { rank: 'page', essential: true, order: 0 };
+    const rules = parseJ(vg.rules, {}) || {};
+    for (const k of ['bring_listed', 'bring_unlisted', 'who', 'mail', 'access']) {
+      for (const t of segmentsOf('markdown', rules[k])) push(t, { ...o, kind: 'markdown', cls: 'check-first', place: `guide:rules:${k}` });
+    }
+    push(vg.ballot_note, { ...o, cls: 'check-first', place: 'guide:ballot_note' });
+    for (const r of (await q.query('select office from vote_contests where workspace_id = $1 and deleted_at is null order by position', [ws.id])).rows) {
+      push(r.office, { ...o, cls: 'check-first', place: 'guide:office' });
+    }
+    for (const r of (await q.query(
+      `select i.note, i.closed_note from vote_place_info i join places p on p.id = i.place_id
+        where i.workspace_id = $1 and p.deleted_at is null order by i.position`, [ws.id],
+    )).rows) {
+      field('text', r.note, { ...o, place: 'guide:place' });
+      push(r.closed_note, { ...o, cls: 'check-first', place: 'guide:closed' });
+    }
+  }
 
   return out.sort((a, b) => (Number(b.essential) - Number(a.essential)) || (a.rank - b.rank) || (a.order - b.order));
 };

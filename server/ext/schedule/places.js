@@ -21,6 +21,9 @@
 // places, the ones this kind used most first (kind_uses, then uses, then by
 // name); then the words already on shifts that are no saved place's name
 // (a shift whose place is its turf is left out: the turf is offered itself).
+// The voter guide's voting places (kind 'voting', ext/voteguide) come after
+// the campaign's own, marked voting: true — 300 of them never push the
+// campaign's own places past the list's 200.
 //
 // The writes (desk; the Shifts area, lib/perms.js):
 //   place.save { name?, lat?, lng?, address?, source? }   a place for the
@@ -88,7 +91,8 @@ const byUse = (a, b) => b.kind_uses - a.kind_uses || b.uses - a.uses || a.name.t
 
 export const placesFor = async (db, ws, kind) => {
   const saved = (await db.query(
-    `select id, name, lat, lng, address, source from places where workspace_id = $1 and deleted_at is null order by lower(name) limit ${MAX_PLACES}`, [ws],
+    `select id, name, lat, lng, address, source, kind from places where workspace_id = $1 and deleted_at is null
+      order by (kind is not distinct from 'voting'), lower(name) limit ${MAX_PLACES}`, [ws],
   )).rows;
   // How often each place and each set of words was used, by what the shift
   // is — its kind, or what its role implies (a shift from before kinds).
@@ -110,7 +114,8 @@ export const placesFor = async (db, ws, kind) => {
     if (kind && kindOf(u).code === kind) t.kind_uses += u.n;
     tally.set(key, t);
   }
-  const places = saved.map((p) => ({ ...placeOut(p), uses: tally.get(p.id)?.uses || 0, kind_uses: tally.get(p.id)?.kind_uses || 0 })).sort(byUse);
+  const places = saved.map((p) => ({ ...placeOut(p), voting: p.kind === 'voting', uses: tally.get(p.id)?.uses || 0, kind_uses: tally.get(p.id)?.kind_uses || 0 }))
+    .sort((a, b) => Number(a.voting) - Number(b.voting) || byUse(a, b));
   const names = new Set(saved.map((p) => p.name.trim().toLowerCase()));
   const words = [...tally.entries()]
     .filter(([key]) => key.startsWith('words:') && !names.has(key.slice(6)))
@@ -127,6 +132,19 @@ const named = async (tx, ws, name, exceptId = null) => (await tx.query(
      and ($3::uuid is null or id <> $3::uuid) order by created_at limit 1`,
   [ws, name, exceptId],
 )).rows[0];
+
+// A place in the voter guide (ext/voteguide): while the guide is published
+// its facts change only there, under its checks (409); in a draft a change
+// here moves the guide's rev, so every reader sees it.
+const guidePlace = async (tx, ws, id) => {
+  const r = (await tx.query(
+    `select g.status from vote_place_info i left join vote_guide g on g.workspace_id = i.workspace_id
+      where i.place_id = $1 and i.workspace_id = $2`, [id, ws],
+  )).rows[0];
+  if (!r) return;
+  if (r.status === 'published') throw httpError(409, 'This place is in the published voter guide — change it under Website → Voter guide');
+  await tx.query('update vote_guide set rev = rev + 1 where workspace_id = $1', [ws]);
+};
 
 export const placeActions = {
   'place.save': {
@@ -176,6 +194,7 @@ export const placeActions = {
         'select * from places where id = $1 and workspace_id = $2 and deleted_at is null', [input.id, ws],
       )).rows[0];
       if (!place) throw httpError(404, 'place not found');
+      await guidePlace(tx, ws, place.id);
       if (await named(tx, ws, input.name, place.id)) throw httpError(409, 'another place has that name');
       await tx.query('update places set name = $3 where id = $1 and workspace_id = $2', [place.id, ws, input.name]);
       emit('place', place.id, 'update', { name: input.name });
@@ -202,6 +221,7 @@ export const placeActions = {
     roles: DESK,
     input: z.object({ id: z.uuid() }),
     handler: async (tx, ctx, input, emit) => {
+      await guidePlace(tx, ctx.workspaceId, input.id);
       const r = await tx.query(
         'update places set deleted_at = now() where id = $1 and workspace_id = $2 and deleted_at is null', [input.id, ctx.workspaceId],
       );

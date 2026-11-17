@@ -45,7 +45,10 @@ for (const e of EXTENSIONS) Object.assign(BODY_MAX, e.bodyMax || {});
 app.use('*', async (c, next) => {
   await next();
   const h = c.res.headers;
-  if (!h.has('X-Frame-Options')) h.set('X-Frame-Options', 'DENY');
+  // The voter guide's embed names the sites that may frame it in its CSP
+  // (frame-ancestors) and so carries no X-Frame-Options (ext/site public.js).
+  const framedBy = /frame-ancestors (?!'none')/.test(h.get('Content-Security-Policy') || '');
+  if (!h.has('X-Frame-Options') && !framedBy) h.set('X-Frame-Options', 'DENY');
   if (!h.has('X-Content-Type-Options')) h.set('X-Content-Type-Options', 'nosniff');
   if (!h.has('Referrer-Policy')) h.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   const build = c.req.path.startsWith('/api/') ? currentBuild() : null;
