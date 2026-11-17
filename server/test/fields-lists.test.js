@@ -234,6 +234,11 @@ test('a list picked by Faith is never walked, called, sent to CallHub, emailed, 
   assert.equal(ok(await staff.get(`/api/lists/${plainOne.id}/hand-on`)).refused, null);
   const { sourceOf } = await import('../ext/drive/export.js');
   await assert.rejects(sourceOf(db, { workspaceId: ws, role: 'staff', user: { id: null } }, 'list', list.id), (e) => e.status === 403);
+  // Google Sheets never gets it, a manager's included: the Sheet would say who is Sikh.
+  await assert.rejects(sourceOf(db, { workspaceId: ws, role: 'manager', user: { id: null } }, 'list', list.id),
+    (e) => e.status === 403 && e.message === 'Google Sheets never gets private fields');
+  await assert.rejects(sourceOf(db, { workspaceId: ws, role: 'manager', user: { id: null } }, 'list', outer.id), (e) => e.status === 403, 'nor a list naming it');
+  assert.ok(await sourceOf(db, { workspaceId: ws, role: 'manager', user: { id: null } }, 'list', plainOne.id), 'a plain list as before');
   // The office still counts it and filters by it.
   assert.equal(ok(await mgr.get(`/api/lists/${list.id}/counts?fresh=1`)).counts.total, 2, 'Sikh Example and Faith Pick Example');
   // A pass walks a plain list; changed to Faith afterwards → refused, or (a

@@ -287,7 +287,8 @@ function OneList({ id }) {
         {/* Picked by a Private field: only a manager takes it out (the server refuses too). */}
         {office && !manager
           ? <button type="button" className="btn btn-quiet ops-tap" disabled>Download CSV</button>
-          : <TakeItOut csvHref={at(`/api/lists/${id}/export.csv`)} source="list" of={id} name={l.name} count={list.data.counts.total} head={LIST_HEAD} />}
+          : <TakeItOut csvHref={at(`/api/lists/${id}/export.csv`)} source="list" of={id} name={l.name} count={list.data.counts.total} head={LIST_HEAD}
+              offWhy={office ? 'Google Sheets never gets private fields' : null} />}
         <fieldset className="ls-offwrap" disabled={Boolean(office)}><SendToMailchimp listId={id} /></fieldset>
         {l.kind === 'filter' && <button type="button" className="btn btn-quiet ops-tap" onClick={() => setEditing((v) => !v)}>{editing ? 'Close' : 'Edit the filter'}</button>}
         {asking ? (

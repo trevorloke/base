@@ -20,7 +20,7 @@ import { areasFor, permsOf } from '../../lib/perms.js';
 import { grantRowOf } from '../../lib/google/tokens.js';
 import { signinRules } from '../../lib/google/config.js';
 import { timeZone } from '../../lib/org.js';
-import { loadList, officeOnly, PRIVATE_LIST } from '../lists/audience.js';
+import { loadList, pickedByPrivate } from '../lists/audience.js';
 import { LIST_HEAD, listCount, listPage } from '../lists/rows.js';
 import { DATASETS, MONEY_DATASETS, MONEY_REPORTS, REPORTS, datasetCols, datasetCount, datasetPage } from '../reports/rows.js';
 import { quickSource } from '../reports/quick.js';
@@ -51,7 +51,10 @@ export const sourceOf = async (db, ctx, source, ref) => {
   if (source === 'list') {
     const list = await loadList(db, ws, ref);
     if (!list) throw httpError(404, 'That list isn’t here any more');
-    if (await officeOnly(db, ctx, list)) throw httpError(403, PRIVATE_LIST);
+    // A list picked by a Private field (Faith) never goes to Google, a
+    // manager's included: the Sheet would say who has it. Its CSV is a
+    // manager's (lists/api.js).
+    if (await pickedByPrivate(db, ctx, list)) throw httpError(403, 'Google Sheets never gets private fields');
     return {
       area: ['people'], name: list.name,
       count: () => listCount(db, ctx, list), cols: async () => LIST_HEAD.length, head: async () => LIST_HEAD,

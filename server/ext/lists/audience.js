@@ -183,7 +183,7 @@ export const handOn = (ctx) => ({ ...ctx, forOthers: 'refuse' });
 export const readFor = (ctx) => ({ ...ctx, forOthers: ctx.forOthers || 'drop' });
 
 // A list picked by a Private field is a file of who holds it: only a
-// manager takes it out of the office (its CSV, a Google Sheet), as with
+// manager downloads its CSV (Google Sheets never gets it), as with
 // the People download's ?private=1. → true when this person may not.
 export const PRIVATE_LIST = 'Only a manager can take out a list picked by a private field';
 // The words a hand-on would be refused with (a list picked by a Private
@@ -194,13 +194,14 @@ export const handOnWords = async (db, ctx, list) => {
     throw e;
   }
 };
-export const officeOnly = async (db, ctx, list) => {
-  if (ctx.role === 'manager') return false;
+// A list whose rule (or a list it names) uses a Private field.
+export const pickedByPrivate = async (db, ctx, list) => {
   try { await whereFor(db, handOn(ctx), { list }); return false; } catch (e) {
     if (e?.status === 409) return true;
     throw e;
   }
 };
+export const officeOnly = async (db, ctx, list) => (ctx.role === 'manager' ? false : pickedByPrivate(db, ctx, list));
 
 // The recipients of a send: one per address or number, the first person
 // (A–Z by last name) to carry it.

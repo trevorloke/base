@@ -500,7 +500,7 @@ than a week after they came off is refused. Contacts are door, phone, text or
   with a `left_out` note), and never picks people for a list that is
   walked, called, sent to CallHub or Mailchimp, emailed, texted or copied
   (*This list picks people by Faith, which is private …*); such a list's
-  CSV or Google Sheet is a manager's only. A Text field
+  CSV is a manager's only, and Google Sheets never gets it. A Text field
   with words on file whose words suit a list (at most 500 different, or the
   40 most common cover 80 % of people) can be **turned into a list**: the
   manager says where each word goes; what doesn't fit is kept as written
