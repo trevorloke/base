@@ -187,18 +187,22 @@ const chunk = async (tx, ws, fieldId, key, emit) => {
   const got = await planFor(tx, ws, fieldId, key);
   if (!got) return 'stop';
   const { f, plan } = got;
-  // In the index's order, after the last chunk's place (plan.after): each
-  // chunk reads on from there rather than past every value already done.
-  const after = plan.after || null;
+  // In the (field_id, person_id) index's order, after the last chunk's
+  // place (plan.after): each chunk reads on from there, never past every
+  // value already done — nor through every row of one word most people
+  // share, which a (value, id) order had to sort for each chunk. A place
+  // kept by an older server (value, id) starts again from the top: what is
+  // done is a choice now, or moved, so nothing is done twice.
+  const after = plan.after?.person_id || null;
   const rows = (await tx.query(
     `select v.id, v.person_id, v.value, ${KEY} as k from person_field_values v
       where v.workspace_id = $1 and v.field_id = $2 and not (v.value in (select jsonb_array_elements($3::jsonb)))
-        ${after ? 'and (v.value, v.id) > ($4::jsonb, $5::uuid)' : ''}
-      order by v.value, v.id limit ${PACE.size} for update skip locked`,
-    after ? [ws, f.id, JSON.stringify(plan.choices), JSON.stringify(after.value), after.id] : [ws, f.id, JSON.stringify(plan.choices)],
+        ${after ? 'and v.person_id > $4::uuid' : ''}
+      order by v.person_id limit ${PACE.size} for update skip locked`,
+    after ? [ws, f.id, JSON.stringify(plan.choices), after] : [ws, f.id, JSON.stringify(plan.choices)],
   )).rows;
   if (!rows.length) return 'empty';
-  plan.after = { value: rows.at(-1).value, id: rows.at(-1).id };
+  plan.after = { person_id: rows.at(-1).person_id };
   const goesTo = (r) => (Object.hasOwn(plan.map, r.k) ? plan.map[r.k] : null);
   const to = rows.filter(goesTo);
   const keep = rows.filter((r) => !goesTo(r));
