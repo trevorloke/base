@@ -195,23 +195,32 @@
       <button class="btn" type="submit">Send my request</button>
       <button class="btn quiet" type="button" id="offer-cancel">Not now</button>
     </div>
-    <p class="fine">This opens your email app with the request written out. Nothing is sent until you send it.</p>
+    <p class="fine" id="offer-error" role="alert" hidden>That didn't send. Check your connection and try again.</p>
   </form>
+  <div id="offer-thanks" hidden>
+    <h2>Request sent</h2>
+    <p>Thanks. We'll email you when your account is ready.</p>
+    <div class="actions"><button class="btn" type="button" id="offer-done">Back to the demo</button></div>
+  </div>
 </dialog>
 
 <script>
 (() => {
-  // Where trial requests go: an inbox someone reads. Empty: the offer stays off.
-  const TRIAL_EMAIL = '';
+  // Where trial requests are posted: a form service's address that passes
+  // them on by email, so no email address is ever in this page. Empty: the
+  // offer stays off.
+  const TRIAL_ENDPOINT = '';
   // The framed app counts the visitor's clicks and tells this page the count
   // (web/src/demoframe.js). After this many, the offer is made, once a visit.
   const CLICKS_BEFORE_OFFER = 6;
   const DEMO_ORIGIN = 'https://staging.base.win';
-  if (!TRIAL_EMAIL) return;
+  if (!TRIAL_ENDPOINT) return;
 
   const offer = document.getElementById('offer');
   const ask = document.getElementById('offer-ask');
   const form = document.getElementById('offer-form');
+  const thanks = document.getElementById('offer-thanks');
+  const failed = document.getElementById('offer-error');
   const made = () => { try { return sessionStorage.getItem('offered') === '1'; } catch { return false; } };
   const markMade = () => { try { sessionStorage.setItem('offered', '1'); } catch { /* private mode */ } };
 
@@ -221,17 +230,34 @@
     markMade();
     ask.hidden = false;
     form.hidden = true;
+    thanks.hidden = true;
     offer.showModal();
   });
   document.getElementById('offer-no').addEventListener('click', () => offer.close());
   document.getElementById('offer-cancel').addEventListener('click', () => offer.close());
   document.getElementById('offer-yes').addEventListener('click', () => { ask.hidden = true; form.hidden = false; form.elements.name.focus(); });
-  form.addEventListener('submit', (e) => {
+  document.getElementById('offer-done').addEventListener('click', () => offer.close());
+  form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const v = (k) => form.elements[k].value.trim();
-    const body = `Name: ${v('name')}\nEmail: ${v('email')}\nCampaign or organization: ${v('campaign')}\n\nPlease set up a free trial account on base.win.`;
-    location.href = `mailto:${TRIAL_EMAIL}?subject=${encodeURIComponent('Free trial request: ' + v('campaign'))}&body=${encodeURIComponent(body)}`;
-    offer.close();
+    const send = form.querySelector('[type=submit]');
+    send.disabled = true;
+    failed.hidden = true;
+    try {
+      const res = await fetch(TRIAL_ENDPOINT, {
+        method: 'POST',
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: v('name'), email: v('email'), campaign: v('campaign'), _subject: `Free trial request: ${v('campaign')}` }),
+      });
+      if (!res.ok) throw new Error(String(res.status));
+      form.hidden = true;
+      thanks.hidden = false;
+      form.reset();
+    } catch {
+      failed.hidden = false;
+    } finally {
+      send.disabled = false;
+    }
   });
 })();
 </script>
