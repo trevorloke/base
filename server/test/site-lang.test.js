@@ -213,6 +213,14 @@ test('remembered: a /pa page sets site_lang, a prefetch doesn’t; / redirects, 
   assert.equal(back.location, '/site/pa/');
   assert.equal(back.headers.get('cache-control'), 'no-store');
   assert.equal((await hit('/site/about', { headers: { cookie: 'site_lang=pa' } })).status, 200, 'only the home page redirects');
+  // The translated home page's "Read it in English" reaches the English
+  // home page, and keeps the language remembered.
+  const paHome = await hit('/site/pa/');
+  const read = paHome.text.match(/<p class="lang-note">[\s\S]*?<a href="([^"]+)"/)[1].replace(/&amp;/g, '&');
+  const official = await hit(read, { headers: { cookie: 'site_lang=pa' } });
+  assert.equal(official.status, 200, `${read} → ${official.status} ${official.location}`);
+  assert.match(official.text, /<html lang="en"/);
+  assert.equal(official.headers.get('set-cookie'), null, 'the language stays remembered');
   assert.equal((await hit('/site/', { headers: { 'accept-language': 'pa-IN,pa;q=0.9' } })).status, 200, 'never by browser language');
   const en = await hit('/site/about?lang=en', { headers: { cookie: 'site_lang=pa' } });
   assert.equal(en.status, 200);
@@ -434,7 +442,51 @@ test('a language turned off answers 302 to English and its form post 400 with no
   assert.equal(post.status, 400);
   assert.equal(post.json.error, 'This page changed — please reload it and send again');
   assert.equal((await db.query('select count(*)::int as n from persons where workspace_id = $1 and email = $2', [ws, email])).rows[0].n, 0);
+  // On the campaign's own domain (root ''), the way to English stays on
+  // the site: '//other.host' after the prefix is a path, a backslash no page.
+  ok(await mgr.action('site.settings.save', { domains: ['vote.example.net'] }));
+  const { forgetDomains } = await import('../ext/site/store.js');
+  forgetDomains();
+  try {
+    const own = await hit('/zh-hant/about', { host: 'vote.example.net' });
+    assert.equal(own.status, 302);
+    assert.equal(own.location, '/about');
+    const two = await hit('/zh-hant//evil.example/x', { host: 'vote.example.net' });
+    assert.ok(two.status === 404 || (two.status === 302 && /^\/[^/\\]/.test(two.location)), `${two.status} ${two.location}`);
+    const three = await hit('/pa/..//zh-hant//evil.example', { host: 'vote.example.net' });
+    assert.ok(!/^\/\/|^\/\\/.test(three.location || ''), three.location);
+    const back = await hit('/zh-hant/%5Cevil.example', { host: 'vote.example.net' });
+    assert.ok(back.status === 404 || !/^\/[/\\]/.test(back.location || ''), `${back.status} ${back.location}`);
+    const tab = await hit('/zh-hant/%09/evil.example', { host: 'vote.example.net' });
+    assert.ok(tab.status === 404 || !/^\/\s*[/\\]/.test(decodeURIComponent(tab.location || '')), `${tab.status} ${tab.location}`);
+  } finally {
+    ok(await mgr.action('site.settings.save', { domains: [] }));
+    forgetDomains();
+  }
   ok(await saveLanguages({ on: ['pa', 'zh-Hans', 'zh-Hant'] }));
+});
+
+test('on the campaign’s own domain a language listed in search is indexed; the app’s copy is not', async () => {
+  ok(await saveLanguages({ index: { pa: true, 'zh-Hans': false, 'zh-Hant': false } }));
+  ok(await mgr.action('site.settings.save', { domains: ['vote.example.net'] }));
+  const { forgetDomains } = await import('../ext/site/store.js');
+  forgetDomains();
+  cacheClear(ws);
+  try {
+    const en = await hit('/about', { host: 'vote.example.net' });
+    assert.equal(en.status, 200);
+    assert.equal(en.headers.get('x-robots-tag'), null);
+    const pa = await hit('/pa/about', { host: 'vote.example.net' });
+    assert.equal(pa.status, 200);
+    assert.equal(pa.headers.get('x-robots-tag'), null, 'Punjabi on the real domain is indexed');
+    const copy = await hit('/site/pa/about');
+    assert.equal(copy.status, 200);
+    assert.equal(copy.headers.get('x-robots-tag'), 'noindex, nofollow', 'the app’s own copy is not');
+  } finally {
+    ok(await mgr.action('site.settings.save', { domains: [] }));
+    forgetDomains();
+    cacheClear(ws);
+  }
 });
 
 test('the job runner runs a queued sweep, and a draft save queues none', async () => {

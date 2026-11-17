@@ -585,9 +585,15 @@ export const makeSiteApp = (at) => {
       site.langs = await languagesFor(site.db, site.ws, settings);
       if (!site.langs.offered.includes(site.lang)) {
         if (c.req.method === 'GET' || c.req.method === 'HEAD') {
+          // Always on this site, as the trailing-slash redirect above: on
+          // the campaign's own domain home is '', so '/pa//other.host' must
+          // not become '//other.host'. A tab, a line break or a backslash
+          // is no page.
+          // eslint-disable-next-line no-control-regex
+          if (/[\u0000-\u001f\u007f\\]/.test(rel)) return notFound(c, site);
           const url = new URL(c.req.url);
           c.header('Cache-Control', 'no-store');
-          return c.redirect(`${site.home}${rel === '/' ? '/' : rel}${url.search}`, 302);
+          return c.redirect(`${site.home}${rel.replace(/^\/+/, '/')}${url.search}`, 302);
         }
         return c.json({ error: 'This page changed — please reload it and send again' }, 400);
       }
@@ -597,8 +603,11 @@ export const makeSiteApp = (at) => {
       }
     }
     // The app's own copy of a site that has a domain of its own isn't indexed.
-    if (R && site.micro) site.mirror = site.micro.domains.length > 0;
-    else if (R) {
+    // Its root without the language says which: '' on a domain (/pa there
+    // is the real site in Punjabi), '/site…' on the app's address.
+    const appCopy = Boolean(at.home ?? R);
+    if (appCopy && site.micro) site.mirror = site.micro.domains.length > 0;
+    else if (appCopy) {
       const domains = parseJ((await site.db.query('select domains from site_settings where workspace_id = $1', [site.ws.id])).rows[0]?.domains, []);
       site.mirror = Boolean(String(process.env.SITE_HOSTS || '').trim()) || (Array.isArray(domains) && domains.length > 0);
     }

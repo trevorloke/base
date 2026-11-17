@@ -57,7 +57,11 @@ export function LanguageSwitch({ rc }) {
     ${current !== 'en' ? (() => {
       const note = rc.legal('translatedNote');
       const read = rc.legal('readInEnglish');
-      return html`<p className="lang-note"><span lang=${note.lang}>${note.text}</span> <a href=${at('en')} hrefLang="en" lang=${read.lang}>${read.text}</a></p>`;
+      // The home page sends a remembered visitor back to their language
+      // unless the address has a query: this link carries one, and unlike
+      // ?lang=en it keeps the language remembered.
+      const en = path === '/' ? `${at('en')}?en=1` : at('en');
+      return html`<p className="lang-note"><span lang=${note.lang}>${note.text}</span> <a href=${en} hrefLang="en" lang=${read.lang}>${read.text}</a></p>`;
     })() : null}
     ${rc.policyEnglish ? (() => {
       // A privacy policy not checked yet in this language is shown in
