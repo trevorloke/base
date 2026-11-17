@@ -1272,7 +1272,8 @@ far-out picture of a rated city list is a megabyte of numbers, about a
 fifth of that over the wire. Choose the provider before election week:
 [GOING-LIVE.md](GOING-LIVE.md), section 5.
 
-**Buildings.** An address with 4 or more units (a tower, a walk-up, a
+**Buildings.** *A building with 4 or more units is one square on the map;
+tap it, then its units* (the release note's line). An address with 4 or more units (a tower, a walk-up, a
 townhouse complex) is one building, worked out when it is read
 (`shared/buildings.js`), never stored: a door is still address + unit. Walk
 lists take a building floor by floor (201, 202, … Penthouse, then the other

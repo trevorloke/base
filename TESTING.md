@@ -1277,8 +1277,12 @@ comes back, or asks if words were typed meanwhile).
   opens the sheet and a plain spot still opens its door; the sheet ("210
   units · 210 left", only Floor 2 open, 1203 one row, ?building= and no
   address, a reload); Next unit · 201 → No answer → Next unit · 202 → ‹ "209
-  left"; townhouses in one list; the GOTV filter's "Showing: … · 10 of 210";
-  the walk list floor by floor and a GOTV pass's "Not on this round";
+  left"; unit 1203's two doors one after the other (Next unit · 1203, then
+  1204), Done only after both; the phone's Back from a unit to the sheet to
+  the map, Escape from a unit's card to its sheet, a square opened with
+  Enter; townhouses in one list; the GOTV filter's "Showing: … · 10 of 210";
+  the walk list floor by floor and a GOTV pass's "Not on this round" (a
+  floor with nobody on the round says so, not "done");
   offline from the kept walk list and the knock synced after; a volunteer
   without the turf gets no square and a 404; the anchor merged away says
   "This building isn't here any more". `RED=1` runs steps 1, 3 and 7 against
