@@ -8,7 +8,8 @@
 // code on the phone (shared/qr.js; works with no signal) for the public
 // guide in the voter's language, with ?near= rounded to 2 decimals (about
 // 1 km) so it never points at the house. The copy is kept on the phone.
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { nearest, nearVotingPlace, distanceWords, hoursWords, timeWords, dayWords, normWords } from '@starbase/shared/voteguide';
 import { qrSvgPath } from '@starbase/shared/qr';
@@ -19,6 +20,7 @@ import { noAnswer } from '../api.js';
 import { useOnline } from '../components/NoSignal.jsx';
 import { useGuide, useGuideClock } from '../components/guide.js';
 import { W } from '../components/guideWords.js';
+import './shifts.css';
 import './vote-guide.css';
 
 const arr = (v) => (Array.isArray(v) ? v : []);
@@ -66,6 +68,13 @@ function PlaceRow({ p, st, now, distance }) {
         </span>
         {distance == null && p.address && <span className="vi-place__addr">{p.address}</span>}
         {closed && p.closed_note && <span className="vi-place__note">{W('vg.closed', { note: p.closed_note })}</span>}
+        {(p.accessible === true || p.curbside === true) && (
+          <span className="vi-place__tags">
+            {p.accessible === true && <span className="chip vi-tag">{W('vg.accessible')}</span>}
+            {p.curbside === true && <span className="chip vi-tag">{W('vg.curbside')}</span>}
+          </span>
+        )}
+        {p.note && <span className="vi-place__line">{p.note}</span>}
         {!closed && p.changed_day && p.changed_day === st.day && <span className="chip chip-warn vi-chip">{W('vg.changed', { time: timeWords(p.changed_hm) })}</span>}
       </div>
       <Go p={p} />
@@ -73,9 +82,9 @@ function PlaceRow({ p, st, now, distance }) {
   );
 }
 
-function Section({ title, children }) {
+function Section({ title, children, open = false }) {
   return (
-    <details className="vi-sec">
+    <details className="vi-sec" open={open || undefined}>
       <summary className="vi-sec__h">{title}</summary>
       <div className="vi-sec__body">{children}</div>
     </details>
@@ -99,6 +108,13 @@ function codeFor(link, near) {
 }
 
 function ShowTheVoter({ links, near, lang, onClose }) {
+  // The whole screen: above the tab bar, and the app behind it out of
+  // reach (no tap, no Tab) while the voter holds the phone.
+  useEffect(() => {
+    const root = document.getElementById('root');
+    root?.setAttribute('inert', '');
+    return () => root?.removeAttribute('inert');
+  }, []);
   const langs = LANG_ORDER.filter((c) => links[c]);
   const [pick, setPick] = useState(langs.includes(lang) ? lang : 'en');
   const [said, setSaid] = useState('');
@@ -106,7 +122,7 @@ function ShowTheVoter({ links, near, lang, onClose }) {
   const copy = async () => {
     try { await navigator.clipboard.writeText(text); setSaid('Link copied'); } catch { setSaid('Couldn’t copy — press and hold the link'); }
   };
-  return (
+  return createPortal(
     <div className="vi-sheet" role="dialog" aria-modal="true" aria-labelledby="vi-sheet-h"
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}>
       <h2 id="vi-sheet-h" className="vi-sheet__h">Scan for where and when to vote</h2>
@@ -129,7 +145,8 @@ function ShowTheVoter({ links, near, lang, onClose }) {
         <button type="button" className="btn" onClick={onClose} autoFocus>Done</button>
       </div>
       <p className="vi-sr" aria-live="polite">{said}</p>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -142,6 +159,8 @@ export default function VoteInfo() {
   // entry at once: a reload (the browser keeps history state) opens the
   // screen without it.
   const [door] = useState(() => (location.state && typeof location.state === 'object' ? location.state : {}));
+  // Land at the top (the walk list's scroll would hide the warning).
+  useLayoutEffect(() => { window.scrollTo(0, 0); }, []);
   useEffect(() => {
     if (location.state) navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
   }, [location.state, location.pathname, location.search, navigate]);
@@ -171,7 +190,10 @@ export default function VoteInfo() {
   const closest = near ? nearest(places, near, 3, g.times, now) : [];
   const links = g.links || {};
   const words = normWords(search);
-  const listed = words ? places.filter((p) => normWords(`${p.name} ${p.address}`).includes(words)) : places;
+  const show = !warn && links.en
+    ? <button type="button" className="btn btn-primary vi-show" onClick={() => setShowing(true)}>Show the voter</button>
+    : null;
+  const listed = words && !near ? places.filter((p) => normWords(`${p.name} ${p.address}`).includes(words)) : places;
   const rules = g.rules || {};
   const bring = [rules.bring_listed, rules.bring_unlisted].some((t) => String(t || '').trim());
   const mail = String(rules.mail || '').trim() || g.mail?.request_by || g.mail?.url;
@@ -192,6 +214,9 @@ export default function VoteInfo() {
         </div>
       )}
 
+      {/* Without a door the one action comes first; the places fold below. */}
+      {!near && show}
+
       {near ? (
         <section aria-labelledby="vi-near-h">
           <h2 id="vi-near-h" className="vi-h">{door.at ? `Nearest to ${door.at}` : 'Nearest voting places'}</h2>
@@ -201,22 +226,9 @@ export default function VoteInfo() {
             </ul>
           ) : <p className="vi-quiet">No voting place is on the map yet.</p>}
         </section>
-      ) : (
-        <section aria-labelledby="vi-all-h">
-          <h2 id="vi-all-h" className="vi-h">Voting places</h2>
-          <label className="vi-sr" htmlFor="vi-search">{W('vg.search')}</label>
-          <input id="vi-search" className="input vi-search" type="search" placeholder={W('vg.search')} value={search} onChange={(e) => setSearch(e.target.value)} />
-          {listed.length ? (
-            <ul className="vi-places">{listed.map((p) => <PlaceRow key={p.id} p={p} st={st} now={now} />)}</ul>
-          ) : (
-            <p className="vi-quiet">{W('vg.noMatch')} <button type="button" className="btn-link" onClick={() => setSearch('')}>{W('vg.clear')}</button></p>
-          )}
-        </section>
-      )}
+      ) : null}
 
-      {!warn && links.en && (
-        <button type="button" className="btn btn-primary vi-show" onClick={() => setShowing(true)}>Show the voter</button>
-      )}
+      {near && show}
 
       <div className="vi-secs">
         <Section title="Days and hours">
@@ -237,18 +249,27 @@ export default function VoteInfo() {
           </Section>
         )}
         {String(rules.who || '').trim() && <Section title={W('vg.who')}><Md text={rules.who} /></Section>}
-        {near && (
-          <Section title={`All voting places (${places.length.toLocaleString('en-CA')})`}>
-            <ul className="vi-places">{places.map((p) => <PlaceRow key={p.id} p={p} st={st} now={now} />)}</ul>
-          </Section>
-        )}
-        {!warn && ballot.length > 0 && (
+        <Section title={`All voting places (${places.length.toLocaleString('en-CA')})`} open={!near}>
+          {!near && (
+            <>
+              <label className="vi-sr" htmlFor="vi-search">{W('vg.search')}</label>
+              <input id="vi-search" className="input vi-search" type="search" placeholder={W('vg.search')} value={search} onChange={(e) => setSearch(e.target.value)} />
+            </>
+          )}
+          {listed.length ? (
+            <ul className="vi-places">{listed.map((p) => <PlaceRow key={p.id} p={p} st={st} now={now} />)}</ul>
+          ) : (
+            <p className="vi-quiet">{W('vg.noMatch')} <button type="button" className="btn-link vi-tap" onClick={() => setSearch('')}>{W('vg.clear')}</button></p>
+          )}
+        </Section>
+        {!warn && ballot.length > 0 && ballot.some((c) => arr(c.names).some((n) => n.ours)) && (
           <Section title="Our names on the ballot">
-            {ballot.map((c, i) => (
+            {ballot.filter((c) => arr(c.names).some((n) => n.ours)).map((c, i) => (
               <div key={`${c.office}-${i}`} className="vi-contest">
                 <h3 className="vi-sub">{W(Number(c.vote_for) === 1 ? 'vg.voteForOne' : 'vg.voteFor', { office: c.office, n: c.vote_for })}</h3>
+                {/* Only ours: a name read out at a door is never an opponent's. */}
                 <ul className="vi-names">
-                  {arr(c.names).map((n, j) => <li key={`${n.name}-${j}`} data-ours={n.ours ? '' : undefined}>{n.name}{n.ours && <span className="vi-sr"> — {W('vg.ours')}</span>}</li>)}
+                  {arr(c.names).filter((n) => n.ours).map((n, j) => <li key={`${n.name}-${j}`} data-ours="">{n.name}</li>)}
                 </ul>
               </div>
             ))}
@@ -259,12 +280,12 @@ export default function VoteInfo() {
           <Section title={W('vg.mail')}>
             <Md text={rules.mail} />
             {g.mail?.request_by && <p>{W('vg.mailBy', { day: dayWords(g.mail.request_by) })}</p>}
-            {g.mail?.url && <p><a href={g.mail.url} target="_blank" rel="noopener noreferrer">{W('vg.mailAsk')} ↗</a></p>}
+            {g.mail?.url && <p><a className="btn vi-go" href={g.mail.url} target="_blank" rel="noopener noreferrer">{W('vg.mailAsk')} ↗</a></p>}
           </Section>
         )}
         {g.ride_phone && (
           <Section title="Need a ride">
-            <p><a href={`tel:${g.ride_phone.replace(/[^\d+]/g, '')}`}>Call or text {g.ride_phone}</a></p>
+            <p><a className="btn vi-go" href={`tel:${g.ride_phone.replace(/[^\d+]/g, '')}`}>Call or text <span className="vi-keep">{g.ride_phone}</span></a></p>
           </Section>
         )}
       </div>

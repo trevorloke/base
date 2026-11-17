@@ -433,7 +433,7 @@ try {
   await vol.page.click('.vi-sheet button:has-text("Done")');
   await vol.page.reload({ waitUntil: 'domcontentloaded' });
   await sleep(1500);
-  check('8. a reload opens “Where to vote” without the door', /Voting places/.test(await text(vol.page, '.vi-page')) && !/Nearest to/.test(await text(vol.page, '.vi-page')));
+  check('8. a reload opens “Where to vote” without the door', /voting places/i.test(await text(vol.page, '.vi-page')) && !/Nearest to/.test(await text(vol.page, '.vi-page')));
   const plain = (u) => { try { return decodeURIComponent(u); } catch { return u; } };
   const leaked = reqs.slice(reqStart).filter((u) => /12530|Example Street|Example\+Street|49\.1253|122\.8012/i.test(plain(u)) || u.includes(maya.id));
   check('8. from the tap on “Where to vote” to the code and a reload, no request carried the door’s address, its full pin or a person id', leaked.length === 0, leaked.join(' '));
@@ -441,6 +441,8 @@ try {
   // ── 9. Near a voting place ──
   await openDoor('Harjit Example');
   const warn = await text(vol.page, '.vi-page');
+  const warnTop = await vol.page.evaluate(() => { const r = document.querySelector('.vi-warn')?.getBoundingClientRect(); return r ? [Math.round(r.top), Math.round(r.bottom), window.innerHeight] : null; });
+  check('9. the warning is on screen on landing (not scrolled past)', Boolean(warnTop) && warnTop[0] >= 0 && warnTop[1] <= warnTop[2], JSON.stringify(warnTop));
   check('9. 80 m from an open place: the warning and the place', /You’re near a voting place — no campaigning within 100 m\./.test(warn) && /Example Community Hall/.test(await text(vol.page, '.vi-warn')));
   check('9. no Show the voter, no names; Directions there', !(await vol.page.$('button:has-text("Show the voter")')) && !/Our names on the ballot/.test(warn) && (await vol.page.locator('.vi-go').count()) > 0);
   await shot(vol.page, '13-near-place-390', true);
@@ -503,7 +505,7 @@ try {
   await vol.ctx.setOffline(true);
   await vol.page.reload({ waitUntil: 'domcontentloaded' }).catch(() => {});
   await sleep(2500);
-  check('10. offline: “Where to vote” opens from the copy', /Voting places/.test(await text(vol.page, '.vi-page')) && /from \d/i.test(await text(vol.page, '.offline-strip__kept')), (await text(vol.page)).slice(0, 160));
+  check('10. offline: “Where to vote” opens from the copy', /voting places/i.test(await text(vol.page, '.vi-page')) && /from \d/i.test(await text(vol.page, '.offline-strip__kept')), (await text(vol.page)).slice(0, 160));
   await vol.page.click('button:has-text("Show the voter")').catch(() => {});
   check('10. offline: the QR code still draws', (await vol.page.locator('.vi-qr').count()) === 1);
   await shot(vol.page, '16-offline-390');

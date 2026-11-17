@@ -446,14 +446,23 @@ function LettersRow({ b }) {
 // "Where to vote" (VG): the first row while the voter guide is published
 // and not over, on a GOTV day or with the first voting day two weeks off.
 // Reading it here also keeps the guide on the phone for when signal drops.
-function VoteInfoRow({ b }) {
+function useGuideOut() {
   const g = useGuide({ side: true }).data;
   if (!g || g.status === 'not_out' || !g.times) return null;
   const now = guideNow(g);
   const st = guideState(g.times, now, g.places);
   if (st.state === 'not_out' || st.state === 'over') return null;
-  if (!b.voted?.on && !guideSoon(g, now)) return null;
+  return { g, now };
+}
+function VoteInfoRow({ b }) {
+  const out = useGuideOut();
+  if (!out) return null;
+  if (!b.voted?.on && !guideSoon(out.g, out.now)) return null;
   return <LinkRow to="/vote-info" state={FROM_TODAY} main="Where to vote" />;
+}
+// On a voting day the same tap sits in the GOTV card, above the map.
+function GotvVoteLink() {
+  return useGuideOut() ? <Link to="/vote-info" state={FROM_TODAY} className="btn today-gotv__btn">Where to vote</Link> : null;
 }
 
 // ── GOTV mode (ext/voted): on by hand, or by itself on an advance-voting day
@@ -475,6 +484,7 @@ function GotvCard({ v }) {
       <div className="today-gotv__acts">
         <Link to={GOTV_CALLS} className="btn today-gotv__btn">Call who hasn’t voted <span aria-hidden="true">→</span></Link>
         <Link to="/map?show=gotv" className="btn today-gotv__btn">Map: who hasn’t voted</Link>
+        <GotvVoteLink />
       </div>
     </section>
   );
