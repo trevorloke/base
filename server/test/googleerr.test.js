@@ -79,7 +79,7 @@ test('a key limited to other services: the words name the two APIs base.win uses
 });
 
 test('every row names its service; no option means the map’s rows, answering as before', () => {
-  for (const t of TROUBLES) assert.ok(['maps', 'drive', 'gmail', 'calendar'].includes(t.service), `${t.code} has a service`);
+  for (const t of TROUBLES) assert.ok(['maps', 'drive', 'gmail', 'calendar', 'translate'].includes(t.service), `${t.code} has a service`);
   assert.equal(TROUBLES.filter((t) => t.service === 'maps').length, 8);
   assert.equal(googleTrouble(429, 'Too Many Requests').code, 'quota');
   assert.equal(googleTrouble(403, tiles(403, 'x', 'SERVICE_DISABLED')).code, 'api-off');
