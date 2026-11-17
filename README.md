@@ -1217,6 +1217,8 @@ election week should switch to a paid provider.
 | `STARBASE_TILE_CLEAN` | `off`: never offer CARTO, key or not (the free map behind Google stays, OpenStreetMap's) | — |
 | `GOOGLE_MAPS_SERVER_KEY` | Google's key (Map Tiles API, Places API (New)): Google is the map whenever it is set. **Before this goes to staging, tell us Google or the free map for canvassing. With a key already set, Google becomes the map and phones stop keeping street maps offline.** | — |
 | `GOOGLE_MAPS_TILES` | `off` keeps the free map with a key set (`1` also turns Google on) | unset: on with a key |
+| `GOOGLE_TRANSLATE_KEY` | Google Cloud Translation, a key restricted to it alone: the campaign's website in Punjabi and Chinese, translated ahead of time (SITE.md "Languages") | no language can be turned on; languages already on keep their words, new wording stays English |
+| `GOOGLE_TRANSLATE_API_BASE` | tests only: the fake Google Translation (`server/test/fake-translate.js`) | Google's own |
 | `GOOGLE_TILES_DAILY_MAX` | Google tiles a day (the campaign's day); then the free map until midnight | none |
 | `ADDRESS_SUGGEST` | `google` (only after counsel's written yes and with Google's logo in the build), `bc`, `nominatim`, `off` | unset: `GEOCODER`'s suggester, never Google |
 | `GOOGLE_PLACES_DAILY_MAX`, `GOOGLE_PLACES_PER_PERSON` | Google address asks a day, and per person | `300`, `50` |

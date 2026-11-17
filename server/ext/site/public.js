@@ -25,7 +25,7 @@
 // as a form's destination; never framed by another site (a draft's preview
 // may be framed by the app's own Website screen).
 import { Hono } from 'hono';
-import { getCookie, setCookie } from 'hono/cookie';
+import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 import { readFile, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -49,12 +49,29 @@ import { formRoute } from './forms.js';
 import { KIT_CODE_RE, goodPath } from '../socials/share.js';
 import { withSource } from '../../../shared/site/components/util.js';
 import { KINDS, consentWording } from './shape.js';
+import { LANG_BY_CODE, LANG_BY_PREFIX, isOther } from '../../../shared/site/languages.js';
+import { UI_WORDS, fillWords } from '../../../shared/site/ui-words.js';
+import { languagesFor, translatorFor } from './translate.js';
+import { LEGAL_ENGLISH_HASH, keyCurrent, legalSlots, legalWords, legalRow } from './legal.js';
+const legalRowOf = (site, id) => legalRow(site.db, site.ws.id, String(id).toLowerCase());
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 const REF_COOKIE = 'site_ref';
 const SRC_COOKIE = 'site_src'; // the share kit a visitor came through (forms.js)
 const REF_DAYS = 30;
+const LANG_COOKIE = 'site_lang'; // the language a visitor last read the site in (TR decision 33)
+// A prefetch (the switch's Speculation-Rules) never sets or clears it.
+const prefetching = (c) => /prefetch/i.test(`${c.req.header('sec-purpose') || ''} ${c.req.header('purpose') || ''}`);
+// The rules a page's Speculation-Rules header points at: prefetch the
+// switch's other languages on hover or press — never the English link
+// that clears the remembered language. That link is left out by its
+// hreflang: a "?" in a URL pattern string is a modifier, so the address
+// test alone let the browser prefetch it, and a click then used the
+// prefetched answer, which (rightly) forgot nothing.
+const LANG_RULES = JSON.stringify({
+  prefetch: [{ where: { and: [{ selector_matches: '.lang-switch a:not([hreflang="en"])' }, { not: { href_matches: '*\\?lang=*' } }] }, eagerness: 'moderate' }],
+});
 
 // ── Files: /site-assets/* ──
 // The site's own pictures (shared/site/assets), its stylesheet and fonts
@@ -76,6 +93,7 @@ const TYPES = {
 };
 const serveAsset = async (c) => {
   const rel = decodeURIComponent(c.req.path.replace(/^.*?\/site-assets\//, ''));
+  if (rel === 'lang-rules.json') return c.body(LANG_RULES, 200, { 'Content-Type': 'application/speculationrules+json', 'Cache-Control': 'public, max-age=3600', 'X-Content-Type-Options': 'nosniff' });
   if (!rel || rel.includes('\0') || rel.split('/').some((p) => p === '..' || p.startsWith('.'))) return c.text('not found', 404);
   const ext = extname(rel).toLowerCase();
   for (const root of ROOTS) {
@@ -181,8 +199,12 @@ const siteFor = async (c, at) => {
   const url = new URL(c.req.url);
   const proto = isHttps(c) ? 'https' : url.protocol.replace(':', '');
   const origin = `${proto}://${url.host}`;
+  // lang: the language app's ('en' on the site's own); home: the root
+  // without the language (where the cookies live, where English is).
+  const lang = isOther(at.lang) ? at.lang : 'en';
+  const home = `${base}${at.home ?? at.root}`;
   return {
-    db, ws, inner: at.root, root: `${base}${at.root}`, base,
+    db, ws, inner: at.root, root: `${base}${at.root}`, base, lang, home,
     origin, address: publicOrigin(base, origin), https: proto === 'https', assets: `${base}/site-assets`,
   };
 };
@@ -227,9 +249,31 @@ const rendererSite = async (site, settings) => {
   });
 };
 
+// What a page needs to speak a language, and to draw the switch (TR): only
+// when the campaign has a language on — an English-only campaign reads
+// nothing more.
+const languageCtx = async (site, settings, { lang = site.lang, preview = false, checkFirst = false } = {}) => {
+  const langs = site.langs || (site.langs = await languagesFor(site.db, site.ws, settings));
+  const roots = Object.fromEntries(['en', ...langs.offered].map((code) => [code, `${site.home}${LANG_BY_CODE[code].path}`]));
+  const out = { offered: preview ? [] : langs.offered, langRoots: roots, indexed: (langs.offered || []).filter((code) => settings.languages?.index?.[code]) };
+  if (!isOther(lang)) return out;
+  const row = langs.legal[lang] || null;
+  const names = row?.words?.names && typeof row.words.names === 'object' ? row.words.names : {};
+  return {
+    ...out,
+    lang,
+    tr: await translatorFor(site.db, site.ws.id, lang),
+    legal: { id: row?.id || null, hash: LEGAL_ENGLISH_HASH, words: row?.words || {}, current: Object.keys(row?.words || {}).filter((k) => keyCurrent(row, k)), slots: legalSlots(settings) },
+    names,
+    checkFirst: checkFirst || Boolean(site.micro?.check_first),
+  };
+};
+
 const draw = async (c, site, { kind, page = null, post = null, campaign = null, key, status, ctx: extra = {} }) => {
   const settings = await readSettings(site.db, site.ws.id);
   const ctx = ctxOf(c, site, extra);
+  const langsOn = (settings.languages?.on || []).length > 0;
+  if (langsOn) Object.assign(ctx, await languageCtx(site, settings, { lang: ctx.preview ? extra.lang || 'en' : site.lang, preview: ctx.preview, checkFirst: page?.checkFirst === true }));
   const keep = key && !ctx.sent && !ctx.error && !ctx.cancelled && !ctx.preview;
   // Per website too: '/' on two hosts is never the same page.
   const micro = site.micro ? [site.micro.id, new Date(site.micro.updated_at).getTime()] : ['', ''];
@@ -242,10 +286,26 @@ const draw = async (c, site, { kind, page = null, post = null, campaign = null, 
     if (fullKey && hit.status === 200) cachePut(fullKey, hit);
   }
   pageHeaders(c, site, { csp: hit.csp, preview: ctx.preview, store: ctx.preview || Boolean(ctx.sent || ctx.error) });
+  if (langsOn && !ctx.preview) langHeaders(c, site, hit.status);
   return c.html(hit.html, hit.status);
 };
 
 const notFound = (c, site) => draw(c, site, { kind: 'notFound', key: ['404'], status: 404 });
+
+// After a page is drawn (TR decision 33): the switch's prefetch rules; a
+// language page remembers its language (never on a prefetch); English's
+// ?lang=en forgets it and is never kept by the browser.
+const langHeaders = (c, site, status) => {
+  if (site.langs?.offered?.length) c.header('Speculation-Rules', `"${site.assets}/lang-rules.json"`);
+  if (prefetching(c)) return;
+  const path = site.home || '/';
+  if (site.lang !== 'en' && status === 200) {
+    setCookie(c, LANG_COOKIE, site.lang, { path, maxAge: 365 * 24 * 3600, sameSite: 'Lax', secure: site.https });
+  } else if (site.lang === 'en' && c.req.query('lang') === 'en') {
+    deleteCookie(c, LANG_COOKIE, { path, secure: site.https });
+    c.header('Cache-Control', 'no-store');
+  }
+};
 
 // A published page of this website (another website's pages are its own).
 const livePage = async (site, slug) => (await site.db.query(
@@ -261,7 +321,7 @@ const shareOf = (content) => (content?.image?.url ? { url: String(content.image.
 const pageFor = (row) => {
   const p = parseJ(row.published, {}) || {};
   const modules = (Array.isArray(p.modules) ? p.modules : []).filter((m) => m && !m.hidden);
-  return { id: row.id, slug: row.slug, title: p.title || '', description: p.description || '', image: shareOf(p), modules };
+  return { id: row.id, slug: row.slug, title: p.title || '', description: p.description || '', image: shareOf(p), modules, ...(p.checkFirst === true ? { checkFirst: true } : {}) };
 };
 
 // /news with no news page: the posts, newest first.
@@ -272,14 +332,16 @@ const NEWS_PAGE = { id: null, slug: 'news', title: 'News', description: '', modu
 // Every one carries "Authorized by …"; another website's (coming soon) its
 // own name and look and the link back; closed: the main site's, home is
 // the main site.
-const plainPage = (site, settings, { title, body, status = 200, closed = false, back = true }) => {
+// pl: the page's language, for a supporter's own pages (TR decision 40):
+// { lang, w, auth } — its words, and "Authorized by" in it as approved.
+const plainPage = (site, settings, { title, body, status = 200, closed = false, back = true, pl = null }) => {
   const parentUrl = site.micro || closed ? parentUrlOf(site, settings) : null;
   const s = siteOf(settings, [], site.ws, site.micro && !closed ? { microsite: site.micro, home: null, parentUrl } : null);
   const mainName = settings.org.name || site.ws.name;
   const org = closed ? mainName : s.site?.name || s.org.name || site.ws.name;
   const home = closed ? parentUrl : `${site.root}/`;
   const auth = authorizedBy(settings.org);
-  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  const html = `<!doctype html><html lang="${pl ? esc(pl.lang) : 'en'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex"><title>${esc(title)} · ${esc(org)}</title>
 <style>${themeCss(s.theme)}
 *{box-sizing:border-box}
@@ -310,7 +372,7 @@ footer p{margin:8px 0 0}
 </style></head><body>
 <header class="top"><a href="${esc(home)}">${esc(org)}</a></header>
 <main id="main">${body}
-<footer>${closed || !back ? '' : `<a href="${esc(home)}">Back to ${esc(org)}</a>`}${parentUrl ? `<p class="by">A website by <a href="${esc(parentUrl)}">${esc(mainName)}</a></p>` : ''}${auth ? `<p class="auth">${esc(auth)}</p>` : ''}</footer></main></body></html>`;
+<footer>${closed || !back ? '' : `<a href="${esc(home)}">${pl ? esc(pl.w('plain.back', { org })) : `Back to ${esc(org)}`}</a>`}${parentUrl ? `<p class="by">${pl ? esc(pl.w('plain.websiteBy')) : 'A website by'} <a href="${esc(parentUrl)}">${esc(mainName)}</a></p>` : ''}${auth ? `<p class="auth"${pl ? ' lang="en"' : ''}>${esc(auth)}</p>` : ''}${pl?.auth ? `<p class="auth" lang="${esc(pl.lang)}">${esc(pl.auth)}</p>` : ''}</footer></main></body></html>`;
   return { html, status };
 };
 const sendPlain = (c, site, settings, page, { preview = false } = {}) => {
@@ -336,17 +398,37 @@ const personOfToken = async (site, t) => {
     'select id, name, email, phone, tags, attrs from persons where id = $1 and workspace_id = $2 and deleted_at is null', [into, site.ws.id],
   )).rows[0] || null;
 };
-const badLink = (c, site, settings) => sendPlain(c, site, settings, {
-  title: 'This link has expired',
-  body: `<h1>This link doesn’t work any more</h1><p>Links in our emails stop working after a while. Use the link in a newer email from us, or reply to one and we’ll change it for you.</p>`,
+const badLink = (c, site, settings, pl = null) => sendPlain(c, site, settings, {
+  title: pl ? pl.w('plain.expiredTitle') : 'This link has expired',
+  body: pl ? `<h1>${esc(pl.w('plain.expired'))}</h1><p>${esc(pl.w('plain.expiredBody'))}</p>`
+    : `<h1>This link doesn’t work any more</h1><p>Links in our emails stop working after a while. Use the link in a newer email from us, or reply to one and we’ll change it for you.</p>`,
   status: 404,
+  pl,
 });
+
+// The language a supporter's own page is in (TR decision 40): ?lang=, else
+// the language they last read the site in — when it is offered; else none
+// (English). Its words, its approved legal words and the form's legal_v.
+const plainLanguage = async (c, site, settings) => {
+  const want = String(c.req.query('lang') || getCookie(c, LANG_COOKIE) || '');
+  if (!isOther(want) || !(settings.languages?.on || []).includes(want)) return null;
+  const langs = await languagesFor(site.db, site.ws, settings);
+  if (!langs.offered.includes(want)) return null;
+  const tr = await translatorFor(site.db, site.ws.id, want);
+  const row = langs.legal[want];
+  const slots = legalSlots(settings);
+  const w = (key, sl) => fillWords(tr.look(UI_WORDS[key] ?? key).text, sl);
+  const legal = (key) => legalWords(row, want, key, slots);
+  const auth = legal('authorizedBy');
+  return { lang: want, w, legal, row, legalV: `${row.id}.${LEGAL_ENGLISH_HASH}`, auth: auth.lang === want ? auth.text : '' };
+};
 
 // A token for a supporter's own choices, for the links in emails:
 // {site}/preferences?t=… and {site}/unsubscribe?t=… (SITE.md).
 export const personToken = (workspaceId, personId) => sign('person', { w: workspaceId, p: personId }, PERSON_TTL);
 
-const choicesBody = (site, person, choices, { t, saved = null, code = null, wording }) => {
+const choicesBody = (site, person, choices, { t, saved = null, code = null, wording, pl = null }) => {
+  if (pl) return choicesBodyIn(site, person, choices, { t, saved, code, pl });
   const box = (name, on, label, hint, disabled = false) => `<label class="check"><input type="checkbox" name="${name}" value="on"${on ? ' checked' : ''}${disabled ? ' disabled' : ''}><span><b>${esc(label)}</b><span class="hint">${esc(hint)}</span></span></label>`;
   return `<h1>Your email and texts</h1>
 ${saved ? `<div class="card done" role="status"><p><b>Saved.</b> ${esc(saved)}</p></div>` : ''}
@@ -359,8 +441,55 @@ ${box('sms', choices.sms, 'Texts', person.phone ? wording.sms : 'We don’t have
 </form>
 ${code ? `<div class="card"><p><b>Your link to share</b></p><p>When someone signs up through it, we know you brought them in:</p><p class="share">${esc(site.address)}${esc(site.root)}/r/${esc(code)}</p></div>` : ''}`;
 };
+// The same page in a supporter's language: its consent lines the approved
+// words (or the English, lang="en"), and the form names them (legal_v).
+const choicesBodyIn = (site, person, choices, { t, saved, code, pl }) => {
+  const W = (k, sl) => esc(pl.w(k, sl));
+  const box = (name, on, label, hint, hintLang, disabled = false) => `<label class="check"><input type="checkbox" name="${name}" value="on"${on ? ' checked' : ''}${disabled ? ' disabled' : ''}><span><b>${label}</b><span class="hint"${hintLang ? ` lang="${esc(hintLang)}"` : ''}>${esc(hint)}</span></span></label>`;
+  const em = pl.legal('email');
+  const sm = pl.legal('sms');
+  return `<h1>${W('plain.choicesTitle')}</h1>
+${saved ? `<div class="card done" role="status"><p><b>${W('plain.saved')}</b> ${esc(saved)}</p></div>` : ''}
+<p>${W('plain.choose', { who: person.email || person.phone || pl.w('plain.you') })}</p>
+<form method="post" class="card">
+<input type="hidden" name="t" value="${esc(t)}">
+<input type="hidden" name="legal_v" value="${esc(pl.legalV)}">
+${box('email', choices.email, W('plain.email'), person.email ? em.text : pl.w('plain.noEmail'), person.email && em.lang === 'en' ? 'en' : null, !person.email)}
+${box('sms', choices.sms, W('plain.texts'), person.phone ? sm.text : pl.w('plain.noPhone'), person.phone && sm.lang === 'en' ? 'en' : null, !person.phone)}
+<button type="submit">${W('plain.save')}</button>
+</form>
+${code ? `<div class="card"><p><b>${W('plain.shareLink')}</b></p><p>${W('plain.shareHint')}</p><p class="share">${esc(site.address)}${esc(site.root)}/r/${esc(code)}</p></div>` : ''}`;
+};
 
-const sitemapXml = (rows) => `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${rows.map(([u, d]) => `<url><loc>${esc(u)}</loc>${d ? `<lastmod>${d}</lastmod>` : ''}</url>`).join('\n')}\n</urlset>\n`;
+const sitemapXml = (rows, alt = null) => {
+  if (!alt) return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${rows.map(([u, d]) => `<url><loc>${esc(u)}</loc>${d ? `<lastmod>${d}</lastmod>` : ''}</url>`).join('\n')}\n</urlset>\n`;
+  // One <url> per indexed address, each listing every language's address
+  // of the same page (itself included) and English as the default.
+  const out = [];
+  for (const [u, d] of rows) {
+    const rel = u.slice(alt.at.length) || '/';
+    const set = alt.codes.map((code) => [code, `${alt.roots[code]}${rel}`]);
+    const links = [...set, ['x-default', set[0][1]]].map(([code, href]) => `<xhtml:link rel="alternate" hreflang="${esc(code)}" href="${esc(href)}"/>`).join('');
+    for (const [, href] of set) out.push(`<url><loc>${esc(href)}</loc>${d ? `<lastmod>${d}</lastmod>` : ''}${links}</url>`);
+  }
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n${out.join('\n')}\n</urlset>\n`;
+};
+// The languages a sitemap lists: English and each offered one search may list.
+const sitemapLanguages = async (site) => {
+  const settings = await readSettings(site.db, site.ws.id);
+  if (!(settings.languages?.on || []).length) return null;
+  const { offered } = await languagesFor(site.db, site.ws, settings);
+  const codes = ['en', ...offered.filter((code) => settings.languages.index?.[code])];
+  if (codes.length < 2) return null;
+  const at = `${site.address}${site.root}`;
+  return { at, codes, roots: Object.fromEntries(codes.map((code) => [code, `${at}${LANG_BY_CODE[code].path}`])) };
+};
+const langDisallows = async (site) => {
+  const settings = await readSettings(site.db, site.ws.id);
+  if (!(settings.languages?.on || []).length) return '';
+  const { offered } = await languagesFor(site.db, site.ws, settings);
+  return offered.map((code) => `Disallow: ${site.root}${LANG_BY_CODE[code].path}/api/\nDisallow: ${site.root}${LANG_BY_CODE[code].path}/r/\n`).join('');
+};
 
 // A closed website's address (a deleted one's, or one it no longer uses):
 // it says so, with who it was by and the main site — never the app, so a
@@ -432,6 +561,27 @@ export const makeSiteApp = (at) => {
         return notFound(c, site);
       }
     }
+    // A language app (TR decisions 5–6): its language must be offered —
+    // else every GET goes to the same page in English and a form post is
+    // refused with nothing kept. Its site's own pages (robots, sitemap, a
+    // supporter's choices, a preview) aren't under a language.
+    if (site.lang !== 'en') {
+      const rel = p.slice(R.length) || '/';
+      const settings = await readSettings(site.db, site.ws.id);
+      site.langs = await languagesFor(site.db, site.ws, settings);
+      if (!site.langs.offered.includes(site.lang)) {
+        if (c.req.method === 'GET' || c.req.method === 'HEAD') {
+          const url = new URL(c.req.url);
+          c.header('Cache-Control', 'no-store');
+          return c.redirect(`${site.home}${rel === '/' ? '/' : rel}${url.search}`, 302);
+        }
+        return c.json({ error: 'This page changed — please reload it and send again' }, 400);
+      }
+      if (/^\/(robots\.txt|sitemap\.xml|preferences|unsubscribe)$|^\/__preview\//.test(rel)) {
+        c.set('site', site);
+        return notFound(c, site);
+      }
+    }
     // The app's own copy of a site that has a domain of its own isn't indexed.
     if (R && site.micro) site.mirror = site.micro.domains.length > 0;
     else if (R) {
@@ -444,11 +594,11 @@ export const makeSiteApp = (at) => {
 
   app.get(route('/site-assets/*'), serveAsset);
 
-  app.get(route('/robots.txt'), (c) => {
+  app.get(route('/robots.txt'), async (c) => {
     const site = c.get('site');
     const body = staging()
       ? 'User-agent: *\nDisallow: /\n'
-      : `User-agent: *\nDisallow: ${site.root}/__preview/\nDisallow: ${site.root}/api/\nDisallow: ${site.root}/preferences\nDisallow: ${site.root}/unsubscribe\nDisallow: ${site.root}/r/\n\nSitemap: ${site.address}${site.root}/sitemap.xml\n`;
+      : `User-agent: *\nDisallow: ${site.root}/__preview/\nDisallow: ${site.root}/api/\nDisallow: ${site.root}/preferences\nDisallow: ${site.root}/unsubscribe\nDisallow: ${site.root}/r/\n${await langDisallows(site)}\nSitemap: ${site.address}${site.root}/sitemap.xml\n`;
     return c.text(body, 200, { 'Cache-Control': 'public, max-age=3600' });
   });
 
@@ -462,8 +612,11 @@ export const makeSiteApp = (at) => {
          and site_id is not distinct from $2::uuid order by nav_order, created_at`,
       [site.ws.id, site.micro?.id || null],
     )).rows) rows.push([p.slug === 'home' ? `${at2}/` : `${at2}/${p.slug}`, day(p.at)]);
+    // Each indexed language: its own <url> per page, every <url> with the
+    // full set of alternates (TR decision 30).
+    const alt = await sitemapLanguages(site);
     // Another website: its own pages only.
-    if (site.micro) return c.body(sitemapXml(rows), 200, { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=600' });
+    if (site.micro) return c.body(sitemapXml(rows, alt), 200, { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=600' });
     if (!rows.some(([u]) => u === `${at2}/news`)) rows.push([`${at2}/news`, null]);
     for (const p of (await site.db.query(
       "select slug, coalesce(updated_at, published_at) as at from site_posts where workspace_id = $1 and deleted_at is null and status = 'published' and published_at <= now() order by published_at desc limit 5000",
@@ -473,7 +626,7 @@ export const makeSiteApp = (at) => {
       "select slug, updated_at as at from site_campaigns where workspace_id = $1 and deleted_at is null and status = 'open' order by created_at",
       [site.ws.id],
     )).rows) rows.push([`${at2}/act/${p.slug}`, day(p.at)]);
-    return c.body(sitemapXml(rows), 200, { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=600' });
+    return c.body(sitemapXml(rows, alt), 200, { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=600' });
   });
 
   // A referral link: remembered 30 days (the forms credit them), then home.
@@ -483,7 +636,9 @@ export const makeSiteApp = (at) => {
   app.get(route('/r/:code'), async (c) => {
     const site = c.get('site');
     const code = String(c.req.param('code') || '').toLowerCase();
-    const keep = { path: site.root || '/', maxAge: REF_DAYS * 24 * 3600, httpOnly: true, sameSite: 'Lax', secure: site.https };
+    // On the site's root without the language: a share opened in Punjabi
+    // credits a sign-up on an English page, and the reverse.
+    const keep = { path: site.home || '/', maxAge: REF_DAYS * 24 * 3600, httpOnly: true, sameSite: 'Lax', secure: site.https };
     // Any well-formed code is remembered, known or not: a form's answer hands
     // someone already on file a decoy code, and following it must look the
     // same as following a real one. An unknown code credits nobody (forms.js
@@ -506,14 +661,16 @@ export const makeSiteApp = (at) => {
   const preferences = async (c, saved = null) => {
     const site = c.get('site');
     const settings = await readSettings(site.db, site.ws.id);
+    const pl = await plainLanguage(c, site, settings);
     const t = c.req.query('t') || '';
     const person = await personOfToken(site, t);
-    if (!person) return badLink(c, site, settings);
+    if (!person) return badLink(c, site, settings, pl);
     const choices = await choicesOf(site.db, site.ws.id, person);
     const code = parseJ(person.attrs, {})?.ref_code || null;
     return sendPlain(c, site, settings, {
-      title: 'Your email and texts',
-      body: choicesBody(site, person, choices, { t, saved, code, wording: consentWording(settings.org, settings.seo) }),
+      title: pl ? pl.w('plain.choicesTitle') : 'Your email and texts',
+      body: choicesBody(site, person, choices, { t, saved, code, wording: consentWording(settings.org, settings.seo), pl }),
+      pl,
     });
   };
   app.get(route('/preferences'), (c) => preferences(c));
@@ -522,8 +679,19 @@ export const makeSiteApp = (at) => {
     const form = await c.req.parseBody().catch(() => ({}));
     const t = String(form.t || c.req.query('t') || '');
     const settings = await readSettings(site.db, site.ws.id);
+    const pl = await plainLanguage(c, site, settings);
     const person = await personOfToken(site, t);
-    if (!person) return badLink(c, site, settings);
+    if (!person) return badLink(c, site, settings, pl);
+    // In a supporter's language: the words their page named (legal_v), as it drew them.
+    let shown = null;
+    if (pl) {
+      const m = /^([0-9a-f-]{36})\.([0-9a-f]{12})$/i.exec(String(form.legal_v || ''));
+      const row = m && m[2] === LEGAL_ENGLISH_HASH ? await legalRowOf(site, m[1]) : null;
+      if (!row || row.lang !== pl.lang) return sendPlain(c, site, settings, { title: pl.w('plain.choicesTitle'), body: `<h1>${esc(pl.w('plain.choicesTitle'))}</h1><p>${esc(pl.w('form.reload'))}</p>`, status: 400, pl });
+      const slots = legalSlots(settings);
+      const one = (key) => { const x = legalWords(row, pl.lang, key, slots); return { wording: x.text, lang: x.lang, wordingEn: legalWords(null, 'en', key, slots).text }; };
+      shown = { email: one('email'), sms: one('sms') };
+    }
     const before = await choicesOf(site.db, site.ws.id, person);
     const want = { email: form.email === 'on' && Boolean(person.email), sms: form.sms === 'on' && Boolean(person.phone) };
     const wording = consentWording(settings.org, settings.seo);
@@ -532,26 +700,34 @@ export const makeSiteApp = (at) => {
       // On: when it isn't. Off: unless it's off already — a save that only
       // changes their texts leaves no second "no" to email on the record.
       if (person.email && (want.email ? !before.email : !before.emailOff)) {
-        await (want.email ? emailOn : emailOff)(tx, ws, { personId: person.id, name: person.name, email: person.email, source: 'preferences', wording: wording.email }, emit);
+        await (want.email ? emailOn : emailOff)(tx, ws, { personId: person.id, name: person.name, email: person.email, source: 'preferences', wording: wording.email, ...(shown?.email || {}) }, emit);
       }
       if (person.phone && (want.sms ? !before.sms : !before.smsOff)) {
-        await (want.sms ? smsOn : smsOff)(tx, ws, { personId: person.id, phone: person.phone, source: 'preferences', wording: wording.sms }, emit);
+        await (want.sms ? smsOn : smsOff)(tx, ws, { personId: person.id, phone: person.phone, source: 'preferences', wording: wording.sms, ...(shown?.sms || {}) }, emit);
       }
       await refCodeFor(tx, ws, person.id, emit);
     });
+    if (pl) {
+      const words = [
+        ...(person.email ? [pl.w(want.email ? 'plain.getEmails' : 'plain.noEmails')] : []),
+        ...(person.phone ? [pl.w(want.sms ? 'plain.textsOn' : 'plain.noTexts')] : []),
+      ].join(', ');
+      return preferencesAfter(c, site, settings, t, words ? `${words}.` : pl.w('plain.nothing'), pl);
+    }
     const words = [
       ...(person.email ? [want.email ? 'You’ll get our emails' : 'No emails'] : []),
       ...(person.phone ? [want.sms ? 'texts are on' : 'no texts'] : []),
     ].join(', ');
     return preferencesAfter(c, site, settings, t, words ? `${words[0].toUpperCase()}${words.slice(1)}.` : 'Nothing to change.');
   });
-  const preferencesAfter = async (c, site, settings, t, saved) => {
+  const preferencesAfter = async (c, site, settings, t, saved, pl = null) => {
     const person = await personOfToken(site, t);
     const choices = await choicesOf(site.db, site.ws.id, person);
     const code = parseJ((await site.db.query('select attrs from persons where id = $1', [person.id])).rows[0]?.attrs, {})?.ref_code || null;
     return sendPlain(c, site, settings, {
-      title: 'Your email and texts',
-      body: choicesBody(site, person, choices, { t, saved, code, wording: consentWording(settings.org, settings.seo) }),
+      title: pl ? pl.w('plain.choicesTitle') : 'Your email and texts',
+      body: choicesBody(site, person, choices, { t, saved, code, wording: consentWording(settings.org, settings.seo), pl }),
+      pl,
     });
   };
 
@@ -561,10 +737,21 @@ export const makeSiteApp = (at) => {
   app.get(route('/unsubscribe'), async (c) => {
     const site = c.get('site');
     const settings = await readSettings(site.db, site.ws.id);
+    const pl = await plainLanguage(c, site, settings);
     const t = c.req.query('t') || '';
     const person = await personOfToken(site, t);
-    if (!person || !person.email) return badLink(c, site, settings);
+    if (!person || !person.email) return badLink(c, site, settings, pl);
     const org = settings.org.name || site.ws.name;
+    const q = `t=${esc(encodeURIComponent(t))}${pl ? `&amp;lang=${esc(pl.lang)}` : ''}`;
+    if (pl) {
+      return sendPlain(c, site, settings, {
+        title: pl.w('plain.unsubTitle'),
+        body: `<h1>${esc(pl.w('plain.unsubAsk', { org }))}</h1><p>${esc(pl.w('plain.unsubWont', { email: person.email }))}</p>
+<form method="post" action="${esc(site.root)}/unsubscribe?${q}"><input type="hidden" name="t" value="${esc(t)}"><button type="submit">${esc(pl.w('plain.unsubButton'))}</button></form>
+<p class="more"><a href="${esc(site.root)}/preferences?${q}">${esc(pl.w('plain.chooseInstead'))}</a></p>`,
+        pl,
+      });
+    }
     return sendPlain(c, site, settings, {
       title: 'Unsubscribe',
       body: `<h1>Stop emails from ${esc(org)}?</h1><p>${esc(person.email)} won’t get our newsletters or other emails.</p>
@@ -577,8 +764,9 @@ export const makeSiteApp = (at) => {
     const form = await c.req.parseBody().catch(() => ({}));
     const t = String(form.t || c.req.query('t') || '');
     const settings = await readSettings(site.db, site.ws.id);
+    const pl = await plainLanguage(c, site, settings);
     const person = await personOfToken(site, t);
-    if (!person || !person.email) return badLink(c, site, settings);
+    if (!person || !person.email) return badLink(c, site, settings, pl);
     const now = await choicesOf(site.db, site.ws.id, person);
     if (!now.emailOff) {
       await runAction(site.db, { workspaceId: site.ws.id, actorId: null, action: 'site.unsubscribe' }, (tx, emit) => emailOff(tx, site.ws.id, {
@@ -586,6 +774,15 @@ export const makeSiteApp = (at) => {
       }, emit));
     }
     const org = settings.org.name || site.ws.name;
+    if (pl) {
+      const q = `t=${esc(encodeURIComponent(t))}&amp;lang=${esc(pl.lang)}`;
+      return sendPlain(c, site, settings, {
+        title: pl.w('plain.unsubDoneTitle'),
+        body: `<h1>${esc(pl.w('plain.unsubDone'))}</h1><div class="card done" role="status"><p>${esc(pl.w('plain.unsubDoneBody', { email: person.email, org }))}</p></div>
+<p class="more"><a href="${esc(site.root)}/preferences?${q}">${esc(pl.w('plain.changeMind'))}</a></p>`,
+        pl,
+      });
+    }
     return sendPlain(c, site, settings, {
       title: 'Unsubscribed',
       body: `<h1>You’re unsubscribed</h1><div class="card done" role="status"><p>${esc(person.email)} won’t get emails from ${esc(org)} any more.</p></div>
@@ -613,13 +810,31 @@ export const makeSiteApp = (at) => {
       }, { preview: true });
     }
     const d = parseJ(row.draft, {}) || {};
-    const page = { id: row.id, slug: row.slug, title: d.title || row.title, description: d.description || '', image: shareOf(d), modules: Array.isArray(d.modules) ? d.modules : [] };
-    return draw(c, site, { kind: 'page', page, key: null, ctx: { preview: true } });
+    const page = { id: row.id, slug: row.slug, title: d.title || row.title, description: d.description || '', image: shareOf(d), modules: Array.isArray(d.modules) ? d.modules : [], ...(d.checkFirst === true ? { checkFirst: true } : {}) };
+    // ?lang=pa: the draft with that language's words so far (one that is on).
+    const settings = await readSettings(site.db, site.ws.id);
+    const want = String(c.req.query('lang') || '');
+    const lang = isOther(want) && (settings.languages?.on || []).includes(want) ? want : 'en';
+    return draw(c, site, { kind: 'page', page, key: null, ctx: { preview: true, lang } });
   });
 
   // ── Pages ──
   const home = async (c) => {
     const site = c.get('site');
+    // Only the home page, only a plain visit: a visitor who last read the
+    // site in another language lands in it again (decided before the cache;
+    // nothing reads Accept-Language, so a crawler always gets English).
+    const remembered = getCookie(c, LANG_COOKIE);
+    if (site.lang === 'en' && isOther(remembered) && !new URL(c.req.url).search && c.req.method === 'GET') {
+      const settings = await readSettings(site.db, site.ws.id);
+      if ((settings.languages?.on || []).includes(remembered)) {
+        site.langs = site.langs || await languagesFor(site.db, site.ws, settings);
+        if (site.langs.offered.includes(remembered)) {
+          c.header('Cache-Control', 'no-store');
+          return c.redirect(`${site.home}${LANG_BY_CODE[remembered].path}/`, 302);
+        }
+      }
+    }
     const row = await livePage(site, 'home');
     if (!row) return notFound(c, site);
     return draw(c, site, { kind: 'page', page: pageFor(row), key: ['page', row.id, row.version] });
@@ -710,34 +925,51 @@ export const makeSiteApp = (at) => {
   return app;
 };
 
+// A language's prefix: /pa/… is the same site in Punjabi (TR decision 4).
+// The language app's root has the prefix; its home is the root without it.
+const langAt = (at, lang) => (lang ? { ...at, root: `${at.root}${LANG_BY_CODE[lang].path}`, home: at.root, lang } : at);
+// The first segment of a path after a root, when it is a language's prefix.
+const langOfPath = (path, root) => {
+  const seg = path.slice(root.length).split('/')[1] || '';
+  return LANG_BY_PREFIX[seg] || null;
+};
+
 // The site at /site/… on the app's own address (and its files at /site-assets/).
-const atSite = makeSiteApp({ root: '/site', workspaceId: null });
+const atSiteApps = new Map(); // lang ('' English) → app
+const atSite = (lang = null) => {
+  if (!atSiteApps.has(lang || '')) atSiteApps.set(lang || '', makeSiteApp(langAt({ root: '/site', workspaceId: null }, lang)));
+  return atSiteApps.get(lang || '');
+};
 // Another website of the campaign at /site/sites/<key>/… on the app's address.
 const KEY = /^[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$/;
-const atKeys = new Map(); // key → app
-const atKey = (key) => {
-  if (!atKeys.has(key)) {
+const atKeys = new Map(); // "key|lang" → app
+const atKey = (key, lang = null) => {
+  const k = `${key}|${lang || ''}`;
+  if (!atKeys.has(k)) {
     if (atKeys.size >= 200) atKeys.clear();
-    atKeys.set(key, makeSiteApp({ root: `/site/sites/${key}`, workspaceId: null, siteKey: key }));
+    atKeys.set(k, makeSiteApp(langAt({ root: `/site/sites/${key}`, workspaceId: null, siteKey: key }, lang)));
   }
-  return atKeys.get(key);
+  return atKeys.get(k);
 };
 const microAtApp = (c, next) => {
   const key = c.req.param('key');
-  return KEY.test(key) ? atKey(key).fetch(c.req.raw, c.env) : next();
+  if (!KEY.test(key)) return next();
+  // /site/sites/<key>/pa/…: that website in Punjabi.
+  return atKey(key, langOfPath(c.req.path, `/site/sites/${key}`)).fetch(c.req.raw, c.env);
 };
+const siteAtApp = (c) => atSite(langOfPath(c.req.path, '/site')).fetch(c.req.raw, c.env);
 export const publicRoutes = new Hono();
 publicRoutes.get('/site-assets/*', serveAsset);
 publicRoutes.all('/site/sites/:key', microAtApp);
 publicRoutes.all('/site/sites/:key/*', microAtApp);
-publicRoutes.all('/site', (c) => atSite.fetch(c.req.raw, c.env));
-publicRoutes.all('/site/*', (c) => atSite.fetch(c.req.raw, c.env));
+publicRoutes.all('/site', siteAtApp);
+publicRoutes.all('/site/*', siteAtApp);
 
 // The campaign's own domain: only the site (and what it shares) answers.
-const sites = new Map(); // "<workspace id ('' for the default)>|<website id ('' the main)>" → app at /
-const atRootFor = (workspaceId, siteId = null) => {
-  const k = `${workspaceId || ''}|${siteId || ''}`;
-  if (!sites.has(k)) sites.set(k, makeSiteApp({ root: '', workspaceId, siteId }));
+const sites = new Map(); // "<workspace id ('' for the default)>|<website id ('' the main)>|<lang>" → app at /
+const atRootFor = (workspaceId, siteId = null, lang = null) => {
+  const k = `${workspaceId || ''}|${siteId || ''}|${lang || ''}`;
+  if (!sites.has(k)) sites.set(k, makeSiteApp(langAt({ root: '', workspaceId, siteId }, lang)));
   return sites.get(k);
 };
 // Shared: pictures, and what services and emails already sent call back
@@ -771,5 +1003,5 @@ export const siteGate = async (c, next) => {
     if (!site) return c.text('This website has closed.', 410);
     return closedPage(c, site);
   }
-  return atRootFor(at.workspaceId, at.siteId).fetch(c.req.raw, c.env);
+  return atRootFor(at.workspaceId, at.siteId, langOfPath(c.req.path, '')).fetch(c.req.raw, c.env);
 };

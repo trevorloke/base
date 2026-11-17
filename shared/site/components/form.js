@@ -14,12 +14,17 @@ import { Check, Choices, FieldError, Hidden, Honeypot, SelectField, TextField } 
 import { ShareSheet } from './share.js';
 import { EMAIL_RE, money, parseDollars, str, trackFrom } from './util.js';
 import { PRIVACY_LINE } from '../wording.js';
+import { wordsIn } from '../ui-words.js';
 
 // The small print under every form: its own words (small), then who keeps
 // what was sent and why, then the main site's privacy policy (when it has
 // one) — one paragraph, one privacy link.
-export function FormSmall({ small, privacy, keeper }) {
-  return html`<p className="form-small">${small ? `${small} ` : null}${PRIVACY_LINE(keeper)}${privacy ? ' ' : null}${privacy ? html`<a href=${privacy}>Privacy policy</a>` : null}</p>`;
+// On a translated page (w given) the privacy line is the approved words
+// (privacyLine), and a line that fell back to English says so (lang).
+export function FormSmall({ small, privacy, keeper, privacyLine, privacyLang, smallLang, w }) {
+  if (!w) return html`<p className="form-small">${small ? `${small} ` : null}${PRIVACY_LINE(keeper)}${privacy ? ' ' : null}${privacy ? html`<a href=${privacy}>Privacy policy</a>` : null}</p>`;
+  const W = wordsIn(w);
+  return html`<p className="form-small">${small ? html`<span lang=${smallLang}>${small}</span>` : null}${small ? ' ' : null}<span lang=${privacyLang}>${privacyLine ?? PRIVACY_LINE(keeper)}</span>${privacy ? ' ' : null}${privacy ? html`<a href=${privacy}>${W('form.privacyPolicy')}</a>` : null}</p>`;
 }
 
 const POSTAL = /^[A-Za-z]\d[A-Za-z][ -]?\d[A-Za-z]\d$/;
@@ -51,30 +56,27 @@ export const rememberMe = (body) => {
   } catch { /* storage blocked: no one-tap, nothing else changes */ }
 };
 
-const STATUS_MESSAGES = {
-  429: 'Too many tries from here. Please wait a minute and try again.',
-  503: 'This can’t be sent online right now. Please try again later.',
-};
+const STATUS_KEYS = { 429: 'form.busy', 503: 'form.unavailable' };
 
 // The amount: once or monthly, the suggested amounts (never above the
 // year's limit; monthly, never above a twelfth of it) and, with
 // JavaScript, any other amount typed in.
-function AmountPicker({ uid, a, cadence, setCadence, pick, setPick, other, setOther, error }) {
+function AmountPicker({ uid, a, cadence, setCadence, pick, setPick, other, setOther, error, W }) {
   const cap = cadence === 'monthly' ? a.monthlyMax || a.limit : a.limit;
   const presets = (a.presets || []).filter((c) => !cap || c <= cap);
   const errId = error ? `${uid}-amount-error` : null;
   return html`<div className="amount-picker">
     ${a.monthly ? html`<fieldset className="group">
-      <legend>How often?</legend>
+      <legend>${W('form.howOften')}</legend>
       <div className="toggle">
-        ${[['once', 'Once'], ['monthly', 'Monthly']].map(([v, l]) => html`<label key=${v} className="toggle-option" htmlFor=${`${uid}-cadence-${v}`}>
+        ${[['once', W('form.once')], ['monthly', W('form.monthly')]].map(([v, l]) => html`<label key=${v} className="toggle-option" htmlFor=${`${uid}-cadence-${v}`}>
           <input type="radio" id=${`${uid}-cadence-${v}`} name="cadence" value=${v} checked=${cadence === v} onChange=${() => setCadence(v)} />
           <span>${l}</span>
         </label>`)}
       </div>
     </fieldset>` : null}
     <fieldset className="group" id=${`${uid}-amount`} aria-describedby=${errId || undefined}>
-      <legend>${a.legend || 'Choose an amount'}</legend>
+      <legend>${a.legend || W('form.chooseAmount')}</legend>
       <div className="amounts">
         ${presets.map((c) => html`<label key=${c} className="amount" htmlFor=${`${uid}-amt-${c}`}>
           <input type="radio" id=${`${uid}-amt-${c}`} name="amount_cents" value=${c} checked=${pick === c} onChange=${() => setPick(c)} />
@@ -82,7 +84,7 @@ function AmountPicker({ uid, a, cadence, setCadence, pick, setPick, other, setOt
         </label>`)}
       </div>
       <div className="field other-amount js-only">
-        <label htmlFor=${`${uid}-other`}>Other amount</label>
+        <label htmlFor=${`${uid}-other`}>${W('form.otherAmount')}</label>
         <div className="custom-amount">
           <span aria-hidden="true">$</span>
           <input id=${`${uid}-other`} className="input" inputMode="decimal" autoComplete="off" value=${other}
@@ -111,11 +113,14 @@ function rows(fields) {
 export function SiteForm(props) {
   const {
     uid, kind, action, layout = 'card', title, hidden = {}, fields = [], amount, impliedConsent,
-    needsContact = true, submit = 'Send', small, thanks = {}, sent = false, error: given = null,
+    needsContact = true, submit: submitGiven, small, thanks = {}, sent = false, error: given = null, w,
   } = props;
+  // The page's words (translated pages), else the English.
+  const W = wordsIn(w);
+  const submit = submitGiven ?? W('form.send');
   const [done, setDone] = useState(Boolean(sent));
   const [errors, setErrors] = useState(given?.field ? { [given.field]: given.message } : {});
-  const [alert, setAlert] = useState(given ? (given.field ? 'Please check the highlighted field.' : given.message) : '');
+  const [alert, setAlert] = useState(given ? (given.field ? W('form.checkField') : given.message) : '');
   const [pending, setPending] = useState(false);
   const [live, setLive] = useState(false);
   const [track, setTrack] = useState({ ref: str(hidden.ref), source: str(hidden.source) });
@@ -175,9 +180,9 @@ export function SiteForm(props) {
   if (done) {
     const t = thanks || {};
     return html`<div className="success-card" role="status" tabIndex="-1" ref=${thanksRef}>
-      <h3 className="success-card__title">${t.title || 'Thank you'}</h3>
+      <h3 className="success-card__title">${t.title || W('form.thanks')}</h3>
       ${t.body ? html`<p>${t.body}</p>` : null}
-      ${t.share ? html`<${ShareSheet} uid=${`${uid}-share`} ...${t.share} url=${withRef(t.share.url, mine)} />` : null}
+      ${t.share ? html`<${ShareSheet} uid=${`${uid}-share`} ...${t.share} url=${withRef(t.share.url, mine)} w=${w} />` : null}
     </div>`;
   }
 
@@ -213,18 +218,18 @@ export function SiteForm(props) {
       if (!f.name || !f.required) continue;
       const v = body[f.name];
       const empty = f.type === 'check' ? v !== true : f.type === 'checks' ? !v?.length : v == null || v === '';
-      if (empty) errs[f.name] = f.msg || 'This is needed';
+      if (empty) errs[f.name] = f.msg || W('form.needed');
     }
-    if (body.email && !EMAIL_RE.test(body.email)) errs.email = 'Enter an email address like name@example.org';
-    if (body.phone && body.phone.replace(/\D/g, '').length < 10) errs.phone = 'Enter a phone number with its area code';
-    if (body.postal_code && !POSTAL.test(body.postal_code)) errs.postal_code = 'Enter a postal code like V3T 1A1';
-    if (body.birth_date && !DAY.test(body.birth_date)) errs.birth_date = 'Enter your date of birth';
-    if (needsContact && !body.email && !body.phone && !errs.email && !errs.phone) errs[names.has('email') ? 'email' : 'phone'] = 'Enter your email or a phone number';
-    if (body.consent_sms === true && !body.phone && names.has('phone')) errs.phone = 'Add a mobile number so we can text you, or untick the text box';
+    if (body.email && !EMAIL_RE.test(body.email)) errs.email = W('form.emailLike');
+    if (body.phone && body.phone.replace(/\D/g, '').length < 10) errs.phone = W('err.phone');
+    if (body.postal_code && !POSTAL.test(body.postal_code)) errs.postal_code = W('err.postal_code');
+    if (body.birth_date && !DAY.test(body.birth_date)) errs.birth_date = W('err.birth_date');
+    if (needsContact && !body.email && !body.phone && !errs.email && !errs.phone) errs[names.has('email') ? 'email' : 'phone'] = W('form.emailOrPhone');
+    if (body.consent_sms === true && !body.phone && names.has('phone')) errs.phone = W('form.smsNeedsPhone');
     if (amount) {
       const cap = cadence === 'monthly' ? amount.monthlyMax || amount.limit : amount.limit;
-      if (!cents || cents < (amount.min || 100)) errs.amount_cents = pick === 'other' ? `Enter an amount of at least ${money(amount.min || 100)}` : 'Choose an amount';
-      else if (cap && cents > cap) errs.amount_cents = `The most you can give is ${money(cap)}${cadence === 'monthly' ? ' a month' : ' this year'}`;
+      if (!cents || cents < (amount.min || 100)) errs.amount_cents = pick === 'other' ? W('form.atLeast', { amount: money(amount.min || 100) }) : W('form.chooseAmount');
+      else if (cap && cents > cap) errs.amount_cents = W(cadence === 'monthly' ? 'form.mostMonth' : 'form.mostYear', { amount: money(cap) });
     }
     return errs;
   }
@@ -248,7 +253,7 @@ export function SiteForm(props) {
     const errs = check(body);
     if (Object.keys(errs).length) {
       setErrors(errs);
-      setAlert(Object.keys(errs).length === 1 ? 'Please check the highlighted field.' : `Please check the ${Object.keys(errs).length} highlighted fields.`);
+      setAlert(Object.keys(errs).length === 1 ? W('form.checkField') : W('form.checkFields', { count: Object.keys(errs).length }));
       focusFirst(form, errs);
       return;
     }
@@ -284,17 +289,17 @@ export function SiteForm(props) {
       }
       if (res.status >= 500) unsure.current = true;
       const field = str(json?.field);
-      const message = str(json?.error) || STATUS_MESSAGES[res.status] || 'Something went wrong. Please try again.';
+      const message = str(json?.error) || (STATUS_KEYS[res.status] ? W(STATUS_KEYS[res.status]) : W('form.wrong'));
       if (res.status === 400 && field && (names.has(field) || field === 'amount_cents')) {
         setErrors({ [field]: message });
-        setAlert('Please check the highlighted field.');
+        setAlert(W('form.checkField'));
         focusFirst(form, { [field]: message });
       } else {
         setAlert(message);
       }
     } catch {
       unsure.current = true;
-      setAlert('We couldn’t send that. Check your connection and try again.');
+      setAlert(W('form.offline'));
     } finally {
       setPending(false);
     }
@@ -305,26 +310,26 @@ export function SiteForm(props) {
     const error = f.name ? errors[f.name] : null;
     switch (f.type) {
       case 'section': return html`<h4 key=${id} className="form-section">${f.label}</h4>`;
-      case 'note': return html`<p key=${id} className="form-note">${f.label}</p>`;
+      case 'note': return html`<p key=${id} className="form-note" lang=${f.labelLang}>${f.label}</p>`;
       case 'amount':
         return amount ? html`<${AmountPicker} key=${id} uid=${uid} a=${amount} cadence=${cadence} setCadence=${changeCadence}
-          pick=${pick} setPick=${setPick} other=${other} setOther=${setOther} error=${errors.amount_cents} />` : null;
-      case 'check': return html`<${Check} key=${id} id=${id} name=${f.name} label=${f.label} required=${f.required} error=${error} hint=${f.hint} />`;
+          pick=${pick} setPick=${setPick} other=${other} setOther=${setOther} error=${errors.amount_cents} W=${W} />` : null;
+      case 'check': return html`<${Check} key=${id} id=${id} name=${f.name} label=${f.label} required=${f.required} error=${error} hint=${f.hint} lang=${f.labelLang} W=${w ? W : null} />`;
       case 'checks': case 'radios':
         return html`<${Choices} key=${id} id=${id} name=${f.name} legend=${f.label} options=${f.options || []} type=${f.type === 'radios' ? 'radio' : 'checkbox'}
-          required=${f.required} optional=${f.optional} error=${error} value=${f.value} columns=${f.columns} />`;
-      case 'select': return html`<${SelectField} key=${id} id=${id} name=${f.name} label=${f.label} options=${f.options || []} optional=${f.optional} required=${f.required} error=${error} />`;
+          required=${f.required} optional=${f.optional} error=${error} value=${f.value} columns=${f.columns} W=${w ? W : null} />`;
+      case 'select': return html`<${SelectField} key=${id} id=${id} name=${f.name} label=${f.label} options=${f.options || []} optional=${f.optional} required=${f.required} error=${error} W=${w ? W : null} />`;
       default:
         return html`<${TextField} key=${id} id=${id} name=${f.name} label=${f.label} type=${f.type || 'text'} required=${f.required} optional=${f.optional}
-          autoComplete=${f.autoComplete} inputMode=${f.inputMode} hint=${f.hint} error=${error} max=${f.max} rows=${f.rows} placeholder=${f.placeholder} />`;
+          autoComplete=${f.autoComplete} inputMode=${f.inputMode} hint=${f.hint} error=${error} max=${f.max} rows=${f.rows} placeholder=${f.placeholder} W=${w ? W : null} />`;
     }
   };
 
-  const total = cents ? ` ${money(cents)}${amount?.monthly && cadence === 'monthly' ? ' a month' : ''}` : '';
+  const total = cents ? ` ${money(cents)}${amount?.monthly && cadence === 'monthly' ? ` ${W('form.aMonth')}` : ''}` : '';
   return html`<form className=${cx('site-form', layout === 'inline' ? 'site-form--inline' : 'form-card')} method="post" action=${action}
       noValidate=${live || undefined} onSubmit=${onSubmit} onChange=${edited} aria-busy=${pending ? 'true' : undefined} aria-labelledby=${title ? `${uid}-title` : undefined}>
     ${title ? html`<h3 className="form-title" id=${`${uid}-title`}>${title}</h3>` : null}
-    <${Honeypot} id=${uid} />
+    <${Honeypot} id=${uid} W=${w ? W : null} />
     <${Hidden} values=${{ ...hidden, ...(impliedConsent ? { [impliedConsent]: 'true' } : {}), ...(amount && !amount.monthly && amount.cadence ? { cadence: 'once' } : {}) }} />
     <div className="form-fields">
       ${rows(fields).map((r, i) => (Array.isArray(r)
@@ -333,8 +338,8 @@ export function SiteForm(props) {
     </div>
     ${alert ? html`<div className="form-alert" role="alert">${alert}</div>` : null}
     <button type="submit" className=${cx('btn btn--submit', props.submitClass || 'btn--action', layout !== 'inline' && 'btn--lg btn--block')} aria-disabled=${pending ? 'true' : undefined}>
-      <span>${pending ? 'Sending…' : submit}${amount && !pending ? html`<span className="js-only">${total}</span>` : null}</span>
+      <span>${pending ? W('form.sending') : submit}${amount && !pending ? html`<span className="js-only">${total}</span>` : null}</span>
     </button>
-    <${FormSmall} small=${small} privacy=${props.privacy} keeper=${props.keeper} />
+    <${FormSmall} small=${small} privacy=${props.privacy} keeper=${props.keeper} privacyLine=${props.privacyLine} privacyLang=${props.privacyLang} smallLang=${props.smallLang} w=${w} />
   </form>`;
 }

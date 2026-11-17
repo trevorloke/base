@@ -468,11 +468,13 @@ function AddStep({ onAdd, busy, tags, campaign, problem }) {
   );
 }
 
+const TRIGGER_LANGS = [['', 'Any'], ['en', 'English'], ['pa', 'ਪੰਜਾਬੀ'], ['zh-Hans', '简体'], ['zh-Hant', '繁體']];
+
 function TriggerLine({ ladder, options, onSave, busy }) {
   const [editing, setEditing] = useState(false);
-  const [t, setT] = useState({ kind: ladder.trigger.kind, ref: ladder.trigger.ref || '' });
+  const [t, setT] = useState({ kind: ladder.trigger.kind, ref: ladder.trigger.ref || '', lang: ladder.trigger.lang || '' });
   const [error, setError] = useState(null);
-  useEffect(() => { if (!editing) setT({ kind: ladder.trigger.kind, ref: ladder.trigger.ref || '' }); }, [editing, ladder.trigger.kind, ladder.trigger.ref]);
+  useEffect(() => { if (!editing) setT({ kind: ladder.trigger.kind, ref: ladder.trigger.ref || '', lang: ladder.trigger.lang || '' }); }, [editing, ladder.trigger.kind, ladder.trigger.ref, ladder.trigger.lang]);
   if (!editing) {
     return (
       <div className="lad-trigger">
@@ -488,12 +490,21 @@ function TriggerLine({ ladder, options, onSave, busy }) {
     e.preventDefault();
     const why = triggerMissing(t);
     if (why) { setError(why); return; }
-    const ok = await onSave({ kind: t.kind, ref: String(t.ref || '').trim() || null });
+    const ok = await onSave({ kind: t.kind, ref: String(t.ref || '').trim() || null, ...(t.kind === 'web' ? { lang: t.lang || null } : {}) });
     if (ok) setEditing(false);
   };
   return (
     <form className="card lad-form" onSubmit={submit} aria-label="Starts when">
       <TriggerPicker value={t} onChange={setT} options={options} idp="lad-trig" disabled={busy} />
+      {t.kind === 'web' && (
+        // The website language they used (TR): a hand-written Punjabi step, say, for Punjabi sign-ups only.
+        <label className="field" htmlFor="lad-trig-lang">
+          <span>Language</span>
+          <select id="lad-trig-lang" className="input" value={t.lang || ''} disabled={busy} onChange={(e) => setT({ ...t, lang: e.target.value })}>
+            {TRIGGER_LANGS.map(([v, l]) => <option key={v || 'any'} value={v}>{l}</option>)}
+          </select>
+        </label>
+      )}
       {error && <p className="error" role="alert">{error}</p>}
       <div className="ops-actions">
         <button type="submit" className="btn ops-solid ops-tap" disabled={busy}>Save</button>

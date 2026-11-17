@@ -665,6 +665,19 @@ comes back, or asks if words were typed meanwhile).
   `server/test/site-builder.test.js`, `server/test/site-website.test.js`;
   in a browser: `e2e-site-admin.mjs`.
 
+- **Languages** (Website → Languages): with no key it says to add one;
+  with it, Settings → Services → **Check translation**; **Turn on** ਪੰਜਾਬੀ
+  (its estimate) and 中文, fill Authorized by, approve the words the law
+  needs in each, **Translate now** — all three *On*. A volunteer given only
+  "Website translations" (Admin → Permissions) sees only Languages and
+  **Suggest**s; the page changes once a manager presses **Looks right**.
+  Tests: `server/test/site-words.test.js` (and `site-lang.test.js`; its
+  clock limits for a /pa page, cold under 150 ms and warm under 10 ms, are
+  asked only on a quiet machine with `TIMING=1`); in a
+  browser, `e2e-site-translate.mjs` (it runs its own server on PORT, the
+  stand-in Google on PORT+1 and Stripe on PORT+2; it needs a CJK font —
+  `apt-get install -y fonts-noto-cjk` — and stops saying so without one).
+
 - **Other websites** (Website → Other websites, a manager): **New website**
   "Doug Didn’t Example" at a domain; its overview is a draft with the
   checklist — Go live says what's missing; publish its home from the

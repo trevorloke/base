@@ -33,17 +33,18 @@ export const DEFAULT_TIME_ZONE = 'America/Vancouver';
 const validZone = (tz) => {
   try { new Intl.DateTimeFormat('en-CA', { timeZone: tz }); return true; } catch { return false; }
 };
-export function when(startIso, endIso, timeZone = DEFAULT_TIME_ZONE) {
+// locale: the page's language (TR; Node and browsers carry full ICU).
+export function when(startIso, endIso, timeZone = DEFAULT_TIME_ZONE, locale = 'en-CA') {
   const start = new Date(str(startIso));
   if (!str(startIso) || Number.isNaN(start.getTime())) return null;
   const tz = validZone(timeZone) ? timeZone : DEFAULT_TIME_ZONE;
-  const f = (o, d = start) => fmtIn(d, tz, o);
+  const f = (o, d = start) => fmtIn(d, tz, o, locale);
   const end = endIso ? new Date(str(endIso)) : null;
   const sameDay = end && !Number.isNaN(end.getTime()) && dayOf(end, tz) === dayOf(start, tz);
   const [a, zone] = onClock(start, tz);
   const [b, endZone] = sameDay ? onClock(end, tz) : [];
   const time = sameDay && zone === endZone
-    ? new Intl.DateTimeFormat('en-CA', { timeZone: zone, hour: 'numeric', minute: '2-digit' }).formatRange(a, b)
+    ? new Intl.DateTimeFormat(locale, { timeZone: zone, hour: 'numeric', minute: '2-digit' }).formatRange(a, b)
     : f({ hour: 'numeric', minute: '2-digit' });
   return {
     iso: start.toISOString(),
@@ -54,10 +55,10 @@ export function when(startIso, endIso, timeZone = DEFAULT_TIME_ZONE) {
     time,
   };
 }
-export function dateOnly(iso, timeZone = DEFAULT_TIME_ZONE) {
+export function dateOnly(iso, timeZone = DEFAULT_TIME_ZONE, locale = 'en-CA') {
   const d = new Date(str(iso));
   if (!str(iso) || Number.isNaN(d.getTime())) return '';
-  return fmtIn(d, validZone(timeZone) ? timeZone : DEFAULT_TIME_ZONE, { year: 'numeric', month: 'long', day: 'numeric' });
+  return fmtIn(d, validZone(timeZone) ? timeZone : DEFAULT_TIME_ZONE, { year: 'numeric', month: 'long', day: 'numeric' }, locale);
 }
 
 // ── An email address ──

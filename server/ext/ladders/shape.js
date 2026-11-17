@@ -85,10 +85,15 @@ export const stepSchema = z.discriminatedUnion('kind', [
 export const stepsSchema = z.array(stepSchema).max(MAX_STEPS);
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// lang (a 'web' trigger only): the website language the action was taken in
+// (TR) — a ladder for Punjabi sign-ups only, say; null for any.
+export const TRIGGER_LANGS = ['en', 'pa', 'zh-Hans', 'zh-Hant'];
 export const triggerSchema = z.object({
   kind: z.enum(TRIGGER_KINDS),
   ref: z.string().trim().max(120).nullish(),
+  lang: z.enum(TRIGGER_LANGS).nullish(),
 }).superRefine((t, ctx) => {
+  if (t.lang && t.kind !== 'web') ctx.addIssue({ code: 'custom', message: 'only a website trigger has a language', path: ['lang'] });
   const need = { tag: 'pick a tag', web: 'pick what they did on the website' };
   if (TRIGGERS[t.kind].refRequired && !t.ref) ctx.addIssue({ code: 'custom', message: need[t.kind] || 'pick one', path: ['ref'] });
   if (t.kind === 'web' && t.ref && !isWebValue(t.ref)) ctx.addIssue({ code: 'custom', message: 'not something done on the website', path: ['ref'] });

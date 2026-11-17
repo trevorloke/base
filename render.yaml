@@ -19,6 +19,9 @@
 #   MAIL_PROVIDER, SENDGRID_API_KEY, SENDGRID_WEBHOOK_PUBLIC_KEY   email through SendGrid instead of Resend
 #   MAILCHIMP_API_KEY, MAILCHIMP_AUDIENCE_ID, MAILCHIMP_WEBHOOK_SECRET   Mailchimp: a list out as a tag, unsubscribes back
 #   GEOCODER (bc), GEOCODER_FALLBACK, BC_GEOCODER_KEY   map pins (google is no longer used for pins)
+#   GOOGLE_TRANSLATE_KEY                                the website in Punjabi and Chinese: Google Cloud
+#                                                       Translation, a separate key restricted to it (asked
+#                                                       for below); GOOGLE_TRANSLATE_API_BASE is for tests only
 #   GOOGLE_MAPS_TILES=off, GOOGLE_MAPS_TILE_TYPE        Google is the map whenever its key is set; =off keeps
 #                                                       the free map. Before this goes to staging, tell us Google
 #                                                       or the free map for canvassing. With a key already set,
@@ -89,6 +92,8 @@ services:
         sync: false
       - key: GOOGLE_MAPS_SERVER_KEY  # optional: Google map tiles and (when ADDRESS_SUGGEST=google) address suggestions (INTEGRATIONS.md)
         sync: false
+      - key: GOOGLE_TRANSLATE_KEY  # optional: the website in Punjabi and Chinese (Cloud Translation only; INTEGRATIONS.md)
+        sync: false
       - key: GOOGLE_OAUTH_CLIENT_ID  # optional: Sign in with Google and Google connections (INTEGRATIONS.md); staging's own client
         sync: false
       - key: GOOGLE_OAUTH_CLIENT_SECRET
@@ -146,6 +151,8 @@ services:
       - key: TWILIO_FROM
         sync: false
       - key: GOOGLE_MAPS_SERVER_KEY
+        sync: false
+      - key: GOOGLE_TRANSLATE_KEY
         sync: false
       - key: GOOGLE_OAUTH_CLIENT_ID
         sync: false

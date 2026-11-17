@@ -7,7 +7,7 @@ import { markdownText } from '../../markdown.js';
 import { html } from './h.js';
 import { Island } from './islands.js';
 import { GoalBar, Img, Md, Module, MODULE_COMPONENTS, Paras, campaignForm } from './modules.js';
-import { Announcement, Footer, Header, PageHead, PreviewBanner, SkipLink } from './shell.js';
+import { Announcement, Footer, Header, LanguageSwitch, PageHead, PreviewBanner, SkipLink } from './shell.js';
 import { arr, dateOnly, obj, str } from './util.js';
 import { pagePath } from './links.js';
 
@@ -28,13 +28,13 @@ function PageView({ rc, page }) {
 function PostView({ rc, post }) {
   const p = obj(post);
   return html`<${Fragment}>
-    <${PageHead} title=${str(p.title)} eyebrow=${dateOnly(p.published_at, rc.timeZone)} lede=${p.excerpt} />
+    <${PageHead} title=${str(p.title)} eyebrow=${dateOnly(p.published_at, rc.timeZone, rc.locale)} lede=${p.excerpt} />
     <article className="section tone-paper post" aria-label=${str(p.title)}>
       <div className="container narrow stack stack--lg">
         <${Img} rc=${rc} image=${p.image} className="news-image" width=${1200} height=${675} eager />
         <${Md} rc=${rc} text=${p.body} className="prose" />
-        <${Island} name="share" props=${{ uid: 'post-share', url: rc.abs(pagePath(rc.loc)), here: pagePath(rc.loc), text: str(p.title), subject: str(p.title), label: 'Share this' }} />
-        <p><a className="text-link" href=${rc.link('/news')}>← All news</a></p>
+        <${Island} name="share" props=${{ uid: 'post-share', url: rc.abs(pagePath(rc.loc)), here: pagePath(rc.loc), text: str(p.title), subject: str(p.title), label: rc.w('share.this'), ...rc.islandWords('share') }} />
+        <p><a className="text-link" href=${rc.link('/news')}>${rc.w('news.allBack')}</a></p>
       </div>
     </article>
   <//>`;
@@ -43,27 +43,26 @@ function PostView({ rc, post }) {
 function CampaignView({ rc, campaign }) {
   const c = obj(campaign);
   const pledge = c.kind === 'pledge';
-  const what = pledge ? 'pledge' : 'petition';
   const live = obj(rc.data.campaigns[str(c.id)]);
   const count = c.count ?? live.count ?? obj(rc.data.counts.signatures)[str(c.id)];
   const m = { kind: 'campaign', id: 'campaign' };
-  const share = { uid: 'campaign-share', url: rc.abs(pagePath(rc.loc)), here: pagePath(rc.loc), text: `I signed “${str(c.title)}”. Add your name:`, subject: str(c.title), label: `Share this ${what}` };
+  const share = { uid: 'campaign-share', url: rc.abs(pagePath(rc.loc)), here: pagePath(rc.loc), text: rc.w('act.signedShare', { title: str(c.title) }), subject: str(c.title), label: rc.w(pledge ? 'act.sharePledge' : 'act.sharePetition'), ...rc.islandWords('share') };
   return html`<${Fragment}>
-    <${PageHead} title=${str(c.title)} eyebrow=${pledge ? 'Pledge' : 'Petition'} lede=${c.excerpt} />
+    <${PageHead} title=${str(c.title)} eyebrow=${rc.w(pledge ? 'act.pledge' : 'act.petition')} lede=${c.excerpt} />
     <section className="section tone-paper campaign" id="m-campaign" data-template="campaign" aria-label=${str(c.title)}>
       <div className="container split act-split">
         <div className="stack stack--lg act-main">
           <${Md} rc=${rc} text=${c.body} className="prose" />
-          ${str(c.statement).trim() ? html`<blockquote className="act-statement">
-            <p className="eyebrow">${pledge ? 'The pledge' : 'The petition'}</p>
+          ${str(c.statement).trim() ? html`<blockquote className="act-statement" lang=${rc.lang !== 'en' && c.statementLang === 'en' ? 'en' : undefined}>
+            <p className="eyebrow">${rc.w(pledge ? 'act.thePledge' : 'act.thePetition')}</p>
             <${Paras} text=${c.statement} />
           </blockquote>` : null}
-          <${GoalBar} count=${count} goal=${c.goal} kind=${c.kind} />
+          <${GoalBar} count=${count} goal=${c.goal} kind=${c.kind} w=${rc.lang !== 'en' ? rc.w : null} />
           <${Island} name="share" props=${share} />
         </div>
         <div className="act-form">
           ${c.status === 'closed'
-            ? html`<div className="notice" role="note"><p className="notice-title">${`This ${what} is closed.`}</p><p>Thank you to everyone who signed.</p></div>`
+            ? html`<div className="notice" role="note"><p className="notice-title">${rc.w(pledge ? 'act.closedPledge' : 'act.closedPetition')}</p><p>${rc.w('act.thanksSigned')}</p></div>`
             : html`<${Island} name="form" props=${campaignForm(rc, m, c, { idPrefix: 'campaign' })} />`}
         </div>
       </div>
@@ -72,14 +71,14 @@ function CampaignView({ rc, campaign }) {
 }
 
 function NotFoundView({ rc }) {
-  const places = [{ label: 'Home page', href: rc.loc.root }, ...rc.site.nav.items.map((l) => ({ label: l.label, href: rc.link(l.href) }))]
+  const places = [{ label: rc.w('page.homePage'), href: rc.loc.root }, ...rc.site.nav.items.map((l) => ({ label: l.label, href: rc.link(l.href) }))]
     .filter((p) => p.href).slice(0, 8);
   const cta = rc.site.nav.cta && rc.link(rc.site.nav.cta.href) ? { label: rc.site.nav.cta.label, href: rc.link(rc.site.nav.cta.href) } : null;
   return html`<${Fragment}>
-    <${PageHead} title="Page not found" lede="We couldn’t find that page. It may have moved, or the link may have a typo." />
+    <${PageHead} title=${rc.w('page.notFound')} lede=${rc.w('page.notFoundLede')} />
     <section className="section tone-paper not-found" aria-labelledby="nf-title">
       <div className="container stack">
-        <h2 className="h3" id="nf-title">Try one of these instead</h2>
+        <h2 className="h3" id="nf-title">${rc.w('page.tryThese')}</h2>
         <ul className="link-list">${places.map((p, i) => html`<li key=${i}><a className="text-link" href=${p.href}>${p.label}</a></li>`)}</ul>
         ${cta ? html`<div className="btn-row"><a className="btn btn--action btn--lg" href=${cta.href}>${cta.label}</a></div>` : null}
       </div>
@@ -94,8 +93,10 @@ export function SiteBody({ rc, kind, page, post, campaign }) {
     : kind === 'notFound' ? html`<${NotFoundView} rc=${rc} />`
     : html`<${PageView} rc=${rc} page=${page} />`;
   return html`<${Fragment}>
-    <${SkipLink} />
-    ${rc.preview ? html`<${PreviewBanner} />` : null}
+    <${SkipLink} rc=${rc} />
+    <${LanguageSwitch} rc=${rc} />
+    ${rc.policyEnglish ? (() => { const l = rc.legal('policyInEnglish'); return html`<p className="lang-note lang-note--policy" lang=${l.lang}>${l.text}</p>`; })() : null}
+    ${rc.preview ? html`<${PreviewBanner} rc=${rc} />` : null}
     <${Announcement} rc=${rc} />
     <${Header} rc=${rc} />
     <main id="main" tabIndex="-1">${view}</main>
@@ -140,12 +141,16 @@ export function headFor(rc, { kind, page, post, campaign }) {
     title = `${str(c.title)} · ${siteTitle}`;
     description = str(c.excerpt).trim() || markdownText(c.statement || c.body, 200) || description;
   } else {
-    title = `Page not found · ${siteTitle}`;
+    title = `${rc.w('page.notFound')} · ${siteTitle}`;
   }
   const imageUrl = rc.img(obj(image).url);
-  const fonts = [...new Set([site.theme.fonts.heading, site.theme.fonts.body].map((f) => FONT_FILES[f]).filter(Boolean))];
+  // A Punjabi page: the body's file and Gurmukhi, in place of the heading's
+  // (two preloads at most).
+  const fonts = rc.lang === 'pa'
+    ? [FONT_FILES[site.theme.fonts.body], 'fonts/noto-gurmukhi-400.woff2'].filter(Boolean)
+    : [...new Set([site.theme.fonts.heading, site.theme.fonts.body].map((f) => FONT_FILES[f]).filter(Boolean))];
   return {
-    title: title || 'Website',
+    title: title || rc.w('page.website'),
     description: description.slice(0, 300),
     // A petition shown on another website counts at the main site's address.
     canonical: kind === 'notFound' || rc.preview ? ''

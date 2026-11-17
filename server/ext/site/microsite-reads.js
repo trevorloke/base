@@ -10,7 +10,8 @@
 //                              hold an address], limit }
 //   GET /site/microsites/:id   { microsite, deleted, pages, home, checklist,
 //                              signups_7, signups_30, sources: [{ source, n }]
-//                              (top 8, 30 days), render_host, urls, brand_theme }
+//                              (top 8, 30 days), waiting: { pa: n, … } | null,
+//                              render_host, urls, brand_theme }
 //   GET /site/microsites/host?host=&id=   { host, why } — the domain save's
 //                              own refusal for an address, as it's typed
 import { areasFor } from '../../lib/perms.js';
@@ -20,6 +21,7 @@ import { hostOf } from './shape.js';
 import { readSettings, pageOut, parseJ, themeFromBrand } from './store.js';
 import { micrositeOut, liveChecklist, hostProblem, MAX_SITES } from './microsites.js';
 import { kitCodeSql, sourceWords } from '../socials/sources.js';
+import { waitingFor } from './translate.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MONEY = ['join', 'donate'];
@@ -128,6 +130,8 @@ export const mountMicrositeReads = (api, opened) => {
       signups_7: n.n7 || 0,
       signups_30: n.n30 || 0,
       sources,
+      // Its sentences not yet translated, per language that is on (TR).
+      waiting: await waitingFor(db, { id: ws }, settings, r.id),
       // Where the domain's DNS points (Render's own name for the service).
       render_host: hostOf(process.env.RENDER_EXTERNAL_HOSTNAME) || null,
       urls: {

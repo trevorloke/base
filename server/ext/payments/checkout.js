@@ -114,7 +114,10 @@ const declarationOf = (d, kind) => {
   if (typeof d === 'string' && d.trim().length >= 10) return { text: d.trim().slice(0, 1000) };
   if (d && typeof d === 'object' && d.agreed !== false) {
     const text = typeof d.text === 'string' && d.text.trim().length >= 10 ? d.text.trim().slice(0, 1000) : ours;
-    return { text };
+    // Shown in another language (the website's, TR): which, and the English
+    // it stands for, for the treasurer.
+    const lang = typeof d.lang === 'string' && /^[a-zA-Z-]{2,10}$/.test(d.lang) && d.lang !== 'en' ? d.lang : null;
+    return lang ? { text, lang, english: typeof d.english === 'string' ? d.english.slice(0, 1000) : ours } : { text };
   }
   return null;
 };
@@ -133,9 +136,11 @@ const metadataOf = (m) => {
 
 // What Stripe is asked for, made once and kept with the checkout: asked
 // again under the same key, Stripe must be sent exactly the same.
-const requestFor = ({ id, ws, kind, cadence, amountCents, term, email, successUrl, cancelUrl }) => {
+// itemName / locale: a website page in another language names the item in
+// its words and opens Stripe's page in that language when Stripe has it.
+const requestFor = ({ id, ws, kind, cadence, amountCents, term, email, successUrl, cancelUrl, itemName = null, locale = 'auto' }) => {
   const monthly = cadence === 'monthly';
-  const name = kind === 'membership'
+  const name = typeof itemName === 'string' && itemName.trim() ? itemName.trim().slice(0, 250) : kind === 'membership'
     ? `${ws.name} membership (${term} year${term > 1 ? 's' : ''})`
     : `${monthly ? 'Monthly contribution' : 'Contribution'} to ${ws.name}`;
   const meta = { base_checkout: id, base_workspace: ws.id, base_kind: kind };
@@ -144,7 +149,7 @@ const requestFor = ({ id, ws, kind, cadence, amountCents, term, email, successUr
     client_reference_id: id,
     success_url: successUrl,
     cancel_url: cancelUrl,
-    locale: 'auto',
+    locale: /^(auto|[a-z]{2}(-[A-Z]{2})?)$/.test(locale) ? locale : 'auto',
     expires_at: nowS() + CHECKOUT_MINUTES * 60,
     line_items: [{
       quantity: 1,
@@ -242,7 +247,7 @@ export const prepareCheckout = async (tx, ctx, opts = {}, emit = null) => {
   const id = newId();
   const mode = stripeMode();
   const made = { ...declaration, at: new Date().toISOString(), source: 'website', ...(citizenship ? { citizenship } : {}) };
-  const request = requestFor({ id, ws, kind, cadence, amountCents, term, email, successUrl: opts.successUrl, cancelUrl: opts.cancelUrl });
+  const request = requestFor({ id, ws, kind, cadence, amountCents, term, email, successUrl: opts.successUrl, cancelUrl: opts.cancelUrl, itemName: opts.itemName, locale: opts.locale });
   await tx.query(
     `insert into stripe_checkouts (id, workspace_id, person_id, kind, cadence, amount_cents, slate, term_years, birth_date, citizenship,
                                    declaration, metadata, mode, request)

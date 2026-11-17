@@ -8,6 +8,7 @@ import { brandFor } from '../../lib/brand.js';
 import { sign, PREVIEW_TTL } from './tokens.js';
 import { paymentsReady } from './payments.js';
 import { mountMicrositeReads } from './microsite-reads.js';
+import { mountLanguageReads } from './language-reads.js';
 
 export const api = new Hono();
 
@@ -15,8 +16,11 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const iso = (d) => (d instanceof Date ? d.toISOString() : d ? new Date(d).toISOString() : null);
 
 // Everything under /site: the Website area's, or refused — whatever the role.
+// The Languages screen's reads are Website translations' (language-reads.js).
+const WORDS_PATH = /\/site\/languages(\/|$)/;
 api.use('/site/*', async (c, next) => {
-  if (!areasFor(c.get('ctx')).includes('site')) return c.json({ error: 'the Website is for managers — ask one under Admin → Permissions' }, 403);
+  const areas = areasFor(c.get('ctx'));
+  if (WORDS_PATH.test(c.req.path) ? !areas.includes('site_words') : !areas.includes('site')) return c.json({ error: 'the Website is for managers — ask one under Admin → Permissions' }, 403);
   await next();
 });
 api.use('/site', async (c, next) => {
@@ -33,6 +37,8 @@ const opened = async (c) => {
 
 // The campaign's other websites (microsite-reads.js).
 mountMicrositeReads(api, opened);
+// The website in other languages (language-reads.js).
+mountLanguageReads(api, opened);
 
 api.get('/site', async (c) => {
   const ws = await opened(c);

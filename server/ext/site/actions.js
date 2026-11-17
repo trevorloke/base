@@ -45,10 +45,12 @@ import { newId, canonical } from '../../lib/events.js';
 import { httpError } from '../../actions/util.js';
 import { readUpload } from '../abtests/media.js';
 import { brandKey } from '../../lib/brand.js';
-import { SECTIONS, slugify, slugProblem, SYSTEM_SLUGS, RESERVED_SLUGS, hostOf } from './shape.js';
+import { SECTIONS, sectionOf, slugify, slugProblem, SYSTEM_SLUGS, RESERVED_SLUGS, hostOf } from './shape.js';
 import { ensureSiteTx, parseJ, pageOut, postOut, campaignOut, forgetDomains, isAppHost, envHosts, appHostSeen, usedWhy } from './store.js';
 import { cacheClear } from './cache.js';
 import { micrositeActions, hostProblem, takeHeld, roomForPage } from './microsites.js';
+import { languageActions } from './language-actions.js';
+import { markRetranslate } from './translate.js';
 
 const MANAGER = ['manager'];
 const DESK = ['manager', 'treasurer', 'staff'];
@@ -193,12 +195,24 @@ export const actions = {
     theme: z.record(z.string(), z.any()).optional(),
     nav: z.any().optional(), footer: z.any().optional(), announcement: z.any().optional(),
     seo: z.any().optional(), org: z.any().optional(), social: z.any().optional(),
+    languages: z.any().optional(),
     domains: z.array(z.string().max(300)).max(10).optional(),
   }), async (tx, ctx, input, emit) => {
     const ws = ctx.workspaceId;
     const sets = [];
     const params = [ws];
     const changed = {};
+    // The website's languages (TR): turning one on publishes election
+    // advertising in it, and the budget is a campaign expense — a manager's.
+    let langWas = null;
+    if (input.languages !== undefined) {
+      langWas = sectionOf('languages', parseJ((await tx.query('select languages from site_settings where workspace_id = $1', [ws])).rows[0]?.languages, {}));
+      const next = SECTIONS.languages.safeParse(input.languages);
+      if (next.success && ctx.role !== 'manager') {
+        const same = (k) => JSON.stringify(next.data[k]) === JSON.stringify(langWas[k]);
+        if (!['on', 'index', 'monthlyChars', 'oldPosts'].every(same)) throw httpError(403, 'Only a manager can do this');
+      }
+    }
     // Who authorized the site, when a save leaves it out (a desk build from
     // before it was asked for): as it was, never wiped.
     if (input.org && typeof input.org === 'object') {
@@ -286,6 +300,11 @@ export const actions = {
     if (!sets.length) throw httpError(400, 'Nothing to save');
     await tx.query(`update site_settings set ${sets.join(', ')}, updated_at = now() where workspace_id = $1`, params);
     emit('site_settings', ws, 'update', changed);
+    if (changed.languages && langWas) {
+      // A name kept from now on: machine words holding it are made again.
+      const added = changed.languages.keep.filter((n) => !langWas.keep.includes(n));
+      if (added.length) await markRetranslate(tx, ws, added);
+    }
     const row = (await tx.query('select updated_at from site_settings where workspace_id = $1', [ws])).rows[0];
     return { saved: Object.keys(changed), updated_at: iso(row.updated_at) };
   }),
@@ -330,6 +349,8 @@ export const actions = {
     modules: z.array(z.any()).max(60).optional(),
     show_in_nav: z.boolean().optional(),
     nav_order: z.number().int().min(0).max(10000).optional(),
+    // "Show translated only after a person checks it" (TR decision 25).
+    check_first: z.boolean().optional(),
     updated_at: z.string().max(40).optional(),
   }), async (tx, ctx, input, emit) => {
     const ws = ctx.workspaceId;
@@ -347,7 +368,8 @@ export const actions = {
     const title = input.title ?? cur.title;
     const description = input.description === undefined ? (cur.description || '') : (input.description || '');
     const modules = input.modules === undefined ? (draft.modules || []) : checked(input.modules);
-    const next = withImage({ title, description, modules }, input.image === undefined ? draft.image : input.image);
+    const checkFirst = input.check_first ?? draft.checkFirst === true;
+    const next = withImage({ title, description, modules, ...(checkFirst ? { checkFirst: true } : {}) }, input.image === undefined ? draft.image : input.image);
     const showInNav = input.show_in_nav ?? cur.show_in_nav;
     const navOrder = input.nav_order ?? cur.nav_order;
     const row = (await tx.query(
@@ -362,6 +384,7 @@ export const actions = {
     if ((next.image?.url || '') !== (draft.image?.url || '')) changes.image = next.image?.url || '';
     if (showInNav !== cur.show_in_nav) changes.show_in_nav = showInNav;
     if (navOrder !== cur.nav_order) changes.nav_order = navOrder;
+    if (checkFirst !== (draft.checkFirst === true)) changes.check_first = checkFirst;
     emit('site_page', cur.id, 'update', { ...changes, modules: shapeOf(modules), content_hash: hash(next) });
     return { page: pageOut(row) };
   }),
@@ -373,7 +396,7 @@ export const actions = {
     const modules = checked(draft.modules || [], { strict: true });
     const problem = await refsProblem(tx, ws, modules, cur.site_id || null);
     if (problem) throw httpError(400, problem);
-    const live = withImage({ title: cur.title, description: cur.description || '', modules }, draft.image);
+    const live = withImage({ title: cur.title, description: cur.description || '', modules, ...(draft.checkFirst === true ? { checkFirst: true } : {}) }, draft.image);
     const row = (await tx.query(
       `update site_pages set published = $3, draft = $3, version = version + 1, status = 'published', published_at = now(), updated_at = now()
        where id = $1 and workspace_id = $2 returning *`,
@@ -628,5 +651,6 @@ export const actions = {
 };
 
 Object.assign(actions, micrositeActions(siteAction));
+Object.assign(actions, languageActions(siteAction));
 
 const SIG = `(select count(distinct a.person_id)::int from site_actions a where a.workspace_id = c.workspace_id and a.campaign_id = c.id and a.kind in ('petition', 'pledge'))`;

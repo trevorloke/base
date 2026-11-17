@@ -29,7 +29,7 @@ before(async () => {
 
 test('each role starts with its usual areas; a manager has them all', async () => {
   // Media (ext/media): staff and treasurers have it, as they have Outreach.
-  assert.deepEqual(await areasOf(mgr), ['people', 'map', 'shifts', 'money', 'signs', 'outreach', 'media', 'data', 'admin', 'learn', 'site']);
+  assert.deepEqual(await areasOf(mgr), ['people', 'map', 'shifts', 'money', 'signs', 'outreach', 'media', 'data', 'admin', 'learn', 'site', 'site_words']);
   assert.deepEqual(await areasOf(staff), ['people', 'map', 'shifts', 'money', 'signs', 'outreach', 'media', 'data', 'learn']);
   assert.deepEqual(await areasOf(treas), ['people', 'map', 'shifts', 'money', 'signs', 'outreach', 'media', 'data', 'learn']);
   assert.deepEqual(await areasOf(vol), []);

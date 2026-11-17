@@ -64,6 +64,55 @@ import { takePerson, refCodeFor, personOfCode, broughtInBy, CODE_RE, makeCode } 
 import { consentFromForm } from './consent.js';
 import { paymentsReady, prepareCheckout, retryCheckout, openCheckout } from './payments.js';
 import { limitsFor } from './loaders.js';
+import { LEGAL_ENGLISH_HASH, legalRow, legalWords, legalSlots } from './legal.js';
+import { segHash, translatorFor } from './translate.js';
+import { LANG_BY_CODE } from '../../../shared/site/languages.js';
+import { UI_WORDS, fillWords, translateMessage } from '../../../shared/site/ui-words.js';
+
+// The Stripe line item in the page's words (ui-words stripe.*) and Stripe's
+// own locale for the language.
+const stripeWords = (ws, kind, k, lang, w) => {
+  const key = kind === 'join' ? (k.term === 1 ? 'stripe.membershipOne' : 'stripe.membership') : k.cadence === 'monthly' ? 'stripe.monthly' : 'stripe.gift';
+  return { itemName: w(key, { org: ws.name, term: k.term }), locale: LANG_BY_CODE[lang]?.stripe || 'auto' };
+};
+
+// ── A form posted to a translated page (TR decisions 36–38) ──
+// The language is the address's (the language app's), never the body's.
+// The page named the words it drew: legal_v (the approval it drew from, and
+// the legal English of the release that drew it) and, for a petition or
+// pledge, statement_v (the statement's version, or en:<hash>). What is kept
+// is exactly those words, in that language — or nothing, and "reload".
+const shownOn = async (db, site, body, kind) => {
+  const { ws, lang } = site;
+  const m = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.([0-9a-f]{12})$/i.exec(String(one(body.legal_v) || ''));
+  if (!m || m[2] !== LEGAL_ENGLISH_HASH) return null;
+  const row = await legalRow(db, ws.id, m[1].toLowerCase());
+  if (!row || row.lang !== lang) return null;
+  const slots = legalSlots(await readSettings(db, ws.id));
+  const word = (key) => {
+    const w = legalWords(row, lang, key, slots);
+    return { text: w.text, lang: w.lang, en: legalWords(null, 'en', key, slots).text };
+  };
+  const out = { lang, email: word('email'), sms: word('sms'), newsletter: word('newsletter'), donate: word('donate'), join: word('join'), statement: null };
+  if (kind === 'petition' || kind === 'pledge') {
+    const id = String(one(body.campaign) || '');
+    const c = UUID.test(id) ? (await db.query('select statement from site_campaigns where id = $1 and workspace_id = $2 and deleted_at is null', [id, ws.id])).rows[0] : null;
+    const st = String(c?.statement || '');
+    if (st.trim()) {
+      const h = segHash(st);
+      const v = String(one(body.statement_v) || '');
+      if (v === `en:${h}`) out.statement = { text: st, lang: 'en', v };
+      else if (UUID.test(v)) {
+        const r = (await db.query(
+          'select id, text from site_translation_versions where id = $1 and workspace_id = $2 and lang = $3 and src_hash = $4', [v, ws.id, lang, h],
+        )).rows[0];
+        if (!r) return null;
+        out.statement = { text: r.text, lang, v: r.id };
+      } else return null;
+    }
+  }
+  return out;
+};
 
 export class FormError extends Error {
   constructor(field, message, status = 400) { super(message); this.field = field; this.status = status; }
@@ -306,6 +355,18 @@ export const formRoute = async (c, site) => {
   if (!body) return c.json({ error: 'send the form as JSON or as a plain form' }, 415);
   const { ws, root } = site;
   const db = site.db;
+  // On a translated page: what it showed, and its answers in its language.
+  const lang = site.lang && site.lang !== 'en' ? site.lang : 'en';
+  let say = (msg) => msg;
+  let shown = null;
+  if (lang !== 'en') {
+    const tr = await translatorFor(db, ws.id, lang);
+    const w = (key, slots) => fillWords(tr.look(UI_WORDS[key] ?? key).text, slots);
+    say = (msg) => translateMessage(msg, w);
+    shown = await shownOn(db, site, body, kind);
+    if (!shown) return plain ? c.text(w('form.reload'), 400) : c.json({ error: w('form.reload'), field: null }, 400);
+    shown.w = w;
+  }
   const hash = (f) => (f?.module_id ? `#m-${f.module_id}` : '');
   // An error names the form it is for (&module=), so the page says it there.
   const go = async (f, k, q) => c.redirect(`${await pagePath(db, ws, root, f || {}, k || {}, c)}?${q}${q.startsWith('error=') && f?.module_id ? `&module=${f.module_id}` : ''}${hash(f)}`, 303);
@@ -320,7 +381,7 @@ export const formRoute = async (c, site) => {
     return plain ? go(moduleOf(), {}, `sent=${kind}`) : c.json(kind === 'join' || kind === 'donate' ? { ok: true } : { ok: true, ref_code: makeCode() });
   }
   if (limited(clientIp(c))) {
-    return plain ? go(moduleOf(), {}, 'error=busy') : c.json({ error: 'Too many tries from here — wait a minute and try again' }, 429);
+    return plain ? go(moduleOf(), {}, 'error=busy') : c.json({ error: say('Too many tries from here — wait a minute and try again.').replace(/\.$/, '') }, 429);
   }
 
   let f;
@@ -346,7 +407,7 @@ export const formRoute = async (c, site) => {
     }
   } catch (e) {
     if (!(e instanceof FormError)) throw e;
-    return plain ? go(f || moduleOf(), k || {}, `error=${encodeURIComponent(e.field)}`) : c.json({ error: e.message, field: e.field }, e.status);
+    return plain ? go(f || moduleOf(), k || {}, `error=${encodeURIComponent(e.field)}`) : c.json({ error: say(e.message), field: e.field }, e.status);
   }
 
   await ensureSite(db, ws);
@@ -360,19 +421,19 @@ export const formRoute = async (c, site) => {
   let answer;
   try {
     const { result } = await runAction(db, { workspaceId: ws.id, actorId: null, action: `site.form.${kind}` }, (tx, emit) => record(tx, emit, {
-      kind, ws, f, k, back, origin: site.origin, siteId: site.micro?.id || null,
+      kind, ws, f, k, back, origin: site.origin, siteId: site.micro?.id || null, shown,
     }));
     // Join and donate: Stripe is asked now, the form's write done.
     answer = result.checkout ? await payPage(db, ws, kind, result.checkout) : result.answer;
   } catch (e) {
-    if (e instanceof FormError) return plain ? go(f, k, `error=${encodeURIComponent(e.field)}`) : c.json({ error: e.message, field: e.field }, e.status);
+    if (e instanceof FormError) return plain ? go(f, k, `error=${encodeURIComponent(e.field)}`) : c.json({ error: say(e.message), field: e.field }, e.status);
     if (e.status === 503) return plain ? go(f, k, 'error=payments') : c.json({ error: 'We couldn’t reach the payment service — please try again in a minute' }, 503);
     // Every other refusal (the payments' own: an amount, an age, a term…)
     // is a 400 in its own plain words, pointing at its field.
     if (e.status >= 400 && e.status < 500) {
       const field = FIELD.test(String(e.field || '')) ? e.field : null;
       if (!field) console.error(`site: a ${kind} form was refused with nothing to point at: ${e.message}`);
-      return plain ? go(f, k, `error=${field || 'form'}`) : c.json({ error: field ? e.message : 'Please check the form and try again', field }, 400);
+      return plain ? go(f, k, `error=${field || 'form'}`) : c.json({ error: field ? say(e.message) : say('Please check the form and try again.').replace(/\.$/, ''), field }, 400);
     }
     throw e;
   }
@@ -418,7 +479,8 @@ const whoFor = (f, k) => createHash('sha256').update(JSON.stringify([
 // (a closed petition, a full event, an amount over the limit).
 // → { answer } done; { checkout: { actionId, checkoutId } } Stripe to be asked.
 // siteId: the other website it was sent on (null: the main site).
-const record = async (tx, emit, { kind, ws, f, k, back, origin, siteId = null }) => {
+const record = async (tx, emit, { kind, ws, f, k, back, origin, siteId = null, shown = null }) => {
+  const lang = shown?.lang || 'en';
   const pays = kind === 'join' || kind === 'donate';
   const key = f.client_key ? `${kind}:${f.client_key}${pays ? `:${paidFor(kind, k)}:${whoFor(f, k)}` : ''}` : null;
   if (key) {
@@ -539,7 +601,8 @@ const record = async (tx, emit, { kind, ws, f, k, back, origin, siteId = null })
 
   // The words beside the boxes, as the page showed them (the newsletter's
   // yes to email is the words beside its button).
-  const words = consentWording(settings?.org, settings?.seo);
+  // On a translated page, the words it drew (shownOn), each with its language.
+  const words = shown ? { email: shown.email, sms: shown.sms, newsletter: shown.newsletter } : consentWording(settings?.org, settings?.seo);
   await consentFromForm(tx, ws.id, {
     personId: person.id, name: person.name, email: f.email, phone: f.phone,
     wantsEmail: f.consent_email, wantsSms: f.consent_sms, source,
@@ -555,15 +618,18 @@ const record = async (tx, emit, { kind, ws, f, k, back, origin, siteId = null })
     ...(k.shift_id ? { shift_id: k.shift_id } : {}),
     ...(k.declaration ? { declaration: true } : {}),
     consent_email: f.consent_email, consent_sms: f.consent_sms, matched: person.created ? null : person.by,
+    // A signature keeps the statement exactly as it was drawn, and its language.
+    ...(shown?.statement ? { statement_shown: shown.statement.text, statement_lang: shown.statement.lang, statement_v: shown.statement.v } : {}),
   };
   await tx.query(
-    `insert into site_actions (id, workspace_id, person_id, kind, campaign_id, page_id, module_id, payload, source, referrer_id, client_key, site_id)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-    [id, ws.id, person.id, kind, campaign?.id || null, page?.id || null, f.module_id, JSON.stringify(payload), f.source, referrer, key, siteId],
+    `insert into site_actions (id, workspace_id, person_id, kind, campaign_id, page_id, module_id, payload, source, referrer_id, client_key, site_id, lang)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+    [id, ws.id, person.id, kind, campaign?.id || null, page?.id || null, f.module_id, JSON.stringify(payload), f.source, referrer, key, siteId, lang],
   );
   emit('site_action', id, 'create', {
     kind, person_id: person.id, campaign_id: campaign?.id || null, page_id: page?.id || null,
     module_id: f.module_id, source: f.source, referrer_id: referrer, site_id: siteId,
+    ...(lang !== 'en' ? { lang } : {}),
   });
 
   if (pays) {
@@ -576,8 +642,14 @@ const record = async (tx, emit, { kind, ws, f, k, back, origin, siteId = null })
       amountCents: k.amount_cents,
       cadence: kind === 'join' ? 'once' : k.cadence,
       slate: k.slate || null,
-      // The words beside the box they ticked, exactly.
-      declaration: kind === 'join' ? JOIN_DECLARATION : DONATE_DECLARATION,
+      // The words beside the box they ticked, exactly — on a translated
+      // page, in the language they read them, with the English beside.
+      declaration: shown
+        ? { text: shown[kind === 'join' ? 'join' : 'donate'].text, lang: shown[kind === 'join' ? 'join' : 'donate'].lang, english: kind === 'join' ? JOIN_DECLARATION : DONATE_DECLARATION }
+        : kind === 'join' ? JOIN_DECLARATION : DONATE_DECLARATION,
+      // The line item in the page's words, and Stripe's page in its
+      // language where Stripe has it (kept with the checkout: a retry sends the same).
+      ...(shown ? stripeWords(ws, kind, k, lang, shown.w) : {}),
       // Stripe's page starts with the email they typed — never one on file.
       email: f.email || null,
       // Membership: payments works out the minimum (the youth rate from the

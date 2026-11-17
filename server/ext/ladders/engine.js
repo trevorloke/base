@@ -237,8 +237,8 @@ const bookingsOf = async (tx, ws, ids) => (ids.length ? new Map((await tx.query(
 const factsOf = async (tx, meta, events, kinds) => {
   const ws = meta.workspaceId;
   const out = [];
-  const add = (personId, kind, ref = null) => {
-    if (personId && kinds.has(kind)) out.push({ personId, kind, ref: ref == null ? null : String(ref) });
+  const add = (personId, kind, ref = null, lang = null) => {
+    if (personId && kinds.has(kind)) out.push({ personId, kind, ref: ref == null ? null : String(ref), ...(lang ? { lang } : {}) });
   };
   const shiftEvents = [];
   for (const e of events) {
@@ -259,8 +259,9 @@ const factsOf = async (tx, meta, events, kinds) => {
     } else if (e.entityType === 'site_action' && e.op === 'create' && p.person_id) {
       // SITE.md: { kind, person_id, campaign_id, … } — a ladder on the kind
       // ("signed a petition") or on the one petition or pledge.
-      add(p.person_id, 'web', p.kind);
-      if (p.campaign_id) add(p.person_id, 'web', `campaign:${String(p.campaign_id).toLowerCase()}`);
+      // In the website language it was done in (TR; English when the event doesn't say).
+      add(p.person_id, 'web', p.kind, p.lang || 'en');
+      if (p.campaign_id) add(p.person_id, 'web', `campaign:${String(p.campaign_id).toLowerCase()}`, p.lang || 'en');
     } else if (e.entityType === 'membership' && e.op === 'create' && p.person_id) {
       // A membership term (ext/membership). A teammate joining the campaign
       // is a 'membership' too, with no person_id.
@@ -375,6 +376,7 @@ const reachGoals = async (tx, meta, events, goals) => {
 
 const matches = (ladder, fact) => {
   if (ladder.trigger_kind !== fact.kind) return false;
+  if (ladder.trigger_lang && fact.kind === 'web' && (fact.lang || 'en') !== ladder.trigger_lang) return false;
   if (!ladder.trigger_ref) return fact.kind !== 'tag';
   return fact.kind === 'tag' ? sameTag(ladder.trigger_ref, fact.ref) : ladder.trigger_ref === fact.ref;
 };
@@ -436,7 +438,7 @@ const enrollAll = async (tx, meta, events, ladders) => {
 // people on.
 export const onEvents = async (tx, meta, events) => {
   const ladders = (await tx.query(
-    `select id, trigger_kind, trigger_ref, reentry, active, goal from ladders
+    `select id, trigger_kind, trigger_ref, trigger_lang, reentry, active, goal from ladders
      where workspace_id = $1 and deleted_at is null and (active or goal is not null) order by created_at`,
     [meta.workspaceId],
   )).rows;

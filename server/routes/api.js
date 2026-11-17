@@ -2,7 +2,7 @@
 // go exclusively through POST /api/actions/:name. GET /api/events is the
 // sync protocol AND the public API — the same endpoint the app uses — and
 // GET /api/export is the contractual one-click full-fidelity export.
-import { mayRun, decide, areaOfPath } from '../lib/perms.js';
+import { mayRun, decide, decideArea, areaOfPath } from '../lib/perms.js';
 import { Hono } from 'hono';
 import { getCookie } from 'hono/cookie';
 import { compress } from 'hono/compress';
@@ -116,7 +116,7 @@ const DESK_ONLY_READS = [
 // denied this person or their role (lib/perms.js).
 app.use('*', async (c, next) => {
   const ctx = c.get('ctx');
-  const d = decide(ctx.perms, areaOfPath(c.req.path));
+  const d = decideArea(ctx.perms, areaOfPath(c.req.path));
   if (d === false) return c.json({ error: 'not for you — ask a manager under Admin → Permissions' }, 403);
   if (ctx.role === 'volunteer' && c.req.method === 'GET' && d !== true
       && DESK_ONLY_READS.some((re) => re.test(c.req.path))) {

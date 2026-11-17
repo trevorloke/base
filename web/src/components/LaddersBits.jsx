@@ -30,10 +30,12 @@ export const TRIGGERS = [
 const TRIGGER_GROUPS = [...new Set(TRIGGERS.map((t) => t.group))];
 export const triggerLabel = (kind) => TRIGGERS.find((t) => t.kind === kind)?.label || kind;
 // "Got a tag · host", "Did something on the website · Signed: SkyTrain to Langley".
+const LANG_WORDS = { en: 'English', pa: 'ਪੰਜਾਬੀ', 'zh-Hans': '简体', 'zh-Hant': '繁體' };
 export const triggerLine = (t) => {
   if (!t) return '';
   const label = t.label || triggerLabel(t.kind);
-  return t.what ? `${label} · ${t.what}` : label;
+  const line = t.what ? `${label} · ${t.what}` : label;
+  return t.lang && LANG_WORDS[t.lang] ? `${line} · in ${LANG_WORDS[t.lang]}` : line;
 };
 
 // A goal: they come off the ladder as soon as they do it (shape.js GOALS).

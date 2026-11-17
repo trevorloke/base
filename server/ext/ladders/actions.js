@@ -157,7 +157,7 @@ const misread = (cur, next, knows) => {
 };
 
 const out = (l) => ({
-  id: l.id, name: l.name, trigger: { kind: l.trigger_kind, ref: l.trigger_ref || null },
+  id: l.id, name: l.name, trigger: { kind: l.trigger_kind, ref: l.trigger_ref || null, lang: l.trigger_lang || null },
   steps: parseJson(l.steps, []), active: l.active, reentry: l.reentry, goal: l.goal || null,
 });
 
@@ -192,12 +192,12 @@ export const actions = {
       const id = newId();
       const goal = input.goal || null;
       await tx.query(
-        `insert into ladders (id, workspace_id, name, trigger_kind, trigger_ref, steps, reentry, public_url, created_by, goal)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        `insert into ladders (id, workspace_id, name, trigger_kind, trigger_ref, steps, reentry, public_url, created_by, goal, trigger_lang)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
         [id, ctx.workspaceId, input.name, input.trigger.kind, ref, JSON.stringify(input.steps),
-         input.reentry, ctx.publicUrl || null, ctx.user.id, goal],
+         input.reentry, ctx.publicUrl || null, ctx.user.id, goal, input.trigger.lang || null],
       );
-      const ladder = { id, name: input.name, trigger: { kind: input.trigger.kind, ref }, steps: input.steps, active: false, reentry: input.reentry, goal };
+      const ladder = { id, name: input.name, trigger: { kind: input.trigger.kind, ref, lang: input.trigger.lang || null }, steps: input.steps, active: false, reentry: input.reentry, goal };
       emit('ladder', id, 'create', { ...ladder, steps: forLog(input.steps) });
       return { ladder };
     },
@@ -226,7 +226,8 @@ export const actions = {
       if (input.trigger) {
         next.trigger_kind = input.trigger.kind;
         next.trigger_ref = await checkRef(tx, ctx.workspaceId, input.trigger);
-        patch.trigger = { kind: next.trigger_kind, ref: next.trigger_ref };
+        next.trigger_lang = input.trigger.lang || null;
+        patch.trigger = { kind: next.trigger_kind, ref: next.trigger_ref, lang: next.trigger_lang };
       }
       if (input.steps) {
         if (misread(parseJson(cur.steps, []), input.steps, input.knows)) throw httpError(409, RELOAD);
@@ -240,10 +241,10 @@ export const actions = {
       if (input.goal !== undefined) { next.goal = input.goal || null; patch.goal = next.goal; }
       await tx.query(
         `update ladders set name = $3, trigger_kind = $4, trigger_ref = $5, steps = $6, reentry = $7,
-           public_url = coalesce($8, public_url), goal = $9, updated_at = now()
+           public_url = coalesce($8, public_url), goal = $9, trigger_lang = $10, updated_at = now()
          where id = $1 and workspace_id = $2`,
         [cur.id, ctx.workspaceId, next.name, next.trigger_kind, next.trigger_ref || null,
-         JSON.stringify(parseJson(next.steps, [])), next.reentry, ctx.publicUrl || null, next.goal || null],
+         JSON.stringify(parseJson(next.steps, [])), next.reentry, ctx.publicUrl || null, next.goal || null, next.trigger_lang || null],
       );
       emit('ladder', cur.id, 'update', patch.steps ? { ...patch, steps: forLog(patch.steps) } : patch);
       return { ladder: out(next) };

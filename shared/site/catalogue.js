@@ -20,6 +20,13 @@
 //   campaign  a petition, pledge or letter (id)   { kinds: ['petition', …] }
 //   page      a site page (slug)
 //
+// translate (TR, shared/site/segments.js): left out, a text field's words
+// are translated on the language pages; false never (people's names,
+// handles, amounts); 'label' only an option's label (its value posted stays
+// English); 'check-first' shown translated only once a person checked it
+// (words beside money, words in a real person's mouth); 'composed' one
+// segment with the field beside it (a headline built from parts).
+//
 // Defaults here are neutral (the generic template). A client's own words
 // come from its seed (server/ext/site/seeds/*.js), never from this file.
 
@@ -51,8 +58,8 @@ export const MODULES = [
     label: 'Hero',
     description: 'The big headline at the top: optional rotating words, a paragraph, buttons and a picture.',
     fields: [
-      { key: 'titlePrefix', type: 'text', label: 'Headline', max: 80 },
-      { key: 'words', type: 'words', label: 'Rotating words after the headline (optional)', max: 30, itemMax: 40 },
+      { key: 'titlePrefix', type: 'text', label: 'Headline', max: 80, translate: 'composed' },
+      { key: 'words', type: 'words', label: 'Rotating words after the headline (optional)', max: 30, itemMax: 40, translate: 'composed' },
       { key: 'text', type: 'textarea', label: 'Paragraph', max: 600 },
       button('primaryCta', 'Main button'),
       { key: 'secondaryCtas', type: 'list', label: 'Other buttons', max: 3, of: [{ key: 'label', type: 'text', label: 'Label', max: 40 }, { key: 'href', type: 'url', label: 'Link' }] },
@@ -113,7 +120,7 @@ export const MODULES = [
     category: 'basics',
     label: 'Call to action band',
     description: 'A bold one-line call with a button, in the brand colours.',
-    fields: [heading(), { key: 'highlight', type: 'text', label: 'Highlighted words', max: 40 }, button(), tone],
+    fields: [{ ...heading(), translate: 'composed' }, { key: 'highlight', type: 'text', label: 'Highlighted words', max: 40, translate: 'composed' }, button(), tone],
     defaults: { title: 'When we organize,', highlight: 'we win', cta: { label: 'Join us', href: '/join' }, tone: 'accent' },
   },
   {
@@ -129,7 +136,7 @@ export const MODULES = [
     category: 'basics',
     label: 'Quote',
     description: 'A quote with who said it and a photo.',
-    fields: [{ key: 'quote', type: 'textarea', label: 'Quote', max: 600, required: true }, { key: 'name', type: 'text', label: 'Name', max: 80 }, { key: 'role', type: 'text', label: 'Who they are', max: 120 }, { key: 'photo', type: 'image', label: 'Photo' }, tone],
+    fields: [{ key: 'quote', type: 'textarea', label: 'Quote', max: 600, required: true, translate: 'check-first' }, { key: 'name', type: 'text', label: 'Name', max: 80, translate: false }, { key: 'role', type: 'text', label: 'Who they are', max: 120 }, { key: 'photo', type: 'image', label: 'Photo' }, tone],
     defaults: { quote: '', name: '', role: '', photo: { url: '', alt: '' }, tone: 'surface' },
   },
 
@@ -147,7 +154,7 @@ export const MODULES = [
     category: 'actions',
     label: 'Become a member',
     description: 'The membership form: their details, the eligibility declaration and the membership contribution (paid online).',
-    fields: [heading(), intro(), { key: 'benefits', type: 'list', label: 'Why join', max: 6, of: [{ key: 'title', type: 'text', label: 'Title', max: 60 }, { key: 'body', type: 'textarea', label: 'Text', max: 300 }] }, { key: 'amountTitle', type: 'text', label: 'Above the amounts', max: 80 }, { key: 'amountNote', type: 'textarea', label: 'Note under the amounts', max: 300 }, { key: 'photo', type: 'image', label: 'Photo' }],
+    fields: [heading(), intro(), { key: 'benefits', type: 'list', label: 'Why join', max: 6, of: [{ key: 'title', type: 'text', label: 'Title', max: 60 }, { key: 'body', type: 'textarea', label: 'Text', max: 300 }] }, { key: 'amountTitle', type: 'text', label: 'Above the amounts', max: 80 }, { key: 'amountNote', type: 'textarea', label: 'Note under the amounts', max: 300, translate: 'check-first' }, { key: 'photo', type: 'image', label: 'Photo' }],
     defaults: { title: 'Become a member', intro: '', benefits: [], amountTitle: 'Your membership', amountNote: '', photo: { url: '', alt: '' } },
   },
   {
@@ -155,7 +162,7 @@ export const MODULES = [
     category: 'actions',
     label: 'Donate',
     description: 'Amounts, once or monthly, paid online; each gift is checked against the contribution limit and gets its receipt.',
-    fields: [heading(60), intro(600), { key: 'text', type: 'textarea', label: 'Second paragraph', max: 400 }, { key: 'amounts', type: 'words', label: 'Suggested amounts in dollars', max: 6, itemMax: 8 }, { key: 'allowMonthly', type: 'toggle', label: 'Offer monthly giving' }, { key: 'monthlyNote', type: 'textarea', label: 'Monthly note', max: 300 }, { key: 'clubNote', type: 'textarea', label: 'Note about giving the maximum', max: 500 }],
+    fields: [heading(60), { ...intro(600), translate: 'check-first' }, { key: 'text', type: 'textarea', label: 'Second paragraph', max: 400, translate: 'check-first' }, { key: 'amounts', type: 'words', label: 'Suggested amounts in dollars', max: 6, itemMax: 8, translate: false }, { key: 'allowMonthly', type: 'toggle', label: 'Offer monthly giving' }, { key: 'monthlyNote', type: 'textarea', label: 'Monthly note', max: 300, translate: 'check-first' }, { key: 'clubNote', type: 'textarea', label: 'Note about giving the maximum', max: 500, translate: 'check-first' }],
     defaults: { title: 'Donate', intro: '', text: '', amounts: ['25', '50', '100', '250'], allowMonthly: true, monthlyNote: '', clubNote: '' },
   },
   {
@@ -171,7 +178,7 @@ export const MODULES = [
     category: 'actions',
     label: 'Volunteer sign-up',
     description: 'Name, contact, what they would like to do and when they are free; they reach a named organizer in base.win within a day.',
-    fields: [heading(), intro(300), { key: 'roles', type: 'words', label: 'What they can pick (the volunteer roles)', max: 20, itemMax: 60 }, { key: 'askAvailability', type: 'toggle', label: 'Ask when they are free' }, tone],
+    fields: [heading(), intro(300), { key: 'roles', type: 'words', label: 'What they can pick (the volunteer roles)', max: 20, itemMax: 60, translate: 'label' }, { key: 'askAvailability', type: 'toggle', label: 'Ask when they are free' }, tone],
     defaults: { title: 'Volunteer', intro: 'Tell us how you would like to help. An organizer will be in touch within a day.', roles: [], askAvailability: true, tone: 'paper' },
   },
   {
@@ -187,7 +194,7 @@ export const MODULES = [
     category: 'actions',
     label: 'Contact form',
     description: 'A message to the campaign; it lands in base.win as a follow-up.',
-    fields: [heading(), intro(300), { key: 'topics', type: 'words', label: 'Topics they can pick', max: 10, itemMax: 60 }],
+    fields: [heading(), intro(300), { key: 'topics', type: 'words', label: 'Topics they can pick', max: 10, itemMax: 60, translate: 'label' }],
     defaults: { title: 'Get in touch', intro: '', topics: [] },
   },
 
@@ -237,7 +244,7 @@ export const MODULES = [
     category: 'org',
     label: 'Board or team',
     description: 'Seats or people with a role, a name, a photo and a short bio; leave the name blank for an open seat.',
-    fields: [heading(), intro(), { key: 'seats', type: 'list', label: 'People', max: 40, of: [{ key: 'role', type: 'text', label: 'Role', max: 80 }, { key: 'name', type: 'text', label: 'Name', max: 80 }, { key: 'photo', type: 'image', label: 'Photo' }, { key: 'bio', type: 'textarea', label: 'Bio', max: 600 }] }],
+    fields: [heading(), intro(), { key: 'seats', type: 'list', label: 'People', max: 40, of: [{ key: 'role', type: 'text', label: 'Role', max: 80 }, { key: 'name', type: 'text', label: 'Name', max: 80, translate: false }, { key: 'photo', type: 'image', label: 'Photo' }, { key: 'bio', type: 'textarea', label: 'Bio', max: 600 }] }],
     defaults: { title: 'Our team', intro: '', seats: [] },
   },
   {
@@ -253,7 +260,7 @@ export const MODULES = [
     category: 'org',
     label: 'Follow along',
     description: 'Your social media accounts.',
-    fields: [intro(300), { key: 'accounts', type: 'list', label: 'Accounts', max: 12, of: [{ key: 'name', type: 'text', label: 'Network', max: 40 }, { key: 'handle', type: 'text', label: 'Handle', max: 60 }, { key: 'url', type: 'url', label: 'Link' }, { key: 'cta', type: 'text', label: 'Button', max: 40 }] }],
+    fields: [intro(300), { key: 'accounts', type: 'list', label: 'Accounts', max: 12, of: [{ key: 'name', type: 'text', label: 'Network', max: 40, translate: false }, { key: 'handle', type: 'text', label: 'Handle', max: 60, translate: false }, { key: 'url', type: 'url', label: 'Link' }, { key: 'cta', type: 'text', label: 'Button', max: 40 }] }],
     defaults: { intro: '', accounts: [] },
   },
 ];

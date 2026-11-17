@@ -2781,3 +2781,118 @@ html[data-heading="inter"] .rail-title {
 .rsvp-cal a:first-of-type {
   padding-left: 0;
 }
+
+/* ── Languages (TR): Gurmukhi type, Chinese type, the switch ──────────────
+   Noto Sans Gurmukhi (SIL OFL, fonts/noto-gurmukhi-OFL.txt) joins every
+   theme face by name: it downloads only where Gurmukhi appears. System and
+   Serif use no web font, so a Punjabi page puts it ahead of them. Chinese
+   uses the reader's own CJK faces (--cjk), Latin words keep the theme's. */
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 100 599; font-display: swap; src: url("fonts/noto-gurmukhi-400.woff2") format("woff2"); unicode-range: U+0A00-0A7F, U+200C-200D, U+25CC; }
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 600 900; font-display: swap; src: url("fonts/noto-gurmukhi-700.woff2") format("woff2"); unicode-range: U+0A00-0A7F, U+200C-200D, U+25CC; }
+@font-face { font-family: "Montserrat"; font-style: normal; font-weight: 100 599; font-display: swap; src: url("fonts/noto-gurmukhi-400.woff2") format("woff2"); unicode-range: U+0A00-0A7F, U+200C-200D, U+25CC; }
+@font-face { font-family: "Montserrat"; font-style: normal; font-weight: 600 900; font-display: swap; src: url("fonts/noto-gurmukhi-700.woff2") format("woff2"); unicode-range: U+0A00-0A7F, U+200C-200D, U+25CC; }
+@font-face { font-family: "Barlow Condensed"; font-style: normal; font-weight: 100 599; font-display: swap; src: url("fonts/noto-gurmukhi-400.woff2") format("woff2"); unicode-range: U+0A00-0A7F, U+200C-200D, U+25CC; }
+@font-face { font-family: "Barlow Condensed"; font-style: normal; font-weight: 600 900; font-display: swap; src: url("fonts/noto-gurmukhi-700.woff2") format("woff2"); unicode-range: U+0A00-0A7F, U+200C-200D, U+25CC; }
+@font-face { font-family: "Noto Sans Gurmukhi"; font-style: normal; font-weight: 100 599; font-display: swap; src: url("fonts/noto-gurmukhi-400.woff2") format("woff2"); unicode-range: U+0A00-0A7F, U+200C-200D, U+25CC; }
+@font-face { font-family: "Noto Sans Gurmukhi"; font-style: normal; font-weight: 600 900; font-display: swap; src: url("fonts/noto-gurmukhi-700.woff2") format("woff2"); unicode-range: U+0A00-0A7F, U+200C-200D, U+25CC; }
+html[data-heading="system"]:lang(pa), html[data-heading="serif"]:lang(pa) { --font-heading: "Noto Sans Gurmukhi", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
+html[data-body="system"]:lang(pa), html[data-body="serif"]:lang(pa) { --font-body: "Noto Sans Gurmukhi", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
+:lang(zh-Hans) { --cjk: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC"; }
+:lang(zh-Hant) { --cjk: "PingFang TC", "Microsoft JhengHei", "Noto Sans CJK TC", "Source Han Sans TC"; }
+html:lang(zh) body { font-family: var(--font-body), var(--cjk), sans-serif; }
+html:lang(zh) .display, html:lang(zh) h1, html:lang(zh) h2, html:lang(zh) h3, html:lang(zh) .wordmark,
+html:lang(zh) .campaign-title, html:lang(zh) .rail-title { font-family: var(--font-heading), var(--cjk), sans-serif; }
+
+/* Gurmukhi's vowel signs sit above and below the line, and neither script
+   has capitals or wants letter-spacing: no uppercase, no spacing, no
+   hyphens, room for the signs, nothing clipped. */
+:lang(pa) .display, :lang(pa) .eyebrow, :lang(pa) .wordmark, :lang(pa) .date-badge .mon, :lang(pa) .rail-title,
+:lang(pa) .rail-subtitle, :lang(pa) .share-sheet__label, :lang(pa) .footer-heading, :lang(pa) .status-badge, :lang(pa) .campaign-title,
+:lang(zh) .display, :lang(zh) .eyebrow, :lang(zh) .wordmark, :lang(zh) .date-badge .mon, :lang(zh) .rail-title,
+:lang(zh) .rail-subtitle, :lang(zh) .share-sheet__label, :lang(zh) .footer-heading, :lang(zh) .status-badge, :lang(zh) .campaign-title {
+  letter-spacing: normal;
+  text-transform: none;
+  hyphens: manual;
+}
+:lang(pa) .display, :lang(pa) .wordmark, :lang(pa) .campaign-title, :lang(pa) .rail-title, :lang(pa) .form-title,
+:lang(pa) .success-card__title, :lang(pa) .event-feature h3, :lang(pa) .footer-name, :lang(pa) .hero-title { line-height: 1.35; overflow: visible; }
+:lang(zh) .display, :lang(zh) .wordmark, :lang(zh) .campaign-title, :lang(zh) .rail-title, :lang(zh) .form-title,
+:lang(zh) .success-card__title, :lang(zh) .event-feature h3, :lang(zh) .footer-name, :lang(zh) .hero-title { line-height: 1.3; overflow: visible; }
+html[data-heading="barlow-condensed"]:lang(pa) .display { line-height: 1.35; }
+html[data-heading="barlow-condensed"]:lang(zh) .display { line-height: 1.3; }
+:lang(pa) .hero-word-wrap, :lang(zh) .hero-word-wrap { overflow: visible; }
+:lang(pa) .hero-title { min-height: 2.8em; }
+/* Back in English inside a translated page (a sentence not translated yet). */
+:lang(pa) [lang="en"], :lang(zh) [lang="en"] { hyphens: manual; }
+
+/* The switch: a thin bar at the very top, the languages as one pill track,
+   each in its own script; the current one filled. */
+.lang-bar {
+  background: var(--paper);
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+}
+.lang-bar-inner {
+  max-width: var(--wrap);
+  margin: 0 auto;
+  padding: 5px 24px;
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.lang-globe { flex: none; color: var(--muted, var(--ink)); }
+.lang-switch {
+  display: inline-flex;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px;
+  gap: 2px;
+}
+.lang-switch a {
+  min-width: 88px;
+  min-height: 40px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  color: var(--ink);
+  font: 600 16px/1.3 var(--font-body);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.lang-switch a[lang="pa"] { font-size: 17px; font-family: "Noto Sans Gurmukhi", var(--font-body); }
+.lang-switch a[lang="zh-Hans"], .lang-switch a[lang="zh-Hant"] { font-family: var(--font-body), "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif; }
+.lang-switch a:hover { background: var(--paper); }
+.lang-switch a:focus-visible { outline: 3px solid var(--link); outline-offset: 2px; }
+.lang-switch a[aria-current="true"] {
+  background: var(--brand);
+  color: var(--brand-ink);
+  view-transition-name: lang-thumb;
+}
+.lang-note {
+  max-width: var(--wrap);
+  margin: 0 auto;
+  padding: 0 24px 8px;
+  text-align: right;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--ink);
+}
+.lang-note a { color: var(--link); }
+/* The page-to-page slide (@view-transition) is opted into by the page's own
+   <style>, only where the switch is drawn (render/index.js): an English-only
+   website's navigations stay exactly as they were. */
+@media (prefers-reduced-motion: reduce) {
+  .lang-switch a[aria-current="true"] { view-transition-name: none; }
+}
+@media (max-width: 640px) {
+  .lang-bar-inner { padding: 8px 16px; justify-content: stretch; }
+  .lang-globe { display: none; }
+  .lang-switch { display: flex; width: 100%; }
+  .lang-switch a { flex: 1 1 0; min-width: 0; min-height: 48px; padding: 0 6px; }
+  .lang-note { padding: 0 16px 8px; text-align: left; }
+}

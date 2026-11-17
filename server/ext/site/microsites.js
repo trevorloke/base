@@ -39,6 +39,7 @@ export const micrositeOut = (r) => ({
   id: r.id, key: r.key, name: r.name, status: r.status,
   domains: parseJ(r.domains, []), held_domains: parseJ(r.held_domains, []),
   theme: parseJ(r.theme, {}),
+  check_first: Boolean(r.check_first),
   created_at: iso(r.created_at), updated_at: iso(r.updated_at), deleted_at: iso(r.deleted_at),
 });
 
@@ -213,6 +214,8 @@ export const micrositeActions = (siteAction) => ({
     id: z.uuid(),
     name: z.string().trim().min(1, 'Give it a name').max(60).optional(),
     theme: z.record(z.string(), z.any()).optional(),
+    // "Show translated only after a person checks it" (TR decision 50).
+    check_first: z.boolean().optional(),
   }), async (tx, ctx, input, emit) => {
     const ws = ctx.workspaceId;
     const cur = await loadMicrosite(tx, ws, input.id);
@@ -230,6 +233,9 @@ export const micrositeActions = (siteAction) => ({
         throw httpError(400, `${p.pair.label}: ${p.ratio.toFixed(1)}:1 is too hard to read — it needs 4.5:1. Pick a darker or lighter colour.`);
       }
       params.push(JSON.stringify(theme)); sets.push(`theme = $${params.length}`); changed.theme = theme;
+    }
+    if (input.check_first !== undefined && input.check_first !== Boolean(cur.check_first)) {
+      params.push(input.check_first); sets.push(`check_first = $${params.length}`); changed.check_first = input.check_first;
     }
     if (!sets.length) return { microsite: micrositeOut(cur) };
     const row = (await tx.query(`update microsites set ${sets.join(', ')}, updated_at = now() where id = $1 and workspace_id = $2 returning *`, params)).rows[0];

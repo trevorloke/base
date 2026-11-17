@@ -130,6 +130,7 @@ function Builder({ id }) {
     const next = {
       title: d.title || p.title || '', description: d.description ?? p.description ?? '',
       image: d.image || { url: '', alt: '' }, show_in_nav: Boolean(p.show_in_nav), modules: Array.isArray(d.modules) ? d.modules : [],
+      check_first: d.checkFirst === true,
     };
     draftRef.current = next;
     baseRef.current = p;
@@ -158,7 +159,7 @@ function Builder({ id }) {
       try {
         const res = await action('site.page.save', {
           id, title: d.title.trim(), description: d.description || '', image: d.image?.url ? d.image : null,
-          show_in_nav: d.show_in_nav, modules: d.modules, updated_at: baseRef.current?.updated_at,
+          show_in_nav: d.show_in_nav, modules: d.modules, check_first: d.check_first, updated_at: baseRef.current?.updated_at,
         });
         baseRef.current = res.page;
         setBase(res.page);
@@ -352,7 +353,10 @@ function Builder({ id }) {
     try {
       await inTurn(() => action('site.page.publish', { id }));
       setStrict(false);
-      say('Published — it’s on the site now');
+      // The website in other languages (TR): translated in about a minute.
+      const langs = siteQ.data?.settings?.languages?.on || [];
+      const words = [...new Set(langs.map((c) => (c === 'pa' ? 'ਪੰਜਾਬੀ' : '中文')))];
+      say(`Published — it’s on the site now${words.length ? `. ${words.join(' and ')} update in about a minute` : ''}`);
       refreshSite();
     } catch (e) {
       const s = sectionFromServer(e.message);
@@ -506,6 +510,10 @@ function Builder({ id }) {
                 onChange={(v) => change((d) => ({ ...d, image: v }))} />
               <ToggleField id="wb-nav" label="Show this page in the site’s menu" value={draft.show_in_nav}
                 hint={live ? null : 'Once it’s published.'} onChange={(v) => change((d) => ({ ...d, show_in_nav: v }))} />
+              {(siteQ.data?.settings?.languages?.on || []).length > 0 && (
+                <ToggleField id="wb-check-first" label="Show translated only after a person checks it" value={draft.check_first}
+                  hint="Until then this page shows in English in the other languages." onChange={(v) => change((d) => ({ ...d, check_first: v }))} />
+              )}
             </div>
           )}
         </section>

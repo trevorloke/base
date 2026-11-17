@@ -41,6 +41,9 @@ import { gmailService } from '../gmail/service.js';
 // Google Drive and Sheets (ext/drive): a panel (the campaign's switches), and
 // a Check with the manager's own Drive connection.
 import { driveService, checkDrive } from '../drive/service.js';
+// The website in other languages (ext/site translate.js): its row carries
+// "Check translation", which learns how Google treats names and the key.
+import { translateKey, translateWorks, checkTranslation } from '../../lib/translate.js';
 
 const MANAGER = 'manager';
 const TIMEOUT_MS = 8000;
@@ -209,6 +212,10 @@ export const services = (base = publicUrl()) => {
     callhubService(),
     googleService(),
     driveService(),
+    row('translate', 'Translation (Google)', 'The website in ਪੰਜਾਬੀ and 中文: new wording translated when it’s published, for people to check', false, ['GOOGLE_TRANSLATE_KEY'], {
+      detail: translateKey() ? 'Set: new wording is translated after each publish (Website → Languages)' : 'Not set: the website stays in English (a language already showing keeps its words)',
+      panel: 'translate',
+    }),
     // Two-step sign-in's key (lib/twostep.js): without it base.win keeps
     // one in the database — it works, but a copy of the database would
     // give the authenticator keys away.
@@ -258,6 +265,11 @@ const CHECKS = {
   callhub: checkCallHub,
   google: checkGoogle,
   drive: checkDrive,
+  translate: async () => {
+    const r = await translateWorks();
+    if (r.state === 'not-set') return { ok: false, said: 'GOOGLE_TRANSLATE_KEY isn’t set' };
+    return r.state === 'works' ? { ok: true, said: 'Working · Google Translation answering' } : refusedBy(r);
+  },
   database: async (db, ws) => {
     await db.query('select 1');
     const n = (await db.query('select count(*)::int as n from persons where workspace_id = $1 and deleted_at is null', [ws])).rows[0].n;
@@ -344,6 +356,27 @@ api.post('/connections/check', async (c) => {
     // Never a key in the words: a failed URL carries its query string.
     return c.json({ key, ok: false, said: `No answer: ${String(e.message).replace(/([?&](key|token|apikey)=)[^&\s]+/gi, '$1…').slice(0, 160)}` });
   }
+});
+
+// "Check translation" (managers): one fixed sentence to Punjabi, sent with
+// the key in the header (and in the body if Google refuses that), up to
+// 15 s. What it learns — does Google keep names, the header key, the
+// placeholders — is kept as the translation sweep's own bookkeeping
+// (site_translate_runtime.probe, like the sweep's claim; not campaign data)
+// and chooses how names and the key are sent from then on.
+api.post('/connections/translate-probe', async (c) => {
+  const denied = managerOnly(c);
+  if (denied) return denied;
+  const r = await checkTranslation();
+  if (!r.works) return c.json({ ok: false, said: r.plain });
+  const probe = { namesKept: r.namesKept, headerAccepted: r.headerAccepted, placeholdersKept: r.placeholdersKept, keyIn: r.keyIn, at: r.at };
+  await c.get('db').query(
+    `insert into site_translate_runtime (workspace_id, probe) values ($1, $2)
+     on conflict (workspace_id) do update set probe = coalesce(site_translate_runtime.probe, '{}'::jsonb) || $2::jsonb`,
+    [c.get('ctx').workspaceId, JSON.stringify(probe)],
+  );
+  const yes = (b) => (b ? 'yes' : 'no');
+  return c.json({ ok: true, ...probe, said: `Names kept: ${yes(r.namesKept)} · Header accepted: ${yes(r.headerAccepted)} · Placeholders kept: ${yes(r.placeholdersKept)}` });
 });
 
 export const deskOnlyReads = ['/connections'];

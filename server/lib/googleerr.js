@@ -39,6 +39,17 @@ export const TROUBLES = [
     plain: 'Your Google account can’t change that file or folder.', step: null, service: 'drive' },
   { code: 'drive-full', reasons: ['storageQuotaExceeded'], words: [],
     plain: 'Your Google Drive is full.', step: null, service: 'drive' },
+  // Google Cloud Translation (ext/site translate.js): the website's languages.
+  { code: 'translate-key', reasons: ['API_KEY_INVALID'], words: ['api key not valid', 'key not valid', 'invalid api key', 'missing api key', 'api key'],
+    plain: 'Google doesn’t accept the translation key. Copy it again from Google Cloud → Credentials into GOOGLE_TRANSLATE_KEY.', step: 'Translation step 2', service: 'translate' },
+  { code: 'translate-off', reasons: ['SERVICE_DISABLED', 'accessNotConfigured'], words: ['has not been used in project', 'is disabled'],
+    plain: 'The Cloud Translation API isn’t turned on in the key’s Google Cloud project.', step: 'Translation step 1', service: 'translate' },
+  { code: 'translate-blocked', reasons: ['API_KEY_SERVICE_BLOCKED'], words: ['are blocked'],
+    plain: 'This key is limited to other Google services. Allow Cloud Translation API on it.', step: 'Translation step 2', service: 'translate' },
+  { code: 'translate-billing', reasons: ['BILLING_DISABLED'], words: ['billing'],
+    plain: 'Billing isn’t turned on for the translation key’s Google Cloud project.', step: 'Translation step 1', service: 'translate' },
+  { code: 'translate-quota', reasons: ['RESOURCE_EXHAUSTED', 'rateLimitExceeded', 'dailyLimitExceeded', 'userRateLimitExceeded'], words: ['quota', 'limit exceeded'],
+    plain: 'Google’s translation limit for today is used up. It carries on tomorrow, or raise the quota in Google Cloud.', step: 'Translation step 3', service: 'translate' },
 ];
 
 const CONSOLE_LINK = /https?:\/\/console\.(?:cloud|developers)\.google\.com\/[^\s"'<>]*/gi;
@@ -83,7 +94,7 @@ export const googleTrouble = (status, body, { service = 'maps' } = {}) => {
     || rows.find((t) => t.words.some((w) => words.includes(w)));
   if (!row) {
     const what = Number(status) && Number(status) !== 200 ? status : (typeof b.status === 'string' && b.status) || status;
-    const who = service === 'drive' ? 'Google Drive' : 'Google';
+    const who = service === 'drive' ? 'Google Drive' : service === 'translate' ? 'Google Translation' : 'Google';
     return { code: 'other', plain: `${who} refused (${what}).`, said, step: null };
   }
   let plain = row.plain;

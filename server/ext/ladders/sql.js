@@ -129,4 +129,7 @@ begin
 end $$;
 create or replace trigger ladders_note_tags after update of tags on persons
   for each row execute function ladders_note_tags();
+
+-- A 'web' trigger's language (TR): null for any.
+alter table ladders add column if not exists trigger_lang text;
 `;

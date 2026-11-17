@@ -24,6 +24,7 @@ is written) and says exactly what is wrong if anything is.
 | [Hosting — Render](#hosting--render) | the two environments | yes | `render.yaml` |
 | [GitHub Actions](#github-actions) | tests, and promoting staging to production | yes | none |
 | [The campaign's website](#the-campaigns-website) | sign-ups, petitions, volunteers, newsletter opt-ins in | when the website is ready | a website key (Settings → Services) |
+| [Website translation — Google](#website-translation--google) | the campaign's website in ਪੰਜਾਬੀ, 简体 and 繁體, made ahead of time | no (the website stays English) | `GOOGLE_TRANSLATE_KEY` |
 | [Online payments — Stripe](#online-payments--stripe) | gifts once or monthly and membership dues on the website, by card, Apple Pay or Google Pay | when the website takes money (test mode first) | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` |
 | [Phone dialer — CallHub](#phone-dialer--callhub) | a list or a phone bank sent to CallHub's dialer; each call's result back on the person | no (only if the campaign calls through CallHub) | `CALLHUB_API_KEY`, `CALLHUB_API_BASE` |
 | [Connect anything](#connect-anything) | any other tool (Zapier, Make, a Slack channel, the campaign's own): people in with a website key, a ladder step out to a web address | no | none (a website key in; a ladder step out) |
@@ -842,6 +843,36 @@ Google Drive and Sheets** says what is missing and nothing Drive shows.
 - base.win never moves, shares or deletes a Sheet after making it. Someone
   who leaves keeps the Sheets in their own Drive; *Sent to Google Drive*
   lists what exists.
+
+
+## Website translation — Google
+
+The language switch on the campaign's websites (English · ਪੰਜਾਬੀ · 简体 ·
+繁體; SITE.md "Languages") is filled by **Google Cloud Translation (Basic,
+v2)** ahead of time: whenever the campaign publishes, the new sentences are
+sent in the background, a few calls a minute at most; nothing is translated
+while a visitor waits. Traditional Chinese is made from the Simplified on
+base.win's own server and costs nothing. The words the law needs ("Authorized
+by", consent, the declarations) and people's names are never sent to be
+translated: a manager approves them per language.
+
+- **Key**: `GOOGLE_TRANSLATE_KEY`, a separate API key in the campaign's Google
+  Cloud project (the one Maps uses), restricted to **Cloud Translation API**
+  only. It is sent in a header (or, if Google refuses that, in the request
+  body), never in an address, so it never reaches a log.
+- **Cost**: characters are counted per month; the default limit, 450,000,
+  sits under Google's free allowance (check the live pricing page); above
+  it, about US$20 per million. Only a manager raises it. Set a project quota
+  on "Characters per day" (300,000) as a backstop.
+- **Without the key** no language can be turned on; a language already on
+  stays on with its words, and new wording shows in English.
+- **Check it**: Settings → Services → Translation (Google): **Check** asks
+  for the languages list (5 s); **Check translation** sends one fixed
+  sentence to Punjabi and says "Names kept · Header accepted · Placeholders
+  kept". What it learns chooses how names and the key are sent from then
+  on. Press it once on staging after the key is in Render.
+- **Tests** use `server/test/fake-translate.js` through
+  `GOOGLE_TRANSLATE_API_BASE`; no test calls Google.
 
 ## Online payments — Stripe
 
