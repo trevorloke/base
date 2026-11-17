@@ -43,7 +43,10 @@ import GoogleNotice from '../components/GoogleNotice.jsx';
 import { More, useScale } from '../components/RatingButtons.jsx';
 import GeocodeButton from '../components/GeocodeButton.jsx';
 import { DEFAULT_TILES, safeAttribution } from '../components/tiles.js';
-import { DotLayer, DensityLayer, cellAt, nearest } from './mapDots.js';
+import { DotLayer, DensityLayer, cellAt, countLabel, isBuildingDot, nearest } from './mapDots.js';
+import { groupBuildings, unitRows } from '@starbase/shared/buildings';
+import BuildingSheet, { GONE_LINE, buildingKey, nextUnit, rowDoorKey, seedDoor, unitLine, useBuilding } from '../components/BuildingSheet.jsx';
+import '../components/buildings.css';
 import { DOT_ZOOM, LONE_PIN_ZOOM, PIN_ZOOM, MARK, markTheme, TILE_WAIT_MS, css, cellOf, cellsFrom, defaultLook, dotsFrom, drawnFor, inBox, mapLooks, pickLook, placingPoll, rowsBudget, streetMove, tileAt, tileHealth, tileHost, TURF_COLORS, turfColor, viewBox } from './mapView.js';
 import { askNotice, forgetNotice, knownNotice } from './tileProbe.js';
 import { TURFS_OUTLINE, TURFS_WHOLE, VIEW_PREF, readViewPref, tellServiceWorker } from './mapQueries.js';
@@ -238,14 +241,18 @@ function buildDoors(data) {
     else if (s.lat != null && s.lng != null) orphanSigns.push(s);
   }
   const doors = [...byKey.values()];
-  for (const door of doors) door.band = householdBand(door.persons);
-  spreadStacked(doors);
-  return { doors, byPerson, orphanSigns };
+  for (const door of doors) { door.band = householdBand(door.persons); door.offset = [0, 0]; }
+  // An address with 4 or more units is a building (shared/buildings.js):
+  // one square, its doors never drawn on their own — so only the rest fan out.
+  const { buildings, loose } = groupBuildings(doors);
+  spreadStacked(loose);
+  return { doors, byPerson, orphanSigns, buildings };
 }
 
-// Units in one building share a lat/lng, so their pins would stack exactly.
-// Fan the extras out on a small sunflower spiral (pixel offsets, unit order)
-// so every door stays tappable; the first unit keeps the true spot.
+// Units at one spot that aren't a building (a house and its suite) share a
+// lat/lng, so their pins would stack exactly. Fan the extras out on a small
+// sunflower spiral (pixel offsets, unit order) so every door stays
+// tappable; the first unit keeps the true spot.
 function spreadStacked(doors) {
   const spots = new Map();
   for (const door of doors) {
@@ -265,7 +272,7 @@ function spreadStacked(doors) {
   }
 }
 
-const EMPTY_MODEL = { doors: [], byPerson: new Map(), orphanSigns: [] };
+const EMPTY_MODEL = { doors: [], byPerson: new Map(), orphanSigns: [], buildings: [] };
 // Two loads of /map/doors as one (each person and sign once).
 function mergeDoorData(whole, view) {
   if (!view) return whole;
@@ -361,6 +368,27 @@ function clusterIcon(doors, offset) {
     html: `<div class="map-cluster" style="--a:${pct(a)};--b:${pct(b)};--c:${pct(o)};--size:${size}px"><span class="map-cluster__n">${label}</span></div>`,
     iconSize: [size + 6, size + 6],
     iconAnchor: [(size + 6) / 2 - offset[0], (size + 6) / 2 - offset[1]],
+  });
+}
+
+// A building's square pin: its count (the units the filter shows) and a bar
+// in the shares of its shown rated people. Never one resident's colour.
+function buildingIcon(b, selected) {
+  const c = { support: 0, undecided: 0, opposed: 0 };
+  let n = 0;
+  for (const d of b.shownDoors) {
+    for (const p of d.persons) {
+      const band = bandOf(p.rating);
+      if (band in c) { c[band] += 1; n += 1; }
+    }
+  }
+  const pct = (k) => `${n ? ((k / n) * 100).toFixed(1) : 0}%`;
+  const label = `${b.address}, building, ${plural(b.shown, 'unit', 'units')}`;
+  return L.divIcon({
+    className: 'map-bldg-wrap',
+    html: `<div class="map-bldg${selected ? ' map-bldg--selected' : ''}" aria-label="${esc(label)}" role="img"><span class="map-bldg__n">${countLabel(b.shown)}</span><span class="map-bldg__bar" style="--a:${pct(c.support)};--b:${pct(c.support + c.undecided)};--c:${pct(c.support + c.undecided + c.opposed)}"></span></div>`,
+    iconSize: [48, 48],
+    iconAnchor: [24, 24],
   });
 }
 
@@ -1092,6 +1120,9 @@ export default function MapPage() {
   const scale = useScale();
   const [params, setParams] = useSearchParams();
   const personParam = params.get('person');
+  // ?building=<person id>: a building's sheet (the anchor; never an address),
+  // with &person=<id> while one of its units' door card is open.
+  const buildingParam = params.get('building');
   const turfParam = params.get('turf');
   const drawParam = params.get('draw');
   const showParam = params.get('show'); // ?show=gotv from Today's GOTV card
@@ -1262,23 +1293,24 @@ export default function MapPage() {
   const doorQ = useQuery({
     queryKey: ['doors', 'door', personParam],
     queryFn: () => apiGet(`/map/doors?person=${encodeURIComponent(personParam)}`),
-    enabled: Boolean(big && personParam),
+    // (A building's unit: its sheet put the door here, so it opens at once.)
+    enabled: Boolean((big || buildingParam) && personParam),
     staleTime: 20_000,
   });
-  const oneDoor = big && personParam && doorQ.data?.scope === 'door' ? doorQ.data : null;
+  const oneDoor = (big || buildingParam) && personParam && doorQ.data?.scope === 'door' ? doorQ.data : null;
   const doorFailed = Boolean(big && personParam && doorQ.isError && !doorQ.data);
   // A big list: what came whole (a volunteer's own turfs, kept on the
   // phone), the people in view where they fit, and the open door — each
   // person once.
   const rowsData = drawn?.kind === 'rows' ? drawn.view : null;
   const baseDoors = useMemo(
-    () => (big ? mergeDoorData(mergeDoorData(doorsQ.data, rowsData), oneDoor) : doorsQ.data),
+    () => (big ? mergeDoorData(mergeDoorData(doorsQ.data, rowsData), oneDoor) : oneDoor ? mergeDoorData(doorsQ.data, oneDoor) : doorsQ.data),
     [big, doorsQ.data, rowsData, oneDoor],
   );
   // Doors answered as dots (a busy view): drawn, counted, opened by a tap.
   const leanAll = useMemo(() => (drawn?.kind === 'dots' ? dotsFrom(drawn.view.dots) : EMPTY_LIST), [drawn]);
   const doorsData = useMemo(() => applyOutbox(baseDoors, outbox.items), [baseDoors, outbox.items]);
-  const { doors, byPerson, orphanSigns } = useMemo(() => (doorsData ? buildDoors(doorsData) : EMPTY_MODEL), [doorsData]);
+  const { doors, byPerson, orphanSigns, buildings } = useMemo(() => (doorsData ? buildDoors(doorsData) : EMPTY_MODEL), [doorsData]);
   const unlocated = (big ? doorsQ.data?.unlocated : doorsData?.unlocated) ?? 0;
   const doorsCopy = showingCopy(doorsQ);
 
@@ -1549,6 +1581,41 @@ export default function MapPage() {
   // the filter hides changes the list, so a tap doesn't rebuild every pin.)
   const extraKey = selectedDoor && !shows(selectedDoor) ? selectedDoor.key : null;
   const visible = useMemo(() => doors.filter((d) => d.key === extraKey || shows(d)), [doors, shows, extraKey]);
+  // Buildings (shared/buildings.js): each is one item on the map, a square;
+  // its doors are never drawn on their own. Which doors make a building
+  // never depends on the filter; how many of its units the filter shows is
+  // its number, and at 0 it isn't drawn.
+  const inBuilding = useMemo(() => {
+    const m = new Map();
+    for (const b of buildings) for (const d of b.doors) m.set(d.key, b);
+    return m;
+  }, [buildings]);
+  const buildingItems = useMemo(() => {
+    if (!buildings.length) return EMPTY_LIST;
+    const keys = filter === 'all' ? null : new Set(visible.map((d) => d.key));
+    return buildings.map((b) => {
+      const rows = unitRows(b);
+      const shownRows = keys ? rows.filter((r) => r.doors.some((d) => keys.has(d.key))) : rows;
+      return {
+        isBuilding: true, key: `building:${b.key}`, lat: b.lat, lng: b.lng, offset: [0, 0], address: b.address,
+        units: b.units, shown: shownRows.length, shownDoors: shownRows.flatMap((r) => r.doors),
+        anchor: rows[0]?.persons[0]?.id || null, band: 'unrated', persons: EMPTY_LIST, signs: EMPTY_LIST,
+      };
+    }).filter((b) => b.shown > 0 && b.anchor);
+  }, [buildings, visible, filter]);
+  // What the map draws: the doors not in a building, and the buildings.
+  const drawable = useMemo(
+    () => (buildings.length ? [...visible.filter((d) => !inBuilding.has(d.key)), ...buildingItems] : visible),
+    [buildings.length, visible, inBuilding, buildingItems],
+  );
+  // The open building's sheet (and the unit card inside it): the map's
+  // filter applied to the building's own doors, and the knocks sent from
+  // its cards since it loaded.
+  const [sentHere, setSentHere] = useState({});
+  useEffect(() => { setSentHere({}); }, [buildingParam]);
+  const showsDoor = useCallback((d) => shows({ key: rowDoorKey(d), persons: d.persons, signs: d.signs || [], band: householdBand(d.persons) }), [shows]);
+  const bld = useBuilding({ anchorId: buildingParam, me, online, mapDoors: doors, showsDoor, filterOn: filter !== 'all', sent: sentHere });
+  const bldSelectedKey = buildingParam ? inBuilding.get(byPerson.get(buildingParam)?.key)?.key || null : null;
   // The dots a big list answered with, less any door the map has whole (the
   // open one, a volunteer's own: drawn from that) — and the ones the filter
   // keeps. Signs, voted and "my turf" need the people: a closer look.
@@ -1562,7 +1629,9 @@ export default function MapPage() {
     if (!leanFree.length || filter === 'mine') return EMPTY_LIST;
     const band = filter.startsWith('r:') ? (drawn?.rating === filter.slice(2) ? null : bandOf(filter.slice(2)))
       : ['support', 'undecided', 'opposed', 'unrated'].includes(filter) ? filter : null;
-    return band ? leanFree.filter((d) => d.band === band) : leanFree;
+    // (A building's dot is never one resident's band: it stays, and its
+    // sheet says how many units the filter shows.)
+    return band ? leanFree.filter((d) => d.band === band || isBuildingDot(d)) : leanFree;
   }, [leanFree, filter, drawn]);
   // The numbers for the pill and the filter sheet. A list loaded whole:
   // its doors. A big list: what is on screen — people from further out
@@ -1793,6 +1862,48 @@ export default function MapPage() {
   // A dot tapped where the people aren't loaded (a busy view): the people at
   // that spot are asked for, and the nearest one's door opens. More than a
   // building's worth there: closer first.
+  // A building's sheet: ?building=<anchor person>. A busy view's square dot
+  // asks the server which building is there; a dot that only looked like
+  // one (or one too big to list) opens a door the old way (openSpot).
+  const openBuilding = (anchorId) => {
+    setSignSel(null);
+    setParamsRef.current({ building: anchorId }, { replace: true });
+  };
+  const openBuildingAt = async (dot) => {
+    const mine = (spotSeqRef.current += 1);
+    setSpotBusy(true);
+    try {
+      const at = `lat=${dot.lat.toFixed(5)}&lng=${dot.lng.toFixed(5)}`;
+      const res = await queryClient.fetchQuery({
+        queryKey: ['turf', 'building', 'at', at], queryFn: () => apiGet(`/buildings/at?${at}`), staleTime: 15_000,
+      });
+      if (mine !== spotSeqRef.current) return;
+      const first = res.building && !res.truncated ? res.doors?.find((d) => d.persons?.length)?.persons[0] : null;
+      if (!first) { openSpot(dot); return; }
+      queryClient.setQueryData(buildingKey(first.id), (was) => was || res);
+      openBuilding(first.id);
+    } catch (err) {
+      if (mine === spotSeqRef.current) toast(err.message || 'That building didn’t open — try again');
+    } finally {
+      if (mine === spotSeqRef.current) setSpotBusy(false);
+    }
+  };
+  // A unit of the open building: its door goes where the map looks (so the
+  // card opens at once, signal or not), then the card opens over the sheet.
+  const openUnit = (row) => {
+    const id = seedDoor(queryClient, row);
+    if (!id || !buildingParam) return;
+    setParamsRef.current({ building: buildingParam, person: id }, { replace: true });
+  };
+  const backToBuilding = () => { if (buildingParam) setParamsRef.current({ building: buildingParam }, { replace: true }); };
+  // Not a building after all: its door opens; gone: the line, and it closes.
+  useEffect(() => {
+    if (!buildingParam || !bld) return;
+    if (bld.status === 'none') setParamsRef.current({ person: buildingParam }, { replace: true });
+    else if (bld.status === 'gone') { toast(GONE_LINE); setParamsRef.current({}, { replace: true }); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bld?.status, buildingParam]);
+
   const openSpot = async (dot) => {
     const mine = (spotSeqRef.current += 1);
     setSpotBusy(true);
@@ -1860,7 +1971,7 @@ export default function MapPage() {
       if (mode === 'draw') { addPoint(latlng); return; }
       if (mode === 'place' && placing) { locatePerson(placing, wrapped(latlng)); return; }
       if (mode === 'add') { setAddAt(wrapped(latlng)); return; } // drop or move the new door's pin
-      if (personParam || turfParam || signSel) select(null); // tap on empty map closes the card
+      if (personParam || turfParam || signSel || buildingParam) select(null); // tap on empty map closes the card
     };
     onLongPressRef.current = (latlng) => {
       if (mode === 'draw' || (mode === 'place' && placing)) return;
@@ -1877,6 +1988,8 @@ export default function MapPage() {
       if (mode === 'draw') { addPoint(L.latLng(door.lat, door.lng)); return; }
       if (mode === 'place' && placing) { locatePerson(placing, { lat: door.lat, lng: door.lng }); return; }
       if (mode === 'add') cancelMode();
+      // A building's square opens the building, never one of its units.
+      if (door.isBuilding) { openBuilding(door.anchor); return; }
       if (selectedKeyRef.current === door.key) return;
       select(door.persons[0].id);
     };
@@ -1885,7 +1998,7 @@ export default function MapPage() {
     onClusterClickRef.current = (group) => {
       const map = mapRef.current;
       if (!map) return;
-      if (!mode && (personParam || turfParam || signSel)) select(null);
+      if (!mode && (personParam || turfParam || signSel || buildingParam)) select(null);
       const b = L.latLngBounds(group.map((d) => [d.lat, d.lng]));
       const z = Math.min(offZoomRef.current, Math.max(map.getZoom() + 2, map.getBoundsZoom(b.pad(0.5))));
       map.setView(b.getCenter(), z, { animate: !reducedMotion() });
@@ -1901,7 +2014,7 @@ export default function MapPage() {
       if (cells.length) {
         const c = cellAt(cells, latlng);
         if (!c) return false;
-        if (personParam || turfParam || signSel) select(null);
+        if (personParam || turfParam || signSel || buildingParam) select(null);
         map.setView([c.lat, c.lng], Math.min(DOT_ZOOM + 2, z + 2), { animate: !reducedMotion() });
         return true;
       }
@@ -1909,18 +2022,19 @@ export default function MapPage() {
       const d = nearest(map, ds, latlng, reach) || nearest(map, lean, latlng, reach);
       if (!d) return false;
       if (z < TAP_OPENS_ZOOM) {
-        if (personParam || turfParam || signSel) select(null);
+        if (personParam || turfParam || signSel || buildingParam) select(null);
         map.setView([d.lat, d.lng], Math.min(PIN_ZOOM, z + 2), { animate: !reducedMotion() });
         return true;
       }
       // A door the map has whole opens at once; a dot's people are asked for.
       if (d.persons) onPinClickRef.current?.(d);
+      else if (isBuildingDot(d)) openBuildingAt(d);
       else openSpot(d);
       return true;
     };
     onSignClickRef.current = (sign) => {
       if (mode) { onMapClickRef.current?.(L.latLng(Number(sign.lat), Number(sign.lng))); return; }
-      if (personParam || turfParam) select(null);
+      if (personParam || turfParam || buildingParam) select(null);
       setPickerOpen(false);
       setAddAt(null);
       setSignSel(sign);
@@ -1930,7 +2044,7 @@ export default function MapPage() {
     onTurfClickRef.current = (turf, latlng) => {
       if (mode) { onMapClickRef.current?.(latlng); return; }
       if (onDotTapRef.current?.(latlng)) return; // a dot inside the turf
-      if (personParam) { select(null); return; }
+      if (personParam || buildingParam) { select(null); return; }
       if (pickerOpen || addAt || turfParam === turf.id) return;
       focusedTurfRef.current = turf.id; // they're looking right at it — no refit
       selectTurf(turf.id);
@@ -1951,7 +2065,7 @@ export default function MapPage() {
       else if (mode) cancelMode();
       else if (pickerOpen) setPickerOpen(false);
       else if (addAt) setAddAt(null);
-      else if (personParam || turfParam || signSel) select(null);
+      else if (personParam || turfParam || signSel || buildingParam) select(null);
     };
   });
 
@@ -2267,23 +2381,26 @@ export default function MapPage() {
   const loneOn = zoom != null && !pinsOn && zoom >= Math.min(LONE_PIN_ZOOM, offZoom);
   // (Which doors stand alone is worked out over every door loaded, on screen
   // or not, so a pan changes no dot; only the ones in view get a marker.)
+  // (A building has its square pin from LONE_PIN_ZOOM, room or not.)
   const lone = useMemo(
-    () => (loneOn ? clusterDoors(visible, zoom, offZoom, null, LONE_PX).filter((g) => g.length === 1) : EMPTY_LIST),
-    [loneOn, visible, zoom, offZoom],
+    () => (loneOn
+      ? [...clusterDoors(buildingItems.length ? drawable.filter((d) => !d.isBuilding) : drawable, zoom, offZoom, null, LONE_PX).filter((g) => g.length === 1), ...buildingItems.map((b) => [b])]
+      : EMPTY_LIST),
+    [loneOn, drawable, buildingItems, zoom, offZoom],
   );
   const groups = useMemo(() => {
-    if (pinsOn) return clusterDoors(visible, zoom, offZoom, viewBounds);
+    if (pinsOn) return clusterDoors(drawable, zoom, offZoom, viewBounds);
     // (The open door's pin is drawn by itself while the rest are dots.)
     return lone.filter((g) => g[0].key !== selectedKey && (!viewBounds || viewBounds.contains([g[0].lat, g[0].lng])));
-  }, [pinsOn, lone, visible, zoom, offZoom, viewBounds, selectedKey]);
+  }, [pinsOn, lone, drawable, zoom, offZoom, viewBounds, selectedKey]);
   // Below street zoom: every door a dot (the open one keeps its pin) — the
   // doors the map has whole and, on a big list, the ones answered as dots —
   // or a big list's patches further out.
   const dotDoors = useMemo(() => {
     if (pinsOn) return EMPTY_LIST;
     const pinned = lone.length ? new Set(lone.map((g) => g[0].key)) : null;
-    return visible.filter((d) => d.key !== selectedKey && !pinned?.has(d.key));
-  }, [pinsOn, lone, visible, selectedKey]);
+    return drawable.filter((d) => d.key !== selectedKey && !pinned?.has(d.key));
+  }, [pinsOn, lone, drawable, selectedKey]);
   const dotItems = useMemo(() => (leanShown.length ? [...dotDoors, ...leanShown] : dotDoors), [dotDoors, leanShown]);
   useEffect(() => {
     const layers = layersRef.current;
@@ -2296,13 +2413,13 @@ export default function MapPage() {
     const layers = layersRef.current;
     if (!layers) return;
     layers.chosen.clearLayers();
-    if (pinsOn || !selectedDoor) return;
+    if (pinsOn || !selectedDoor || inBuilding.has(selectedDoor.key)) return;
     L.marker([selectedDoor.lat, selectedDoor.lng], {
       icon: pinIcon(selectedDoor, true, signOk),
       title: `${doorTitle(selectedDoor)} — ${selectedDoor.persons.map((p) => personTitle(scale, p)).join(', ')}`,
       zIndexOffset: 1000,
     }).on('click', () => onPinClickRef.current?.(selectedDoor)).addTo(layers.chosen);
-  }, [pinsOn, selectedDoor, signOk, scale]);
+  }, [pinsOn, selectedDoor, signOk, scale, inBuilding]);
   const pulledKey = useMemo(
     () => (selectedKey && groups.some((g) => g.length > 1 && g.some((d) => d.key === selectedKey)) ? selectedKey : null),
     [groups, selectedKey],
@@ -2325,15 +2442,32 @@ export default function MapPage() {
       marker.addTo(layers.doors);
       markersRef.current.set(door.key, marker);
     };
+    // A building: one square, whatever its size (its sheet lists the units).
+    const addSquare = (b) => {
+      const label = `${b.address}, building, ${plural(b.shown, 'unit', 'units')}`;
+      const marker = L.marker([b.lat, b.lng], {
+        icon: buildingIcon(b, b.key === bldSelectedKey),
+        title: label,
+        alt: label,
+        riseOnHover: true,
+        zIndexOffset: 300,
+      });
+      marker.on('click', () => onPinClickRef.current?.(b));
+      marker.addTo(layers.doors);
+      markersRef.current.set(b.key, marker);
+    };
     for (const group of groups) {
       const rest = pulledKey ? group.filter((d) => d.key !== pulledKey) : group;
       if (rest.length !== group.length) addPin(group.find((d) => d.key === pulledKey));
-      if (rest.length === 1) addPin(rest[0]);
+      if (rest.length === 1 && rest[0].isBuilding) addSquare(rest[0]);
+      else if (rest.length === 1) addPin(rest[0]);
       else if (rest.length > 1) {
         const seed = rest[0];
+        // A bubble counts doors: a building in it counts its shown units.
+        const flat = rest.some((d) => d.isBuilding) ? rest.flatMap((d) => (d.isBuilding ? d.shownDoors : [d])) : rest;
         L.marker([seed.lat, seed.lng], {
-          icon: clusterIcon(rest, seed.offset),
-          title: `${plural(rest.length, 'door', 'doors')} — tap to zoom in`,
+          icon: clusterIcon(flat, seed.offset),
+          title: `${plural(flat.length, 'door', 'doors')} — tap to zoom in`,
           riseOnHover: true,
           zIndexOffset: 200,
         })
@@ -2352,7 +2486,7 @@ export default function MapPage() {
           .addTo(layers.signs);
       }
     }
-  }, [groups, pulledKey, orphanSigns, filter, scale, signOk, zoom]);
+  }, [groups, pulledKey, orphanSigns, filter, scale, signOk, zoom, bldSelectedKey]);
 
   // Highlight the selected pin without rebuilding every marker.
   useEffect(() => {
@@ -2370,12 +2504,13 @@ export default function MapPage() {
   }, [selectedKey, groups, pulledKey]);
 
   const naming = mode === 'draw' && draft.naming;
-  const turfSheetOpen = Boolean(selectedTurf && !mode && !pickerOpen && !addAt && !selectedDoor);
-  const signSheetOpen = Boolean(signSel && !mode && !pickerOpen && !addAt && !selectedDoor && !turfSheetOpen);
+  const bldOpen = Boolean(buildingParam && !mode && !pickerOpen && !addAt);
+  const turfSheetOpen = Boolean(selectedTurf && !mode && !pickerOpen && !addAt && !selectedDoor && !bldOpen);
+  const signSheetOpen = Boolean(signSel && !mode && !pickerOpen && !addAt && !selectedDoor && !turfSheetOpen && !bldOpen);
   // The check sits over a scrim, like the Show sheet it opens from: nothing
   // else opens under it, and a tap beside it closes it.
   const checkSheetOpen = Boolean(checkOpen && mayCheck && !mode);
-  const hasSheet = Boolean(pickerOpen || addAt || mode === 'add' || naming || (selectedDoor && !mode) || turfSheetOpen || signSheetOpen || checkSheetOpen);
+  const hasSheet = Boolean(pickerOpen || addAt || mode === 'add' || naming || (selectedDoor && !mode) || bldOpen || turfSheetOpen || signSheetOpen || checkSheetOpen);
   // What only this page knows, for the check: its build, the street map in
   // use and whether its tiles came, the map's size on screen.
   const lookLabel = [...looks, ...views].find((v) => v.key === view)?.label || view;
@@ -2856,7 +2991,51 @@ export default function MapPage() {
         </div>
       )}
 
-      {selectedDoor && !pickerOpen && !addAt && !mode && (
+      {bldOpen && (
+        <BuildingSheet
+          key={buildingParam}
+          bld={bld}
+          hidden={Boolean(personParam && selectedDoor)}
+          filterLabel={filter === 'all' ? null : labelOf(filter)}
+          onOpen={openUnit}
+          onClose={() => select(null)}
+        />
+      )}
+      {bldOpen && personParam && selectedDoor && (() => {
+        const ready = bld?.status === 'ready';
+        const row = ready ? bld.rows.find((r) => r.doors.some((d) => rowDoorKey(d) === selectedDoor.key)) : null;
+        const next = ready ? nextUnit(bld, selectedDoor.key) : null;
+        return (
+          <div className="map-sheet">
+            <DoorCard
+              key={selectedDoor.key}
+              door={selectedDoor}
+              selectedId={personParam}
+              onSelect={(id) => setParamsRef.current({ building: buildingParam, person: id }, { replace: true })}
+              onClose={() => select(null)}
+              toast={toast}
+              me={me}
+              canCreate={canCreate}
+              canAddHere={canCreate || Boolean(mineKeys?.has(selectedDoor.key))}
+              allowGoogle={isGoogleLook(tiles?.url)}
+              building={{
+                label: ready ? unitLine(bld, row) : doorTitle(selectedDoor),
+                onBack: backToBuilding,
+                onNext: () => (next ? openUnit(next) : backToBuilding()),
+                nextLabel: next ? `Next unit · ${next.unit || '—'}` : null,
+                // A knock sent (not queued: the outbox has those) counts
+                // on the sheet at once, before the building is read again.
+                onLogged: (person, via, outcome, r) => {
+                  if (via !== 'door' || r?.queued) return;
+                  setSentHere((m) => ({ ...m, [person.id]: { outcome, at: new Date().toISOString(), queued: false } }));
+                },
+              }}
+            />
+          </div>
+        );
+      })()}
+
+      {selectedDoor && !pickerOpen && !addAt && !mode && !buildingParam && (
         <div className="map-sheet">
           <DoorCard
             key={selectedDoor.key}

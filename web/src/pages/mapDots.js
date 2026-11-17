@@ -13,9 +13,21 @@
 // layer takes taps itself (a canvas tile can't tell what was hit): the map
 // asks nearest() / cellAt() where it was tapped.
 import L from 'leaflet';
+import { BUILDING_MIN } from '@starbase/shared/buildings';
 import { MARK, css, cellFill, CELL_ALPHA, dotRadius, ringedAt } from './mapView.js';
 
 const ORDER = ['unrated', 'undecided', 'opposed', 'support']; // drawn last = on top
+
+// A building (shared/buildings.js): a square, not a dot. Either an item the
+// map grouped from the doors it holds ({ isBuilding, shown }) or a busy
+// view's dot whose spot has BUILDING_MIN or more units at one address (u).
+export const isBuildingDot = (d) => Boolean(d?.isBuilding || d?.u >= BUILDING_MIN);
+const buildingCount = (d) => (d.isBuilding ? d.shown : d.u);
+export const countLabel = (n) => (n > 999 ? '999+' : Number(n).toLocaleString('en-CA'));
+// The page's own paper and ink (light or dark), read when a tile is drawn.
+const themeColor = (name, fallback) => {
+  try { return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback; } catch { return fallback; }
+};
 
 // Shared by both layers: items with a latlng, bucketed by the tile they fall
 // in at each zoom (built once per zoom, on first draw), drawn per tile.
@@ -106,10 +118,13 @@ export const DotLayer = BucketLayer.extend({
     const ring = this._imagery || ringedAt(z);
     const at = (d) => [d._p[z].x - ox, d._p[z].y - oy];
     const reach = r0 + 12; // a dot, its ring, its flag
-    const shown = doors.filter((d) => {
+    const all = doors.filter((d) => {
       const [x, y] = at(d);
-      return x > -reach && x < size + reach && y > -reach && y < size + reach;
+      return x > -reach - 20 && x < size + reach + 20 && y > -reach && y < size + reach;
     });
+    // Buildings are drawn last, as squares (below); never in a band colour.
+    const squares = all.filter(isBuildingDot);
+    const shown = squares.length ? all.filter((d) => !isBuildingDot(d)) : all;
     for (const band of ORDER) {
       ctx.fillStyle = css(band === 'unrated' ? MARK.unrated[theme] : MARK[band]);
       for (const d of shown) {
@@ -134,6 +149,7 @@ export const DotLayer = BucketLayer.extend({
         }
       }
     }
+    if (squares.length) this._squares(ctx, squares, z, at, r0);
     if (z < 16) return;
     if (this._flagged) {
       ctx.lineWidth = 1.2;
@@ -156,6 +172,38 @@ export const DotLayer = BucketLayer.extend({
       if (!(n >= 2)) continue;
       ctx.fillStyle = d.band === 'undecided' ? '#161a2e' : '#ffffff';
       ctx.fillText(n > 9 ? '9+' : String(n), at(d)[0], at(d)[1] + 0.5);
+    }
+  },
+});
+
+// Buildings: a rounded square of the dot's size class, paper with an ink
+// edge, on top of the dots; from z16 it carries its count (to 999, then
+// "999+"), and grows to fit it.
+DotLayer.include({
+  _squares(ctx, items, z, at, r0) {
+    const paper = themeColor('--paper-0', 'white');
+    const ink = themeColor('--ink', 'black');
+    const labelled = z >= 16;
+    ctx.font = '700 10px Inter, system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (const d of items) {
+      const [x, y] = at(d);
+      const text = labelled ? countLabel(buildingCount(d)) : '';
+      const h = Math.max(r0 * 2 + 3, labelled ? 16 : 0);
+      const w = Math.max(h, text ? ctx.measureText(text).width + 8 : 0);
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(x - w / 2, y - h / 2, w, h, 3);
+      else ctx.rect(x - w / 2, y - h / 2, w, h);
+      ctx.fillStyle = paper;
+      ctx.fill();
+      ctx.strokeStyle = ink;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      if (text) {
+        ctx.fillStyle = ink;
+        ctx.fillText(text, x, y + 0.5);
+      }
     }
   },
 });
@@ -194,7 +242,8 @@ export const DensityLayer = BucketLayer.extend({
   },
 });
 
-// The door nearest a tap, within reach px on screen; null if none.
+// The door nearest a tap, within reach px on screen; null if none (a
+// building before a plain door at the same point).
 export function nearest(map, items, latlng, reach) {
   const at = map.latLngToContainerPoint(latlng);
   const size = map.getSize();
@@ -203,7 +252,8 @@ export function nearest(map, items, latlng, reach) {
   for (const it of items) {
     const p = map.latLngToContainerPoint([it.lat, it.lng]);
     if (p.x < -reach || p.y < -reach || p.x > size.x + reach || p.y > size.y + reach) continue;
-    const d = (p.x - at.x) ** 2 + (p.y - at.y) ** 2;
+    // A building wins over a plain door at (about) the same point.
+    const d = (p.x - at.x) ** 2 + (p.y - at.y) ** 2 - (isBuildingDot(it) ? 2 : 0);
     if (d < bestD) { bestD = d; best = it; }
   }
   return best;

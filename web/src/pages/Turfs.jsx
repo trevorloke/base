@@ -44,6 +44,7 @@ import { IKnowThem, KnowMeChip } from '../components/RelationshipsBits.jsx';
 import { doorState, inPass } from '@starbase/shared/passes';
 import { noCalls } from '@starbase/shared/canvass';
 import { PassChip, TryAgainChip, WalkShow, overlayPass, waitingTries } from '../components/PassBits.jsx';
+import { nextDoor } from '@starbase/shared/buildings';
 import { VotedChip, VotedRow, pendingVoted } from '../components/Voted.jsx';
 import RequestAsk from '../components/RequestAsk.jsx';
 import './turfs.css';
@@ -107,6 +108,9 @@ function dropCache(key) {
 }
 // The walk lists kept on this phone for the signed-in user, newest first:
 // [{ id, name, at }]. The map (and Today) offer them when there's no signal.
+// One kept walk list ({ data, at }), or undefined: the building sheet builds
+// a building from it when there's no signal.
+export const keptWalkList = (me, id) => readCache(cacheKey(me, `walk:${id}`));
 export function cachedWalkLists(me) {
   const base = cacheKey(me, 'walk:');
   if (!base) return [];
@@ -511,17 +515,8 @@ function WalkList({ id }) {
   // way round while the list is filtered to Try again: those are the doors
   // being worked). Without a pass every door is open or done, so the order
   // is what it always was.
-  const pickNext = (from, list = doors) => {
-    const n = list.length;
-    for (const want of (show === 'again' ? ['again', 'open'] : ['open', 'again'])) {
-      for (let k = 1; k <= n; k += 1) {
-        const i = (from + k) % n;
-        if (i === from && from >= 0) continue;
-        if (list[i].state === want) return i;
-      }
-    }
-    return -1;
-  };
+  // (One rule with the building's Next unit: shared/buildings.js nextDoor.)
+  const pickNext = (from, list = doors) => nextDoor(list, from, { prefer: show === 'again' ? 'again' : 'open' });
   const nextIdx = pickNext(-1);
   // Where the button goes: with no door open, the first one not knocked;
   // with one open, the first not-knocked door after it (wrapping round). At
