@@ -206,7 +206,10 @@ export const actions = {
     // advertising in it, and the budget is a campaign expense — a manager's.
     let langWas = null;
     if (input.languages !== undefined) {
-      langWas = sectionOf('languages', parseJ((await tx.query('select languages from site_settings where workspace_id = $1', [ws])).rows[0]?.languages, {}));
+      langWas = sectionOf('languages', parseJ((await tx.query('select languages from site_settings where workspace_id = $1 for update', [ws])).rows[0]?.languages, {}));
+      // Only what the save names changes: a name a translator kept (or
+      // anything else) since the screen was read stays as it is now.
+      if (input.languages && typeof input.languages === 'object' && !Array.isArray(input.languages)) input.languages = { ...langWas, ...input.languages };
       const next = SECTIONS.languages.safeParse(input.languages);
       if (next.success && ctx.role !== 'manager') {
         const same = (k) => JSON.stringify(next.data[k]) === JSON.stringify(langWas[k]);

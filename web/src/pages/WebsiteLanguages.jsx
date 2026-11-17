@@ -53,8 +53,9 @@ const countsLine = (c) => (c ? [
 ].filter(Boolean).join(' · ') : 'Not turned on');
 const errorWords = (e) => (e === 'monthly-limit' ? 'This month’s character limit is reached — the rest waits for next month or a higher limit' : e);
 
-// The settings the manager's switches save (the whole section, as it is).
-const saveLanguages = (settings, patch) => action('site.settings.save', { languages: { ...settings, ...patch } });
+// The settings the manager's switches save: only what changed, so a name a
+// translator kept meanwhile is never put back as this screen last read it.
+const saveLanguages = (settings, patch) => action('site.settings.save', { languages: patch });
 
 function KeyNote({ d, manager }) {
   if (d.key) return null;

@@ -221,6 +221,16 @@ test('names: kept as written from the screen; one taken off', async () => {
   assert.ok(!r.names.possible.includes('Pat Example'));
   ok(await vol.client.action('site.names.keep', { name: 'Pat Example', keep: false }));
   assert.ok(!ok(await mgr.get('/api/site/languages')).names.typed.includes('Pat Example'));
+  // A manager's switch saves only what it changes: a name a translator kept
+  // meanwhile stays kept.
+  ok(await vol.client.action('site.names.keep', { name: 'Jas Example', keep: true }));
+  ok(await mgr.action('site.settings.save', { languages: { oldPosts: true } }));
+  const after = ok(await mgr.get('/api/site/languages'));
+  assert.ok(after.names.typed.includes('Jas Example'), 'kept');
+  assert.deepEqual(after.settings.on, ['pa', 'zh-Hans', 'zh-Hant'], 'the languages on stay on');
+  assert.equal(after.settings.oldPosts, true);
+  ok(await mgr.action('site.settings.save', { languages: { oldPosts: false } }));
+  ok(await vol.client.action('site.names.keep', { name: 'Jas Example', keep: false }));
 });
 
 test('a petition’s statement: a manager checks the machine’s words; anyone else may not', async () => {
