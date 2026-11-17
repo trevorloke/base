@@ -100,6 +100,8 @@ const placeInput = z.object({
   note: text(200).optional(),
   closed: z.boolean().optional(),
   closed_note: text(200).optional(),
+  // The pin came from the desk's address lookup (POST /site/guide/place/lookup), not a hand.
+  looked_up: z.boolean().optional(),
 }).refine((v) => (v.lat == null) === (v.lng == null), 'A pin is a latitude and a longitude');
 
 const daysProblem = (days) => {
@@ -282,8 +284,8 @@ export const actions = {
   }),
 
   'site.guide.place.save': guideAction(placeInput, async (tx, ctx, input, emit, g) => {
-    const { closed, ...p } = input;
-    const out = await writePlace(tx, ctx, emit, g, { ...p, closed });
+    const { closed, looked_up: lookedUp, ...p } = input;
+    const out = await writePlace(tx, ctx, emit, g, { ...p, closed }, { pin: lookedUp && p.lat != null ? 'lookup' : undefined });
     if (g.status === 'not_out') await tx.query("update vote_guide set status = 'draft' where workspace_id = $1", [ctx.workspaceId]);
     return { place: { id: out.id }, created: out.created, adopted: out.adopted };
   }),

@@ -8,6 +8,9 @@
 //   POST /site/guide/import/preview   the Website area: { text } → the rows
 //        with their status and pins, and a token the save takes (a read:
 //        the addresses are looked up here, outside any transaction)
+//   POST /site/guide/place/lookup     the Website area: { address, city }
+//        → { lat, lng } | { none }: a typed place's pin, looked up before
+//        its save (the same lookup and fence as the import)
 import { Hono } from 'hono';
 import { createHash } from 'node:crypto';
 import { now } from '../../lib/clock.js';
@@ -148,6 +151,16 @@ const lookUp = async (address, city, deadline) => {
   if (!inFence(Number(r.lat), Number(r.lng))) return { none: 'Looked up outside the campaign’s area' };
   return { lat: Number(r.lat), lng: Number(r.lng) };
 };
+
+api.post('/site/guide/place/lookup', async (c) => {
+  let body;
+  try { body = await c.req.json(); } catch { return c.json({ error: 'Send an address' }, 400); }
+  const address = String(body?.address ?? '').trim().slice(0, 200);
+  const city = String(body?.city ?? '').trim().slice(0, 80);
+  if (!address) return c.json({ error: 'Add its address' }, 400);
+  if (lookupOff()) return c.json({ none: 'The address lookup is off' });
+  return c.json(await lookUp(address, city, Date.now() + LOOKUP_MS));
+});
 
 const FIELDS = ['name', 'address', 'city', 'days', 'accessible', 'curbside', 'area', 'note'];
 const FIELD_WORDS = { name: 'name', address: 'address', city: 'city', days: 'days', accessible: 'accessible', curbside: 'curbside', area: 'area', note: 'note' };

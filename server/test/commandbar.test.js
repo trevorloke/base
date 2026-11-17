@@ -278,7 +278,7 @@ test('Website languages: found by “languages”, “translate”, “punjabi�
 // HOME's search meets VG's Website → Voter guide: the words a person types
 // on the day the City's notice is out find it, behind the Website area.
 test('Voter guide: found by “voter guide”, “polls”, “ballot” and “where to vote”, behind the Website', () => {
-  const words = ['voter guide', 'polls', 'ballot', 'where to vote', 'voting places'];
+  const words = ['voter guide', 'polls', 'ballot', 'where to vote', 'voting places', 'polling place', 'polling station'];
   const manager = commandsFor({ role: 'manager', areas: [] }, NAV).screens;
   for (const w of words) assert.equal(rank(manager, w)[0]?.to, '/website/guide', w);
   const builder = commandsFor({ role: 'staff', areas: ['people', 'site', 'site_words'] }, NAV).screens;

@@ -115,6 +115,9 @@
 .wg-preview tr[data-status='Problem'] td:first-child { color: var(--danger); font-weight: 600; }
 .wg-confirm { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; padding: var(--s-3); border-radius: var(--r-card); background: var(--paper-1); border: 1px solid var(--rule-2); }
 .wg-confirm p { margin: 0; font-size: 14px; flex: 1 1 240px; }
+.wg-confirm .wg-confirm__line { flex-basis: 100%; }
+.wg-warn { color: var(--warn); }
+.btn.wg-tap { min-height: var(--ctl); }
 .wg-snippet { width: 100%; min-height: 96px; font-family: var(--font-mono); font-size: 12px; }
 .wg-names { display: flex; flex-wrap: wrap; gap: var(--s-2); }
 .wg-contest { display: grid; gap: var(--s-2); padding: var(--s-3); border: 1px solid var(--rule-2); border-radius: var(--r-card); }
@@ -124,6 +127,8 @@
 .wg-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
 @media (max-width: 640px) {
+  /* Links on the desk's phone view are 48 px to tap. */
+  .wg-checks a, .wg-page .btn-link { display: inline-flex; align-items: center; min-height: var(--ctl); }
   .wg-day { grid-template-columns: 1fr 1fr; }
   .wg-grid { grid-template-columns: 1fr; }
   .wg-table { display: none; }

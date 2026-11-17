@@ -18,6 +18,7 @@ import { Toast, WebsiteTabs, useToast } from '../components/site/Bits.jsx';
 import { GUIDE_STATE, useSiteGuide } from '../components/site/useSiteGuide.js';
 import { DEFAULT_TILES } from '../components/tiles.js';
 import './shifts.css';
+import './schedule.css'; // the pin map's box (.sch-map__box)
 import '../editor.css';
 import './website.css';
 import './surveys.css'; // the Closed today switch (.sv-switch)
@@ -158,7 +159,22 @@ function PlaceEditor({ p, d, run, busy, online, onClose, toast }) {
       accessible: fromTri(f.accessible), curbside: fromTri(f.curbside), closed: f.closed, closed_note: f.closed_note,
       ...(f.pinMoved && f.pin ? { lat: f.pin.lat, lng: f.pin.lng } : {}),
     };
-    try { await run('site.guide.place.save', input); toast(p ? 'Saved' : 'Place added'); onClose(); } catch (e) { setErr(e.message); }
+    // A new or moved address with no hand pin is looked up first (outside
+    // the save, as the import does), so a typed place lands on the map.
+    const moved = !p || p.address !== f.address || (p.city || '') !== f.city;
+    let missed = '';
+    if (!f.pinMoved && (moved || !f.pin) && f.address.trim()) {
+      try {
+        const got = await apiPost('/site/guide/place/lookup', { address: f.address, city: f.city });
+        if (Number.isFinite(got?.lat)) Object.assign(input, { lat: got.lat, lng: got.lng, looked_up: true });
+        else missed = got?.none || 'Address not found';
+      } catch { missed = 'The address lookup didn’t answer'; }
+    }
+    try {
+      await run('site.guide.place.save', input);
+      toast(`${p ? 'Saved' : 'Place added'}${missed && input.lat == null && !f.pin ? ` — not on the map (${missed}): put the pin by hand` : ''}`);
+      onClose();
+    } catch (e) { setErr(e.message); }
   };
   const remove = async () => {
     setErr(null);
@@ -211,7 +227,7 @@ function PlaceEditor({ p, d, run, busy, online, onClose, toast }) {
       </div>
       {mapOpen && (
         <Suspense fallback={<p className="wg-line">Loading…</p>}>
-          {tiles ? <PlaceMap tiles={tiles} around={f.pin ? [[f.pin.lat, f.pin.lng]] : around} point={f.pin} onPoint={(pt) => set({ pin: pt, pinMoved: true })} /> : <p className="wg-line">Loading…</p>}
+          {tiles ? <PlaceMap label="Map — tap where the voting place is" tiles={tiles} around={f.pin ? [[f.pin.lat, f.pin.lng]] : around} point={f.pin} onPoint={(pt) => set({ pin: pt, pinMoved: true })} /> : <p className="wg-line">Loading…</p>}
         </Suspense>
       )}
       {err && <p className="wg-err" role="alert">{err}</p>}
@@ -279,7 +295,7 @@ function ImportSheet({ d, run, busy, online, onClose, toast, live }) {
                 <tr key={i} data-status={r.status}>
                   <td>{r.status}{r.status !== 'Problem' && !r.on_map ? ' · Not on the map' : ''}</td>
                   <td>{r.name}</td><td>{r.address}</td>
-                  <td>{arr(r.days).map((x) => dayWords(x).replace(/^\w+, /, '')).join(', ')}</td>
+                  <td>{r.status === 'Problem' ? '' : arr(r.days).map((x) => dayWords(x).replace(/^\w+, /, '')).join(', ')}</td>
                   <td>{[r.reason, r.changes?.length ? `Changed: ${r.changes.join(', ')}` : ''].filter(Boolean).join(' · ')}</td>
                 </tr>
               ))}
@@ -339,13 +355,16 @@ function PlacesCard({ d, run, busy, online, toast, live }) {
   return (
     <section className="card wg-card" id="wg-places" aria-labelledby="wg-places-h">
       <h2 id="wg-places-h">Voting places · {num(places.length)}</h2>
+      {places.some((p) => p.lat == null) && (
+        <p className="wg-line wg-warn" role="note">{(() => { const n = places.filter((p) => p.lat == null).length; return `${num(n)} ${n === 1 ? 'place isn’t' : 'places aren’t'} on the map — canvassers won’t see ${n === 1 ? 'it' : 'them'} as nearest. Open ${n === 1 ? 'it' : 'each'} and put the pin.`; })()}</p>
+      )}
       <fieldset className="wg-radios">
         <legend>Can voters vote at any voting place?</legend>
         <label className="wg-radio"><input type="radio" name="wg-any" checked={d.guide.vote_anywhere === true} disabled={busy || !online} onChange={() => anywhere(true)} /><span>Yes, at any voting place</span></label>
         <label className="wg-radio"><input type="radio" name="wg-any" checked={d.guide.vote_anywhere === false} disabled={busy || !online} onChange={() => anywhere(false)} /><span>No, at an assigned place</span></label>
       </fieldset>
       {d.gotv_only > 0 && (
-        <p className="wg-line">In GOTV, not in the guide: {num(d.gotv_only)} · <button type="button" className="btn-link" disabled={busy || !online} onClick={addBack}>Add</button></p>
+        <p className="wg-line">In GOTV, not in the guide: {num(d.gotv_only)} · <button type="button" className="btn btn-quiet wg-tap" disabled={busy || !online} onClick={addBack}>Add</button></p>
       )}
       <div className="wg-row">
         <label className="wg-sr" htmlFor="wg-psearch">Search places</label>
@@ -377,7 +396,7 @@ function PlacesCard({ d, run, busy, online, toast, live }) {
             {shown.map((p) => (open === p.id && narrow ? <li key={p.id}>{editor(p)}</li> : (
               <li key={p.id}>
                 <button type="button" className="wg-rowbtn" onClick={() => setOpen(p.id)}>
-                  <span className="wg-name">{p.name}{p.closed ? ' · Closed today' : ''}</span>
+                  <span className="wg-name">{p.name}{p.closed && <> <span className="chip chip-danger">Closed today</span></>}</span>
                   <span className="wg-sub">{p.address} · {placeDaysWords(p, days)}{p.lat == null ? ' · Not on the map' : ''}</span>
                 </button>
               </li>
@@ -579,7 +598,7 @@ function MoreCard({ d, run, busy, online, manager, toast }) {
 
         <div className="wg-row">
           <Link className="btn btn-quiet" to="/vote-info?draft=1">See it as a canvasser</Link>
-          <span className="wg-line">Asked to be told: {num(d.asked)} · <Link to="/people?web=guide">See them</Link></span>
+          <span className="wg-line">Asked to be told: {num(d.asked)} · <Link className="btn btn-quiet wg-tap" to="/people?web=guide">See them</Link></span>
         </div>
 
         {manager && (
@@ -607,7 +626,14 @@ export default function WebsiteGuide() {
   const [gotvDays, setGotvDays] = useState(null);
   const [pubErr, setPubErr] = useState('');
   const [adding, setAdding] = useState(false);
+  const [goTo, setGoTo] = useState(null);
   const d = q.data;
+  // A checklist line on an empty guide opens the cards, then goes to its own.
+  useEffect(() => {
+    if (!goTo) return;
+    document.querySelector(goTo)?.scrollIntoView({ block: 'start' });
+    setGoTo(null);
+  }, [goTo, adding]);
 
   const head = (state) => (
     <div className="wg-head">
@@ -627,7 +653,7 @@ export default function WebsiteGuide() {
         {head(null)}
         <WebsiteTabs />
         {noSignal(q) ? <NoSignal /> : q.isError
-          ? <p className="wg-err" role="alert">Unavailable — <button type="button" className="btn-link" onClick={() => q.refetch()}>Try again</button></p>
+          ? <p className="wg-err" role="alert">Unavailable — <button type="button" className="btn btn-quiet wg-tap" onClick={() => q.refetch()}>Try again</button></p>
           : <p className="muted">Loading…</p>}
       </div>
     );
@@ -654,7 +680,7 @@ export default function WebsiteGuide() {
       {publishing && (
         <div className="wg-confirm" role="group" aria-label="Publish">
           <p>Publish the voter guide?</p>
-          <label className="wg-check"><input type="checkbox" checked={useGotv} onChange={(e) => setGotvDays(e.target.checked)} /><span>Also use these days for GOTV mode</span></label>
+          <label className="wg-check wg-confirm__line"><input type="checkbox" checked={useGotv} onChange={(e) => setGotvDays(e.target.checked)} /><span>Also use these days for GOTV mode</span></label>
           <button type="button" className="btn" disabled={busy || !online} onClick={publish}>Yes</button>
           <button type="button" className="btn btn-quiet" onClick={() => setPublishing(false)}>No</button>
         </div>
@@ -677,7 +703,7 @@ export default function WebsiteGuide() {
                 <span className="wg-tick" aria-hidden="true">{c.done ? '✓' : '○'}</span>
                 {c.done ? <span>{c.words}<span className="ws-sr"> — done</span></span>
                   : c.key === 'authorized' ? <Link to="/website/settings#org">{c.words}</Link>
-                    : <a href={FIX[c.key] || '#'}>{c.words}</a>}
+                    : <a href={FIX[c.key] || '#'} onClick={(e) => { if (empty) { e.preventDefault(); setAdding(true); setGoTo(FIX[c.key] || null); } }}>{c.words}</a>}
               </li>
             ))}
           </ul>
@@ -686,7 +712,7 @@ export default function WebsiteGuide() {
       )}
 
       {(!empty || adding) && <DaysCard d={d} run={run} busy={busy} online={online} adding={adding} onAdded={() => setAdding(false)} />}
-      {!empty && (
+      {(!empty || adding) && (
         <>
           <PlacesCard d={d} run={run} busy={busy} online={online} toast={say} live={live} />
           <BallotCard d={d} run={run} busy={busy} online={online} />

@@ -250,7 +250,9 @@ export const checklist = (g, authorization, now) => {
     checkBallot: !g.contests.length || Boolean(g.checked?.ballot?.on),
     checkRules: !hasRules || Boolean(g.checked?.rules?.on),
   };
-  return CHECKS.filter(([k]) => (k === 'checkBallot' ? g.contests.length > 0 : k === 'checkRules' ? hasRules : true))
+  // "Every voting day has passed" only once there are days to have passed.
+  const shown = { checkBallot: g.contests.length > 0, checkRules: hasRules, future: g.days.length > 0 };
+  return CHECKS.filter(([k]) => shown[k] ?? true)
     .map(([key, words]) => ({ key, words, done: done[key] }));
 };
 

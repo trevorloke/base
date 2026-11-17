@@ -224,6 +224,21 @@ test('import: preview statuses, the fence, weak answers, a stale token, replace 
   process.env.GEOCODER = 'bc';
 });
 
+test('a typed place: the desk looks its address up first (a read, fenced), then saves the pin as looked up; a volunteer is refused', async () => {
+  const hit = ok(await staff.post('/api/site/guide/place/lookup', { address: '410 Example Ave', city: '' }));
+  assert.ok(Number.isFinite(hit.lat) && Number.isFinite(hit.lng), JSON.stringify(hit));
+  assert.equal(ok(await staff.post('/api/site/guide/place/lookup', { address: '1 Nowhere Rd' })).none, 'Address not found');
+  assert.equal(ok(await staff.post('/api/site/guide/place/lookup', { address: '1 Faraway Rd' })).none, 'Looked up outside the campaign’s area');
+  assert.equal((await vol.post('/api/site/guide/place/lookup', { address: '410 Example Ave' })).status, 403);
+  const calls = lookups.length;
+  const saved = ok(await staff.action('site.guide.place.save', place('Example Typed Hall', '410 Example Ave', { lat: hit.lat, lng: hit.lng, looked_up: true })));
+  assert.equal(lookups.length, calls, 'nothing looked up in the write');
+  const row = (await db.query('select i.pin, p.lat from vote_place_info i join places p on p.id = i.place_id where i.place_id = $1', [saved.place.id])).rows[0];
+  assert.equal(row.pin, 'lookup');
+  assert.ok(row.lat != null);
+  ok(await mgr.action('site.guide.place.delete', { id: saved.place.id }));
+});
+
 test('a published place edited carries before and after and changed_at; closed is today only', async () => {
   const lib = (await db.query("select id from places where workspace_id = $1 and name = 'Example Library'", [ws])).rows[0];
   moveTo(A1, '10:00');
