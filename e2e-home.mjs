@@ -30,7 +30,8 @@
 //   the volunteer's field Today: one primary button, MAP's window under it;
 //   a manager opening /activity or /path-to-win in the field app lands on
 //   the desk's screen; and the same under BASE_PATH (:5421): page--wide on
-//   the desk's /, Go to's and the band's links under the base.
+//   the desk's /, Go to's, the band's and Activity's popup links under the
+//   base.
 // Stand-in tiles answer every tile host (the sandbox reaches none).
 //
 //   (cd web && npm run build) && SHOTS=/tmp/home node e2e-home.mjs   servers on :5420, :5421, :5422
@@ -490,6 +491,18 @@ try {
     await M.page.click('.today-under-band a');
     await M.page.waitForSelector('[data-testid="dashboard"]', { timeout: 10000 }).catch(() => {});
     check('under BASE_PATH: Activity › opens /imaginesurrey/desk/activity', new URL(M.page.url()).pathname === '/imaginesurrey/desk/activity', M.page.url());
+    // Activity's popups link through adminHref: a walk list's and a contact's.
+    const popLinks = [];
+    await M.page.waitForSelector('.dash-map path.leaflet-interactive', { timeout: 10000 }).catch(() => {});
+    for (const i of [0, -1]) {
+      await M.page.evaluate((i) => {
+        const all = [...document.querySelectorAll('.dash-map path.leaflet-interactive')];
+        all.at(i)?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      }, i);
+      await M.page.waitForSelector('.dash-map .leaflet-popup-content a', { timeout: 5000 }).catch(() => {});
+      popLinks.push(...await M.page.$$eval('.dash-map .leaflet-popup-content a', (els) => els.map((e) => e.getAttribute('href'))));
+    }
+    check('under BASE_PATH: Activity’s map popups link under /imaginesurrey/desk', popLinks.length > 0 && popLinks.every((h) => h.startsWith('/imaginesurrey/desk/')), popLinks.join(' '));
     await M.page.click(`.today-goto a`).catch(() => {});
     await M.go('/');
     await M.page.waitForSelector('.today-goto a', { timeout: 10000 });
