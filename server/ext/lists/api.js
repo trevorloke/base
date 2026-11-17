@@ -6,12 +6,14 @@
 // GET /lists/preview?tag=…        the counts for a filter not yet saved (People's own query keys)
 // GET /lists/tags                 the campaign's tags with how many carry each
 // GET /lists/:id                  one list: its people (?q, ?limit, ?offset, ?reach) and counts, counted now
-// GET /lists/:id/export.csv       the list as a spreadsheet
+// GET /lists/:id/export.csv       the list as a spreadsheet (a list picked by a
+//                                  Private field: a manager's only)
+// GET /lists/:id/hand-on          { refused }: may it be walked, called, sent
 // All desk (people area); volunteers are refused.
 import { Hono } from 'hono';
 import { csvResponse } from '../../lib/csv.js';
 import { cleanFilter } from '../../lib/audience.js';
-import { countsOf, keptCounts, listCounts, loadList, parseJ, peopleOf, REACHES } from './audience.js';
+import { countsOf, keptCounts, listCounts, loadList, parseJ, peopleOf, REACHES, officeOnly, PRIVATE_LIST, handOnWords } from './audience.js';
 import { listRows } from './rows.js';
 
 export const api = new Hono();
@@ -71,11 +73,22 @@ api.get('/lists/:id', async (c) => {
   return c.json({ list: listOut(list), counts: await listCounts(db, ctx, list, { fresh: true }), people, total, limit, offset });
 });
 
+// GET /lists/:id/hand-on → { refused: words | null }: whether it may be
+// walked, called or sent (a list picked by a Private field may not).
+api.get('/lists/:id/hand-on', async (c) => {
+  const ctx = c.get('ctx'); const db = c.get('db');
+  if (!DESK.includes(ctx.role)) return refuse(c);
+  const list = await loadList(db, ctx.workspaceId, c.req.param('id'));
+  if (!list) return c.json({ error: 'not found' }, 404);
+  return c.json({ refused: await handOnWords(db, ctx, list) });
+});
+
 api.get('/lists/:id/export.csv', async (c) => {
   const ctx = c.get('ctx'); const db = c.get('db');
   if (!DESK.includes(ctx.role)) return refuse(c);
   const list = await loadList(db, ctx.workspaceId, c.req.param('id'));
   if (!list) return c.json({ error: 'not found' }, 404);
+  if (await officeOnly(db, ctx, list)) return c.json({ error: PRIVATE_LIST }, 403);
   const { head, rows } = await listRows(db, ctx, list);
   return csvResponse(c, `list-${list.name}`, head, rows);
 });

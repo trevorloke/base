@@ -207,6 +207,7 @@ test('a list picked by Faith is never walked, called, sent to CallHub, emailed, 
   const filter = { field: `${F.Faith.id}:Sikh` };
   const list = ok(await mgr.action('list.create', { name: 'By faith', kind: 'filter', filter })).list;
   const outer = ok(await mgr.action('list.create', { name: 'On that list', kind: 'filter', filter: { list: list.id } })).list;
+  const plainOne = ok(await mgr.action('list.create', { name: 'Not by faith', kind: 'filter', filter: { q: 'Faith Pick' } })).list;
   const WORDS = 'This list picks people by Faith, which is private — it can’t be walked, called, sent to CallHub, emailed, texted or copied.';
   const body = `Hello from Lists ${tag}. Reply STOP to stop.`;
   said(await mgr.action('blast.send', { kind: 'eblast', subject: 'Hi', body: 'Hello there.', audience: { filter } }), 409, WORDS, 'email to the filter');
@@ -221,6 +222,18 @@ test('a list picked by Faith is never walked, called, sent to CallHub, emailed, 
   // Mailchimp: refused at the tap (when connected, before anything goes).
   const { startSync } = await import('../ext/mailchimp/push.js');
   await assert.rejects(db.transaction((tx) => startSync(tx, { workspaceId: ws }, () => {}, { list_id: list.id, audience: 'aud1' })), (e) => e.status === 409 && e.message === WORDS);
+  // Its CSV and a Sheet: a manager's only, as the People download's ?private=1.
+  const staffCsv = await csvOf(staff, `/api/lists/${list.id}/export.csv`);
+  assert.equal(staffCsv.status, 403, 'staff: no CSV of who is Sikh');
+  assert.match(staffCsv.text, /Only a manager can take out a list picked by a private field/);
+  assert.equal((await csvOf(staff, `/api/lists/${outer.id}/export.csv`)).status, 403, 'nor of a list naming it');
+  assert.equal((await csvOf(mgr, `/api/lists/${list.id}/export.csv`)).status, 200, 'a manager may');
+  assert.equal((await csvOf(staff, `/api/lists/${plainOne.id}/export.csv`)).status, 200, 'a plain list as before');
+  // The desk says it under the list picker: the same words as the refusal.
+  assert.equal(ok(await staff.get(`/api/lists/${list.id}/hand-on`)).refused, WORDS);
+  assert.equal(ok(await staff.get(`/api/lists/${plainOne.id}/hand-on`)).refused, null);
+  const { sourceOf } = await import('../ext/drive/export.js');
+  await assert.rejects(sourceOf(db, { workspaceId: ws, role: 'staff', user: { id: null } }, 'list', list.id), (e) => e.status === 403);
   // The office still counts it and filters by it.
   assert.equal(ok(await mgr.get(`/api/lists/${list.id}/counts?fresh=1`)).counts.total, 2, 'Sikh Example and Faith Pick Example');
   // A pass walks a plain list; changed to Faith afterwards → refused, or (a

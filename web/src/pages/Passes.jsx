@@ -21,7 +21,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { KINDS, WHO, TRIES_MAX, kindLabel, passLine } from '@starbase/shared/passes';
 import { action, apiGet } from '../api.js';
 import { NeedsSignalLine, NoSignal, noSignal, useOnline } from '../components/NoSignal.jsx';
-import { LOADING, Unavailable, useListNames } from '../components/AudienceBits.jsx';
+import { LOADING, Unavailable, useHandOn, useListNames } from '../components/AudienceBits.jsx';
 import './shifts.css';
 import './surveys.css';
 import './passes.css';
@@ -67,6 +67,7 @@ function StartForm({ open, busy, online, onSubmit, onCancel, list = '' }) {
   const [listId, setListId] = useState(list);
   const names = useListNames();
   const lists = names.data?.lists ?? [];
+  const refused = useHandOn(listId || null).data?.refused || null;
   const name = typed ?? suggestName(kind);
   const submit = async (e) => {
     e.preventDefault();
@@ -93,6 +94,7 @@ function StartForm({ open, busy, online, onSubmit, onCancel, list = '' }) {
           {lists.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
         </select>
         {names.isError && <span className="error" role="alert"><Unavailable onRetry={() => names.refetch()} /></span>}
+        {listId && refused && <span className="muted" role="status">{refused}</span>}
       </div>
       <Picks id={`${uid}-tries`} label="Tries" items={TRIES.map((n) => ({ code: n, label: String(n) }))} value={tries} onPick={setTries} className="pass-tries" />
       <p className="muted pass-form__note">
@@ -100,7 +102,7 @@ function StartForm({ open, busy, online, onSubmit, onCancel, list = '' }) {
       </p>
       {error && <p className="error" role="alert">{error}</p>}
       <div className="ops-actions">
-        <button type="submit" className="btn btn-primary ops-tap" disabled={busy || !online}>Start the pass</button>
+        <button type="submit" className="btn btn-primary ops-tap" disabled={busy || !online || Boolean(listId && refused)}>Start the pass</button>
         <button type="button" className="btn btn-quiet ops-tap" onClick={onCancel}>Cancel</button>
       </div>
     </form>

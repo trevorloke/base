@@ -16,7 +16,7 @@
 //                    filter, Download CSV, Save these people as they are now
 // Every number is the number, "Loading…" or "Unavailable — Try again".
 import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useOutletContext, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSettled } from '../components/useSettled.js';
 import { usePersonSearch } from '../components/usePersonSearch.js';
@@ -232,6 +232,7 @@ function Figures({ counts }) {
 
 function OneList({ id }) {
   const navigate = useNavigate();
+  const manager = (useOutletContext() ?? {}).me?.role === 'manager';
   const queryClient = useQueryClient();
   const [typed, setQ] = useState('');
   const q = useSettled(typed.trim());
@@ -279,11 +280,14 @@ function OneList({ id }) {
       <p className="ops-meta">{l.kind !== 'filter' ? 'Hand-picked: the people put on it.' : l.by_volunteer ? 'A volunteer’s saved filter: whoever matches it today, by what a volunteer may see.' : 'A saved filter: whoever matches it today.'}</p>
       <Figures counts={list.data.counts} />
       {office && (
-        <p className="muted ls-office">Stays in the office: it picks people by {office}, so it can’t be walked, called, sent to CallHub, emailed, texted or copied.</p>
+        <p className="muted ls-office">Stays in the office: it picks people by {office}, so it can’t be walked, called, sent to CallHub, emailed, texted{manager ? ' or copied' : ', copied or downloaded'}.</p>
       )}
       <Ways id={id} name={l.name} page off={Boolean(office)} />
       <div className="ops-actions ls-tools">
-        <TakeItOut csvHref={at(`/api/lists/${id}/export.csv`)} source="list" of={id} name={l.name} count={list.data.counts.total} head={LIST_HEAD} />
+        {/* Picked by a Private field: only a manager takes it out (the server refuses too). */}
+        {office && !manager
+          ? <button type="button" className="btn btn-quiet ops-tap" disabled>Download CSV</button>
+          : <TakeItOut csvHref={at(`/api/lists/${id}/export.csv`)} source="list" of={id} name={l.name} count={list.data.counts.total} head={LIST_HEAD} />}
         <fieldset className="ls-offwrap" disabled={Boolean(office)}><SendToMailchimp listId={id} /></fieldset>
         {l.kind === 'filter' && <button type="button" className="btn btn-quiet ops-tap" onClick={() => setEditing((v) => !v)}>{editing ? 'Close' : 'Edit the filter'}</button>}
         {asking ? (

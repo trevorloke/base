@@ -46,6 +46,13 @@ export const useListNames = (enabled = true) => useQuery({
   queryKey: ['lists', 'names'], queryFn: () => apiGet('/lists?counts=later'), enabled, staleTime: 15_000,
 });
 
+// A list picked by a Private field can't be walked, called or sent: its
+// refusal words (or null), said under a list picker before anyone fills in
+// the rest. The server refuses the same at the tap.
+export const useHandOn = (listId) => useQuery({
+  queryKey: ['lists', 'hand-on', listId], queryFn: () => apiGet(`/lists/${listId}/hand-on`), enabled: Boolean(listId), staleTime: 15_000,
+});
+
 // A city's lists are counted on the server one by one, each kept a minute:
 // asked for a few at a time, so thirty lists never ask thirty counts at once
 // — on a first look, or coming back once the numbers have gone stale (a

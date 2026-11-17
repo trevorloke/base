@@ -15,7 +15,7 @@ import { fmtBig } from '../components/MoneyWords.js';
 import { RatingChip, useScale } from '../components/RatingButtons.jsx';
 import { useWebDid, webChoices } from '../components/FieldCuts.jsx';
 import SendToCallHub from '../components/SendToCallHub.jsx';
-import { LOADING, Unavailable, useListCounts, useListNames } from '../components/AudienceBits.jsx';
+import { LOADING, Unavailable, useHandOn, useListCounts, useListNames } from '../components/AudienceBits.jsx';
 import './dashboard.css';
 import './shifts.css'; // the ops-* pieces: a full-height button, a row of actions, a quiet line
 import './banks.css';
@@ -170,6 +170,7 @@ function NewBank() {
   const from = picked ?? (names.isPending ? null : lists.length ? 'list' : 'hand');
   const chosen = lists.find((l) => l.id === listId) || null;
   const listCount = useListCounts(chosen ? [chosen] : []).get(chosen?.id);
+  const refused = useHandOn(from === 'list' && chosen ? chosen.id : null).data?.refused || null;
   const name = typedName ?? (from === 'list' && chosen ? chosen.name : '');
   // What they did on the website (ext/webdid): offered once it has people.
   const web = webChoices(useWebDid());
@@ -241,7 +242,8 @@ function NewBank() {
                     : listCount?.isError ? <Unavailable onRetry={listCount.refetch} /> : LOADING}
                 </p>
               )}
-              {chosen && <p className="ops-meta">Whoever leaves the list leaves the calls not made yet. Or <Link className="au-tap" to={`/calls?list=${chosen.id}&channel=phone`}>call them yourself</Link>.</p>}
+              {chosen && refused && <p className="ops-meta" role="status">{refused}</p>}
+              {chosen && !refused && <p className="ops-meta">Whoever leaves the list leaves the calls not made yet. Or <Link className="au-tap" to={`/calls?list=${chosen.id}&channel=phone`}>call them yourself</Link>.</p>}
             </div>
           )}
           {from === 'hand' && (
@@ -282,7 +284,7 @@ function NewBank() {
           placeholder={'Hi, this is ___ with the campaign. We’re calling neighbours about the election on…'} onChange={(e) => setScript(e.target.value)} />
         {error && <p className="error" role="alert">{error}</p>}
         <div className="lu-form__acts">
-          <button type="submit" className="btn btn-primary" disabled={busy || !name.trim() || !from || (from === 'list' ? !chosen || startWith === 0 : !callable.length)}>
+          <button type="submit" className="btn btn-primary" disabled={busy || !name.trim() || !from || (from === 'list' ? !chosen || startWith === 0 || Boolean(refused) : !callable.length)}>
             {startWith == null ? 'Make the bank' : `Make the bank with ${num(startWith)} ${plural(startWith, 'number')}`}
           </button>
           <Link className="btn btn-quiet" to="/banks">Cancel</Link>
