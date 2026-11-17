@@ -419,6 +419,13 @@ test('the embed: framed only by the saved addresses, its authorization line; ref
   assert.match(r.headers.get('content-security-policy'), /frame-ancestors https:\/\/news\.example\.ca;/, 'the next answer has the new list');
   r = await hit('/site/');
   assert.equal(r.headers.get('x-frame-options'), 'DENY', 'every other page still DENY');
+  const js = await hit('/site-assets/embed.js');
+  assert.equal(js.status, 200);
+  assert.ok(Buffer.byteLength(js.text) <= 1024, 'the snippet’s script is small');
+  assert.match(js.text, /basewin:height/);
+  assert.match((await hit('/site/voter-guide')).text, /voteguide\.css\?v=/, 'the guide’s own styles');
+  // Every language's app answers the guide's routes too (TR).
+  assert.equal((await hit('/site/pa/api/guide/clock')).status, 302, 'a language not offered goes to English');
 });
 
 test('clear: refused while live, then everything goes but the rules, the link and used places', async () => {

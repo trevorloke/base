@@ -203,3 +203,30 @@ test('no facts shipped: no dates, places, names or claims in the product’s own
   assert.match(sql, /vote_anywhere boolean,/, 'vote_anywhere has no default: not said yet');
   assert.match(sql, /ballot_note text not null default ''/);
 });
+
+test('the island flips from open to over at the server’s 20:00, whatever the process zone and its rules', async () => {
+  const { renderToString } = await import('react-dom/server');
+  const { createElement } = await import('react');
+  const { VoteGuide } = await import('../../shared/site/components/voteguide-island.js');
+  const lastClose = at('2027-10-16', '20:00');
+  const props = (now) => ({
+    uid: 't', title: 'How to vote', now, clockUrl: '/c', findUrl: '/f',
+    guide: { times: { ...timesAt(now), status: 'published' }, places: [placeRow('1', 49.1, -122.8)], areas: [], contests: [] },
+  });
+  const Real = Intl.DateTimeFormat;
+  process.env.TZ = 'America/Los_Angeles';
+  // A stale copy of the rules on this machine: an hour off after Nov 1, 2026.
+  Intl.DateTimeFormat = function Stale(locale, opts = {}) {
+    const real = new Real(locale, opts);
+    if (opts.timeZone === 'UTC' || !opts.timeZone) return real;
+    const shifted = new Real(locale, { ...opts, timeZone: 'Etc/GMT+8' });
+    return shifted;
+  };
+  try {
+    assert.match(renderToString(createElement(VoteGuide, props(lastClose - 1))), /Voting is open now · until 8 p\.m\./);
+    assert.match(renderToString(createElement(VoteGuide, props(lastClose))), /Voting is over\. Thank you for voting\./);
+  } finally {
+    Intl.DateTimeFormat = Real;
+    delete process.env.TZ;
+  }
+});

@@ -97,6 +97,8 @@ const TYPES = {
 };
 const serveAsset = async (c) => {
   const rel = decodeURIComponent(c.req.path.replace(/^.*?\/site-assets\//, ''));
+  // The voter guide's embed script (VG): the snippet's second line.
+  if (rel === 'embed.js') return c.body(await readFile(fromHere('../../../shared/site/embed.js')), 200, { 'Content-Type': TYPES['.js'], 'Cache-Control': 'public, max-age=3600', 'X-Content-Type-Options': 'nosniff' });
   if (rel === 'lang-rules.json') return c.body(LANG_RULES, 200, { 'Content-Type': 'application/speculationrules+json', 'Cache-Control': 'public, max-age=3600', 'X-Content-Type-Options': 'nosniff' });
   if (!rel || rel.includes('\0') || rel.split('/').some((p) => p === '..' || p.startsWith('.'))) return c.text('not found', 404);
   const ext = extname(rel).toLowerCase();

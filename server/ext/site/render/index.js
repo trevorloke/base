@@ -118,6 +118,7 @@ export function renderSite({ kind = 'page', site, page: rawPage, post, campaign,
     + (rc.site.icon ? `<link rel="icon" href="${esc(rc.img(rc.site.icon.icon))}" type="image/png"><link rel="apple-touch-icon" href="${esc(rc.img(rc.site.icon.touch))}">` : '')
     + head.fonts.map((f) => `<link rel="preload" href="${esc(f)}" as="font" type="font/woff2" crossorigin>`).join('')
     + `<link rel="stylesheet" href="${esc(assetUrl(rc.loc.assets, 'site.css'))}">`
+    + (/ class="(?:vote-banner|vg-embed)"| data-module="voterguide"/.test(body) ? `<link rel="stylesheet" href="${esc(assetUrl(rc.loc.assets, 'voteguide.css'))}">` : '')
     + `<style>${themeCss(t)}${rc.langs.offered.length ? VIEW_TRANSITION : ''}</style>`
     + hints
     + `<script type="application/ld+json">${jsonForScript(head.organization)}</script>`
