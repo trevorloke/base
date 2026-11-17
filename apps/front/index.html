@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>base.win</title>
+<meta name="description" content="base.win is one product for a campaign: its people, map, field work, money, outreach, and website in one place. Try it on the page, then book a call to get started. Pricing as low as $24/mo.">
+<style>
+  :root {
+    --paper: #f3f5f7;
+    --card: #ffffff;
+    --ink: #10233b;
+    --muted: #55667a;
+    --line: #c9d2dc;
+    --signal: #c7411f;
+    --on-signal: #ffffff;
+    --display: "Avenir Next", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --body: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #0d1a2b;
+      --card: #14253a;
+      --ink: #eef2f6;
+      --muted: #a3b2c3;
+      --line: #2a3c52;
+      --signal: #ff7a50;
+      --on-signal: #0d1a2b;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 17px;
+    line-height: 1.6;
+  }
+  .wrap { width: 100%; max-width: 1040px; margin: 0 auto; padding: 0 clamp(20px, 5vw, 56px); }
+  a { color: inherit; }
+  :focus-visible { outline: 3px solid var(--signal); outline-offset: 3px; }
+
+  header.wrap { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding-top: 24px; padding-bottom: 24px; }
+  .mark { font-family: var(--display); font-weight: 700; font-size: 22px; letter-spacing: -0.01em; text-decoration: none; }
+  .mark span { color: var(--signal); }
+  nav { display: flex; gap: clamp(12px, 3vw, 28px); align-items: center; font-size: 15px; }
+  nav a { text-decoration: none; color: var(--muted); }
+  nav a:hover { color: var(--ink); }
+
+  .btn {
+    display: inline-block; min-height: 48px; padding: 12px 22px; border-radius: 8px;
+    background: var(--signal); color: var(--on-signal); font-weight: 600; text-decoration: none;
+    border: 2px solid var(--signal);
+  }
+  .btn:hover { filter: brightness(1.08); }
+  .btn.quiet { background: transparent; color: var(--ink); border-color: var(--line); }
+  nav .btn { min-height: 40px; padding: 7px 16px; color: var(--on-signal); }
+
+  .hero.wrap { padding-top: clamp(40px, 9vw, 104px); padding-bottom: clamp(48px, 9vw, 104px); border-bottom: 1px solid var(--line); }
+  h1 {
+    font-family: var(--display); font-weight: 700; letter-spacing: -0.03em; line-height: 1.04;
+    font-size: clamp(40px, 7.4vw, 84px); margin: 0 0 24px; max-width: 13ch; text-wrap: balance;
+  }
+  .lede { font-size: clamp(18px, 2.2vw, 22px); color: var(--muted); max-width: 56ch; margin: 0 0 32px; }
+  .actions { display: flex; flex-wrap: wrap; gap: 12px; }
+
+  section.wrap { padding-top: clamp(48px, 7vw, 88px); padding-bottom: clamp(48px, 7vw, 88px); }
+  section.wrap + section.wrap { border-top: 1px solid var(--line); }
+  @media (max-width: 560px) { nav a:not(.btn) { display: none; } }
+  .eyebrow { font-family: var(--mono); font-size: 13px; color: var(--signal); margin: 0 0 12px; }
+  h2 { font-family: var(--display); font-weight: 700; letter-spacing: -0.02em; line-height: 1.12; font-size: clamp(28px, 4vw, 42px); margin: 0 0 16px; max-width: 22ch; text-wrap: balance; }
+  .intro { color: var(--muted); max-width: 60ch; margin: 0 0 36px; }
+
+  .areas { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 0 40px; }
+  .areas li { padding: 20px 0; border-top: 1px solid var(--line); }
+  .areas h3 { font-family: var(--display); font-size: 19px; margin: 0 0 4px; }
+  .areas p { margin: 0; color: var(--muted); font-size: 16px; }
+
+  .own { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 32px 56px; align-items: start; }
+  .address { font-family: var(--mono); font-size: clamp(16px, 2.4vw, 22px); background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 18px 20px; overflow-wrap: anywhere; }
+  .address b { color: var(--signal); font-weight: 500; }
+  .own p { color: var(--muted); margin: 0 0 14px; max-width: 52ch; }
+
+  .price-line { margin: 20px 0 0; color: var(--muted); font-size: 16px; }
+  .price-line b { color: var(--ink); }
+  .price { margin: 0 0 28px; font-family: var(--display); font-size: clamp(22px, 3vw, 30px); letter-spacing: -0.01em; }
+  .price span { color: var(--muted); font-family: var(--body); font-size: 17px; letter-spacing: 0; }
+  .demo { background: var(--card); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; box-shadow: 0 18px 40px -24px rgba(16, 35, 59, 0.45); }
+  .demo iframe { display: block; width: 100%; height: min(760px, 82vh); border: 0; }
+  [hidden] { display: none !important; }
+  dialog { border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--ink); padding: 28px; max-width: min(440px, calc(100vw - 32px)); }
+  dialog::backdrop { background: rgba(8, 16, 28, 0.6); }
+  dialog h2 { font-size: 26px; margin-bottom: 8px; }
+  dialog p { color: var(--muted); margin: 0 0 20px; }
+  button.btn { font: inherit; font-weight: 600; cursor: pointer; }
+  .calendar { background: #ffffff; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .calendar iframe { display: block; width: 100%; height: 720px; border: 0; }
+  .fallback { margin: 16px 0 0; color: var(--muted); font-size: 15px; }
+
+  footer.wrap { border-top: 1px solid var(--line); padding-top: 28px; padding-bottom: 40px; color: var(--muted); font-size: 14px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; }
+</style>
+</head>
+<body>
+
+<header class="wrap">
+  <a class="mark" href="/" aria-label="base.win home">base<span>.</span>win</a>
+  <nav aria-label="Main">
+    <a href="#inside">What's inside</a>
+    <a href="#yours">Your own address</a>
+    <a href="#get-started">Pricing</a>
+    <a class="btn" href="#get-started">Get started</a>
+  </nav>
+</header>
+
+<main>
+  <div class="hero wrap">
+    <h1>Run the whole campaign from one place</h1>
+    <p class="lede">base.win puts your people, map, field work, money, outreach, and website in one product. The office and the doorstep work from the same list, so nothing gets retyped and nobody gets lost between tools.</p>
+    <div class="actions">
+      <a class="btn" href="#get-started">Get started</a>
+      <a class="btn quiet" href="#try" data-needs-demo hidden>Try it now</a>
+      <a class="btn quiet" href="#inside" data-no-demo>See what's inside</a>
+    </div>
+    <p class="price-line">Pricing as low as <b>$24/mo</b>.</p>
+  </div>
+
+  <section id="try" class="wrap" data-needs-demo hidden>
+    <p class="eyebrow">Try it</p>
+    <h2>Play with the real thing</h2>
+    <p class="intro">This is base.win running with a made-up campaign. Tap around: nothing you do here touches a real list.</p>
+    <div class="demo" id="demo">
+      <iframe id="demo-frame" title="base.win, running with a demo campaign" loading="lazy"></iframe>
+    </div>
+  </section>
+
+  <section id="inside" class="wrap">
+    <p class="eyebrow">What's inside</p>
+    <h2>One list of people, and everything you do with it</h2>
+    <p class="intro">Most campaigns stitch together a voter file, a texting tool, an email tool, a donation page, and a website. base.win is built so you don't have to.</p>
+    <ul class="areas">
+      <li><h3>People</h3><p>Supporters, volunteers, and donors in one place, each with a single history of every knock, call, text, email, gift, and shift.</p></li>
+      <li><h3>Map and field</h3><p>Turfs, walk lists, and door ratings on a volunteer's phone. Knocks logged without a signal send once the phone is back online.</p></li>
+      <li><h3>Shifts</h3><p>Schedule a week by tap. Volunteers get the details by email and text, and their walk list lands on their phone.</p></li>
+      <li><h3>Donations</h3><p>One-time and monthly gifts, receipts, and contribution limits tracked for you.</p></li>
+      <li><h3>Outreach</h3><p>Email and one-to-one texting to any list, plus phone banks, with quiet hours and opt-outs respected.</p></li>
+      <li><h3>Website</h3><p>Your public site, built from sections and published from the same desk that runs everything else.</p></li>
+    </ul>
+  </section>
+
+  <section id="yours" class="wrap">
+    <p class="eyebrow">Your own address</p>
+    <h2>Your data sits on your own server</h2>
+    <div class="own">
+      <div>
+        <p>Every client gets its own server and its own database. Your list is never pooled with another campaign's.</p>
+        <p>You also get your own address on base.win, where your staff and volunteers sign in.</p>
+      </div>
+      <p class="address"><b>yourcampaign</b>.base.win</p>
+    </div>
+  </section>
+
+  <section id="get-started" class="wrap">
+    <p class="eyebrow">Get started</p>
+    <h2>Book a call and we'll set you up</h2>
+    <p class="intro">Pick a time below. On the call we'll walk through your campaign, set up your address, and plan how to bring in your list.</p>
+    <p class="price"><span>Pricing as low as</span> <b>$24/mo</b></p>
+    <div class="calendar">
+      <iframe title="Book a call with base.win" loading="lazy"
+        src="https://calendar.google.com/calendar/appointments/schedules/AcZssZ0Psx8mPWQUmDXpbDbRAWGbT1nR36o_Iyo8WVMeosrBARTVjkEYaGECcJUCwAiKjvDgDxcP5djI?gv=true"></iframe>
+    </div>
+    <p class="fallback">Calendar not loading? <a href="https://calendar.google.com/calendar/appointments/schedules/AcZssZ0Psx8mPWQUmDXpbDbRAWGbT1nR36o_Iyo8WVMeosrBARTVjkEYaGECcJUCwAiKjvDgDxcP5djI">Open the booking page</a>.</p>
+  </section>
+</main>
+
+<footer class="wrap">
+  <span>&copy; 2026 base.win</span>
+  <span>Already a client? Sign in at your own base.win address.</span>
+</footer>
+
+<dialog id="nudge" aria-labelledby="nudge-title">
+  <h2 id="nudge-title">Ready to run your own?</h2>
+  <p>Book a call and we'll set up base.win for your campaign. Pricing as low as $24/mo.</p>
+  <div class="actions">
+    <a class="btn" href="#get-started" id="nudge-go">Get started</a>
+    <button class="btn quiet" type="button" id="nudge-stay">Keep exploring</button>
+  </div>
+</dialog>
+
+<script>
+(() => {
+  // The demo: an address that allows this page to frame it, opening on a
+  // made-up campaign with no sign-in. Empty: the demo and its prompt stay off.
+  const DEMO_URL = '';
+  const PROMPT_AFTER_SECONDS = 60;
+
+  const show = (sel, on) => document.querySelectorAll(sel).forEach((el) => { el.hidden = !on; });
+  show('[data-needs-demo]', Boolean(DEMO_URL));
+  show('[data-no-demo]', !DEMO_URL);
+  if (!DEMO_URL) return;
+
+  const demo = document.getElementById('demo');
+  const frame = document.getElementById('demo-frame');
+  const nudge = document.getElementById('nudge');
+  frame.src = DEMO_URL;
+
+  const seen = () => { try { return sessionStorage.getItem('nudged') === '1'; } catch { return false; } };
+  const markSeen = () => { try { sessionStorage.setItem('nudged', '1'); } catch { /* private mode */ } };
+
+  // Seconds count once the visitor first touches the demo, and only while
+  // the tab is in front.
+  let playing = false, seconds = 0, timer = null;
+  const tick = () => {
+    if (document.hidden) return;
+    seconds += 1;
+    if (seconds < PROMPT_AFTER_SECONDS) return;
+    clearInterval(timer);
+    if (seen() || nudge.open) return;
+    markSeen();
+    nudge.showModal();
+  };
+  const start = () => {
+    if (playing || seen()) return;
+    playing = true;
+    timer = setInterval(tick, 1000);
+  };
+  demo.addEventListener('pointerenter', start);
+  demo.addEventListener('touchstart', start, { passive: true });
+  // A click or key inside the frame takes focus from this page.
+  window.addEventListener('blur', () => { if (document.activeElement === frame) start(); });
+
+  document.getElementById('nudge-stay').addEventListener('click', () => nudge.close());
+  document.getElementById('nudge-go').addEventListener('click', () => nudge.close());
+})();
+</script>
+
+</body>
+</html>
