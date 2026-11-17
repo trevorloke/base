@@ -866,6 +866,11 @@ translated: a manager approves them per language.
   on "Characters per day" (300,000) as a backstop.
 - **Without the key** no language can be turned on; a language already on
   stays on with its words, and new wording shows in English.
+- **Check it**: Settings → Services → Translation (Google): **Check** asks
+  for the languages list (5 s); **Check translation** sends one fixed
+  sentence to Punjabi and says "Names kept · Header accepted · Placeholders
+  kept". What it learns chooses how names and the key are sent from then
+  on. Press it once on staging after the key is in Render.
 - **Tests** use `server/test/fake-translate.js` through
   `GOOGLE_TRANSLATE_API_BASE`; no test calls Google.
 

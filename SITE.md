@@ -576,6 +576,24 @@ answer the 404 under a prefix.
   (`languages.index`): until then its pages say `noindex` and the
   alternates and sitemap leave it out.
 - Ladders: a website trigger may name a language (`trigger_lang`).
+- **Website → Languages** (the desk; `language-reads.js`,
+  `language-actions.js`, `web/src/pages/WebsiteLanguages.jsx`). One row
+  per language with its chip (On · Getting ready · Off · Needs approval ·
+  English changed) and counts, and the month's characters. A language:
+  **Turn on** (a manager; with the estimate of what its first translation
+  sends), the checklist while it gets ready, the sentences (To check ·
+  Suggested · Couldn't translate · Edited · All), Recent edits with Undo,
+  and the names kept as written (with possible names to keep). **Words the
+  law needs** shows each key's English and the approved words or a
+  labelled draft; a manager approves them all at once. Reads:
+  `GET /api/site/languages` and `/api/site/languages/:code/{estimate,
+  sentences,edits,legal}`. Writes: `site.translation.save` (live at once,
+  unchecked, for someone with the Website; a suggestion for someone with
+  only **Website translations**, `site_words`), `site.translation.approve`,
+  `.decline`, `.check` (never one's own words; a petition's statement
+  needs a manager), `.undo` (the Website's), `site.names.keep`,
+  `site.translate.now`. Turning a language on or off, search listing, the
+  limit and older posts are `site.settings.save`, a manager's.
 
 ## Settings (`site_settings`, `server/ext/site/shape.js`)
 
