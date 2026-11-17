@@ -8,7 +8,7 @@
 // code on the phone (shared/qr.js; works with no signal) for the public
 // guide in the voter's language, with ?near= rounded to 2 decimals (about
 // 1 km) so it never points at the house. The copy is kept on the phone.
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { nearest, nearVotingPlace, distanceWords, hoursWords, timeWords, dayWords, normWords } from '@starbase/shared/voteguide';
 import { qrSvgPath } from '@starbase/shared/qr';
@@ -138,7 +138,13 @@ export default function VoteInfo() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const draft = params.get('draft') === '1';
-  const door = location.state && typeof location.state === 'object' ? location.state : {};
+  // The door comes once, in router state, and is taken out of the history
+  // entry at once: a reload (the browser keeps history state) opens the
+  // screen without it.
+  const [door] = useState(() => (location.state && typeof location.state === 'object' ? location.state : {}));
+  useEffect(() => {
+    if (location.state) navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
+  }, [location.state, location.pathname, location.search, navigate]);
   const near = door.near && Number.isFinite(door.near.lat) && Number.isFinite(door.near.lng) ? door.near : null;
   const q = useGuide({ poll: true, draft });
   const online = useOnline();

@@ -127,3 +127,6 @@
   .wg-preview tr { display: grid; padding: var(--s-2) 0; border-bottom: 1px solid var(--rule); }
   .wg-preview td { border: 0; padding: 0; }
 }
+
+/* Shifts' place picker: the voting places' own heading, on its own line. */
+.sch-note.sch-voting-h { flex-basis: 100%; margin-top: var(--s-2); }

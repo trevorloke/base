@@ -43,10 +43,11 @@ function NotOut({ m, p, rc, level, g }) {
       thanks: { title: rc.w('form.newsletterThanks'), body: rc.w('form.newsletterThanksBody') },
       hidden: { source: 'voter-guide' },
     })} />
-    ${g?.official_url ? html`<p className="small">${(() => {
+    ${g?.official_url ? (() => {
+      // The words around the link are the <p>'s own children (no list, no keys).
       const [before, after] = rc.w('vg.official', { label: '\u0000' }).split('\u0000');
-      return html`${before}${away(rc, g.official_url, g.official_label || g.official_url)}${after || ''}`;
-    })()}</p>` : null}
+      return html`<p className="small">${before}${away(rc, g.official_url, g.official_label || g.official_url)}${after || ''}</p>`;
+    })() : null}
   </div>`;
 }
 
