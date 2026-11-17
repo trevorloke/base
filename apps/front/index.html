@@ -94,6 +94,9 @@
   .demo { background: var(--card); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; box-shadow: 0 18px 40px -24px rgba(16, 35, 59, 0.45); }
   .demo iframe { display: block; width: 100%; height: min(760px, 82vh); border: 0; }
   [hidden] { display: none !important; }
+  .trial-actions { margin: 0 0 14px; }
+  .fine { color: var(--muted); font-size: 14px; margin: 0 0 40px; max-width: 60ch; }
+  h3.talk { font-family: var(--display); font-size: 21px; margin: 0 0 16px; }
   dialog { border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--ink); padding: 28px; max-width: min(440px, calc(100vw - 32px)); }
   dialog::backdrop { background: rgba(8, 16, 28, 0.6); }
   dialog h2 { font-size: 26px; margin-bottom: 8px; }
@@ -114,7 +117,7 @@
     <a href="#inside">What's inside</a>
     <a href="#yours">Your own address</a>
     <a href="#get-started">Pricing</a>
-    <a class="btn" href="#get-started">Get started</a>
+    <a class="btn" href="#get-started" data-trial-link>Get started</a>
   </nav>
 </header>
 
@@ -123,11 +126,12 @@
     <h1>Run the whole campaign from one place</h1>
     <p class="lede">base.win puts your people, map, field work, money, outreach, and website in one product. The office and the doorstep work from the same list, so nothing gets retyped and nobody gets lost between tools.</p>
     <div class="actions">
-      <a class="btn" href="#get-started">Get started</a>
+      <a class="btn" href="#get-started" data-trial-link>Get started</a>
       <a class="btn quiet" href="#try" data-needs-demo hidden>Try it now</a>
       <a class="btn quiet" href="#inside" data-no-demo>See what's inside</a>
     </div>
-    <p class="price-line">Pricing as low as <b>$24/mo</b>.</p>
+    <p class="price-line" data-no-trial>Pricing as low as <b>$24/mo</b>.</p>
+    <p class="price-line" data-trial hidden>Free for 15 days, then as low as <b>$24/mo</b>. Card required.</p>
   </div>
 
   <section id="try" class="wrap" data-needs-demo hidden>
@@ -167,9 +171,18 @@
 
   <section id="get-started" class="wrap">
     <p class="eyebrow">Get started</p>
-    <h2>Book a call and we'll set you up</h2>
-    <p class="intro">Pick a time below. On the call we'll walk through your campaign, set up your address, and plan how to bring in your list.</p>
-    <p class="price"><span>Pricing as low as</span> <b>$24/mo</b></p>
+    <div data-no-trial>
+      <h2>Book a call and we'll set you up</h2>
+      <p class="intro">Pick a time below. On the call we'll walk through your campaign, set up your address, and plan how to bring in your list.</p>
+      <p class="price"><span>Pricing as low as</span> <b>$24/mo</b></p>
+    </div>
+    <div data-trial hidden>
+      <h2>Start your 15-day trial</h2>
+      <p class="intro">Add a card to start. Nothing is charged for 15 days. After that you're on the monthly plan, as low as $24/mo, until you cancel. Once you've signed up, we create your own base.win address and email you the sign-in.</p>
+      <p class="actions trial-actions"><a class="btn" data-trial-link href="#get-started">Start free trial</a></p>
+      <p class="fine">By starting a trial you agree to the <a href="/terms.html">terms</a> and <a href="/privacy.html">privacy policy</a>. Cancel before day 15 and you pay nothing.</p>
+      <h3 class="talk">Prefer to talk first? Book a call</h3>
+    </div>
     <div class="calendar">
       <iframe title="Book a call with base.win" loading="lazy"
         src="https://calendar.google.com/calendar/appointments/schedules/AcZssZ0Psx8mPWQUmDXpbDbRAWGbT1nR36o_Iyo8WVMeosrBARTVjkEYaGECcJUCwAiKjvDgDxcP5djI?gv=true"></iframe>
@@ -185,9 +198,10 @@
 
 <dialog id="nudge" aria-labelledby="nudge-title">
   <h2 id="nudge-title">Ready to run your own?</h2>
-  <p>Book a call and we'll set up base.win for your campaign. Pricing as low as $24/mo.</p>
+  <p data-no-trial>Book a call and we'll set up base.win for your campaign. Pricing as low as $24/mo.</p>
+  <p data-trial hidden>Start a 15-day trial and we'll set up base.win for your campaign. Free for 15 days, then as low as $24/mo.</p>
   <div class="actions">
-    <a class="btn" href="#get-started" id="nudge-go">Get started</a>
+    <a class="btn" href="#get-started" id="nudge-go" data-trial-link>Get started</a>
     <button class="btn quiet" type="button" id="nudge-stay">Keep exploring</button>
   </div>
 </dialog>
@@ -199,7 +213,19 @@
   const DEMO_URL = '';
   const PROMPT_AFTER_SECONDS = 60;
 
+  // The trial: the payment page that takes a card and starts the 15 days
+  // (a Stripe payment link). Empty: the page offers the call alone.
+  const TRIAL_URL = '';
+
   const show = (sel, on) => document.querySelectorAll(sel).forEach((el) => { el.hidden = !on; });
+  show('[data-trial]', Boolean(TRIAL_URL));
+  show('[data-no-trial]', !TRIAL_URL);
+  if (TRIAL_URL) {
+    document.querySelectorAll('[data-trial-link]').forEach((a) => {
+      a.href = TRIAL_URL;
+      a.textContent = 'Start free trial';
+    });
+  }
   show('[data-needs-demo]', Boolean(DEMO_URL));
   show('[data-no-demo]', !DEMO_URL);
   if (!DEMO_URL) return;
