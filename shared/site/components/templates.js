@@ -95,7 +95,6 @@ export function SiteBody({ rc, kind, page, post, campaign }) {
   return html`<${Fragment}>
     <${SkipLink} rc=${rc} />
     <${LanguageSwitch} rc=${rc} />
-    ${rc.policyEnglish ? (() => { const l = rc.legal('policyInEnglish'); return html`<p className="lang-note lang-note--policy" lang=${l.lang}>${l.text}</p>`; })() : null}
     ${rc.preview ? html`<${PreviewBanner} rc=${rc} />` : null}
     <${Announcement} rc=${rc} />
     <${Header} rc=${rc} />

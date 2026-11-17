@@ -426,10 +426,9 @@ html[data-heading="serif"] .display {
 }
 .eyebrow {
   margin: 0;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0;
   color: var(--soft);
 }
 .on-dark .eyebrow,
@@ -576,6 +575,13 @@ html[data-heading="serif"] .display {
 .btn--primary {
   background: var(--cta);
   color: var(--cta-ink);
+}
+/* On a brand or accent band the call to action carries an edge in the
+   band's text colour: a theme whose accent is its brand colour would
+   otherwise draw the button the colour of the band, as loose text. */
+.tone-brand .btn--primary,
+.tone-accent .btn--primary {
+  border-color: var(--text);
 }
 .btn--action {
   background: var(--action);
@@ -2050,9 +2056,8 @@ html[data-heading="inter"] .rail-title {
 .rail-subtitle {
   margin: 0;
   font-size: 15px;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0;
   color: var(--muted);
 }
 .next-list {
@@ -2518,9 +2523,8 @@ html[data-heading="inter"] .rail-title {
 .share-sheet__label {
   margin: 0;
   font-size: 15px;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0;
   color: var(--muted);
 }
 .share-sheet__list {
@@ -2641,10 +2645,9 @@ html[data-heading="inter"] .rail-title {
 .footer-heading {
   margin: 0 0 12px;
   font-family: var(--font-body);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0;
   color: var(--hl);
 }
 .socials {
@@ -2895,4 +2898,6 @@ html[data-heading="barlow-condensed"]:lang(zh) .display { line-height: 1.3; }
   .lang-switch { display: flex; width: 100%; }
   .lang-switch a { flex: 1 1 0; min-width: 0; min-height: 48px; padding: 0 6px; }
   .lang-note { padding: 0 16px 8px; text-align: left; }
+  /* "Read it in English" on its own line, one 48 px target. */
+  .lang-note a { display: flex; align-items: center; width: fit-content; min-height: 48px; }
 }

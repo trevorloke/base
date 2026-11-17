@@ -59,6 +59,12 @@ export function LanguageSwitch({ rc }) {
       const read = rc.legal('readInEnglish');
       return html`<p className="lang-note"><span lang=${note.lang}>${note.text}</span> <a href=${at('en')} hrefLang="en" lang=${read.lang}>${read.text}</a></p>`;
     })() : null}
+    ${rc.policyEnglish ? (() => {
+      // A privacy policy not checked yet in this language is shown in
+      // English: said as the bar's own second line, not loose under it.
+      const l = rc.legal('policyInEnglish');
+      return html`<p className="lang-note lang-note--policy" lang=${l.lang}>${l.text}</p>`;
+    })() : null}
   </div>`;
 }
 
