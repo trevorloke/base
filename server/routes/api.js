@@ -325,18 +325,26 @@ const signsIn = async (db, ws, bbox) => (await db.query(
 // address there (a building has 4 or more, shared/buildings.js; several
 // houses on one rough geocode never add up to one). An address with its
 // unit in front ("1203-13450 104 Ave", "#1203-…") is counted with its
-// building. null: more doors than MAP_DOTS.
+// building. The spot is rounded as a float (a numeric round of every row
+// cost more than counting the units does); only a point exactly halfway
+// between two spots can land on the other one, a metre away.
+// null: more doors than MAP_DOTS.
 const doorDots = async (db, ws, bbox, rating) => {
   const rows = (await db.query(
     `select lat, lng, max(band)::int as band, sum(n)::int as n, max(u)::int as u from (
-       select round(lat::numeric, 5)::float8 as lat, round(lng::numeric, 5)::float8 as lng,
-              max(case when rating ~ '^4[A-Z]{0,2}$' then 3 when rating in ('1', '2') then 2 when rating = '3' then 1 else 0 end) as band,
-              count(*) as n,
-              count(distinct lower(btrim(address)) || '|' || lower(btrim(coalesce(unit, '')))) filter (where btrim(address) <> '') as u
-       from persons
-       where workspace_id = $1 and deleted_at is null and lat between $2 and $4 and lng between $3 and $5
-         ${rating ? 'and rating = $6' : ''}
-       group by 1, 2, regexp_replace(lower(btrim(coalesce(address, ''))), '^\\s*#?\\d{1,4}[a-z]?\\s*-\\s*(?=\\d{4,})', '')
+       select lat, lng, max(band) as band, sum(n) as n, count(*) filter (where a <> '') as u from (
+         select round(lat * 100000) / 100000 as lat, round(lng * 100000) / 100000 as lng,
+                case when strpos(address, '-') > 0
+                  then regexp_replace(lower(btrim(address)), '^\\s*#?\\d{1,4}[a-z]?\\s*-\\s*(?=\\d{4,})', '')
+                  else lower(btrim(coalesce(address, ''))) end as c,
+                lower(btrim(coalesce(address, ''))) as a, lower(btrim(coalesce(unit, ''))) as un,
+                max(case when rating ~ '^4[A-Z]{0,2}$' then 3 when rating in ('1', '2') then 2 when rating = '3' then 1 else 0 end) as band,
+                count(*) as n
+         from persons
+         where workspace_id = $1 and deleted_at is null and lat between $2 and $4 and lng between $3 and $5
+           ${rating ? 'and rating = $6' : ''}
+         group by 1, 2, 3, 4, 5
+       ) d group by lat, lng, c
      ) s group by 1, 2 limit ${mapDots() + 1}`,
     rating ? [ws, ...bbox, rating] : [ws, ...bbox],
   )).rows;
