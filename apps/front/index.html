@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>base.win</title>
-<meta name="description" content="base.win is one product for a campaign: its people, map, field work, money, outreach, and website in one place. Free for the time being. Book a call and we'll set you up.">
+<meta name="description" content="base.win is one product for a campaign: its people, map, field work, money, outreach, and website in one place. Try it right on the page. Free for the time being.">
 <style>
   :root {
     --paper: #f3f5f7;
@@ -89,22 +89,8 @@
 
   .price-line { margin: 20px 0 0; color: var(--muted); font-size: 16px; }
   .price-line b { color: var(--ink); }
-  .price { margin: 0 0 28px; font-family: var(--display); font-size: clamp(22px, 3vw, 30px); letter-spacing: -0.01em; }
-  .price span { color: var(--muted); font-family: var(--body); font-size: 17px; letter-spacing: 0; }
   .demo { background: var(--card); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; box-shadow: 0 18px 40px -24px rgba(16, 35, 59, 0.45); }
   .demo iframe { display: block; width: 100%; height: min(760px, 82vh); border: 0; }
-  [hidden] { display: none !important; }
-  .trial-actions { margin: 0 0 14px; }
-  .fine { color: var(--muted); font-size: 14px; margin: 0 0 40px; max-width: 60ch; }
-  h3.talk { font-family: var(--display); font-size: 21px; margin: 0 0 16px; }
-  dialog { border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--ink); padding: 28px; max-width: min(440px, calc(100vw - 32px)); }
-  dialog::backdrop { background: rgba(8, 16, 28, 0.6); }
-  dialog h2 { font-size: 26px; margin-bottom: 8px; }
-  dialog p { color: var(--muted); margin: 0 0 20px; }
-  button.btn { font: inherit; font-weight: 600; cursor: pointer; }
-  .calendar { background: #ffffff; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
-  .calendar iframe { display: block; width: 100%; height: 720px; border: 0; }
-  .fallback { margin: 16px 0 0; color: var(--muted); font-size: 15px; }
 
   footer.wrap { border-top: 1px solid var(--line); padding-top: 28px; padding-bottom: 40px; color: var(--muted); font-size: 14px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; }
 </style>
@@ -116,8 +102,7 @@
   <nav aria-label="Main">
     <a href="#inside">What's inside</a>
     <a href="#yours">Your own address</a>
-    <a href="#get-started">Pricing</a>
-    <a class="btn" href="#get-started" data-trial-link>Get started free</a>
+    <a class="btn" href="#try">Try it free</a>
   </nav>
 </header>
 
@@ -126,20 +111,18 @@
     <h1>Run the whole campaign from one place</h1>
     <p class="lede">base.win puts your people, map, field work, money, outreach, and website in one product. The office and the doorstep work from the same list, so nothing gets retyped and nobody gets lost between tools.</p>
     <div class="actions">
-      <a class="btn" href="#get-started" data-trial-link>Get started free</a>
-      <a class="btn quiet" href="#try" data-needs-demo hidden>Try it now</a>
-      <a class="btn quiet" href="#inside" data-no-demo>See what's inside</a>
+      <a class="btn" href="#try">Try it free</a>
+      <a class="btn quiet" href="#inside">See what's inside</a>
     </div>
-    <p class="price-line" data-no-trial><b>Free</b> for the time being. No card needed.</p>
-    <p class="price-line" data-trial hidden>Free for 15 days, then as low as <b>$24/mo</b>. Card required.</p>
+    <p class="price-line"><b>Free</b> for the time being. No card needed.</p>
   </div>
 
-  <section id="try" class="wrap" data-needs-demo hidden>
+  <section id="try" class="wrap">
     <p class="eyebrow">Try it</p>
     <h2>Play with the real thing</h2>
-    <p class="intro">This is base.win running with a made-up campaign. Tap around: nothing you do here touches a real list.</p>
+    <p class="intro">This is base.win itself, running a made-up campaign in Vancouver. You're signed in with full access, so open anything. Nobody in it is real.</p>
     <div class="demo" id="demo">
-      <iframe id="demo-frame" title="base.win, running with a demo campaign" loading="lazy"></iframe>
+      <iframe id="demo-frame" title="base.win, running with a sample campaign" src="https://staging.base.win/api/auth/demo"></iframe>
     </div>
   </section>
 
@@ -169,101 +152,12 @@
     </div>
   </section>
 
-  <section id="get-started" class="wrap">
-    <p class="eyebrow">Get started</p>
-    <div data-no-trial>
-      <h2>Get set up, free</h2>
-      <p class="intro">base.win is free for the time being, with no card needed. Pick a time below. On the call we'll walk through your campaign, set up your address, and plan how to bring in your list.</p>
-      <p class="price"><b>Free</b> <span>for the time being</span></p>
-    </div>
-    <div data-trial hidden>
-      <h2>Start your 15-day trial</h2>
-      <p class="intro">Add a card to start. Nothing is charged for 15 days. After that you're on the monthly plan, as low as $24/mo, until you cancel. Once you've signed up, we create your own base.win address and email you the sign-in.</p>
-      <p class="actions trial-actions"><a class="btn" data-trial-link href="#get-started">Start free trial</a></p>
-      <p class="fine">By starting a trial you agree to the <a href="/terms.html">terms</a> and <a href="/privacy.html">privacy policy</a>. Cancel before day 15 and you pay nothing.</p>
-      <h3 class="talk">Prefer to talk first? Book a call</h3>
-    </div>
-    <div class="calendar">
-      <iframe title="Book a call with base.win" loading="lazy"
-        src="https://calendar.google.com/calendar/appointments/schedules/AcZssZ0Psx8mPWQUmDXpbDbRAWGbT1nR36o_Iyo8WVMeosrBARTVjkEYaGECcJUCwAiKjvDgDxcP5djI?gv=true"></iframe>
-    </div>
-    <p class="fallback">Calendar not loading? <a href="https://calendar.google.com/calendar/appointments/schedules/AcZssZ0Psx8mPWQUmDXpbDbRAWGbT1nR36o_Iyo8WVMeosrBARTVjkEYaGECcJUCwAiKjvDgDxcP5djI">Open the booking page</a>.</p>
-  </section>
 </main>
 
 <footer class="wrap">
   <span>&copy; 2026 base.win</span>
   <span>Already a client? Sign in at your own base.win address.</span>
 </footer>
-
-<dialog id="nudge" aria-labelledby="nudge-title">
-  <h2 id="nudge-title">Ready to run your own?</h2>
-  <p data-no-trial>Book a call and we'll set up base.win for your campaign. It's free for the time being.</p>
-  <p data-trial hidden>Start a 15-day trial and we'll set up base.win for your campaign. Free for 15 days, then as low as $24/mo.</p>
-  <div class="actions">
-    <a class="btn" href="#get-started" id="nudge-go" data-trial-link>Get started free</a>
-    <button class="btn quiet" type="button" id="nudge-stay">Keep exploring</button>
-  </div>
-</dialog>
-
-<script>
-(() => {
-  // The demo: an address that allows this page to frame it, opening on a
-  // made-up campaign with no sign-in. Empty: the demo and its prompt stay off.
-  const DEMO_URL = '';
-  const PROMPT_AFTER_SECONDS = 60;
-
-  // The trial: the payment page that takes a card and starts the 15 days
-  // (a Stripe payment link). Empty: the page offers the call alone.
-  const TRIAL_URL = '';
-
-  const show = (sel, on) => document.querySelectorAll(sel).forEach((el) => { el.hidden = !on; });
-  show('[data-trial]', Boolean(TRIAL_URL));
-  show('[data-no-trial]', !TRIAL_URL);
-  if (TRIAL_URL) {
-    document.querySelectorAll('[data-trial-link]').forEach((a) => {
-      a.href = TRIAL_URL;
-      a.textContent = 'Start free trial';
-    });
-  }
-  show('[data-needs-demo]', Boolean(DEMO_URL));
-  show('[data-no-demo]', !DEMO_URL);
-  if (!DEMO_URL) return;
-
-  const demo = document.getElementById('demo');
-  const frame = document.getElementById('demo-frame');
-  const nudge = document.getElementById('nudge');
-  frame.src = DEMO_URL;
-
-  const seen = () => { try { return sessionStorage.getItem('nudged') === '1'; } catch { return false; } };
-  const markSeen = () => { try { sessionStorage.setItem('nudged', '1'); } catch { /* private mode */ } };
-
-  // Seconds count once the visitor first touches the demo, and only while
-  // the tab is in front.
-  let playing = false, seconds = 0, timer = null;
-  const tick = () => {
-    if (document.hidden) return;
-    seconds += 1;
-    if (seconds < PROMPT_AFTER_SECONDS) return;
-    clearInterval(timer);
-    if (seen() || nudge.open) return;
-    markSeen();
-    nudge.showModal();
-  };
-  const start = () => {
-    if (playing || seen()) return;
-    playing = true;
-    timer = setInterval(tick, 1000);
-  };
-  demo.addEventListener('pointerenter', start);
-  demo.addEventListener('touchstart', start, { passive: true });
-  // A click or key inside the frame takes focus from this page.
-  window.addEventListener('blur', () => { if (document.activeElement === frame) start(); });
-
-  document.getElementById('nudge-stay').addEventListener('click', () => nudge.close());
-  document.getElementById('nudge-go').addEventListener('click', () => nudge.close());
-})();
-</script>
 
 </body>
 </html>
