@@ -217,7 +217,10 @@ const consent = async (db, q) => (await rowsOf(db, `
 const webDetail = (r, p) => {
   if (r.kind === 'contact') return clean([p.topic, p.message].filter(Boolean).join(': ')) || null;
   if (r.kind === 'volunteer') return clean(line(Array.isArray(p.roles) && p.roles.join(', '), p.availability, p.note) || '') || null;
-  if (r.kind === 'petition' || r.kind === 'pledge') return clean(p.comment) || null;
+  // A signature on a translated page: the statement exactly as signed.
+  if (r.kind === 'petition' || r.kind === 'pledge') {
+    return line(p.statement_shown && p.statement_lang && p.statement_lang !== 'en' && `Signed in ${langWord(p.statement_lang)}: ${clean(p.statement_shown, 300)}`, clean(p.comment)) || null;
+  }
   if (r.kind === 'rsvp') return r.shift_title || null;
   if (r.kind === 'donate') return p.amount_cents ? `${money(p.amount_cents)}${p.cadence === 'monthly' ? ' a month' : ''}` : null;
   if (r.kind === 'join') return line(p.term && years(p.term), p.amount_cents && money(p.amount_cents));
@@ -251,10 +254,14 @@ const web = async (db, q) => (await rowsOf(db, `
 // gift voided by a card refund has the refund's entry (payments), not a
 // second one here. Only a gift still on the books leads to the profile's
 // Gifts: that list leaves out the ones taken off.
+// Declared on a translated page: the words ticked, their language and the
+// English they stand for — for the treasurer and Elections BC (TR).
+const declared = (d) => d?.text && d.lang && `Declared in ${langWord(d.lang)}: ${clean(d.text, 300)}${d.english ? ` · English: ${clean(d.english, 300)}` : ''}`;
 const METHOD = { card: 'Card', etransfer: 'E-transfer', cheque: 'Cheque', cash: 'Cash', pad: 'Pre-authorized debit', 'in-kind': 'In-kind' };
 const gifts = async (db, q) => (await rowsOf(db, `
   select ${ms('x.at')} as at, 'gift:' || g.id::text || x.tail as key, x.what, x.day,
-         g.amount_cents, g.method, g.cadence, g.slate, g.note, g.flagged, g.deleted_at is not null as void, g.attrs->>'source' as source
+         g.amount_cents, g.method, g.cadence, g.slate, g.note, g.flagged, g.deleted_at is not null as void, g.attrs->>'source' as source,
+         case when coalesce(g.attrs->'declaration'->>'lang', 'en') <> 'en' then g.attrs->'declaration' end as declared
     from gifts g
     cross join lateral (values
       ('gift', '',
@@ -275,7 +282,7 @@ const gifts = async (db, q) => (await rowsOf(db, `
     money(r.amount_cents), METHOD[r.method] || r.method, r.cadence === 'monthly' && 'monthly',
     r.slate && r.slate !== DEFAULT_SLATE && slateLabel(r.slate), r.source === 'online' && 'online',
     r.void ? 'void' : r.flagged && 'flagged',
-  ), { detail: r.note || null, link: r.void ? null : '#gifts', ...(r.day ? { day: true } : {}) })));
+  ), { detail: line(r.note, declared(parseJ(r.declared, null))) || null, link: r.void ? null : '#gifts', ...(r.day ? { day: true } : {}) })));
 
 // ── An online payment that isn't simply paid: refunded, disputed… ──
 // When it came to stand as it does: the log's event for that status (the

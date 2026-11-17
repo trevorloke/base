@@ -287,3 +287,50 @@ test('History: a yes given in 简体 shows the words shown, their language and t
   assert.match(all, /是的，给我发电子邮件 \(in 简体\) · English: Yes, email me/);
   assert.match(all, / in 简体"/);
 });
+
+test('a person’s Traditional checked, then the Simplified changes: it goes back under To check', async () => {
+  const h = segHash(STORY);
+  const checkList = async () => ok(await vol.client.get(`/api/site/languages/zh-Hant/sentences?filter=check&q=${encodeURIComponent('library')}`)).sentences;
+  ok(await mgr.action('site.translation.save', { lang: 'zh-Hant', src_hash: h, text: '我們每週在圖書館見面。' }));
+  assert.equal((await checkList()).length, 0, 'a person’s own words are not machine words to check');
+  ok(await vol.client.action('site.translation.check', { lang: 'zh-Hant', src_hashes: [h] }));
+  ok(await staff.client.action('site.translation.save', { lang: 'zh-Hans', src_hash: h, text: '我们每周都在图书馆聚会。' }));
+  const t = await row('zh-Hant', STORY);
+  assert.equal(t.text, '我們每週在圖書館見面。', 'the person’s Traditional stays');
+  assert.equal(t.checked_at, null);
+  const list = await checkList();
+  assert.equal(list.length, 1, 'under To check');
+  assert.equal(list[0].origin, 'edited');
+  // Checked again: off the list.
+  ok(await vol.client.action('site.translation.check', { lang: 'zh-Hant', src_hashes: [h] }));
+  assert.equal((await checkList()).length, 0);
+});
+
+test('a name kept later: a person’s words that hold it go under To check', async () => {
+  const src = 'Read [the plan](https://example.org/plan) with Pat Example.';
+  const list = async () => ok(await mgr.get(`/api/site/languages/pa/sentences?filter=check&q=${encodeURIComponent('the plan')}`)).sentences;
+  ok(await mgr.action('site.translation.save', { lang: 'pa', src_hash: segHash(src), text: 'ਪੜ੍ਹੋ [ਯੋਜਨਾ](https://example.org/plan) Pat Example ਨਾਲ।' }));
+  assert.equal((await list()).length, 0);
+  ok(await mgr.action('site.names.keep', { name: 'Pat Example', keep: true }));
+  const l = await list();
+  assert.equal(l.length, 1);
+  assert.equal(l[0].origin, 'edited');
+  ok(await mgr.action('site.names.keep', { name: 'Pat Example', keep: false }));
+});
+
+test('History: a gift declared in ਪੰਜਾਬੀ shows the words and the English; a signature shows the statement as signed', async () => {
+  const p = ok(await mgr.action('person.create', { kind: 'person', first_name: 'Gurpreet', last_name: 'Example', email: `gp-${Date.now()}@example.org` })).person;
+  const declaration = { text: 'ਮੈਂ ਕੈਨੇਡੀਅਨ ਨਾਗਰਿਕ ਹਾਂ', lang: 'pa', english: 'I am a Canadian citizen', source: 'website' };
+  await db.query(
+    `insert into gifts (id, workspace_id, person_id, amount_cents, date, method, cadence, attrs)
+     values (gen_random_uuid(), $1, $2, 2500, current_date, 'card', 'one-time', $3)`, [ws, p.id, JSON.stringify({ source: 'online', declaration })]);
+  await db.query(
+    `insert into site_actions (id, workspace_id, person_id, kind, campaign_id, payload, lang)
+     values (gen_random_uuid(), $1, $2, 'petition', $3, $4, 'pa')`,
+    [ws, p.id, petition.id, JSON.stringify({ statement_shown: 'ਅਸੀਂ ਸ਼ਹਿਰ ਨੂੰ ਲਾਂਘਾ ਠੀਕ ਕਰਨ ਲਈ ਕਹਿੰਦੇ ਹਾਂ।', statement_lang: 'pa' })]);
+  const t = ok(await mgr.get(`/api/persons/${p.id}/timeline`));
+  const gift = t.entries.find((e) => e.kind === 'gift');
+  assert.match(gift.detail, /Declared in ਪੰਜਾਬੀ: ਮੈਂ ਕੈਨੇਡੀਅਨ ਨਾਗਰਿਕ ਹਾਂ · English: I am a Canadian citizen/);
+  const signed = t.entries.find((e) => e.kind === 'web');
+  assert.match(signed.detail, /Signed in ਪੰਜਾਬੀ: ਅਸੀਂ ਸ਼ਹਿਰ ਨੂੰ ਲਾਂਘਾ ਠੀਕ ਕਰਨ ਲਈ ਕਹਿੰਦੇ ਹਾਂ।/);
+});

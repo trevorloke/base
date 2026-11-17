@@ -204,7 +204,7 @@ export const mountLanguageReads = (api, opened) => {
     const segs = await sentencesOf(db, { ...c.get('ctx').workspace, id: wsId }, settings);
     const hashes = segs.map((g) => g.hash);
     const rows = new Map((await db.query(
-      `select t.src_hash, t.text, t.origin, t.checked_at, t.checked_by, v.made_by from site_translations t
+      `select t.src_hash, t.text, t.origin, t.checked_at, t.checked_by, t.needs_check, v.made_by from site_translations t
          left join site_translation_versions v on v.id = t.version_id
         where t.workspace_id = $1 and t.lang = $2 and t.src_hash = any($3::text[])`, [wsId, code, hashes],
     )).rows.map((r) => [r.src_hash, r]));
@@ -220,7 +220,8 @@ export const mountLanguageReads = (api, opened) => {
     const keep = (g) => {
       const r = rows.get(g.hash);
       if (q && !g.text.toLowerCase().includes(q) && !String(r?.text || '').toLowerCase().includes(q)) return false;
-      if (filter === 'check') return r && r.origin !== 'edited' && !r.checked_at;
+      // A person's words come back here only when what they stood on moved.
+      if (filter === 'check') return r && !r.checked_at && (r.origin !== 'edited' || r.needs_check);
       if (filter === 'suggested') return suggestions.has(g.hash);
       if (filter === 'edited') return r?.origin === 'edited';
       if (filter === 'failed') return !r && fails.has(g.hash);

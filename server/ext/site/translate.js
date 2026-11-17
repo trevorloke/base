@@ -351,7 +351,7 @@ export const convertRow = async (tx, workspaceId, hash, src, simplified, place) 
   const text = convertToTraditional(simplified);
   const cur = (await tx.query("select id, origin, version_id, text from site_translations where workspace_id = $1 and lang = 'zh-Hant' and src_hash = $2", [workspaceId, hash])).rows[0];
   if (cur?.origin === 'edited') {
-    await tx.query("update site_translations set checked_by = null, checked_at = null, updated_at = now() where id = $1", [cur.id]);
+    await tx.query("update site_translations set checked_by = null, checked_at = null, needs_check = true, updated_at = now() where id = $1", [cur.id]);
     return;
   }
   if (cur && cur.text === text) return;
@@ -532,7 +532,7 @@ export const markRetranslate = async (tx, workspaceId, names) => {
     if (!name) continue;
     const like = `%${name.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
     await tx.query("update site_translations set retranslate = true where workspace_id = $1 and origin = 'machine' and src like $2", [workspaceId, like]);
-    await tx.query("update site_translations set checked_by = null, checked_at = null where workspace_id = $1 and origin = 'edited' and src like $2", [workspaceId, like]);
+    await tx.query("update site_translations set checked_by = null, checked_at = null, needs_check = true where workspace_id = $1 and origin = 'edited' and src like $2", [workspaceId, like]);
   }
 };
 

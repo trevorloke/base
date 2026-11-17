@@ -218,6 +218,9 @@ create table if not exists site_translations (
   updated_at timestamptz not null default now(),
   unique (workspace_id, lang, src_hash)
 );
+-- A person's words whose source moved under them (the Simplified they
+-- stood beside changed, or a name in them is kept now): back under To check.
+alter table site_translations add column if not exists needs_check boolean not null default false;
 create table if not exists site_translation_versions (
   id uuid primary key,
   workspace_id uuid not null references workspaces(id) on delete cascade,

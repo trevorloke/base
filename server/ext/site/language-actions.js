@@ -96,7 +96,7 @@ const putLive = async (tx, wsId, { lang, hash, src, place, versionId, text, chec
     `insert into site_translations (id, workspace_id, lang, src_hash, src, text, origin, version_id, checked_by, checked_at, place)
      values ($1, $2, $3, $4, $5, $6, 'edited', $7, $8, case when $8::uuid is null then null else now() end, $9)
      on conflict (workspace_id, lang, src_hash) do update set text = $6, origin = 'edited', version_id = $7, retranslate = false,
-       checked_by = $8, checked_at = case when $8::uuid is null then null else now() end, updated_at = now()`,
+       checked_by = $8, checked_at = case when $8::uuid is null then null else now() end, needs_check = false, updated_at = now()`,
     [newId(), wsId, lang, hash, src, text, versionId, checkedBy, place],
   );
   await tx.query('delete from site_translation_failures where workspace_id = $1 and lang = $2 and src_hash = $3', [wsId, lang, hash]);
@@ -173,7 +173,7 @@ export const languageActions = (siteAction) => {
         throw httpError(403, 'A manager needs to check a statement people sign');
       }
     }
-    await tx.query('update site_translations set checked_by = $3, checked_at = now(), updated_at = now() where workspace_id = $1 and lang = $2 and id = any($4::uuid[])',
+    await tx.query('update site_translations set checked_by = $3, checked_at = now(), needs_check = false, updated_at = now() where workspace_id = $1 and lang = $2 and id = any($4::uuid[])',
       [ctx.workspaceId, input.lang, ctx.user.id, rows.map((r) => r.id)]);
     await bumpRev(tx, ctx.workspaceId, input.lang);
     emit('site_translation_check', newId(), 'create', { lang: input.lang, src_hashes: rows.map((r) => r.src_hash) });
@@ -193,7 +193,7 @@ export const languageActions = (siteAction) => {
     // Checked again only when someone other than the one undoing had approved them.
     const checkedBy = prior.origin === 'edited' && prior.decided_by && prior.decided_by !== ctx.user.id ? prior.decided_by : null;
     await tx.query(
-      `update site_translations set text = $4, origin = $5, version_id = $6, checked_by = $7, checked_at = case when $7::uuid is null then null else now() end, updated_at = now()
+      `update site_translations set text = $4, origin = $5, version_id = $6, checked_by = $7, checked_at = case when $7::uuid is null then null else now() end, needs_check = false, updated_at = now()
         where workspace_id = $1 and lang = $2 and src_hash = $3`, [ctx.workspaceId, input.lang, v.src_hash, prior.text, prior.origin, prior.id, checkedBy],
     );
     if (input.lang === 'zh-Hans') { await convertRow(tx, ctx.workspaceId, v.src_hash, row.src, prior.text, row.place); await bumpRev(tx, ctx.workspaceId, 'zh-Hant'); }

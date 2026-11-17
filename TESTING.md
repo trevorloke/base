@@ -671,7 +671,9 @@ comes back, or asks if words were typed meanwhile).
   needs in each, **Translate now** — all three *On*. A volunteer given only
   "Website translations" (Admin → Permissions) sees only Languages and
   **Suggest**s; the page changes once a manager presses **Looks right**.
-  Tests: `server/test/site-words.test.js` (and `site-lang.test.js`); in a
+  Tests: `server/test/site-words.test.js` (and `site-lang.test.js`; its
+  clock limits for a /pa page, cold under 150 ms and warm under 10 ms, are
+  asked only on a quiet machine with `TIMING=1`); in a
   browser, `e2e-site-translate.mjs` (it runs its own server on PORT, the
   stand-in Google on PORT+1 and Stripe on PORT+2; it needs a CJK font —
   `apt-get install -y fonts-noto-cjk` — and stops saying so without one).
