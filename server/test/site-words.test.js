@@ -107,6 +107,10 @@ test('the sentence list: to check, with where each is; a search', async () => {
   const r = ok(await vol.client.get('/api/site/languages/pa/sentences?filter=check'));
   assert.equal(r.sentences.length, 50);
   assert.ok(r.next === 50 && r.total > 50);
+  // The site's own pages first; the fixed words every site shares last.
+  assert.notEqual(r.sentences[0].place_label, 'Fixed words', 'a page comes before the fixed words');
+  const firstFixed = r.sentences.findIndex((x) => x.place_label === 'Fixed words');
+  if (firstFixed >= 0) assert.ok(r.sentences.slice(firstFixed).every((x) => x.place_label === 'Fixed words'), 'nothing of the site’s own after the fixed words begin');
   const story = ok(await vol.client.get(`/api/site/languages/pa/sentences?filter=all&q=${encodeURIComponent('library')}`));
   assert.equal(story.sentences.length, 1);
   assert.equal(story.sentences[0].src, STORY);

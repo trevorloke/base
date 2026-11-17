@@ -347,8 +347,11 @@ function SignedInShell({ who, mode }) {
 
   const desk = isDesk(me);
   // The admin: the tabs of the areas they have. The field app: a volunteer's five.
+  // A volunteer given an area (Website translations, say) keeps Today, where
+  // they land, beside its tabs: never a nav without the screen they're on.
+  const granted = desk ? [] : NAV_DESK.filter((t) => t.area && areasOf(me).includes(t.area) && !(t.unless && areasOf(me).includes(t.unless)));
   const nav = mode === 'admin'
-    ? (desk ? NAV_DESK.filter((t) => hasArea(me, t.area) && !(t.unless && hasArea(me, t.unless))) : NAV_DESK.filter((t) => t.area && areasOf(me).includes(t.area) && !(t.unless && areasOf(me).includes(t.unless))))
+    ? (desk ? NAV_DESK.filter((t) => hasArea(me, t.area) && !(t.unless && hasArea(me, t.unless))) : granted.length ? [NAV_DESK[0], ...granted] : granted)
     : NAV_VOLUNTEER;
   // New replies to your texts: a small count on Calls.
   const unread = Number(useTextingStatus(me).data?.unread) || 0;

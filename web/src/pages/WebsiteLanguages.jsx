@@ -165,6 +165,9 @@ function TurnOn({ d, l, manager, say }) {
       {e && (e.converted
         ? <p>No characters: made from 简体.</p>
         : <p>First translation needs about {n(e.essential)} characters ({n(e.all)} with everything). This month: {n(left)} of {n(e.usage.limit)} left.</p>)}
+      {e && !e.converted && e.essential > left && (
+        <p className="wb-warn" role="status">Not enough characters left this month — <Link to="/website/languages">change the limit</Link> first.</p>
+      )}
       {l.code === 'zh-Hans' && <p className="wb-field__hint">简体 and 繁體 come on together; 繁體 is made from 简体.</p>}
       {err && <p className="wb-field__err" role="alert">{err}</p>}
       <button type="button" className="btn btn-primary ops-tap" disabled={busy} onClick={go}>{busy ? 'Turning on…' : 'Turn on'}</button>
@@ -222,6 +225,12 @@ function Checklist({ d, l }) {
 }
 
 const ORIGIN = { machine: ['Machine', 'ops-chip-muted'], converted: ['From 简体', 'ops-chip-muted'], edited: ['Edited', 'ops-chip-muted'] };
+// A sentence's {slots} (a name or a number the site puts in) as plain
+// chips, so a checker sees them as parts to keep, not code to translate.
+const SLOT = /(\{[A-Za-z_]+\})/;
+const withSlots = (text) => String(text).split(SLOT).map((part, i) => (i % 2 ? <span key={i} className="lg-slot">{part.slice(1, -1)}</span> : part));
+const hasSlot = (text) => SLOT.test(String(text || ''));
+
 const FILTERS = [['check', 'To check'], ['suggested', 'Suggested'], ['failed', 'Couldn’t translate'], ['edited', 'Edited'], ['all', 'All']];
 
 function Sentence({ s, code, mayLive, onDone, say }) {
@@ -242,8 +251,9 @@ function Sentence({ s, code, mayLive, onDone, say }) {
   const rows = Math.min(10, Math.max(2, Math.ceil(((s.text || s.src).length) / 50)));
   return (
     <li className="lg-sent" data-open={open ? '' : undefined}>
-      <p className="lg-sent__src" lang="en">{s.src}</p>
-      {s.text !== null && <p className="lg-sent__text" lang={code}>{s.text}</p>}
+      <p className="lg-sent__src" lang="en">{withSlots(s.src)}</p>
+      {s.text !== null && <p className="lg-sent__text" lang={code}>{withSlots(s.text)}</p>}
+      {hasSlot(s.src) && <p className="lg-sent__hint">Keep the grey parts as they are.</p>}
       {s.earlier && <p className="lg-sent__earlier">Earlier wording: <span lang={code}>{s.earlier}</span></p>}
       {s.failure && <p className="lg-sent__why">{s.failure.reason}</p>}
       {s.suggestion && (
@@ -309,7 +319,7 @@ function Sentences({ code, mayLive, say, failedCount }) {
       {q.isError && <Unavailable q={q} />}
       {q.data && (
         <>
-          <p className="ws-sr" aria-live="polite">{plural(q.data.total, 'sentence')}</p>
+          <p className="lg-total" aria-live="polite">{filter === 'check' ? `${n(q.data.total)} to check` : plural(q.data.total, 'sentence')}</p>
           {q.data.sentences.length === 0 && <p className="ops-empty">{filter === 'check' ? 'Nothing waiting to be checked.' : 'None here.'}</p>}
           <ul className="lg-sents">
             {q.data.sentences.map((s) => <Sentence key={`${s.src_hash}:${s.text}:${s.suggestion?.id}`} s={s} code={code} mayLive={mayLive} onDone={done} say={say} />)}
@@ -468,12 +478,16 @@ export function WebsiteLanguage() {
               The English changed in: {(l.legal.stale_labels || l.legal.stale_keys).join(', ')}. It shows in English until you <Link to={`/website/languages/${code}/legal`}>approve new words</Link>.
             </p>
           )}
-          {l.last_error && <p className="card lg-note wb-warn" role="status">{errorWords(l.last_error)} <button type="button" className="btn btn-quiet ops-tap" onClick={now}>Try again</button></p>}
+          {/* The month's limit reached: trying again can't help until it changes. */}
+          {l.last_error && <p className="card lg-note wb-warn" role="status">{errorWords(l.last_error)}{' '}
+            {l.last_error === 'monthly-limit'
+              ? (manager ? <Link className="btn btn-quiet ops-tap" to="/website/languages">Change the limit</Link> : null)
+              : <button type="button" className="btn btn-quiet ops-tap" onClick={now}>Try again</button>}</p>}
           <div className="lg-links">
             <Link className="btn btn-quiet ops-tap" to={`/website/languages/${code}/legal`}>Words the law needs</Link>
             {l.offered && <a className="btn btn-quiet ops-tap" href={`${d.site || '/site'}${LANGS[code].path}/`} target="_blank" rel="noopener">Preview<span aria-hidden="true"> ↗</span><span className="ws-sr"> (opens a new tab)</span></a>}
             {l.on && !l.offered && <DraftPreview code={code} say={say} />}
-            {l.on && l.counts?.waiting > 0 && <button type="button" className="btn btn-quiet ops-tap" onClick={now}>Translate now</button>}
+            {l.on && l.counts?.waiting > 0 && l.last_error !== 'monthly-limit' && <button type="button" className="btn btn-quiet ops-tap" onClick={now}>Translate now</button>}
           </div>
           {(l.on || l.counts) && <Sentences code={code} mayLive={mayLive} say={say} failedCount={l.counts?.failed || 0} />}
           {(l.on || l.counts) && <Edits code={code} mayUndo={mayLive} say={say} />}

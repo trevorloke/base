@@ -37,6 +37,14 @@ export const LEGAL_LABELS = {
   translatedNote: 'Translated note', readInEnglish: 'Read it in English link', policyInEnglish: 'Privacy policy in English',
 };
 
+// How soon a sentence comes in the list (lower first).
+const weightOf = (g) => {
+  const kind = String(g.place || '').split(':')[0];
+  if (kind === 'ui') return 3;
+  if (kind === 'settings' || kind === 'shift') return 2;
+  return g.cls === 'check-first' ? 0 : 1;
+};
+
 // The segments a person can see and correct (the legal drafts have their
 // own screen), with the words to say where each is.
 const sentencesOf = async (db, ws, settings) => {
@@ -244,7 +252,10 @@ export const mountLanguageReads = (api, opened) => {
       if (filter === 'failed') return !r && fails.has(g.hash);
       return true;
     };
-    const list = segs.filter(keep);
+    // The site's own words first (pages, news, petitions), then menus,
+    // footer and shifts, then the fixed words every site shares: a checker
+    // starts with what readers read most. Stable, so each group keeps its order.
+    const list = segs.filter(keep).sort((a, b) => weightOf(a) - weightOf(b));
     const pageOf = list.slice(after, after + PAGE);
     const who = await namesOf(db, pageOf.flatMap((g) => [rows.get(g.hash)?.checked_by, suggestions.get(g.hash)?.made_by]));
     // "Earlier wording": a person's words for the English that was at the
