@@ -41,4 +41,5 @@
 /* Campus: school and campus together — long words, one to a row on a phone. */
 @media (max-width: 600px) {
   .mf-campus .mf-check { flex: 1 1 100%; min-height: 48px; white-space: normal; }
+  .mf-campus .mf-check input { flex: none; }
 }
