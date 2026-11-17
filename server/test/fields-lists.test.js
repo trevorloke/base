@@ -401,6 +401,33 @@ test('Turn into a list refuses a field whose words are mostly different, and wit
   assert.equal(ok(await mgr.get('/api/audit/verify')).ok, true);
 });
 
+test('import: words kept as written go to “<list> as written”, made by the import; a dry run makes nothing', async () => {
+  const f = ok(await mgr.action('field.create', { name: 'Shoe style', kind: 'choice', choices: ['Boot', 'Sandal'] })).field;
+  const row = (name, word) => ({ name, phone: '604-555-0177', fields: { [f.id]: '', [`as_written:${f.id}`]: word } });
+  const dry = ok(await mgr.post('/api/data/import', { rows: [row('Clog Example', 'Clog')], as_written: [f.id], dryRun: true }));
+  assert.equal(dry.invalid.length, 0, JSON.stringify(dry.invalid));
+  assert.equal((await fieldsBy())['Shoe style as written'], undefined);
+  const r = ok(await mgr.post('/api/data/import', { rows: [row('Clog Example', 'Clog')], as_written: [f.id] }));
+  assert.equal(r.invalid.length, 0, JSON.stringify(r.invalid));
+  const F = await fieldsBy();
+  assert.equal(F['Shoe style as written'].as_written_of, f.id);
+  assert.equal(F['Shoe style as written'].kind, 'text');
+  const made = (await db.query(
+    `select payload from events where workspace_id = $1 and entity_type = 'person_field' and entity_id = $2 and op = 'create'`,
+    [ws, F['Shoe style as written'].id],
+  )).rows[0];
+  assert.equal(JSON.parse(typeof made.payload === 'string' ? made.payload : JSON.stringify(made.payload)).by_import, true);
+  const p = (await db.query("select id from persons where workspace_id = $1 and name = 'Clog Example'", [ws])).rows[0];
+  const v = await valuesOf(mgr, p.id);
+  assert.deepEqual([v['Shoe style'], v['Shoe style as written']], [null, 'Clog']);
+  // Again: the same field, no second one.
+  ok(await mgr.post('/api/data/import', { rows: [row('Mule Example', 'Mule')], as_written: [f.id] }));
+  assert.equal(ok(await mgr.get('/api/fields')).fields.filter((x) => x.name === 'Shoe style as written').length, 1);
+  ok(await mgr.action('field.retire', { id: F['Shoe style as written'].id }));
+  ok(await mgr.action('field.retire', { id: f.id }));
+  assert.equal(ok(await mgr.get('/api/audit/verify')).ok, true);
+});
+
 test('membership form: Campus a choice; other words in Notes (kept), never refusing the form', async () => {
   const F = await fieldsBy();
   const r1 = ok(await form({ campus: 'kwantlen polytechnic university - surrey' }));
