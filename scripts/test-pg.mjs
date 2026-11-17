@@ -16,10 +16,17 @@ const files = process.argv.length > 2
   : readdirSync('server/test').filter((f) => f.endsWith('.test.js')).sort().map((f) => `server/test/${f}`);
 let failed = 0;
 for (const file of files) {
-  const port = 55432 + Math.floor(Math.random() * 1000);
   const db = await PGlite.create();
-  const server = new PGLiteSocketServer({ db, port, host: '127.0.0.1' });
-  await server.start();
+  // A random port can be taken (another runner, a test's own server): try
+  // another rather than crash the whole run on EADDRINUSE.
+  let port, server;
+  for (let tries = 0; ; tries += 1) {
+    port = 55432 + Math.floor(Math.random() * 1000);
+    server = new PGLiteSocketServer({ db, port, host: '127.0.0.1' });
+    try { await server.start(); break; } catch (e) {
+      if (e.code !== 'EADDRINUSE' || tries >= 20) throw e;
+    }
+  }
   const child = spawn(process.execPath, ['--test', file], {
     stdio: 'inherit',
     env: { ...process.env, DATABASE_URL: `postgres://postgres:postgres@127.0.0.1:${port}/postgres`, PG_POOL_MAX: '1' },
