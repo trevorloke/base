@@ -311,7 +311,7 @@ test('the public guide by the clock: before, open, between, over; the banner; Pe
   r = await hit('/site/voter-guide');
   assert.match(r.text, /Voting is open now · until 8 p\.m\./);
   home = await hit('/site/');
-  assert.match(home.text, /Vote today until 8 p\.m\. <a/, 'one full stop');
+  assert.match(home.text, /Vote today until 8 p\.m\.(?:<!-- -->)? <a/, 'one full stop');
   cacheClear(ws);
   moveTo(A1, '21:00');
   r = await hit('/site/voter-guide');
