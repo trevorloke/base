@@ -14,9 +14,36 @@ import { PGLiteSocketServer } from '@electric-sql/pglite-socket';
 const files = process.argv.length > 2
   ? process.argv.slice(2)
   : readdirSync('server/test').filter((f) => f.endsWith('.test.js')).sort().map((f) => `server/test/${f}`);
+// PGlite mishandles a chunk whose next message starts exactly at byte 16,384
+// (it answers the messages before it and drops the rest, so the client
+// waits for ever). The socket server hands it whatever TCP delivered; this
+// hands it one whole message at a time, as PGlite's own query() does.
+const oneMessageAtATime = (db) => {
+  const raw = db.execProtocolRaw.bind(db);
+  db.execProtocolRaw = async (data, opts) => {
+    const view = Buffer.from(data.buffer, data.byteOffset, data.byteLength);
+    const lengths = [];
+    for (let i = 0; i < view.length;) {
+      if (i + 5 > view.length) return raw(data, opts);
+      const len = view.readInt32BE(i + 1);
+      // The startup message has no type byte; a part of a message is passed on as it came.
+      if (len < 4 || i + 1 + len > view.length) return raw(data, opts);
+      lengths.push(1 + len);
+      i += 1 + len;
+    }
+    if (lengths.length < 2) return raw(data, opts);
+    const out = [];
+    let at = 0;
+    // Copied at once: each answer is a view PGlite reuses on the next call.
+    for (const n of lengths) { out.push(Buffer.from(await raw(data.subarray(at, at + n), opts))); at += n; }
+    return new Uint8Array(Buffer.concat(out));
+  };
+  return db;
+};
 let failed = 0;
+const failedFiles = [];
 for (const file of files) {
-  const db = await PGlite.create();
+  const db = oneMessageAtATime(await PGlite.create());
   // A random port can be taken (another runner, a test's own server): try
   // another rather than crash the whole run on EADDRINUSE.
   let port, server;
@@ -34,7 +61,7 @@ for (const file of files) {
   const code = await new Promise((r) => child.on('exit', r));
   await server.stop();
   await db.close();
-  if (code !== 0) { failed += 1; console.error(`✗ ${file} failed over Postgres`); }
+  if (code !== 0) { failed += 1; failedFiles.push(file); console.error(`✗ ${file} failed over Postgres`); }
 }
-console.log(failed ? `\n${failed} of ${files.length} test files failed over Postgres` : `\nAll ${files.length} test files passed over Postgres`);
+console.log(failed ? `\n${failed} of ${files.length} test files failed over Postgres: ${failedFiles.join(', ')}` : `\nAll ${files.length} test files passed over Postgres`);
 process.exit(failed ? 1 : 0);
