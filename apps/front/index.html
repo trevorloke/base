@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>base.win</title>
-<meta name="description" content="base.win is one product for a campaign: its people, map, field work, money, outreach, and website in one place. Book a demo or a setup session.">
+<meta name="description" content="base.win is one product for a campaign: its people, map, field work, money, outreach, and website in one place. Try it on the page, then book a call to get started. Pricing starts as low as $99/mo.">
 <style>
   :root {
     --paper: #f3f5f7;
@@ -87,10 +87,18 @@
   .address b { color: var(--signal); font-weight: 500; }
   .own p { color: var(--muted); margin: 0 0 14px; max-width: 52ch; }
 
-  .kinds { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 20px; margin-bottom: 28px; }
-  .kind { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 24px; }
-  .kind h3 { font-family: var(--display); font-size: 21px; margin: 0 0 6px; }
-  .kind p { margin: 0; color: var(--muted); font-size: 16px; }
+  .price-line { margin: 20px 0 0; color: var(--muted); font-size: 16px; }
+  .price-line b { color: var(--ink); }
+  .price { margin: 0 0 28px; font-family: var(--display); font-size: clamp(22px, 3vw, 30px); letter-spacing: -0.01em; }
+  .price span { color: var(--muted); font-family: var(--body); font-size: 17px; letter-spacing: 0; }
+  .demo { background: var(--card); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; box-shadow: 0 18px 40px -24px rgba(16, 35, 59, 0.45); }
+  .demo iframe { display: block; width: 100%; height: min(760px, 82vh); border: 0; }
+  [hidden] { display: none !important; }
+  dialog { border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--ink); padding: 28px; max-width: min(440px, calc(100vw - 32px)); }
+  dialog::backdrop { background: rgba(8, 16, 28, 0.6); }
+  dialog h2 { font-size: 26px; margin-bottom: 8px; }
+  dialog p { color: var(--muted); margin: 0 0 20px; }
+  button.btn { font: inherit; font-weight: 600; cursor: pointer; }
   .calendar { background: #ffffff; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
   .calendar iframe { display: block; width: 100%; height: 720px; border: 0; }
   .fallback { margin: 16px 0 0; color: var(--muted); font-size: 15px; }
@@ -105,7 +113,8 @@
   <nav aria-label="Main">
     <a href="#inside">What's inside</a>
     <a href="#yours">Your own address</a>
-    <a class="btn" href="#book">Book a time</a>
+    <a href="#get-started">Pricing</a>
+    <a class="btn" href="#get-started">Get started</a>
   </nav>
 </header>
 
@@ -114,10 +123,21 @@
     <h1>Run the whole campaign from one place</h1>
     <p class="lede">base.win puts your people, map, field work, money, outreach, and website in one product. The office and the doorstep work from the same list, so nothing gets retyped and nobody gets lost between tools.</p>
     <div class="actions">
-      <a class="btn" href="#book">Book a demo</a>
-      <a class="btn quiet" href="#inside">See what's inside</a>
+      <a class="btn" href="#get-started">Get started</a>
+      <a class="btn quiet" href="#try" data-needs-demo hidden>Try it now</a>
+      <a class="btn quiet" href="#inside" data-no-demo>See what's inside</a>
     </div>
+    <p class="price-line">Pricing starts as low as <b>$99/mo</b>.</p>
   </div>
+
+  <section id="try" class="wrap" data-needs-demo hidden>
+    <p class="eyebrow">Try it</p>
+    <h2>Play with the real thing</h2>
+    <p class="intro">This is base.win running with a made-up campaign. Tap around: nothing you do here touches a real list.</p>
+    <div class="demo" id="demo">
+      <iframe id="demo-frame" title="base.win, running with a demo campaign" loading="lazy"></iframe>
+    </div>
+  </section>
 
   <section id="inside" class="wrap">
     <p class="eyebrow">What's inside</p>
@@ -145,22 +165,13 @@
     </div>
   </section>
 
-  <section id="book" class="wrap">
-    <p class="eyebrow">Book a time</p>
-    <h2>Pick a time that works for you</h2>
-    <p class="intro">Two reasons to book. Choose a slot below for either one.</p>
-    <div class="kinds">
-      <div class="kind">
-        <h3>A demo</h3>
-        <p>A walkthrough of base.win with your campaign in mind: the field app, the desk, and the website.</p>
-      </div>
-      <div class="kind">
-        <h3>A setup session</h3>
-        <p>For teams ready to start. We set up your address, your brand, and a plan for bringing in your list.</p>
-      </div>
-    </div>
+  <section id="get-started" class="wrap">
+    <p class="eyebrow">Get started</p>
+    <h2>Book a call and we'll set you up</h2>
+    <p class="intro">Pick a time below. On the call we'll walk through your campaign, set up your address, and plan how to bring in your list.</p>
+    <p class="price"><span>Pricing starts as low as</span> <b>$99/mo</b></p>
     <div class="calendar">
-      <iframe title="Book a time with base.win" loading="lazy"
+      <iframe title="Book a call with base.win" loading="lazy"
         src="https://calendar.google.com/calendar/appointments/schedules/AcZssZ0Psx8mPWQUmDXpbDbRAWGbT1nR36o_Iyo8WVMeosrBARTVjkEYaGECcJUCwAiKjvDgDxcP5djI?gv=true"></iframe>
     </div>
     <p class="fallback">Calendar not loading? <a href="https://calendar.google.com/calendar/appointments/schedules/AcZssZ0Psx8mPWQUmDXpbDbRAWGbT1nR36o_Iyo8WVMeosrBARTVjkEYaGECcJUCwAiKjvDgDxcP5djI">Open the booking page</a>.</p>
@@ -171,6 +182,62 @@
   <span>&copy; 2026 base.win</span>
   <span>Already a client? Sign in at your own base.win address.</span>
 </footer>
+
+<dialog id="nudge" aria-labelledby="nudge-title">
+  <h2 id="nudge-title">Ready to run your own?</h2>
+  <p>Book a call and we'll set up base.win for your campaign. Pricing starts as low as $99/mo.</p>
+  <div class="actions">
+    <a class="btn" href="#get-started" id="nudge-go">Get started</a>
+    <button class="btn quiet" type="button" id="nudge-stay">Keep exploring</button>
+  </div>
+</dialog>
+
+<script>
+(() => {
+  // The demo: an address that allows this page to frame it, opening on a
+  // made-up campaign with no sign-in. Empty: the demo and its prompt stay off.
+  const DEMO_URL = '';
+  const PROMPT_AFTER_SECONDS = 60;
+
+  const show = (sel, on) => document.querySelectorAll(sel).forEach((el) => { el.hidden = !on; });
+  show('[data-needs-demo]', Boolean(DEMO_URL));
+  show('[data-no-demo]', !DEMO_URL);
+  if (!DEMO_URL) return;
+
+  const demo = document.getElementById('demo');
+  const frame = document.getElementById('demo-frame');
+  const nudge = document.getElementById('nudge');
+  frame.src = DEMO_URL;
+
+  const seen = () => { try { return sessionStorage.getItem('nudged') === '1'; } catch { return false; } };
+  const markSeen = () => { try { sessionStorage.setItem('nudged', '1'); } catch { /* private mode */ } };
+
+  // Seconds count once the visitor first touches the demo, and only while
+  // the tab is in front.
+  let playing = false, seconds = 0, timer = null;
+  const tick = () => {
+    if (document.hidden) return;
+    seconds += 1;
+    if (seconds < PROMPT_AFTER_SECONDS) return;
+    clearInterval(timer);
+    if (seen() || nudge.open) return;
+    markSeen();
+    nudge.showModal();
+  };
+  const start = () => {
+    if (playing || seen()) return;
+    playing = true;
+    timer = setInterval(tick, 1000);
+  };
+  demo.addEventListener('pointerenter', start);
+  demo.addEventListener('touchstart', start, { passive: true });
+  // A click or key inside the frame takes focus from this page.
+  window.addEventListener('blur', () => { if (document.activeElement === frame) start(); });
+
+  document.getElementById('nudge-stay').addEventListener('click', () => nudge.close());
+  document.getElementById('nudge-go').addEventListener('click', () => nudge.close());
+})();
+</script>
 
 </body>
 </html>
