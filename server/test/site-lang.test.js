@@ -370,6 +370,15 @@ test('preferences in the visitor’s language: approved words, kept with the lan
   // The cookie does the same when there is no ?lang.
   const viaCookie = await hit(`/site/unsubscribe?t=${encodeURIComponent(t)}`, { headers: { cookie: 'site_lang=pa' } });
   assert.match(viaCookie.text, /<html lang="pa"/);
+  // An English page from an email link with no language: the switch at the
+  // top, each link the same page with the token kept.
+  const en = await hit(`/site/preferences?t=${encodeURIComponent(t)}`);
+  assert.match(en.text, /<html lang="en"/);
+  const sw = /<nav class="langs"[^>]*>(.*?)<\/nav>/.exec(en.text)?.[1] || '';
+  assert.match(sw, /<a href="[^"]*\/site\/preferences\?t=[^"]+&amp;lang=pa" hreflang="pa" lang="pa">ਪੰਜਾਬੀ<\/a>/);
+  assert.match(sw, /lang="en" aria-current="true">English<\/a>/);
+  const un = await hit(`/site/unsubscribe?t=${encodeURIComponent(t)}`);
+  assert.match(un.text, /<nav class="langs"[^>]*>.*\/site\/unsubscribe\?t=[^"]+&amp;lang=pa/);
 });
 
 test('<head> and the sitemap: alternates only for languages search may list', async () => {

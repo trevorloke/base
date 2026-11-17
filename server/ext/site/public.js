@@ -49,7 +49,7 @@ import { formRoute } from './forms.js';
 import { KIT_CODE_RE, goodPath } from '../socials/share.js';
 import { withSource } from '../../../shared/site/components/util.js';
 import { KINDS, consentWording } from './shape.js';
-import { LANG_BY_CODE, LANG_BY_PREFIX, isOther } from '../../../shared/site/languages.js';
+import { LANG_BY_CODE, LANG_BY_PREFIX, isOther, labelFor } from '../../../shared/site/languages.js';
 import { UI_WORDS, fillWords } from '../../../shared/site/ui-words.js';
 import { languagesFor, translatorFor } from './translate.js';
 import { LEGAL_ENGLISH_HASH, keyCurrent, legalSlots, legalWords, legalRow } from './legal.js';
@@ -334,7 +334,7 @@ const NEWS_PAGE = { id: null, slug: 'news', title: 'News', description: '', modu
 // the main site.
 // pl: the page's language, for a supporter's own pages (TR decision 40):
 // { lang, w, auth } — its words, and "Authorized by" in it as approved.
-const plainPage = (site, settings, { title, body, status = 200, closed = false, back = true, pl = null }) => {
+const plainPage = (site, settings, { title, body, status = 200, closed = false, back = true, pl = null, langs = '' }) => {
   const parentUrl = site.micro || closed ? parentUrlOf(site, settings) : null;
   const s = siteOf(settings, [], site.ws, site.micro && !closed ? { microsite: site.micro, home: null, parentUrl } : null);
   const mainName = settings.org.name || site.ws.name;
@@ -367,10 +367,14 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid var(-
 a{color:var(--link)}
 .more{margin-top:16px}
 .more a,footer a{display:inline-flex;align-items:center;min-height:48px}
+.langs{display:flex;justify-content:flex-end;gap:2px;padding:6px 16px;background:var(--paper);border-bottom:1px solid var(--line)}
+.langs a{display:inline-flex;align-items:center;justify-content:center;min-height:48px;min-width:64px;padding:0 12px;border-radius:999px;color:var(--ink);font:600 16px/1.2 var(--font-body);text-decoration:none}
+.langs a[aria-current="true"]{background:var(--brand);color:var(--brand-ink)}
+@media (max-width:640px){.langs a{flex:1 1 0;min-width:0;padding:0 4px}}
 footer{margin-top:28px;font-size:15px}
 footer p{margin:8px 0 0}
 </style></head><body>
-<header class="top"><a href="${esc(home)}">${esc(org)}</a></header>
+${langs}<header class="top"><a href="${esc(home)}">${esc(org)}</a></header>
 <main id="main">${body}
 <footer>${closed || !back ? '' : `<a href="${esc(home)}">${pl ? esc(pl.w('plain.back', { org })) : `Back to ${esc(org)}`}</a>`}${parentUrl ? `<p class="by">${pl ? esc(pl.w('plain.websiteBy')) : 'A website by'} <a href="${esc(parentUrl)}">${esc(mainName)}</a></p>` : ''}${auth ? `<p class="auth"${pl ? ' lang="en"' : ''}>${esc(auth)}</p>` : ''}${pl?.auth ? `<p class="auth" lang="${esc(pl.lang)}">${esc(pl.auth)}</p>` : ''}</footer></main></body></html>`;
   return { html, status };
@@ -380,6 +384,16 @@ const sendPlain = (c, site, settings, page, { preview = false } = {}) => {
   pageHeaders(c, site, { csp: cspFor(html, { preview }), preview, store: true });
   c.header('X-Robots-Tag', 'noindex, nofollow');
   return c.html(html, status);
+};
+
+// The language switch on a supporter's own page (preferences, unsubscribe):
+// the same page, the token kept, in each language the site offers.
+const plainSwitch = async (site, settings, path, t, current) => {
+  if (!(settings.languages?.on || []).length) return '';
+  const offered = (await languagesFor(site.db, site.ws, settings)).offered;
+  if (!offered.length) return '';
+  const link = (code) => `${site.root}${path}?t=${encodeURIComponent(t)}&lang=${code}`;
+  return `<nav class="langs" aria-label="Language · ਭਾਸ਼ਾ · 语言 · 語言">${['en', ...offered].map((code) => `<a href="${esc(link(code))}" hreflang="${esc(code)}" lang="${esc(code)}"${code === current ? ' aria-current="true"' : ''}>${esc(labelFor(code, offered))}</a>`).join('')}</nav>`;
 };
 
 const personOfToken = async (site, t) => {
@@ -671,6 +685,7 @@ export const makeSiteApp = (at) => {
       title: pl ? pl.w('plain.choicesTitle') : 'Your email and texts',
       body: choicesBody(site, person, choices, { t, saved, code, wording: consentWording(settings.org, settings.seo), pl }),
       pl,
+      langs: await plainSwitch(site, settings, '/preferences', t, pl?.lang || 'en'),
     });
   };
   app.get(route('/preferences'), (c) => preferences(c));
@@ -743,6 +758,7 @@ export const makeSiteApp = (at) => {
     if (!person || !person.email) return badLink(c, site, settings, pl);
     const org = settings.org.name || site.ws.name;
     const q = `t=${esc(encodeURIComponent(t))}${pl ? `&amp;lang=${esc(pl.lang)}` : ''}`;
+    const langs = await plainSwitch(site, settings, '/unsubscribe', t, pl?.lang || 'en');
     if (pl) {
       return sendPlain(c, site, settings, {
         title: pl.w('plain.unsubTitle'),
@@ -750,6 +766,7 @@ export const makeSiteApp = (at) => {
 <form method="post" action="${esc(site.root)}/unsubscribe?${q}"><input type="hidden" name="t" value="${esc(t)}"><button type="submit">${esc(pl.w('plain.unsubButton'))}</button></form>
 <p class="more"><a href="${esc(site.root)}/preferences?${q}">${esc(pl.w('plain.chooseInstead'))}</a></p>`,
         pl,
+        langs,
       });
     }
     return sendPlain(c, site, settings, {
@@ -757,6 +774,7 @@ export const makeSiteApp = (at) => {
       body: `<h1>Stop emails from ${esc(org)}?</h1><p>${esc(person.email)} won’t get our newsletters or other emails.</p>
 <form method="post" action="${esc(site.root)}/unsubscribe?t=${esc(encodeURIComponent(t))}"><input type="hidden" name="t" value="${esc(t)}"><button type="submit">Unsubscribe</button></form>
 <p class="more"><a href="${esc(site.root)}/preferences?t=${esc(encodeURIComponent(t))}">Choose what you get instead</a></p>`,
+      langs,
     });
   });
   app.post(route('/unsubscribe'), async (c) => {
