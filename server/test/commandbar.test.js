@@ -253,3 +253,24 @@ test('Go to: a desk member who writes letters gets “Your letters” in place o
     assert.equal(rank(screens, 'your letters')[0]?.to, '/letters', me.role);
   }
 });
+
+// HOME's search meets TR's Website → Languages: the words people type find
+// it for whoever has Website translations (site_words), and for nobody else.
+test('Website languages: found by “languages”, “translate”, “punjabi” and “chinese”, behind Website translations', () => {
+  const words = ['languages', 'translate', 'punjabi', 'chinese'];
+  const manager = commandsFor({ role: 'manager', areas: [] }, NAV).screens;
+  for (const w of words) assert.equal(rank(manager, w)[0]?.to, '/website/languages', w);
+  // The server gives site_words to whoever has the Website (perms.js decideArea).
+  const builder = commandsFor({ role: 'staff', areas: ['people', 'site', 'site_words'] }, NAV).screens;
+  assert.equal(rank(builder, 'translate')[0]?.to, '/website/languages');
+  const staff = commandsFor({ role: 'staff', areas: ['people', 'map', 'shifts', 'money', 'signs', 'outreach', 'data'] }, NAV).screens;
+  assert.ok(!staff.some((s) => s.to === '/website/languages'), 'not without the area');
+  // A volunteer with Website translations alone: their one desk tab is
+  // Translations (Shell.jsx NAV_DESK, with these words); offered once, found by each word.
+  const tab = { to: '/website/languages', label: 'Translations', words: 'website languages translate punjabi chinese language' };
+  const reader = commandsFor({ role: 'volunteer', areas: ['site_words'] }, [tab]).screens;
+  assert.equal(reader.filter((s) => s.to === '/website/languages').length, 1, 'the tab, not a second entry');
+  for (const w of [...words, 'translations']) assert.equal(rank(reader, w)[0]?.to, '/website/languages', w);
+  // Not a Go to tile: Today's places stay the everyday ones.
+  assert.ok(!quickFor({ role: 'manager', areas: [] }, NAV, {}).some((q) => q.to === '/website/languages'));
+});

@@ -84,7 +84,8 @@ const NAV_DESK = [
   { to: '/imagineu', label: BRAND.learn, icon: 'learn', area: 'learn' },
   { to: '/website',  label: 'Website',  icon: 'website', area: 'site' },
   // Website translations alone (TR): straight to its one screen.
-  { to: '/website/languages', label: 'Translations', icon: 'website', area: 'site_words', unless: 'site' },
+  // Its words are the search's "Website languages" (commands.js), which this tab stands in for.
+  { to: '/website/languages', label: 'Translations', icon: 'website', area: 'site_words', unless: 'site', words: 'website languages translate punjabi chinese language' },
 ];
 // The areas a person has: what the server said, else their role's usual ones.
 export const areasOf = (me) => (Array.isArray(me?.areas) ? me.areas : (isDesk(me) ? ['people', 'map', 'shifts', 'money', 'signs', 'outreach', 'data', 'media'] : []));

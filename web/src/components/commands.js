@@ -91,6 +91,10 @@ export const SCREENS = [
   { label: 'Mainstreeting', to: '/mainstreet', area: 'people', desk: true, words: 'events bus loop met someone' },
   // The writer's own letters and the campaign's replies (Letters.jsx), for anyone.
   { label: 'Your letters', to: '/letters', words: 'my letters op-ed oped replies mine sent' },
+  // The website in Punjabi and Chinese (Website → Languages): Website
+  // translations' (site_words), which whoever has the Website has too. For
+  // someone with that area alone it is their Translations tab (Shell.jsx).
+  { label: 'Website languages', to: '/website/languages', area: 'site_words', words: 'translations translate punjabi chinese language' },
 ];
 
 // Today's "Go to" (desk): the places used every day, in this order, each
