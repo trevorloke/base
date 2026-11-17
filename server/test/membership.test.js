@@ -161,6 +161,23 @@ test('a volunteer given Donations enters a form for someone on file: the email o
   }
 });
 
+// A paper form is the person's own answers: a Private Birth date on it is
+// kept even when a volunteer given Donations types it in.
+test('Birth date marked Private: a volunteer given Donations still enters a paper form with it', async () => {
+  const me = ok(await vol.get('/api/auth/me'));
+  const bd = ok(await mgr.get('/api/fields')).fields.find((f) => f.name === 'Birth date' && !f.retired);
+  ok(await mgr.action('field.update', { id: bd.id, sensitive: true }));
+  ok(await mgr.action('permission.member.set', { user_id: me.user.id, grant: ['money'] }));
+  try {
+    const birth = `${yr - 40}-05-06`;
+    const r = ok(await vol.action('membership.enter', { first_name: 'Hal', last_name: 'Example', birth_date: birth, city: 'Surrey', citizenship: 'citizen', term: 1, signed: true }));
+    assert.equal((await fieldsOf(r.person.id))['Birth date'], birth);
+  } finally {
+    ok(await mgr.action('permission.member.set', { user_id: me.user.id, grant: [] }));
+    ok(await mgr.action('field.update', { id: bd.id, sensitive: false }));
+  }
+});
+
 test('the desk’s: a volunteer can’t enter a form or read the club amounts; the books verify', async () => {
   assert.equal((await vol.action('membership.enter', { first_name: 'X', last_name: 'Y' })).status, 403);
   assert.equal((await vol.get('/api/membership/form')).status, 403);

@@ -324,8 +324,10 @@ export const actions = {
         if (!f) throw httpError(400, 'that field is not in this campaign');
         if (f.retired_at) throw httpError(409, `“${f.name}” is taken off`);
         // A Private field is the office's to record, whatever areas a
-        // volunteer has been granted.
-        if (f.sensitive && !DESK.includes(ctx.role)) throw httpError(403, `Only the office records ${f.name}`);
+        // volunteer has been granted. A form the person filled in (the
+        // website's, their own consent link, a paper membership form) writes
+        // what they gave: ctx.form, set by those callers only.
+        if (f.sensitive && !ctx.form && !DESK.includes(ctx.role)) throw httpError(403, `Only the office records ${f.name}`);
         if (f.converting) throw httpError(409, convertingRefusal(f.name));
         const p = parseValue(f, value);
         if (p.error) throw httpError(400, valueError(f, p.error));

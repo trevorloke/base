@@ -310,7 +310,7 @@ const setFields = async (tx, ws, personId, pairs, emit) => {
     )).rows[0];
     if (!had) values.push({ field_id: f.id, value });
   }
-  if (values.length) await fieldActions['field.values.set'].handler(tx, { workspaceId: ws, user: null }, { person_id: personId, values }, emit);
+  if (values.length) await fieldActions['field.values.set'].handler(tx, { workspaceId: ws, user: null, form: true }, { person_id: personId, values }, emit);
 };
 
 // Where a plain post goes back to: the page it came from.

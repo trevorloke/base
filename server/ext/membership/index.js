@@ -283,7 +283,7 @@ export const actions = {
       const optIn = input.opt_in && input.signed && joins;
       if (optIn && (input.email || person.email)) set('Email opt-in', true);
       if (optIn && (input.phone || person.phone)) set('SMS opt-in', true);
-      if (values.length) await fieldActions['field.values.set'].handler(tx, ctx, { person_id: person.id, values }, emit);
+      if (values.length) await fieldActions['field.values.set'].handler(tx, { ...ctx, form: true }, { person_id: person.id, values }, emit);
 
       // ── Tags, volunteer, sign ──
       const had = (await tx.query('select tags from persons where id = $1', [person.id])).rows[0];
