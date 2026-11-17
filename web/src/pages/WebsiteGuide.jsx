@@ -8,7 +8,7 @@
 // Read by GET /api/site/guide (the Website area); every write is a
 // site.guide.* action. Publish, Unpublish, Clear and the embed addresses
 // are a manager's; staff with the Website area do the rest.
-import { Suspense, lazy, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { dayWords, normWords } from '@starbase/shared/voteguide';
@@ -304,7 +304,24 @@ function ImportSheet({ d, run, busy, online, onClose, toast, live }) {
 }
 
 // ── Voting places ──
+// A phone shows the places as a list, a desk as a table (vote-guide.css);
+// the open place's editor is drawn in the one on screen only, so its
+// fields' ids (and their labels) are never there twice.
+const NARROW = '(max-width: 640px)';
+function useNarrow() {
+  const [narrow, setNarrow] = useState(() => Boolean(globalThis.matchMedia?.(NARROW).matches));
+  useEffect(() => {
+    const mq = globalThis.matchMedia?.(NARROW);
+    if (!mq) return undefined;
+    const on = () => setNarrow(mq.matches);
+    mq.addEventListener?.('change', on);
+    return () => mq.removeEventListener?.('change', on);
+  }, []);
+  return narrow;
+}
+
 function PlacesCard({ d, run, busy, online, toast, live }) {
+  const narrow = useNarrow();
   const places = arr(d.guide.places);
   const days = arr(d.guide.days);
   const [open, setOpen] = useState(null); // a place id, or 'new'
@@ -343,7 +360,7 @@ function PlacesCard({ d, run, busy, online, toast, live }) {
           <table className="wg-table">
             <thead><tr><th>Name</th><th>Address</th><th>Days</th><th>On the map</th><th>Accessible</th></tr></thead>
             <tbody>
-              {shown.map((p) => (open === p.id ? (
+              {shown.map((p) => (open === p.id && !narrow ? (
                 <tr key={p.id}><td colSpan={5}>{editor(p)}</td></tr>
               ) : (
                 <tr key={p.id} data-closed={p.closed ? '' : undefined}>
@@ -357,7 +374,7 @@ function PlacesCard({ d, run, busy, online, toast, live }) {
             </tbody>
           </table>
           <ul className="wg-list">
-            {shown.map((p) => (open === p.id ? <li key={p.id}>{editor(p)}</li> : (
+            {shown.map((p) => (open === p.id && narrow ? <li key={p.id}>{editor(p)}</li> : (
               <li key={p.id}>
                 <button type="button" className="wg-rowbtn" onClick={() => setOpen(p.id)}>
                   <span className="wg-name">{p.name}{p.closed ? ' · Closed today' : ''}</span>

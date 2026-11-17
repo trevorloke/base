@@ -486,7 +486,8 @@ try {
   await mpage.click('#wg-places .wg-list .wg-rowbtn:has-text("Example Community Hall")').catch(() => {});
   await sleep(500);
   const phoneLook = await mpage.evaluate(() => {
-    const sw = document.querySelector('#wg-places .wg-place [role=switch]');
+    const sw = document.querySelector('#wg-places .wg-list .wg-place [role=switch]');
+    if (document.querySelectorAll('#wg-places .wg-place').length !== 1) return { track: 0, on: 'two editors' };
     const track = sw?.querySelector('.sv-switch__track');
     return { track: track ? Math.round(track.getBoundingClientRect().width) : 0, on: sw?.getAttribute('aria-checked') };
   });
