@@ -324,32 +324,48 @@ function Field({ d, tiles, sel, onSel, period }) {
   const mapRef = useRef(null);
   const layersRef = useRef(null);
   // The campaign's own frame, every time nobody is picked (dashFrame.js:
-  // turfs, else the period's contacts and who was seen today, else the
-  // city); a resize refits it. dataRef: the effect below reads the latest.
+  // turfs, else the period's contacts and who was seen today — the
+  // campaign's today — else the city). A resize refits it until someone
+  // zooms or drags (movedRef): a phone's address bar showing or hiding
+  // changes the band's height, and must not throw their view away.
+  // dataRef: the effects below read the latest.
   const dataRef = useRef(d);
   dataRef.current = d;
-  const fitCity = (map) => {
+  const fittingRef = useRef(false);
+  const movedRef = useRef(false);
+  const frameKeyRef = useRef('');
+  const frameNow = () => {
     const x = dataRef.current;
-    const box = frameOf({ turfs: x?.turfs, dots: x?.pins, people: x?.people, today: Date.now() });
-    if (box) map.fitBounds(box, { padding: [16, 16], maxZoom: 16, animate: false });
-    else map.setView(SURREY, 12, { animate: false });
+    return frameOf({ turfs: x?.turfs, dots: x?.pins, people: x?.people, today: x?.today || Date.now(), tz: x?.tz });
+  };
+  const fitCity = (map) => {
+    const box = frameNow();
+    fittingRef.current = true;
+    try {
+      if (box) map.fitBounds(box, { padding: [16, 16], maxZoom: 16, animate: false });
+      else map.setView(SURREY, 12, { animate: false });
+    } finally { fittingRef.current = false; }
+    movedRef.current = false;
+    frameKeyRef.current = JSON.stringify(box);
   };
   const selected = d.people.find((p) => p.id === sel) || null;
   const selRef = useRef(sel);
   const wasSelRef = useRef(false);
-  const framedRef = useRef(false);
+  const framedRef = useRef(false); // the period last framed
   const headId = useId();
 
   useEffect(() => {
     const el = boxRef.current;
     if (!el || mapRef.current) return undefined;
     const map = L.map(el, { zoomControl: true, attributionControl: true, scrollWheelZoom: false, zoomSnap: 1 }); // whole zooms: no hairline seams between tiles; the wheel scrolls the page past the band
+    // Their own zoom or drag (not ours: fitCity's run with fittingRef set).
+    map.on('dragstart zoomstart', () => { if (!fittingRef.current) movedRef.current = true; });
     fitCity(map);
     const layers = { turfs: L.layerGroup().addTo(map), pins: L.layerGroup().addTo(map), trail: L.layerGroup().addTo(map), people: L.layerGroup().addTo(map) };
     mapRef.current = map; layersRef.current = layers;
     let ro = null;
     if (typeof ResizeObserver !== 'undefined') {
-      ro = new ResizeObserver(() => { map.invalidateSize(); if (!selRef.current) fitCity(map); });
+      ro = new ResizeObserver(() => { map.invalidateSize(); if (!selRef.current && !movedRef.current) fitCity(map); });
       ro.observe(el);
     }
     return () => { ro?.disconnect(); map.remove(); mapRef.current = null; layersRef.current = null; };
@@ -407,10 +423,12 @@ function Field({ d, tiles, sel, onSel, period }) {
     }
     if (selected?.where) {
       map.setView([selected.where.lat, selected.where.lng], Math.max(map.getZoom(), 15));
-    } else if (wasSelRef.current || !framedRef.current) {
-      fitCity(map); // the first data, or back from one person: the same frame
-      framedRef.current = true;
+    } else if (wasSelRef.current || !framedRef.current || ((d.period ?? 'any') !== framedRef.current && JSON.stringify(frameNow()) !== frameKeyRef.current)) {
+      // The first data, back from one person, or another period whose data
+      // sits elsewhere (with no turfs the frame is the period's dots).
+      fitCity(map);
     }
+    if (!selected) framedRef.current = d.period ?? 'any';
     wasSelRef.current = !!selected;
     selRef.current = sel;
   }, [d, sel, selected, onSel, period]);

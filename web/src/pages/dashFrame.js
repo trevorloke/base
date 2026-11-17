@@ -7,7 +7,11 @@
 //   3. else null: the map opens on the city (setView(SURREY, 12)).
 // → [[south, west], [north, east]] or null.
 const finite = (p) => p && Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lng));
-const dayOf = (t) => new Date(t).toLocaleDateString('en-CA');
+// The day of t in the campaign's zone (the answer's tz), as YYYY-MM-DD; a
+// zone this browser doesn't know falls back to the device's.
+const dayOf = (t, tz) => {
+  try { return new Date(t).toLocaleDateString('en-CA', tz ? { timeZone: tz } : undefined); } catch { return new Date(t).toLocaleDateString('en-CA'); }
+};
 
 function boundsOf(lats, lngs) {
   return [[Math.min(...lats), Math.min(...lngs)], [Math.max(...lats), Math.max(...lngs)]];
@@ -15,7 +19,8 @@ function boundsOf(lats, lngs) {
 // The value at fraction f of a sorted list (nearest rank).
 const at = (sorted, f) => sorted[Math.round(f * (sorted.length - 1))];
 
-export function frameOf({ turfs = [], dots = [], people = [], today = Date.now() } = {}) {
+// today: the campaign's day as YYYY-MM-DD (the answer's today), or a time.
+export function frameOf({ turfs = [], dots = [], people = [], today = Date.now(), tz } = {}) {
   const corners = [];
   for (const t of turfs || []) {
     if (!Array.isArray(t?.polygon) || t.polygon.length < 3) continue;
@@ -31,9 +36,9 @@ export function frameOf({ turfs = [], dots = [], people = [], today = Date.now()
     lats.push(at(la, 0.02), at(la, 0.98));
     lngs.push(at(ln, 0.02), at(ln, 0.98));
   }
-  const day = dayOf(today);
+  const day = typeof today === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(today) ? today : dayOf(today, tz);
   for (const p of people || []) {
-    if (!finite(p?.where) || !p.where.at || dayOf(p.where.at) !== day) continue;
+    if (!finite(p?.where) || !p.where.at || dayOf(p.where.at, tz) !== day) continue;
     lats.push(Number(p.where.lat)); lngs.push(Number(p.where.lng));
   }
   return lats.length ? boundsOf(lats, lngs) : null;

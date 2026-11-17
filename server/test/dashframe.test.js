@@ -39,3 +39,14 @@ test('nothing → null (the map opens on the city)', () => {
   assert.equal(frameOf({ turfs: [], dots: [], people: [], today: NOW }), null);
   assert.equal(frameOf({}), null);
 });
+
+test('“today” is the campaign’s day (the answer’s today and tz), not the device’s', () => {
+  // 02:00 on the 16th in a campaign at UTC+14; still the 15th in UTC and in Vancouver.
+  const where = { lat: 49.19, lng: -122.70, at: '2026-11-15T12:00:00Z' };
+  const box = frameOf({ turfs: [], dots: [], people: [{ where }], today: '2026-11-16', tz: 'Pacific/Kiritimati' });
+  assert.deepEqual(box, [[49.19, -122.70], [49.19, -122.70]]);
+  // The same position, in a campaign whose day it was the 15th: not today.
+  assert.equal(frameOf({ turfs: [], dots: [], people: [{ where }], today: '2026-11-16', tz: 'America/Vancouver' }), null);
+  // A zone the browser doesn't know falls back to the device's, never throws.
+  assert.doesNotThrow(() => frameOf({ people: [{ where }], today: '2026-11-16', tz: 'Nowhere/Made_Up' }));
+});

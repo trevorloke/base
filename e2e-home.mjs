@@ -238,6 +238,20 @@ try {
     const zoom = await page.evaluate(() => document.querySelector('.dash-map')?.classList.contains('leaflet-container'));
     check('Activity: the map is drawn, with its one-line note', zoom && /Dots: the period’s contacts · Initials: who canvassed/.test(actText), '');
     await M.shot('3-activity-1440', true);
+    // Their zoom survives the band's height changing (a phone's address bar).
+    const zoomNow = () => page.evaluate(() => {
+      const lv = [...document.querySelectorAll('.dash-map .leaflet-tile-container')].sort((a, b) => Number(b.style.zIndex) - Number(a.style.zIndex))[0];
+      const m = (lv?.querySelector('img')?.getAttribute('src') || '').match(/\/(\d+)\/\d+\/\d+(@2x)?\.png/);
+      return m ? Number(m[1]) : null;
+    });
+    const z0 = await zoomNow();
+    await page.click('.dash-map .leaflet-control-zoom-in'); await sleep(500);
+    await page.click('.dash-map .leaflet-control-zoom-in'); await sleep(900);
+    const z1 = await zoomNow();
+    await page.setViewportSize({ width: 1440, height: 860 }); await sleep(900);
+    const z2 = await zoomNow();
+    check('Activity: zoomed in twice, a shorter window keeps the zoom', z0 != null && z1 === z0 + 2 && z2 === z1, JSON.stringify({ z0, z1, z2 }));
+    await page.setViewportSize(WIDE); await sleep(400);
     await page.setViewportSize(PHONE); await sleep(600);
     const am = await measure(page, '.dash-period, .dash-prow');
     check('Activity at 390: no sideways scroll', am.overflow <= 0, JSON.stringify(am));
@@ -415,6 +429,20 @@ try {
     await staff.go('/activity');
     await sleep(600);
     check('staff typing /activity land on Today', new URL(staff.page.url()).pathname === '/admin/' || new URL(staff.page.url()).pathname === '/admin', staff.page.url());
+
+    // Their own letter, and the campaign's reply: Needs you says so, and
+    // "Your letters" takes Go to's last tile.
+    const mine = await staff.api('/actions/myletter.submit', { client_id: '00000000-0000-4000-8000-0000000004e1', kind: 'letter', body: 'A made-up letter about parks, for this test.' });
+    await act('letter.note', { id: mine.json?.letter?.id, body: 'Thanks — one small change?' });
+    await deskToday(staff);
+    await sleep(800);
+    const lNeeds = await staff.text('section[aria-labelledby="today-needs-h"]');
+    const lHref = await staff.page.getAttribute('section[aria-labelledby="today-needs-h"] a:has-text("to your letters")', 'href').catch(() => null);
+    const lPlaces = (await goTo(staff)).map((p) => p.label);
+    check('a writer with a reply: “1 reply to your letters” in Needs you → /letters; Go to ends with “Your letters”',
+      /1 reply to your letters/.test(lNeeds) && /\/letters$/.test(lHref || '') && lPlaces.length <= 6 && lPlaces[lPlaces.length - 1] === 'Your letters' && inOrder(lPlaces),
+      `${lNeeds.slice(0, 200)} | ${lHref} | ${lPlaces.join(' | ')}`);
+    await staff.shot('10b-staff-letters-1440', true);
 
     const dana = await C.join('staff', 'Dana', ['data']);
     await deskToday(dana);
