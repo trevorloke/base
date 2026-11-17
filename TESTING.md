@@ -397,7 +397,11 @@ one tap away under **More**.
   phone banks, passes, copies); the upgrade job; Turn into a list (stop,
   start again, a value another write holds — that one needs a Postgres with
   two connections: `DATABASE_URL=… PG_POOL_MAX=4`); the membership form's
-  Campus; a move's Undo into "as written". **Speed**:
+  Campus; a move's Undo into "as written". `npm run test:pg -- --twice
+  [files…]` runs each file a second time against the same database, so an
+  upgrade job that touches an existing campaign shows up; many files set
+  up the first campaign or a fixed email and fail a second run for that
+  reason alone, so compare with the commit before. **Speed**:
   `DATABASE_URL=… PG_POOL_MAX=4 node scripts/bench-fieldlist.mjs` against a
   Postgres. On a local Postgres 16 (17 November 2026, 300,000 values):
   GET …/words 0.4 s; the whole conversion 0.5 min, the slowest chunk
