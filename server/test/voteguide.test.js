@@ -11,6 +11,7 @@ process.env.SITE_CACHE_SECONDS = '60';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
+import { existsSync } from 'node:fs';
 import { campaign, member, hit, send } from './site-helpers.js';
 import { atLocal, localDay } from '../lib/tzrule.js';
 import { sign } from '../ext/site/tokens.js';
@@ -607,4 +608,12 @@ test('the desk sends Closed today only when the switch was changed in the editor
   assert.deepEqual(closedPatch(true, false), { closed: false });
   assert.deepEqual(closedPatch(false, true), { closed: true });
   assert.deepEqual(closedPatch(null, false), { closed: false }, 'a new place says it');
+});
+
+// The page is never kept by the browser, the islands' script for an hour:
+// each build's script must be a new address, or a visitor from before a
+// deploy gets the guide without its address lookup and filters.
+test('the islands’ script on a drawn page carries its build’s ?v=', { skip: !existsSync(new URL('../../web/dist/site-islands.js', import.meta.url)) && 'needs the web build' }, async () => {
+  const r = await hit('/site/voter-guide');
+  assert.match(r.text, /<script type="module" src="[^"]*\/site-islands\.js\?v=[a-f0-9]+"/);
 });

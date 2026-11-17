@@ -243,7 +243,9 @@ const ctxOf = (c, site, extra = {}) => {
     assets: site.assets,
     media: `${site.base}/media`,
     origin: site.address,
-    islands: islandsBuilt() ? `${site.assets}/site-islands.js` : null,
+    // true: the renderer names it under ctx.assets with its build's ?v=,
+    // so a deploy's script is a new address (it is kept for an hour).
+    islands: islandsBuilt() ? true : null,
     preview: false,
     path: c.req.path.slice(site.inner.length) || '/',
     sent, error, cancelled,
