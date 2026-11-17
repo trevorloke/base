@@ -12,7 +12,7 @@ import { html, cx } from './h.js';
 import { wordsIn } from '../ui-words.js';
 import { directionsUrl } from '../../maps.js';
 import {
-  guideState, openNow, metresBetween, distanceWords, hoursWords, timeWords, dayWords, dayParts, normWords,
+  guideState, openNow, metresBetween, distanceWords, hoursWords, timeWords, dayWords, dayParts, normWords, seedDateWords,
 } from '../../voteguide.js';
 
 const arr = (v) => (Array.isArray(v) ? v : []);
@@ -51,6 +51,27 @@ export function statusWords(st, W, lang) {
     return st.next.day === st.day
       ? W('vg.opensToday', { time: timeWords(st.next.opens, lang) })
       : W('vg.next', { day: dayWords(st.next.day, lang), hours: hoursWords(st.next.opens, st.next.closes, lang) });
+  }
+  return '';
+}
+
+// A sentence with its slots drawn as given nodes ({time} → <span>…</span>).
+const fillIn = (W, key, vars) => {
+  const names = Object.keys(vars);
+  const parts = W(key, Object.fromEntries(names.map((n, i) => [n, `\u0000${i}\u0000`]))).split('\u0000');
+  return html`<${Fragment}>${parts.map((t, i) => (i % 2 ? html`<${Fragment} key=${i}>${vars[names[Number(t)]]}<//>` : t))}<//>`;
+};
+// A phone number, an hour or a day never splits across two lines.
+const keep = (s) => html`<span className="vg-keep">${s}</span>`;
+
+// The status line as drawn: statusWords, with its day and hours kept whole.
+function statusLine(st, W, lang) {
+  if (st.state === 'before') return fillIn(W, 'vg.starts', { day: keep(dayWords(st.next?.day, lang)) });
+  if (st.state === 'open') return fillIn(W, 'vg.openNow', { time: keep(timeWords(st.next?.closes, lang)) });
+  if (st.state === 'between' && st.next) {
+    return st.next.day === st.day
+      ? fillIn(W, 'vg.opensToday', { time: keep(timeWords(st.next.opens, lang)) })
+      : fillIn(W, 'vg.next', { day: keep(dayWords(st.next.day, lang)), hours: keep(hoursWords(st.next.opens, st.next.closes, lang)) });
   }
   return '';
 }
@@ -95,7 +116,7 @@ function Place({ p, st, days, W, lang, where, embed }) {
       ${closed ? html`<p className="vg-place-closed" role="note">${p.closed_note ? W('vg.closed', { note: p.closed_note }) : W('vg.closedToday')}</p>` : null}
       ${p.note ? html`<p className="vg-place-note">${p.note}</p>` : null}
     </div>
-    ${dir ? html`<a className="vg-directions" href=${dir} target="_blank" rel="noopener noreferrer" aria-label=${W('vg.directionsTo', { name: p.name })} data-embed=${embed ? '1' : undefined}>${W('vg.directions')}</a>` : null}
+    ${dir && !closed ? html`<a className="vg-directions" href=${dir} target="_blank" rel="noopener noreferrer" aria-label=${W('vg.directionsTo', { name: p.name })} data-embed=${embed ? '1' : undefined}>${W('vg.directions')}</a>` : null}
   </li>`;
 }
 
@@ -105,6 +126,7 @@ export function VoteGuide(props) {
     clockUrl, findUrl, where = {}, rules = {}, ballotNote = '', w,
   } = props;
   const W = wordsIn(w);
+  seedDateWords(lang, props.dateWords);
   const H = `h${Math.min(6, Math.max(1, level))}`;
   const H3 = `h${Math.min(6, Math.max(1, level + 1))}`;
   const times = guide.times || {};
@@ -197,9 +219,12 @@ export function VoteGuide(props) {
 
   const shown = useMemo(() => {
     const list = filterPlaces(places, { day, area, q }, days, st.day);
-    if (!at) return list;
+    // A place closed on the day drawn goes last, so the first row (and its
+    // Directions) is never a closed door; its row stays, with the note.
+    const shut = (p) => (st.day && p.closed_on === st.day ? 1 : 0);
+    if (!at) return [...list].sort((a, b) => shut(a) - shut(b));
     const withD = list.map((p) => (p.lat != null && p.lng != null ? { ...p, distance: metresBetween(at, { lat: p.lat, lng: p.lng }) } : p));
-    return withD.sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity) || a.position - b.position);
+    return withD.sort((a, b) => shut(a) - shut(b) || (a.distance ?? Infinity) - (b.distance ?? Infinity) || a.position - b.position);
   }, [places, day, area, q, at, st.day]);
 
   // Each filter is a link too (?day=, ?area=), for a page without JavaScript.
@@ -238,7 +263,7 @@ export function VoteGuide(props) {
     <div className="vg-head">
       <${H} id=${headingId} className="display">${title}<//>
       ${intro ? html`<p className="lede">${intro}</p>` : null}
-      <p className="vg-status" aria-live="polite">${statusWords(st, W, lang)}</p>
+      <p className="vg-status" aria-live="polite">${statusLine(st, W, lang)}</p>
     </div>
 
     <section className="vg-block" aria-labelledby=${`${uid}-days`}>
@@ -310,7 +335,7 @@ export function VoteGuide(props) {
       ${rules.access ? html`<${Fragment}><${H3} className="vg-title">${W('vg.access')}<//><${Md} html=${rules.access} /><//>` : null}
       ${guide.ride_phone ? html`<p className="vg-ride">${(() => {
         const [before, after] = W('vg.ride', { phone: '\u0000' }).split('\u0000');
-        return html`<${Fragment}>${before}<a href=${`tel:${guide.ride_phone.replace(/[^\d+]/g, '')}`}>${guide.ride_phone}</a>${after || ''}<//>`;
+        return html`<${Fragment}>${before}<a className="vg-keep" href=${`tel:${guide.ride_phone.replace(/[^\d+]/g, '')}`}>${guide.ride_phone}</a>${after || ''}<//>`;
       })()}</p>` : null}
     </section>` : null}
 
@@ -327,8 +352,8 @@ export function VoteGuide(props) {
 
     ${cta ? html`<p className="vg-cta"><a className="btn btn--action" href=${cta.href} target=${embed ? '_top' : undefined}>${cta.label}</a></p>` : null}
     ${guide.official_url ? html`<p className="vg-source small">${(() => {
-      const [before, after] = W('vg.source', { label: '\u0000', day: guide.checkedOn ? dayWords(guide.checkedOn, lang) : '' }).split('\u0000');
-      return html`<${Fragment}>${before}<${Away} href=${guide.official_url} top=${embed}>${guide.official_label || guide.official_url}<//>${after || ''}<//>`;
+      const label = html`<${Away} href=${guide.official_url} top=${embed}>${guide.official_label || guide.official_url}<//>`;
+      return fillIn(W, 'vg.source', { label, day: guide.checkedOn ? keep(dayWords(guide.checkedOn, lang)) : '' });
     })()}</p>` : null}
   </div>`;
 }

@@ -16,6 +16,7 @@
 //   nearest(places, { lat, lng }, n, times, now) · nearVotingPlace(places, at, now, metres)
 //   metresBetween(a, b) · distanceWords(m) · hoursWords(opens, closes, lang)
 //   timeWords(hm, lang) · dayWords(day, lang) · dayParts(day, lang)
+//   dateWordsFor(guide, lang) · seedDateWords(lang, words)
 //   parsePlaces(text, guideDays) · normWords(s) · normAddress(s)
 
 const HOUR = 3600 * 1000;
@@ -143,7 +144,20 @@ export const guideLangOf = (value) => {
   return 'en';
 };
 
+// The words the server drew, keyed by language and kind: a browser whose
+// copy of Intl lacks a language (desktop Chromium often has no Punjabi
+// dates, and gives "M11 20") uses the server's words instead of its own,
+// so the island hydrates to exactly what the server sent.
+const drawn = new Map();
+const said = (lang, key) => drawn.get(`${lang}|${key}`);
+export const seedDateWords = (lang, words) => {
+  if (!words || typeof words !== 'object') return;
+  for (const [k, v] of Object.entries(words)) if (typeof v === 'string' && v) drawn.set(`${lang}|${k}`, v);
+};
+
 export const timeWords = (hm, lang = 'en') => {
+  const known = said(lang, `t:${hm}`);
+  if (known) return known;
   const m = HM.exec(String(hm ?? ''));
   if (!m) return '';
   const d = new Date(Date.UTC(2000, 0, 1, Number(m[1]), Number(m[2])));
@@ -157,6 +171,8 @@ const dateOf = (day) => {
 };
 // "Sat, Oct 19"
 export const dayWords = (day, lang = 'en') => {
+  const known = said(lang, `dw:${day}`);
+  if (known) return known;
   const d = dateOf(day);
   return d ? fmt(lang, { weekday: 'short', month: 'short', day: 'numeric' }).format(d) : '';
 };
@@ -164,7 +180,37 @@ export const dayWords = (day, lang = 'en') => {
 export const dayParts = (day, lang = 'en') => {
   const d = dateOf(day);
   if (!d) return { weekday: '', date: '' };
-  return { weekday: fmt(lang, { weekday: 'short' }).format(d), date: fmt(lang, { month: 'short', day: 'numeric' }).format(d) };
+  return {
+    weekday: said(lang, `w:${day}`) || fmt(lang, { weekday: 'short' }).format(d),
+    date: said(lang, `d:${day}`) || fmt(lang, { month: 'short', day: 'numeric' }).format(d),
+  };
+};
+// Every day and hour word a guide can draw, made here (the server, with
+// full ICU) for the island's props: seedDateWords(lang, these) in the browser.
+export const dateWordsFor = (guide, lang = 'en') => {
+  const days = new Set();
+  const hms = new Set();
+  const times = guide?.times || {};
+  for (const d of arr(times.days)) { days.add(d.day); hms.add(d.opens); hms.add(d.closes); }
+  for (const p of arr(guide?.places)) {
+    for (const e of arr(p?.days)) { days.add(e.day); hms.add(e.opens); hms.add(e.closes); }
+    if (p?.changed_hm) hms.add(p.changed_hm);
+  }
+  if (guide?.mail?.request_by) days.add(guide.mail.request_by);
+  if (guide?.checkedOn) days.add(guide.checkedOn);
+  const out = {};
+  for (const day of days) {
+    const d = dateOf(day);
+    if (!d) continue;
+    out[`w:${day}`] = fmt(lang, { weekday: 'short' }).format(d);
+    out[`d:${day}`] = fmt(lang, { month: 'short', day: 'numeric' }).format(d);
+    out[`dw:${day}`] = fmt(lang, { weekday: 'short', month: 'short', day: 'numeric' }).format(d);
+  }
+  for (const hm of hms) {
+    const m = HM.exec(String(hm ?? ''));
+    if (m) out[`t:${hm}`] = fmt(lang, Number(m[2]) ? { hour: 'numeric', minute: '2-digit' } : { hour: 'numeric' }).format(new Date(Date.UTC(2000, 0, 1, Number(m[1]), Number(m[2]))));
+  }
+  return out;
 };
 
 // ── Matching names and addresses ──

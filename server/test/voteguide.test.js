@@ -331,7 +331,7 @@ test('the public guide by the clock: before, open, between, over; the banner; Pe
   cacheClear(ws);
   moveTo(A1, '10:00');
   r = await hit('/site/voter-guide');
-  assert.match(r.text, /Voting is open now · until 8 p\.m\./);
+  assert.match(r.text, /Voting is open now · until <span class="vg-keep">8 p\.m\.<\/span>/);
   home = await hit('/site/');
   assert.match(home.text, /Vote today until 8 p\.m\.(?:<!-- -->)? <a/, 'one full stop');
   cacheClear(ws);
@@ -341,7 +341,7 @@ test('the public guide by the clock: before, open, between, over; the banner; Pe
   cacheClear(ws);
   moveTo(A2, '06:00');
   r = await hit('/site/voter-guide');
-  assert.match(r.text, /Voting opens today at 8 a\.m\./);
+  assert.match(r.text, /Voting opens today at <span class="vg-keep">8 a\.m\.<\/span>/);
   // Kept at 19:59:30, not served at 20:00:01.
   cacheClear(ws);
   process.env.STARBASE_CLOCK_SHIFT_MS = String(atLocal(A2, '19:59', TZ) + 30_000 - Date.now());

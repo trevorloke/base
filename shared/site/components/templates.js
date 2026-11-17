@@ -17,7 +17,9 @@ export const visibleModules = (page) => arr(obj(page).modules).filter((m) => m &
 function PageView({ rc, page }) {
   const p = obj(page);
   const modules = visibleModules(p);
-  const heroFirst = modules[0]?.kind === 'hero';
+  // A hero is the page's title; so is a voter guide that opens the page
+  // (one title, with the day that matters straight under it).
+  const heroFirst = modules[0]?.kind === 'hero' || modules[0]?.kind === 'voterguide';
   const name = rc.site.site?.name || rc.site.org.name;
   const title = str(p.slug) === 'home' ? name || str(p.title) : str(p.title) || name;
   return html`<${Fragment}>

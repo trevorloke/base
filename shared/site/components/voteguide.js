@@ -9,7 +9,7 @@
 import { html } from './h.js';
 import { Island } from './islands.js';
 import { formProps, makeF } from './modules.js';
-import { guideState, dayWords, timeWords } from '../../voteguide.js';
+import { guideState, dayWords, timeWords, dateWordsFor } from '../../voteguide.js';
 import { arr, obj, str } from './util.js';
 
 const guideOf = (rc) => {
@@ -61,6 +61,23 @@ export function guideProps(rc, m, p, level) {
   const check = { check: true };
   const rules = Object.fromEntries(Object.entries(obj(g.rules)).filter(([, t]) => str(t).trim()).map(([k, t]) => [k, rc.markdown(t, check)]));
   const cta = p.cta && rc.link(obj(p.cta).href) && str(obj(p.cta).label).trim() ? { href: rc.link(p.cta.href), label: p.cta.label } : null;
+  const guide = {
+    times: g.times,
+    areas: over ? [] : arr(g.areas),
+    places: (over ? [] : arr(g.places)).map((x) => ({
+      ...x,
+      note: x.note ? rc.tt(x.note) : '',
+      closed_note: x.closed_note ? rc.tt(x.closed_note, check) : '',
+    })),
+    contests: (over ? [] : arr(g.contests)).map((c) => ({ ...c, office: rc.tt(c.office, check), names: arr(c.names).map((n) => ({ ...n, name: rc.names(n.name) })) })),
+    vote_anywhere: g.vote_anywhere ?? null,
+    official_url: g.official_url || '',
+    official_label: g.official_label || '',
+    mail: obj(g.mail),
+    ride_phone: g.ride_phone || '',
+    wait_url: g.wait_url || '',
+    checkedOn: g.checkedOn || null,
+  };
   return {
     uid: `${m.id}-vg`,
     headingId: titleId(m),
@@ -78,23 +95,8 @@ export function guideProps(rc, m, p, level) {
     filter: obj(rc.vgFilter),
     rules,
     ballotNote: str(g.ballot_note).trim() ? rc.tt(g.ballot_note, check) : '',
-    guide: {
-      times: g.times,
-      areas: over ? [] : arr(g.areas),
-      places: (over ? [] : arr(g.places)).map((x) => ({
-        ...x,
-        note: x.note ? rc.tt(x.note) : '',
-        closed_note: x.closed_note ? rc.tt(x.closed_note, check) : '',
-      })),
-      contests: (over ? [] : arr(g.contests)).map((c) => ({ ...c, office: rc.tt(c.office, check), names: arr(c.names).map((n) => ({ ...n, name: rc.names(n.name) })) })),
-      vote_anywhere: g.vote_anywhere ?? null,
-      official_url: g.official_url || '',
-      official_label: g.official_label || '',
-      mail: obj(g.mail),
-      ride_phone: g.ride_phone || '',
-      wait_url: g.wait_url || '',
-      checkedOn: g.checkedOn || null,
-    },
+    guide,
+    dateWords: dateWordsFor(guide, rc.lang),
     ...rc.islandWords('voteguide'),
   };
 }
@@ -143,9 +145,11 @@ export function EmbedView({ rc, page, Module }) {
   const org = rc.site.org;
   return html`<main id="main" tabIndex="-1" className="vg-embed">
     ${m ? html`<${Module} m=${m} rc=${rc} level=${1} />` : null}
-    <div className="container vg-embed-foot small">
-      ${org.authorization ? html`<p className="footer-authorization">${org.authorization}</p>` : null}
-      ${org.name ? html`<p>${rc.w('vg.by', { org: org.name })}</p>` : null}
+    <div className="section vg-embed-foot">
+      <div className="container small">
+        ${org.authorization ? html`<p className="footer-authorization">${org.authorization}</p>` : null}
+        ${org.name ? html`<p>${rc.w('vg.by', { org: org.name })}</p>` : null}
+      </div>
     </div>
   </main>`;
 }

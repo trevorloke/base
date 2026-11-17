@@ -13,12 +13,20 @@
 }
 .vote-banner p { margin: 0; font-weight: 600; }
 .vote-banner a { color: inherit; text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
+/* The banner's one control is how most phones reach the guide: a full
+   48 px target there. */
+@media (max-width: 640px) {
+  .vote-banner-inner { padding-block: 0; }
+  .vote-banner p { padding-block: 6px; }
+  .vote-banner a { display: inline-flex; align-items: center; min-height: 48px; vertical-align: middle; }
+}
 
 .vg { display: grid; gap: 28px; grid-template-columns: minmax(0, 1fr); }
 .vg-head { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr); }
 .vg-status {
   margin: 0;
-  font-size: 1.35rem;
+  font-size: 1.5rem;
+  line-height: 1.3;
   font-weight: 700;
   color: var(--ink);
 }
@@ -38,6 +46,7 @@
 .vg-day {
   display: grid;
   gap: 2px;
+  align-content: start;
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -47,7 +56,8 @@
 .vg-day-date { font-size: 1.125rem; font-weight: 700; }
 .vg-day-kind, .vg-day-hours { font-size: 0.875rem; }
 .vg-day-flag { font-size: 0.8125rem; font-weight: 700; margin-top: 4px; }
-.vg-day--general { border-color: var(--accent); box-shadow: inset 0 4px 0 var(--accent); }
+.vg-day--general { border: 2px solid var(--ink); }
+.vg-day--general .vg-day-kind { font-weight: 700; }
 .vg-day--today { outline: 3px solid var(--brand); outline-offset: -1px; }
 .vg-day--done { color: var(--muted); background: var(--surface); }
 
@@ -112,6 +122,7 @@
 .vg-tag--changed { background: var(--accent); color: var(--accent-ink); }
 .vg-tag--far { font-weight: 700; }
 .vg-place--closed { background: var(--surface); }
+.vg-place--closed .vg-tag { background: var(--paper); box-shadow: inset 0 0 0 1px var(--line); }
 .vg-place-closed { font-weight: 700; color: var(--danger, var(--ink)); }
 .vg-directions {
   flex: none;
@@ -134,11 +145,19 @@
 .vg-source { color: var(--muted); }
 
 .vg-embed { padding: 16px 0; }
-.vg-embed-foot { margin-top: 24px; color: var(--muted); }
+.vg-keep { white-space: nowrap; }
+
+.vg-embed-foot { padding-top: 0; color: var(--muted); }
 .vg-embed-foot p { margin: 4px 0; }
 
 @media (max-width: 640px) {
-  .vg-status { font-size: 1.2rem; }
+  .vg-status { font-size: 1.5rem; line-height: 1.25; }
+  /* A link alone on its line is a control: 48 px to tap. */
+  .vg p > a:only-child, .vg-none a, .vg-source a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 48px;
+  }
   .vg-days { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .vg-place { flex-direction: column; }
 }

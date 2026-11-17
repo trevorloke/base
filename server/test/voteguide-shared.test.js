@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   guideState, placesOpen, nearest, nearVotingPlace, distanceWords, hoursWords, dayWords, timeWords,
-  parsePlaces, DAYS_PROBLEM, openNow,
+  parsePlaces, DAYS_PROBLEM, openNow, dayParts, dateWordsFor, seedDateWords,
 } from '../../shared/voteguide.js';
 import { atLocal, localDay } from '../lib/tzrule.js';
 import * as sharedQr from '../../shared/qr.js';
@@ -223,10 +223,37 @@ test('the island flips from open to over at the server’s 20:00, whatever the p
     return shifted;
   };
   try {
-    assert.match(renderToString(createElement(VoteGuide, props(lastClose - 1))), /Voting is open now · until 8 p\.m\./);
+    assert.match(renderToString(createElement(VoteGuide, props(lastClose - 1))), /Voting is open now · until <span class="vg-keep">8 p\.m\.<\/span>/, 'the hour kept on one line');
     assert.match(renderToString(createElement(VoteGuide, props(lastClose))), /Voting is over\. Thank you for voting\./);
   } finally {
     Intl.DateTimeFormat = Real;
     delete process.env.TZ;
+  }
+});
+
+test('a browser without Punjabi dates draws the server’s words, not "M11 20"', async () => {
+  const { renderToString } = await import('react-dom/server');
+  const { createElement } = await import('react');
+  const { VoteGuide } = await import('../../shared/site/components/voteguide-island.js');
+  const now = at('2027-10-06', '10:00');
+  const guide = { times: { ...timesAt(now), status: 'published' }, places: [placeRow('1', 49.1, -122.8)], areas: [], contests: [] };
+  const words = dateWordsFor(guide, 'pa');
+  assert.ok(words['w:2027-10-06'] && words['d:2027-10-06'] && words['t:20:00'], 'every day and hour is drawn');
+  assert.doesNotMatch(Object.values(words).join(' '), /\bM\d/, 'full ICU here');
+  // A trimmed ICU: Punjabi falls back to "M10 6, Wed".
+  const Real = Intl.DateTimeFormat;
+  Intl.DateTimeFormat = function Trimmed(locale, opts = {}) {
+    if (String(locale).startsWith('pa')) return { format: (d) => `M${d.getUTCMonth() + 1} ${d.getUTCDate()}` };
+    return new Real(locale, opts);
+  };
+  try {
+    const html = renderToString(createElement(VoteGuide, { uid: 'p', title: 'x', now, lang: 'pa', clockUrl: '/c', findUrl: '/f', guide, dateWords: words }));
+    assert.doesNotMatch(html, /M10 6/, 'never the fallback month');
+    assert.ok(html.includes(words['d:2027-10-06']), 'the server’s date');
+    assert.equal(dayParts('2027-10-06', 'pa').date, words['d:2027-10-06']);
+    seedDateWords('pa', { 'd:2027-12-25': 'X' });
+    assert.equal(dayParts('2027-12-25', 'pa').date, 'X');
+  } finally {
+    Intl.DateTimeFormat = Real;
   }
 });
