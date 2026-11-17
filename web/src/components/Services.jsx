@@ -64,6 +64,7 @@ function Row({ s, online }) {
         {s.panel === 'google' && s.lines && <GooglePanel s={s} online={online} />}
         {s.panel === 'gmail' && <GmailPanel online={online} />}
         {s.panel === 'drive' && <DrivePanel online={online} />}
+        {s.panel === 'translate' && s.state !== 'missing' && <TranslateProbe online={online} />}
         {/* The email sender's block comes as `hook`: a page cached from before it existed prints Stripe's sentence over any `webhook`. */}
         {s.hook && <Webhook w={s.hook} />}
         {s.webhook && <Webhook w={s.webhook} />}
@@ -77,6 +78,25 @@ function Row({ s, online }) {
         <button type="button" className="btn ops-tap sv2-check" disabled={busy || !online} onClick={check}>{busy ? 'Checking…' : 'Check'}</button>
       )}
     </li>
+  );
+}
+
+// The Translation row's "Check translation": one fixed sentence to Punjabi,
+// which tells base.win how Google treats names and the key (up to 15 s).
+function TranslateProbe({ online }) {
+  const [busy, setBusy] = useState(false);
+  const [res, setRes] = useState(null);
+  const run = async () => {
+    setBusy(true);
+    setRes(null);
+    try { setRes(await apiPost('/connections/translate-probe', {})); } catch (e) { setRes({ ok: false, said: e.message }); }
+    setBusy(false);
+  };
+  return (
+    <div className="sv2-hook">
+      <button type="button" className="btn ops-tap" disabled={busy || !online} onClick={run}>{busy ? 'Checking translation…' : 'Check translation'}</button>
+      <p className={res ? `sv2-said ${res.ok ? 'is-ok' : 'is-bad'}` : 'sv2-sr'} role="status">{res ? `${res.ok ? '✓ ' : '✕ '}${res.said}` : ''}</p>
+    </div>
   );
 }
 

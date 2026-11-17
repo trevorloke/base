@@ -25,11 +25,15 @@ import './shifts.css';
 import '../editor.css';
 import './website.css';
 import './website-sites.css';
+import './website-languages.css';
 
 const n = (x) => Number(x || 0).toLocaleString('en-CA');
 const viewUrl = (d) => d.urls.domains[0] || d.urls.site;
 
 // "← Doug Didn't" back to the website's overview (or the list).
+// The website's languages (TR), for its waiting count.
+const LANG_LABELS = { pa: 'ਪੰਜਾਬੀ', 'zh-Hans': '简体', 'zh-Hant': '繁體' };
+
 export function SiteBack({ d, id, to }) {
   return to === 'list'
     ? <Link className="ops-back" to="/website/sites">← Other websites</Link>
@@ -218,6 +222,19 @@ export default function WebsiteSite() {
             </ul>
           ) : <p className="muted">No sign-ups yet.</p>}
           <Link className="ms-link" to={`/people?web=site:${id}`}>See everyone from this site</Link>
+          {/* The website in other languages (TR): its sentences not yet translated. */}
+          {d.waiting && Object.keys(d.waiting).length > 0 && (
+            <p className="wb-field__hint">
+              {Object.entries(d.waiting).map(([c, k], i) => <span key={c}>{i > 0 && ' · '}<span lang={c}>{LANG_LABELS[c] || c}</span>: {k ? `${n(k)} waiting` : 'all translated'}</span>)}
+            </p>
+          )}
+          {d.waiting && manager && !deleted && (
+            <label className="lg-toggle">
+              <input type="checkbox" checked={Boolean(m.check_first)} disabled={!online || busy}
+                onChange={(e) => run('site.microsite.save', { id, check_first: e.target.checked }, e.target.checked ? 'Translated words show once a person checks them' : 'Translated words show as soon as they’re made')} />
+              <span>Show translated only after a person checks it</span>
+            </label>
+          )}
         </section>
       )}
 

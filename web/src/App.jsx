@@ -80,6 +80,9 @@ const WebsiteCampaigns = lazy(() => import('./pages/WebsiteCampaigns.jsx'));
 const WebsiteSites = lazy(() => import('./pages/WebsiteSites.jsx'));
 const WebsiteSite = lazy(() => import('./pages/WebsiteSite.jsx'));
 const WebsiteSiteDomain = lazy(() => import('./pages/WebsiteSite.jsx').then((m) => ({ default: m.WebsiteSiteDomain })));
+const WebsiteLanguages = lazy(() => import('./pages/WebsiteLanguages.jsx'));
+const WebsiteLanguage = lazy(() => import('./pages/WebsiteLanguages.jsx').then((m) => ({ default: m.WebsiteLanguage })));
+const WebsiteLanguageLegal = lazy(() => import('./pages/WebsiteLanguageLegal.jsx'));
 const PathToWin = lazy(() => import('./pages/PathToWin.jsx'));
 import Join from './pages/Join.jsx';
 import { TwoStepRequired } from './components/TwoStep.jsx';
@@ -155,6 +158,7 @@ const ROUTE_AREA = [
   [/^\/voted/, 'people'],
   [/^\/requests/, 'people'],
   [/^\/field-report/, 'data'],
+  [/^\/website\/languages/, 'site_words'],
   [/^\/website/, 'site'],
   [/^\/media/, 'media'],
   [/^\/path-to-win/, 'data'],
@@ -303,6 +307,10 @@ export default function App({ mode = 'field' }) {
           <Route path="/website/pages" element={<WebsitePages />} />
           <Route path="/website/pages/:id" element={<WebsitePage />} />
           <Route path="/website/theme" element={<WebsiteTheme />} />
+          {/* The website in other languages (TR): Website translations' (site_words). */}
+          <Route path="/website/languages" element={<WebsiteLanguages />} />
+          <Route path="/website/languages/:code" element={<WebsiteLanguage />} />
+          <Route path="/website/languages/:code/legal" element={<WebsiteLanguageLegal />} />
           <Route path="/website/settings" element={<WebsiteSettings />} />
           <Route path="/website/news" element={<WebsitePosts />} />
           <Route path="/website/news/:id" element={<WebsitePosts />} />

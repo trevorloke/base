@@ -33,6 +33,9 @@ const kindLine = (byKind = {}) => Object.entries(byKind)
   .join(' · ');
 const hostOf = (u) => String(u).replace(/^https?:\/\//, '').replace(/\/$/, '');
 
+// The website in other languages (TR): "Languages · ਪੰਜਾਬੀ 简体 繁體 on".
+const LANG_LABELS = { pa: 'ਪੰਜਾਬੀ', 'zh-Hans': '简体', 'zh-Hant': '繁體' };
+
 export default function WebsiteHome() {
   const { me } = useOutletContext() || {};
   const q = useSite();
@@ -94,6 +97,14 @@ export default function WebsiteHome() {
           <Link className="card ms-home-row" to="/website/sites">
             <span className="ms-home-row__name">Other websites</span>
             <span className="ms-home-row__n">{c.microsites ? `${c.microsites_live ?? 0} live${c.microsites > (c.microsites_live ?? 0) ? ` · ${plural(c.microsites - (c.microsites_live ?? 0), 'draft')}` : ''}` : 'None yet'}</span>
+            <span aria-hidden="true">›</span>
+          </Link>
+
+          <Link className="card ms-home-row" to="/website/languages">
+            <span className="ms-home-row__name">Languages</span>
+            <span className="ms-home-row__n">{(d.settings?.languages?.on || []).length
+              ? <>{d.settings.languages.on.map((c) => <span key={c} lang={c}>{LANG_LABELS[c]} </span>)}on</>
+              : 'English only'}</span>
             <span aria-hidden="true">›</span>
           </Link>
 

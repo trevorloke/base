@@ -17,6 +17,7 @@ import { LEGAL_ENGLISH, LEGAL_KEYS, fillSlots } from '../../../shared/site/wordi
 import { LANG_BY_CODE, OTHER_CODES } from '../../../shared/site/languages.js';
 import { MODULE_BY_KIND } from '../../../shared/site/catalogue.js';
 import { prepare, translateKey } from '../../lib/translate.js';
+import { here } from '../../lib/mount.js';
 import { readSettings, parseJ } from './store.js';
 import { latestLegal, staleKeys, legalSlots } from './legal.js';
 import { liveStrings, languageState, offeredLanguages, keptNames, usageMonth, segHash, convertToTraditional, MAX_NAMES } from './translate.js';
@@ -141,6 +142,7 @@ export const mountLanguageReads = (api, opened) => {
           state: !row ? 'missing' : stale.length ? 'stale' : 'approved',
           approved_at: iso(row?.approved_at), approved_by_name: approvers.get(row?.approved_by) || null,
           stale_keys: row ? stale : [],
+          stale_labels: row ? stale.map((k) => LEGAL_LABELS[k] || k) : [],
         },
         counts: lg.on.includes(code) || state[code] ? await countsFor(db, wsId, code, hashes) : null,
         last_error: state[code]?.last_error || null,
@@ -151,6 +153,8 @@ export const mountLanguageReads = (api, opened) => {
     const kept = await keptNames(db, { ...ws, id: wsId }, settings);
     return c.json({
       key: Boolean(translateKey()),
+      // The site's own address, for Preview (/site/pa/).
+      site: here(c, '/site'),
       agent: Boolean(String(settings.org?.agentName || '').trim()),
       settings: lg,
       languages,

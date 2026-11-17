@@ -1,5 +1,5 @@
 // Small pieces every Website screen shares:
-//   <WebsiteTabs />        Overview · Pages · News · Petitions and pledges · Other websites · Theme · Settings
+//   <WebsiteTabs />        Overview · Pages · News · Petitions and pledges · Other websites · Languages · Theme · Settings
 //   useToast()             one message at a time, with an optional Undo
 //                          ({ toast, say(text, { undo }) } and <Toast toast={…} />)
 //   <MoreMenu label>       a "⋯" button that opens a short list of actions
@@ -9,7 +9,7 @@
 //                          Escape closes it)
 //   <SaveState state />    "Saving…" · "Saved 2:14 pm" · "Not saved — …"
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useOutletContext } from 'react-router-dom';
 import { clock } from './useSite.js';
 
 const TABS = [
@@ -18,13 +18,17 @@ const TABS = [
   ['/website/news', 'News'],
   ['/website/petitions', 'Petitions and pledges'],
   ['/website/sites', 'Other websites'],
+  ['/website/languages', 'Languages'],
   ['/website/theme', 'Theme'],
   ['/website/settings', 'Settings'],
 ];
+// Someone given only "Website translations" sees its one tab.
 export function WebsiteTabs() {
+  const { me } = useOutletContext() || {};
+  const onlyWords = me && me.role !== 'manager' && Array.isArray(me.areas) && !me.areas.includes('site');
   return (
     <nav className="ws-tabs wb-tabs" aria-label="Website">
-      {TABS.map(([to, label, end]) => <NavLink key={to} to={to} end={end} className="ws-tab">{label}</NavLink>)}
+      {TABS.filter(([to]) => !onlyWords || to === '/website/languages').map(([to, label, end]) => <NavLink key={to} to={to} end={end} className="ws-tab">{label}</NavLink>)}
     </nav>
   );
 }

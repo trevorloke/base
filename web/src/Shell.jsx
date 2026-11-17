@@ -83,6 +83,8 @@ const NAV_DESK = [
   { to: '/media',    label: 'Media',    icon: 'media', area: 'media' },
   { to: '/imagineu', label: BRAND.learn, icon: 'learn', area: 'learn' },
   { to: '/website',  label: 'Website',  icon: 'website', area: 'site' },
+  // Website translations alone (TR): straight to its one screen.
+  { to: '/website/languages', label: 'Translations', icon: 'website', area: 'site_words', unless: 'site' },
 ];
 // The areas a person has: what the server said, else their role's usual ones.
 export const areasOf = (me) => (Array.isArray(me?.areas) ? me.areas : (isDesk(me) ? ['people', 'map', 'shifts', 'money', 'signs', 'outreach', 'data', 'media'] : []));
@@ -345,7 +347,7 @@ function SignedInShell({ who, mode }) {
   const desk = isDesk(me);
   // The admin: the tabs of the areas they have. The field app: a volunteer's five.
   const nav = mode === 'admin'
-    ? (desk ? NAV_DESK.filter((t) => hasArea(me, t.area)) : NAV_DESK.filter((t) => t.area && areasOf(me).includes(t.area)))
+    ? (desk ? NAV_DESK.filter((t) => hasArea(me, t.area) && !(t.unless && hasArea(me, t.unless))) : NAV_DESK.filter((t) => t.area && areasOf(me).includes(t.area) && !(t.unless && areasOf(me).includes(t.unless))))
     : NAV_VOLUNTEER;
   // New replies to your texts: a small count on Calls.
   const unread = Number(useTextingStatus(me).data?.unread) || 0;
