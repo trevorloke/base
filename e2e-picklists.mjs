@@ -15,12 +15,20 @@
 // a volunteer sees Dwelling type and no Faith or Campus. Every claim on a
 // screen is checked against the API.
 //
-//   STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=5450 node server/index.js &
-//   BASE=http://127.0.0.1:5450 SHOTS=/tmp/picklists node e2e-picklists.mjs
+// It starts its own in-memory server on PORT (default 5450) and stops it,
+// with the suite's handle on how fast a field is turned into a list on
+// PORT+1 (slowed down so Stop can be pressed while one runs). Build the web
+// app first (cd web && npm run build).
+//
+//   SHOTS=/tmp/picklists [PORT=5450] node e2e-picklists.mjs
 import { chromium } from 'playwright-core';
-import { mkdirSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
-const BASE = process.env.BASE || 'http://127.0.0.1:5450';
+const PORT = Number(process.env.PORT) || 5450;
+const CONTROL = PORT + 1;
+const BASE = `http://127.0.0.1:${PORT}`;
 const ADMIN = `${BASE}/admin`;
 const SHOTS = process.env.SHOTS || '/tmp/starbase-picklists';
 mkdirSync(SHOTS, { recursive: true });
@@ -32,6 +40,38 @@ const check = (name, ok, extra = '') => {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const tag = Date.now().toString(36);
 const CAMPUSES = ['Kwantlen Polytechnic University – Surrey', 'Kwantlen Polytechnic University – Cloverdale', 'SFU Surrey'];
+
+// ── The server, and the handle on its conversion's pace ──
+const serverDir = fileURLToPath(new URL('./server/', import.meta.url));
+const STUB = `${SHOTS}/picklists-stub.mjs`;
+writeFileSync(STUB, `
+import { createServer } from 'node:http';
+const { _setPaceForTest } = await import(${JSON.stringify(pathToFileURL(`${serverDir}ext/fields/convert.js`).href)});
+createServer(async (req, res) => {
+  let body = '';
+  for await (const c of req) body += c;
+  if (req.url === '/pace') _setPaceForTest(JSON.parse(body || '{}'));
+  res.end('ok');
+}).listen(${CONTROL}, '127.0.0.1');
+`);
+const env = { ...process.env };
+for (const k of Object.keys(env)) if (/^(GOOGLE_|RESEND_|SENDGRID_|MAIL_|STARBASE_)/.test(k)) delete env[k];
+Object.assign(env, { STARBASE_OPEN_SIGNUP: '1', STARBASE_DATA: 'memory', PORT: String(PORT), STARBASE_JOBS_EVERY_MS: '1000' });
+const server = spawn(process.execPath, ['--import', pathToFileURL(STUB).href, 'server/index.js'], {
+  cwd: fileURLToPath(new URL('.', import.meta.url)), env, stdio: ['ignore', 'pipe', 'pipe'],
+});
+let serverLog = '';
+server.stdout.on('data', (d) => { serverLog += d; });
+server.stderr.on('data', (d) => { serverLog += d; });
+process.on('exit', () => { try { server.kill('SIGKILL'); } catch { /* gone */ } });
+let up = false;
+for (let i = 0; i < 150 && !up; i += 1) {
+  if (server.exitCode !== null) break;
+  up = await fetch(`${BASE}/api/health`).then((r) => r.ok).catch(() => false);
+  if (!up) await sleep(200);
+}
+if (!up) { console.log(serverLog.slice(-1500)); server.kill('SIGKILL'); process.exit(1); }
+const pace = (o) => fetch(`http://127.0.0.1:${CONTROL}/pace`, { method: 'POST', body: JSON.stringify(o) });
 
 const browser = await chromium.launch({
   executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
@@ -323,20 +363,57 @@ await M.go(`/people/${hse.id}`);
 await openSec(page, 'More details');
 check('a person without: no such field', !(await page.$(`${Q} .fd-written`)) && (await valuesOf(hse.id))['Dwelling type'] === 'House');
 
-// Campus: Stop, then Turn into a list again.
-const st = await M.api('/actions/field.list.start', { id: cp.id, choices: CAMPUSES, display: 'buttons', map: [] });
-const sp = await M.api('/actions/field.list.stop', { id: cp.id });
-check('Campus: started and stopped', st.status === 200 && sp.status === 200, `${st.raw.slice(0, 120)} ${sp.raw.slice(0, 120)}`);
-// 300 values are one chunk: the job may finish before the Stop lands. Then
-// turn it back into Text — "convert, back to Text, convert again" — instead.
-const afterStop = (await fieldsNow()).Campus;
-if (afterStop.kind === 'choice') {
-  console.log('NOTE  the conversion finished before the Stop: turned back into Text to convert again');
-  await M.api('/actions/field.update', { id: cp.id, kind: 'text' });
-}
+// Campus: Turn into a list, Stop while it runs, then Turn into a list again.
+// Slowed (20 values a chunk, 1.5 s apart) so Stop can be pressed.
+await pace({ size: 20, waitMs: 1500 });
 await M.go(`/people/fields?list=${cp.id}`);
 await page.waitForSelector('.fl-go .btn-primary', { timeout: 15000 }).catch(() => {});
-check('after a Stop, “Turn into a list” is offered again', !!(await page.$('.fl-go .btn-primary')));
+await page.click('.fl-go .btn-primary');
+await page.click('.fl-go button:has-text("Yes")');
+await page.waitForSelector('.fl-run', { timeout: 15000 }).catch(() => {});
+await page.waitForSelector('.fl-run p:has-text("Turning into a list… 20 of 300"), .fl-run p:has-text("Turning into a list… 40 of 300")', { timeout: 15000 }).catch(() => {});
+const runTxt = await page.innerText('.fl-run').catch(() => '');
+check('Campus running: the bar and “Turning into a list… N of 300”', /Turning into a list… [\d,]+ of 300/.test(runTxt) && !!(await page.$('.fl-run [role="progressbar"]')), runTxt);
+await M.shot('11b-campus-running-1440');
+// Meanwhile, an import with a Campus column waits for it.
+{
+  const p2 = await mctx.newPage();
+  await p2.goto(`${ADMIN}/people/import`, { waitUntil: 'domcontentloaded' });
+  await sleep(1100);
+  await p2.click('button:has-text("Paste text")');
+  await p2.fill('#imp-paste', ['Full name\tCampus', 'Wait Example\tSFU Surrey'].join('\n'));
+  await p2.click('button:has-text("Use this text")');
+  await p2.waitForSelector('.imp-need:has-text("is being turned into a list")', { timeout: 10000 }).catch(() => {});
+  const need = await p2.innerText('.imp-need[role="status"]').catch(() => '');
+  check('the import, while Campus converts: “Campus is being turned into a list — import when it’s done”, Check off',
+    /Campus is being turned into a list — import when it’s done/.test(need) && await p2.$eval('button:has-text("Check 1 row")', (b) => b.disabled).catch(() => false), need);
+  await p2.screenshot({ path: `${SHOTS}/11c-import-waits-1440.png` });
+  await p2.close();
+}
+await page.click('.fl-run button:has-text("Stop")');
+check('Stop asks first: “Stop? What’s done stays done.”', /Stop\? What’s done stays done\./.test(await page.innerText('.fl-run')));
+await M.shot('11d-campus-stop-confirm-1440');
+await page.click('.fl-run .ops-confirm button:has-text("Yes")');
+await page.waitForSelector('.fl-go .btn-primary', { timeout: 20000 }).catch(() => {});
+const afterStop = (await fieldsNow()).Campus;
+check('Stopped: “Stopped — what was done stays done.”, Campus still Text, Turn into a list offered again',
+  /Stopped — what was done stays done\./.test(await M.text()) && afterStop.kind === 'text' && !afterStop.converting && !!(await page.$('.fl-go .btn-primary')), JSON.stringify([afterStop.kind, afterStop.converting]));
+await M.shot('11e-campus-stopped-1440');
+// A reload of the words (here: the signal comes back) keeps what's been typed.
+await page.click('.sv-choice__add');
+const last = page.locator('.sv-choices .sv-choice input').last();
+await last.fill('Another campus example');
+let reads = 0;
+const countReads = (r) => { if (/\/api\/fields\/[^/]+\/words/.test(r.url())) reads += 1; };
+page.on('response', countReads);
+await mctx.setOffline(true);
+await sleep(600);
+await mctx.setOffline(false);
+await sleep(2500);
+page.off('response', countReads);
+check('a reload of the words keeps a typed choice', reads >= 1 && (await page.locator('.sv-choices .sv-choice input').last().inputValue()) === 'Another campus example', `${reads} reads`);
+await page.locator('.sv-choices .sv-choice__x').last().click();
+await pace({});
 await page.click('.fl-go .btn-primary');
 await page.click('.fl-go button:has-text("Yes")');
 await page.waitForSelector('.ops-done:has-text("is now a list")', { timeout: 90000 }).catch(() => {});
@@ -428,6 +505,13 @@ await page.click('form.bk-form button[type="submit"]').catch(() => {});
 await page.waitForSelector('form.bk-form .error', { timeout: 8000 }).catch(() => {});
 check('New phone bank on it: the 409 in place', /picks people by Faith, which is private/.test(await page.innerText('form.bk-form').catch(() => '')));
 await M.shot('19-bank-refused-1440');
+await M.go(`/passes?new=1&list=${lst.id}`);
+await page.waitForSelector('form.pass-form', { timeout: 8000 }).catch(() => {});
+await page.fill('form.pass-form input.input[required]', 'Faith walk');
+await page.click('form.pass-form button[type="submit"]').catch(() => {});
+await page.waitForSelector('text=/picks people by Faith, which is private/', { timeout: 8000 }).catch(() => {});
+check('Start a pass on it: the 409 in place', /picks people by Faith, which is private/.test(await M.text()) && (await M.api('/passes')).json?.open == null);
+await M.shot('19b-pass-refused-1440');
 
 // ── 11. The membership form's Campus ──
 await M.go('/people/membership-form');
@@ -450,6 +534,9 @@ await simple(ppage, 'membership form at 390', '.mf-campus label.mf-check');
 
 check('no page errors', errors.length === 0, errors.join(' | '));
 await browser.close();
+server.kill('SIGTERM');
+await sleep(300);
+if (server.exitCode === null) server.kill('SIGKILL');
 const failed = results.filter((x) => !x).length;
 console.log(`\n${results.length - failed}/${results.length} passed`);
 process.exit(failed ? 1 : 0);

@@ -405,13 +405,18 @@ one tap away under **More**.
   different words refused in 1.2 s; GET /fields's grouping about 4 % slower
   than before (the middle of five tries each; the machine was shared, so a
   single run swings by more than that).
-- **Pick lists in the browser** (`e2e-picklists.mjs`, a fresh in-memory
-  server): Faith's buttons and the Christian row, Dwelling type's select,
-  Campus, the kept copy's "Needs signal", the People filter's "Christian
-  (any)", Profile fields' Private and Show as, Turn into a list end to end,
-  the import's word mapping (and no room for "as written"), the private
-  download tick, a list picked by Faith, the membership form's Campus — at
-  1440 and 390.
+- **Pick lists in the browser** (`SHOTS=… [PORT=5450] node
+  e2e-picklists.mjs`; it starts its own in-memory server, with the
+  conversion slowed on PORT+1 so Stop can be pressed): Faith's buttons and
+  the Christian row, Dwelling type's select, Campus, the kept copy's "Needs
+  signal", the People filter's "Christian (any)", Profile fields' Private
+  and Show as, Turn into a list end to end (the bar, Stop and its confirm,
+  again after a Stop, a reload of the words keeping what's typed), the
+  import waiting while a field converts, the import's word mapping (and no
+  room for "as written"), the private download tick, a list picked by
+  Faith (a phone bank and a pass refused in place), the membership form's
+  Campus — at 1440 and 390. The tick turning People's Google Sheets off is
+  in `e2e-drive.mjs`, where Sheets is set up.
 - **People → More → Profile fields** → **Add a field**: a name, a type (Text ·
   Yes/No · Pick one · Number · Date), its choices, and *Volunteers can see
   this* (off by default). Tap a field to rename it, add a choice or *Move
