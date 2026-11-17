@@ -18,7 +18,9 @@
 //       (only one marked for them); unknown, "Profile field: Yes".
 //   useImportFields() / FIELD_KEY / fieldCell   the import's column choices.
 import { useId, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { groupsOf } from '@starbase/shared/fieldlists';
 import { action, apiGet } from '../api.js';
 import { NeedsSignalLine, NoSignal, noSignal, useOnline } from './NoSignal.jsx';
 import './survey-questions.css';
@@ -84,10 +86,17 @@ const sameDraft = (f, d) => {
   return typeof a === 'string' ? a.trim() === String(d ?? '').trim() : a === d;
 };
 
-function Taps({ id, label, options, value, onPick, disabled }) {
+// A field's name, with "Private" after it for a private one (Faith).
+function Label({ f }) {
+  return <>{f.name}{f.sensitive && <span className="chip fd-private">Private</span>}</>;
+}
+const PrivateHint = ({ f }) => (f.sensitive ? <p className="muted fd-q__hint">Only what they tell you. Never guess.</p> : null);
+
+function Taps({ id, label, options, value, onPick, disabled, hint = null }) {
   return (
     <div className="sv-q fd-q" role="group" aria-labelledby={id}>
       <p className="sv-q__text fd-q__label" id={id}>{label}</p>
+      {hint}
       <div className="sv-q__opts">
         {options.map((o) => (
           <button key={String(o.v)} type="button" className={`sv-opt${value === o.v ? ' is-on' : ''}`}
@@ -121,28 +130,132 @@ function ManyTaps({ id, label, choices, value, onChange, disabled }) {
   );
 }
 
-function FieldControl({ f, value, onChange, disabled }) {
+// Pick one with groups (more than 12 choices, "Christian – Catholic"): a
+// group is one button; tapping it opens its row underneath. Opening and
+// closing a row never changes the value — tap the picked one again, or the
+// row's Clear, to clear it.
+function GroupTaps({ id, f, groups, value, onPick, disabled }) {
+  const inGroup = (g) => g.members.some((m) => m.choice === value);
+  const [open, setOpen] = useState(() => groups.find((g) => g.group && inGroup(g))?.group || null);
+  const shown = groups.find((g) => g.group === open);
+  const extra = value != null && !f.choices.includes(value) ? value : null; // taken off since: still shows, picked
+  const rowId = `${id}-row`;
+  return (
+    <div className="sv-q fd-q" role="group" aria-labelledby={id}>
+      <p className="sv-q__text fd-q__label" id={id}><Label f={f} /></p>
+      <PrivateHint f={f} />
+      <div className="sv-q__opts">
+        {groups.map((g) => (g.group ? (
+          <button key={`g:${g.group}`} type="button" className={`sv-opt fd-grp${inGroup(g) ? ' is-on' : ''}${open === g.group ? ' is-open' : ''}`}
+            aria-expanded={open === g.group} aria-controls={open === g.group ? rowId : undefined} disabled={disabled}
+            onClick={() => setOpen(open === g.group ? null : g.group)}>
+            {g.group} <span aria-hidden="true">{open === g.group ? '▴' : '▾'}</span>
+          </button>
+        ) : (
+          <button key={g.choice} type="button" className={`sv-opt${value === g.choice ? ' is-on' : ''}`}
+            aria-pressed={value === g.choice} disabled={disabled} onClick={() => onPick(value === g.choice ? null : g.choice)}>
+            {g.choice}
+          </button>
+        )))}
+        {extra && (
+          <button type="button" className="sv-opt is-on" aria-pressed disabled={disabled} onClick={() => onPick(null)}>{extra}</button>
+        )}
+      </div>
+      {shown && (
+        <div className="fd-sub" id={rowId} role="group" aria-labelledby={`${rowId}-l`}>
+          <p className="fd-sub__label" id={`${rowId}-l`}>
+            {shown.group} — pick one.{/^just\b/i.test(shown.members[0]?.short || '') ? ` Just ${shown.group}? Pick the first one.` : ''}
+          </p>
+          <div className="sv-q__opts">
+            {shown.members.map((m) => (
+              <button key={m.choice} type="button" className={`sv-opt${value === m.choice ? ' is-on' : ''}`}
+                aria-pressed={value === m.choice} aria-label={m.choice} disabled={disabled}
+                onClick={() => onPick(value === m.choice ? null : m.choice)}>
+                {m.short}
+              </button>
+            ))}
+          </div>
+          {inGroup(shown) && (
+            <button type="button" className="btn btn-quiet fd-clear" disabled={disabled} onClick={() => onPick(null)}>Clear</button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Pick one shown as a scroll-down list (Dwelling type): the phone's own picker.
+function ChoiceSelect({ id, f, value, onPick, disabled }) {
+  const extra = value != null && !f.choices.includes(value) ? value : null;
+  return (
+    <div className="sv-q fd-q">
+      <label className="sv-q__text fd-q__label" htmlFor={id}><Label f={f} /></label>
+      <PrivateHint f={f} />
+      <select id={id} className="input fd-select" disabled={disabled} value={value ?? ''}
+        onChange={(e) => onPick(e.target.value || null)}>
+        <option value="">Pick one…</option>
+        {groupsOf(f.choices).map((g) => (g.group ? (
+          <optgroup key={`g:${g.group}`} label={g.group}>
+            {g.members.map((m) => <option key={m.choice} value={m.choice}>{m.short}</option>)}
+          </optgroup>
+        ) : <option key={g.choice} value={g.choice}>{g.choice}</option>))}
+        {extra && <option value={extra}>{extra}</option>}
+      </select>
+    </div>
+  );
+}
+
+// The words a list couldn't take ("Dwelling type as written"): read-only,
+// drawn only while there are some; Clear empties it at the next Save.
+function AsWritten({ id, f, value, stored, onChange, disabled }) {
+  if (stored == null || stored === '') return null;
+  const cleared = value == null || value === '';
+  return (
+    <div className="sv-q fd-q fd-written" role="group" aria-labelledby={id}>
+      <p className="sv-q__text fd-q__label" id={id}><Label f={f} /></p>
+      <p className={`fd-written__v${cleared ? ' is-cleared' : ''}`}>{String(stored)}</p>
+      <p className="muted fd-q__hint">{cleared ? 'Cleared — Save to keep it that way.' : 'From before the list — pick the type above, then clear this'}</p>
+      {!cleared && <button type="button" className="btn btn-quiet fd-clear" disabled={disabled} onClick={() => onChange(null)}>Clear</button>}
+    </div>
+  );
+}
+
+function FieldControl({ f, value, onChange, disabled, stored, listable }) {
   const id = useId();
+  if (f.kept_out) {
+    // A Private field from the kept copy: its value never left the server.
+    return (
+      <div className="sv-q fd-q">
+        <p className="sv-q__text fd-q__label"><Label f={f} /></p>
+        <p className="muted">Needs signal</p>
+      </div>
+    );
+  }
+  if (f.as_written_of) return <AsWritten id={id} f={f} value={value} stored={stored} onChange={onChange} disabled={disabled} />;
   if (f.kind === 'choices') {
-    return <ManyTaps id={id} label={f.name} choices={f.choices} value={value} onChange={onChange} disabled={disabled} />;
+    return <ManyTaps id={id} label={<Label f={f} />} choices={f.choices} value={value} onChange={onChange} disabled={disabled} />;
   }
   if (f.kind === 'note') {
     return (
       <div className="sv-q fd-q">
-        <label className="sv-q__text fd-q__label" htmlFor={id}>{f.name}</label>
+        <label className="sv-q__text fd-q__label" htmlFor={id}><Label f={f} /></label>
+        <PrivateHint f={f} />
         <textarea id={id} className="input sv-q__input fd-note" rows={4} maxLength={NOTE_MAX} disabled={disabled}
           value={value ?? ''} onChange={(e) => onChange(e.target.value)} />
       </div>
     );
   }
   if (f.kind === 'yesno') {
-    return <Taps id={id} label={f.name} value={value} onPick={onChange} disabled={disabled}
+    return <Taps id={id} label={<Label f={f} />} hint={<PrivateHint f={f} />} value={value} onPick={onChange} disabled={disabled}
       options={[{ v: true, label: 'Yes' }, { v: false, label: 'No' }]} />;
   }
   if (f.kind === 'choice') {
+    if (f.display === 'list') return <ChoiceSelect id={id} f={f} value={value} onPick={onChange} disabled={disabled} />;
+    const groups = groupsOf(f.choices);
+    if (groups.some((g) => g.group)) return <GroupTaps id={id} f={f} groups={groups} value={value} onPick={onChange} disabled={disabled} />;
     // A value whose choice was since taken off still shows, picked.
     const choices = f.choices.includes(value) || value == null ? f.choices : [...f.choices, value];
-    return <Taps id={id} label={f.name} value={value} onPick={onChange} disabled={disabled}
+    return <Taps id={id} label={<Label f={f} />} hint={<PrivateHint f={f} />} value={value} onPick={onChange} disabled={disabled}
       options={choices.map((c) => ({ v: c, label: c }))} />;
   }
   const kind = {
@@ -152,9 +265,13 @@ function FieldControl({ f, value, onChange, disabled }) {
   }[f.kind] || { type: 'text' };
   return (
     <div className="sv-q fd-q">
-      <label className="sv-q__text fd-q__label" htmlFor={id}>{f.name}</label>
+      <label className="sv-q__text fd-q__label" htmlFor={id}><Label f={f} /></label>
+      <PrivateHint f={f} />
       <input id={id} className="input sv-q__input" autoComplete="off" disabled={disabled} {...kind}
         value={value ?? ''} onChange={(e) => onChange(e.target.value)} />
+      {listable && (
+        <p className="muted fd-q__hint fd-listable">This can be a pick list — <Link to={`/fields?list=${f.id}`}>Turn it into a list</Link></p>
+      )}
     </div>
   );
 }
@@ -163,12 +280,12 @@ function FieldControl({ f, value, onChange, disabled }) {
 // server's values after a save, and "✓ Saved" must outlast that.
 // With no signal (online false) it is read-only: what's kept (or typed and
 // not saved yet) stays on screen, every control off, and one line says so.
-function PersonFieldsForm({ fields, personId, saved, setSaved, online }) {
+function PersonFieldsForm({ fields, personId, saved, setSaved, online, listable, faithLine }) {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState(() => Object.fromEntries(fields.map((f) => [f.id, draftOf(f)])));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
-  const changed = fields.filter((f) => !sameDraft(f, draft[f.id]));
+  const changed = fields.filter((f) => !f.kept_out && !sameDraft(f, draft[f.id]));
   const set = (fid, v) => { setSaved(false); setError(null); setDraft((d) => ({ ...d, [fid]: v })); };
   const off = busy || !online;
 
@@ -209,8 +326,10 @@ function PersonFieldsForm({ fields, personId, saved, setSaved, online }) {
   return (
     <form className="fd-form" onSubmit={save} aria-label="More details">
       {!online && <NeedsSignalLine>Changing these needs signal</NeedsSignalLine>}
+      {faithLine && <p className="muted fd-tagline">{faithLine}</p>}
       {fields.map((f) => (
-        <FieldControl key={f.id} f={f} value={draft[f.id]} disabled={off} onChange={(v) => set(f.id, v)} />
+        <FieldControl key={f.id} f={f} value={draft[f.id]} stored={f.value} disabled={off} onChange={(v) => set(f.id, v)}
+          listable={listable?.has(f.id)} />
       ))}
       <div className="fd-foot">
         <button type="submit" className="btn fd-save" disabled={off || !changed.length}>
@@ -223,9 +342,16 @@ function PersonFieldsForm({ fields, personId, saved, setSaved, online }) {
   );
 }
 
-export function PersonFields({ query, personId }) {
+// The Dwelling type or Campus still typed as Text, whose words suit a list:
+// a manager's profile says it can be one (GET /fields; never read otherwise).
+const LISTABLE = new Set(['dwelling type', 'campus']);
+export function PersonFields({ query, personId, manager = false, tags = [] }) {
   const [saved, setSaved] = useState(false);
   const online = useOnline();
+  const list = useFieldsList(manager);
+  const listable = useMemo(() => new Set((list.data?.fields || [])
+    .filter((f) => !f.retired && f.kind === 'text' && !f.as_written_of && !f.converting && f.suits && LISTABLE.has(f.name.trim().toLowerCase()))
+    .map((f) => f.id)), [list.data]);
   // No signal and nothing kept: say so, never a "Loading…" that doesn't end.
   if (noSignal(query)) return <NoSignal />;
   if (query.isPending) return <p className="muted">Loading…</p>;
@@ -245,7 +371,12 @@ export function PersonFields({ query, personId }) {
   }
   // A fresh form whenever the saved values change (after Save, or another desk's).
   const version = fields.map((f) => `${f.id}=${JSON.stringify(f.value)}`).join('|');
-  return <PersonFieldsForm key={version} fields={fields} personId={personId} saved={saved} setSaved={setSaved} online={online} />;
+  // Tagged "faith" before Faith was a field: a nudge to pick it, never a guess.
+  const faith = fields.find((f) => f.kind === 'choice' && f.name.trim().toLowerCase() === 'faith' && !f.kept_out);
+  const faithLine = faith && (faith.value == null) && tags.some((t) => String(t).toLowerCase() === 'faith')
+    ? `Tagged “faith”. If they told you their faith, pick it under ${faith.name}.` : null;
+  return <PersonFieldsForm key={version} fields={fields} personId={personId} saved={saved} setSaved={setSaved} online={online}
+    listable={listable} faithLine={faithLine} />;
 }
 
 // ── People: filter by one field's value ──
@@ -258,18 +389,48 @@ const filterOptions = (f) => {
   return f.kind === 'text' ? [...common, ['*', 'Filled in']] : common.length ? common : [['*', 'Filled in']];
 };
 
+// A grouped Pick one (Faith): the top-level chips, "Christian (any)" for a
+// whole group (?field=<id>:Christian – *), and the group's own chips under
+// a quiet More.
+const ANY = ' – *';
+function GroupedFilter({ f, chip }) {
+  const [more, setMore] = useState(null);
+  const groups = groupsOf(f.choices);
+  return (
+    <fieldset className="pp-group">
+      <legend className="eyebrow">{f.name}</legend>
+      <div className="pp-group__opts">
+        {groups.map((g) => (g.group ? chip('field', `${f.id}:${g.group}${ANY}`, `${g.group} (any)`) : chip('field', `${f.id}:${g.choice}`, g.choice)))}
+      </div>
+      {groups.filter((g) => g.group).map((g) => (
+        <div key={g.group} className="fd-fmore">
+          <button type="button" className="btn btn-quiet fd-fmore__btn" aria-expanded={more === g.group}
+            onClick={() => setMore(more === g.group ? null : g.group)}>
+            More: {g.group} {more === g.group ? '▴' : '▾'}
+          </button>
+          {more === g.group && (
+            <div className="pp-group__opts">{g.members.map((m) => chip('field', `${f.id}:${m.choice}`, m.short))}</div>
+          )}
+        </div>
+      ))}
+    </fieldset>
+  );
+}
+
 export function FieldFilterGroups({ chip }) {
   const list = useFieldsList();
   const fields = (list.data?.fields || []).filter((f) => !f.retired);
   if (!fields.length) return null;
-  return fields.map((f) => (
-    <fieldset key={f.id} className="pp-group">
-      <legend className="eyebrow">{f.name}</legend>
-      <div className="pp-group__opts">
-        {filterOptions(f).map(([v, label]) => chip('field', `${f.id}:${v}`, label))}
-      </div>
-    </fieldset>
-  ));
+  return fields.map((f) => (f.kind === 'choice' && groupsOf(f.choices).some((g) => g.group)
+    ? <GroupedFilter key={f.id} f={f} chip={chip} />
+    : (
+      <fieldset key={f.id} className="pp-group">
+        <legend className="eyebrow">{f.name}</legend>
+        <div className="pp-group__opts">
+          {filterOptions(f).map(([v, label]) => chip('field', `${f.id}:${v}`, label))}
+        </div>
+      </fieldset>
+    )));
 }
 
 // "Language at home: Punjabi" — or "Profile field: Yes" when the field's
@@ -287,6 +448,7 @@ export const fieldFilterLabel = (value, fields) => {
   const f = (fields || []).find((x) => x.id === id);
   if (v === '*') return f ? `${f.name}: Filled in` : 'Profile field: Filled in';
   if (!f) return `Profile field: ${/^(yes|true)$/i.test(v) ? 'Yes' : /^(no|false)$/i.test(v) ? 'No' : v}`;
+  if (v.endsWith(ANY)) return `${f.name}: ${v.slice(0, -ANY.length)} (any)`;
   const word = f.kind === 'yesno' ? (/^y/i.test(v) ? 'Yes' : 'No') : fieldWords(f.kind, f.kind === 'number' ? Number(v) : v);
   return `${f.name}: ${word}`;
 };

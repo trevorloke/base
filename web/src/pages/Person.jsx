@@ -1014,7 +1014,7 @@ export default function Person() {
           <Section title="More details" count={filledCount(fields) || ''} open={!!open.more} onToggle={toggle('more')}>
             {desk && <VoterNumber key={`voter-${person.id}`} personId={person.id} />}
             {desk && <SocialsTyped person={person} />}
-            {(!desk || fields.data?.fields?.length !== 0) && <PersonFields key={person.id} query={fields} personId={person.id} />}
+            {(!desk || fields.data?.fields?.length !== 0) && <PersonFields key={person.id} query={fields} personId={person.id} manager={me?.role === 'manager'} tags={desk ? tags : []} />}
           </Section>
         )}
         {desk && (

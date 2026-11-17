@@ -12,12 +12,18 @@
 //   the manager's (the server refuses anyone else's changes too). With no
 //   signal it keeps its title and says so; changes are off ("Changing
 //   fields needs signal").
+//   A field's editor also has "Private" (never shown to volunteers, put in
+//   downloads or used to pick who is reached) and, for Pick one, "Show as"
+//   (Buttons · Scroll-down list). A Text field whose words suit a list gets
+//   "Turn into a list" (?list=<id>, FieldToList.jsx); a notice at the top
+//   says so while Dwelling type or Campus is still typed.
 import { useId, useRef, useState } from 'react';
 import { Link, Navigate, useOutletContext, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { action } from '../api.js';
 import { NeedsSignalLine, NoSignal, noSignal, useOnline } from '../components/NoSignal.jsx';
 import { FIELDS_QUERY, KINDS, KIND_LABEL, hasChoices } from '../components/FieldsBits.jsx';
+import FieldToList from './FieldToList.jsx';
 import './shifts.css';
 import './surveys.css';
 import './fields.css';
@@ -26,21 +32,24 @@ const CHOICES_MAX = 40;
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const sameList = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
 
-function VolunteersSwitch({ on, onChange, disabled }) {
+function Switch({ on, onChange, disabled, label }) {
   return (
     <button type="button" role="switch" aria-checked={on} className="sv-switch fd-switch" disabled={disabled}
       onClick={() => onChange(!on)}>
       <span className="sv-switch__track" aria-hidden="true"><span className="sv-switch__dot" /></span>
-      <span className="sv-switch__label">Volunteers can see this</span>
+      <span className="sv-switch__label">{label}</span>
     </button>
   );
 }
+const VolunteersSwitch = (p) => <Switch {...p} label="Volunteers can see this" />;
+// The two Dwelling type and Campus fields the notice offers to turn into lists.
+export const LISTABLE_NAMES = ['dwelling type', 'campus'];
 
 // initial: the field as GET /fields has it (editing), or null (adding).
 // A choice someone has is decided once, when the form opens: it shows as
 // words with its count (no ✕). Every other row — added or unused — stays an
 // input with ✕, whatever is typed in it (a twin is caught on Save).
-function FieldForm({ initial = null, primary = false, submitLabel, busy, onSubmit, onCancel }) {
+function FieldForm({ initial = null, primary = false, submitLabel, busy, onSubmit, onCancel, onList }) {
   const uid = useId();
   const used = new Map((initial?.uses || []).map((u) => [u.value, u.n]));
   const nextKey = useRef(0);
@@ -51,6 +60,8 @@ function FieldForm({ initial = null, primary = false, submitLabel, busy, onSubmi
     ? initial.choices.map((c) => row(c, (used.get(c) || 0) > 0))
     : [row(''), row('')]));
   const [volunteers, setVolunteers] = useState(Boolean(initial?.volunteers));
+  const [sensitive, setSensitive] = useState(Boolean(initial?.sensitive));
+  const [display, setDisplay] = useState(initial?.display || 'buttons');
   const [error, setError] = useState(null);
   const filled = initial?.filled || 0;
   const kindLocked = filled > 0;
@@ -68,6 +79,8 @@ function FieldForm({ initial = null, primary = false, submitLabel, busy, onSubmi
     if (!initial || kind !== initial.kind) input.kind = kind;
     if (hasChoices(kind) && (!initial || kind !== initial.kind || !sameList(clean, initial.choices))) input.choices = clean;
     if (!initial ? volunteers : volunteers !== initial.volunteers) input.volunteers = volunteers;
+    if (!initial ? sensitive : sensitive !== Boolean(initial.sensitive)) input.sensitive = sensitive;
+    if (kind === 'choice' && (!initial ? display === 'list' : display !== (initial.display || 'buttons'))) input.display = display;
     const err = await onSubmit(input);
     if (err) setError(err);
   };
@@ -130,7 +143,28 @@ function FieldForm({ initial = null, primary = false, submitLabel, busy, onSubmi
           )}
         </div>
       )}
-      <VolunteersSwitch on={volunteers} onChange={setVolunteers} disabled={busy} />
+      {kind === 'choice' && (
+        <div className="field">
+          <span className="sv-label" id={`${uid}-show`}>Show as</span>
+          <div className="sv-kinds" role="group" aria-labelledby={`${uid}-show`}>
+            {[['buttons', 'Buttons'], ['list', 'Scroll-down list']].map(([code, label]) => (
+              <button key={code} type="button" className="sv-kind" aria-pressed={display === code} onClick={() => setDisplay(code)}>{label}</button>
+            ))}
+          </div>
+        </div>
+      )}
+      {/* A Text field with words on file: it can become a list, if its words suit one. */}
+      {initial && initial.kind === 'text' && kind === 'text' && initial.filled > 0 && !initial.as_written_of && !initial.converting && (
+        initial.suits
+          ? <button type="button" className="btn btn-quiet ops-tap fd-tolist" onClick={onList}>Turn into a list</button>
+          : <p className="fd-why muted">Its words are mostly different — it doesn’t suit a list.</p>
+      )}
+      <VolunteersSwitch on={volunteers && !sensitive} onChange={setVolunteers} disabled={busy || sensitive} />
+      <div className="fd-private-sw">
+        <Switch on={sensitive} label="Private" disabled={busy}
+          onChange={(on) => { setSensitive(on); if (on) setVolunteers(false); }} />
+        <p className="fd-why muted">Never shown to volunteers, put in downloads, walked, called or used to pick who gets a message.</p>
+      </div>
       {error && <p className="error" role="alert">{error}</p>}
       <div className="ops-actions">
         <button type="submit" className={`btn ops-tap ${primary ? 'btn-primary' : 'ops-solid'}`} disabled={busy}>{submitLabel}</button>
@@ -140,13 +174,17 @@ function FieldForm({ initial = null, primary = false, submitLabel, busy, onSubmi
   );
 }
 
-const rowSub = (f) => [
+const rowSub = (f, all = []) => [
   KIND_LABEL[f.kind],
   `${f.filled} filled in`,
   f.volunteers ? 'Volunteers see it' : null,
+  f.sensitive ? 'Private' : null,
+  f.kind === 'choice' && f.display === 'list' ? 'Scroll-down list' : null,
+  f.as_written_of ? `Words kept from ${all.find((x) => x.id === f.as_written_of)?.name || 'a list'}` : null,
+  f.converting ? 'Being turned into a list' : null,
 ].filter(Boolean).join(' · ');
 
-function FieldRow({ f, index, total, open, busy, onToggle, onSave, onMove, onRetire }) {
+function FieldRow({ f, all, index, total, open, busy, onToggle, onSave, onMove, onRetire, onList }) {
   const [confirm, setConfirm] = useState(false);
   const bodyId = `fd-f-${f.id}`;
   return (
@@ -154,12 +192,12 @@ function FieldRow({ f, index, total, open, busy, onToggle, onSave, onMove, onRet
       <button type="button" className="ops-row" aria-expanded={open} aria-controls={bodyId} onClick={onToggle}>
         <span className="ops-row__main">
           <span className="ops-row__name">{f.name}</span>
-          <span className="ops-row__sub">{rowSub(f)}</span>
+          <span className="ops-row__sub">{rowSub(f, all)}</span>
         </span>
       </button>
       {open && (
         <div className="ops-body" id={bodyId}>
-          <FieldForm initial={f} submitLabel="Save" busy={busy} onSubmit={onSave} onCancel={onToggle} />
+          <FieldForm initial={f} submitLabel="Save" busy={busy} onSubmit={onSave} onCancel={onToggle} onList={onList} />
           <div className="ops-actions sv-qmove">
             <button type="button" className="btn ops-tap" disabled={busy || index === 0} onClick={() => onMove(-1)}>Move up</button>
             <button type="button" className="btn ops-tap" disabled={busy || index === total - 1} onClick={() => onMove(1)}>Move down</button>
@@ -213,7 +251,13 @@ export default function Fields() {
   const [params, setParams] = useSearchParams();
   const adding = params.get('add') === '1';
   const queryClient = useQueryClient();
-  const q = useQuery({ ...FIELDS_QUERY, enabled: me?.role === 'manager' });
+  // While a field is being turned into a list: read again every 2 s (its progress).
+  const q = useQuery({
+    ...FIELDS_QUERY,
+    enabled: me?.role === 'manager',
+    refetchInterval: (query) => (query.state.data?.fields || []).some((f) => f.converting) ? 2000 : false,
+  });
+  const listId = params.get('list');
   const [openId, setOpenId] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -258,6 +302,12 @@ export default function Fields() {
   const all = q.data.fields || [];
   const live = all.filter((f) => !f.retired);
   const off = all.filter((f) => f.retired);
+  const toList = (id) => { setOpenId(null); setSaid(null); setError(null); setParams({ list: id }); };
+  if (listId) {
+    return <FieldToList id={listId} fields={all} online={online} onBack={() => setParams({})} />;
+  }
+  // Dwelling type and Campus still typed, with words on file: they can be lists now.
+  const typed = live.filter((f) => f.kind === 'text' && f.filled > 0 && !f.as_written_of && LISTABLE_NAMES.includes(f.name.trim().toLowerCase()));
 
   const add = async (input) => {
     const r = await run('field.create', input, `✓ Added “${input.name}”`);
@@ -308,6 +358,16 @@ export default function Fields() {
 
       {said && <p className="ops-done" role="status">{said}</p>}
       {error && <p className="error" role="alert">{error}</p>}
+      {typed.length > 0 && !adding && (
+        <div className="fd-notice" role="note">
+          <p>{typed.map((f) => f.name).join(' and ')} can be pick lists now.</p>
+          {typed.map((f) => (
+            <button key={f.id} type="button" className="btn btn-quiet ops-tap" onClick={() => toList(f.id)}>
+              {f.converting ? `${f.name} is being turned into a list` : `Turn ${f.name} into a list`}
+            </button>
+          ))}
+        </div>
+      )}
 
       {adding && (
         <FieldForm key={`add-${live.length}`} primary submitLabel="Add field" busy={locked}
@@ -322,6 +382,8 @@ export default function Fields() {
             <FieldRow
               key={f.id}
               f={f}
+              all={all}
+              onList={() => toList(f.id)}
               index={i}
               total={live.length}
               open={openId === f.id}
