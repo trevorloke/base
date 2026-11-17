@@ -46,7 +46,7 @@
   a { color: inherit; }
   :focus-visible { outline: 3px solid var(--signal); outline-offset: 3px; }
 
-  header.wrap { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding-top: 24px; padding-bottom: 24px; }
+  header.wrap { max-width: 1320px; display: flex; justify-content: space-between; align-items: center; gap: 16px; padding-top: 24px; padding-bottom: 24px; }
   .mark { font-family: var(--display); font-weight: 700; font-size: 22px; letter-spacing: -0.01em; text-decoration: none; }
   .mark span { color: var(--signal); }
   nav { display: flex; gap: clamp(12px, 3vw, 28px); align-items: center; font-size: 15px; }
@@ -62,10 +62,15 @@
   .btn.quiet { background: transparent; color: var(--ink); border-color: var(--line); }
   nav .btn { min-height: 40px; padding: 7px 16px; color: var(--on-signal); }
 
-  .hero.wrap { padding-top: clamp(40px, 9vw, 104px); padding-bottom: clamp(48px, 9vw, 104px); border-bottom: 1px solid var(--line); }
+  .hero.wrap {
+    max-width: 1320px; padding-top: clamp(32px, 6vw, 72px); padding-bottom: clamp(40px, 7vw, 88px); border-bottom: 1px solid var(--line);
+    display: grid; grid-template-columns: minmax(0, 1fr); gap: 40px; align-items: center;
+  }
+  @media (min-width: 980px) { .hero.wrap { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 48px; } }
+  .demo-note { margin: 12px 2px 0; color: var(--muted); font-size: 14px; }
   h1 {
     font-family: var(--display); font-weight: 700; letter-spacing: -0.03em; line-height: 1.04;
-    font-size: clamp(40px, 7.4vw, 84px); margin: 0 0 12px; max-width: 13ch; text-wrap: balance;
+    font-size: clamp(40px, 5.4vw, 72px); margin: 0 0 12px; max-width: 13ch; text-wrap: balance;
   }
   .sub { font-family: var(--display); font-weight: 600; font-size: clamp(22px, 3.2vw, 34px); letter-spacing: -0.01em; color: var(--signal); margin: 0 0 24px; }
   .lede.built { color: var(--ink); font-weight: 600; margin-top: -16px; }
@@ -92,7 +97,16 @@
   .price-line { margin: 20px 0 0; color: var(--muted); font-size: 16px; }
   .price-line b { color: var(--ink); }
   .demo { background: var(--card); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; box-shadow: 0 18px 40px -24px rgba(16, 35, 59, 0.45); }
-  .demo iframe { display: block; width: 100%; height: min(760px, 82vh); border: 0; }
+  [hidden] { display: none !important; }
+  dialog { border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--ink); padding: 28px; width: min(460px, calc(100vw - 32px)); }
+  dialog::backdrop { background: rgba(8, 16, 28, 0.6); }
+  dialog h2 { font-size: 26px; margin-bottom: 8px; }
+  dialog p { color: var(--muted); margin: 0 0 20px; }
+  dialog label { display: block; font-size: 14px; font-weight: 600; margin: 0 0 14px; }
+  dialog input { display: block; width: 100%; margin-top: 6px; min-height: 44px; padding: 8px 12px; font: inherit; color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 8px; }
+  dialog .fine { font-size: 13px; margin: 16px 0 0; }
+  button.btn { font: inherit; font-weight: 600; cursor: pointer; }
+  .demo iframe { display: block; width: 100%; height: min(600px, 72vh); border: 0; }
 
   footer.wrap { border-top: 1px solid var(--line); padding-top: 28px; padding-bottom: 40px; color: var(--muted); font-size: 14px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; }
 </style>
@@ -110,25 +124,24 @@
 
 <main>
   <div class="hero wrap">
-    <h1>Campaigns win here</h1>
-    <p class="sub">Your campaign hub</p>
-    <p class="lede">base.win puts your people, map, field work, money, outreach, digital, and website into one synchronized product.</p>
-    <p class="lede built">Built by campaigners for campaigners.</p>
-    <div class="actions">
-      <a class="btn" href="#try">Try it free</a>
-      <a class="btn quiet" href="#inside">See what's inside</a>
+    <div class="pitch">
+      <h1>Campaigns win here</h1>
+      <p class="sub">Your campaign hub</p>
+      <p class="lede">base.win puts your people, map, field work, money, outreach, digital, and website into one synchronized product.</p>
+      <p class="lede built">Built by campaigners for campaigners.</p>
+      <div class="actions">
+        <a class="btn" href="#try">Try it free</a>
+        <a class="btn quiet" href="#inside">See what's inside</a>
+      </div>
+      <p class="price-line"><b>Free</b> for the time being. No card needed.</p>
     </div>
-    <p class="price-line"><b>Free</b> for the time being. No card needed.</p>
+    <div class="try" id="try">
+      <div class="demo" id="demo">
+        <iframe id="demo-frame" title="base.win, running with a sample campaign" src="https://staging.base.win/api/auth/demo"></iframe>
+      </div>
+      <p class="demo-note">This is base.win itself, running a made-up campaign in Vancouver. You have full access, so open anything. Nobody in it is real.</p>
+    </div>
   </div>
-
-  <section id="try" class="wrap">
-    <p class="eyebrow">Try it</p>
-    <h2>Play with the real thing</h2>
-    <p class="intro">This is base.win itself, running a made-up campaign in Vancouver. You're signed in with full access, so open anything. Nobody in it is real.</p>
-    <div class="demo" id="demo">
-      <iframe id="demo-frame" title="base.win, running with a sample campaign" src="https://staging.base.win/api/auth/demo"></iframe>
-    </div>
-  </section>
 
   <section id="inside" class="wrap">
     <p class="eyebrow">What's inside</p>
@@ -162,6 +175,66 @@
   <span>&copy; 2026 base.win</span>
   <span>Already a client? Sign in at your own base.win address.</span>
 </footer>
+
+<dialog id="offer" aria-labelledby="offer-title">
+  <div id="offer-ask">
+    <h2 id="offer-title">Want one of your own?</h2>
+    <p>You've had a look around. We can set up a free trial account for your campaign, with your own base.win address.</p>
+    <div class="actions">
+      <button class="btn" type="button" id="offer-yes">Yes, set up my free trial</button>
+      <button class="btn quiet" type="button" id="offer-no">Keep exploring</button>
+    </div>
+  </div>
+  <form id="offer-form" hidden>
+    <h2>Set up your free trial</h2>
+    <p>Tell us who you are and we'll email you when your account is ready.</p>
+    <label>Your name <input name="name" autocomplete="name" required></label>
+    <label>Email <input name="email" type="email" autocomplete="email" required></label>
+    <label>Campaign or organization <input name="campaign" required></label>
+    <div class="actions">
+      <button class="btn" type="submit">Send my request</button>
+      <button class="btn quiet" type="button" id="offer-cancel">Not now</button>
+    </div>
+    <p class="fine">This opens your email app with the request written out. Nothing is sent until you send it.</p>
+  </form>
+</dialog>
+
+<script>
+(() => {
+  // Where trial requests go: an inbox someone reads. Empty: the offer stays off.
+  const TRIAL_EMAIL = '';
+  // The framed app counts the visitor's clicks and tells this page the count
+  // (web/src/demoframe.js). After this many, the offer is made, once a visit.
+  const CLICKS_BEFORE_OFFER = 6;
+  const DEMO_ORIGIN = 'https://staging.base.win';
+  if (!TRIAL_EMAIL) return;
+
+  const offer = document.getElementById('offer');
+  const ask = document.getElementById('offer-ask');
+  const form = document.getElementById('offer-form');
+  const made = () => { try { return sessionStorage.getItem('offered') === '1'; } catch { return false; } };
+  const markMade = () => { try { sessionStorage.setItem('offered', '1'); } catch { /* private mode */ } };
+
+  window.addEventListener('message', (e) => {
+    if (e.origin !== DEMO_ORIGIN || e.data?.source !== 'base.win-demo') return;
+    if (!(Number(e.data.clicks) >= CLICKS_BEFORE_OFFER) || made() || offer.open) return;
+    markMade();
+    ask.hidden = false;
+    form.hidden = true;
+    offer.showModal();
+  });
+  document.getElementById('offer-no').addEventListener('click', () => offer.close());
+  document.getElementById('offer-cancel').addEventListener('click', () => offer.close());
+  document.getElementById('offer-yes').addEventListener('click', () => { ask.hidden = true; form.hidden = false; form.elements.name.focus(); });
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const v = (k) => form.elements[k].value.trim();
+    const body = `Name: ${v('name')}\nEmail: ${v('email')}\nCampaign or organization: ${v('campaign')}\n\nPlease set up a free trial account on base.win.`;
+    location.href = `mailto:${TRIAL_EMAIL}?subject=${encodeURIComponent('Free trial request: ' + v('campaign'))}&body=${encodeURIComponent(body)}`;
+    offer.close();
+  });
+})();
+</script>
 
 </body>
 </html>
