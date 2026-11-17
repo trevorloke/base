@@ -199,13 +199,20 @@ test('money stays in the tab whatever role the tab thinks it has; a desk’s Peo
     await assert.rejects(qc.fetchQuery({ queryKey: ['persons', 'list', `q=&limit=300&${cut}`], queryFn: async () => { throw new api.ApiError(503, 'request failed (503)'); } }),
       /503/, `${cut}: not the whole list`);
   }
-  // A list picked by a profile field (Faith = Sikh): never kept, by name or
-  // by its rows — no laptop's browser storage holds anyone's faith.
+  // A list picked by a Private field (Faith = Sikh), or by a field the desk
+  // hasn't read: never kept, by name or by its rows — no laptop's browser
+  // storage holds anyone's faith. A field it knows isn't Private is kept.
+  const plainField = '1c7d4e9f-2a3b-4d6c-9e1f-1b2c3d4e5f60';
   const faith = `q=&limit=300&field=${someList}%3ASikh`;
-  await qc.fetchQuery({ queryKey: ['persons', 'list', faith], queryFn: async () => ({ persons: [{ id: 'p2', name: 'Amar Example', address: '1 Main' }] }) });
+  const row = (name) => async () => ({ persons: [{ id: 'p2', name, address: '1 Main' }] });
+  await qc.fetchQuery({ queryKey: ['persons', 'list', faith], queryFn: row('Amar Example') });
+  qc.setQueryData(['fields'], { fields: [{ id: someList, name: 'Faith', sensitive: true }, { id: plainField, name: 'Union local', sensitive: false }] });
+  await qc.fetchQuery({ queryKey: ['persons', 'list', `${faith}&rating=1`], queryFn: row('Bal Example') });
+  await qc.fetchQuery({ queryKey: ['persons', 'list', `q=&limit=300&field=${plainField}%3ACUPE`], queryFn: row('Cy Example') });
   await sleep(900);
-  assert.ok(![...session.m.keys(), ...local.m.keys()].some((k) => /field=/.test(k)), 'a field-picked list is not kept');
-  assert.ok(![...session.m.values(), ...local.m.values()].some((v) => /Amar Example/.test(v)));
+  assert.ok(![...session.m.keys(), ...local.m.keys()].some((k) => k.includes(someList)), 'a Faith-picked list is not kept');
+  assert.ok(![...session.m.values(), ...local.m.values()].some((v) => /Amar Example|Bal Example/.test(v)));
+  assert.ok([...session.m.values()].some((v) => /Cy Example/.test(v)), 'a plain field’s list is kept, this tab only');
   // A refusal is still a refusal.
   qc.removeQueries({ queryKey: ['persons'] });
   await assert.rejects(qc.fetchQuery({ queryKey: ['persons', 'list', 'q=&limit=300'], queryFn: async () => { throw new api.ApiError(403, 'not yours'); } }), /not yours/);

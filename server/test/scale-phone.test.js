@@ -135,12 +135,13 @@ test('the phone shows the newer of its scale copies', () => {
 test('no signal: a profile-field filter is an exact kept copy or No signal — never the whole list', async () => {
   net.cookie = mgr.cookie;
   const queryClient = {
-    getQueryData: (k) => (k[0] === 'me' ? mgrMe : undefined),
+    // The desk's People has read the fields list (its filter chips).
+    getQueryData: (k) => (k[0] === 'me' ? mgrMe : k[0] === 'fields' ? { fields } : undefined),
     getQueryCache: () => ({ subscribe: () => () => {}, getAll: () => [] }),
     invalidateQueries: () => {},
   };
-  kept.watchKeptCopies(queryClient);
   const fields = ok(await mgr.get('/api/fields')).fields;
+  kept.watchKeptCopies(queryClient);
   const strata = fields.find((f) => f.name === 'Strata council member');
   const lang = fields.find((f) => f.name === 'Language at home');
   const qs = (extra) => new URLSearchParams({ q: '', limit: '300', ...extra }).toString();

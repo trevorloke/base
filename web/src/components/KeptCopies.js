@@ -62,6 +62,16 @@ const keptOutPrivate = (d) => (Array.isArray(d?.fields) && d.fields.some((f) => 
   ? { ...d, fields: d.fields.map((f) => (f?.sensitive ? { ...f, value: null, at: null, by_name: null, kept_out: true } : f)) }
   : d);
 
+// A field filter ("<field id>:<choice>") that may be on a Private field:
+// for the desk, unless the fields list it read says that field isn't one
+// (unknown counts as Private). A volunteer is never answered on one.
+const mayBePrivate = (v, me) => {
+  if (!isDeskRole(me.role)) return false;
+  const id = String(v).split(':')[0];
+  const f = (client?.getQueryData(['fields'])?.fields || []).find((x) => x?.id === id);
+  return !f || Boolean(f.sensitive);
+};
+
 // What a query's copy is called and where it lives, or null (not kept).
 // Shifts keep the names the field already uses (pages/Shifts.jsx), so Today
 // and Shifts read the same copy.
@@ -91,12 +101,11 @@ function planFor(key, me) {
     // A search isn't kept (each one typed would be another copy, pushing the
     // whole list out): with no signal it's answered from the kept list. A
     // desk's lists carry donor tags: this tab only. A list picked by a
-    // profile field isn't kept either: the field may be Private (Faith), and
-    // the copy would say who has it.
+    // Private field (Faith) isn't kept: the copy would say who has it.
     case 'persons': {
       if (k1 !== 'list' || key.length !== 3) return null;
       const p = new URLSearchParams(String(k2));
-      return { ...q(`persons:${k2}`, money), keep: !(p.get('q') || '').trim() && !p.has('field') };
+      return { ...q(`persons:${k2}`, money), keep: !(p.get('q') || '').trim() && !p.getAll('field').some((v) => mayBePrivate(v, me)) };
     }
     case 'signs': return key.length === 1 ? q('signs', 'local') : null;
     case 'texting': return (k1 === 'inbox' || k1 === 'thread') && key.length === 3 ? q(`texting:${k1}:${k2}`, 'local') : null;
