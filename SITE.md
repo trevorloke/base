@@ -540,7 +540,8 @@ answer the 404 under a prefix.
   Translation in batches outside any transaction, and writes each answer by
   an action (`site.translations.machine`, one event per batch). Traditional
   is converted from Simplified on the server (opencc, Taiwan character
-  forms). A segment that won't come back whole is tried again after an hour
+  forms; its dictionary loads the first time Traditional is made, never
+  at start-up). A segment that won't come back whole is tried again after an hour
   and six hours, then not again. The month's characters are reserved before
   each call (`site_translate_usage`, default 450,000).
 - **Drawn like English.** A page looks its words up in a per-language memo
@@ -570,7 +571,10 @@ answer the 404 under a prefix.
   reload it and send again". The language comes from the address, never the
   body.
 - **Remembered.** A language page sets `site_lang` (never on a prefetch);
-  only the home page `/` redirects to it; English's `?lang=en` forgets it.
+  only the home page `/` redirects to it (not with a query: a translated
+  home page's "Read it in English" carries `?en=1`); English's `?lang=en`
+  forgets it. A language not offered sends its addresses to the English
+  page on the same site (`//other.host` after the prefix is a path there).
   `/preferences` and `/unsubscribe` follow `?lang=` or the cookie.
 - Search engines see a language only when a manager turns on its listing
   (`languages.index`): until then its pages say `noindex` and the
@@ -586,7 +590,8 @@ answer the 404 under a prefix.
   person's words whose Simplified changed or that now hold a kept name),
   Recent edits with Undo, the names kept as written (with possible names
   to keep), and **Preview** (before the language is offered, a half-hour
-  link to the home page's draft in it). **Words the
+  link to the home page's draft in it; for someone with only Website
+  translations, the published home page, never the draft). **Words the
   law needs** shows each key's English and the approved words or a
   labelled draft; a manager approves them all at once. Reads:
   `GET /api/site/languages` and `/api/site/languages/:code/{estimate,
@@ -596,9 +601,14 @@ answer the 404 under a prefix.
   unchecked, for someone with the Website; a suggestion for someone with
   only **Website translations**, `site_words`), `site.translation.approve`,
   `.decline`, `.check` (never one's own words; a petition's statement
-  needs a manager), `.undo` (the Website's), `site.names.keep`,
-  `site.translate.now`. Turning a language on or off, search listing, the
-  limit and older posts are `site.settings.save`, a manager's.
+  needs a manager, wherever else its words also appear), `.undo` (the
+  Website's: exactly the version the undone one replaced,
+  `site_translation_versions.replaced_id`; Traditional back to a
+  conversion is converted again from today's Simplified),
+  `site.names.keep`, `site.translate.now` (on the event log). Turning a
+  language on or off, search listing, the limit and older posts are
+  `site.settings.save`, a manager's; a languages save changes only the
+  keys it names.
 
 ## Settings (`site_settings`, `server/ext/site/shape.js`)
 
