@@ -105,6 +105,13 @@ test('permissions: an area taken from a role, or given to one person, changes wh
   assert.deepEqual(view.roles.staff.deny, ['money']);
   assert.deepEqual(view.members.find((m) => m.name === 'Vic').areas, ['outreach']);
   assert.ok(!view.members.find((m) => m.name === 'Sam').areas.includes('money'));
+
+  // Given the Website, Vic has Website translations too (perms.js decideArea),
+  // and Permissions lists what /auth/me says, not the Website alone.
+  assert.equal((await mgr.action('permission.member.set', { user_id: ids.Vic, grant: ['outreach', 'site'] })).status, 200);
+  assert.deepEqual(await areasOf(vol), ['outreach', 'site', 'site_words']);
+  assert.deepEqual((await mgr.get('/api/admin/permissions')).json.members.find((m) => m.name === 'Vic').areas, ['outreach', 'site', 'site_words']);
+  assert.equal((await mgr.action('permission.member.set', { user_id: ids.Vic, grant: ['outreach'] })).status, 200);
 });
 
 test('permissions: Candidates have a row of their own — set apart from Volunteers, a volunteer’s defaults', async () => {

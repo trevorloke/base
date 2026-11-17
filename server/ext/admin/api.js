@@ -2,7 +2,7 @@
 // picker) · GET /admin/permissions (managers: the areas, each role's and
 // each member's grants and denies, and what each member ends up with).
 import { Hono } from 'hono';
-import { AREAS, BASE, permsOf, decide, AREA_KEYS } from '../../lib/perms.js';
+import { AREAS, BASE, permsOf, decideArea, AREA_KEYS } from '../../lib/perms.js';
 import { learnName } from '../../lib/brand.js';
 
 export const api = new Hono();
@@ -46,7 +46,8 @@ api.get('/admin/permissions', async (c) => {
   )).rows.map((m) => {
     const own = parseJ(m.permissions, {});
     const perms = permsOf(m.candidate_id ? 'candidate' : m.role, settings, own);
-    const areas = AREA_KEYS.filter((k) => { const d = decide(perms, k); return d === null ? BASE[m.role].includes(k) : d; });
+    // The same rule as /auth/me's areasFor: Website translations comes with the Website.
+    const areas = AREA_KEYS.filter((k) => { const d = decideArea(perms, k); return d === null ? BASE[m.role].includes(k) : d; });
     const candidate = m.candidate_id ? { office: m.candidate_office || null } : null;
     return { id: m.id, name: m.name, email: m.email, role: m.role, candidate, grant: own.grant || [], deny: own.deny || [], areas };
   });
