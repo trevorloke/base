@@ -337,7 +337,7 @@ export const mountLanguageReads = (api, opened) => {
     // the approved Simplified converted for Traditional.
     let draft = {}; let from = null;
     if (code === 'zh-Hant' && legal['zh-Hans']) {
-      draft = Object.fromEntries(LEGAL_KEYS.map((k) => [k, convertToTraditional(legal['zh-Hans'].words[k] || '')]));
+      draft = Object.fromEntries(await Promise.all(LEGAL_KEYS.map(async (k) => [k, await convertToTraditional(legal['zh-Hans'].words[k] || '')])));
       from = 'converted';
     } else {
       const byHash = new Map((await db.query(

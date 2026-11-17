@@ -19,7 +19,6 @@
 // Nothing is ever translated while a visitor waits: a GET never queues a
 // sweep, and a segment a page needs but doesn't have shows in English.
 import { createHash } from 'node:crypto';
-import { Converter } from 'opencc-js/cn2t';
 import { checkProps } from '@starbase/shared/site/catalogue';
 import { OTHER_CODES, LANG_BY_CODE } from '../../../shared/site/languages.js';
 import { normSeg, segmentsOf, moduleSegments } from '../../../shared/site/segments.js';
@@ -34,8 +33,16 @@ import { cacheClear } from './cache.js';
 import { latestLegal, keyCurrent } from './legal.js';
 
 export const segHash = (text) => createHash('sha256').update(normSeg(text)).digest('hex');
-const toTraditional = Converter({ from: 'cn', to: 'tw' });
-export const convertToTraditional = (text) => toTraditional(String(text ?? ''));
+// The Simplified→Traditional dictionary is about 80 MB once built: loaded
+// the first time Traditional is made, never at start-up.
+let toTraditional = null;
+export const convertToTraditional = async (text) => {
+  if (!toTraditional) {
+    const { Converter } = await import('opencc-js/cn2t');
+    toTraditional = Converter({ from: 'cn', to: 'tw' });
+  }
+  return toTraditional(String(text ?? ''));
+};
 
 // The languages Google is asked for: Punjabi, and Simplified whenever
 // either Chinese is on (Traditional is made from it).
@@ -360,7 +367,7 @@ export const bumpRev = (tx, workspaceId, lang, { lastError } = {}) => tx.query(
 // write. A row a person edited in Traditional is never replaced; it goes
 // back under "To check".
 export const convertRow = async (tx, workspaceId, hash, src, simplified, place) => {
-  const text = convertToTraditional(simplified);
+  const text = await convertToTraditional(simplified);
   const cur = (await tx.query("select id, origin, version_id, text from site_translations where workspace_id = $1 and lang = 'zh-Hant' and src_hash = $2", [workspaceId, hash])).rows[0];
   if (cur?.origin === 'edited') {
     await tx.query("update site_translations set checked_by = null, checked_at = null, needs_check = true, updated_at = now() where id = $1", [cur.id]);

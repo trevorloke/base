@@ -287,7 +287,7 @@ test('the legal words: the machine’s draft, and Traditional from the approved 
   const hant = ok(await mgr.get('/api/site/languages/zh-Hant/legal'));
   assert.equal(hant.draft_from, 'converted');
   const { convertToTraditional } = await import('../ext/site/translate.js');
-  assert.equal(hant.draft.authorizedBy, convertToTraditional(approvedWords('zh-Hans').authorizedBy));
+  assert.equal(hant.draft.authorizedBy, await convertToTraditional(approvedWords('zh-Hans').authorizedBy));
 });
 
 test('Settings → Services: the Translation row, its Check, and Check translation', async () => {
