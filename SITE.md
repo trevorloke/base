@@ -891,3 +891,47 @@ name, if that will point here too), then point its DNS here: the site
 answers there from the first request, and nobody signs in there before it
 does.
 
+
+## The voter guide (`server/ext/voteguide`, VG)
+
+One guide per campaign for the next vote, kept under Website → Voter guide
+and shown by the **Voter guide** module (`voterguide`, at most one per
+page). It ships empty: no dates, places, rules or names of its own.
+
+- **Tables:** `vote_guide` (state, the office's link, the campaign's rules
+  and ballot note, the checks, `rev`), `vote_days` (`'HH:MM'` hours),
+  `vote_place_info` beside a `places` row with `kind = 'voting'` (the same
+  list as Shifts and GOTV; `closed_on` closes a place for that one day),
+  `vote_contests`.
+- **Actions:** `site.guide.*` are Website actions; publish, unpublish, clear
+  and the embed addresses are a manager's. Publish is refused for the first
+  missing item of the checklist (days, election day, a day still ahead,
+  places, "vote anywhere?", the office's link, the two checks, the
+  authorization line, and the ballot and rules checks when there are any).
+  "Also use these days for GOTV mode" writes `voted_settings` through
+  `saveVotingDays` (ext/voted). In a published guide, Shifts can't rename
+  or remove a guide place (409).
+- **Import:** `POST /api/site/guide/import/preview { text }` reads a pasted
+  sheet, a CSV or "name, address" lines, looks new addresses up outside any
+  transaction (4 at a time, inside the campaign's box + 10 km) and signs the
+  rows; `site.guide.places.import` saves them as signed (30 minutes).
+- **States** by the server's clock (`server/lib/clock.js`) and B.C.'s rule
+  (`server/lib/tzrule.js`): not out (also a draft outside a preview: a
+  "Tell me when it's out" sign-up with source `voter-guide`, People
+  `web=guide`), before, open, between, over. The island corrects its clock
+  from `<root>/api/guide/clock` and re-draws at each boundary.
+- **Banner:** on every page from a week before the first day until the last
+  close, after the language switch and before the announcement; not on the
+  guide's page, the embed or plain pages.
+- **Cache:** a page drawn while the guide is published expires at the
+  guide's next boundary; `?area=`/`?day=` are part of the key only when
+  they are the guide's own values; `?q=` is never kept; `?near=` is the
+  island's alone. Pages holding the module send `geolocation=(self)`.
+- **Address lookup:** `POST <root>/api/guide/find { address }` → a pin to 3
+  decimals; nothing is stored or logged; 30 a minute per address, 300 a
+  minute per campaign.
+- **Embed:** `<root>/embed/voter-guide`, framed only by the saved addresses
+  (`frame-ancestors`, no `X-Frame-Options`), never cached, with the
+  authorization line; `site-assets/embed.js` sets the frame's height.
+- **Field read:** `GET /api/guide?rev=` (every role; `{ same: true }` when
+  unchanged; `?draft=1` for the Website area).

@@ -842,6 +842,9 @@ with its receipt; a monthly gift is a pledge, each month its own gift.
 
 Addresses are looked up with the BC Address Geocoder (`server/lib/geocode.js`;
 `GEOCODER=bc|nominatim|off`, `BC_GEOCODER_KEY`, `GEOCODE_MIN_SCORE`).
+The voter guide's address lookups and place import share the B.C.
+service's rate with everything else: set `BC_GEOCODER_KEY` before a guide
+goes live (SITE.md "The voter guide").
 Google no longer places pins (its terms let a Google pin be kept 30 days
 only and not on another map): `GEOCODER=google` places with B.C. and
 `GEOCODER_FALLBACK=google` is ignored, each said once and on Settings →
