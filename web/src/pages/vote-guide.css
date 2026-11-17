@@ -1,0 +1,129 @@
+/* The voter guide in the app (VG): "Where to vote" in the field (vi-*)
+   and Website → Voter guide on the desk (wg-*). Only the app's variables. */
+
+/* ── Where to vote (pages/VoteInfo.jsx): a phone first, 720 px on the desk ── */
+.vi-page { max-width: 720px; display: grid; gap: var(--s-3); padding-bottom: var(--s-6); }
+.vi-page h1 { margin: 0; font-size: 24px; }
+.vi-back { min-height: var(--ctl); text-align: left; }
+.vi-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.vi-status { margin: 0; font-size: 18px; font-weight: 600; }
+.vi-quiet { margin: 0; font-size: 16px; color: var(--text-2); }
+.vi-h { margin: var(--s-2) 0 var(--s-2); font-size: 16px; font-weight: 600; overflow-wrap: anywhere; }
+.vi-sub { margin: var(--s-3) 0 var(--s-1); font-size: 14px; font-weight: 600; }
+.vi-warn {
+  border: 2px solid var(--warn);
+  background: color-mix(in srgb, var(--warn) 10%, var(--paper-0));
+  border-radius: var(--r-card);
+  padding: var(--s-3) var(--s-4);
+}
+.vi-warn__h { margin: 0; color: var(--warn); font-weight: 600; font-size: 16px; }
+.vi-warn__name { margin: var(--s-1) 0 0; font-size: 14px; }
+.vi-search { width: 100%; margin-bottom: var(--s-2); }
+.vi-places { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-2); }
+.vi-place {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s-3);
+  padding: var(--s-3); border: 1px solid var(--rule); border-radius: var(--r-card); background: var(--paper-0);
+}
+.vi-place__main { display: grid; gap: 2px; min-width: 0; }
+.vi-place__name { font-weight: 600; font-size: 15px; overflow-wrap: anywhere; }
+.vi-place[data-closed] .vi-place__name { text-decoration: line-through; color: var(--text-3); }
+.vi-place__line, .vi-place__addr { font-size: 14px; color: var(--text-2); overflow-wrap: anywhere; }
+.vi-place__note { font-size: 14px; color: var(--danger); }
+.vi-chip { justify-self: start; margin-left: var(--s-1); }
+.btn.vi-go { min-height: 48px; flex: none; }
+.btn.vi-show { width: 100%; min-height: 48px; font-size: 16px; }
+.vi-secs { display: grid; gap: var(--s-2); margin-top: var(--s-2); }
+.vi-sec { border: 1px solid var(--rule); border-radius: var(--r-card); background: var(--paper-0); }
+.vi-sec__h { min-height: 48px; display: flex; align-items: center; padding: 0 var(--s-4); cursor: pointer; font-weight: 600; font-size: 15px; }
+.vi-sec__body { padding: 0 var(--s-4) var(--s-3); font-size: 14px; overflow-wrap: anywhere; }
+.vi-days { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-2); }
+.vi-days li[data-today] strong { color: var(--mark-deep); }
+.vi-names { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-1); }
+.vi-names li { padding: var(--s-1) var(--s-2); border-radius: var(--r-sm); }
+.vi-names li[data-ours] { background: var(--mark-soft); font-weight: 600; }
+.vi-note, .vi-md { color: var(--text-2); }
+.vi-md p { margin: 0 0 var(--s-2); }
+.vi-foot { margin: var(--s-2) 0 0; font-size: 12px; color: var(--text-3); }
+
+/* Show the voter: the whole screen, the code as large as the phone allows. */
+.vi-sheet {
+  position: fixed; inset: 0; z-index: 90; overflow-y: auto;
+  display: flex; flex-direction: column; align-items: center; gap: var(--s-3);
+  padding: var(--s-5) var(--s-4); background: var(--paper);
+}
+.vi-sheet__h { margin: 0; font-size: 20px; text-align: center; }
+.vi-qr { width: min(80vw, 360px); height: auto; border-radius: var(--r-sm); }
+.vi-sheet__long { font-size: 16px; }
+.vi-sheet__link { margin: 0; font-size: 12px; color: var(--text-3); max-width: 100%; overflow-wrap: anywhere; text-align: center; }
+.vi-langs { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--s-2); }
+.chip.vi-lang { min-height: 48px; padding: 0 var(--s-4); font-size: 15px; cursor: pointer; }
+.chip.vi-lang.is-on { background: var(--mark-soft); border-color: var(--mark); color: var(--ink); font-weight: 600; }
+.vi-sheet__acts { display: flex; gap: var(--s-3); }
+.vi-sheet__acts .btn { min-height: 48px; min-width: 120px; }
+
+/* Today's row and the door's quiet link. */
+.vi-doorlink { display: flex; align-items: center; min-height: 48px; }
+.chip.vi-nearchip { color: var(--warn); border-color: var(--warn); }
+
+/* ── Website → Voter guide (pages/WebsiteGuide.jsx): one 880 px column ── */
+.wg-page { max-width: 880px; display: grid; gap: var(--s-4); padding-bottom: var(--s-7); }
+.wg-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; }
+.wg-head h1 { margin: 0; font-size: 24px; display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
+.wg-card { display: grid; gap: var(--s-3); }
+.wg-card h2 { margin: 0; font-size: 18px; }
+.wg-line { margin: 0; font-size: 14px; color: var(--text-2); }
+.wg-err { margin: 0; color: var(--danger); font-size: 14px; }
+.wg-ok { color: var(--ok); }
+.wg-checks { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-1); }
+.wg-checks li { display: flex; gap: var(--s-2); align-items: baseline; font-size: 14px; }
+.wg-checks li[data-done] { color: var(--text-3); }
+.wg-tick { flex: none; width: 1.2em; text-align: center; }
+.wg-days { display: grid; gap: var(--s-2); }
+.wg-day { display: grid; grid-template-columns: minmax(140px, 1.3fr) minmax(120px, 1fr) minmax(96px, .8fr) minmax(96px, .8fr) auto; gap: var(--s-2); align-items: end; }
+.wg-day label, .wg-fld label, .wg-fld > span { display: block; font-size: 12px; color: var(--text-3); margin-bottom: 2px; }
+.wg-day .input, .wg-fld .input, .wg-fld select { width: 100%; }
+.wg-row { display: flex; gap: var(--s-2); flex-wrap: wrap; align-items: center; }
+.wg-foot { display: flex; gap: var(--s-3); align-items: center; flex-wrap: wrap; border-top: 1px solid var(--rule); padding-top: var(--s-3); font-size: 14px; }
+.wg-radios { display: grid; gap: var(--s-1); border: 0; margin: 0; padding: 0; }
+.wg-radios legend { font-weight: 600; font-size: 15px; margin-bottom: var(--s-1); }
+.wg-radio { display: flex; align-items: center; gap: var(--s-2); min-height: var(--ctl); font-size: 15px; }
+.wg-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.wg-table th { text-align: left; font-weight: 600; color: var(--text-3); font-size: 12px; padding: var(--s-1) var(--s-2); border-bottom: 1px solid var(--rule); }
+.wg-table td { padding: 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+.wg-table td button { all: unset; display: block; box-sizing: border-box; width: 100%; padding: var(--s-2); cursor: pointer; min-height: var(--ctl); }
+.wg-table td button:focus-visible { outline: 2px solid var(--focus); }
+.wg-table tr[data-closed] .wg-name { text-decoration: line-through; }
+.wg-list { list-style: none; margin: 0; padding: 0; display: none; }
+.wg-list li button { all: unset; box-sizing: border-box; display: grid; gap: 2px; width: 100%; padding: var(--s-2) 0; min-height: 48px; border-bottom: 1px solid var(--rule); cursor: pointer; }
+.wg-list li button:focus-visible { outline: 2px solid var(--focus); }
+.wg-name { font-weight: 600; }
+.wg-sub { font-size: 13px; color: var(--text-3); }
+.wg-place { display: grid; gap: var(--s-3); padding: var(--s-3); border: 1px solid var(--rule-2); border-radius: var(--r-card); background: var(--paper-1); }
+.wg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-3); }
+.wg-dayticks { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.wg-check { display: flex; align-items: center; gap: var(--s-2); min-height: var(--ctl); font-size: 14px; }
+.wg-text { width: 100%; min-height: 96px; font: inherit; }
+.wg-big { width: 100%; min-height: 200px; font: inherit; font-family: var(--font-mono); font-size: 13px; }
+.wg-counts { display: flex; flex-wrap: wrap; gap: var(--s-2); list-style: none; margin: 0; padding: 0; }
+.wg-preview { width: 100%; border-collapse: collapse; font-size: 13px; }
+.wg-preview td, .wg-preview th { text-align: left; padding: var(--s-1) var(--s-2); border-bottom: 1px solid var(--rule); vertical-align: top; overflow-wrap: anywhere; }
+.wg-preview tr[data-status='Problem'] td:first-child { color: var(--danger); font-weight: 600; }
+.wg-confirm { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; padding: var(--s-3); border-radius: var(--r-card); background: var(--paper-1); border: 1px solid var(--rule-2); }
+.wg-confirm p { margin: 0; font-size: 14px; flex: 1 1 240px; }
+.wg-snippet { width: 100%; min-height: 96px; font-family: var(--font-mono); font-size: 12px; }
+.wg-names { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.wg-contest { display: grid; gap: var(--s-2); padding: var(--s-3); border: 1px solid var(--rule-2); border-radius: var(--r-card); }
+.wg-more > summary { min-height: var(--ctl); display: flex; align-items: center; cursor: pointer; font-weight: 600; }
+.wg-more[open] > summary { margin-bottom: var(--s-3); }
+.wg-more__body { display: grid; gap: var(--s-4); }
+.wg-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+@media (max-width: 640px) {
+  .wg-day { grid-template-columns: 1fr 1fr; }
+  .wg-grid { grid-template-columns: 1fr; }
+  .wg-table { display: none; }
+  .wg-list { display: block; }
+  .wg-preview thead { display: none; }
+  .wg-preview tr { display: grid; padding: var(--s-2) 0; border-bottom: 1px solid var(--rule); }
+  .wg-preview td { border: 0; padding: 0; }
+}

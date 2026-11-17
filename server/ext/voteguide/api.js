@@ -87,6 +87,11 @@ api.get('/site/guide', async (c) => {
       advance_days: parse(gotv?.advance_days),
     },
     gotv_only: guide.gotvOnly,
+    // Which ones, so the desk's "Add" can put them back in the guide.
+    gotv_only_places: guide.gotvOnly ? (await db.query(
+      `select p.id, p.name from places p where p.workspace_id = $1 and p.kind = 'voting' and p.deleted_at is null
+          and not exists (select 1 from vote_place_info i where i.place_id = p.id) order by lower(p.name) limit 300`, [ws.id],
+    )).rows : [],
     lookup: String(process.env.GEOCODER || 'bc').toLowerCase() === 'off' ? 'off' : 'on',
   });
 });

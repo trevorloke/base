@@ -1,5 +1,5 @@
 // Small pieces every Website screen shares:
-//   <WebsiteTabs />        Overview · Pages · News · Petitions and pledges · Other websites · Languages · Theme · Settings
+//   <WebsiteTabs />        Overview · Pages · News · Petitions and pledges · Other websites · Languages · Voter guide · Theme · Settings
 //   useToast()             one message at a time, with an optional Undo
 //                          ({ toast, say(text, { undo }) } and <Toast toast={…} />)
 //   <MoreMenu label>       a "⋯" button that opens a short list of actions
@@ -19,6 +19,7 @@ const TABS = [
   ['/website/petitions', 'Petitions and pledges'],
   ['/website/sites', 'Other websites'],
   ['/website/languages', 'Languages'],
+  ['/website/guide', 'Voter guide'],
   ['/website/theme', 'Theme'],
   ['/website/settings', 'Settings'],
 ];

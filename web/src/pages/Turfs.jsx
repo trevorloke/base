@@ -45,6 +45,9 @@ import { doorState, inPass } from '@starbase/shared/passes';
 import { noCalls } from '@starbase/shared/canvass';
 import { PassChip, TryAgainChip, WalkShow, overlayPass, waitingTries } from '../components/PassBits.jsx';
 import { VotedChip, VotedRow, pendingVoted } from '../components/Voted.jsx';
+import WhereToVote from '../components/WhereToVote.jsx';
+import { nearOpenPlace, useGuide } from '../components/guide.js';
+import { W as guideWords } from '../components/guideWords.js';
 import RequestAsk from '../components/RequestAsk.jsx';
 import './turfs.css';
 import './quick.css'; // the desk's Print beside Map
@@ -1052,6 +1055,14 @@ function WalkList({ id }) {
   );
 }
 
+// On a voting day while voting is open: a door within 150 m of an open
+// voting place says so in the list (no campaigning near it; VG decision 29).
+function NearChip({ door }) {
+  const g = useGuide({ side: true }).data;
+  if (!nearOpenPlace(g, door)) return null;
+  return <span className="chip vi-nearchip">{guideWords('vg.nearChip')}</span>;
+}
+
 function Door({
   door, index, isNext, open, onToggle, selectedId, onPick, busy, notes, setNote, onNoteFocus, onLog, onNobodyHome,
   onLeftLit, onVoted, onSign, onAdded, toast,
@@ -1127,6 +1138,7 @@ function Door({
               ? rated.length > 0 && <span className="chip walk-rated">{rated.length} rated</span>
               : rated.map((p) => <RatingChip key={p.id} code={p.rating} who brief />)}
             <VotedChip persons={door.persons} />
+            <NearChip door={door} />
           </span>
           <span className="walk-sr">
             {door.done ? (phoneOnly ? ' — called, not knocked' : ' — done') : door.state === 'again' ? ` — try again, ${door.tries} of ${pass?.tries}` : ' — not knocked yet'}{isNext ? ', next door' : ''}
@@ -1184,6 +1196,7 @@ function Door({
               {sel.phone && !noCalls(sel) && <a className="btn walk-act" href={`tel:${dialable(sel.phone)}`}>Call</a>}
               {!sel.pending && <Link className="btn btn-quiet walk-act" to={`/people/${sel.id}`} state={fromHere} onClick={markDoor}>Profile</Link>}
               <Directions to={{ lat: door.lat, lng: door.lng, address: door.address, city: sel.city }} words={door.address ? doorTitle(door) : null} mode="walking" className="btn btn-quiet walk-act" />
+              <WhereToVote door={door} person={sel} at={door.address ? doorTitle(door) : null} className="btn btn-quiet walk-act" />
               {!sel.pending && <RequestAsk person={sel} toast={(t, o) => toast(t, o)} />}
             </div>
             <IKnowThem key={`know-${sel.id}`} person={sel} />

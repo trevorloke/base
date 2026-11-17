@@ -95,6 +95,7 @@ export const SCREENS = [
   // translations' (site_words), which whoever has the Website has too. For
   // someone with that area alone it is their Translations tab (Shell.jsx).
   { label: 'Website languages', to: '/website/languages', area: 'site_words', words: 'translations translate punjabi chinese language' },
+  { label: 'Voter guide', to: '/website/guide', area: 'site', desk: true, words: 'voting places where to vote election day advance polls ballot' },
 ];
 
 // Today's "Go to" (desk): the places used every day, in this order, each
