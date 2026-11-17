@@ -681,6 +681,7 @@ html:has(.auth-page) body { background: transparent; }
   .nav .ws { display: none; }
   .nav-inner { min-height: 56px; }
   .brand-mark { height: 30px; max-width: 150px; line-height: 30px; }
+  .nav .brand { min-height: 48px; } /* the home link is a 48 px target too */
   /* Clear the tab bar; the full-bleed map cancels exactly 64px itself. */
   .page { padding: var(--s-5) var(--s-4) calc(92px + env(safe-area-inset-bottom)); }
   .tabbar {

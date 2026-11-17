@@ -231,7 +231,7 @@ function TurfList() {
   return (
     <div className="turfs-page">
       <header className="page-head turfs-head">
-        <h1>{desk ? 'Turfs' : 'My turfs'}</h1>
+        <h1>{desk ? 'Turfs' : 'My walk lists'}</h1>
         {desk && turfs.length > 0 && <Link className="btn turfs-draw" to="/map?draw=1">+ Draw turf</Link>}
       </header>
       <PassChip pass={q.data?.pass} desk={desk} />
@@ -899,7 +899,7 @@ function WalkList({ id }) {
     const err = q.error;
     return (
       <div className="walk" ref={rootRef}>
-        <Link className="btn btn-quiet walk-back" to="/turfs">← Turfs</Link>
+        <Link className="btn btn-quiet walk-back" to="/turfs">{desk ? '← Turfs' : '← Walk lists'}</Link>
         <div className="walk-gone" role="alert">
           <p>
             {err?.status === 403
@@ -938,7 +938,7 @@ function WalkList({ id }) {
   return (
     <div className={`walk${target ? ' has-next' : ''}${openIdx >= 0 ? ' has-open' : ''}`} ref={rootRef} style={{ '--turf': turfColor(turf) }}>
       <div className="walk-nav">
-        <Link className="btn btn-quiet walk-back" to="/turfs">← Turfs</Link>
+        <Link className="btn btn-quiet walk-back" to="/turfs">{desk ? '← Turfs' : '← Walk lists'}</Link>
         <Link className="btn btn-quiet walk-act walk-map" to={`/map?turf=${turf.id}`} aria-label="Map of this turf">Map</Link>
         {/* The desk prints a sheet for a canvasser with no phone (WalkSheet.jsx); never in the field app. */}
         {desk && <Link className="btn btn-quiet walk-act walk-print" to={`/reports/walk?turf=${turf.id}`} aria-label="Print this turf’s walking list">Print</Link>}

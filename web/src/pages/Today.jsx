@@ -843,7 +843,7 @@ function VolunteerToday({ b, me }) {
           </Link>
           {/* Still the way back to the walk list: re-check a door, open a profile. */}
           <Link to={myTurfs.length === 1 ? `/turfs/${myTurfs[0].id}` : '/turfs'} className="today-go__meta today-go__link">
-            <span className="today-go__turf">{myTurfs.length === 1 ? myTurfs[0].name : `${myTurfs.length} turfs`}</span>
+            <span className="today-go__turf">{myTurfs.length === 1 ? myTurfs[0].name : `${myTurfs.length} walk lists`}</span>
             <span className="today-go__done">— All done <span aria-hidden="true">✓</span></span>
             <Chevron />
           </Link>
@@ -851,7 +851,8 @@ function VolunteerToday({ b, me }) {
       ) : (
         <section className="today-go" aria-label="Canvass">
           <Link to={firstOpen ? `/turfs/${firstOpen.id}` : '/map'} className="btn btn-primary today-start">
-            {b.pass?.kind === 'gotv' ? 'Get out the vote' : 'Start canvassing'} <span aria-hidden="true">→</span>
+            {/* GOTV mode on (b.voted) is the day's job too, pass or not. */}
+            {b.pass?.kind === 'gotv' || b.voted?.on ? 'Get out the vote' : 'Start canvassing'} <span aria-hidden="true">→</span>
           </Link>
           {firstOpen ? (
             <div className="today-go__meta">
@@ -902,7 +903,7 @@ function VolunteerToday({ b, me }) {
         </ul>
         {others.length > 0 && (
           <>
-            <h3 className="today-subh">{done ? 'Your turfs' : 'Your other turfs'}</h3>
+            <h3 className="today-subh">{done ? 'Your walk lists' : 'Your other walk lists'}</h3>
             <TurfRows turfs={others} statsById={statsById} />
           </>
         )}

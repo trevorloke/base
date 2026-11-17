@@ -56,3 +56,9 @@
 .mapwindow__retry, .mapwindow__fail .btn { min-height: 48px; }
 .mapwindow__fail { display: flex; align-items: center; gap: var(--s-3); margin: 0; padding: var(--s-3) var(--s-4); color: var(--text-2); font-size: 14px; }
 .mapwindow__note { margin: 0; padding: var(--s-2) var(--s-4); border-top: 1px solid var(--rule); color: var(--text-2); font-size: 14px; }
+
+/* A phone: the field window is shorter, so the first quick-access row under
+   it (the next shift, signs, My people) stays on the first screen. */
+@media (max-width: 600px) {
+  .mapwindow--window .mapwindow__frame { height: min(26vh, 220px); height: min(26dvh, 220px); }
+}
