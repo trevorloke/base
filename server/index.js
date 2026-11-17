@@ -5,6 +5,8 @@ import { relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
+import { frameHosts } from './lib/demo.js';
+import { seedSample } from './lib/samplecampaign.js';
 import authRoutes from './routes/auth.js';
 import apiRoutes from './routes/api.js';
 import publicRoutes from './routes/public.js';
@@ -37,14 +39,21 @@ app.use('*', (c, next) => bodyLimit({
 // the email sender's delivery events come in batches (ext/mail).
 for (const e of EXTENSIONS) Object.assign(BODY_MAX, e.bodyMax || {});
 // Headers every answer carries: not framed by another site (voter data on
-// screen), no sniffing a type, no full URLs leaking off-site. A route that
+// screen; the demo's frame on staging is the one exception, below), no sniffing a type, no full URLs leaking off-site. A route that
 // set its own keeps it. The API's answers also name the web build this
 // server hands out (lib/build.js): a page from before a deploy sees that it
 // is older than the server, and says so.
 app.use('*', async (c, next) => {
   await next();
   const h = c.res.headers;
-  if (!h.has('X-Frame-Options')) h.set('X-Frame-Options', 'DENY');
+  if (!h.has('X-Frame-Options')) {
+    // The demo's frame (lib/demo.js; never on production): the sites named
+    // may frame the app, and no other. Everywhere else, nobody may.
+    const frames = frameHosts();
+    const csp = h.get('Content-Security-Policy') || '';
+    if (!frames.length) h.set('X-Frame-Options', 'DENY');
+    else if (!/frame-ancestors/i.test(csp)) h.set('Content-Security-Policy', `${csp ? `${csp}; ` : ''}frame-ancestors 'self' ${frames.join(' ')}`);
+  }
   if (!h.has('X-Content-Type-Options')) h.set('X-Content-Type-Options', 'nosniff');
   if (!h.has('Referrer-Policy')) h.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   const build = c.req.path.startsWith('/api/') ? currentBuild() : null;
@@ -92,6 +101,8 @@ if (isMain) {
   const server = serve({ fetch: mountAt(app, base), port }, () => {
     console.log(`starbase on :${port}${base ? ` at ${base}` : ''}`);
   });
+  // Staging's sample campaign, made once on an empty database (lib/samplecampaign.js).
+  seedSample(app).catch((e) => console.error('sample:', e));
   const tz = staleTimeZoneData();
   if (tz) console.warn(`starbase: ${tz}`);
   // Behind the base.win door without its key, everyone who comes through
