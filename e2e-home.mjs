@@ -9,8 +9,9 @@
 //   "Activity ›" opens /activity; staff denied Map see no band;
 //   Activity (empty and with data): its title and period pills, the tiles,
 //   the chart, the map as a band (≥ 1,000 wide, ≤ 560 tall) with the people
-//   under it, By team, Latest; a 500 says "Unavailable" with Try again, no
-//   signal says the No signal line; the search finds and opens it;
+//   under it, By team, Latest; zoomed in, a shorter window keeps the zoom;
+//   a 500 says "Unavailable" with Try again, no signal says the No signal
+//   line; the search finds and opens it;
 //   Supporters: "of N needed" with the brief's numbers, the breakdown in
 //   place (support=1) with the win number's lines, the band legend and
 //   "Path to win ›"; with no win number the manager sees "Set it on Path to
@@ -19,7 +20,9 @@
 //   no "All caught up."); with email set (:5422) "All caught up."; never for
 //   staff or a treasurer;
 //   Go to: at most six, in QUICK order, Reports first; Data-denied staff have
-//   no Reports or Path to win; each opens its screen; "All places and people"
+//   no Reports or Path to win; a writer with a reply sees "1 reply to your
+//   letters" in Needs you and "Your letters" as the last tile; each opens
+//   its screen; "All places and people"
 //   opens the search with focus in the box and finds a person and Activity;
 //   exactly one "Ctrl K" on Today;
 //   More: the week's lines and Clear sample data, no links to places;
