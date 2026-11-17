@@ -167,7 +167,11 @@ export const placeActions = {
       const address = input.address || suggested?.address || null;
       const had = await named(tx, ws, name);
       if (had) {
-        if (pin && had.lat == null) {
+        // A voter guide place's pin is the guide's to set, under its checks
+        // (Website → Voter guide): a point dropped here leaves it as it is.
+        const guided = pin && had.lat == null
+          && (await tx.query('select 1 from vote_place_info where place_id = $1 and workspace_id = $2', [had.id, ws])).rows[0];
+        if (pin && had.lat == null && !guided) {
           await tx.query('update places set lat = $3, lng = $4, address = coalesce(address, $5) where id = $1 and workspace_id = $2',
             [had.id, ws, pin.lat, pin.lng, address]);
           emit('place', had.id, 'update', pin);

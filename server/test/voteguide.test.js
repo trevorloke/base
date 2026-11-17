@@ -150,6 +150,17 @@ test('one list of places: a guide place is a voting place in Shifts; adopting, c
   assert.equal(ok(await mgr.get('/api/site/guide')).gotv_only, 0);
 });
 
+test('a pin dropped in Shifts never lands on a voter guide place that has none', async () => {
+  const pl = ok(await mgr.action('site.guide.place.save', place('Example Pinless Hall', '1 Nowhere Lane'))).place;
+  assert.equal((await db.query('select lat from places where id = $1', [pl.id])).rows[0].lat, null);
+  const rev = (await db.query('select rev from vote_guide where workspace_id = $1', [ws])).rows[0].rev;
+  const got = ok(await staff.action('place.save', { name: 'Example Pinless Hall', lat: 49.15, lng: -122.8 }));
+  assert.equal(got.place.id, pl.id, 'the same place, found by its name');
+  assert.equal((await db.query('select lat from places where id = $1', [pl.id])).rows[0].lat, null, 'its pin is the guide’s to set');
+  assert.equal((await db.query('select rev from vote_guide where workspace_id = $1', [ws])).rows[0].rev, rev);
+  ok(await mgr.action('site.guide.place.delete', { id: pl.id }));
+});
+
 test('300 voting places never push the campaign’s own 10 off the Shifts list', async () => {
   const db2 = db;
   const own = Array.from({ length: 10 }, (_, i) => `Zed Own Place ${i}`);
