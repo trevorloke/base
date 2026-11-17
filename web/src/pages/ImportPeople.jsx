@@ -12,7 +12,7 @@ import {
   readTable as readCsvTable, shapeTable, decodeBytes, isSpreadsheetBinary, breathe, DELIM_NAMES,
 } from '../components/csv.js';
 import { Link, Navigate, useOutletContext } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { matchRating, offeredCandidates, offeredCodes } from '@starbase/shared/scale';
 import { VOLUNTEER_ROLES } from '@starbase/shared/canvass';
 import { splitFirst } from '@starbase/shared/names';
@@ -22,7 +22,8 @@ import GeocodeButton from '../components/GeocodeButton.jsx';
 import DriveImport from '../components/DriveImport.jsx';
 import { RatingChip, useScale } from '../components/RatingButtons.jsx';
 import { invalidatePersonData, tagWord } from './People.jsx';
-import { FIELD_KEY, fieldCell, useImportFields } from '../components/FieldsBits.jsx';
+import { FIELD_KEY, FIELDS_QUERY, fieldCell, useImportFields } from '../components/FieldsBits.jsx';
+import { choiceKey, guessChoice } from '@starbase/shared/fieldlists';
 import './import.css';
 import '../components/voter-number.css';
 
@@ -340,6 +341,13 @@ const headCol = (headers, names) => (headers ? headers.findIndex((h) => names.in
 // homeCol: a Home Phone column — the number to call when the row has no
 // other (it still fills the Home phone profile field too); not when the
 // column is set to Don't import.
+// A list's word in the mapping step: kept as written, or left blank.
+const LIST_KEEP = '\u0001keep';
+const LIST_BLANK = '\u0001blank';
+const AS_WRITTEN = 'as_written:'; // server/routes/data.js AS_WRITTEN_KEY
+const LIST_ROWS = 40;
+const FIELDS_MAX = 40;
+
 function toRow(scale, cells, mapping, ratingMap, homeCol = -1, roleMap = null, volCols = null, more = {}) {
   const row = {};
   const roles = new Set();
@@ -354,7 +362,16 @@ function toRow(scale, cells, mapping, ratingMap, homeCol = -1, roleMap = null, v
         if (code) roles.add(code);
       }
     }
-    if (key.startsWith(FIELD_KEY)) { fieldCell(row, key, SCI_RE.test(v) && i === homeCol ? '' : v); return; }
+    if (key.startsWith(FIELD_KEY)) {
+      // A Pick one list's words, as the mapping step says: a choice, blank,
+      // or kept as written ("<name> as written", made by the import).
+      const id = key.slice(FIELD_KEY.length);
+      const to = more.lists?.get(id)?.(v);
+      if (to === LIST_KEEP) { fieldCell(row, key, ''); row.fields[`${AS_WRITTEN}${id}`] = v; return; }
+      if (to !== undefined) { fieldCell(row, key, to === LIST_BLANK ? '' : to); return; }
+      fieldCell(row, key, SCI_RE.test(v) && i === homeCol ? '' : v);
+      return;
+    }
     if (key === 'tags') row.tags = row.tags ? `${row.tags};${v}` : v;
     else if (key === 'rating') { const code = resolveRating(scale, ratingMap, v); if (code) row.rating = code; }
     else if ((key === 'phone' || key === 'voter_number') && SCI_RE.test(v)) { /* digits lost in Excel */ }
@@ -626,6 +643,7 @@ function ImportFlow() {
   const [roleMap, setRoleMap] = useState({}); // volunteer-role tags (lower-cased words) → role codes ('' a tag only), by choice
   const [historyMap, setHistoryMap] = useState({}); // Interaction Status values → 'door:no_answer'… ('' a field only), by choice
   const [signMap, setSignMap] = useState({}); // Sign values → 'requested' | 'installed' ('' a field only), by choice
+  const [listMap, setListMap] = useState({}); // Pick one field id → { choiceKey(word): choice | LIST_KEEP | LIST_BLANK }, by choice
   const [splitFirsts, setSplitFirsts] = useState(true); // a first name's second word or initial → Middle name
   // A list from a past election: its support, signs, voting and volunteering
   // come in as tags with the year ("Strong support 2022"), not as today's.
@@ -641,9 +659,10 @@ function ImportFlow() {
   const pastFieldCols = useMemo(() => (source ? mapping.map((k, i) => {
     if (!k || !k.startsWith(FIELD_KEY)) return null;
     const f = custom.find((c) => c.key === k);
-    return { id: k.slice(FIELD_KEY.length), head: source.headers[i], name: f?.label || source.headers[i], kind: f?.kind };
+    return { id: k.slice(FIELD_KEY.length), head: source.headers[i], name: f?.label || source.headers[i], kind: f?.kind, sensitive: Boolean(f?.f?.sensitive) };
   }).filter(Boolean) : []), [source, mapping, custom]);
-  const tagsField = (c) => (Object.hasOwn(fieldTagPick, c.id) ? fieldTagPick[c.id] : tagByDefault(c.kind));
+  // A Private field (Faith) is never a tag: volunteers see tags.
+  const tagsField = (c) => !c.sensitive && (Object.hasOwn(fieldTagPick, c.id) ? fieldTagPick[c.id] : tagByDefault(c.kind));
   const pastBody = past && pastOk ? { past: { year: pastY, field_tags: pastFieldCols.filter(tagsField).map((c) => c.id) } } : {};
   const [bumped, setBumped] = useState(null); // { col, key } — a column switched off by a pick
   const [tag, setTag] = useState('');
@@ -797,7 +816,57 @@ function ImportFlow() {
   const statusCol = headCol(source?.headers, STATUS_HEADS);
   const dateCol = headCol(source?.headers, DATE_HEADS);
   const signCol = headCol(source?.headers, SIGN_HEADS);
-  const more = useMemo(() => ({ statusCol, dateCol, signCol, historyMap, signMap, splitFirsts }), [statusCol, dateCol, signCol, historyMap, signMap, splitFirsts]);
+  // The campaign's fields as GET /fields has them, read again every 2 s
+  // while one is being turned into a list (its import waits for that).
+  const fieldsQ = useQuery({
+    ...FIELDS_QUERY,
+    refetchInterval: (q) => ((q.state.data?.fields || []).some((f) => f.converting) ? 2000 : false),
+  });
+  const allLive = (fieldsQ.data?.fields || []).filter((f) => !f.retired);
+  // Columns matched to a Pick one field (not one coming in as a past
+  // election's tag): what each of their words means.
+  const listCols = useMemo(() => (source ? mapping.map((k, i) => {
+    if (!k || !k.startsWith(FIELD_KEY)) return null;
+    const f = allLive.find((x) => x.id === k.slice(FIELD_KEY.length));
+    if (!f || f.kind !== 'choice') return null;
+    if (past && tagsField({ id: f.id, kind: f.kind, sensitive: f.sensitive })) return null;
+    const seen = new Map();
+    for (const r of source.records) {
+      const v = String(r.cells[i] ?? '').trim();
+      if (!v) continue;
+      const key = choiceKey(v);
+      const cur = seen.get(key) || { value: v, key, n: 0 };
+      cur.n += 1;
+      seen.set(key, cur);
+    }
+    const words = [...seen.values()].sort((a, b) => b.n - a.n || a.value.localeCompare(b.value));
+    return { i, f, head: source.headers[i], words };
+  }).filter(Boolean) : []), [source, mapping, fieldsQ.data, past, fieldTagPick]); // eslint-disable-line react-hooks/exhaustive-deps
+  // A word → its choice, LIST_BLANK or LIST_KEEP: what a person picked, else
+  // the choice itself in any spelling, else a guess, else kept as written.
+  // Beyond the 40 shown, never a guess: the choice itself, or kept.
+  const listTo = (f, word, shown = true) => {
+    const k = choiceKey(word);
+    const own = listMap[f.id]?.[k];
+    if (own !== undefined && shown) return own;
+    const exact = f.choices.find((c) => choiceKey(c) === k);
+    if (exact) return exact;
+    return (shown && guessChoice(f.name, word, f.choices)) || LIST_KEEP;
+  };
+  const lists = useMemo(() => new Map(listCols.map(({ f, words }) => {
+    const shown = new Set(words.slice(0, LIST_ROWS).map((w) => w.key));
+    return [f.id, (v) => listTo(f, v, shown.has(choiceKey(v)))];
+  })), [listCols, listMap]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The lists with words kept as written, and whether each has room for its field.
+  const keeps = listCols.filter(({ f, words }) => words.some((w, n) => listTo(f, w.value, n < LIST_ROWS) === LIST_KEEP));
+  const hasWritten = (f) => allLive.some((x) => x.as_written_of === f.id && x.kind === 'text');
+  const noRoom = keeps.filter(({ f }) => !hasWritten(f) && allLive.length >= FIELDS_MAX);
+  const asWrittenBody = keeps.length ? { as_written: keeps.map(({ f }) => f.id) } : {};
+  // A matched field being turned into a list: import when it's done.
+  const convertingCol = source ? allLive.find((f) => f.converting && mapping.includes(`${FIELD_KEY}${f.id}`)) : null;
+  const listsBlocked = noRoom.length > 0 || Boolean(convertingCol);
+  const setListMeaning = (fid, word, to) => { setListMap((m) => ({ ...m, [fid]: { ...(m[fid] || {}), [choiceKey(word)]: to } })); setCheck(null); };
+  const more = useMemo(() => ({ statusCol, dateCol, signCol, historyMap, signMap, splitFirsts, lists }), [statusCol, dateCol, signCol, historyMap, signMap, splitFirsts, lists]);
   const volCols = useMemo(
     () => new Set(source ? source.headers.map((h, i) => (/volunteer/i.test(h) ? i : -1)).filter((i) => i >= 0) : []),
     [source],
@@ -955,7 +1024,7 @@ function ImportFlow() {
       for (let start = 0; start < total; start += CHECK_CHUNK) {
         if (run !== checkRun.current) return; // a newer answer is being checked
         const part = partAt(start, CHECK_CHUNK);
-        const r = await apiPost('/data/import', { rows: part.map((x) => x.data), tag: tagClean || undefined, dryRun: true, otherNumber: numbers, ...pastBody });
+        const r = await apiPost('/data/import', { rows: part.map((x) => x.data), tag: tagClean || undefined, dryRun: true, otherNumber: numbers, ...pastBody, ...asWrittenBody });
         acc.created += r.created || 0;
         acc.merged += r.merged || 0;
         acc.unchanged += r.unchanged || 0;
@@ -995,7 +1064,7 @@ function ImportFlow() {
     try {
       for (; start < total; start += IMPORT_CHUNK) {
         const part = partAt(start, IMPORT_CHUNK);
-        const r = await apiPost('/data/import', { rows: part.map((x) => x.data), tag: tagClean || undefined, otherNumber, ...pastBody });
+        const r = await apiPost('/data/import', { rows: part.map((x) => x.data), tag: tagClean || undefined, otherNumber, ...pastBody, ...asWrittenBody });
         acc.created += r.created || 0;
         acc.merged += r.merged || 0;
         acc.unchanged += r.unchanged || 0;
@@ -1320,6 +1389,47 @@ function ImportFlow() {
                 </ul>
               </section>
             )}
+            {listCols.map(({ f, head, words }) => {
+              const rest = words.slice(LIST_ROWS);
+              const restKept = rest.filter((w) => listTo(f, w.value, false) === LIST_KEEP);
+              const full = noRoom.some((x) => x.f.id === f.id);
+              return (
+                <section key={f.id} className="imp-rmap" aria-labelledby={`imp-list-${f.id}`}>
+                  <h3 id={`imp-list-${f.id}`} className="imp-rmap__h">{f.name}</h3>
+                  <p className="imp-hint imp-hint--sm">What the list’s {head} words mean.</p>
+                  {full && (
+                    <p className="imp-need" role="alert">
+                      There’s no room for a “{f.name} as written” field ({FIELDS_MAX} fields). Take a field off, or pick “Leave blank” for the words below.
+                    </p>
+                  )}
+                  <ul className="imp-rmap__list">
+                    {words.slice(0, LIST_ROWS).map(({ value, key, n }) => {
+                      const cur = listTo(f, value);
+                      return (
+                        <li key={key} className={`imp-rmap__row${cur !== LIST_KEEP && cur !== LIST_BLANK ? ' is-used' : ''}`}>
+                          <span className="imp-rmap__val"><span className="imp-rmap__word">{value}</span> <span className="mono muted">{plural(n, 'row', 'rows')}</span></span>
+                          <span className="imp-map__arrow" aria-hidden="true">→</span>
+                          <select className="input imp-rmap__select" value={cur} disabled={locked}
+                            aria-label={`What “${value}” means for ${f.name}`} onChange={(e) => setListMeaning(f.id, value, e.target.value)}>
+                            {f.choices.map((c) => <option key={c} value={c}>{c}</option>)}
+                            <option value={LIST_KEEP}>Keep as written</option>
+                            <option value={LIST_BLANK}>Leave blank</option>
+                          </select>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  {restKept.length > 0 && (
+                    <p className="imp-hint imp-hint--sm">
+                      {fmtN(restKept.length)} other {restKept.length === 1 ? 'word' : 'words'} in {plural(restKept.reduce((m, w) => m + w.n, 0), 'row', 'rows')} {restKept.length === 1 ? 'is' : 'are'} kept as written in “{f.name} as written”
+                    </p>
+                  )}
+                </section>
+              );
+            })}
+            {convertingCol && (
+              <p className="imp-need" role="status">{convertingCol.name} is being turned into a list — import when it’s done</p>
+            )}
             {!hasName && (
               <p className="imp-need" role="alert">
                 Match a column to <strong>Full name</strong>, or <strong>First</strong> + <strong>Last name</strong>.
@@ -1344,7 +1454,7 @@ function ImportFlow() {
                 <div className="imp-past__fields">
                   <p className="imp-hint imp-hint--sm">Your profile fields from that election — ticked ones come in as a tag with the year, the rest as the field:</p>
                   <ul className="imp-past__list">
-                    {pastFieldCols.map((c) => (
+                    {pastFieldCols.filter((c) => !c.sensitive).map((c) => (
                       <li key={c.id}>
                         <label>
                           <input type="checkbox" checked={tagsField(c)} disabled={locked}
@@ -1430,7 +1540,7 @@ function ImportFlow() {
               </div>
             ) : (
               <div className="imp-actions">
-                <button type="button" className="btn btn-primary imp-tap" onClick={() => runCheck()} disabled={!hasName || !pastOk || busy || locked}>
+                <button type="button" className="btn btn-primary imp-tap" onClick={() => runCheck()} disabled={!hasName || !pastOk || busy || locked || listsBlocked}>
                   Check {plural(total, 'row', 'rows')}
                 </button>
                 <span className="imp-line imp-line--inline">{fmtN(usedCount)} of {fmtN(source.headers.length)} columns</span>
@@ -1496,7 +1606,7 @@ function ImportFlow() {
                 {!check.again && nothingValid && <p className="imp-line">Nothing to import yet. Fix the rows above, or change a column.</p>}
                 {!check.again && !nothingNew && (
                   <div className="imp-actions">
-                    <button type="button" className="btn btn-primary imp-tap" onClick={() => runImport(0)}>
+                    <button type="button" className="btn btn-primary imp-tap" onClick={() => runImport(0)} disabled={listsBlocked}>
                       Import {plural(willWrite, 'person', 'people')}
                     </button>
                   </div>
