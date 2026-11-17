@@ -14,8 +14,8 @@
 .vote-banner p { margin: 0; font-weight: 600; }
 .vote-banner a { color: inherit; text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
 
-.vg { display: grid; gap: 28px; }
-.vg-head { display: grid; gap: 10px; }
+.vg { display: grid; gap: 28px; grid-template-columns: minmax(0, 1fr); }
+.vg-head { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr); }
 .vg-status {
   margin: 0;
   font-size: 1.35rem;
@@ -23,7 +23,7 @@
   color: var(--ink);
 }
 .vg--not-out .vg-status { font-size: 1.25rem; }
-.vg-block { display: grid; gap: 12px; }
+.vg-block { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); min-width: 0; }
 .vg-title { margin: 0; font-size: 1.25rem; }
 .vg-sub { margin: 4px 0 0; font-weight: 700; }
 
@@ -51,7 +51,8 @@
 .vg-day--today { outline: 3px solid var(--brand); outline-offset: -1px; }
 .vg-day--done { color: var(--muted); background: var(--surface); }
 
-.vg-find { display: grid; gap: 12px; }
+.vg-find { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
+.vg-address, .vg-search { min-width: 0; }
 .vg-label { display: block; font-size: 0.9375rem; margin-bottom: 4px; }
 .vg-row { display: flex; gap: 8px; }
 .vg-input {
@@ -66,6 +67,7 @@
   color: var(--ink);
 }
 .vg-locate, .vg-find-btn, .vg-search .btn { min-height: 48px; }
+.vg-locate { justify-self: start; }
 .vg-say:empty { display: none; }
 .vg-say { margin: 0; color: var(--danger, var(--ink)); }
 

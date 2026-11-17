@@ -125,6 +125,8 @@ export function VoteBanner({ rc }) {
   else if (st.state === 'open') words = rc.w('vg.bannerOpen', { time: timeWords(st.next?.closes, lang) });
   else if (st.next?.day === st.day) words = rc.w('vg.bannerToday', { time: timeWords(st.next?.opens, lang) });
   else words = rc.w('vg.bannerNext', { day: dayWords(st.next?.day, lang) });
+  // "until 8 p.m.." → one full stop.
+  words = words.replace(/\.\.$/, '.');
   const href = rc.link(g.page);
   return html`<div className="vote-banner" role="region" aria-label=${rc.w('vg.banner')}>
     <div className="vote-banner-inner">
