@@ -28,6 +28,8 @@ import './shifts.css';
 import './surveys.css';
 import './fields.css';
 
+const fmtN = (n) => (Number(n) || 0).toLocaleString('en-CA');
+
 const CHOICES_MAX = 40;
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const sameList = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
@@ -121,7 +123,7 @@ function FieldForm({ initial = null, primary = false, submitLabel, busy, onSubmi
               return (
                 <div className="sv-choice fd-choice--kept" key={c.key}>
                   <span className="fd-choice__words">{c.words}</span>
-                  <span className="fd-choice__n mono">{used.get(c.words) || 0} filled in</span>
+                  <span className="fd-choice__n mono">{fmtN(used.get(c.words) || 0)} filled in</span>
                 </div>
               );
             }
@@ -176,7 +178,7 @@ function FieldForm({ initial = null, primary = false, submitLabel, busy, onSubmi
 
 const rowSub = (f, all = []) => [
   KIND_LABEL[f.kind],
-  `${f.filled} filled in`,
+  `${fmtN(f.filled)} filled in`,
   f.volunteers ? 'Volunteers see it' : null,
   f.sensitive ? 'Private' : null,
   f.kind === 'choice' && f.display === 'list' ? 'Scroll-down list' : null,
@@ -232,7 +234,7 @@ function TakenOff({ fields, busy, onRestore }) {
               <div className="ops-row ops-row--static">
                 <span className="ops-row__main">
                   <span className="ops-row__name">{f.name}</span>
-                  <span className="ops-row__sub">{KIND_LABEL[f.kind]} · {f.filled} filled in</span>
+                  <span className="ops-row__sub">{KIND_LABEL[f.kind]} · {fmtN(f.filled)} filled in</span>
                 </span>
                 <span className="ops-row__end">
                   <button type="button" className="btn ops-tap" disabled={busy} onClick={() => onRestore(f)}>Bring back</button>

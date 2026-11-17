@@ -6,6 +6,7 @@
 .fd-q__label { font-size: 15px; }
 /* Choices: two across on a phone, more on a desk. */
 .fd-form .sv-q__opts { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+.fd-form .sv-q__opts.fd-opts--long { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
 .fd-q input[type='date'].sv-q__input { max-width: 260px; }
 .fd-foot { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
 .btn.fd-save {

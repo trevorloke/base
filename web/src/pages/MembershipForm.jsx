@@ -200,7 +200,7 @@ export default function MembershipForm() {
             {campuses.map((c) => <Radio key={c} name="campus" value={c} on={f.campus === c} onPick={set('campus')}>{c}</Radio>)}
             <Radio name="campus" value={OTHER_CAMPUS} on={f.campus === OTHER_CAMPUS} onPick={set('campus')}>Another campus</Radio>
             {f.campus === OTHER_CAMPUS && <input className="input mf-inline" aria-label="Another campus" value={f.campusOther} onChange={set('campusOther')} maxLength={120} />}
-            {f.campus && <button type="button" className="btn-link" onClick={() => setF((x) => ({ ...x, campus: '', campusOther: '' }))}>Clear</button>}
+            {f.campus && <button type="button" className="btn btn-quiet ops-tap" onClick={() => setF((x) => ({ ...x, campus: '', campusOther: '' }))}>Clear</button>}
           </div>
           <div className="mf-line">
             <span className="mf-label">Get involved</span>

@@ -83,7 +83,7 @@ test('a new campaign has Faith (private), Dwelling type (a scroll-down list) and
 test('choice words match a little more loosely, and CHOICE_KEY_SQL agrees with choiceKey', async () => {
   const F = await fieldsBy();
   const p = await mgr.createPerson('Loose Example');
-  for (const [given, stored] of [['christian - catholic', 'Christian – Catholic'], ['Christian – Jehovah’s Witness', "Christian – Jehovah's Witness"], ['CHRISTIAN – CATHOLIC', 'Christian – Catholic']]) {
+  for (const [given, stored] of [['christian - catholic', 'Christian – Catholic'], ["Christian – Jehovah's Witness", 'Christian – Jehovah’s Witness'], ['CHRISTIAN – CATHOLIC', 'Christian – Catholic']]) {
     ok(await setOne(mgr, p.id, F.Faith.id, given), given);
     assert.equal((await valuesOf(mgr, p.id)).Faith, stored, given);
   }

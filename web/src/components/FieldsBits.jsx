@@ -97,7 +97,8 @@ function Taps({ id, label, options, value, onPick, disabled, hint = null }) {
     <div className="sv-q fd-q" role="group" aria-labelledby={id}>
       <p className="sv-q__text fd-q__label" id={id}>{label}</p>
       {hint}
-      <div className="sv-q__opts">
+      {/* Long choices (a school and its campus) get wider buttons, one or two lines each. */}
+      <div className={`sv-q__opts${options.some((o) => String(o.label).length > 24) ? ' fd-opts--long' : ''}`}>
         {options.map((o) => (
           <button key={String(o.v)} type="button" className={`sv-opt${value === o.v ? ' is-on' : ''}`}
             aria-pressed={value === o.v} disabled={disabled} onClick={() => onPick(value === o.v ? null : o.v)}>

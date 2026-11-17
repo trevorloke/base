@@ -1394,7 +1394,7 @@ function ImportFlow() {
               const restKept = rest.filter((w) => listTo(f, w.value, false) === LIST_KEEP);
               const full = noRoom.some((x) => x.f.id === f.id);
               return (
-                <section key={f.id} className="imp-rmap" aria-labelledby={`imp-list-${f.id}`}>
+                <section key={f.id} className="imp-rmap imp-rmap--list" aria-labelledby={`imp-list-${f.id}`}>
                   <h3 id={`imp-list-${f.id}`} className="imp-rmap__h">{f.name}</h3>
                   <p className="imp-hint imp-hint--sm">What the list’s {head} words mean.</p>
                   {full && (
@@ -1409,7 +1409,7 @@ function ImportFlow() {
                         <li key={key} className={`imp-rmap__row${cur !== LIST_KEEP && cur !== LIST_BLANK ? ' is-used' : ''}`}>
                           <span className="imp-rmap__val"><span className="imp-rmap__word">{value}</span> <span className="mono muted">{plural(n, 'row', 'rows')}</span></span>
                           <span className="imp-map__arrow" aria-hidden="true">→</span>
-                          <select className="input imp-rmap__select" value={cur} disabled={locked}
+                          <select className="input imp-rmap__select" value={cur} disabled={locked} title={cur === LIST_KEEP ? 'Keep as written' : cur === LIST_BLANK ? 'Leave blank' : cur}
                             aria-label={`What “${value}” means for ${f.name}`} onChange={(e) => setListMeaning(f.id, value, e.target.value)}>
                             {f.choices.map((c) => <option key={c} value={c}>{c}</option>)}
                             <option value={LIST_KEEP}>Keep as written</option>
@@ -1428,7 +1428,7 @@ function ImportFlow() {
               );
             })}
             {convertingCol && (
-              <p className="imp-need" role="status">{convertingCol.name} is being turned into a list — import when it’s done</p>
+              <p className="imp-wait" role="status">{convertingCol.name} is being turned into a list — import when it’s done</p>
             )}
             {!hasName && (
               <p className="imp-need" role="alert">

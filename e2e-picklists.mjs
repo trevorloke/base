@@ -383,8 +383,8 @@ await M.shot('11b-campus-running-1440');
   await p2.click('button:has-text("Paste text")');
   await p2.fill('#imp-paste', ['Full name\tCampus', 'Wait Example\tSFU Surrey'].join('\n'));
   await p2.click('button:has-text("Use this text")');
-  await p2.waitForSelector('.imp-need:has-text("is being turned into a list")', { timeout: 10000 }).catch(() => {});
-  const need = await p2.innerText('.imp-need[role="status"]').catch(() => '');
+  await p2.waitForSelector('.imp-wait:has-text("is being turned into a list")', { timeout: 10000 }).catch(() => {});
+  const need = await p2.innerText('.imp-wait[role="status"]').catch(() => '');
   check('the import, while Campus converts: “Campus is being turned into a list — import when it’s done”, Check off',
     /Campus is being turned into a list — import when it’s done/.test(need) && await p2.$eval('button:has-text("Check 1 row")', (b) => b.disabled).catch(() => false), need);
   await p2.screenshot({ path: `${SHOTS}/11c-import-waits-1440.png` });
