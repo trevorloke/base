@@ -146,21 +146,30 @@ export const buildGuide = (rows, tz) => {
 // ── The memo ──
 const memo = new Map(); // workspaceId → { rev, gen, tz, checkedAt, guide }
 const FRESH_MS = 5000;
-export const forgetGuide = (wsId) => { if (wsId) memo.delete(wsId); else memo.clear(); };
+// Readers who come while the rev is being asked (or the rows read) wait for
+// that one read: a crowd of phones or pages costs one query, not one each.
+const asking = new Map(); // `${wsId}|${gen}|${tz}` → promise of the guide
+export const forgetGuide = (wsId) => { if (wsId) memo.delete(wsId); else memo.clear(); asking.clear(); };
 export const guideFor = async (q, ws) => {
   const wsId = ws.id;
   const tz = tzOf(ws);
   const hit = memo.get(wsId);
   const gen = cacheGen();
   if (hit && hit.gen === gen && hit.tz === tz && Date.now() - hit.checkedAt < FRESH_MS) return hit.guide;
-  if (hit && hit.gen === gen && hit.tz === tz) {
-    const rev = (await q.query('select rev from vote_guide where workspace_id = $1', [wsId])).rows[0]?.rev ?? 0;
-    if (Number(rev) === hit.rev) { hit.checkedAt = Date.now(); return hit.guide; }
-  }
-  const guide = buildGuide(await readRows(q, wsId), tz);
-  if (memo.size > 200) memo.clear();
-  memo.set(wsId, { rev: guide.rev, gen, tz, checkedAt: Date.now(), guide });
-  return guide;
+  const key = `${wsId}|${gen}|${tz}`;
+  if (asking.has(key)) return asking.get(key);
+  const read = (async () => {
+    if (hit && hit.gen === gen && hit.tz === tz) {
+      const rev = (await q.query('select rev from vote_guide where workspace_id = $1', [wsId])).rows[0]?.rev ?? 0;
+      if (Number(rev) === hit.rev) { hit.checkedAt = Date.now(); return hit.guide; }
+    }
+    const guide = buildGuide(await readRows(q, wsId), tz);
+    if (memo.size > 200) memo.clear();
+    memo.set(wsId, { rev: guide.rev, gen, tz, checkedAt: Date.now(), guide });
+    return guide;
+  })();
+  asking.set(key, read);
+  try { return await read; } finally { if (asking.get(key) === read) asking.delete(key); }
 };
 
 // The guide at a moment: today's campaign day, and whether each place is

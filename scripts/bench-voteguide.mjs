@@ -1,31 +1,31 @@
-// The voter guide under load (VG): a server of its own on 5512 (Postgres
-// when DATABASE_URL is set, else a file-backed PGlite), a published guide
-// with 60 places, 5 days and 2 contests, and the fake address service on
-// 5513. Then, each for SECONDS (60 by default):
+// The voter guide under load (VG): a server of its own on 5512 (a child
+// process, scripts/bench-voteguide-server.mjs, that counts its database
+// queries) over the Postgres wire protocol — DATABASE_URL when set, else
+// PGlite's socket server on 5514, as npm run test:pg does — a published
+// guide with 60 places, 5 days and 2 contests, and the fake address service
+// on 5513. Then, each for SECONDS (60 by default):
 //   1. 400 clients on the guide page and the home page (10 % with a valid
-//      ?area=): no errors, p95 ≤ 150 ms;
-//   2. 500 phones polling GET /api/guide?rev= every 5 s (60× the real rate):
-//      p95 ≤ 50 ms; a place edited mid-run reaches the next page request
-//      (≤ 1 s) and every phone's next poll (a new rev);
+//      ?area=): no errors, p95 ≤ 150 ms, and each address's page drawn from
+//      the database at most once per SITE_CACHE_SECONDS (its data read
+//      once per draw);
+//   2. 500 phones polling GET /api/guide?rev=&tag= every 5 s (60× the real
+//      rate): p95 ≤ 50 ms, ≤ 13 rev reads a minute; a place edited mid-run
+//      reaches the next page request (≤ 1 s) and every phone's next poll;
 //   3. 50 finds a second from 200 made-up addresses: 429 past 30 a minute
 //      from one address, "Busy …" past 300 a minute for the campaign, the
 //      address service sees at most 300 lookups a minute, and the page's
 //      p95 stays under 200 ms meanwhile.
-// It counts what reaches the server from outside; it does not count the
-// database's queries (the page cache and the guide's memo are unit-tested).
 // Runs by hand (not in CI); paste the numbers into the pull request.
 //
 //   node scripts/bench-voteguide.mjs            SECONDS=10 for a quick look
-import { spawn } from 'node:child_process';
+import { fork } from 'node:child_process';
+import { PGlite } from '@electric-sql/pglite';
+import { PGLiteSocketServer } from '@electric-sql/pglite-socket';
 import { createServer } from 'node:http';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 
-const PORT = 5512; const GEO = 5513;
+const PORT = 5512; const GEO = 5513; const WIRE = 5514;
 const SECONDS = Number(process.env.SECONDS) || 60;
 const ORIGIN = `http://127.0.0.1:${PORT}`;
-const DATA = mkdtempSync(join(tmpdir(), 'vg-bench-'));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const p95 = (xs) => { const s = [...xs].sort((a, b) => a - b); return s.length ? Math.round(s[Math.floor(s.length * 0.95)]) : 0; };
 const out = [];
@@ -40,13 +40,27 @@ const geo = createServer((req, res) => {
   res.end(JSON.stringify({ features: [{ geometry: { coordinates: [-122.8, 49.1 + n / 10000] }, properties: { score: 99, matchPrecision: 'CIVIC_NUMBER', fullAddress: q } }] }));
 });
 await new Promise((r) => geo.listen(GEO, '127.0.0.1', r));
-const server = spawn(process.execPath, ['server/index.js'], {
+// The database, over the wire.
+let pglite = null; let wire = null;
+if (!process.env.DATABASE_URL) {
+  pglite = await PGlite.create();
+  wire = new PGLiteSocketServer({ db: pglite, port: WIRE, host: '127.0.0.1' });
+  await wire.start();
+}
+const DATABASE_URL = process.env.DATABASE_URL || `postgres://postgres:postgres@127.0.0.1:${WIRE}/postgres`;
+const server = fork('scripts/bench-voteguide-server.mjs', [], {
   env: {
-    ...process.env, PORT: String(PORT), STARBASE_OPEN_SIGNUP: '1', STARBASE_DATA: process.env.DATABASE_URL ? undefined : DATA,
+    ...process.env, PORT: String(PORT), STARBASE_OPEN_SIGNUP: '1', DATABASE_URL, ...(pglite ? { PG_POOL_MAX: '1' } : {}), STARBASE_JOBS: 'off',
     GEOCODER: 'bc', BC_GEOCODER_URL: `http://127.0.0.1:${GEO}`, STARBASE_GEO_BOUNDS: '49.002,-122.92|49.222,-122.67', SITE_CACHE_SECONDS: '60',
   },
-  stdio: ['ignore', 'ignore', 'inherit'],
+  stdio: ['ignore', 'ignore', 'inherit', 'ipc'],
 });
+const counted = () => new Promise((resolve) => {
+  const on = (m) => { if (m?.counts) { server.off('message', on); resolve(m.counts); } };
+  server.on('message', on);
+  server.send('counts');
+});
+const resetCounts = () => server.send('reset');
 try {
   for (let i = 0; i < 120; i += 1) { try { if ((await fetch(`${ORIGIN}/api/health`)).ok) break; } catch { /* not yet */ } await sleep(250); }
   let cookie = '';
@@ -84,27 +98,34 @@ try {
   const until = (s) => Date.now() + s * 1000;
   const pageTimes = []; let pageErrors = 0;
   const page = async (u) => { const t = performance.now(); try { const r = await fetch(u); await r.text(); if (!r.ok) pageErrors += 1; } catch { pageErrors += 1; } pageTimes.push(performance.now() - t); };
+  resetCounts();
   const end1 = until(SECONDS);
   await Promise.all(Array.from({ length: 400 }, async (_, i) => {
     while (Date.now() < end1) await page(i % 10 === 0 ? `${ORIGIN}/site/voter-guide?area=${AREAS[i % 4]}` : i % 2 ? `${ORIGIN}/site/voter-guide` : `${ORIGIN}/site/`);
   }));
   say('400 clients on the pages: no errors, p95 ≤ 150 ms', pageErrors === 0 && p95(pageTimes) <= 150, `${pageTimes.length} requests, ${pageErrors} errors, p95 ${p95(pageTimes)} ms`);
+  const c1 = await counted();
+  for (const [k, n] of c1.kinds || []) console.log(`      ${n}× ${k}`);
+  // Six addresses (the guide page, the home page, the guide page per area).
+  const draws = 6 * (Math.ceil(SECONDS / 60) + 1);
+  say('each address drawn from the database at most once per SITE_CACHE_SECONDS', c1.page <= draws, `${c1.page} draws (at most ${draws}) for ${pageTimes.length} requests; guide rows read ${c1.rows} times; ${c1.total} queries in all`);
 
   // ── 2. Phones polling, a place edited mid-run ──
   const pollTimes = []; let pollErrors = 0;
   const start = await call('/api/guide');
+  resetCounts();
   const seen = new Map();
   const end2 = until(SECONDS);
   let editedAt = null;
   const phones = Array.from({ length: 500 }, async (_, i) => {
-    let rev = start.rev;
+    let rev = start.rev; let tag = start.tag;
     await sleep((i * 10) % 5000);
     while (Date.now() < end2) {
       const t = performance.now();
       try {
-        const r = await fetch(`${ORIGIN}/api/guide?rev=${rev}`, { headers: { cookie } });
+        const r = await fetch(`${ORIGIN}/api/guide?rev=${rev}&tag=${tag}`, { headers: { cookie } });
         const j = await r.json(); if (!r.ok) pollErrors += 1;
-        if (!j.same && j.rev !== rev) { rev = j.rev; if (editedAt) seen.set(i, Date.now() - editedAt); }
+        if (!j.same) { tag = j.tag; if (j.rev !== rev) { rev = j.rev; if (editedAt) seen.set(i, Date.now() - editedAt); } }
       } catch { pollErrors += 1; }
       pollTimes.push(performance.now() - t);
       await sleep(5000);
@@ -120,6 +141,9 @@ try {
   })();
   await Promise.all([...phones, edit]);
   say('500 phones polling every 5 s: p95 ≤ 50 ms', pollErrors === 0 && p95(pollTimes) <= 50, `${pollTimes.length} polls, ${pollErrors} errors, p95 ${p95(pollTimes)} ms`);
+  const c2 = await counted();
+  const perMinute = Math.round((c2.rev / SECONDS) * 60);
+  say('the phones cost ≤ 13 rev reads a minute', perMinute <= 13, `${c2.rev} rev reads in ${SECONDS} s (${perMinute} a minute) for ${pollTimes.length} polls; guide rows read ${c2.rows} times`);
   say('every phone saw the new rev on its next poll', seen.size === 500 && Math.max(...seen.values()) <= 5500, `${seen.size} phones, slowest ${Math.max(0, ...seen.values())} ms`);
 
   // ── 3. Finds from 200 addresses, 50 a second ──
@@ -144,9 +168,9 @@ try {
   say('the page’s p95 stays under 200 ms during the finds', p95(findPages) < 200, `p95 ${p95(findPages)} ms`);
 } finally {
   server.kill('SIGTERM');
-  await sleep(500);
+  await new Promise((r) => { server.once('exit', r); setTimeout(r, 5000); });
   geo.close();
-  rmSync(DATA, { recursive: true, force: true });
+  if (wire) { await wire.stop(); await pglite.close(); }
 }
 console.log(`\n${out.filter(Boolean).length}/${out.length} passed`);
 process.exit(out.every(Boolean) ? 0 : 1);

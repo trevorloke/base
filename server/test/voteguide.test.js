@@ -401,6 +401,27 @@ test('the query string: ?area= kept per area, ?q= never kept, ?near= the plain p
   moveBack();
 });
 
+test('many visitors at once on a page not in the cache: it is drawn once', async () => {
+  cacheClear(ws);
+  let draws = 0;
+  const q0 = db.query.bind(db);
+  db.query = (...a) => { if (/from site_posts/.test(String(a[0]))) draws += 1; return q0(...a); };
+  try {
+    const all = await Promise.all(Array.from({ length: 20 }, () => hit('/site/voter-guide')));
+    assert.ok(all.every((r) => r.status === 200));
+    assert.equal(draws, 1, 'one draw for twenty visitors');
+  } finally { db.query = q0; }
+  // The guide's memo too: twenty phones while it is read, one read.
+  forgetGuide(ws);
+  let reads = 0;
+  db.query = (...a) => { if (/from vote_place_info i join places/.test(String(a[0]))) reads += 1; return q0(...a); };
+  try {
+    const all = await Promise.all(Array.from({ length: 20 }, () => vol.get('/api/guide')));
+    assert.ok(all.every((r) => r.status === 200));
+    assert.equal(reads, 1, 'one read of the guide for twenty phones');
+  } finally { db.query = q0; }
+});
+
 test('find an address: rounded, refused with its words, limited, and nothing kept', async () => {
   const tables = (await db.query("select table_name from information_schema.tables where table_schema = current_schema() and table_type = 'BASE TABLE'")).rows.map((r) => r.table_name);
   const counts = async () => Object.fromEntries(await Promise.all(tables.map(async (t) => [t, (await db.query(`select count(*)::int as n from "${t}"`)).rows[0].n])));

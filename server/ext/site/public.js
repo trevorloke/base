@@ -294,6 +294,10 @@ const guideFilter = async (c, site, page) => {
   return { area, day, q: q('q').slice(0, 80) };
 };
 
+// Pages being drawn now, by cache key: visitors who ask for the same page
+// while it is drawn wait for that one draw (a crowd on a page not yet in
+// the cache — the voter guide on voting day — asks the database once).
+const DRAWING = new Map();
 const draw = async (c, site, { kind, page = null, post = null, campaign = null, key, status, frame = null, ctx: extra = {} }) => {
   const settings = await readSettings(site.db, site.ws.id);
   const vg = kind === 'page' ? await guideFilter(c, site, page) : null;
@@ -305,15 +309,24 @@ const draw = async (c, site, { kind, page = null, post = null, campaign = null, 
   const micro = site.micro ? [site.micro.id, new Date(site.micro.updated_at).getTime()] : ['', ''];
   const fullKey = keep ? cacheKey(site.ws.id, [site.address, site.root, ...micro, kind, ...key, settings.updated_at, ctx.referral || '', ...(vg ? ['vg', vg.area, vg.day] : [])]) : null;
   let hit = fullKey ? cacheGet(fullKey) : null;
+  if (!hit && fullKey && DRAWING.has(fullKey)) hit = await DRAWING.get(fullKey).catch(() => null);
   if (!hit) {
-    const now = clockNow();
-    const data = await loadData(site.db, site.ws, { posts: kind === 'page' && page?.slug === 'news' ? 200 : 24, now, draft: ctx.preview, siteId: site.micro?.id || null });
-    const out = renderSite({ kind, site: await rendererSite(site, settings), page, post, campaign, data, ctx });
-    hit = { status: status || out.status || 200, html: out.html, csp: cspFor(out.html, { preview: ctx.preview, frameAncestors: frame || [] }), geo: / data-module="voterguide"/.test(out.html) };
-    // While the guide is published, never served past its next change.
-    const g = data.guide;
-    const until = g && g.status === 'published' ? guideState(g.times, now, g.places).boundary : null;
-    if (fullKey && hit.status === 200) cachePut(fullKey, hit, { until: until ?? undefined });
+    const drawing = (async () => {
+      const now = clockNow();
+      const data = await loadData(site.db, site.ws, { posts: kind === 'page' && page?.slug === 'news' ? 200 : 24, now, draft: ctx.preview, siteId: site.micro?.id || null });
+      const out = renderSite({ kind, site: await rendererSite(site, settings), page, post, campaign, data, ctx });
+      const drawn = { status: status || out.status || 200, html: out.html, csp: cspFor(out.html, { preview: ctx.preview, frameAncestors: frame || [] }), geo: / data-module="voterguide"/.test(out.html) };
+      // While the guide is published, never served past its next change.
+      const g = data.guide;
+      const until = g && g.status === 'published' ? guideState(g.times, now, g.places).boundary : null;
+      if (fullKey && drawn.status === 200) cachePut(fullKey, drawn, { until: until ?? undefined });
+      return drawn;
+    })();
+    if (fullKey) {
+      DRAWING.set(fullKey, drawing);
+      drawing.catch(() => {}).finally(() => { if (DRAWING.get(fullKey) === drawing) DRAWING.delete(fullKey); });
+    }
+    hit = await drawing;
   }
   pageHeaders(c, site, { csp: hit.csp, preview: ctx.preview, store: ctx.preview || frame !== null || Boolean(ctx.sent || ctx.error), geo: hit.geo, frame });
   if (langsOn && !ctx.preview) langHeaders(c, site, hit.status);
