@@ -44,4 +44,26 @@ export const cacheClear = (workspaceId) => {
   for (const k of [...PAGES.keys()]) if (!workspaceId || k.startsWith(`${workspaceId}|`)) PAGES.delete(k);
 };
 
+// What a request reads before the cache can answer (the campaign, its
+// website settings, a live page by its address), kept per process until
+// the next Website action (a new cacheGen) or SITE_CACHE_SECONDS, whichever
+// comes first: a page already kept costs the database nothing (VG: a crowd
+// on the voter guide). A read started before a clear is never served after
+// it. One read at a time per key: a crowd waits for the one. Kept per
+// database handle (a new one, as tests make, starts empty).
+const READS = new WeakMap(); // db → key → { gen, at, value: Promise }
+export const remember = (db, key, read) => {
+  const t = ttl();
+  if (t <= 0) return read();
+  if (!READS.has(db)) READS.set(db, new Map());
+  const reads = READS.get(db);
+  const was = reads.get(key);
+  if (was && was.gen === gen && Date.now() - was.at < t) return was.value;
+  if (reads.size >= MAX * 4) reads.delete(reads.keys().next().value);
+  const entry = { gen, at: Date.now(), value: Promise.resolve().then(read) };
+  reads.set(key, entry);
+  entry.value.catch(() => { if (reads.get(key) === entry) reads.delete(key); });
+  return entry.value;
+};
+
 export const cacheSize = (workspaceId) => [...PAGES.keys()].filter((k) => !workspaceId || k.startsWith(`${workspaceId}|`)).length;

@@ -422,6 +422,46 @@ test('many visitors at once on a page not in the cache: it is drawn once', async
   } finally { db.query = q0; }
 });
 
+test('a page already kept costs the database nothing: no query on a cache hit', async () => {
+  cacheClear(ws);
+  ok({ status: (await hit('/site/voter-guide')).status, json: {} });
+  ok({ status: (await hit('/site/')).status, json: {} });
+  let n = 0; const seen = [];
+  const q0 = db.query.bind(db);
+  db.query = (...a) => { n += 1; seen.push(String(a[0]).replace(/\s+/g, ' ').slice(0, 80)); return q0(...a); };
+  try {
+    for (let i = 0; i < 5; i += 1) {
+      assert.equal((await hit('/site/voter-guide')).status, 200);
+      assert.equal((await hit('/site/')).status, 200);
+    }
+  } finally { db.query = q0; }
+  assert.equal(n, 0, `queries on cache hits: ${seen.join(' · ')}`);
+  // A Website action is seen at the next request all the same.
+  ok(await mgr.action('site.guide.save', { ballot_note: 'Kept pages are read again after a save.' }));
+  assert.match((await hit('/site/voter-guide')).text, /Kept pages are read again after a save\./);
+});
+
+test('a correction saved while the page is being drawn: the next visitors get it, not the old draw', async () => {
+  cacheClear(ws);
+  const q0 = db.query.bind(db);
+  let held = null; let release; const gate = new Promise((r) => { release = r; });
+  db.query = (...a) => {
+    if (!held && /show_in_nav/.test(String(a[0]))) { held = true; return gate.then(() => q0(...a)); }
+    return q0(...a);
+  };
+  try {
+    const first = hit('/site/voter-guide');
+    while (!held) await new Promise((r) => setTimeout(r, 5));
+    ok(await mgr.action('site.guide.save', { ballot_note: 'Corrected while drawing.' }));
+    const second = hit('/site/voter-guide');
+    await new Promise((r) => setTimeout(r, 50));
+    release();
+    await first;
+    assert.match((await second).text, /Corrected while drawing\./, 'a visitor after the save gets the correction');
+    assert.match((await hit('/site/voter-guide')).text, /Corrected while drawing\./, 'and so does the next one');
+  } finally { db.query = q0; release(); }
+});
+
 test('find an address: rounded, refused with its words, limited, and nothing kept', async () => {
   const tables = (await db.query("select table_name from information_schema.tables where table_schema = current_schema() and table_type = 'BASE TABLE'")).rows.map((r) => r.table_name);
   const counts = async () => Object.fromEntries(await Promise.all(tables.map(async (t) => [t, (await db.query(`select count(*)::int as n from "${t}"`)).rows[0].n])));

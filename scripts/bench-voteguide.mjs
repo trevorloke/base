@@ -4,8 +4,9 @@
 // PGlite's socket server on 5514, as npm run test:pg does — a published
 // guide with 60 places, 5 days and 2 contests, and the fake address service
 // on 5513. Then, each for SECONDS (60 by default):
-//   1. 400 clients on the guide page and the home page (10 % with a valid
-//      ?area=): no errors, p95 ≤ 150 ms, and each address's page drawn from
+//   1. 400 clients (from four threads, so the clients' own event loop is
+//      not what is measured) on the guide page and the home page (10 % with
+//      a valid ?area=): no errors, p95 ≤ 150 ms, and each address's page drawn from
 //      the database at most once per SITE_CACHE_SECONDS (its data read
 //      once per draw);
 //   2. 500 phones polling GET /api/guide?rev=&tag= every 5 s (60× the real
@@ -22,6 +23,7 @@ import { fork } from 'node:child_process';
 import { PGlite } from '@electric-sql/pglite';
 import { PGLiteSocketServer } from '@electric-sql/pglite-socket';
 import { createServer } from 'node:http';
+import { Worker } from 'node:worker_threads';
 
 const PORT = 5512; const GEO = 5513; const WIRE = 5514;
 const SECONDS = Number(process.env.SECONDS) || 60;
@@ -29,6 +31,26 @@ const ORIGIN = `http://127.0.0.1:${PORT}`;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const p95 = (xs) => { const s = [...xs].sort((a, b) => a - b); return s.length ? Math.round(s[Math.floor(s.length * 0.95)]) : 0; };
 const out = [];
+// One thread of page clients: each asks for its page again as soon as the
+// last answer is read, until `end`; posts back every time and the errors.
+const CLIENTS = `
+const { workerData, parentPort } = require('node:worker_threads');
+const http = require('node:http');
+const { port, end, urls } = workerData;
+const agent = new http.Agent({ keepAlive: true, maxSockets: urls.length });
+const times = []; let errors = 0;
+const one = (path) => new Promise((resolve) => {
+  const t = performance.now();
+  const req = http.get({ host: '127.0.0.1', port, path, agent }, (res) => {
+    if (res.statusCode !== 200) errors += 1;
+    res.on('data', () => {});
+    res.on('end', () => { times.push(performance.now() - t); resolve(); });
+  });
+  req.on('error', () => { errors += 1; times.push(performance.now() - t); resolve(); });
+});
+Promise.all(urls.map(async (u) => { while (Date.now() < end) await one(u); }))
+  .then(() => { agent.destroy(); parentPort.postMessage({ times, errors }); });
+`;
 const say = (name, ok, extra) => { out.push(ok); console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}  — ${extra}`); };
 
 let lookups = [];
@@ -92,17 +114,25 @@ try {
 
   // ── 1. Pages ──
   for (const u of ['/site/voter-guide', '/site/voter-guide', '/site/', '/site/']) {
-    const t = performance.now(); const r = await fetch(`${ORIGIN}${u}`); await r.text();
-    console.log(`      one request ${u}: ${Math.round(performance.now() - t)} ms (${r.headers.get('x-cache') || 'no cache header'})`);
+    const t = performance.now(); const r = await fetch(`${ORIGIN}${u}`); const body = await r.text();
+    console.log(`      one request ${u}: ${Math.round(performance.now() - t)} ms, ${Math.round(Buffer.byteLength(body) / 1024)} kB`);
   }
   const until = (s) => Date.now() + s * 1000;
   const pageTimes = []; let pageErrors = 0;
   const page = async (u) => { const t = performance.now(); try { const r = await fetch(u); await r.text(); if (!r.ok) pageErrors += 1; } catch { pageErrors += 1; } pageTimes.push(performance.now() - t); };
   resetCounts();
   const end1 = until(SECONDS);
-  await Promise.all(Array.from({ length: 400 }, async (_, i) => {
-    while (Date.now() < end1) await page(i % 10 === 0 ? `${ORIGIN}/site/voter-guide?area=${AREAS[i % 4]}` : i % 2 ? `${ORIGIN}/site/voter-guide` : `${ORIGIN}/site/`);
-  }));
+  // The 400 clients from four threads of their own (a hundred each, plain
+  // keep-alive http): one event loop reading 400 pages of 40–90 kB is
+  // itself the slowest thing in the room, and its own wait is not the
+  // server's.
+  const urls = Array.from({ length: 400 }, (_, i) => (i % 10 === 0 ? `/site/voter-guide?area=${AREAS[i % 4]}` : i % 2 ? '/site/voter-guide' : '/site/'));
+  const results = await Promise.all([0, 1, 2, 3].map((w) => new Promise((resolve, reject) => {
+    const worker = new Worker(CLIENTS, { eval: true, workerData: { port: PORT, end: end1, urls: urls.filter((_, i) => i % 4 === w) } });
+    worker.once('message', resolve);
+    worker.once('error', reject);
+  })));
+  for (const r of results) { pageTimes.push(...r.times); pageErrors += r.errors; }
   say('400 clients on the pages: no errors, p95 ≤ 150 ms', pageErrors === 0 && p95(pageTimes) <= 150, `${pageTimes.length} requests, ${pageErrors} errors, p95 ${p95(pageTimes)} ms`);
   const c1 = await counted();
   for (const [k, n] of c1.kinds || []) console.log(`      ${n}× ${k}`);

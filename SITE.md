@@ -809,7 +809,11 @@ Writes are actions (`POST /api/actions/:name`):
 Slugs: lowercase a–z, 0–9 and dashes; never `news`, `act`, `r`,
 `preferences`, `unsubscribe`, `api`, `site-assets`, `__preview`,
 `sitemap.xml`, `robots.txt`, `media`, `stripe`, `site` (and `home` is the
-home page's). Every Website write clears the campaign's cached pages.
+home page's). Every Website write clears the campaign's cached pages —
+and what a request reads before the cache answers (the campaign, the
+website settings, a live page by its address), so a kept page costs the
+database nothing; a page drawn across a Website write is never kept, and
+visitors after the write wait for a fresh draw, not the older one.
 
 Environment: `SITE_HOSTS` (the campaign's own domains), `APP_HOSTS` (the
 app's other addresses on this server, never a website domain: one people

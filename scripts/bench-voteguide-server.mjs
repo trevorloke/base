@@ -36,3 +36,5 @@ process.on('message', (m) => {
   if (m === 'counts') process.send({ counts: { ...counts, kinds: [...kinds].sort((a, b) => b[1] - a[1]).slice(0, 8) } });
 });
 serve({ fetch: app.fetch, port: Number(process.env.PORT) }, () => process.send?.({ ready: true }));
+// A plain exit when the parent stops it, so NODE_OPTIONS=--cpu-prof writes its profile.
+process.on('SIGTERM', () => process.exit(0));
