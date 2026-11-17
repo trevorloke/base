@@ -12,6 +12,7 @@ import { getDb, dbReachable } from './db/client.js';
 import { EXTENSIONS } from './ext.js';
 import { startJobRunner, stopJobRunner } from './lib/jobs.js';
 import { staleTimeZoneData } from './lib/tzcheck.js';
+import { clockNote } from './lib/clock.js';
 import { envName, orgName } from './lib/org.js';
 import { bodyLimit } from 'hono/body-limit';
 import { appRedirect, basePath, mountAt } from './lib/mount.js';
@@ -44,7 +45,10 @@ for (const e of EXTENSIONS) Object.assign(BODY_MAX, e.bodyMax || {});
 app.use('*', async (c, next) => {
   await next();
   const h = c.res.headers;
-  if (!h.has('X-Frame-Options')) h.set('X-Frame-Options', 'DENY');
+  // The voter guide's embed names the sites that may frame it in its CSP
+  // (frame-ancestors) and so carries no X-Frame-Options (ext/site public.js).
+  const framedBy = /frame-ancestors (?!'none')/.test(h.get('Content-Security-Policy') || '');
+  if (!h.has('X-Frame-Options') && !framedBy) h.set('X-Frame-Options', 'DENY');
   if (!h.has('X-Content-Type-Options')) h.set('X-Content-Type-Options', 'nosniff');
   if (!h.has('Referrer-Policy')) h.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   const build = c.req.path.startsWith('/api/') ? currentBuild() : null;
@@ -94,6 +98,8 @@ if (isMain) {
   });
   const tz = staleTimeZoneData();
   if (tz) console.warn(`starbase: ${tz}`);
+  const moved = clockNote();
+  if (moved) console.warn(`starbase: ${moved}`);
   // Behind the base.win door without its key, everyone who comes through
   // the door is the door's one address to the limits per address.
   if (base && !doorKeySet()) {

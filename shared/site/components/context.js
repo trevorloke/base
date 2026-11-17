@@ -116,6 +116,8 @@ export function normalizeData(data) {
     campaigns: obj(d.campaigns),
     payments: { ready: pay.ready === true, limit_cents: Math.max(0, Math.round(num(pay.limit_cents))), monthly_max_cents: Math.max(0, Math.round(num(pay.monthly_max_cents))), membership_min_cents: Math.max(0, Math.round(num(pay.membership_min_cents))) },
     roles: arr(d.roles).map(str).map((r) => r.trim()).filter(Boolean),
+    // The voter guide as the server shaped it (ext/voteguide publicGuide).
+    guide: d.guide && typeof d.guide === 'object' ? d.guide : null,
   };
 }
 
@@ -224,6 +226,10 @@ export function renderContext({ kind = 'page', site, page, post, campaign, data,
     data: d,
     timeZone: tz,
     preview: Boolean(c.preview),
+    // The voter guide alone for another website's frame, and its filters
+    // from the address (?area=, ?day=, ?q=) as the server checked them.
+    embed: Boolean(c.embed),
+    vgFilter: obj(c.vgFilter),
     // The forms' tracking, only as the server takes it (util.js).
     referral: cleanRef(c.referral),
     source: cleanSource(c.source),
@@ -259,7 +265,8 @@ export function renderContext({ kind = 'page', site, page, post, campaign, data,
     },
     // Markdown, sanitized (shared/markdown.js), with its site links put
     // under the site's root like every other link.
-    markdown: (text) => (tr && !english ? translatedMarkdown(text) : renderMarkdown(text)).replace(/<a href="(\/(?!\/)[^"]*)"/g, (m, url) => {
+    // check: shown translated only once a person checked it (check-first).
+    markdown: (text, { check = false } = {}) => (tr && !english ? translatedMarkdown(text, check) : renderMarkdown(text)).replace(/<a href="(\/(?!\/)[^"]*)"/g, (m, url) => {
       const to = linkFor(loc, url.replace(/&amp;/g, '&'));
       return to ? `<a href="${to.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}"` : m;
     }),
@@ -272,11 +279,11 @@ export function renderContext({ kind = 'page', site, page, post, campaign, data,
   };
   // Markdown block by block: each block its translation, or its English
   // with lang="en" on it.
-  function translatedMarkdown(text) {
+  function translatedMarkdown(text, check = false) {
     const blocks = blocksOf(text).map((b) => {
-      if (b.t === 'list') return { ...b, items: b.items.map((i) => { const r = look(normSeg(i.text)); return r.lang === 'en' ? { text: i.text, lang: 'en' } : { text: r.text }; }) };
+      if (b.t === 'list') return { ...b, items: b.items.map((i) => { const r = look(normSeg(i.text), { check }); return r.lang === 'en' ? { text: i.text, lang: 'en' } : { text: r.text }; }) };
       if (b.t === 'hr') return b;
-      const r = look(normSeg(blockText(b)));
+      const r = look(normSeg(blockText(b)), { check });
       if (r.lang === 'en') return { ...b, lang: 'en' };
       return b.t === 'h' ? { ...b, text: r.text } : { ...b, lines: r.text.split('\n') };
     });

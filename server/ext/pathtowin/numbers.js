@@ -24,6 +24,7 @@
 // list's door); it is knocked once anyone there has a door contact, any
 // outcome (the walk list's rule with no pass open).
 import { toLocal } from '../../lib/tzsql.js';
+import { now, clockShift } from '../../lib/clock.js';
 import { WEEKS } from './rules.js';
 
 const DOOR = `case when nullif(trim(p.address), '') is null then p.id::text
@@ -92,9 +93,13 @@ export const trendRows = async (db, ws, today, tz) => (await db.query(
 // The campaign's today, YYYY-MM-DD, by the same clock as the counts
 // (lib/tzsql.js: B.C. on UTC-7 all year from March 2026, whatever this
 // runtime's own copy of the time-zone rules says).
-export const todayOf = async (db, tz) => (await db.query(
-  `select to_char(${toLocal('now()', '$1::text')}, 'YYYY-MM-DD') as today`, [tz],
-)).rows[0].today;
+// While a test moves the clock (lib/clock.js), its moment is the "now".
+export const todayOf = async (db, tz) => {
+  const shift = clockShift();
+  return shift
+    ? (await db.query(`select to_char(${toLocal('$2::timestamptz', '$1::text')}, 'YYYY-MM-DD') as today`, [tz, new Date(now()).toISOString()])).rows[0].today
+    : (await db.query(`select to_char(${toLocal('now()', '$1::text')}, 'YYYY-MM-DD') as today`, [tz])).rows[0].today;
+};
 
 // One row per live turf with at least three corners. Its shape is its plan,
 // whatever the database knows about the tables (an embedded one never

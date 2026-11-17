@@ -88,7 +88,7 @@ export function renderSite({ kind = 'page', site, page: rawPage, post, campaign,
       .filter(([, r]) => typeof r === 'string')
       .map(([code, r]) => `<link rel="alternate" hreflang="${esc(code)}" href="${esc(`${rc.loc.origin}${r}${rc.loc.path}`)}">`).join('')
     : '';
-  const noindex = head.noindex || (rc.lang !== 'en' && !indexed.includes(rc.lang));
+  const noindex = head.noindex || rc.embed || (rc.lang !== 'en' && !indexed.includes(rc.lang));
   const t = rc.site.theme;
   // The island script only where it does something people need (a form, a
   // share sheet, sign-ups, the rotating words); the Menu alone works
@@ -101,6 +101,9 @@ export function renderSite({ kind = 'page', site, page: rawPage, post, campaign,
     + `<html lang="${esc(rc.lang)}" data-skin="${esc(t.skin)}" data-heading="${esc(t.fonts.heading)}" data-body="${esc(t.fonts.body)}">`
     + '<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
     + `<title>${esc(head.title)}</title>`
+    // The voter guide in another website's frame: its links open in the
+    // framing window (Directions say otherwise, in a new tab).
+    + (rc.embed ? '<base target="_top">' : '')
     + meta('description', head.description)
     + (noindex ? '<meta name="robots" content="noindex">' : '')
     + (head.canonical ? `<link rel="canonical" href="${esc(head.canonical)}">` : '')
@@ -115,6 +118,7 @@ export function renderSite({ kind = 'page', site, page: rawPage, post, campaign,
     + (rc.site.icon ? `<link rel="icon" href="${esc(rc.img(rc.site.icon.icon))}" type="image/png"><link rel="apple-touch-icon" href="${esc(rc.img(rc.site.icon.touch))}">` : '')
     + head.fonts.map((f) => `<link rel="preload" href="${esc(f)}" as="font" type="font/woff2" crossorigin>`).join('')
     + `<link rel="stylesheet" href="${esc(assetUrl(rc.loc.assets, 'site.css'))}">`
+    + (/ class="(?:vote-banner|vg-embed)"| data-module="voterguide"/.test(body) ? `<link rel="stylesheet" href="${esc(assetUrl(rc.loc.assets, 'voteguide.css'))}">` : '')
     + `<style>${themeCss(t)}${rc.langs.offered.length ? VIEW_TRANSITION : ''}</style>`
     + hints
     + `<script type="application/ld+json">${jsonForScript(head.organization)}</script>`

@@ -1,6 +1,7 @@
 // The website's own files, served at {site root}site-assets/…:
 //
 //   site.css                  shared/site/site.css
+//   voteguide.css             shared/site/voteguide.css (the voter guide)
 //   fonts/<name>.woff2        shared/site/fonts/
 //   site-islands.js           web/dist/site-islands.js (built by `npm run build`)
 //
@@ -18,6 +19,7 @@ const TYPES = { css: 'text/css; charset=utf-8', js: 'text/javascript; charset=ut
 export function siteAssetFile(name) {
   const n = String(name || '').split(/[?#]/)[0].replace(/^\/+/, '');
   if (n === 'site.css') return `${SHARED}site.css`;
+  if (n === 'voteguide.css') return `${SHARED}voteguide.css`;
   if (/^fonts\/[a-z0-9-]+\.woff2$/.test(n)) return `${SHARED}${n}`;
   if (n === 'site-islands.js') return `${DIST}site-islands.js`;
   return null;

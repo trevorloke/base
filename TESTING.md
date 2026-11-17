@@ -1574,3 +1574,25 @@ Built conservatively; the campaign should confirm these rules with counsel
   shorter, Unavailable / Try again on a failed read, No signal);
   Check the records on Import & export; staff, staff denied Data or
   Map, a treasurer denied Outreach, a volunteer's field Today.
+
+## The voter guide (VG)
+
+Server: `server/test/voteguide.test.js` (actions, checklist, import against
+a fake address service, the public pages in every state, the cache's
+expiry, the embed, the field read) and `server/test/voteguide-shared.test.js`
+(states, closed for one day, nearest, words in any zone, the import's
+reader, the QR's longest link) and `server/test/tzrule.test.js`.
+The clock moves only in tests: `STARBASE_CLOCK_SHIFT_MS` (milliseconds) is
+read when `NODE_ENV=test`, under `node --test`, or with `STARBASE_E2E=1`
+(a browser suite's server), and ignored anywhere else — the server says
+so when it starts.
+
+Browser: `e2e-voteguide.mjs` starts its own server (5510, or `BASE_PATH=/imaginesurrey
+PORT=5511`) on a file-backed database and restarts it with the clock moved to walk
+the guide from not out to over; a fake address service on 5513 and a framing page
+on 5514. `e2e-voted.mjs` checks GOTV's "The voter guide has other days" line;
+`e2e-site-render.mjs` draws the module in every state. Load, by hand:
+`node scripts/bench-voteguide.mjs` (`SECONDS=10` for a quick look): its server runs
+in a child process over the Postgres wire protocol (`DATABASE_URL`, else PGlite's
+socket server on 5514) and counts the database's queries — page draws per
+address, the guide's rev reads a minute (`BENCH_KINDS=1` lists the commonest).

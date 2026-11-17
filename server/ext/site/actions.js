@@ -58,8 +58,9 @@ const uuid = () => z.uuid();
 const text = (max) => z.string().trim().max(max);
 
 // A Website action: managers, or whoever the 'site' area is granted to.
-// After it commits, the campaign's cached pages go (cache.js).
-const siteAction = (input, handler) => ({
+// After it commits, the campaign's cached pages go (cache.js). Exported:
+// the voter guide's site.guide.* actions are Website actions too.
+export const siteAction = (input, handler) => ({
   roles: MANAGER,
   area: 'site',
   input,
@@ -101,6 +102,11 @@ const checked = (modules, opts = {}) => {
     }
     throw moduleProblem(e, modules);
   }
+};
+
+// A page holds at most one voter guide (VG decision 12).
+const oneGuide = (modules) => {
+  if ((modules || []).filter((m) => m?.kind === 'voterguide').length > 1) throw httpError(400, 'A page can have one voter guide');
 };
 
 const loadPage = async (tx, ws, id) => {
@@ -329,6 +335,7 @@ export const actions = {
     }
     const slug = await freeSlug(tx, ws, 'site_pages', input.slug, input.title, null, { siteId });
     const modules = checked(input.modules || []);
+    oneGuide(modules);
     const draft = { title: input.title, description: input.description || '', modules };
     const order = (await tx.query(
       'select coalesce(max(nav_order), -1) + 1 as n from site_pages where workspace_id = $1 and deleted_at is null and site_id is not distinct from $2::uuid', [ws, siteId],
@@ -371,6 +378,7 @@ export const actions = {
     const title = input.title ?? cur.title;
     const description = input.description === undefined ? (cur.description || '') : (input.description || '');
     const modules = input.modules === undefined ? (draft.modules || []) : checked(input.modules);
+    oneGuide(modules);
     const checkFirst = input.check_first ?? draft.checkFirst === true;
     const next = withImage({ title, description, modules, ...(checkFirst ? { checkFirst: true } : {}) }, input.image === undefined ? draft.image : input.image);
     const showInNav = input.show_in_nav ?? cur.show_in_nav;

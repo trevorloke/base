@@ -72,6 +72,8 @@ import { NS } from '../base.js';
 import { BRAND } from '../brand.js';
 import MapWindow from '../components/MapWindow.jsx';
 import { quickFor } from '../components/commands.js';
+import { guideNow, guideSoon, useGuide } from '../components/guide.js';
+import { guideState } from '@starbase/shared/voteguide';
 import './home.css';
 
 const greeting = () => {
@@ -439,6 +441,19 @@ const FROM_TODAY = { from: { to: '/', label: 'Today' } };
 function LettersRow({ b }) {
   const n = Number(b.letters?.unseen) || 0;
   return <LinkRow to="/letters" main={n > 0 ? <>Your letters · <strong className="mono">{n}</strong> {n === 1 ? 'reply' : 'replies'}</> : 'Letters to the editor'} />;
+}
+
+// "Where to vote" (VG): the first row while the voter guide is published
+// and not over, on a GOTV day or with the first voting day two weeks off.
+// Reading it here also keeps the guide on the phone for when signal drops.
+function VoteInfoRow({ b }) {
+  const g = useGuide({ side: true }).data;
+  if (!g || g.status === 'not_out' || !g.times) return null;
+  const now = guideNow(g);
+  const st = guideState(g.times, now, g.places);
+  if (st.state === 'not_out' || st.state === 'over') return null;
+  if (!b.voted?.on && !guideSoon(g, now)) return null;
+  return <LinkRow to="/vote-info" state={FROM_TODAY} main="Where to vote" />;
 }
 
 // ── GOTV mode (ext/voted): on by hand, or by itself on an advance-voting day
@@ -870,6 +885,7 @@ function VolunteerToday({ b, me }) {
       {firstOpen && !done && <MapWindow me={me} turfId={firstOpen.id} />}
 
       <ul className="today-rows today-next">
+        <VoteInfoRow b={b} />
         <VolunteerShiftRow shifts={b.shifts ?? []} me={me} turfs={b.shiftTurfs} />
         {signs > 0 && (
           <LinkRow to="/signs" main={<><strong className="mono">{signs}</strong> {plural(signs, 'sign')} to put up</>} />
@@ -1025,6 +1041,7 @@ function CandidateToday({ b, me }) {
       {candTurf && <MapWindow me={me} turfId={candTurf.id} />}
 
       <ul className="today-rows today-next">
+        <VoteInfoRow b={b} />
         {calling && <LinkRow to="/mainstreet" main="Met someone" />}
         {!ready && <li className="today-need today-row--wait muted" role="status">Loading…</li>}
         {ready && next && (

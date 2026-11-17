@@ -15,6 +15,7 @@ import { dayEvent } from '@starbase/shared/ics';
 import { dayOf } from '@starbase/shared/dayparts';
 import AddToCalendar from '../components/AddToCalendar.jsx';
 import { zoneOf } from '../components/shiftTime.js';
+import { useGuide } from '../components/guide.js';
 import '../components/voted.css';
 import './shifts.css';
 import './surveys.css';
@@ -29,6 +30,7 @@ export default function Voted() {
   const queryClient = useQueryClient();
   const online = useOnline();
   const q = useQuery({ queryKey: ['voted', 'summary'], queryFn: () => apiGet('/voted/summary'), staleTime: 15_000 });
+  const guide = useGuide({ side: true }).data;
   const [draft, setDraft] = useState(null); // { on, election_day, advance_days, auto } once edited
   const [newDay, setNewDay] = useState('');
   const [busy, setBusy] = useState(false);
@@ -90,6 +92,29 @@ export default function Voted() {
     }
   };
 
+  // The published voter guide's days (VG decision 25): kept equal by a
+  // person's choice, never silently.
+  const gDays = guide?.status !== 'not_out' ? (guide?.days || []) : [];
+  const gAdvance = gDays.filter((d) => d.kind === 'advance').map((d) => d.day).sort();
+  const gElection = gDays.filter((d) => d.kind === 'general').map((d) => d.day).sort().at(-1) || '';
+  const guideDiffers = gDays.length > 0 && (gElection !== (s.election_day || '') || JSON.stringify(gAdvance) !== JSON.stringify([...(s.advance_days || [])].sort()));
+  const takeGuideDays = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await action('vote.settings', { on: saved.on, election_day: gElection || null, advance_days: gAdvance, auto: saved.auto });
+      await Promise.all([queryClient.invalidateQueries({ queryKey: ['voted'] }), queryClient.invalidateQueries({ queryKey: ['brief'] })]);
+      setDraft(null);
+      setSaid('Saved');
+      clearTimeout(timer.current);
+      timer.current = setTimeout(() => setSaid(null), 4000);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const pct = s.supporters ? Math.min(100, Math.round((s.supporters_voted / s.supporters) * 100)) : 0;
   return (
     <div className="vt-page">
@@ -100,6 +125,12 @@ export default function Voted() {
         <p className="vt-now" role="status"><strong>{why}</strong></p>
         <p className="vt-line">While it’s on: everyone can mark people as voted (walk list, door card, Calls), the GOTV scripts are said instead of the usual ones (<Link to="/scripts">Scripts</Link>), and Today and the map open on the supporters who haven’t voted.</p>
 
+        {guideDiffers && (
+          <p className="vt-line vt-guide" role="status">
+            The voter guide has other days.{' '}
+            {isManager && <button type="button" className="btn vt-tap" disabled={busy || !online} onClick={takeGuideDays}>Use the guide’s days</button>}
+          </p>
+        )}
         <div className="field">
           <label htmlFor="vt-date">Election day</label>
           <input id="vt-date" type="date" className="input vt-date" value={cur.election_day || ''} disabled={!isManager || busy}

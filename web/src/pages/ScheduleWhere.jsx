@@ -22,6 +22,7 @@ import { apiGet, action } from '../api.js';
 import { useOnline } from '../components/NoSignal.jsx';
 import { DEFAULT_TILES } from '../components/tiles.js';
 import { Unavailable } from './ScheduleSheet.jsx';
+import './vote-guide.css';
 
 // The map is its own download, fetched when someone opens it. One that
 // doesn't arrive (a weak signal) says so and never takes the sheet down
@@ -248,12 +249,23 @@ export default function Where({ kind, value, onChange, canMap }) {
       {places.isPending && <p className="sch-note" role="status">Loading places…</p>}
       {places.isError && <Unavailable what="Places" onRetry={() => places.refetch()} />}
       <div className="sch-chips" role="group" aria-label="Places">
-        {shown.map((c) => (
+        {shown.filter((c) => !c.place?.voting).map((c) => (
           <button key={c.key} type="button" className="sch-chip" aria-pressed={chosen(c)} onClick={() => pick(c)}
             title={c.place && isPinName(c.place.name) ? c.place.name : undefined}>
             <span className="sch-chip__words">{placeLabel(c.place ? c.place.name : c.words)}</span>
           </button>
         ))}
+        {/* The voter guide's voting places (VG), under their own heading: where scrutineer shifts happen. */}
+        {shown.some((c) => c.place?.voting) && (
+          <>
+            <p className="sch-note sch-voting-h">Voting places</p>
+            {shown.filter((c) => c.place?.voting).map((c) => (
+              <button key={c.key} type="button" className="sch-chip" aria-pressed={chosen(c)} onClick={() => pick(c)}>
+                <span className="sch-chip__words">{placeLabel(c.place.name)}</span>
+              </button>
+            ))}
+          </>
+        )}
         {!all && list.length > shown.length && (
           <button type="button" className="sch-chip sch-chip--quiet" onClick={() => setAll(true)}>More places · {list.length - shown.length}</button>
         )}

@@ -208,6 +208,14 @@ export const MODULES = [
     defaults: { title: 'Act now', showCounts: true },
   },
   {
+    kind: 'voterguide',
+    category: 'live',
+    label: 'Voter guide',
+    description: 'Where and when to vote, from the guide you keep under Website → Voter guide.',
+    fields: [heading(), intro(400), { key: 'showBallot', type: 'toggle', label: 'Show the names on the ballot' }, button('cta', 'Button')],
+    defaults: { title: 'How to vote', intro: '', showBallot: true, cta: { label: '', href: '' } },
+  },
+  {
     kind: 'events',
     category: 'live',
     label: 'Events',

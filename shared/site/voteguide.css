@@ -1,0 +1,144 @@
+/* The voter guide (VG): the module's island, the banner on every page and
+   the embed. Coloured only by the theme's variables (shared/site/theme.js),
+   so it takes each campaign's own look. Loaded only on a page that draws
+   the guide or the banner (server/ext/site/render/index.js). */
+.vote-banner {
+  background: var(--brand);
+  color: var(--brand-ink);
+}
+.vote-banner-inner {
+  max-width: var(--wrap);
+  margin: 0 auto;
+  padding: 10px var(--gutter);
+}
+.vote-banner p { margin: 0; font-weight: 600; }
+.vote-banner a { color: inherit; text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
+
+.vg { display: grid; gap: 28px; grid-template-columns: minmax(0, 1fr); }
+.vg-head { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr); }
+.vg-status {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+.vg--not-out .vg-status { font-size: 1.25rem; }
+.vg-block { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); min-width: 0; }
+.vg-title { margin: 0; font-size: 1.25rem; }
+.vg-sub { margin: 4px 0 0; font-weight: 700; }
+
+.vg-days {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 10px;
+}
+.vg-day {
+  display: grid;
+  gap: 2px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+.vg-day-week { font-size: 0.875rem; color: var(--muted); }
+.vg-day-date { font-size: 1.125rem; font-weight: 700; }
+.vg-day-kind, .vg-day-hours { font-size: 0.875rem; }
+.vg-day-flag { font-size: 0.8125rem; font-weight: 700; margin-top: 4px; }
+.vg-day--general { border-color: var(--accent); box-shadow: inset 0 4px 0 var(--accent); }
+.vg-day--today { outline: 3px solid var(--brand); outline-offset: -1px; }
+.vg-day--done { color: var(--muted); background: var(--surface); }
+
+.vg-find { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
+.vg-address, .vg-search { min-width: 0; }
+.vg-label { display: block; font-size: 0.9375rem; margin-bottom: 4px; }
+.vg-row { display: flex; gap: 8px; }
+.vg-input {
+  flex: 1;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0 12px;
+  border: 1px solid var(--field-line, var(--line));
+  border-radius: var(--radius);
+  font: inherit;
+  background: var(--paper);
+  color: var(--ink);
+}
+.vg-locate, .vg-find-btn, .vg-search .btn { min-height: 48px; }
+.vg-locate { justify-self: start; }
+.vg-say:empty { display: none; }
+.vg-say { margin: 0; color: var(--danger, var(--ink)); }
+
+.vg-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.vg-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 48px;
+  padding: 0 16px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--ink);
+  text-decoration: none;
+  font-weight: 600;
+}
+.vg-chip--on { background: var(--brand); border-color: var(--brand); color: var(--brand-ink); }
+
+.vg-places { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.vg-place {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+.vg-place-main { display: grid; gap: 4px; min-width: 0; }
+.vg-place-main p { margin: 0; }
+.vg-place-name { font-weight: 700; }
+.vg-place-address, .vg-place-hours, .vg-place-note { font-size: 0.9375rem; color: var(--muted); }
+.vg-place-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.vg-tag {
+  font-size: 0.8125rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+}
+.vg-tag--changed { background: var(--accent); color: var(--accent-ink); }
+.vg-tag--far { font-weight: 700; }
+.vg-place--closed { background: var(--surface); }
+.vg-place-closed { font-weight: 700; color: var(--danger, var(--ink)); }
+.vg-directions {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: 48px;
+  padding: 0 4px;
+  font-weight: 600;
+}
+.vg-none { margin: 0; }
+
+.vg-contest { display: grid; gap: 6px; }
+.vg-office { margin: 0; font-weight: 700; }
+.vg-names { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.vg-name { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--radius); }
+.vg-oval { width: 22px; height: 14px; border: 2px solid var(--ink); border-radius: 50%; flex: none; }
+.vg-name--ours { background: var(--brand-soft, var(--surface)); font-weight: 700; }
+.vg-name--ours .vg-oval { background: var(--ink); }
+.vg-ballot-note { margin: 0; font-size: 0.9375rem; }
+.vg-source { color: var(--muted); }
+
+.vg-embed { padding: 16px 0; }
+.vg-embed-foot { margin-top: 24px; color: var(--muted); }
+.vg-embed-foot p { margin: 4px 0; }
+
+@media (max-width: 640px) {
+  .vg-status { font-size: 1.2rem; }
+  .vg-days { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .vg-place { flex-direction: column; }
+}

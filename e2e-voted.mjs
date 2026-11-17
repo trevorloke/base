@@ -393,6 +393,27 @@ check('off: the map has no voted filters', !optsOff.some(([l]) => l === 'Voted' 
 await vpage.keyboard.press('Escape').catch(() => {});
 await V.shot('12-walk-off');
 
+// ── 11b. The voter guide has other days (VG): one line, and a manager takes them ──
+{
+  const plusDays = (n) => new Date(Date.now() - 7 * 3600e3 + n * 86400e3).toISOString().slice(0, 10);
+  const gA = plusDays(3); const gG = plusDays(6);
+  await D.api('/actions/site.settings.save', { org: { name: 'Imagine Surrey', agentName: 'Pat Example', agentContact: 'agent@example.org' } });
+  await D.api('/actions/site.guide.days', { days: [{ day: gA, kind: 'advance', opens: '08:00', closes: '20:00' }, { day: gG, kind: 'general', opens: '08:00', closes: '20:00' }] });
+  await D.api('/actions/site.guide.place.save', { name: 'Example Community Hall', address: '100 Example Ave', days: [{ day: gA }, { day: gG }] });
+  await D.api('/actions/site.guide.save', { vote_anywhere: true, official_url: 'https://elections.example.org/vote', official_label: 'Example City elections' });
+  for (const section of ['days', 'places']) await D.api('/actions/site.guide.check', { section, checked: true });
+  const pubd = await D.api('/actions/site.guide.publish', { gotv_days: false });
+  check('a voter guide published with other days than GOTV’s', pubd.status === 200, JSON.stringify(pubd.json));
+  await D.go('/voted');
+  await page.waitForSelector('.vt-guide', { timeout: 8000 }).catch(() => {});
+  check('GOTV: “The voter guide has other days.” with “Use the guide’s days”', /The voter guide has other days\./.test(await D.text()) && !!(await page.$('.vt-guide button')));
+  await D.shot('12b-guide-other-days');
+  await page.click('.vt-guide button');
+  await sleep(1200);
+  const s2 = (await D.api('/voted/status')).json;
+  check('“Use the guide’s days”: GOTV now has the guide’s days, and the line is gone', s2.election_day === gG && !(await page.$('.vt-guide')), JSON.stringify(s2));
+}
+
 // ── 12. The books still verify ──
 const v = (await D.api('/audit/verify')).json;
 check('hash chain verifies after the whole journey', v.ok === true && v.checked > 20, JSON.stringify(v));

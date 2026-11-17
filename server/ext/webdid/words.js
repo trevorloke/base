@@ -19,6 +19,9 @@ export const WEB_WORDS = {
   donate: 'Filled in the donation form',
 };
 export const MONEY_KINDS = new Set(['join', 'donate']);
+// web=guide: asked the voter guide to tell them when voting information is
+// out (its newsletter sign-up, source 'voter-guide'; VG decision 26).
+export const GUIDE_WORDS = 'Asked to be told when voting info is out';
 
 // A filter or trigger value: a kind ("petition"), one campaign
 // ("campaign:<uuid>", a petition or pledge), or "any".
@@ -33,7 +36,7 @@ export const siteOfValue = (v) => {
   const m = /^site:(.+)$/.exec(String(v || ''));
   return m && UUID.test(m[1]) ? m[1].toLowerCase() : null;
 };
-export const isWebValue = (v, { any = false } = {}) => (any && v === 'any') || WEB_KINDS.includes(v) || Boolean(campaignOf(v));
+export const isWebValue = (v, { any = false } = {}) => (any && v === 'any') || v === 'guide' || WEB_KINDS.includes(v) || Boolean(campaignOf(v));
 
 // "Signed: SkyTrain to Langley" for one campaign, given its title.
 export const campaignWords = (c) => `${c?.kind === 'pledge' ? 'Pledged' : 'Signed'}: ${c?.title || 'a petition'}`;

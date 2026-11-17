@@ -17,6 +17,7 @@ import { LANG_BY_CODE } from '../languages.js';
 import { heroSegments, bandSegment, splitMark } from '../segments.js';
 import { enLang } from './lang.js';
 import { googleLink, outlookLink, shiftEvent } from '../../ics.js';
+import { VoterGuide } from './voteguide.js';
 
 const TONES = new Set(['paper', 'surface', 'brand', 'accent', 'ink']);
 const DARK = new Set(['brand', 'ink', 'action']);
@@ -97,7 +98,7 @@ export function Img({ rc, image, className, width, height, eager, alt }) {
 // On a translated page the labels and messages are the page's language
 // (rc.w); a legal line that isn't approved there carries lang 'en'.
 const langOf = (rc, l) => (rc.lang !== 'en' && l === 'en' ? { labelLang: 'en' } : {});
-const makeF = (rc) => ({
+export const makeF = (rc) => ({
   first: (o) => ({ name: 'first_name', label: rc.w('field.first'), autoComplete: 'given-name', required: true, msg: rc.w('err.first_name'), half: true, max: 80, ...o }),
   last: (o) => ({ name: 'last_name', label: rc.w('field.last'), autoComplete: 'family-name', required: true, msg: rc.w('err.last_name'), half: true, max: 80, ...o }),
   email: (o) => ({ name: 'email', label: rc.w('field.email'), type: 'email', inputMode: 'email', autoComplete: 'email', required: true, msg: rc.w('err.emailAddress'), half: true, max: 200, ...o }),
@@ -126,7 +127,7 @@ const privacyOf = (rc) => ({ href: privacyHref(rc), keeper: keeper(rc), ...priva
 
 // The island's props for a module's form: the fields, where it posts, the
 // hidden ids, and — after a plain post — its thank-you or its error.
-function formProps(rc, m, kind, o) {
+export function formProps(rc, m, kind, o) {
   const names = o.fields.map((f) => f.name).filter(Boolean).concat(o.amount ? ['amount_cents'] : []);
   return {
     uid: `${m.id}-form`,
@@ -903,6 +904,7 @@ export const MODULE_COMPONENTS = {
   people: People,
   groups: Groups,
   social: Social,
+  voterguide: VoterGuide,
 };
 
 // One module instance on a page. Unknown kinds draw nothing.

@@ -84,6 +84,9 @@ const WebsiteLanguages = lazy(() => import('./pages/WebsiteLanguages.jsx'));
 const WebsiteLanguage = lazy(() => import('./pages/WebsiteLanguages.jsx').then((m) => ({ default: m.WebsiteLanguage })));
 const WebsiteLanguageLegal = lazy(() => import('./pages/WebsiteLanguageLegal.jsx'));
 const PathToWin = lazy(() => import('./pages/PathToWin.jsx'));
+// The voter guide (VG): "Where to vote" for every role, and its desk screen.
+const VoteInfo = lazy(() => import('./pages/VoteInfo.jsx'));
+const WebsiteGuide = lazy(() => import('./pages/WebsiteGuide.jsx'));
 // The managers' dashboard, its own screen (reached from Today and the search).
 const Activity = lazy(() => import('./pages/Dashboard.jsx'));
 import Join from './pages/Join.jsx';
@@ -220,6 +223,7 @@ export default function App({ mode = 'field' }) {
           <Route path="/imagineu/:id" element={<ImagineU />} />
           <Route path="/banks" element={<Banks />} />
           <Route path="/banks/:id" element={<Banks />} />
+          <Route path="/vote-info" element={<VoteInfo />} />
           <Route path="*" element={<FieldFallback />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
@@ -257,6 +261,7 @@ export default function App({ mode = 'field' }) {
         <Route path="/imagineu/:id" element={<ImagineU />} />
         <Route path="/banks" element={<Banks />} />
         <Route path="/banks/:id" element={<Banks />} />
+        <Route path="/vote-info" element={<VoteInfo />} />
         <Route element={<DeskOnly />}>
           <Route path="/shifts/volunteers" element={<Volunteers />} />
           <Route path="/people/import" element={<ImportPeople />} />
@@ -315,6 +320,7 @@ export default function App({ mode = 'field' }) {
           <Route path="/website/languages" element={<WebsiteLanguages />} />
           <Route path="/website/languages/:code" element={<WebsiteLanguage />} />
           <Route path="/website/languages/:code/legal" element={<WebsiteLanguageLegal />} />
+          <Route path="/website/guide" element={<WebsiteGuide />} />
           <Route path="/website/settings" element={<WebsiteSettings />} />
           <Route path="/website/news" element={<WebsitePosts />} />
           <Route path="/website/news/:id" element={<WebsitePosts />} />

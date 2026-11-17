@@ -100,6 +100,9 @@ function planFor(key, me) {
     case 'shiftturfs': return key.length === 1 ? { name: 'shiftturfs', tier: 'local', field: true } : null;
     // What to say at the door and on the phone (ext/scripts): it shows with no signal.
     case 'scripts': return key.length === 1 ? { name: 'scripts', tier: 'local', field: true } : null;
+    // The published voter guide (ext/voteguide): no person in it, so it lives
+    // in this browser for every role; "Where to vote" opens with no signal.
+    case 'guide': return key.length === 1 ? { name: 'guide', tier: 'local', field: true } : null;
     // Today's "Follow up" (ext/followups): who to call still shows with no
     // signal (a call needs none; the log goes through the outbox). A desk's
     // can hold a ladder's thank-you for a gift: this tab only.
@@ -289,7 +292,7 @@ export function watchKeptCopies(queryClient) {
 // meta: { side: true } on that useQuery: its time isn't what the screen
 // shows. Only Today and Money draw the brief (offline-copies.test.js checks).
 const SHOWN = new Set(['brief', 'persons', 'person', 'signs', 'shifts', 'shift', 'records',
-  'receipts', 'doors', 'turf', 'turfs', 'fieldReport', 'shiftturfs']);
+  'receipts', 'doors', 'turf', 'turfs', 'fieldReport', 'shiftturfs', 'guide']);
 const shown = (key) => SHOWN.has(key[0]) || (key[0] === 'texting' && (key[1] === 'inbox' || key[1] === 'thread'));
 // Watched by a screen that draws it (not only by side reads).
 const drawn = (q) => q.observers.some((o) => !o.options?.meta?.side);

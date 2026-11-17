@@ -7,6 +7,8 @@
 // numbers: there is no money or email in them.
 import { DEFAULT_TZ } from '../../lib/org.js';
 import { startOfDay } from '../../lib/tzsql.js';
+import { now } from '../../lib/clock.js';
+import { localDay } from '../../lib/tzrule.js';
 
 export const SUPPORT_CODES = ['1', '2'];
 const START_OF_TODAY = startOfDay('$2::text');
@@ -16,7 +18,9 @@ const dateOnly = (d) => (d instanceof Date ? d.toISOString().slice(0, 10) : Stri
 // advance-voting day or election day, in the campaign's day — while auto is
 // on. voting_day: 'advance' | 'election' | null — what kind of day today is.
 // { on, manual, auto, election_day, advance_days, voting_day }
-const campaignDay = (tz) => new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+// The campaign's day by the one clock tests can move (lib/clock.js) and
+// B.C.'s current rule (lib/tzrule.js); a zone Intl doesn't know throws.
+const campaignDay = (tz) => { new Intl.DateTimeFormat('en-CA', { timeZone: tz }); return localDay(now(), tz); };
 export const settingsOf = async (db, ctx) => {
   const ws = ctx.workspaceId;
   const tz = ctx.workspace?.settings?.tz || DEFAULT_TZ;

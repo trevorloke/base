@@ -18,6 +18,7 @@ import { ShareSheet } from './share.js';
 import { RotatingWords } from './words.js';
 import { Menu } from './menu.js';
 import { Openings } from './openings.js';
+import { VoteGuide } from './voteguide-island.js';
 
 export const ISLANDS = {
   form: SiteForm,
@@ -25,6 +26,7 @@ export const ISLANDS = {
   words: RotatingWords,
   menu: Menu,
   openings: Openings,
+  voteguide: VoteGuide,
 };
 
 export function Island({ name, props }) {

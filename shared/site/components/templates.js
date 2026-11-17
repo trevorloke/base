@@ -8,6 +8,7 @@ import { html } from './h.js';
 import { Island } from './islands.js';
 import { GoalBar, Img, Md, Module, MODULE_COMPONENTS, Paras, campaignForm } from './modules.js';
 import { Announcement, Footer, Header, LanguageSwitch, PageHead, PreviewBanner, SkipLink } from './shell.js';
+import { VoteBanner, EmbedView } from './voteguide.js';
 import { arr, dateOnly, obj, str } from './util.js';
 import { pagePath } from './links.js';
 
@@ -92,10 +93,13 @@ export function SiteBody({ rc, kind, page, post, campaign }) {
     : kind === 'campaign' ? html`<${CampaignView} rc=${rc} campaign=${campaign} />`
     : kind === 'notFound' ? html`<${NotFoundView} rc=${rc} />`
     : html`<${PageView} rc=${rc} page=${page} />`;
+  // The voter guide alone, in another website's frame (VG decision 21).
+  if (rc.embed && kind === 'page') return html`<${Fragment}><${SkipLink} rc=${rc} /><${EmbedView} rc=${rc} page=${page} Module=${Module} /><//>`;
   return html`<${Fragment}>
     <${SkipLink} rc=${rc} />
     <${LanguageSwitch} rc=${rc} />
     ${rc.preview ? html`<${PreviewBanner} rc=${rc} />` : null}
+    <${VoteBanner} rc=${rc} />
     <${Announcement} rc=${rc} />
     <${Header} rc=${rc} />
     <main id="main" tabIndex="-1">${view}</main>

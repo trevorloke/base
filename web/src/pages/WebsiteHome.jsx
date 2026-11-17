@@ -12,6 +12,7 @@ import { Link, useOutletContext } from 'react-router-dom';
 import { NoSignal, noSignal } from '../components/NoSignal.jsx';
 import { WebsiteTabs } from '../components/site/Bits.jsx';
 import { useSite, plural } from '../components/site/useSite.js';
+import { GUIDE_STATE, useSiteGuide } from '../components/site/useSiteGuide.js';
 import './shifts.css';
 import '../editor.css';
 import './website.css';
@@ -39,6 +40,7 @@ const LANG_LABELS = { pa: 'ਪੰਜਾਬੀ', 'zh-Hans': '简体', 'zh-Hant': 
 export default function WebsiteHome() {
   const { me } = useOutletContext() || {};
   const q = useSite();
+  const vg = useSiteGuide();
   const d = q.data;
   const home = d?.pages?.find((p) => p.slug === 'home');
   const live = home?.status === 'published';
@@ -105,6 +107,12 @@ export default function WebsiteHome() {
             <span className="ms-home-row__n">{(d.settings?.languages?.on || []).length
               ? <>{d.settings.languages.on.map((c) => <span key={c} lang={c}>{LANG_LABELS[c]} </span>)}on</>
               : 'English only'}</span>
+            <span aria-hidden="true">›</span>
+          </Link>
+
+          <Link className="card ms-home-row" to="/website/guide">
+            <span className="ms-home-row__name">Voter guide</span>
+            <span className="ms-home-row__n">{vg.data ? GUIDE_STATE[vg.data.state] : vg.isError ? 'Unavailable' : 'Loading…'}</span>
             <span aria-hidden="true">›</span>
           </Link>
 
