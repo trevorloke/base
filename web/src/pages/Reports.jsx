@@ -4,7 +4,7 @@
 // numbers, each table downloadable as CSV or sent to Sheets, and the
 // exports: any table as a spreadsheet, or everything as JSON. The numbers
 // are read only once More is opened.
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { apiGet, ApiError, fmtMoney } from '../api.js';
@@ -12,6 +12,7 @@ import { NoSignal, noSignal } from '../components/NoSignal.jsx';
 import { SendToSheet, TakeItOut } from '../components/SendToSheet.jsx';
 import { hasArea } from '../Shell.jsx';
 import { fmt } from '../components/AudienceBits.jsx';
+import { useFieldsList } from '../components/FieldsBits.jsx';
 import './shifts.css'; // the ops-* pieces (the head, the page column, the buttons)
 import './reports.css';
 import './quick.css';
@@ -37,15 +38,39 @@ const CONTACT_COLS = {
 const MONEY = ['gifts', 'members'];
 
 // One table in the exports: its CSV, and a quiet "Google Sheets" beside it when Sheets may be sent.
+// People, for a manager: one tick under it adds the Private fields (Faith)
+// to the download (?private=1) — off every time — and while it's on, the
+// people table can't go to Google Sheets, which never gets them.
 export function ExportItem({ k, label, me, csvClass = 'btn ops-tap', download = false }) {
-  const href = at(`/api/export/${k}.csv`);
+  const manager = me?.role === 'manager' && k === 'people';
+  const list = useFieldsList(manager);
+  const [priv, setPriv] = useState(false);
+  const tickId = useId();
+  const secret = manager ? (list.data?.fields || []).filter((f) => !f.retired && f.sensitive && !f.as_written_of).map((f) => f.name) : [];
+  const withPriv = priv && secret.length > 0;
+  const href = at(`/api/export/${k}.csv${withPriv ? '?private=1' : ''}`);
   if (MONEY.includes(k) && !hasArea(me, 'money')) return null;
   return (
-    <li className="drv-export">
+    <li className={`drv-export${secret.length ? ' drv-export--private' : ''}`}>
       <a className={csvClass} href={href} download={download || undefined}>{label}</a>
-      <SendToSheet source="dataset" of={k} name={label} head={CONTACT_COLS[k] || []} label={<>Google Sheets<span className="drv-sr"> for {label}</span></>} csvHref={href} />
+      <SendToSheet source="dataset" of={k} name={label} head={CONTACT_COLS[k] || []} label={<>Google Sheets<span className="drv-sr"> for {label}</span></>} csvHref={href}
+        offWhy={withPriv ? 'Google Sheets never gets private fields' : null} />
+      {secret.length > 0 && (
+        <label className="rp-private" htmlFor={tickId}>
+          <input id={tickId} type="checkbox" checked={priv} onChange={(e) => setPriv(e.target.checked)} />
+          <span>Include private fields ({secret.join(', ')}) in the download</span>
+        </label>
+      )}
     </li>
   );
+}
+// Staff and treasurers: what their copy of everything leaves out.
+export function BackupLeftOut({ me }) {
+  const desk = me?.role === 'staff' || me?.role === 'treasurer';
+  const list = useFieldsList(desk);
+  const secret = desk ? (list.data?.fields || []).filter((f) => !f.retired && f.sensitive && !f.as_written_of).map((f) => f.name) : [];
+  if (!secret.length) return null;
+  return <p className="muted rp-leftout">Private fields ({secret.join(', ')}) are left out of your copy.</p>;
 }
 
 const cell = (v) => (v instanceof Date || /^\d{4}-\d{2}-\d{2}T/.test(String(v)) ? String(v).slice(0, 10) : typeof v === 'number' && !Number.isInteger(v) ? v.toFixed(2) : String(v ?? ''));
@@ -146,6 +171,7 @@ function Numbers({ me }) {
           {EXPORTS.map(([k, label]) => <ExportItem key={k} k={k} label={label} me={me} />)}
           <li><a className="btn btn-quiet ops-tap" href={at('/api/export')}>Everything (JSON)</a></li>
         </ul>
+        <BackupLeftOut me={me} />
       </section>
     </div>
   );

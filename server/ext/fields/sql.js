@@ -65,6 +65,23 @@ begin
   end loop;
 end $$;
 
+-- A field's settings (actions.js): sensitive is "Private" (never volunteers,
+-- a non-manager's download or backup, a tag, or a list handed out);
+-- display is how a Pick one draws ('buttons' or a scroll-down 'list');
+-- as_written_of marks "<name> as written", the Text field that keeps the
+-- words a list couldn't take (the list's id); converting is the plan while
+-- a Text field is being turned into a list (null otherwise).
+alter table person_fields add column if not exists sensitive boolean not null default false;
+alter table person_fields add column if not exists display text not null default 'buttons';
+alter table person_fields add column if not exists as_written_of uuid;
+alter table person_fields add column if not exists converting jsonb;
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conrelid = 'person_fields'::regclass and conname = 'person_fields_display_check') then
+    alter table person_fields add constraint person_fields_display_check check (display in ('buttons', 'list'));
+  end if;
+end $$;
+
 -- Voter eligibility, Language and Notes (people.js STANDARD_FIELDS) for
 -- campaigns set up before they were standard: added once each, at the end
 -- of the list. fields_seeded remembers, so a campaign that renames or takes
@@ -125,4 +142,13 @@ update person_field_values v set value = (
    and f.choices = '["English", "Punjabi", "Hindi", "Mandarin", "Tagalog", "Cantonese", "Urdu", "Arabic", "Korean", "Spanish", "Gujarati", "Vietnamese"]'::jsonb and jsonb_typeof(v.value) = 'array';
 update person_fields set choices = '["English", "Punjabi", "Hindi", "Urdu", "Mandarin", "Cantonese", "Filipino", "Korean", "Vietnamese", "Arabic", "Farsi", "Gujarati", "Spanish", "French", "Other"]'::jsonb, updated_at = now()
  where name = 'Language' and kind = 'choices' and choices = '["English", "Punjabi", "Hindi", "Mandarin", "Tagalog", "Cantonese", "Urdu", "Arabic", "Korean", "Spanish", "Gujarati", "Vietnamese"]'::jsonb;
+
+-- Faith, and Dwelling type and Campus as pick lists (people.js), for
+-- campaigns set up before them: once each, through the event log, by a job
+-- (index.js fields.lists). A campaign made since has the Faith marker
+-- (workspaceCreated) and never gets one.
+insert into jobs (id, workspace_id, kind, key)
+select gen_random_uuid(), w.id, 'fields.lists', 'fields-lists-1' from workspaces w
+ where not exists (select 1 from fields_seeded x where x.workspace_id = w.id and x.name = 'Faith')
+on conflict (workspace_id, key) where key is not null do nothing;
 `;

@@ -35,7 +35,10 @@ api.get('/lists/:id/mailchimp', async (c) => {
     out.sync = { ...syncOut(row), by: row.by || null, stalled };
   }
   if (out.on) out.first = await firstOf(db, ws);
-  if (out.on && c.req.query('counts')) out.counts = await countsFor(db, ws, list);
+  // A list picked by a Private field (ext/fields) is never sent: its words instead of counts.
+  if (out.on && c.req.query('counts')) {
+    out.counts = await countsFor(db, ws, list).catch((e) => { if (e?.status !== 409) throw e; out.refused = e.message; return null; });
+  }
   return c.json(out);
 });
 

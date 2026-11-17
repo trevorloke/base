@@ -189,7 +189,7 @@ test('the door’s fields go with the old door, and come back with Undo; Home ph
   const gus = await atDoor('Gus Example');
   ok(await mgr.action('field.values.set', { person_id: gus.id, values: [
     { field_id: F['House notes'].id, value: 'Dog in yard' }, { field_id: F['Building notes'].id, value: 'Buzz 12' },
-    { field_id: F['Access type'].id, value: 'Gated' }, { field_id: F['Dwelling type'].id, value: 'bsmt suite' },
+    { field_id: F['Access type'].id, value: 'Gated' }, { field_id: F['Dwelling type'].id, value: 'Suite in a house (basement or upper)' },
     { field_id: F['Home phone'].id, value: '604-555-0109' },
   ] }));
   const r = ok(await mgr.action('person.move', { person_id: gus.id, to: { address: '20 Example Way' } }));
@@ -207,7 +207,7 @@ test('the door’s fields go with the old door, and come back with Undo; Home ph
     `select f.name, v.value from person_field_values v join person_fields f on f.id = v.field_id where v.person_id = $1 order by f.name`, [gus.id],
   )).rows;
   assert.deepEqual(back.map((x) => x.name), ['Access type', 'Building notes', 'Dwelling type', 'Home phone', 'House notes']);
-  assert.equal(back.find((x) => x.name === 'Dwelling type').value, 'bsmt suite');
+  assert.equal(back.find((x) => x.name === 'Dwelling type').value, 'Suite in a house (basement or upper)');
 });
 
 test('a replay of the phone’s id is the same move, never a second', async () => {

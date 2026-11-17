@@ -56,6 +56,12 @@ export const keptPartial = (data) => Boolean(data) && partial.has(data);
 // The data on screen is a copy (the server gave no answer for it).
 export const keptCopy = (data) => Boolean(data) && keptAt.has(data);
 
+// A profile's More details as kept: each Private field with no value, and
+// kept_out so the profile says "Needs signal" in its place.
+const keptOutPrivate = (d) => (Array.isArray(d?.fields) && d.fields.some((f) => f?.sensitive)
+  ? { ...d, fields: d.fields.map((f) => (f?.sensitive ? { ...f, value: null, at: null, by_name: null, kept_out: true } : f)) }
+  : d);
+
 // What a query's copy is called and where it lives, or null (not kept).
 // Shifts keep the names the field already uses (pages/Shifts.jsx), so Today
 // and Shifts read the same copy.
@@ -65,7 +71,8 @@ function planFor(key, me) {
   const money = desk ? 'session' : 'local';
   const q = (name, tier) => ({ name: `q:${me.role}:${name}`, tier });
   // A profile's More details (ext/fields), kept beside the profile; a volunteer's comes already narrowed.
-  if (key[0] === 'person' && key[2] === 'fields' && key.length === 3 && typeof key[1] === 'string') return q(`person:${key[1]}:fields`, money);
+  // Private fields (Faith) are kept without their value: no laptop's browser storage holds anyone's faith.
+  if (key[0] === 'person' && key[2] === 'fields' && key.length === 3 && typeof key[1] === 'string') return { ...q(`person:${key[1]}:fields`, money), shape: keptOutPrivate };
   const [k0, k1, k2] = key;
   // A profile's Knows (ext/relationships; desk only), kept beside the profile.
   if (k0 === 'person' && k2 === 'knows' && key.length === 3 && typeof k1 === 'string') return q(`person:${k1}:knows`, money);
@@ -228,7 +235,7 @@ export async function keptPersister(queryFn, context, query) {
       const tier = tierOf(plan, data);
       // One copy, in one place: the other (an answer before the money came or went) goes.
       if (plan.moneyIn) removeCopy(copyKey(me, plan.name), otherTier(tier));
-      writeCopy(copyKey(me, plan.name), data, Date.now(), {
+      writeCopy(copyKey(me, plan.name), plan.shape ? plan.shape(data) : data, Date.now(), {
         tier, gen, group: plan.field ? null : { scope, name: 'q:', max: DESK_MAX },
       });
     }

@@ -21,7 +21,7 @@ import { z } from 'zod';
 import { httpError } from '../../actions/util.js';
 import { newId } from '../../lib/events.js';
 import { mayReach, person } from '../../lib/reach.js';
-import { loadList, whereFor } from '../lists/audience.js';
+import { handOn, loadList, whereFor } from '../lists/audience.js';
 import { addFromList, bankCounts, stillOn } from './numbers.js';
 import { areasFor } from '../../lib/perms.js';
 import { handCallTime } from '../candidates/hand.js';
@@ -127,8 +127,9 @@ export const actions = {
       let added; let skipped;
       if (list) {
         // The server reads the list itself: everyone on it who can be called, however many.
-        added = await addFromList(tx, ctx, bank, list);
-        const { where, params } = await whereFor(tx, ctx, { list });
+        // Called by volunteers: never a list picked by a Private field.
+        const { where, params } = await whereFor(tx, handOn(ctx), { list });
+        added = await addFromList(tx, handOn(ctx), bank, list);
         skipped = (await tx.query(`select count(*)::int as n from persons p where ${where}`, params)).rows[0].n - added;
       } else ({ added, skipped } = await addNumbers(tx, ws, id, input.person_ids || []));
       // Call time: every number is the candidate's (nobody's until they sign in).
@@ -222,7 +223,7 @@ export const actions = {
       const b = await bankOf(tx, ctx.workspaceId, input.id);
       const list = b.list_id ? await loadList(tx, ctx.workspaceId, b.list_id) : null;
       if (!list) throw httpError(409, b.list_id ? 'the list this phone bank was made from is gone' : 'this phone bank wasn’t made from a list');
-      const added = await addFromList(tx, ctx, b, list);
+      const added = await addFromList(tx, handOn(ctx), b, list);
       await toCandidate(tx, ctx, b);
       if (added) emit('call_bank', b.id, 'update', { added, list_id: list.id });
       return { added, ...(await counts(tx, ctx, b)) };

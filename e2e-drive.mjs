@@ -517,6 +517,21 @@ try {
   await people.getByRole('button', { name: 'Try again' }).first().click();
   await people.getByText('In Google Sheets').waitFor({ timeout: 30000 }).catch(() => {});
   check('Try again → done, in the same Sheet', /In Google Sheets/.test(await text(m, '.drv-export:has-text("People") .drv-panel')));
+  // The private tick (FLD): while it's on, People's Google Sheets is off.
+  {
+    await go(m, '/data');
+    const li = m.locator('li.drv-export--private');
+    const sheetsBtn = li.getByRole('button', { name: /^Google Sheets/ });
+    const tickBox = li.locator('label.rp-private input');
+    const before = !(await sheetsBtn.isDisabled()) && !/never gets private fields/.test(await li.innerText());
+    await tickBox.check();
+    const off = (await sheetsBtn.isDisabled()) && /Google Sheets never gets private fields/.test(await li.innerText())
+      && (await sheetsBtn.getAttribute('aria-describedby')) != null;
+    await shot(m, '17b-private-tick-sheets-off-desktop');
+    await tickBox.uncheck();
+    const back = !(await sheetsBtn.isDisabled()) && !/never gets private fields/.test(await li.innerText());
+    check('the private tick: People’s Google Sheets off with “Google Sheets never gets private fields”, back on when unticked', before && off && back, JSON.stringify({ before, off, back }));
+  }
 
   // ── Staff: Sheets for "Anyone at the desk"; the campaign folder first ──
   await go(m, '/settings/services');

@@ -550,6 +550,20 @@ on — so test it on staging, on a phone, before the week it matters.
 No test of ours has drawn the real street map: the browser tests run where
 the tile hosts can't be reached, on stand-in tiles. Look at it on staging.
 
+### Faith, Dwelling type and Campus
+
+Every campaign gets **Faith** (Private) once, and an empty Dwelling type or
+Campus becomes a pick list by itself, at the first boot (a background job).
+A Dwelling type or Campus with words on file stays Text until a manager
+turns it into a list: People → More → Profile fields → *Turn into a list*,
+go through *Needs you* (a bare "Apartment" or "Kwantlen" can't be
+guessed), then **Turn into a list** — do it when nobody is importing;
+nothing is lost (what doesn't fit stays in "… as written"). If the
+campaign keeps Faith, its privacy notice should say so, why, and how to
+have it removed, and that the change history keeps old values. Only a
+manager's backup and download carry Faith; staff and treasurers get
+theirs without it.
+
 ## 6 · A new client
 
 Each client is its own pair of services and its own databases; nothing is

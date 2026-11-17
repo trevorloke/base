@@ -19,9 +19,22 @@
 export { sql } from './sql.js';
 export { actions } from './actions.js';
 export { api } from './api.js';
-import { personsWhere, importRows, sampleLoaded, sampleCleared, workspaceCreated } from './people.js';
+import { personsWhere, importRows, sampleLoaded, sampleCleared, workspaceCreated, upgradeLists } from './people.js';
+import { stepJob } from './convert.js';
+import { runAction } from '../../lib/events.js';
 
 export const hooks = { personsWhere, importRows, sampleLoaded, sampleCleared, workspaceCreated };
+
+// fields.lists: a campaign from before Faith and the Dwelling type and
+// Campus lists gets them once (sql.js queues it; people.js upgradeLists).
+// field.list.step: Turn into a list, a chunk at a time (convert.js).
+export const jobs = {
+  'fields.lists': async (db, job) => {
+    await runAction(db, { workspaceId: job.workspace_id, actorId: null, action: 'field.standard.lists' },
+      (tx, emit) => upgradeLists(tx, { workspaceId: job.workspace_id }, emit));
+  },
+  'field.list.step': stepJob,
+};
 
 // In the full export: every field (taken off too) and every value.
 export const exportTables = ['person_fields', 'person_field_values'];
@@ -29,4 +42,4 @@ export const exportTables = ['person_fields', 'person_field_values'];
 // Volunteers read a profile's fields through /persons/:id/fields only (the
 // ones marked for them), and one such field's name through /fields/:id. The
 // list of every field, with counts and the most common values, is the desk's.
-export const deskOnlyReads = ['/fields'];
+export const deskOnlyReads = ['/fields', '/fields/:id/words'];

@@ -2,6 +2,7 @@
 // wire-protocol server (PGlite's socket server), proving the DATABASE_URL
 // adapter end to end without a system Postgres install.
 //   npm run test:pg
+//   npm run test:pg -- --twice   (each file twice against one database)
 import { spawn } from 'node:child_process';
 import { readdirSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
@@ -11,8 +12,14 @@ import { PGLiteSocketServer } from '@electric-sql/pglite-socket';
 // runner (helpers.freshDb) — files may assume they start from nothing (the
 // first-run setup) or that their campaign is the only one (the website).
 // Optional arguments name the test files to run (default: all of them).
-const files = process.argv.length > 2
-  ? process.argv.slice(2)
+// --twice runs each file a second time against the same database, so the
+// second run finds the first run's campaigns, jobs and markers (an upgrade
+// job must leave them alone).
+const args = process.argv.slice(2);
+const twice = args.includes('--twice');
+const named = args.filter((a) => a !== '--twice');
+const files = named.length
+  ? named
   : readdirSync('server/test').filter((f) => f.endsWith('.test.js')).sort().map((f) => `server/test/${f}`);
 // PGlite mishandles a chunk whose next message starts exactly at byte 16,384
 // (it answers the messages before it and drops the rest, so the client
@@ -54,14 +61,21 @@ for (const file of files) {
       if (e.code !== 'EADDRINUSE' || tries >= 20) throw e;
     }
   }
-  const child = spawn(process.execPath, ['--test', file], {
-    stdio: 'inherit',
-    env: { ...process.env, DATABASE_URL: `postgres://postgres:postgres@127.0.0.1:${port}/postgres`, PG_POOL_MAX: '1' },
-  });
-  const code = await new Promise((r) => child.on('exit', r));
+  let code = 0;
+  let run = 0;
+  for (; run < (twice ? 2 : 1) && code === 0; run += 1) {
+    const child = spawn(process.execPath, ['--test', file], {
+      stdio: 'inherit',
+      env: { ...process.env, DATABASE_URL: `postgres://postgres:postgres@127.0.0.1:${port}/postgres`, PG_POOL_MAX: '1' },
+    });
+    code = await new Promise((r) => child.on('exit', r));
+  }
   await server.stop();
   await db.close();
-  if (code !== 0) { failed += 1; failedFiles.push(file); console.error(`✗ ${file} failed over Postgres`); }
+  if (code !== 0) {
+    const which = twice ? (run === 2 ? ' (second run)' : ' (first run)') : '';
+    failed += 1; failedFiles.push(file + which); console.error(`✗ ${file} failed over Postgres${which}`);
+  }
 }
 console.log(failed ? `\n${failed} of ${files.length} test files failed over Postgres: ${failedFiles.join(', ')}` : `\nAll ${files.length} test files passed over Postgres`);
 process.exit(failed ? 1 : 0);

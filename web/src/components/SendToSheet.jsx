@@ -96,7 +96,7 @@ export function Progress({ e, online }) {
 // question, with no Send); onUnblock, with unblockLabel: the one change that
 // lets it ("A–Z by last name" for a report on Largest first).
 export function SendToSheet({ source, of, name, count = null, head = [], noun = 'people', label = 'Send to Google Sheets', csvHref = null,
-  blocked = null, onUnblock = null, unblockLabel = null }) {
+  blocked = null, onUnblock = null, unblockLabel = null, offWhy = null }) {
   const d = useDrive();
   const online = useOnline();
   const qc = useQueryClient();
@@ -136,10 +136,13 @@ export function SendToSheet({ source, of, name, count = null, head = [], noun = 
   return (
     <>
       {!showing || !going(e) ? (
-        <button type="button" className="btn btn-quiet ops-tap" aria-expanded={open} disabled={!online && !open}
+        <button type="button" className="btn btn-quiet ops-tap" aria-expanded={open && !offWhy} disabled={(!online && !open) || Boolean(offWhy)}
+          aria-describedby={offWhy ? `${String(of)}-sheets-off` : undefined}
           onClick={() => (open ? close() : (setId(null), setOpen(true)))}>{label}</button>
       ) : null}
-      {(open || showing || (id && !e)) && (
+      {/* offWhy: why it's off now (People with private fields ticked, pages/Reports.jsx). */}
+      {offWhy && <span className="muted drv-off" id={`${String(of)}-sheets-off`}>{offWhy}</span>}
+      {((open && !offWhy) || showing || (id && !e)) && (
         <div className="drv-panel" role="group" aria-label="Google Sheets">
           {open && !connected && <DriveConnect />}
           {open && connected && count === 0 && <p role="status">Nothing to send yet</p>}

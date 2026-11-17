@@ -390,6 +390,37 @@ one tap away under **More**.
   *Put back* is off (*12 at most on the list — take one off first*). Filter
   People → *Opposed*, add a candidate, rate someone for them, reload: the
   same Opposed link (and the Call list carried from it) still finds them.
+- **Pick lists and Private** (`server/test/fields-lists.test.js`): Faith,
+  Dwelling type and Campus on a new campaign; loose choice words and their
+  SQL twin; "Christian – *"; never put back; Private through every path
+  (volunteers, the CSV, the backup and event log, tags, sends, CallHub,
+  phone banks, passes, copies); the upgrade job; Turn into a list (stop,
+  start again, a value another write holds — that one needs a Postgres with
+  two connections: `DATABASE_URL=… PG_POOL_MAX=4`); the membership form's
+  Campus; a move's Undo into "as written". `npm run test:pg -- --twice
+  [files…]` runs each file a second time against the same database, so an
+  upgrade job that touches an existing campaign shows up; many files set
+  up the first campaign or a fixed email and fail a second run for that
+  reason alone, so compare with the commit before. **Speed**:
+  `DATABASE_URL=… PG_POOL_MAX=4 node scripts/bench-fieldlist.mjs` against a
+  Postgres. On a local Postgres 16 (17 November 2026, 300,000 values):
+  GET …/words 0.4 s; the whole conversion 0.5 min, the slowest chunk
+  0.39 s; a profile save on another field mid-run 0.11 s; 300,000
+  different words refused in 1.2 s; GET /fields's grouping about 4 % slower
+  than before (the middle of five tries each; the machine was shared, so a
+  single run swings by more than that).
+- **Pick lists in the browser** (`SHOTS=… [PORT=5450] node
+  e2e-picklists.mjs`; it starts its own in-memory server, with the
+  conversion slowed on PORT+1 so Stop can be pressed): Faith's buttons and
+  the Christian row, Dwelling type's select, Campus, the kept copy's "Needs
+  signal", the People filter's "Christian (any)", Profile fields' Private
+  and Show as, Turn into a list end to end (the bar, Stop and its confirm,
+  again after a Stop, a reload of the words keeping what's typed), the
+  import waiting while a field converts, the import's word mapping (and no
+  room for "as written"), the private download tick, a list picked by
+  Faith (a phone bank and a pass refused in place), the membership form's
+  Campus — at 1440 and 390. The tick turning People's Google Sheets off is
+  in `e2e-drive.mjs`, where Sheets is set up.
 - **People → More → Profile fields** → **Add a field**: a name, a type (Text ·
   Yes/No · Pick one · Number · Date), its choices, and *Volunteers can see
   this* (off by default). Tap a field to rename it, add a choice or *Move

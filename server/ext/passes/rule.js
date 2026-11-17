@@ -10,7 +10,7 @@
 //                    pass that walks no list.
 //   doorState / inUniverse / inPass  from shared/passes.js (one rule for the
 //                    server and the phone).
-import { asDesk, loadList, whereFor } from '../lists/audience.js';
+import { asDesk, loadList, readFor, whereFor } from '../lists/audience.js';
 
 export const openPass = async (q, ws) => (await q.query(
   'select id, name, kind, who, list_id, tries, started_at from canvass_passes where workspace_id = $1 and ended_at is null',
@@ -22,7 +22,7 @@ export const openPass = async (q, ws) => (await q.query(
 export const listedWhere = async (db, ctx, pass) => {
   if (!pass?.list_id) return null;
   const list = await loadList(db, ctx.workspaceId, pass.list_id);
-  return list ? whereFor(db, asDesk(ctx), { list }) : { where: 'false', params: [] };
+  return list ? whereFor(db, readFor(asDesk(ctx)), { list }) : { where: 'false', params: [] };
 };
 
 export { doorState, inUniverse, inPass } from '@starbase/shared/passes';

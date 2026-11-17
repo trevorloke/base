@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { matchRating, offeredCodes, ratingByCode } from '@starbase/shared/scale';
 import { OUTCOMES, VOLUNTEER_ROLES, VOLUNTEER_ROLE_CODES } from '@starbase/shared/canvass';
 import { dateFrom, parseValue, valueError } from '../ext/fields/kinds.js';
+import { makeAsWritten } from '../ext/fields/convert.js';
 import { timeZone } from '../lib/org.js';
 import { fromLocal } from '../lib/tzsql.js';
 import { loadScale } from '../ext/scale/rules.js';
@@ -134,7 +135,12 @@ const importInput = z.object({
   // A row found on someone with another voter number: keep theirs, take the
   // file's, or (found by name) a new person. See the rules above.
   otherNumber: z.enum(['keep', 'take', 'new']).default('keep'),
+  // Pick one lists whose words the importer kept as written (ext/fields): a
+  // row's cell under fields["as_written:<list id>"] goes to "<list> as
+  // written", made here first if there isn't one.
+  as_written: z.array(z.uuid()).max(40).default([]),
 });
+export const AS_WRITTEN_KEY = 'as_written:';
 
 // A 1/0 column: 1, yes, y, true, x (any case) say yes.
 // 1 · yes · y · true · t · x (a Postgres export writes t/f); anything else is no.
@@ -300,7 +306,62 @@ app.post('/import', async (c) => {
   const ctx = c.get('ctx');
   const parsed = importInput.safeParse(await c.req.json().catch(() => ({})));
   if (!parsed.success) return c.json({ error: parsed.error.issues[0].message }, 400);
-  const { rows, tag, dryRun, past, otherNumber } = parsed.data;
+  const { tag, dryRun, past, otherNumber } = parsed.data;
+  let { rows } = parsed.data;
+
+  // "Keep as written" (the import's mapping step): each list named gets its
+  // "<name> as written" field before the columns are matched, and the rows'
+  // as_written:<id> cells are put under that field. A dry run makes nothing:
+  // it checks those cells against the field if there is one, else skips them.
+  if (parsed.data.as_written.length) {
+    const db = c.get('db');
+    const lists = (await db.query(
+      `select * from person_fields where workspace_id = $1 and id = any($2::uuid[]) and retired_at is null and kind = 'choice'`,
+      [ctx.workspaceId, parsed.data.as_written],
+    )).rows;
+    // A list taken off (or no longer Pick one) since the file was mapped:
+    // its kept words would have nowhere to go, so the file is refused, by
+    // name, rather than dropping them without a word.
+    const gone = [...new Set(parsed.data.as_written)].filter((id) => !lists.some((f) => f.id === id));
+    if (gone.length) {
+      const named = (await db.query('select name from person_fields where workspace_id = $1 and id = $2', [ctx.workspaceId, gone[0]])).rows[0];
+      return c.json({ error: `${named ? named.name : 'A list'} was taken off — check the file again` }, 409);
+    }
+    const to = new Map();
+    try {
+      if (dryRun) {
+        for (const f of lists) {
+          const had = (await db.query(
+            `select id from person_fields where workspace_id = $1 and as_written_of = $2 and kind = 'text' and retired_at is null limit 1`,
+            [ctx.workspaceId, f.id],
+          )).rows[0];
+          if (had) to.set(f.id, had.id);
+        }
+      } else if (lists.length) {
+        // Its own transaction, committed first: the fields hook below
+        // (importRows) reads the campaign's fields before any row is
+        // written and must find this one. If the import stops part way,
+        // the field stays, empty, and the next Keep as written reuses it.
+        await runAction(db, { workspaceId: ctx.workspaceId, actorId: ctx.user.id, action: 'import.as_written' }, async (tx, emit) => {
+          for (const f of lists) to.set(f.id, (await makeAsWritten(tx, ctx, f, emit, { by_import: true })).id);
+        });
+      }
+    } catch (e) {
+      if (e.status) return c.json({ error: e.message }, e.status);
+      throw e;
+    }
+    rows = rows.map((raw) => {
+      const given = raw?.fields;
+      if (!given || typeof given !== 'object' || Array.isArray(given)) return raw;
+      const fields = {};
+      for (const [k, v] of Object.entries(given)) {
+        if (!k.startsWith(AS_WRITTEN_KEY)) { fields[k] = v; continue; }
+        const id = to.get(k.slice(AS_WRITTEN_KEY.length));
+        if (id) fields[id] = v;
+      }
+      return { ...raw, fields };
+    });
+  }
 
   // Features' own columns (ext/fields: a person's profile fields), checked
   // with the row — a cell that doesn't fit refuses it — and filled after it.
@@ -318,9 +379,12 @@ app.post('/import', async (c) => {
   // A past election's profile fields to tag: read here, by id, so their
   // cells never reach the fields as today's values.
   const tagFields = new Map(past?.field_tags?.length ? (await c.get('db').query(
-    'select id, name, kind, choices from person_fields where workspace_id = $1 and id = any($2::uuid[])',
+    'select id, name, kind, choices, sensitive from person_fields where workspace_id = $1 and id = any($2::uuid[])',
     [ctx.workspaceId, past.field_tags],
   )).rows.map((f) => [f.id, f]) : []);
+  // Volunteers see tags: a Private field (ext/fields) never becomes one.
+  const secret = [...tagFields.values()].find((f) => f.sensitive);
+  if (secret) return c.json({ error: `${secret.name} is private — it can’t become a tag` }, 400);
   rows.forEach((raw, i) => {
     let given = raw;
     const fieldTags = [];

@@ -12,6 +12,7 @@ import { Link, useOutletContext } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { action, apiGet } from '../api.js';
 import { useFieldsList } from '../components/FieldsBits.jsx';
+import { CAMPUSES } from '@starbase/shared/fieldlists';
 import { useOnline } from '../components/NoSignal.jsx';
 import './shifts.css'; // the ops-* pieces (the page column, the back link)
 import './membership.css';
@@ -36,6 +37,7 @@ const BLANK = {
 const Check = ({ on, onChange, children, disabled }) => (
   <label className={`mf-check${on ? ' is-on' : ''}`}><input type="checkbox" checked={on} disabled={disabled} onChange={(e) => onChange(e.target.checked)} /> {children}</label>
 );
+const OTHER_CAMPUS = '\u0001another';
 const Radio = ({ name, value, on, onPick, children }) => (
   <label className={`mf-check${on ? ' is-on' : ''}`}><input type="radio" name={name} checked={on} onChange={() => onPick(value)} /> {children}</label>
 );
@@ -57,6 +59,9 @@ export default function MembershipForm() {
   const choicesOf = (name, fallback) => (fields.data?.fields || []).find((x) => x.name === name && !x.retired)?.choices?.filter((c) => c !== 'Other') || fallback;
   const langs = choicesOf('Language', FORM_LANGS);
   const interests = choicesOf('Interests', FORM_INTERESTS);
+  // Campus: the Campus field's choices (school and campus together), then "Another campus".
+  const campusField = (fields.data?.fields || []).find((x) => x.name === 'Campus' && !x.retired);
+  const campuses = campusField?.kind === 'choice' ? campusField.choices : CAMPUSES;
   const form = useQuery({ queryKey: ['membership', 'form', f.signedOn], queryFn: () => apiGet(`/membership/form?date=${f.signedOn || today()}`) });
   const clubs = form.data?.clubs;
 
@@ -97,7 +102,8 @@ export default function MembershipForm() {
         birth_date: f.birth || undefined, email: f.email.trim() || undefined, phone: f.phone.trim() || undefined,
         address: f.address.trim() || undefined, city: f.city.trim() || undefined, postal: f.postal.trim() || undefined,
         citizenship: f.citizenship || undefined, union_member: f.union, union_local: f.local.trim() || undefined,
-        campus: f.campus === 'Other' ? (f.campusOther.trim() || undefined) : (f.campus || undefined),
+        // "Another campus": its words go to the person's Notes (the server says so).
+        campus: f.campus === OTHER_CAMPUS ? (f.campusOther.trim() || undefined) : (f.campus || undefined),
         volunteer: f.volunteer, candidate: f.candidate, sign: f.sign || undefined,
         languages: f.languages, other_language: f.otherLang.trim() || undefined, interests: f.interests,
         term: f.term ? Number(f.term) : undefined,
@@ -189,10 +195,11 @@ export default function MembershipForm() {
 
         <fieldset className="card mf-sec">
           <legend>Campus · Get involved</legend>
-          <div className="mf-line" role="radiogroup" aria-label="Campus">
+          <div className="mf-line mf-campus" role="radiogroup" aria-label="Campus">
             <span className="mf-label">Campus</span>
-            {['SFU', 'UBC', 'Kwantlen', 'Other'].map((c) => <Radio key={c} name="campus" value={c} on={f.campus === c} onPick={set('campus')}>{c}</Radio>)}
-            {f.campus === 'Other' && <input className="input mf-inline" aria-label="Other campus" value={f.campusOther} onChange={set('campusOther')} maxLength={120} />}
+            {campuses.map((c) => <Radio key={c} name="campus" value={c} on={f.campus === c} onPick={set('campus')}>{c}</Radio>)}
+            <Radio name="campus" value={OTHER_CAMPUS} on={f.campus === OTHER_CAMPUS} onPick={set('campus')}>Another campus</Radio>
+            {f.campus === OTHER_CAMPUS && <input className="input mf-inline" aria-label="Another campus" value={f.campusOther} onChange={set('campusOther')} maxLength={120} />}
             {f.campus && <button type="button" className="btn-link" onClick={() => setF((x) => ({ ...x, campus: '', campusOther: '' }))}>Clear</button>}
           </div>
           <div className="mf-line">

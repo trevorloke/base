@@ -15,6 +15,8 @@
 // is YYYY-MM-DD and must be a real day. Empty (null, "", spaces) means
 // "not filled in" — saving it clears the value.
 
+import { choiceKey, MANY_SPLIT } from '@starbase/shared/fieldlists';
+
 export const KINDS = ['text', 'note', 'yesno', 'choice', 'choices', 'number', 'date'];
 export const KIND_WORD = { text: 'Text', note: 'Long text', yesno: 'Yes/No', choice: 'Pick one', choices: 'Pick several', number: 'Number', date: 'Date' };
 // The kinds with a list of choices: Pick one (one of them) and Pick several
@@ -24,7 +26,7 @@ export const NOTE_MAX = 4000;
 export const NAME_MAX = 60;
 export const TEXT_MAX = 500;
 export const CHOICE_MAX = 80;
-export const CHOICES_MAX = 30;
+export const CHOICES_MAX = 40;
 export const FIELDS_MAX = 40;
 const NUMBER_MAX = 1e12;
 
@@ -33,6 +35,18 @@ export const choicesOf = (f) => { const c = parseJ(f?.choices, []); return Array
 // Names compare trimmed, case-insensitively, with runs of spaces as one.
 export const nameKey = (s) => String(s ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
 export const cleanName = (s) => String(s ?? '').trim().replace(/\s+/g, ' ');
+// Choices compare a little more loosely (shared/fieldlists.js): curly
+// apostrophes as ', and " - " as " – " — so "christian - catholic" from a
+// CSV cell finds "Christian – Catholic". MANY_SPLIT: what Pick several
+// reads a cell apart on.
+export { choiceKey, MANY_SPLIT } from '@starbase/shared/fieldlists';
+// choiceKey in SQL, for grouping stored words in the database (Turn into a
+// list, GET /fields): the same steps, every kind of space as JavaScript's
+// trim and \s know it (Postgres's own \s may not know a non-breaking one).
+const SP = '[\\s\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff]';
+// One regular expression a value (a city's voter file is 300,000 of them):
+// every run of spaces → one, then btrim, then the two dashes as plain replaces.
+export const CHOICE_KEY_SQL = (expr) => `lower(replace(replace(btrim(regexp_replace(translate(${expr}, '’‘', ''''''), '${SP}+', ' ', 'g')), ' - ', ' – '), ' — ', ' – '))`;
 
 // Yes and no as spreadsheets and databases write them: yes · y · true ·
 // t · 1 · x · ✓, and no · n · false · f · 0 (a Postgres export writes t/f).
@@ -81,13 +95,13 @@ export const parseValue = (field, raw) => {
   // Pick several: a list, or one cell with them apart ("Punjabi; Hindi").
   if (field.kind === 'choices') {
     const choices = choicesOf(field);
-    const given = Array.isArray(raw) ? raw : typeof raw === 'object' ? null : String(raw).split(/[;,|/\n]/);
+    const given = Array.isArray(raw) ? raw : typeof raw === 'object' ? null : String(raw).split(MANY_SPLIT);
     if (!given) return { error: 'isn’t a value' };
     const words = given.map((x) => String(x ?? '').trim()).filter(Boolean);
     if (!words.length) return { empty: true };
     const picked = new Set();
     for (const w of words) {
-      const hit = choices.find((c) => nameKey(c) === nameKey(w));
+      const hit = choices.find((c) => choiceKey(c) === choiceKey(w));
       if (!hit) return { error: `${quote(w)} isn’t one of the choices (${listChoices(choices)})` };
       picked.add(hit);
     }
@@ -115,7 +129,7 @@ export const parseValue = (field, raw) => {
     }
     case 'choice': {
       const choices = choicesOf(field);
-      const hit = choices.find((c) => nameKey(c) === nameKey(s));
+      const hit = choices.find((c) => choiceKey(c) === choiceKey(s));
       return hit ? { value: hit } : { error: `${quote(s)} isn’t one of the choices (${listChoices(choices)})` };
     }
     case 'number': {
