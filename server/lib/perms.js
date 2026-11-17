@@ -26,6 +26,9 @@ export const AREAS = [
   { key: 'admin', label: 'Admin', what: 'members, teams, permissions, the rating scale' },
   { key: 'learn', label: 'ImagineU', what: 'training: the lessons, their files, who has done what' },
   { key: 'site', label: 'Website', what: 'the public website: its pages, news, petitions and look' },
+  // The website in other languages (TR): read the Languages screen, suggest
+  // and check sentences, keep names. Whoever has Website has it too.
+  { key: 'site_words', label: 'Website translations', what: 'checking and correcting the website in ਪੰਜਾਬੀ and 中文' },
 ];
 export const AREA_KEYS = AREAS.map((a) => a.key);
 // What each role has with nothing granted or denied — the app's tabs.
@@ -112,6 +115,7 @@ const PATH_AREA = [
   [/^\/api\/(places|schedule)(\/|$)/, 'shifts'],
   [/^\/api\/connections(\/|$)/, 'admin'],
   [/^\/api\/intake(\/|$)/, 'admin'],
+  [/^\/api\/site\/languages(\/|$)/, 'site_words'],
   [/^\/api\/site(\/|$)/, 'site'],
   [/^\/api\/media(\/|$)/, 'media'],
 ];
@@ -141,13 +145,19 @@ export const decide = (perms, area) => {
 // An action that names its area (action.area, e.g. the Website's) is that
 // area's, manager-only or not: granting the area lets someone run it.
 const managerOnly = (action) => !action.area && action.roles.length === 1 && action.roles[0] === 'manager';
+// Website translations comes with the Website: the area's own grant or deny
+// first, then the Website's.
+export const decideArea = (perms, area) => {
+  const d = decide(perms, area);
+  return d === null && area === 'site_words' ? decide(perms, 'site') : d;
+};
 export const mayRun = (ctx, name, action) => {
-  const d = decide(ctx.perms, action.area || (managerOnly(action) ? 'admin' : areaOfAction(name)));
+  const d = decideArea(ctx.perms, action.area || (managerOnly(action) ? 'admin' : areaOfAction(name)));
   if (d === false) return false;
   if (action.roles.includes(ctx.role)) return true;
   return d === true;
 };
 export const areasFor = (ctx) => AREA_KEYS.filter((k) => {
-  const d = decide(ctx.perms, k);
+  const d = decideArea(ctx.perms, k);
   return d === null ? (BASE[ctx.role] || []).includes(k) : d;
 });
