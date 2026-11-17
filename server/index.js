@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { frameHosts } from './lib/demo.js';
+import { seedSample } from './lib/samplecampaign.js';
 import authRoutes from './routes/auth.js';
 import apiRoutes from './routes/api.js';
 import publicRoutes from './routes/public.js';
@@ -100,6 +101,8 @@ if (isMain) {
   const server = serve({ fetch: mountAt(app, base), port }, () => {
     console.log(`starbase on :${port}${base ? ` at ${base}` : ''}`);
   });
+  // Staging's sample campaign, made once on an empty database (lib/samplecampaign.js).
+  seedSample(app).catch((e) => console.error('sample:', e));
   const tz = staleTimeZoneData();
   if (tz) console.warn(`starbase: ${tz}`);
   // Behind the base.win door without its key, everyone who comes through

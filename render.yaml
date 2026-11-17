@@ -85,8 +85,17 @@ services:
       # as the account named, with no password. Off until the email is set.
       - key: STARBASE_FRAME_HOSTS
         value: "https://base.win,https://www.base.win"
-      - key: STARBASE_DEMO_EMAIL     # an account in the campaign that is not a manager; unset: no demo
+      - key: STARBASE_DEMO_EMAIL     # the demo account, the sample campaign's manager (an address on a domain you hold)
+        value: demo@base.win
+      # The sample campaign (server/lib/samplecampaign.js; staging only): made once
+      # when the database holds no campaign. STARBASE_SAMPLE_RESET, set by
+      # hand to a new word, drops everything in staging's database first.
+      - key: STARBASE_SAMPLE
+        value: vancouver
+      - key: STARBASE_SAMPLE_RESET
         sync: false
+      - key: STARBASE_CANDIDATES     # made-up opponents for the sample's rating scale
+        value: "4A:Hartwell:Opposed — Hartwell supporter;4B:Quist:Opposed — Quist supporter;4C:Delmar:Opposed — Delmar supporter"
       - key: RESEND_API_KEY          # email: newsletters, invites, shift alerts (staging: a test key, or unset)
         sync: false
       - key: MAIL_FROM

@@ -5,8 +5,10 @@
 // its settings say.
 //   STARBASE_FRAME_HOSTS   the sites that may frame the app, comma-separated
 //                          origins (https://base.win,https://www.base.win)
-//   STARBASE_DEMO_EMAIL    the account every demo visitor is signed in as:
-//                          one already in the campaign, and not a manager
+//   STARBASE_DEMO_EMAIL    the account every demo visitor is signed in as,
+//                          one already in the campaign. A visitor can do
+//                          whatever it can, so the campaign must be the
+//                          sample one (lib/samplecampaign.js)
 import { envName } from './org.js';
 
 const allowed = () => envName() !== 'production';
