@@ -270,7 +270,7 @@ function FieldControl({ f, value, onChange, disabled, stored, listable }) {
       <input id={id} className="input sv-q__input" autoComplete="off" disabled={disabled} {...kind}
         value={value ?? ''} onChange={(e) => onChange(e.target.value)} />
       {listable && (
-        <p className="muted fd-q__hint fd-listable">This can be a pick list — <Link to={`/fields?list=${f.id}`}>Turn it into a list</Link></p>
+        <p className="muted fd-q__hint fd-listable">This can be a pick list — <Link to={`/people/fields?list=${f.id}`}>Turn it into a list</Link></p>
       )}
     </div>
   );

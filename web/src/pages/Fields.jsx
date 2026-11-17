@@ -360,7 +360,7 @@ export default function Fields() {
       {error && <p className="error" role="alert">{error}</p>}
       {typed.length > 0 && !adding && (
         <div className="fd-notice" role="note">
-          <p>{typed.map((f) => f.name).join(' and ')} can be pick lists now.</p>
+          <p>{typed.map((f) => f.name).join(' and ')} {typed.length > 1 ? 'can be pick lists now.' : 'can be a pick list now.'}</p>
           {typed.map((f) => (
             <button key={f.id} type="button" className="btn btn-quiet ops-tap" onClick={() => toList(f.id)}>
               {f.converting ? `${f.name} is being turned into a list` : `Turn ${f.name} into a list`}
