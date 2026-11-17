@@ -65,6 +65,7 @@ test('no language on: no switch, nothing queued, /pa goes to the English page', 
   const home = await hit('/site/about');
   assert.equal(home.status, 200);
   assert.ok(!home.text.includes('lang-switch'));
+  assert.ok(!home.text.includes('@view-transition'), 'an English-only website keeps its navigations as they were');
   assert.match(home.text, /<html lang="en"/);
   const pa = await hit('/site/pa/about');
   assert.equal(pa.status, 302);
@@ -141,6 +142,7 @@ test('ready but no Authorized by approved: still not offered; approved: the swit
   await approve('zh-Hans');
   await approve('zh-Hant');
   const en = await hit('/site/about');
+  assert.match(en.text, /@view-transition/);
   assert.match(en.text, /class="lang-switch"/);
   assert.match(en.text, /<a href="\/site\/about\?lang=en" hrefLang="en" lang="en" aria-current="true">English<\/a>/i);
   assert.match(en.text, /href="\/site\/pa\/about"[^>]*>ਪੰਜਾਬੀ</);

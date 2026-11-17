@@ -2883,9 +2883,10 @@ html[data-heading="barlow-condensed"]:lang(zh) .display { line-height: 1.3; }
   color: var(--ink);
 }
 .lang-note a { color: var(--link); }
-@view-transition { navigation: auto; }
+/* The page-to-page slide (@view-transition) is opted into by the page's own
+   <style>, only where the switch is drawn (render/index.js): an English-only
+   website's navigations stay exactly as they were. */
 @media (prefers-reduced-motion: reduce) {
-  @view-transition { navigation: none; }
   .lang-switch a[aria-current="true"] { view-transition-name: none; }
 }
 @media (max-width: 640px) {

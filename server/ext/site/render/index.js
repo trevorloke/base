@@ -27,6 +27,11 @@ import { moduleSegments } from '../../../../shared/site/segments.js';
 import { LANG_BY_CODE } from '../../../../shared/site/languages.js';
 import { assetUrl, islandsBuilt } from './assets.js';
 
+// The switch's slide from one language to the next (TR): cross-document
+// view transitions, only on a website that draws the switch, and never for
+// someone who asked for less motion.
+const VIEW_TRANSITION = '@media (prefers-reduced-motion: no-preference){@view-transition{navigation:auto}}';
+
 export { readSiteAsset, siteAssetFile, islandsBuilt, assetUrl } from './assets.js';
 
 const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
@@ -110,7 +115,7 @@ export function renderSite({ kind = 'page', site, page: rawPage, post, campaign,
     + (rc.site.icon ? `<link rel="icon" href="${esc(rc.img(rc.site.icon.icon))}" type="image/png"><link rel="apple-touch-icon" href="${esc(rc.img(rc.site.icon.touch))}">` : '')
     + head.fonts.map((f) => `<link rel="preload" href="${esc(f)}" as="font" type="font/woff2" crossorigin>`).join('')
     + `<link rel="stylesheet" href="${esc(assetUrl(rc.loc.assets, 'site.css'))}">`
-    + `<style>${themeCss(t)}</style>`
+    + `<style>${themeCss(t)}${rc.langs.offered.length ? VIEW_TRANSITION : ''}</style>`
     + hints
     + `<script type="application/ld+json">${jsonForScript(head.organization)}</script>`
     + '</head>'
