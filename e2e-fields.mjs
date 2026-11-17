@@ -385,13 +385,13 @@ await sleep(500);
 const sel = await spage.$$eval('.imp-map__select', (els) => els.map((e) => e.options[e.selectedIndex].text));
 check('columns matched to fields by name (any case)', sel.join('|') === 'Full name|Phone|Language at home|Strata council member', sel.join('|'));
 await S.shot('09-import-mapping');
-await spage.click('button:has-text("Check 2 rows")');
-await sleep(1200);
-const invalid = await spage.innerText('.imp-invalid').catch(() => '');
 // A Pick one's word not on its list is never a refusal now (FLD): the
 // mapping step offers it as "Keep as written". A Yes/No that isn't one is.
 const klingon = await spage.$eval('section.imp-rmap:has(h3:text-is("Language at home")) select[aria-label^="What “Klingon” means"]', (x) => x.selectedOptions[0].text).catch(() => '');
 check('a word not on the list: “Keep as written”, not a refusal', klingon === 'Keep as written', klingon);
+await spage.click('button:has-text("Check 2 rows")');
+await sleep(1200);
+const invalid = await spage.innerText('.imp-invalid').catch(() => '');
 check('a bad cell is refused with its row number', /Row 3/.test(invalid) && /perhaps/.test(invalid), invalid);
 await spage.click('button:has-text("Import 1 person")');
 await sleep(1500);
