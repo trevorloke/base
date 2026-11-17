@@ -208,7 +208,10 @@ const publicOrigin = (base, origin) => {
 // public one (publicOrigin) — neither repeats the client's path.
 const siteFor = async (c, at) => {
   const db = await getDb();
-  const ws = await remember(db, `ws|${at.workspaceId || ''}|${process.env.SITE_WORKSPACE || ''}`, () => siteWorkspace(db, at.workspaceId || null));
+  // Read once until the next Website action; no campaign yet is asked again
+  // (one may be signed up a moment later).
+  const ws = await remember(db, `ws|${at.workspaceId || ''}|${process.env.SITE_WORKSPACE || ''}`, () => siteWorkspace(db, at.workspaceId || null))
+    || await siteWorkspace(db, at.workspaceId || null);
   if (!ws) return null;
   const base = c.env?.base || '';
   const url = new URL(c.req.url);
