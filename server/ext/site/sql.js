@@ -235,6 +235,8 @@ create table if not exists site_translation_versions (
   decided_at timestamptz
 );
 create index if not exists site_translation_versions_hash_idx on site_translation_versions (workspace_id, lang, src_hash, made_at);
+-- The version a live one took the place of: Undo puts back exactly that one.
+alter table site_translation_versions add column if not exists replaced_id uuid;
 create table if not exists site_translation_failures (
   workspace_id uuid not null references workspaces(id) on delete cascade,
   lang text not null,

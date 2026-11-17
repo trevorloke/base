@@ -491,7 +491,10 @@ test('on the campaign’s own domain a language listed in search is indexed; the
 
 test('the job runner runs a queued sweep, and a draft save queues none', async () => {
   await db.query("delete from jobs where workspace_id = $1 and kind = 'site.translate'", [ws]);
+  const logged = async () => (await db.query("select count(*)::int as n from events where workspace_id = $1 and entity_type = 'site_translate_sweep'", [ws])).rows[0].n;
+  const was = await logged();
   ok(await mgr.action('site.translate.now', {}));
+  assert.equal(await logged(), was + 1, 'who asked for a sweep is on the log');
   await db.query("update jobs set run_at = now() where workspace_id = $1 and kind = 'site.translate'", [ws]);
   const out = await runDueJobs(db, { workspaceId: ws });
   assert.equal(out.ran, 1);

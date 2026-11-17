@@ -388,3 +388,47 @@ test('Preview: the home page in a language that is on, before visitors see it', 
   assert.equal(off.status, 409);
   ok(await saveLanguages({ on: ['pa', 'zh-Hans', 'zh-Hant'] }));
 });
+
+test('Undo puts back exactly the words that were live before, whoever made them and in whatever order', async () => {
+  const one = 'Doors open at noon on Saturday.';
+  const two = 'Bring a friend along to the meeting.';
+  const three = 'Coffee is on the house for everyone.';
+  const r = ok(await mgr.action('site.page.create', { title: 'Open house', slug: 'open-house', modules: [
+    { id: 'text01', kind: 'text', hidden: false, props: { title: 'Saturday', body: `${one}\n\n${two}\n\n${three}`, tone: 'paper' } },
+  ] }));
+  ok(await mgr.action('site.page.publish', { id: r.page.id }));
+  await sweep(db, ws);
+  const save = async (who, lang, src, text) => ok(await who.action('site.translation.save', { lang, src_hash: segHash(src), text }));
+  const undo = async (who, lang, id) => ok(await who.action('site.translation.undo', { lang, version_id: id }));
+
+  // An edit undone, then a later edit undone: the words live before that one.
+  const b = await save(staff.client, 'pa', one, 'ਬੀ ਸ਼ਬਦ');
+  const c = await save(mgr, 'pa', one, 'ਸੀ ਗਲਤ');
+  await undo(mgr, 'pa', c.version_id);
+  assert.equal((await row('pa', one)).text, 'ਬੀ ਸ਼ਬਦ');
+  const d = await save(staff.client, 'pa', one, 'ਡੀ ਸ਼ਬਦ');
+  await undo(mgr, 'pa', d.version_id);
+  const back = await row('pa', one);
+  assert.equal(back.text, 'ਬੀ ਸ਼ਬਦ', 'the words live before D, not the ones undone');
+  assert.equal(back.version_id, b.version_id);
+  assert.equal(back.checked_at, null, 'nobody approved B: still to check');
+
+  // A suggestion approved after a later edit: Undo goes to that edit.
+  const s = await save(vol.client, 'pa', two, 'ਸੁਝਾਅ ਸ਼ਬਦ');
+  await save(staff.client, 'pa', two, 'ਬੀ ਸਿੱਧਾ');
+  ok(await mgr.action('site.translation.approve', { lang: 'pa', version_id: s.version_id }));
+  await undo(mgr, 'pa', s.version_id);
+  assert.equal((await row('pa', two)).text, 'ਬੀ ਸਿੱਧਾ', 'the staff correction comes back');
+
+  // Traditional edited, Simplified then changed, the edit undone: converted
+  // from the Simplified as it is now.
+  await save(mgr, 'zh-Hant', three, '人工的繁體字');
+  await save(staff.client, 'zh-Hans', three, '咖啡对所有人免费');
+  const e = await row('zh-Hant', three);
+  assert.equal(e.text, '人工的繁體字');
+  await undo(mgr, 'zh-Hant', e.version_id);
+  const t = await row('zh-Hant', three);
+  assert.equal(t.origin, 'converted');
+  assert.equal(t.text, '咖啡對所有人免費', 'from the Simplified as it is now');
+  assert.equal(t.needs_check, false);
+});

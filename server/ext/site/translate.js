@@ -295,8 +295,8 @@ export const writeBatch = async (db, workspaceId, { lang = null, good = [], fail
         if (!(cur.origin === 'machine' && cur.retranslate)) continue;
         await tx.query("update site_translation_versions set state = 'replaced', decided_at = now() where id = $1", [cur.version_id]);
         await tx.query(
-          `insert into site_translation_versions (id, workspace_id, lang, src_hash, text, origin, state) values ($1, $2, $3, $4, $5, 'machine', 'live')`,
-          [vid, workspaceId, lang, g.hash, g.text],
+          `insert into site_translation_versions (id, workspace_id, lang, src_hash, text, origin, state, replaced_id) values ($1, $2, $3, $4, $5, 'machine', 'live', $6)`,
+          [vid, workspaceId, lang, g.hash, g.text, cur.version_id],
         );
         await tx.query(
           `update site_translations set text = $4, version_id = $5, retranslate = false, checked_by = null, checked_at = null, place = $6, updated_at = now()
@@ -370,8 +370,8 @@ export const convertRow = async (tx, workspaceId, hash, src, simplified, place) 
   const vid = newId();
   if (cur) await tx.query("update site_translation_versions set state = 'replaced', decided_at = now() where id = $1", [cur.version_id]);
   await tx.query(
-    `insert into site_translation_versions (id, workspace_id, lang, src_hash, text, origin, state) values ($1, $2, 'zh-Hant', $3, $4, 'converted', 'live')`,
-    [vid, workspaceId, hash, text],
+    `insert into site_translation_versions (id, workspace_id, lang, src_hash, text, origin, state, replaced_id) values ($1, $2, 'zh-Hant', $3, $4, 'converted', 'live', $5)`,
+    [vid, workspaceId, hash, text, cur?.version_id || null],
   );
   await tx.query(
     `insert into site_translations (id, workspace_id, lang, src_hash, src, text, origin, version_id, place)

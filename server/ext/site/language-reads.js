@@ -306,8 +306,9 @@ export const mountLanguageReads = (api, opened) => {
     const after = Math.max(0, Number.parseInt(c.req.query('after') || '0', 10) || 0);
     const rows = (await db.query(
       `select v.id, v.src_hash, v.text, v.made_by, v.made_at, v.state, t.src, t.version_id as live_id,
-              (select b.text from site_translation_versions b where b.workspace_id = v.workspace_id and b.lang = v.lang and b.src_hash = v.src_hash
-                  and b.made_at < v.made_at and b.state in ('live', 'replaced') order by b.made_at desc limit 1) as before
+              coalesce((select b.text from site_translation_versions b where b.id = v.replaced_id),
+                (select b.text from site_translation_versions b where b.workspace_id = v.workspace_id and b.lang = v.lang and b.src_hash = v.src_hash
+                  and b.made_at < v.made_at and b.state in ('live', 'replaced') order by b.made_at desc limit 1)) as before
          from site_translation_versions v left join site_translations t on t.workspace_id = v.workspace_id and t.lang = v.lang and t.src_hash = v.src_hash
         where v.workspace_id = $1 and v.lang = $2 and v.made_by is not null
         order by v.made_at desc, v.id limit $3 offset $4`, [wsId, code, PAGE + 1, after],

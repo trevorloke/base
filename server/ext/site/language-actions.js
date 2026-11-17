@@ -93,7 +93,12 @@ const roleOf = async (tx, wsId, userId) => (userId
 // failure forgotten, the language's rev bumped.
 const putLive = async (tx, wsId, { lang, hash, src, place, versionId, text, checkedBy = null }) => {
   const cur = (await tx.query('select version_id from site_translations where workspace_id = $1 and lang = $2 and src_hash = $3', [wsId, lang, hash])).rows[0];
-  if (cur && cur.version_id !== versionId) await tx.query("update site_translation_versions set state = 'replaced', decided_at = coalesce(decided_at, now()) where id = $1", [cur.version_id]);
+  if (cur && cur.version_id !== versionId) {
+    await tx.query("update site_translation_versions set state = 'replaced', decided_at = coalesce(decided_at, now()) where id = $1", [cur.version_id]);
+    // What Undo puts back: the words live until now (a suggestion goes live
+    // later than it was made, so its time says nothing).
+    await tx.query('update site_translation_versions set replaced_id = $2 where id = $1', [versionId, cur.version_id]);
+  }
   await tx.query(
     `insert into site_translations (id, workspace_id, lang, src_hash, src, text, origin, version_id, checked_by, checked_at, place)
      values ($1, $2, $3, $4, $5, $6, 'edited', $7, $8, case when $8::uuid is null then null else now() end, $9)
@@ -187,12 +192,16 @@ export const languageActions = (siteAction) => {
     const v = await version(tx, ctx, input.lang, input.version_id);
     const row = (await tx.query('select src, place, version_id from site_translations where workspace_id = $1 and lang = $2 and src_hash = $3 for update', [ctx.workspaceId, input.lang, v.src_hash])).rows[0];
     if (!row || row.version_id !== v.id || !v.made_by) throw httpError(409, 'These aren’t the live words any more — reload the list');
-    const prior = (await tx.query(
-      `select * from site_translation_versions where workspace_id = $1 and lang = $2 and src_hash = $3 and made_at <= $4 and id <> $5 and state = 'replaced'
-        order by made_at desc limit 1`, [ctx.workspaceId, input.lang, v.src_hash, v.made_at, v.id],
-    )).rows[0];
+    // Exactly the words this version took the place of: never one undone
+    // before (it is never anyone's replaced_id again), never by time.
+    const prior = v.replaced_id ? (await tx.query(
+      "select * from site_translation_versions where workspace_id = $1 and lang = $2 and src_hash = $3 and id = $4 and state = 'replaced'",
+      [ctx.workspaceId, input.lang, v.src_hash, v.replaced_id],
+    )).rows[0] : null;
     if (!prior) throw httpError(400, 'There are no earlier words to go back to');
-    await tx.query("update site_translation_versions set state = 'replaced', decided_by = $2, decided_at = now() where id = $1", [v.id, ctx.user.id]);
+    // Who undid it is on the event; decided_by stays what it was (an
+    // approval), so an undone version never reads as checked.
+    await tx.query("update site_translation_versions set state = 'replaced', decided_at = now() where id = $1", [v.id]);
     await tx.query("update site_translation_versions set state = 'live' where id = $1", [prior.id]);
     // Checked again only when someone other than the one undoing had approved them.
     const checkedBy = prior.origin === 'edited' && prior.decided_by && prior.decided_by !== ctx.user.id ? prior.decided_by : null;
@@ -201,6 +210,12 @@ export const languageActions = (siteAction) => {
         where workspace_id = $1 and lang = $2 and src_hash = $3`, [ctx.workspaceId, input.lang, v.src_hash, prior.text, prior.origin, prior.id, checkedBy],
     );
     if (input.lang === 'zh-Hans') { await convertRow(tx, ctx.workspaceId, v.src_hash, row.src, prior.text, row.place); await bumpRev(tx, ctx.workspaceId, 'zh-Hant'); }
+    // Traditional back to a conversion: made from the Simplified as it is
+    // now, which may have changed while the edit stood.
+    if (input.lang === 'zh-Hant' && prior.origin === 'converted') {
+      const hans = (await tx.query("select text from site_translations where workspace_id = $1 and lang = 'zh-Hans' and src_hash = $2", [ctx.workspaceId, v.src_hash])).rows[0];
+      if (hans) await convertRow(tx, ctx.workspaceId, v.src_hash, row.src, hans.text, row.place);
+    }
     await bumpRev(tx, ctx.workspaceId, input.lang);
     emit('site_translation', v.id, 'update', { lang: input.lang, src_hash: v.src_hash, state: 'replaced', undone: true, before: v.text, text: prior.text });
     return { version_id: prior.id };
@@ -237,8 +252,10 @@ export const languageActions = (siteAction) => {
     emit('site_legal_words', id, 'create', { lang: input.lang, words, english: LEGAL_ENGLISH, approved_by: ctx.user.id });
     return { id, lang: input.lang };
   }),
-  'site.translate.now': wordsAction(z.object({}), async (tx, ctx) => {
+  'site.translate.now': wordsAction(z.object({}), async (tx, ctx, input, emit) => {
     await queueSweep(tx, ctx.workspaceId);
+    // On the log: who asked for a sweep (it may spend the month's characters).
+    emit('site_translate_sweep', newId(), 'create', { at: new Date().toISOString() });
     return { queued: true };
   }),
   };
