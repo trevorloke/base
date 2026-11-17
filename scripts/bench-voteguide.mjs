@@ -126,7 +126,8 @@ try {
   // keep-alive http): one event loop reading 400 pages of 40–90 kB is
   // itself the slowest thing in the room, and its own wait is not the
   // server's.
-  const urls = Array.from({ length: 400 }, (_, i) => (i % 10 === 0 ? `/site/voter-guide?area=${AREAS[i % 4]}` : i % 2 ? '/site/voter-guide' : '/site/'));
+  // One in ten through the embed (a WordPress page framing the guide).
+  const urls = Array.from({ length: 400 }, (_, i) => (i % 10 === 0 ? `/site/voter-guide?area=${AREAS[i % 4]}` : i % 10 === 5 ? '/site/embed/voter-guide' : i % 2 ? '/site/voter-guide' : '/site/'));
   const results = await Promise.all([0, 1, 2, 3].map((w) => new Promise((resolve, reject) => {
     const worker = new Worker(CLIENTS, { eval: true, workerData: { port: PORT, end: end1, urls: urls.filter((_, i) => i % 4 === w) } });
     worker.once('message', resolve);

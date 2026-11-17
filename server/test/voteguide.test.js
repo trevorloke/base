@@ -452,6 +452,7 @@ test('a page already kept costs the database nothing: no query on a cache hit', 
   cacheClear(ws);
   ok({ status: (await hit('/site/voter-guide')).status, json: {} });
   ok({ status: (await hit('/site/')).status, json: {} });
+  ok({ status: (await hit('/site/embed/voter-guide')).status, json: {} });
   let n = 0; const seen = [];
   const q0 = db.query.bind(db);
   db.query = (...a) => { n += 1; seen.push(String(a[0]).replace(/\s+/g, ' ').slice(0, 80)); return q0(...a); };
@@ -459,6 +460,8 @@ test('a page already kept costs the database nothing: no query on a cache hit', 
     for (let i = 0; i < 5; i += 1) {
       assert.equal((await hit('/site/voter-guide')).status, 200);
       assert.equal((await hit('/site/')).status, 200);
+      // The embed is what a WordPress page frames on voting day: kept too.
+      assert.equal((await hit('/site/embed/voter-guide')).status, 200);
     }
   } finally { db.query = q0; }
   assert.equal(n, 0, `queries on cache hits: ${seen.join(' · ')}`);

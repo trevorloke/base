@@ -1013,9 +1013,13 @@ export const makeSiteApp = (at) => {
     const at = g.pages.find((p) => (p.site_id || null) === (site.micro?.id || null)) || null;
     const module = at?.module || { id: 'voter-guide', kind: 'voterguide', hidden: false, props: {} };
     const page = { id: at?.id || null, slug: at?.slug || 'voter-guide', title: '', description: '', modules: [module] };
-    // Never kept: a change of addresses is in the next answer.
+    // Kept like any page (on voting day the crowd may come through a
+    // WordPress page that frames it). The saved addresses are in the key,
+    // so a change of them is in the next answer: its kept frame-ancestors
+    // can never be another list's.
+    const frame = g.embed_origins || [];
     return draw(c, site, {
-      kind: 'page', page, key: null, frame: g.embed_origins || [],
+      kind: 'page', page, key: ['embed', at?.id || '', JSON.stringify(frame)], frame,
       ctx: { embed: true, ...(at ? { path: at.slug === 'home' ? '/' : `/${at.slug}` } : {}) },
     });
   });
