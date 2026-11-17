@@ -935,3 +935,17 @@ page). It ships empty: no dates, places, rules or names of its own.
   authorization line; `site-assets/embed.js` sets the frame's height.
 - **Field read:** `GET /api/guide?rev=` (every role; `{ same: true }` when
   unchanged; `?draft=1` for the Website area).
+- **The desk:** Website → Voter guide (`/website/guide`): the checklist,
+  then cards for days, places (typed, or pasted and previewed, "Closed
+  today" with its note, a pin put by hand), the ballot (the slate's names
+  ticked Ours by themselves), what to bring and the office's link; More
+  holds the mail and ride lines, the banner switch, the guide page, the
+  embed snippet, "See it as a canvasser", Unpublish and Clear. One primary
+  button: Publish (a manager) or View guide (live).
+- **The field:** "Where to vote" (`/vote-info`) from Today (while the guide
+  is out and GOTV is on or the first day is two weeks off), a door card's
+  and a walk-list door's More. The door travels in router state only and
+  leaves the history entry once read. Nearest three with Directions;
+  within 150 m of an open place a warning, no QR and no names; "Show the
+  voter" draws a QR code on the phone (`shared/qr.js`) with `?near=` at 2
+  decimals. The read is kept on the phone for every role.

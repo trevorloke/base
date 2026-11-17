@@ -1586,3 +1586,10 @@ The clock moves only in tests: `STARBASE_CLOCK_SHIFT_MS` (milliseconds) is
 read when `NODE_ENV=test`, under `node --test`, or with `STARBASE_E2E=1`
 (a browser suite's server), and ignored anywhere else — the server says
 so when it starts.
+
+Browser: `e2e-voteguide.mjs` starts its own server (5510, or `BASE_PATH=/imaginesurrey
+PORT=5511`) on a file-backed database and restarts it with the clock moved to walk
+the guide from not out to over; a fake address service on 5513 and a framing page
+on 5514. `e2e-voted.mjs` checks GOTV's "The voter guide has other days" line;
+`e2e-site-render.mjs` draws the module in every state. Load, by hand:
+`node scripts/bench-voteguide.mjs` (`SECONDS=10` for a quick look).
