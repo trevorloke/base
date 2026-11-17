@@ -338,6 +338,10 @@ app.post('/import', async (c) => {
           if (had) to.set(f.id, had.id);
         }
       } else if (lists.length) {
+        // Its own transaction, committed first: the fields hook below
+        // (importRows) reads the campaign's fields before any row is
+        // written and must find this one. If the import stops part way,
+        // the field stays, empty, and the next Keep as written reuses it.
         await runAction(db, { workspaceId: ctx.workspaceId, actorId: ctx.user.id, action: 'import.as_written' }, async (tx, emit) => {
           for (const f of lists) to.set(f.id, (await makeAsWritten(tx, ctx, f, emit, { by_import: true })).id);
         });
