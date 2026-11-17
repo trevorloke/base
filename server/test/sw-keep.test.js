@@ -37,8 +37,10 @@ const worker = (base, net) => {
   };
   const asked = [];
   const fetch = async (path, opts) => {
+    if (typeof path !== 'string') path = new URL(path.url).pathname; // a navigation: the request itself
     asked.push([String(path), opts?.cache || 'default']);
     const body = net.get(String(path));
+    if (body && typeof body === 'object') return new Response(body.html, { status: 200, headers: { 'content-type': 'text/html; charset=utf-8' } });
     if (body === undefined) throw new TypeError('offline');
     if (body === null) return new Response('<!doctype html><div id="root"></div>', { status: 200, headers: { 'content-type': 'text/html' } }); // the app's page, for a file that is not there
     return new Response(body, { status: 200, headers: { 'content-type': /\.css$/.test(path) ? 'text/css' : 'application/octet-stream' } });
@@ -54,7 +56,19 @@ const worker = (base, net) => {
     on.fetch({ request: new Request(`${ORIGIN}${path}`), respondWith: (r) => { res = r; }, waitUntil() {} });
     return res && (await res).text();
   };
-  return { ...api, asked, kept, stores, answer };
+  // A page opened (a navigation), its background work waited for.
+  const open = async (path) => {
+    let res = null; const waits = [];
+    on.fetch({ request: { url: `${ORIGIN}${path}`, method: 'GET', mode: 'navigate', destination: 'document' }, respondWith: (r) => { res = r; }, waitUntil: (p) => waits.push(p) });
+    const out = res && (await res);
+    await Promise.all(waits);
+    return out;
+  };
+  const shellIndex = async () => {
+    const r = stores.get(`${base ? `starbase-${base.slice(1)}` : 'starbase'}-shell-v2`)?.get(`${ORIGIN}${base}/index.html`);
+    return r ? r.clone().text() : null;
+  };
+  return { ...api, asked, kept, stores, answer, open, shellIndex };
 };
 
 const page = (base, brand) => {
@@ -152,4 +166,21 @@ test('a brand whose headings are Montserrat (the website’s file): the page nam
   assert.ok((await w.kept()).includes(FONT));
   net.clear(); // no signal
   assert.equal(await w.answer(FONT), 'MONT-1', 'from what the worker kept');
+});
+
+test('the website (and a draft preview) never becomes the app kept for no signal', async () => {
+  for (const base of ['', '/imaginesurrey']) {
+    const app = page(base, BRANDS.base);
+    const site = '<!doctype html><html lang="en"><head><title>A campaign website</title><script type="module" src="/site-assets/islands-x.js"></script></head><body><main>Fighting for the city</main></body></html>';
+    const net = new Map([[`${base}/assets/index-a1.js`, 'x'], [`${base}/assets/index-b2.css`, '.a{}'], [`${base}/fonts/fonts.css`, ''], [`${base}/admin`, { html: app }]]);
+    const w = worker(base, net);
+    await w.open(`${base}/admin`);
+    assert.equal(await w.shellIndex(), app, 'the app, kept');
+    for (const path of ['/site/', '/site/pa/', '/site/__preview/x?t=1&lang=pa', '/site/sites/doug/zh/', '/elsewhere']) {
+      net.set(`${base}${path.split('?')[0]}`, { html: site });
+      await w.open(`${base}${path}`);
+      assert.equal(await w.shellIndex(), app, `${base}${path}: the app stays the one kept`);
+    }
+    assert.ok((await w.kept()).includes(`${base}/assets/index-a1.js`), 'and its files stay');
+  }
 });
