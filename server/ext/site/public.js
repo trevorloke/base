@@ -65,9 +65,12 @@ const LANG_COOKIE = 'site_lang'; // the language a visitor last read the site in
 const prefetching = (c) => /prefetch/i.test(`${c.req.header('sec-purpose') || ''} ${c.req.header('purpose') || ''}`);
 // The rules a page's Speculation-Rules header points at: prefetch the
 // switch's other languages on hover or press — never the English link
-// that clears the remembered language.
+// that clears the remembered language. That link is left out by its
+// hreflang: a "?" in a URL pattern string is a modifier, so the address
+// test alone let the browser prefetch it, and a click then used the
+// prefetched answer, which (rightly) forgot nothing.
 const LANG_RULES = JSON.stringify({
-  prefetch: [{ where: { and: [{ selector_matches: '.lang-switch a' }, { not: { href_matches: '*\\?lang=*' } }] }, eagerness: 'moderate' }],
+  prefetch: [{ where: { and: [{ selector_matches: '.lang-switch a:not([hreflang="en"])' }, { not: { href_matches: '*\\?lang=*' } }] }, eagerness: 'moderate' }],
 });
 
 // ── Files: /site-assets/* ──

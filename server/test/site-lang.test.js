@@ -221,6 +221,7 @@ test('remembered: a /pa page sets site_lang, a prefetch doesn’t; / redirects, 
   const rules = await hit('/site-assets/lang-rules.json');
   assert.equal(rules.headers.get('content-type'), 'application/speculationrules+json');
   assert.match(rules.text, /\?lang=/);
+  assert.match(rules.text, /:not\(\[hreflang=\\"en\\"\]\)/, 'the English link is never prefetched');
 });
 
 test('a newsletter on /pa keeps the approved Punjabi words, its language and the English', async () => {
