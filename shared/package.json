@@ -25,6 +25,8 @@
     "./site/*": "./site/*.js",
     "./fillwords": "./fillwords.js",
     "./letters": "./letters.js",
+    "./voteguide": "./voteguide.js",
+    "./qr": "./qr.js",
     "./email/*": "./email/*.js"
   },
   "dependencies": {

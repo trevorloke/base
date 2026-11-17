@@ -12,6 +12,7 @@ import { getDb, dbReachable } from './db/client.js';
 import { EXTENSIONS } from './ext.js';
 import { startJobRunner, stopJobRunner } from './lib/jobs.js';
 import { staleTimeZoneData } from './lib/tzcheck.js';
+import { clockNote } from './lib/clock.js';
 import { envName, orgName } from './lib/org.js';
 import { bodyLimit } from 'hono/body-limit';
 import { appRedirect, basePath, mountAt } from './lib/mount.js';
@@ -94,6 +95,8 @@ if (isMain) {
   });
   const tz = staleTimeZoneData();
   if (tz) console.warn(`starbase: ${tz}`);
+  const moved = clockNote();
+  if (moved) console.warn(`starbase: ${moved}`);
   // Behind the base.win door without its key, everyone who comes through
   // the door is the door's one address to the limits per address.
   if (base && !doorKeySet()) {
