@@ -260,6 +260,7 @@ export const actions = {
     input: z.object({ id: z.uuid() }),
     handler: async (tx, ctx, input, emit) => {
       const f = await liveField(tx, ctx, input.id);
+      if (f.converting) throw httpError(409, convertingRefusal(f.name));
       await tx.query('update person_fields set retired_at = now(), updated_at = now() where id = $1 and workspace_id = $2',
         [f.id, ctx.workspaceId]);
       const kept = (await tx.query(

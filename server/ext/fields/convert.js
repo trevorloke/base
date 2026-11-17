@@ -183,13 +183,18 @@ const chunk = async (tx, ws, fieldId, key, emit) => {
   const got = await planFor(tx, ws, fieldId, key);
   if (!got) return 'stop';
   const { f, plan } = got;
+  // In the index's order, after the last chunk's place (plan.after): each
+  // chunk reads on from there rather than past every value already done.
+  const after = plan.after || null;
   const rows = (await tx.query(
     `select v.id, v.person_id, v.value, ${KEY} as k from person_field_values v
       where v.workspace_id = $1 and v.field_id = $2 and not (v.value in (select jsonb_array_elements($3::jsonb)))
-      order by v.id limit ${CHUNK} for update skip locked`,
-    [ws, f.id, JSON.stringify(plan.choices)],
+        ${after ? 'and (v.value, v.id) > ($4::jsonb, $5::uuid)' : ''}
+      order by v.value, v.id limit ${CHUNK} for update skip locked`,
+    after ? [ws, f.id, JSON.stringify(plan.choices), JSON.stringify(after.value), after.id] : [ws, f.id, JSON.stringify(plan.choices)],
   )).rows;
   if (!rows.length) return 'empty';
+  plan.after = { value: rows.at(-1).value, id: rows.at(-1).id };
   const goesTo = (r) => (Object.hasOwn(plan.map, r.k) ? plan.map[r.k] : null);
   const to = rows.filter(goesTo);
   const keep = rows.filter((r) => !goesTo(r));
@@ -259,7 +264,8 @@ const finish = async (tx, ws, fieldId, key, emit) => {
       order by v.id limit 1 for update`,
     [ws, f.id, JSON.stringify(plan.choices)],
   )).rows[0];
-  if (left) return 'more';
+  // Left behind (held by another write, or come in since): from the start again.
+  if (left) { plan.after = null; await savePlan(tx, ws, f, plan); return 'more'; }
   await tx.query(
     `update person_fields set kind = 'choice', choices = $3, display = $4, converting = null, updated_at = now()
       where id = $1 and workspace_id = $2`,
@@ -285,7 +291,8 @@ export const stepJob = async (db, job) => {
       if (end !== 'more') return {};
     }
   }
-  // The runner goes round at once, not at its next tick.
+  // The runner goes round at once, not at its next tick (again: 1 ms —
+  // lib/jobs.js reads a 0 as done).
   runJobsSoon();
-  return { again: 0 };
+  return { again: 1 };
 };

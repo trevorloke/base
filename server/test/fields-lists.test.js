@@ -452,3 +452,36 @@ test('Undo a move after Dwelling type became a list: a word it would refuse goes
   assert.equal(r.door_words_kept_out, undefined);
   assert.equal(ok(await mgr.get('/api/audit/verify')).ok, true);
 });
+
+// Needs a real Postgres with more than one connection (two transactions at
+// once): DATABASE_URL=… PG_POOL_MAX=4. PGlite and test:pg have one.
+const twoAtOnce = !!process.env.DATABASE_URL && Number(process.env.PG_POOL_MAX || 10) > 1;
+test('a value another write holds when the last chunk runs: the field isn’t finished until that value is a choice', { skip: !twoAtOnce && 'needs a Postgres with two connections' }, async () => {
+  const f = ok(await mgr.action('field.create', { name: `Held words ${tag}`, kind: 'text' })).field;
+  await db.query(
+    `insert into person_field_values (id, workspace_id, field_id, person_id, value)
+     select gen_random_uuid(), $1, $2, p.id, to_jsonb(case when row_number() over (order by p.id) % 2 = 0 then 'a' else 'b' end)
+       from persons p where p.workspace_id = $1 and p.name like 'Bulk Example %' limit 20`, [ws, f.id],
+  );
+  ok(await mgr.action('field.list.start', { id: f.id, choices: ['A', 'B'], display: 'buttons', map: [] }));
+  let release;
+  const held = new Promise((r) => { release = r; });
+  let locked;
+  const isLocked = new Promise((r) => { locked = r; });
+  const holder = db.transaction(async (tx) => {
+    await tx.query('select id from person_field_values where field_id = $1 order by id limit 1 for update', [f.id]);
+    locked();
+    await held;
+  });
+  await isLocked;
+  const run = runDueJobs(db, { workspaceId: ws });
+  await new Promise((r) => { setTimeout(r, 400); });
+  assert.equal((await db.query('select kind from person_fields where id = $1', [f.id])).rows[0].kind, 'text', 'not finished while a value is held');
+  release();
+  await holder;
+  await run;
+  await runJobs();
+  const vals = (await db.query('select value from person_field_values where field_id = $1', [f.id])).rows.map((r) => r.value);
+  assert.deepEqual([...new Set(vals)].sort(), ['A', 'B']);
+  assert.equal((await db.query('select kind from person_fields where id = $1', [f.id])).rows[0].kind, 'choice');
+});

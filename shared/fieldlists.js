@@ -78,8 +78,9 @@ export const splits = (word) => MANY_SPLIT.test(String(word ?? ''));
 // curly apostrophes as ', and a dash with a space each side as " – "
 // ("christian - catholic" is "Christian – Catholic"; "1-4" stays "1-4").
 // Its SQL twin is CHOICE_KEY_SQL (server ext/fields/kinds.js).
-export const choiceKey = (s) => String(s ?? '').trim().replace(/\s+/g, ' ')
-  .replace(/[’‘]/g, "'").replace(/ [-–—] /g, ' – ').toLowerCase();
+// The steps are CHOICE_KEY_SQL's, one for one, so the two always agree.
+export const choiceKey = (s) => String(s ?? '').replace(/[’‘]/g, "'").replace(/\s+/g, ' ').trim()
+  .replace(/ - /g, ' – ').replace(/ — /g, ' – ').toLowerCase();
 
 // A Text field "suits a list" when it has at most this many different
 // words, or its LIST_TOP most common words cover LIST_COVER of the people

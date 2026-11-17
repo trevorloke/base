@@ -22,7 +22,6 @@
 // desk-only read (index.js) and the handler checks the role again.
 import { Hono } from 'hono';
 import { fieldOut } from './actions.js';
-import { CHOICE_KEY_SQL } from './kinds.js';
 import { LIST_TOP, LIST_WORDS_MAX } from '@starbase/shared/fieldlists';
 import { DOESNT_SUIT, ONLY_TEXT, suits, wordsOf } from './convert.js';
 
@@ -56,23 +55,25 @@ api.get('/fields', async (c) => {
     [ws],
   )).rows;
   // What a filter can find (Text, Number): the most common values on people
-  // still on the list — text as choices compare ("punjabi" and "Punjabi"
-  // are one). From the same scan, for Text: how many different words (d)
-  // and how many people the 40 most common cover (top) — whether it suits
-  // a list (convert.js).
+  // still on the list — text in any case, as the filter matches it
+  // ("punjabi" and "Punjabi" are one). From the same scan, for Text: how
+  // many different words (d) and how many people the 40 most common cover
+  // (top) — whether it suits a list. Counted as the filter compares words,
+  // never fewer than choiceKey would (convert.js counts those exactly), so
+  // a field said to suit here always does; choiceKey's regular expression
+  // on every value would make this read a third slower on a city's file.
   const grouped = (await db.query(
-    `select field_id, kind, words, n, r::int as r, d::int as d, people::int as people, top::int as top from (
+    `select field_id, kind, words, n, r::int as r, d::int as d, people::int as people from (
        select v.field_id, f.kind, min(v.value #>> '{}') as words, count(*)::int as n,
               row_number() over (partition by v.field_id order by count(*) desc, min(v.value #>> '{}')) as r,
               count(*) over (partition by v.field_id) as d,
-              sum(count(*)) over (partition by v.field_id) as people,
-              sum(count(*)) over (partition by v.field_id order by count(*) desc, min(v.value #>> '{}') rows between unbounded preceding and current row) as top
+              sum(count(*)) over (partition by v.field_id) as people
        from person_field_values v
        join persons p on p.id = v.person_id and p.deleted_at is null
        join person_fields f on f.id = v.field_id and f.kind in ('text', 'number')
        where v.workspace_id = $1
-       group by v.field_id, f.kind, case when f.kind = 'text' then ${CHOICE_KEY_SQL("v.value #>> '{}'")} else v.value #>> '{}' end
-     ) t where r <= $2 or r = least(d, $3) order by field_id, r`,
+       group by v.field_id, f.kind, case when f.kind = 'text' then lower(v.value #>> '{}') else v.value #>> '{}' end
+     ) t where r <= greatest($2::int, $3::int) order by field_id, r`,
     [ws, COMMON_MAX, LIST_TOP],
   )).rows;
   const common = grouped.filter((r) => r.r <= COMMON_MAX);
@@ -87,9 +88,10 @@ api.get('/fields', async (c) => {
           .map((r) => ({ value: r.kind === 'number' ? Number(r.words) : r.words, n: r.n }));
       }
       if (f.kind === 'text') {
-        const last = grouped.find((r) => r.field_id === f.id && r.r === Math.min(r.d, LIST_TOP));
-        Object.assign(out, { words: last?.d || 0, top40: last?.top || 0 });
-        out.suits = suits({ distinct: out.words, top40: out.top40, people: last?.people || 0 });
+        const mine = grouped.filter((r) => r.field_id === f.id);
+        const top40 = mine.filter((r) => r.r <= LIST_TOP).reduce((m, r) => m + r.n, 0);
+        Object.assign(out, { words: mine[0]?.d || 0, top40 });
+        out.suits = suits({ distinct: out.words, top40, people: mine[0]?.people || 0 });
       }
       return out;
     }),

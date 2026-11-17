@@ -44,7 +44,9 @@ export { choiceKey, MANY_SPLIT } from '@starbase/shared/fieldlists';
 // list, GET /fields): the same steps, every kind of space as JavaScript's
 // trim and \s know it (Postgres's own \s may not know a non-breaking one).
 const SP = '[\\s\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff]';
-export const CHOICE_KEY_SQL = (expr) => `lower(regexp_replace(regexp_replace(regexp_replace(translate(${expr}, '’‘', ''''''), '^${SP}+|${SP}+$', '', 'g'), '${SP}+', ' ', 'g'), ' [-–—] ', ' – ', 'g'))`;
+// One regular expression a value (a city's voter file is 300,000 of them):
+// every run of spaces → one, then btrim, then the two dashes as plain replaces.
+export const CHOICE_KEY_SQL = (expr) => `lower(replace(replace(btrim(regexp_replace(translate(${expr}, '’‘', ''''''), '${SP}+', ' ', 'g')), ' - ', ' – '), ' — ', ' – '))`;
 
 // Yes and no as spreadsheets and databases write them: yes · y · true ·
 // t · 1 · x · ✓, and no · n · false · f · 0 (a Postgres export writes t/f).

@@ -485,7 +485,28 @@ than a week after they came off is refused. Contacts are door, phone, text or
   last three were added to every campaign once, by themselves; one renamed
   or taken off is never put back). The People export has a column for each
   profile field, named as the field (Pick several as *Punjabi; Hindi*), so
-  it imports straight back. Every person has a
+  it imports straight back. **Dwelling type** is a pick list (House ·
+  Townhouse or row house · Suite in a house · Low-rise apartment (1–4
+  floors) · High-rise apartment (5+ floors) · … — plain words for any
+  city), shown as a scroll-down list; **Campus** is one pick naming school
+  and campus (KPU Surrey, KPU Cloverdale, SFU Surrey; a paper form's other
+  words go to the person's Notes, never refusing the form); **Faith** is one
+  pick (Surrey's faiths, the Christian churches named one by one, Prefer not
+  to say) and **Private**. A Pick one field can *Show as* buttons or a
+  scroll-down list. **Private** (any field a manager marks; Faith from the
+  start): set by the office only, never shown to volunteers, never a tag,
+  left out of the People CSV unless a manager asks for it (`?private=1`),
+  left out of a non-manager's full backup and event log (blanked there,
+  with a `left_out` note), and never picks people for a list that is
+  walked, called, sent to CallHub or Mailchimp, emailed, texted or copied
+  (*This list picks people by Faith, which is private …*). A Text field
+  with words on file whose words suit a list (at most 500 different, or the
+  40 most common cover 80 % of people) can be **turned into a list**: the
+  manager says where each word goes; what doesn't fit is kept as written
+  in "<name> as written", right after it — no word is lost. It runs in the
+  background, 1,000 values at a time (Stop keeps what's done). Choice words
+  match in any case, with ' for ’ and " - " for " – ". A renamed or taken-off
+  standard field is never put back by the membership form. Every person has a
   **House number** of its own, apart from the street (the door card, the
   profile and *Add a person* ask for both; the address line reads 13450 104
   Ave, and a number typed into the street is split out). The import takes a
