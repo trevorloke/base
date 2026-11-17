@@ -275,3 +275,15 @@ test('Settings → Services: the Translation row, its Check, and Check translati
   const probe = (await db.query('select probe from site_translate_runtime where workspace_id = $1', [ws])).rows[0].probe;
   assert.equal((typeof probe === 'string' ? JSON.parse(probe) : probe).headerAccepted, true);
 });
+
+test('History: a yes given in 简体 shows the words shown, their language and the English; a sign-up says its language', async () => {
+  const p = ok(await mgr.action('person.create', { kind: 'person', first_name: 'Mei', last_name: 'Example', email: `mei-${Date.now()}@example.org` })).person;
+  await db.query(
+    `insert into consent_events (id, workspace_id, person_id, channel, granted, source, wording, lang, wording_en)
+     values (gen_random_uuid(), $1, $2, 'email', true, 'website-newsletter', '是的，给我发电子邮件', 'zh-Hans', 'Yes, email me')`, [ws, p.id]);
+  await db.query("insert into site_actions (id, workspace_id, person_id, kind, payload, lang) values (gen_random_uuid(), $1, $2, 'newsletter', '{}'::jsonb, 'zh-Hans')", [ws, p.id]);
+  const t = ok(await mgr.get(`/api/persons/${p.id}/timeline`));
+  const all = JSON.stringify(t);
+  assert.match(all, /是的，给我发电子邮件 \(in 简体\) · English: Yes, email me/);
+  assert.match(all, / in 简体"/);
+});

@@ -16,6 +16,7 @@
 // A row that is several things in time — an email sent, opened, clicked; a
 // gift and its void — is laid out as one row each, in SQL, before the page
 // is cut, so a page is never short by what a later page holds.
+import { langWord } from '../../../shared/site/languages.js';
 import { toLocal, fromLocal } from '../../lib/tzsql.js';
 import { SIGN_KINDS, DEFAULT_SLATE, slateLabel } from '@starbase/shared/canvass';
 import { fmtIn } from '@starbase/shared/dayparts';
@@ -201,12 +202,15 @@ const consentWords = (r) => {
   return UNSUBSCRIBED.has(r.source) ? 'Unsubscribed from email' : EMAIL_NO[r.source] || 'Marked do not email';
 };
 const consent = async (db, q) => (await rowsOf(db, `
-  select ${ms('c.created_at')} as at, 'consent:' || c.id::text as key, c.channel, c.granted, c.source, c.wording
+  select ${ms('c.created_at')} as at, 'consent:' || c.id::text as key, c.channel, c.granted, c.source, c.wording, c.lang, c.wording_en
     from consent_events c
    where c.workspace_id = $1 and c.person_id = $2`, q,
 )).map((r) => entry(r, 'messages', 'consent', r.channel === 'sms' ? 'Text' : 'Email', consentWords(r), {
-  // The words they were shown, when it was a form's box.
-  detail: clean(r.wording, 200) || null,
+  // The words they were shown, when it was a form's box — in the language
+  // shown, with the English beside them (the website's languages, TR).
+  detail: r.lang && r.lang !== 'en'
+    ? line(clean(r.wording, 200) && `${clean(r.wording, 200)} (in ${langWord(r.lang)})`, clean(r.wording_en, 200) && `English: ${clean(r.wording_en, 200)}`)
+    : clean(r.wording, 200) || null,
 }));
 
 // ── Website forms, by kind (the money forms are money) ──
@@ -222,7 +226,7 @@ const webDetail = (r, p) => {
 // On another website of the campaign: which one.
 const onSite = (r) => (!r.site_id ? '' : r.site_deleted || !(r.site_domain || r.site_name) ? ' on a site since deleted' : ` on ${r.site_domain || r.site_name}`);
 const web = async (db, q) => (await rowsOf(db, `
-  select ${ms('a.created_at')} as at, 'web:' || a.id::text as key, a.kind, a.payload, a.source,
+  select ${ms('a.created_at')} as at, 'web:' || a.id::text as key, a.kind, a.payload, a.source, a.lang,
          sc.kind as campaign_kind, sc.title as campaign_title, s.id as shift_id, s.title as shift_title,
          a.site_id, m.name as site_name, m.domains->>0 as site_domain, m.deleted_at as site_deleted, k.title as kit_title
     from site_actions a
@@ -234,7 +238,7 @@ const web = async (db, q) => (await rowsOf(db, `
    where a.workspace_id = $1 and a.person_id = $2 and a.kind <> all($6::text[])`,
   q, q.viewer.money ? [] : [...MONEY_KINDS],
 )).map((r) => entry(r, 'website', 'web', 'Website',
-  `${r.campaign_title ? campaignWords({ kind: r.campaign_kind, title: r.campaign_title }) : WEB_WORDS[r.kind] || 'Did something on the website'}${onSite(r)}`, {
+  `${r.campaign_title ? campaignWords({ kind: r.campaign_kind, title: r.campaign_title }) : WEB_WORDS[r.kind] || 'Did something on the website'}${onSite(r)}${r.lang && r.lang !== 'en' ? ` in ${langWord(r.lang)}` : ''}`, {
     // Which link brought them ("From flyer"): the source the form kept.
     // A share kit's post by its name, never its code.
     detail: line(webDetail(r, parseJ(r.payload, {}) || {}), clean(r.source, 60) && `From ${clean(sourceWords(r.source, r.kit_title), 60)}`),
