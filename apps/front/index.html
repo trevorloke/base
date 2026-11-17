@@ -42,7 +42,7 @@
     font-size: 17px;
     line-height: 1.6;
   }
-  .wrap { width: 100%; max-width: 1040px; margin: 0 auto; padding: 0 clamp(20px, 5vw, 56px); }
+  .wrap { width: 100%; max-width: 1320px; margin: 0 auto; padding: 0 clamp(20px, 5vw, 56px); }
   a { color: inherit; }
   :focus-visible { outline: 3px solid var(--signal); outline-offset: 3px; }
 
@@ -63,7 +63,6 @@
     display: grid; grid-template-columns: minmax(0, 1fr); gap: 40px; align-items: center;
   }
   @media (min-width: 980px) { .hero.wrap { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 48px; } }
-  .demo-note { margin: 12px 2px 0; color: var(--muted); font-size: 14px; }
   h1 {
     font-family: var(--display); font-weight: 700; letter-spacing: -0.03em; line-height: 1.04;
     font-size: clamp(40px, 5.4vw, 72px); margin: 0 0 12px; max-width: 13ch; text-wrap: balance;
@@ -77,12 +76,7 @@
   section.wrap + section.wrap { border-top: 1px solid var(--line); }
   .eyebrow { font-family: var(--mono); font-size: 13px; color: var(--signal); margin: 0 0 12px; }
   h2 { font-family: var(--display); font-weight: 700; letter-spacing: -0.02em; line-height: 1.12; font-size: clamp(28px, 4vw, 42px); margin: 0 0 16px; max-width: 22ch; text-wrap: balance; }
-  .intro { color: var(--muted); max-width: 60ch; margin: 0 0 36px; }
 
-  .areas { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 0 40px; }
-  .areas li { padding: 20px 0; border-top: 1px solid var(--line); }
-  .areas h3 { font-family: var(--display); font-size: 19px; margin: 0 0 4px; }
-  .areas p { margin: 0; color: var(--muted); font-size: 16px; }
 
   .own { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 32px 56px; align-items: start; }
   .address { font-family: var(--mono); font-size: clamp(16px, 2.4vw, 22px); background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 18px 20px; overflow-wrap: anywhere; }
@@ -114,31 +108,13 @@
       <p class="sub">Your campaign hub</p>
       <p class="lede">base.win puts your people, map, field work, money, outreach, digital, and website into one synchronized product.</p>
       <p class="lede built">Built by campaigners for campaigners.</p>
-      <div class="actions">
-        <a class="btn quiet" href="#inside">See what's inside</a>
-      </div>
     </div>
     <div class="try" id="try">
       <div class="demo" id="demo">
         <iframe id="demo-frame" title="base.win, running with a sample campaign" src="https://staging.base.win/api/auth/demo"></iframe>
       </div>
-      <p class="demo-note">This is base.win itself, running a made-up campaign in Vancouver. You have full access, so open anything. Nobody in it is real.</p>
     </div>
   </div>
-
-  <section id="inside" class="wrap">
-    <p class="eyebrow">What's inside</p>
-    <h2>One list of people, and everything you do with it</h2>
-    <p class="intro">Most campaigns stitch together a voter file, a texting tool, an email tool, a donation page, and a website. base.win is built so you don't have to.</p>
-    <ul class="areas">
-      <li><h3>People</h3><p>Supporters, volunteers, and donors in one place, each with a single history of every knock, call, text, email, gift, and shift.</p></li>
-      <li><h3>Map and field</h3><p>Turfs, walk lists, and door ratings on a volunteer's phone. Knocks logged without a signal send once the phone is back online.</p></li>
-      <li><h3>Shifts</h3><p>Schedule a week by tap. Volunteers get the details by email and text, and their walk list lands on their phone.</p></li>
-      <li><h3>Donations</h3><p>One-time and monthly gifts, receipts, and contribution limits tracked for you.</p></li>
-      <li><h3>Outreach</h3><p>Email and one-to-one texting to any list, plus phone banks, with quiet hours and opt-outs respected.</p></li>
-      <li><h3>Website</h3><p>Your public site, built from sections and published from the same desk that runs everything else.</p></li>
-    </ul>
-  </section>
 
   <section id="yours" class="wrap">
     <p class="eyebrow">Your own address</p>
