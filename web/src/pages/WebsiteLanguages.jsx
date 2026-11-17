@@ -365,14 +365,14 @@ function Names({ d, say }) {
       </form>
       {err && <p className="wb-field__err" role="alert">{err}</p>}
       {d.names.possible.length > 0 && (
-        <>
-          <h3 className="lg-h3">Possible names</h3>
+        <details className="lg-more">
+          <summary className="lg-h3">Possible names ({d.names.possible.length})</summary>
           <ul className="lg-possible">
             {d.names.possible.map((nm) => (
               <li key={nm}><span>{nm}</span><button type="button" className="btn btn-quiet ops-tap" onClick={() => keep(nm)}>Keep as written<span className="ws-sr"> — {nm}</span></button></li>
             ))}
           </ul>
-        </>
+        </details>
       )}
     </section>
   );

@@ -81,3 +81,6 @@
 /* "Show translated only after a person checks it" (a website's, a page's) */
 .lg-toggle { display: flex; align-items: center; gap: var(--s-2); min-height: 48px; font-size: 15px; cursor: pointer; }
 .lg-toggle input { width: 20px; height: 20px; }
+
+/* Possible names: a hint, folded away until asked for */
+.lg-more summary { cursor: pointer; min-height: 48px; display: flex; align-items: center; }
