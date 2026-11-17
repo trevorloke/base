@@ -928,7 +928,11 @@ page). It ships empty: no dates, places, rules or names of its own.
 - **Import:** `POST /api/site/guide/import/preview { text }` reads a pasted
   sheet, a CSV or "name, address" lines, looks new addresses up outside any
   transaction (4 at a time, inside the campaign's box + 10 km) and signs the
-  rows; `site.guide.places.import` saves them as signed (30 minutes).
+  rows; `site.guide.places.import` saves them as signed (30 minutes). A
+  place typed by hand is looked up the same way before its save
+  (`POST /api/site/guide/place/lookup { address, city }` → `{ lat, lng }`
+  or `{ none }`; the save carries `looked_up: true`), and the Places card
+  counts the places still not on the map.
 - **States** by the server's clock (`server/lib/clock.js`) and B.C.'s rule
   (`server/lib/tzrule.js`): not out (also a draft outside a preview: a
   "Tell me when it's out" sign-up with source `voter-guide`, People
@@ -941,6 +945,10 @@ page). It ships empty: no dates, places, rules or names of its own.
   guide's next boundary; `?area=`/`?day=` are part of the key only when
   they are the guide's own values; `?q=` is never kept; `?near=` is the
   island's alone. Pages holding the module send `geolocation=(self)`.
+- **Words for days and hours** are drawn on the server (full ICU) and sent
+  in the island's props (`dateWords`), so a browser without, say, Punjabi
+  dates hydrates to the same text. A guide that is a page's first module
+  is the page's title (no page banner above it).
 - **Address lookup:** `POST <root>/api/guide/find { address }` → a pin to 3
   decimals; nothing is stored or logged; 30 a minute per address, 300 a
   minute per campaign.
@@ -963,7 +971,9 @@ page). It ships empty: no dates, places, rules or names of its own.
 - **The field:** "Where to vote" (`/vote-info`) from Today (while the guide
   is out and GOTV is on or the first day is two weeks off), a door card's
   and a walk-list door's More. The door travels in router state only and
-  leaves the history entry once read. Nearest three with Directions;
+  leaves the history entry once read; the screen opens at the top. Nearest
+  three with Directions (without a door, Show the voter first and every
+  place under All voting places); Our names on the ballot lists only ours;
   within 150 m of an open place a warning, no QR and no names; "Show the
   voter" draws a QR code on the phone (`shared/qr.js`) with `?near=` at 2
   decimals, in the person's language when their Language field says
