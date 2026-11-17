@@ -505,7 +505,13 @@ than a week after they came off is refused. Contacts are door, phone, text or
   manager says where each word goes; what doesn't fit is kept as written
   in "<name> as written", right after it — no word is lost. It runs in the
   background, 1,000 values at a time (Stop keeps what's done). Choice words
-  match in any case, with ' for ’ and " - " for " – ". A renamed or taken-off
+  match in any case, with ' for ’ and " - " for " – ". On a profile Faith
+  shows its top choices with Christian opening the churches; "… as written"
+  words show read-only with a Clear; the desk's offline copy never keeps a
+  Private value ("Needs signal"). The import asks what each word in a Pick
+  one column means (a choice, Keep as written or Leave blank) and never
+  refuses a row for a word not on the list. A manager's People download has
+  an "Include private fields" tick (Google Sheets never gets them). A renamed or taken-off
   standard field is never put back by the membership form. Every person has a
   **House number** of its own, apart from the street (the door card, the
   profile and *Add a person* ask for both; the address line reads 13450 104
