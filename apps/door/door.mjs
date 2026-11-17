@@ -30,6 +30,7 @@
 // ("ground" is the older name for "server" and still read; "web" and "air"
 // entries left from before are ignored.)
 import { createServer } from 'node:http';
+import { readFileSync } from 'node:fs';
 import { Readable } from 'node:stream';
 
 const NAME_RE = /^[a-z0-9][a-z0-9-]{0,62}$/;
@@ -81,6 +82,10 @@ export const visitorIp = (req, hops = Math.max(1, Number(process.env.BASE_TRUSTE
 };
 export const doorKeyOf = (raw = process.env.BASE_DOOR_KEY) => String(raw || '').trim();
 
+// base.win itself: the coming-soon page (home.html), where the product can
+// later be mounted. It names no client.
+const HOME = readFileSync(new URL('./home.html', import.meta.url), 'utf8');
+
 const page = (status, title, body) => ({
   status,
   headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'x-frame-options': 'DENY', 'x-content-type-options': 'nosniff' },
@@ -94,7 +99,7 @@ export const handler = (clients, { fetchImpl = fetch, doorKey = doorKeyOf() } = 
   const send = ({ status, headers, body }) => { res.writeHead(status, headers); res.end(body); };
   if (url.pathname === '/healthz') return send({ status: 200, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ok: true, service: 'base-door', clients: clients.size }) });
   if (url.pathname === '/' || url.pathname === '') {
-    return send(page(200, 'base.win', '<h1>base.win</h1><p>Your campaign has its own address on base.win — ask its organizers for it.</p>'));
+    return send({ ...page(200, 'base.win', ''), body: HOME });
   }
   const r = route(clients, url.pathname);
   if (!r) return send(page(404, 'Not found — base.win', '<h1>Not here</h1><p>There’s no campaign at this address on base.win. Check the link your campaign sent you.</p>'));

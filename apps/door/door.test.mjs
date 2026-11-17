@@ -139,6 +139,7 @@ test('nobody at that name, a server not answering: a plain page each, saying bas
   assert.equal(home.status, 200);
   const homeText = await home.text();
   assert.match(homeText, /<title>base\.win<\/title>/);
+  assert.match(homeText, /Coming soon/);
   assert.doesNotMatch(homeText, /imaginesurrey/i, 'the home page lists no campaigns');
   for (const t of [noneText, homeText]) assert.doesNotMatch(t, /\bGround\b|\bAir\b|Base Web/, 'one name: base.win');
   assert.equal((await (await get('/healthz')).json()).ok, true);
