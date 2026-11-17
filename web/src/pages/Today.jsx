@@ -1106,6 +1106,8 @@ function DeskToday({ b, me, nav, toast }) {
 
       <NeedsYou b={b} me={me} />
 
+      {/* Nothing of theirs to come (no Shifts, no filing dates): no heading over an empty list. */}
+      {(hasArea(me, 'shifts') || (b.filing ?? []).length > 0) && (
       <section className="today-section" aria-labelledby="today-next-h">
         <h2 className="today-h" id="today-next-h">Coming up</h2>
         <ul className="today-rows">
@@ -1119,6 +1121,7 @@ function DeskToday({ b, me, nav, toast }) {
           ))}
         </ul>
       </section>
+      )}
 
       <GoTo me={me} nav={nav} b={b} />
 

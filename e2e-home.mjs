@@ -7,6 +7,8 @@
 //   "N walk lists"), Today reads nothing of /api/map/doors or /density; it
 //   folds, stays folded on a reload and asks no Leaflet while folded;
 //   "Activity ›" opens /activity; staff denied Map see no band;
+//   staff denied Donations, Shifts, Signs and Map see no total, gift, shift,
+//   sign or map link; a $87,500 total fits its tile at 390 and 360;
 //   Activity (empty and with data): its title and period pills, the tiles,
 //   the chart, the map as a band (≥ 1,000 wide, ≤ 560 tall) with the people
 //   under it, By team, Latest; zoomed in, a shorter window keeps the zoom;
@@ -463,6 +465,40 @@ try {
     const mo = await C.join('staff', 'Mo', ['map']);
     await deskToday(mo);
     check('staff denied Map: no band', (await mo.page.$('.mapwindow--band')) === null);
+
+    // Staff denied Donations, Shifts, Signs and Map: Today shows nothing a
+    // tap there would refuse — no total, no gift, no shift, no signs, and
+    // Doors this week is a number, not a link.
+    const di = await C.join('staff', 'Di', ['money', 'shifts', 'signs', 'map']);
+    await deskToday(di);
+    await sleep(800);
+    const diText = await di.text();
+    const diHrefs = await di.page.$$eval('main a', (els) => els.map((e) => e.getAttribute('href') || ''));
+    const diBrief = (await di.api('/brief')).json;
+    check('staff denied Donations, Shifts, Signs and Map: no total, gifts, shifts or signs; no links to them',
+      !/Total raised|Over limit|spots? left|to put up|Open the map/.test(diText) && /Doors this week/.test(diText)
+      && !diHrefs.some((h) => /\/(money|shifts|signs|map)(\/|\?|$)/.test(h)) && diBrief.money === null && !diBrief.flagged?.length,
+      `${diText.slice(0, 300)} | ${diHrefs.filter((h) => /money|shifts|signs|map/.test(h)).join(' ')}`);
+    await di.shot('11b-staff-denied-money-1440', true);
+
+    // A five-figure total fits its tile on a phone (390 and 360).
+    await staff.page.route(/\/api\/brief(\?|$)/, async (route) => {
+      const r = await route.fetch();
+      const j = await r.json();
+      if (j.money) j.money.totalCents = 8_750_000;
+      await route.fulfill({ response: r, json: j });
+    });
+    for (const width of [390, 360]) {
+      await staff.page.setViewportSize({ width, height: 844 });
+      await deskToday(staff);
+      const fit = await staff.page.$$eval('.today-num', (els) => els.map((t) => {
+        const n = t.querySelector('.today-num__n');
+        return { text: n.textContent, inside: n.getBoundingClientRect().right <= t.getBoundingClientRect().right - 1 && n.scrollWidth <= n.clientWidth };
+      }));
+      check(`a total of $87,500 fits its tile at ${width}`, fit.some((f) => f.text === '$87,500') && fit.every((f) => f.inside), JSON.stringify(fit));
+      await staff.shot(`10c-staff-87500-${width}`);
+    }
+    await staff.page.unroute(/\/api\/brief(\?|$)/);
 
     const tess = await C.join('treasurer', 'Tess', ['outreach']);
     await deskToday(tess);

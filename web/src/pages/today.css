@@ -110,6 +110,8 @@ h2.today-h {
   text-overflow: ellipsis;
 }
 .today-num { container-type: inline-size; }
+/* Two tiles (no Donations): they share the row. */
+.today-nums:has(> :nth-child(2):last-child) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 /* Doors this week for someone without the Map: a number, not a link. */
 .today-num--plain { cursor: default; }
 @media (hover: hover) {
