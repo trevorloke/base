@@ -319,6 +319,14 @@ app.post('/import', async (c) => {
       `select * from person_fields where workspace_id = $1 and id = any($2::uuid[]) and retired_at is null and kind = 'choice'`,
       [ctx.workspaceId, parsed.data.as_written],
     )).rows;
+    // A list taken off (or no longer Pick one) since the file was mapped:
+    // its kept words would have nowhere to go, so the file is refused, by
+    // name, rather than dropping them without a word.
+    const gone = [...new Set(parsed.data.as_written)].filter((id) => !lists.some((f) => f.id === id));
+    if (gone.length) {
+      const named = (await db.query('select name from person_fields where workspace_id = $1 and id = $2', [ctx.workspaceId, gone[0]])).rows[0];
+      return c.json({ error: `${named ? named.name : 'A list'} was taken off — check the file again` }, 409);
+    }
     const to = new Map();
     try {
       if (dryRun) {

@@ -428,6 +428,16 @@ test('import: words kept as written go to “<list> as written”, made by the i
   assert.equal(ok(await mgr.get('/api/audit/verify')).ok, true);
 });
 
+test('import: a list taken off between Check and Import refuses the file, naming it — no kept word is dropped', async () => {
+  const f = ok(await mgr.action('field.create', { name: 'Shoe', kind: 'choice', choices: ['Boot', 'Sandal'] })).field;
+  const row = { name: 'Gone Example', phone: '604-555-0178', fields: { [`as_written:${f.id}`]: 'Clog' } };
+  ok(await mgr.action('field.retire', { id: f.id }));
+  for (const dryRun of [true, false]) said(await mgr.post('/api/data/import', { rows: [row], as_written: [f.id], dryRun }), 409, 'Shoe was taken off — check the file again');
+  assert.equal((await db.query("select 1 from persons where workspace_id = $1 and name = 'Gone Example'", [ws])).rows.length, 0);
+  // A list that isn't there at all.
+  said(await mgr.post('/api/data/import', { rows: [row], as_written: ['00000000-0000-4000-8000-000000000000'] }), 409, 'taken off');
+});
+
 test('membership form: Campus a choice; other words in Notes (kept), never refusing the form', async () => {
   const F = await fieldsBy();
   const r1 = ok(await form({ campus: 'kwantlen polytechnic university - surrey' }));
