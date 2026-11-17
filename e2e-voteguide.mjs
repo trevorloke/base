@@ -54,6 +54,8 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { qrMatrix } from './shared/qr.js';
+import { LEGAL_ENGLISH } from './shared/site/wording.js';
+import { startFakeTranslate } from './server/test/fake-translate.js';
 
 const PORT = Number(process.env.PORT || 5510);
 const P = String(process.env.BASE_PATH || '').replace(/\/+$/, '');
@@ -64,6 +66,7 @@ const SITE = `${ORIGIN}${P}/site`;
 const API = `${ORIGIN}${P}/api`;
 const GEO_PORT = 5513;
 const FRAME_PORT = 5514;
+const TRANSLATE_PORT = 5512; // the stand-in Google Translation (TR), for the Punjabi page
 const SHOTS = process.env.SHOTS || '/tmp/starbase-voteguide';
 mkdirSync(SHOTS, { recursive: true });
 const DATA = mkdtempSync(join(tmpdir(), 'vg-e2e-'));
@@ -103,6 +106,7 @@ const framer = createServer((req, res) => {
 <script src="${SITE}/site-assets/embed.js" async></script>`);
 });
 await new Promise((r) => framer.listen(FRAME_PORT, '0.0.0.0', r));
+const fakeT = await startFakeTranslate({ port: TRANSLATE_PORT });
 
 // ── The server, restarted with a moved clock ──
 let server = null;
@@ -111,6 +115,7 @@ const startServer = async (shift = 0) => {
     env: {
       ...process.env, PORT: String(PORT), STARBASE_OPEN_SIGNUP: '1', STARBASE_DATA: DATA, STARBASE_E2E: '1', STARBASE_CLOCK_SHIFT_MS: String(Math.round(shift)),
       GEOCODER: 'bc', BC_GEOCODER_URL: `http://127.0.0.1:${GEO_PORT}`, STARBASE_GEO_BOUNDS: '49.002,-122.92|49.222,-122.67', SITE_CACHE_SECONDS: '60',
+      GOOGLE_TRANSLATE_API_BASE: fakeT.url, GOOGLE_TRANSLATE_KEY: 'test-translate-key-vg',
       ...(P ? { BASE_PATH: P } : {}),
     },
     stdio: ['ignore', 'ignore', 'inherit'],
@@ -284,6 +289,8 @@ try {
   const pages = (await api(mpage, '/site')).json?.pages || [];
   const gp = pages.find((p) => p.slug === 'voter-guide');
   check('4. the guide page is made as a draft', gp && gp.status !== 'published');
+  const moreSaid = await text(mpage, '.wg-more');
+  check('4. More then links to the draft page, and Add the guide page is gone', /Voter guide \(draft\) — open in the builder/.test(moreSaid) && (await mpage.locator('button:has-text("Add the guide page")').count()) === 0, moreSaid.slice(0, 200));
   await act(mpage, 'site.page.publish', { id: gp.id });
   const pub = watch(await (await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 })).newPage(), 'public');
   await go(pub, `${SITE}/voter-guide`);
@@ -362,6 +369,14 @@ try {
   check('6. no JavaScript: the plain page then shows every place open today', njAll.length === 5 && !njAll.includes('Example Recreation Centre'), njAll.join(', '));
   await nojs.close();
 
+  // ── Punjabi pages (TR): on, the law's words approved, the first sweep done ──
+  await act(mpage, 'site.settings.save', { languages: { on: ['pa'] } });
+  check('the law’s words approved in Punjabi', (await act(mpage, 'site.legal.approve', { lang: 'pa', words: LEGAL_ENGLISH })).status === 200);
+  await act(mpage, 'site.translate.now', {});
+  let paOn = false;
+  for (let i = 0; i < 90 && !paOn; i += 1) { await sleep(1000); paOn = Boolean((await api(mpage, '/site/languages')).json?.languages?.find((l) => l.code === 'pa')?.offered); }
+  check('the website offers Punjabi', paOn);
+
   // ── 8. Today's row; a door's More; Show the voter; no door in any URL ──
   const reqs = [];
   vol.page.on('request', (r) => reqs.push(r.url()));
@@ -382,8 +397,8 @@ try {
     await vol.page.waitForSelector('.vi-page h1', { timeout: 8000 }).catch(() => {});
     await sleep(500);
   };
-  await openDoor('Maya Example');
   const reqStart = reqs.length;
+  await openDoor('Maya Example');
   const vi = await text(vol.page, '.vi-page');
   check('8. “Nearest to 12530 Example Street” with three rows', /Nearest to 12530 Example Street/.test(vi) && (await vol.page.locator('#vi-near-h + .vi-places > li').count()) === 3, vi.slice(0, 160));
   check('8. the address bar is /vote-info, nothing more', new URL(vol.page.url()).search === '' && new URL(vol.page.url()).hash === '', vol.page.url());
@@ -406,8 +421,8 @@ try {
   want.forEach((row, y) => row.forEach((on, x) => { if (on) wantCells.push(`${x + 4},${y + 4}`); }));
   check('8. the QR code is the guide’s address with ?near= at 2 decimals', drawn && drawn.size === want.length + 8 && JSON.stringify([...drawn.cells].sort()) === JSON.stringify(wantCells.sort()), expected);
   check('8. the link under the code says the same', (await text(vol.page, '.vi-sheet__link')) === expected, await text(vol.page, '.vi-sheet__link'));
-  if (links.pa) check('8. Punjabi preselected for a Punjabi speaker', (await vol.page.getAttribute('.vi-lang[lang="pa"]', 'aria-checked')) === 'true');
-  else skip('8. Punjabi preselected', 'the website offers no Punjabi pages in this campaign (TR offers a language only after its pages are approved)');
+  check('8. the guide offers its Punjabi page', /\/pa\/voter-guide$/.test(links.pa || ''), JSON.stringify(links));
+  check('8. Punjabi preselected for a Punjabi speaker (from the walk list’s row)', (await vol.page.getAttribute('.vi-lang[lang="pa"]', 'aria-checked')) === 'true');
   await shot(vol.page, '12-show-the-voter-390');
   await vol.page.click('.vi-sheet button:has-text("Done")');
   await vol.page.reload({ waitUntil: 'domcontentloaded' });
@@ -415,7 +430,7 @@ try {
   check('8. a reload opens “Where to vote” without the door', /Voting places/.test(await text(vol.page, '.vi-page')) && !/Nearest to/.test(await text(vol.page, '.vi-page')));
   const plain = (u) => { try { return decodeURIComponent(u); } catch { return u; } };
   const leaked = reqs.slice(reqStart).filter((u) => /12530|Example Street|Example\+Street|49\.1253|122\.8012/i.test(plain(u)) || u.includes(maya.id));
-  check('8. from “Where to vote” to the code and a reload, no request carried the door’s address, its full pin or a person id', leaked.length === 0, leaked.join(' '));
+  check('8. from the door to “Where to vote”, the code and a reload, no request carried the door’s address, its full pin or a person id', leaked.length === 0, leaked.join(' '));
 
   // ── 9. Near a voting place ──
   await openDoor('Harjit Example');
@@ -434,7 +449,16 @@ try {
   await go(mpage, `${DESK}/website/guide`);
   await mpage.waitForSelector('#wg-places .wg-table', { timeout: 10000 }).catch(() => {});
   await mpage.click('#wg-places .wg-table button:has-text("Example Community Hall")');
+  const editorLook = await mpage.evaluate(() => {
+    const track = document.querySelector('#wg-places .wg-place .sv-switch__track');
+    const save = [...document.querySelectorAll('#wg-places .wg-place button')].find((b) => b.textContent.trim() === 'Save');
+    const cs = save && getComputedStyle(save);
+    return { track: track ? Math.round(track.getBoundingClientRect().width) : 0, saveBorder: cs ? cs.borderTopWidth : '', saveH: save ? Math.round(save.getBoundingClientRect().height) : 0 };
+  });
+  check('7. the place editor: the switch has its track, Save looks like a button', editorLook.track >= 24 && editorLook.saveBorder !== '0px' && editorLook.saveH >= 36, JSON.stringify(editorLook));
   await mpage.click('#wg-places [role=switch]:has-text("Closed today")');
+  check('7. the switch reads on', (await mpage.getAttribute('#wg-places [role=switch]:has-text("Closed today")', 'aria-checked')) === 'true');
+  await shot(mpage, '15a-place-editor-1440');
   await mpage.fill('input[aria-label="Why it’s closed"]', 'Power outage — use Sample Secondary School');
   await mpage.click('#wg-places .wg-place button:has-text("Save")');
   await sleep(1200);
@@ -552,7 +576,7 @@ try {
 } finally {
   await browser.close().catch(() => {});
   await stopServer();
-  geo.close(); framer.close();
+  geo.close(); framer.close(); await fakeT.close();
   rmSync(DATA, { recursive: true, force: true });
   const n = results.filter(Boolean).length;
   console.log(`\n${n}/${results.length} passed${exitCode ? '' : ' — all good'}`);

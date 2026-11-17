@@ -181,7 +181,8 @@ export default function VoteInfo() {
   return (
     <div className="vi-page">
       {head}
-      {draft && <p className="chip chip-warn">Draft — only the desk sees this</p>}
+      {/* Only when the server served the draft (not a live guide, not a volunteer's ?draft=1). */}
+      {draft && g.draft === true && <p className="chip chip-warn">Draft — only the desk sees this</p>}
       <p className="vi-status" aria-live="polite">{statusLine(st)}</p>
 
       {warn && (

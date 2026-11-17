@@ -18,7 +18,7 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiGet } from '../api.js';
-import { guideState, nearVotingPlace } from '@starbase/shared/voteguide';
+import { guideLangOf, guideState, nearVotingPlace } from '@starbase/shared/voteguide';
 
 const FIVE_MIN = 5 * 60 * 1000;
 const DAY = 24 * 3600 * 1000;
@@ -79,14 +79,7 @@ export const guideSoon = (g, now = guideNow(g)) => {
 };
 
 // A person's Language field (Pick several) → the guide's language.
-const LANGS = { punjabi: 'pa', mandarin: 'zh-Hans', cantonese: 'zh-Hant' };
-export const langOf = (value) => {
-  for (const v of Array.isArray(value) ? value : [value]) {
-    const code = LANGS[String(v ?? '').trim().toLowerCase()];
-    if (code) return code;
-  }
-  return 'en';
-};
+export const langOf = guideLangOf;
 export const languageOf = (fieldsData) => langOf((fieldsData?.fields || []).find((f) => String(f.name).toLowerCase() === 'language')?.value);
 
 const pinned = (d) => Number.isFinite(Number(d?.lat)) && Number.isFinite(Number(d?.lng)) && d?.lat !== null && d?.lng !== null;

@@ -17,6 +17,7 @@ import { DEFAULT_TZ } from '../../lib/org.js';
 import { atLocal, localDay, localHm, nextDay } from '../../lib/tzrule.js';
 import { parseJ } from '../site/store.js';
 import { cacheGen } from '../site/cache.js';
+import { guideLangOf } from '../../../shared/voteguide.js';
 
 const DAY_MS = 24 * 3600 * 1000;
 export const RULE_KEYS = ['bring_listed', 'bring_unlisted', 'who', 'mail', 'access'];
@@ -263,4 +264,23 @@ export const changedSinceChecked = (g) => {
     const at = g.checked?.[s]?.at;
     return [s, Boolean(at && newest[s] && newest[s] > at)];
   }));
+};
+
+// The guide language of each of these people from their Language field
+// (the walk list's rows, so "Where to vote" picks it with no read of the
+// person): person id → 'pa' | 'zh-Hans' | 'zh-Hant', English left out. A
+// volunteer sees it only when the field is shown to volunteers.
+export const guideLangs = async (q, ctx, ids) => {
+  const out = new Map();
+  if (!ids.length) return out;
+  const rows = (await q.query(
+    `select v.person_id, v.value from person_field_values v join person_fields f on f.id = v.field_id and f.workspace_id = v.workspace_id
+      where v.workspace_id = $1 and lower(f.name) = 'language' and f.retired_at is null ${ctx.role === 'volunteer' ? 'and f.volunteers' : ''}
+        and v.person_id = any($2::uuid[])`, [ctx.workspaceId, ids],
+  )).rows;
+  for (const r of rows) {
+    const code = guideLangOf(parseJ(r.value, r.value));
+    if (code !== 'en') out.set(r.person_id, code);
+  }
+  return out;
 };

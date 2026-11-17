@@ -132,6 +132,17 @@ const fmt = (lang, opts) => {
 const HM = /^(\d\d):(\d\d)$/;
 const DAY = /^(\d{4})-(\d\d)-(\d\d)$/;
 // "8 a.m.", "8:30 p.m." (":00" dropped).
+// A person's Language field (Pick several, or one choice) → the guide's
+// language: Punjabi → pa, Mandarin → zh-Hans, Cantonese → zh-Hant, else en.
+const GUIDE_LANGS = { punjabi: 'pa', mandarin: 'zh-Hans', cantonese: 'zh-Hant' };
+export const guideLangOf = (value) => {
+  for (const v of Array.isArray(value) ? value : [value]) {
+    const code = GUIDE_LANGS[String(v ?? '').trim().toLowerCase()];
+    if (code) return code;
+  }
+  return 'en';
+};
+
 export const timeWords = (hm, lang = 'en') => {
   const m = HM.exec(String(hm ?? ''));
   if (!m) return '';

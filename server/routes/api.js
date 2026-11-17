@@ -48,6 +48,7 @@ import { myBookingSql } from '../ext/schedule/hours.js';
 // Whether a volunteer may move this person (ext/core: a pin in their turf).
 import { inMyTurf } from '../ext/core/index.js';
 import { deskList } from '../ext/todaycounts/index.js';
+import { guideLangs } from '../ext/voteguide/read.js';
 
 // Gift rows flagged as maybe one donor (idsOf: the ids a row names, as
 // stored) get maybe_same_as: those records by name, as things stand.
@@ -748,6 +749,9 @@ export const walkFor = async (db, ctx, t, { names = false } = {}) => {
   const located = box ? await loadLocated(db, ctx, pass, box, await listedWhere(db, ctx, pass), { names }) : [];
   const doors = walkOrder(groupDoors(located.filter((p) => pointInPolygon(p.lat, p.lng, polygon))).filter((d) => inPass(d, pass)));
   const view = forViewer(ctx);
+  // Each person's guide language (VG): "Where to vote" picks it from the row.
+  const langs = await guideLangs(db, ctx, doors.flatMap((d) => d.persons.map((p) => p.id)));
+  const withLang = (p) => (langs.has(p.id) ? { ...view(p), guide_lang: langs.get(p.id) } : view(p));
   // Each door's signs (requested or up), matched the way the map matches
   // them — by a person there, or by the address of a door with no unit — so
   // "Wants a sign?" never offers a kind the door already has.
@@ -771,7 +775,7 @@ export const walkFor = async (db, ctx, t, { names = false } = {}) => {
     // lays its own knocks over them with the same rule.
     doors: doors.map((d) => {
       const state = doorState(d, pass);
-      return { ...d, persons: d.persons.map(view), signs: signsAt(d), state, tries: Math.max(0, ...d.persons.map((p) => p.pass_tries || 0)), done: state === 'done' };
+      return { ...d, persons: d.persons.map(withLang), signs: signsAt(d), state, tries: Math.max(0, ...d.persons.map((p) => p.pass_tries || 0)), done: state === 'done' };
     }),
     pass: pass ? { id: pass.id, name: pass.name, kind: pass.kind, who: pass.who, list_id: pass.list_id || null, tries: pass.tries, started_at: pass.started_at } : null,
     stats: turfStats(polygon, located, pass),

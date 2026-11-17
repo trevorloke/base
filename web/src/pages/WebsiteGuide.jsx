@@ -346,11 +346,11 @@ function PlacesCard({ d, run, busy, online, toast, live }) {
                 <tr key={p.id}><td colSpan={5}>{editor(p)}</td></tr>
               ) : (
                 <tr key={p.id} data-closed={p.closed ? '' : undefined}>
-                  <td><button type="button" onClick={() => setOpen(p.id)}><span className="wg-name">{p.name}</span>{p.closed && <span className="chip chip-danger"> Closed today</span>}</button></td>
-                  <td><button type="button" tabIndex={-1} onClick={() => setOpen(p.id)}>{p.address}</button></td>
-                  <td><button type="button" tabIndex={-1} onClick={() => setOpen(p.id)}>{placeDaysWords(p, days)}</button></td>
-                  <td><button type="button" tabIndex={-1} onClick={() => setOpen(p.id)}>{p.lat != null ? 'Yes' : 'Not on the map'}</button></td>
-                  <td><button type="button" tabIndex={-1} onClick={() => setOpen(p.id)}>{p.accessible === true ? 'Yes' : p.accessible === false ? 'No' : '—'}</button></td>
+                  <td><button type="button" className="wg-rowbtn" onClick={() => setOpen(p.id)}><span className="wg-name">{p.name}</span>{p.closed && <span className="chip chip-danger"> Closed today</span>}</button></td>
+                  <td><button type="button" className="wg-rowbtn" tabIndex={-1} onClick={() => setOpen(p.id)}>{p.address}</button></td>
+                  <td><button type="button" className="wg-rowbtn" tabIndex={-1} onClick={() => setOpen(p.id)}>{placeDaysWords(p, days)}</button></td>
+                  <td><button type="button" className="wg-rowbtn" tabIndex={-1} onClick={() => setOpen(p.id)}>{p.lat != null ? 'Yes' : 'Not on the map'}</button></td>
+                  <td><button type="button" className="wg-rowbtn" tabIndex={-1} onClick={() => setOpen(p.id)}>{p.accessible === true ? 'Yes' : p.accessible === false ? 'No' : '—'}</button></td>
                 </tr>
               )))}
             </tbody>
@@ -358,7 +358,7 @@ function PlacesCard({ d, run, busy, online, toast, live }) {
           <ul className="wg-list">
             {shown.map((p) => (open === p.id ? <li key={p.id}>{editor(p)}</li> : (
               <li key={p.id}>
-                <button type="button" onClick={() => setOpen(p.id)}>
+                <button type="button" className="wg-rowbtn" onClick={() => setOpen(p.id)}>
                   <span className="wg-name">{p.name}{p.closed ? ' · Closed today' : ''}</span>
                   <span className="wg-sub">{p.address} · {placeDaysWords(p, days)}{p.lat == null ? ' · Not on the map' : ''}</span>
                 </button>
@@ -528,7 +528,12 @@ function MoreCard({ d, run, busy, online, manager, toast }) {
         <div>
           <h3 className="vi-sub">The guide page</h3>
           {pages.length ? (
-            <ul className="wg-checks">{pages.map((p) => <li key={p.id}><Link to={`/website/pages/${p.id}`}>{p.path}</Link>{p.site_id ? ' (another website)' : ''}</li>)}</ul>
+            <ul className="wg-checks">{pages.map((p) => (
+              <li key={p.id}>
+                <Link to={`/website/pages/${p.id}`}>{p.title || 'Voter guide'}{p.published ? '' : ' (draft)'} — open in the builder</Link>
+                <span className="muted"> {p.path}{p.site_id ? ' · another website' : ''}</span>
+              </li>
+            ))}</ul>
           ) : (
             <button type="button" className="btn" disabled={busy || !online} onClick={() => doIt('site.guide.page', {}, 'Page added as a draft — publish it from Pages')}>Add the guide page</button>
           )}
@@ -593,7 +598,7 @@ export default function WebsiteGuide() {
         <button type="button" className="btn btn-primary" disabled={!online} onClick={() => { setPublishing(true); setPubErr(''); }}>Publish</button>
       )}
       {d && state === 'live' && (() => {
-        const page = arr(d.pages).find((p) => !p.site_id);
+        const page = arr(d.pages).find((p) => !p.site_id && p.published);
         return page ? <a className="btn btn-primary" href={`${String(d.site).replace(/\/+$/, '')}${page.path}`} target="_blank" rel="noopener">View guide<span className="ws-sr"> (opens a new tab)</span></a> : null;
       })()}
     </div>

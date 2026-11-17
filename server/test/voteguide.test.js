@@ -33,14 +33,14 @@ const DAYS = [
 const moveTo = (day, hm) => { process.env.STARBASE_CLOCK_SHIFT_MS = String(atLocal(day, hm, TZ) - Date.now()); };
 const moveBack = () => { delete process.env.STARBASE_CLOCK_SHIFT_MS; };
 
-let db; let mgr; let ws; let staff; let vol; let fake; let lookups = [];
+let db; let mgr; let ws; let staff; let vol; let volId; let fake; let lookups = [];
 const ok = (r, msg = '') => { assert.equal(r.status, 200, `${msg} ${JSON.stringify(r.json)}`); return r.json; };
 const no = (r, status, words) => { assert.equal(r.status, status, JSON.stringify(r.json)); if (words) assert.equal(r.json.error, words); return r.json; };
 
 before(async () => {
   ({ db, mgr, ws } = await campaign('Guide Example Campaign'));
   staff = (await member(mgr, 'staff', 'Sam Staff')).client;
-  vol = (await member(mgr, 'volunteer', 'Vic Volunteer')).client;
+  ({ client: vol, id: volId } = await member(mgr, 'volunteer', 'Vic Volunteer'));
   ok(await mgr.action('permission.role.set', { role: 'staff', grant: ['site'], deny: [] }));
   // A fake B.C. address service: in the box unless the words say otherwise.
   fake = createServer((req, res) => {
@@ -483,4 +483,27 @@ test('the export carries the guide’s tables; the books verify', async () => {
   for (const t of ['vote_guide', 'vote_days', 'vote_place_info', 'vote_contests']) assert.ok(Array.isArray(ex[t]), t);
   const v = ok(await mgr.get('/api/audit/verify'));
   assert.equal(v.ok, true, JSON.stringify(v));
+});
+
+test('the walk list carries each person’s guide language from the Language field, and no more', async () => {
+  const fields = ok(await mgr.get('/api/fields')).fields;
+  let language = fields.find((f) => f.name === 'Language');
+  if (!language) language = ok(await mgr.action('field.create', { name: 'Language', kind: 'choices', choices: ['English', 'Punjabi', 'Mandarin', 'Cantonese'], volunteers: true })).field;
+  const at = { lat: 49.15, lng: -122.85 };
+  const mk = async (name, address) => ok(await mgr.action('person.create', { name, address, city: 'Surrey', lat: at.lat, lng: at.lng })).person;
+  const raj = await mk('Raj Example', '15 Example Way');
+  const mei = await mk('Mei Example', '15 Example Way');
+  const bo = await mk('Bo Example', '15 Example Way');
+  ok(await mgr.action('field.values.set', { person_id: raj.id, values: [{ field_id: language.id, value: ['English', 'Punjabi'] }] }));
+  ok(await mgr.action('field.values.set', { person_id: mei.id, values: [{ field_id: language.id, value: ['Cantonese'] }] }));
+  const turf = ok(await mgr.action('turf.create', { name: 'Language block', polygon: [[at.lat - 0.001, at.lng - 0.001], [at.lat - 0.001, at.lng + 0.001], [at.lat + 0.001, at.lng + 0.001], [at.lat + 0.001, at.lng - 0.001]] })).turf;
+  ok(await mgr.action('turf.assign', { turf_id: turf.id, user_id: volId }));
+  const langs = async (client) => Object.fromEntries(ok(await client.get(`/api/turfs/${turf.id}/walk`)).doors.flatMap((d) => d.persons).map((p) => [p.name, p.guide_lang ?? null]));
+  assert.deepEqual(await langs(vol), { 'Raj Example': 'pa', 'Mei Example': 'zh-Hant', 'Bo Example': null });
+  // A field kept from volunteers says nothing to a volunteer.
+  ok(await mgr.action('field.update', { id: language.id, volunteers: false }));
+  assert.deepEqual(await langs(vol), { 'Raj Example': null, 'Mei Example': null, 'Bo Example': null });
+  assert.equal((await langs(mgr))['Raj Example'], 'pa');
+  ok(await mgr.action('field.update', { id: language.id, volunteers: true }));
+  assert.ok(bo.id);
 });
