@@ -20,6 +20,7 @@ import { LANG_BY_CODE, OTHER_CODES } from '../../../shared/site/languages.js';
 import { MODULE_BY_KIND } from '../../../shared/site/catalogue.js';
 import { prepare, translateKey } from '../../lib/translate.js';
 import { here } from '../../lib/mount.js';
+import { areasFor } from '../../lib/perms.js';
 import { sign, PREVIEW_TTL } from './tokens.js';
 import { readSettings, parseJ } from './store.js';
 import { latestLegal, staleKeys, legalSlots } from './legal.js';
@@ -211,9 +212,13 @@ export const mountLanguageReads = (api, opened) => {
     const wsId = await opened(c);
     const db = c.get('db');
     if (!(await readSettings(db, wsId)).languages.on.includes(code)) return c.json({ error: 'Turn it on first' }, 409);
-    const home = (await db.query("select id from site_pages where workspace_id = $1 and site_id is null and slug = 'home' and deleted_at is null", [wsId])).rows[0];
+    const home = (await db.query("select id, published from site_pages where workspace_id = $1 and site_id is null and slug = 'home' and deleted_at is null", [wsId])).rows[0];
     if (!home) return c.json({ error: 'The website has no home page yet' }, 404);
-    const t = await sign('preview', { w: wsId, p: home.id }, PREVIEW_TTL);
+    // A draft is the Website's: someone with only translations sees the
+    // published page (claim 'live'), never words not yet made public.
+    const live = !areasFor(c.get('ctx')).includes('site');
+    if (live && !home.published) return c.json({ error: 'The home page isn’t published yet' }, 409);
+    const t = await sign('preview', { w: wsId, p: home.id, ...(live ? { live: true } : {}) }, PREVIEW_TTL);
     return c.json({ url: here(c, `/site/__preview/${home.id}?t=${encodeURIComponent(t)}&lang=${encodeURIComponent(code)}`) });
   });
 

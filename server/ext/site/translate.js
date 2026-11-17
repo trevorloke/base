@@ -99,14 +99,18 @@ const YEAR_MS = 365 * 24 * 3600 * 1000;
 export const liveStrings = async (q, ws, { settings = null, now = Date.now() } = {}) => {
   const s = settings || await readSettings(q, ws.id);
   const out = [];
-  const seen = new Set();
+  const seen = new Map(); // hash → its entry
   const push = (text, { kind = 'plain', cls = 'content', place, rank, essential, order = 0 }) => {
     const t = normSeg(text);
     if (!t) return;
     const h = segHash(t);
-    if (seen.has(h)) return;
-    seen.add(h);
-    out.push({ text: t, hash: h, kind, cls, place, rank: RANK[rank], essential, order });
+    // The same words twice are one sentence; checked first if either
+    // place asks for it (a petition's statement quoted on a page is still
+    // a statement people sign).
+    if (seen.has(h)) { if (cls === 'check-first') seen.get(h).cls = cls; return; }
+    const g = { text: t, hash: h, kind, cls, place, rank: RANK[rank], essential, order };
+    seen.set(h, g);
+    out.push(g);
   };
   const field = (type, value, o) => {
     for (const t of segmentsOf(type, value)) push(t, { ...o, kind: type === 'markdown' ? 'markdown' : 'plain' });
@@ -196,6 +200,14 @@ export const liveStrings = async (q, ws, { settings = null, now = Date.now() } =
 
   return out.sort((a, b) => (Number(b.essential) - Number(a.essential)) || (a.rank - b.rank) || (a.order - b.order));
 };
+
+// The sentences people sign: each petition's or pledge's statement, by the
+// hash of its words wherever else they also appear (decision 41: a manager
+// handles these).
+export const statementHashes = async (q, wsId) => new Set(
+  (await q.query('select statement from site_campaigns where workspace_id = $1 and deleted_at is null', [wsId])).rows
+    .map((r) => normSeg(r.statement)).filter(Boolean).map((t) => segHash(t)),
+);
 
 // ── The month's characters ──
 const monthOf = (tz) => {

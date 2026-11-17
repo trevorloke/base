@@ -29,7 +29,7 @@ import { OTHER_CODES } from '../../../shared/site/languages.js';
 import { newId } from '../../lib/events.js';
 import { httpError } from '../../actions/util.js';
 import { areasFor } from '../../lib/perms.js';
-import { keptNames, queueSweep, bumpRev, liveStrings, convertRow, markRetranslate } from './translate.js';
+import { keptNames, queueSweep, bumpRev, liveStrings, convertRow, markRetranslate, statementHashes } from './translate.js';
 import { parseJ } from './store.js';
 import { sectionOf } from './shape.js';
 import { LEGAL_LABELS } from './language-reads.js';
@@ -82,7 +82,6 @@ export const editProblem = (src, text, kept = []) => {
   return null;
 };
 
-const STATEMENT = /^campaign:[^:]+:statement$/;
 const OWN = 'Someone else needs to check your own wording';
 const sentenceOf = async (tx, ws, hash) => (await liveStrings(tx, ws)).find((g) => g.hash === hash && g.cls !== 'legal') || null;
 const roleOf = async (tx, wsId, userId) => (userId
@@ -144,7 +143,8 @@ export const languageActions = (siteAction) => {
     const ws = { ...(ctx.workspace || {}), id: ctx.workspaceId };
     const g = await sentenceOf(tx, ws, v.src_hash);
     if (!g) throw httpError(404, 'That sentence isn’t on the website any more — reload the list');
-    if (STATEMENT.test(g.place) && ctx.role !== 'manager' && await roleOf(tx, ctx.workspaceId, v.made_by) !== 'manager') {
+    // A statement by its words, not by where they were first seen.
+    if ((await statementHashes(tx, ctx.workspaceId)).has(g.hash) && ctx.role !== 'manager' && await roleOf(tx, ctx.workspaceId, v.made_by) !== 'manager') {
       throw httpError(403, 'A manager needs to check a statement people sign');
     }
     const { names } = await keptNames(tx, ws);
@@ -170,9 +170,10 @@ export const languageActions = (siteAction) => {
         where t.workspace_id = $1 and t.lang = $2 and t.src_hash = any($3::text[]) for update of t`, [ctx.workspaceId, input.lang, input.src_hashes],
     )).rows;
     if (rows.length !== new Set(input.src_hashes).size) throw httpError(404, 'Some of those sentences have no words yet — reload the list');
+    const statements = await statementHashes(tx, ctx.workspaceId);
     for (const r of rows) {
       if (r.made_by === ctx.user.id) throw httpError(403, OWN);
-      if (STATEMENT.test(r.place || '') && ctx.role !== 'manager' && await roleOf(tx, ctx.workspaceId, r.made_by) !== 'manager') {
+      if (statements.has(r.src_hash) && ctx.role !== 'manager' && await roleOf(tx, ctx.workspaceId, r.made_by) !== 'manager') {
         throw httpError(403, 'A manager needs to check a statement people sign');
       }
     }

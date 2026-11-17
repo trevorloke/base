@@ -824,11 +824,13 @@ export const makeSiteApp = (at) => {
     const claims = UUID.test(id) ? await verify('preview', c.req.query('t')) : null;
     const row = claims && claims.w === site.ws.id && claims.p === id
       ? (await site.db.query(
-        'select id, slug, title, description, draft from site_pages where id = $1 and workspace_id = $2 and deleted_at is null and site_id is not distinct from $3::uuid',
+        'select id, slug, title, description, draft, published from site_pages where id = $1 and workspace_id = $2 and deleted_at is null and site_id is not distinct from $3::uuid',
         [id, site.ws.id, site.micro?.id || null],
       )).rows[0]
       : null;
-    if (!row) {
+    // A link made for someone with only Website translations draws the
+    // published page, never the draft.
+    if (!row || (claims.live && !row.published)) {
       const settings = await readSettings(site.db, site.ws.id);
       return sendPlain(c, site, settings, {
         title: 'Preview expired',
@@ -836,7 +838,7 @@ export const makeSiteApp = (at) => {
         status: 403,
       }, { preview: true });
     }
-    const d = parseJ(row.draft, {}) || {};
+    const d = parseJ(claims.live ? row.published : row.draft, {}) || {};
     const page = { id: row.id, slug: row.slug, title: d.title || row.title, description: d.description || '', image: shareOf(d), modules: Array.isArray(d.modules) ? d.modules : [], ...(d.checkFirst === true ? { checkFirst: true } : {}) };
     // ?lang=pa: the draft with that language's words so far (one that is on).
     const settings = await readSettings(site.db, site.ws.id);

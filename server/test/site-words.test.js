@@ -236,6 +236,31 @@ test('a petition’s statement: a manager checks the machine’s words; anyone e
   assert.ok((await hit(`/site/pa/act/${petition.slug}`)).text.includes('ਅਸੀਂ ਸ਼ਹਿਰ ਨੂੰ ਕਹਿੰਦੇ ਹਾਂ।'));
 });
 
+test('a statement quoted word for word on a page still needs a manager', async () => {
+  const statement = 'We ask the council to light the river path.';
+  const quote = ok(await mgr.action('site.page.create', { title: 'Our ask', slug: 'our-ask', modules: [
+    { id: 'text01', kind: 'text', hidden: false, props: { title: 'Sign our petition', body: statement, tone: 'paper' } },
+  ] }));
+  ok(await mgr.action('site.page.publish', { id: quote.page.id }));
+  const p = ok(await mgr.action('site.campaign.save', { kind: 'petition', title: 'Light the path', statement, excerpt: 'Safer at night.' })).campaign;
+  await sweep(db, ws);
+  const h = segHash(statement);
+  const machine = (await row('pa', statement)).text;
+  for (const who of [vol, staff]) {
+    const r = await who.client.action('site.translation.check', { lang: 'pa', src_hashes: [h] });
+    assert.equal(r.status, 403, `${who.email} may not check a statement`);
+    assert.match(r.json.error, /A manager needs to check/);
+  }
+  const s = ok(await vol.client.action('site.translation.save', { lang: 'pa', src_hash: h, text: 'ਅਸੀਂ ਕੌਂਸਲ ਨੂੰ ਰਾਹ ਰੌਸ਼ਨ ਕਰਨ ਲਈ ਕਹਿੰਦੇ ਹਾਂ।' }));
+  assert.equal((await staff.client.action('site.translation.approve', { lang: 'pa', version_id: s.version_id })).status, 403);
+  ok(await mgr.action('site.translation.decline', { lang: 'pa', version_id: s.version_id }));
+  cacheClear(ws);
+  assert.ok(!(await hit(`/site/pa/act/${p.slug}`)).text.includes(machine), 'unchecked, the statement stays in English');
+  const list = ok(await mgr.get(`/api/site/languages/pa/sentences?filter=all&q=${encodeURIComponent('river path')}`)).sentences;
+  assert.equal(list.length, 1);
+  assert.equal(list[0].check_first, true);
+});
+
 test('couldn’t translate: listed with the reason; typing its words clears it', async () => {
   fake.set({ drop: { contains: 'meets on Tuesdays', what: 'x' } });
   const text = 'Riverside Example League meets on Tuesdays.';
@@ -348,6 +373,16 @@ test('Preview: the home page in a language that is on, before visitors see it', 
   assert.equal(page.status, 200);
   assert.match(page.text, /<html[^>]* lang="pa"/);
   assert.match(page.text, /noindex/);
+  // A draft of the home page is the Website's: someone with only
+  // translations previews the published page; the Website sees the draft.
+  const home = (await db.query("select id, draft from site_pages where workspace_id = $1 and site_id is null and slug = 'home'", [ws])).rows[0];
+  const d = typeof home.draft === 'string' ? JSON.parse(home.draft) : home.draft;
+  ok(await mgr.action('site.page.save', { id: home.id, modules: [...(d.modules || []), { id: 'draft9', kind: 'text', hidden: false, props: { title: 'Not yet', body: 'UNPUBLISHED-DRAFT-WORDS', tone: 'paper' } }] }));
+  const volView = await hit(new URL(ok(await vol.client.get('/api/site/languages/pa/preview')).url, 'http://localhost').href.replace('http://localhost', ''));
+  assert.equal(volView.status, 200);
+  assert.ok(!volView.text.includes('UNPUBLISHED-DRAFT-WORDS'), 'no unpublished draft for translations alone');
+  const mgrView = await hit(new URL(ok(await mgr.get('/api/site/languages/pa/preview')).url, 'http://localhost').href.replace('http://localhost', ''));
+  assert.ok(mgrView.text.includes('UNPUBLISHED-DRAFT-WORDS'), 'the Website previews its draft');
   ok(await saveLanguages({ on: ['pa', 'zh-Hans'] }));
   const off = await vol.client.get('/api/site/languages/zh-Hant/preview');
   assert.equal(off.status, 409);
