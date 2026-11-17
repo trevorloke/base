@@ -15,7 +15,7 @@ import { dayWords, normWords } from '@starbase/shared/voteguide';
 import { action, apiGet, apiPost } from '../api.js';
 import { NeedsSignal, NoSignal, noSignal, useOnline } from '../components/NoSignal.jsx';
 import { Toast, WebsiteTabs, useToast } from '../components/site/Bits.jsx';
-import { GUIDE_STATE, useSiteGuide } from '../components/site/useSiteGuide.js';
+import { GUIDE_STATE, closedPatch, useSiteGuide } from '../components/site/useSiteGuide.js';
 import { DEFAULT_TILES } from '../components/tiles.js';
 import './shifts.css';
 import './schedule.css'; // the pin map's box (.sch-map__box)
@@ -140,7 +140,7 @@ function PlaceEditor({ p, d, run, busy, online, onClose, toast }) {
   const days = arr(d.guide.days);
   const [f, setF] = useState(() => ({
     name: p?.name || '', address: p?.address || '', city: p?.city || '', area: p?.area || '', note: p?.note || '',
-    accessible: tri(p?.accessible), curbside: tri(p?.curbside), closed: Boolean(p?.closed), closed_note: p?.closed_note || '',
+    accessible: tri(p?.accessible), curbside: tri(p?.curbside), closed: Boolean(p?.closed), closedWas: p ? Boolean(p.closed) : null, closed_note: p?.closed_note || '',
     days: p ? arr(p.own_days) : days.map((x) => ({ day: x.day })),
     pin: p && p.lat != null ? { lat: p.lat, lng: p.lng } : null, pinMoved: false,
   }));
@@ -156,7 +156,7 @@ function PlaceEditor({ p, d, run, busy, online, onClose, toast }) {
     setErr(null);
     const input = {
       ...(p ? { id: p.id } : {}), name: f.name, address: f.address, city: f.city, area: f.area, note: f.note, days: f.days,
-      accessible: fromTri(f.accessible), curbside: fromTri(f.curbside), closed: f.closed, closed_note: f.closed_note,
+      accessible: fromTri(f.accessible), curbside: fromTri(f.curbside), ...closedPatch(f.closedWas, f.closed), closed_note: f.closed_note,
       ...(f.pinMoved && f.pin ? { lat: f.pin.lat, lng: f.pin.lng } : {}),
     };
     // A new or moved address with no hand pin is looked up first (outside

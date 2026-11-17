@@ -583,3 +583,14 @@ test('the walk list carries each person’s guide language from the Language fie
   ok(await mgr.action('field.update', { id: language.id, volunteers: true }));
   assert.ok(bo.id);
 });
+
+// A desk tab left open overnight still holds yesterday's "Closed today": a
+// save that didn't touch the switch must not close the place again today.
+test('the desk sends Closed today only when the switch was changed in the editor', async () => {
+  const { closedPatch } = await import('../../web/src/components/site/useSiteGuide.js');
+  assert.deepEqual(closedPatch(true, true), {}, 'yesterday’s switch, untouched: nothing sent');
+  assert.deepEqual(closedPatch(false, false), {});
+  assert.deepEqual(closedPatch(true, false), { closed: false });
+  assert.deepEqual(closedPatch(false, true), { closed: true });
+  assert.deepEqual(closedPatch(null, false), { closed: false }, 'a new place says it');
+});
