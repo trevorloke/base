@@ -183,9 +183,10 @@ const writePlace = async (tx, ctx, emit, g, p, { pin } = {}) => {
      on conflict (place_id) do update set city = excluded.city, pin = excluded.pin, area = excluded.area, days = excluded.days,
        accessible = excluded.accessible, curbside = excluded.curbside, note = excluded.note, closed_on = excluded.closed_on,
        closed_note = excluded.closed_note, external_id = coalesce(excluded.external_id, vote_place_info.external_id),
-       changed_at = case when $14 then now() else vote_place_info.changed_at end, updated_at = now()`,
+       changed_at = case when $14 then $15::timestamptz else vote_place_info.changed_at end, updated_at = now()`,
+    // "Changed 2:14 p.m." is the campaign's clock (lib/clock.js), the one its day is read by.
     [id, ws, next.city, pinKind, next.area, JSON.stringify(next.days), next.accessible, next.curbside, next.note, next.closed_on, next.closed_note,
-      p.external_id || null, position, Boolean(stamp)],
+      p.external_id || null, position, Boolean(stamp), new Date(now()).toISOString()],
   );
   const payload = { name: next.name, address: next.address, city: next.city, area: next.area, days: next.days, accessible: next.accessible, curbside: next.curbside, note: next.note, closed_on: next.closed_on, closed_note: next.closed_note, pin: pinKind };
   if (stamp) {

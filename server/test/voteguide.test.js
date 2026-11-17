@@ -237,6 +237,7 @@ test('a published place edited carries before and after and changed_at; closed i
   assert.equal(pl.after.closed_on, A1);
   const g1 = ok(await vol.get('/api/guide'));
   assert.equal(g1.places.find((p) => p.id === lib.id).closed, true);
+  assert.equal(g1.places.find((p) => p.id === lib.id).changed_day, A1, '"Changed …" is on the campaign’s (moved) clock');
   moveTo(A2, '10:00');
   forgetGuide(ws);
   const g2 = ok(await vol.get('/api/guide'));
