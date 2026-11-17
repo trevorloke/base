@@ -238,7 +238,7 @@ app.get('/persons/count', async (c) => {
 // Permissions → Volunteers' map): then only the doors inside those turfs
 // (and their own) reach the phone — and its kept copy. A volunteer given
 // Map & turfs sees every door, as the desk does.
-const turfsOnly = (ctx) => ctx.role === 'volunteer'
+export const turfsOnly = (ctx) => ctx.role === 'volunteer'
   && ctx.workspace?.settings?.permissions?.volunteerDoors === 'turfs'
   && decide(ctx.perms, 'map') !== true;
 
@@ -321,19 +321,26 @@ const signsIn = async (db, ws, bbox) => (await db.query(
 // One row per door, for dots: where it is (to the metre), the household's
 // band — 0 not asked yet · 1 undecided · 2 support · 3 opposed, the
 // strongest there, as a pin's colour is (shared/scale.js bandOf says which
-// codes are which) — and how many people. null: more doors than MAP_DOTS.
+// codes are which) — how many people, and u: the most units at any one
+// address there (a building has 4 or more, shared/buildings.js; several
+// houses on one rough geocode never add up to one). An address with its
+// unit in front ("1203-13450 104 Ave", "#1203-…") is counted with its
+// building. null: more doors than MAP_DOTS.
 const doorDots = async (db, ws, bbox, rating) => {
   const rows = (await db.query(
-    `select round(lat::numeric, 5)::float8 as lat, round(lng::numeric, 5)::float8 as lng,
-            max(case when rating ~ '^4[A-Z]{0,2}$' then 3 when rating in ('1', '2') then 2 when rating = '3' then 1 else 0 end)::int as band,
-            count(*)::int as n
-     from persons
-     where workspace_id = $1 and deleted_at is null and lat between $2 and $4 and lng between $3 and $5
-       ${rating ? 'and rating = $6' : ''}
-     group by 1, 2 limit ${mapDots() + 1}`,
+    `select lat, lng, max(band)::int as band, sum(n)::int as n, max(u)::int as u from (
+       select round(lat::numeric, 5)::float8 as lat, round(lng::numeric, 5)::float8 as lng,
+              max(case when rating ~ '^4[A-Z]{0,2}$' then 3 when rating in ('1', '2') then 2 when rating = '3' then 1 else 0 end) as band,
+              count(*) as n,
+              count(distinct lower(btrim(address)) || '|' || lower(btrim(coalesce(unit, '')))) filter (where btrim(address) <> '') as u
+       from persons
+       where workspace_id = $1 and deleted_at is null and lat between $2 and $4 and lng between $3 and $5
+         ${rating ? 'and rating = $6' : ''}
+       group by 1, 2, regexp_replace(lower(btrim(coalesce(address, ''))), '^\\s*#?\\d{1,4}[a-z]?\\s*-\\s*(?=\\d{4,})', '')
+     ) s group by 1, 2 limit ${mapDots() + 1}`,
     rating ? [ws, ...bbox, rating] : [ws, ...bbox],
   )).rows;
-  return rows.length > mapDots() ? null : rows.map((r) => [r.lat, r.lng, r.band, r.n]);
+  return rows.length > mapDots() ? null : rows.map((r) => [r.lat, r.lng, r.band, r.n, r.u]);
 };
 
 // One person's door: everyone at their address and unit (within about 50 m —
@@ -614,7 +621,7 @@ const parseJ = (v, d) => (typeof v === 'string' ? JSON.parse(v) : (v ?? d));
 // listedWhere); null for a pass that walks no list.
 // names: also first_name and last_name (Reports' walking list prints them
 // apart); every other caller's rows stay exactly as they were.
-const loadLocated = async (db, ctx, pass = null, box = null, onList = null, { names = false } = {}) => {
+export const loadLocated = async (db, ctx, pass = null, box = null, onList = null, { names = false } = {}) => {
   const params = box ? [ctx.workspaceId, pass?.id || null, ...box] : [ctx.workspaceId, pass?.id || null];
   const listed = onList ? `coalesce((${joinWhere(params, onList)}), false)` : null;
   return (await db.query(
@@ -747,6 +754,18 @@ export const walkFor = async (db, ctx, t, { names = false } = {}) => {
   const box = boxOf(polygon);
   const located = box ? await loadLocated(db, ctx, pass, box, await listedWhere(db, ctx, pass), { names }) : [];
   const doors = walkOrder(groupDoors(located.filter((p) => pointInPolygon(p.lat, p.lng, polygon))).filter((d) => inPass(d, pass)));
+  return {
+    turf: { id: t.id, name: t.name, color: t.color, notes: t.notes, polygon },
+    doors: await shapeDoors(db, ctx, doors, pass),
+    pass: pass ? { id: pass.id, name: pass.name, kind: pass.kind, who: pass.who, list_id: pass.list_id || null, tries: pass.tries, started_at: pass.started_at } : null,
+    stats: turfStats(polygon, located, pass),
+  };
+};
+
+// The walk list's doors as the phone gets them: each person as this viewer
+// may see them, the door's signs, and its state in the open pass. The
+// building read (ext/buildings) shapes its doors the same way.
+export const shapeDoors = async (db, ctx, doors, pass) => {
   const view = forViewer(ctx);
   // Each door's signs (requested or up), matched the way the map matches
   // them — by a person there, or by the address of a door with no unit — so
@@ -762,20 +781,15 @@ export const walkFor = async (db, ctx, t, { names = false } = {}) => {
       .filter((s) => (s.person_id ? ids.has(s.person_id) : addr && String(s.address || '').trim().toLowerCase() === addr))
       .map(({ id, kind, status }) => ({ id, kind, status }));
   };
-  return {
-    turf: { id: t.id, name: t.name, color: t.color, notes: t.notes, polygon },
-    // Each door's state in the open pass (open · again · done) and the most
-    // tries anyone there has had; done is state === 'done' (the old rule
-    // with no pass). pass_tries / pass_last_outcome stay on the person rows
-    // (forViewer keeps them: not an email, not a money tag) — the phone
-    // lays its own knocks over them with the same rule.
-    doors: doors.map((d) => {
-      const state = doorState(d, pass);
-      return { ...d, persons: d.persons.map(view), signs: signsAt(d), state, tries: Math.max(0, ...d.persons.map((p) => p.pass_tries || 0)), done: state === 'done' };
-    }),
-    pass: pass ? { id: pass.id, name: pass.name, kind: pass.kind, who: pass.who, list_id: pass.list_id || null, tries: pass.tries, started_at: pass.started_at } : null,
-    stats: turfStats(polygon, located, pass),
-  };
+  // Each door's state in the open pass (open · again · done) and the most
+  // tries anyone there has had; done is state === 'done' (the old rule
+  // with no pass). pass_tries / pass_last_outcome stay on the person rows
+  // (forViewer keeps them: not an email, not a money tag) — the phone
+  // lays its own knocks over them with the same rule.
+  return doors.map((d) => {
+    const state = doorState(d, pass);
+    return { ...d, persons: d.persons.map(view), signs: signsAt(d), state, tries: Math.max(0, ...d.persons.map((p) => p.pass_tries || 0)), done: state === 'done' };
+  });
 };
 
 // Team members for assignment pickers (desk roles; /team stays manager-only).

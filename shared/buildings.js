@@ -123,9 +123,13 @@ const civicGroups = (doors) => {
       const mine = left.filter((d) => near(d, lat, lng));
       left = left.filter((d) => !near(d, lat, lng));
       const units = new Set(mine.map(unitOf)).size;
-      // The address as people write it, without a unit inside it.
-      const shown = mine.map((d) => (splitUnit(d.address) ? null : String(d.address).trim())).find(Boolean)
-        || splitUnit(mine[0].address)?.civic || String(mine[0].address).trim();
+      // The address as most of its doors write it, never with a unit inside.
+      const spelled = new Map();
+      for (const d of mine) {
+        const a = String(splitUnit(d.address)?.civic ?? d.address).trim();
+        spelled.set(a, (spelled.get(a) || 0) + 1);
+      }
+      const shown = [...spelled.entries()].sort((x, y) => y[1] - x[1])[0][0];
       groups.push({
         key: `${civic}@${pinKey(lat, lng)}`, civic, address: shown, city: mine.find((d) => d.city)?.city ?? null,
         lat, lng, doors: mine, units, people: mine.reduce((n, d) => n + (d.persons?.length || 0), 0),
