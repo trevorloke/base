@@ -6,6 +6,7 @@ import { areasFor } from '../lib/perms.js';
 import { runHooks } from '../lib/hooks.js';
 import { Hono } from 'hono';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
+import { demoEmail } from '../lib/demo.js';
 import { z } from 'zod';
 import { createHash } from 'node:crypto';
 import { getDb } from '../db/client.js';
@@ -209,6 +210,27 @@ app.post('/signup', async (c) => {
   setCookie(c, SESSION_COOKIE, token, cookieOpts);
   const ctx = await loadContext(db, token);
   return c.json(await meFor(db, ctx), 201);
+});
+
+// The public demo (lib/demo.js; never on production): no password — every
+// visitor is signed in as the one demo account and sent to the app. Off
+// unless STARBASE_DEMO_EMAIL names an account in the campaign; a manager's
+// is refused, so a visitor never holds Settings, the members or a send to
+// everyone. The same limit from one address as sign-in.
+app.get('/demo', async (c) => {
+  const email = demoEmail();
+  if (!email) return c.json({ error: 'not found' }, 404);
+  if (triesFrom(clientIp(c))) return c.json({ error: TOO_MANY }, 429);
+  const db = await getDb();
+  const row = (await db.query(
+    `select u.id, m.workspace_id, m.role from users u
+       join memberships m on m.user_id = u.id
+      where u.email = $1 order by m.created_at limit 1`,
+    [email],
+  )).rows[0];
+  if (!row || row.role === 'manager') return c.json({ error: 'the demo is not set up' }, 503);
+  setCookie(c, SESSION_COOKIE, await createSession(db, row.id, row.workspace_id), cookieOpts);
+  return c.redirect(`${c.env?.base || ''}/`, 302);
 });
 
 app.post('/login', async (c) => {

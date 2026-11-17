@@ -80,6 +80,13 @@ services:
         value: "council:City council,school_board:School board"
       - key: STARBASE_PUBLIC_URL     # this environment's address, e.g. https://starbase-staging.onrender.com
         sync: false
+      # The public demo (server/lib/demo.js; staging only): the base.win
+      # website may frame this server, and /api/auth/demo signs a visitor in
+      # as the account named, with no password. Off until the email is set.
+      - key: STARBASE_FRAME_HOSTS
+        value: "https://base.win,https://www.base.win"
+      - key: STARBASE_DEMO_EMAIL     # an account in the campaign that is not a manager; unset: no demo
+        sync: false
       - key: RESEND_API_KEY          # email: newsletters, invites, shift alerts (staging: a test key, or unset)
         sync: false
       - key: MAIL_FROM
