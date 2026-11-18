@@ -53,6 +53,7 @@ export { publicRoutes, siteGate, personToken } from './public.js';
 import { consentFromEvents, consentEventsToRead } from './consent.js';
 import { queueFromHook, translationEvents, translateJob } from './translate.js';
 import { translateKey } from '../../lib/translate.js';
+import { refetchJob } from './fonts.js';
 
 // A record merged into another (ext/duplicates moves every person_id column;
 // a referrer is site_actions.referrer_id): the referrals follow it.
@@ -91,7 +92,10 @@ export const hooks = {
 // In GET /api/export (rows of this campaign). site_keys holds the server's
 // signing secret and is never exported.
 // The translation sweep (translate.js): one at a time per campaign.
-export const jobs = { 'site.translate': translateJob };
+export const jobs = { 'site.translate': translateJob, 'site.font.refetch': refetchJob };
 
 export const exportTables = ['site_settings', 'site_pages', 'site_posts', 'site_campaigns', 'site_actions', 'consent_events', 'microsites',
-  'site_translations', 'site_translation_versions', 'site_translation_failures', 'site_legal_words', 'site_language_state', 'site_translate_usage'];
+  'site_translations', 'site_translation_versions', 'site_translation_failures', 'site_legal_words', 'site_language_state', 'site_translate_usage',
+  // Added Google fonts (WA): the rows, and the files without their bytes —
+  // fetched from Google again when an export is brought back (fonts.js).
+  'site_fonts', { table: 'site_font_files', omit: ['data'] }];

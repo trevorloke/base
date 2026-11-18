@@ -3,7 +3,13 @@
 // and the hash chain advance commit together or not at all. The events table
 // IS the audit trail — there is no dual write to drift.
 import { createHash, randomUUID } from 'node:crypto';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { runHooks } from './hooks.js';
+
+// Whether this code runs inside a write's transaction (lib/outside.js
+// refuses a call to another service from there).
+const writing = new AsyncLocalStorage();
+export const inWrite = () => writing.getStore() === true;
 
 // Canonical JSON: object keys sorted recursively, so the same payload always
 // hashes the same regardless of construction order.
@@ -27,7 +33,7 @@ export const chainHash = (prevHash, seq, action, entityType, entityId, op, actor
 const EVENT_BATCH = 100;
 
 export const runAction = async (db, { workspaceId, actorId, action, clientTs }, handler) => {
-  return db.transaction(async (tx) => {
+  return writing.run(true, () => db.transaction(async (tx) => {
     const ws = (await tx.query(
       'select event_seq, last_event_hash from workspaces where id = $1 for update',
       [workspaceId],
@@ -76,7 +82,7 @@ export const runAction = async (db, { workspaceId, actorId, action, clientTs }, 
       [workspaceId, seq, prev],
     );
     return { result, lastSeq: seq };
-  });
+  }));
 };
 
 // Replay the chain and verify every link. Streams by cursor batches so a

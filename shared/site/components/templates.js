@@ -11,6 +11,7 @@ import { Announcement, Footer, Header, LanguageSwitch, PageHead, PreviewBanner, 
 import { VoteBanner, EmbedView } from './voteguide.js';
 import { arr, dateOnly, obj, str } from './util.js';
 import { pagePath } from './links.js';
+import { fontFilesFor } from '../fonts.js';
 
 export const visibleModules = (page) => arr(obj(page).modules).filter((m) => m && typeof m === 'object' && !m.hidden && MODULE_COMPONENTS[m.kind]);
 
@@ -109,12 +110,6 @@ export function SiteBody({ rc, kind, page, post, campaign }) {
   <//>`;
 }
 
-// The font files a theme's heading and body faces load first (preloaded).
-const FONT_FILES = {
-  inter: 'fonts/inter-latin.woff2',
-  montserrat: 'fonts/montserrat-latin.woff2',
-  'barlow-condensed': 'fonts/barlow-condensed-800-latin.woff2',
-};
 
 // What goes in <head>, as data (the server writes it out, escaped).
 export function headFor(rc, { kind, page, post, campaign }) {
@@ -149,11 +144,9 @@ export function headFor(rc, { kind, page, post, campaign }) {
     title = `${rc.w('page.notFound')} · ${siteTitle}`;
   }
   const imageUrl = rc.img(obj(image).url);
-  // A Punjabi page: the body's file and Gurmukhi, in place of the heading's
-  // (two preloads at most).
-  const fonts = rc.lang === 'pa'
-    ? [FONT_FILES[site.theme.fonts.body], 'fonts/noto-gurmukhi-400.woff2'].filter(Boolean)
-    : [...new Set([site.theme.fonts.heading, site.theme.fonts.body].map((f) => FONT_FILES[f]).filter(Boolean))];
+  // The body's file and the heading's (a Punjabi page: the body's and
+  // Gurmukhi, in place of the heading's): two preloads at most.
+  const fonts = fontFilesFor(site.theme, site.fonts, rc.lang);
   return {
     title: title || rc.w('page.website'),
     description: description.slice(0, 300),
@@ -168,7 +161,7 @@ export function headFor(rc, { kind, page, post, campaign }) {
     noindex: kind === 'notFound' || rc.preview || site.seo.noindex,
     themeColor: site.theme.colors.brand,
     published: kind === 'post' ? str(obj(post).published_at) : '',
-    fonts: fonts.map((f) => loc.assets + f),
+    fonts: fonts.map((f) => (f.startsWith('fonts/g/') ? loc.fontAssets : loc.assets) + f),
     organization: {
       '@context': 'https://schema.org',
       '@type': 'Organization',

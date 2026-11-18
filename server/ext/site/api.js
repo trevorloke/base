@@ -9,6 +9,7 @@ import { sign, PREVIEW_TTL } from './tokens.js';
 import { paymentsReady } from './payments.js';
 import { mountMicrositeReads } from './microsite-reads.js';
 import { mountLanguageReads } from './language-reads.js';
+import { mountFontReads } from './fonts.js';
 
 export const api = new Hono();
 
@@ -37,6 +38,8 @@ const opened = async (c) => {
 
 // The campaign's other websites (microsite-reads.js).
 mountMicrositeReads(api, opened);
+// Google fonts (fonts.js).
+mountFontReads(api, (c) => opened(c));
 // The website in other languages (language-reads.js).
 mountLanguageReads(api, opened);
 

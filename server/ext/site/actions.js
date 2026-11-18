@@ -51,6 +51,7 @@ import { cacheClear } from './cache.js';
 import { micrositeActions, hostProblem, takeHeld, roomForPage } from './microsites.js';
 import { languageActions } from './language-actions.js';
 import { markRetranslate } from './translate.js';
+import { fontActions, themeProblem, fontsForCheck } from './fonts.js';
 
 const MANAGER = ['manager'];
 const DESK = ['manager', 'treasurer', 'staff'];
@@ -208,6 +209,7 @@ export const actions = {
     const sets = [];
     const params = [ws];
     const changed = {};
+    let themeNotes = [];
     // The website's languages (TR): turning one on publishes election
     // advertising in it, and the budget is a campaign expense — a manager's.
     let langWas = null;
@@ -261,11 +263,9 @@ export const actions = {
       // since it was made has none. Never the save's own word for it.
       const kept = follow && Boolean(was) && (was.follow === true ? was.kept === true : true);
       const given = { ...input.theme, follow, kept };
-      const { theme, problems } = checkTheme(given, brandKey());
-      if (problems.length) {
-        const p = problems[0];
-        throw httpError(400, `${p.pair.label}: ${p.ratio.toFixed(1)}:1 is too hard to read — it needs 4.5:1. Pick a darker or lighter colour.`);
-      }
+      const { theme, problems, notes } = checkTheme(given, brandKey(), await fontsForCheck(tx, ws, input.languages?.on));
+      if (problems.length) throw httpError(400, themeProblem(problems[0]));
+      themeNotes = notes;
       params.push(JSON.stringify(theme));
       sets.push(`theme = $${params.length}`);
       changed.theme = theme;
@@ -315,7 +315,7 @@ export const actions = {
       if (added.length) await markRetranslate(tx, ws, added);
     }
     const row = (await tx.query('select updated_at from site_settings where workspace_id = $1', [ws])).rows[0];
-    return { saved: Object.keys(changed), updated_at: iso(row.updated_at) };
+    return { saved: Object.keys(changed), updated_at: iso(row.updated_at), ...(themeNotes.length ? { notes: themeNotes.map((n) => n.words) } : {}) };
   }),
 
   'site.page.create': siteAction(z.object({
@@ -663,5 +663,6 @@ export const actions = {
 
 Object.assign(actions, micrositeActions(siteAction));
 Object.assign(actions, languageActions(siteAction));
+Object.assign(actions, fontActions);
 
 const SIG = `(select count(distinct a.person_id)::int from site_actions a where a.workspace_id = c.workspace_id and a.campaign_id = c.id and a.kind in ('petition', 'pledge'))`;

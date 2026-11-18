@@ -18,6 +18,7 @@
 import { createElement } from 'react';
 import { renderToString } from 'react-dom/server';
 import { themeCss } from '../../../../shared/site/theme.js';
+import { faceCss, fontFor } from '../../../../shared/site/fonts.js';
 import { renderContext } from '../../../../shared/site/components/context.js';
 import { SiteBody, headFor } from '../../../../shared/site/components/templates.js';
 import { jsonForScript, str } from '../../../../shared/site/components/util.js';
@@ -119,7 +120,7 @@ export function renderSite({ kind = 'page', site, page: rawPage, post, campaign,
     + head.fonts.map((f) => `<link rel="preload" href="${esc(f)}" as="font" type="font/woff2" crossorigin>`).join('')
     + `<link rel="stylesheet" href="${esc(assetUrl(rc.loc.assets, 'site.css'))}">`
     + (/ class="(?:vote-banner|vg-embed)"| data-module="voterguide"/.test(body) ? `<link rel="stylesheet" href="${esc(assetUrl(rc.loc.assets, 'voteguide.css'))}">` : '')
-    + `<style>${themeCss(t)}${rc.langs.offered.length ? VIEW_TRANSITION : ''}</style>`
+    + `<style>${faceCss([fontFor(t.fonts.heading, rc.site.fonts), fontFor(t.fonts.body, rc.site.fonts)], rc.loc.fontAssets)}${themeCss(t, rc.site.fonts)}${rc.langs.offered.length ? VIEW_TRANSITION : ''}</style>`
     + hints
     + `<script type="application/ld+json">${jsonForScript(head.organization)}</script>`
     + '</head>'

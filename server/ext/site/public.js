@@ -50,6 +50,7 @@ import { verify, sign, PERSON_TTL } from './tokens.js';
 import { refCodeFor, CODE_RE } from './people.js';
 import { choicesOf, emailOff, emailOn, smsOff, smsOn } from './consent.js';
 import { formRoute } from './forms.js';
+import { publicFontFile, licencesText } from './fonts.js';
 import { KIT_CODE_RE, goodPath } from '../socials/share.js';
 import { withSource } from '../../../shared/site/components/util.js';
 import { KINDS, consentWording } from './shape.js';
@@ -241,6 +242,8 @@ const ctxOf = (c, site, extra = {}) => {
   return {
     root: site.root,
     assets: site.assets,
+    // Added fonts: under the site's root without a language (fonts.js).
+    fontAssets: `${site.home}/site-assets`,
     media: `${site.base}/media`,
     origin: site.address,
     // true: the renderer names it under ctx.assets with its build's ?v=,
@@ -677,6 +680,14 @@ export const makeSiteApp = (at) => {
     await next();
   });
 
+  // A campaign's added Google fonts and the fonts' licences (fonts.js):
+  // this site's own, before the repository's files.
+  app.get(route('/site-assets/fonts/g/:file'), publicFontFile);
+  app.get(route('/site-assets/fonts/licences'), async (c) => {
+    const site = c.get('site');
+    const s = await rendererSite(site, await settingsOf(site));
+    return c.text(licencesText(s.theme, s.fonts), 200, { 'Cache-Control': 'public, max-age=300', 'X-Content-Type-Options': 'nosniff' });
+  });
   app.get(route('/site-assets/*'), serveAsset);
 
   app.get(route('/robots.txt'), async (c) => {

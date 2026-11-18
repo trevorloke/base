@@ -30,7 +30,8 @@
 // pictures are ids, words are escaped — a saved brand can never put markup,
 // script or CSS into a page.
 import { APP_NAME, BRANDS } from '@starbase/shared/brand';
-import { deriveLook, lookCss, lookChrome, SIDEBARS, CORNERS, HEADINGS } from '@starbase/shared/brand-look';
+import { deriveLook, lookCss, lookChrome, SIDEBARS, CORNERS, headingOf } from '@starbase/shared/brand-look';
+import { FONT_BY_VALUE, BUILT_FILES, LATIN, LATIN_EXT } from '@starbase/shared/site/fonts';
 import { envName, orgName } from './org.js';
 import { getDb } from '../db/client.js';
 
@@ -92,6 +93,19 @@ const presetBrand = (key = brandKey()) => {
 // app (the service worker keeps them for no signal, sw.js) and at
 // /media/<id> on the public pages, the website and in emails (the same
 // bytes; /media answers on the campaign's own domain too).
+// An added Google font as the brand's heading face (WA): its name, kind and
+// the files the desk loads (brand.save writes it from site_fonts).
+const KINDS = ['sans-serif', 'serif', 'display', 'handwriting', 'monospace'];
+const headingFaceOf = (s) => {
+  const hf = s?.headingFace;
+  if (!/^g:[a-z0-9-]{1,80}$/.test(String(s?.heading || '')) || !hf || typeof hf !== 'object') return null;
+  const family = String(hf.family || '').replace(/[^A-Za-z0-9 -]/g, '').slice(0, 100);
+  const files = (Array.isArray(hf.files) ? hf.files : []).slice(0, 4)
+    .filter((x) => /^[a-f0-9]{64}$/.test(String(x?.sha)) && /^\d{3,4}( \d{3,4})?$/.test(String(x?.weight)))
+    .map((x) => ({ sha: x.sha, weight: String(x.weight), range: String(x.range || '').replace(/[^A-Fa-f0-9U+,\- ]/g, '') }));
+  return family && files.length ? { family, kind: KINDS.includes(hf.kind) ? hf.kind : 'sans-serif', files } : null;
+};
+
 const savedBrand = (s, key) => {
   const start = BRANDS[key] || BRANDS.base;
   const logo = picture(s.logo);
@@ -108,7 +122,8 @@ const savedBrand = (s, key) => {
     second: hexOf(s.second),
     sidebar: oneOf(s.sidebar, SIDEBARS, 'light'),
     corners: oneOf(s.corners, Object.keys(CORNERS), 'soft'),
-    heading: oneOf(s.heading, HEADINGS, 'inter'),
+    heading: headingFaceOf(s) ? s.heading : headingOf({ heading: s.heading }),
+    headingFace: headingFaceOf(s),
     learn: plainWords(s.learn, 40) || start.learn,
     shortName,
     // The tab's name: the campaign's, with base.win after it.
@@ -209,7 +224,7 @@ const BASE_CSS = presetBrand('base').css;
 // What script needs of a saved brand (web/src/brand.js): no address in it
 // but the campaign's own pictures, which the app puts its path in front of.
 const forScript = (b) => ({
-  key: b.key, saved: true, color: b.color, second: b.second, sidebar: b.sidebar, sideDark: b.sideDark, corners: b.corners, heading: b.heading,
+  key: b.key, saved: true, color: b.color, second: b.second, sidebar: b.sidebar, sideDark: b.sideDark, corners: b.corners, heading: b.heading, ...(b.headingFace ? { headingFace: b.headingFace } : {}),
   learn: b.learn, shortName: b.shortName, logo: b.logo, logoDark: b.logoDark, logoSize: b.logoSize, mark: b.mark,
 });
 
@@ -217,8 +232,26 @@ const forScript = (b) => ({
 // app.css's own), a saved brand's data, and its logo asked for early — which
 // is also how the service worker learns which pictures to keep for no
 // signal (sw.js). So is a heading face from outside the app's /fonts/: the
-// website's Montserrat (web/public/fonts/fonts.css declares it).
+// website's Montserrat (web/public/fonts/fonts.css declares it), and any
+// other face base.win ships or the campaign added (WA), declared here.
 const MONTSERRAT = '/site-assets/fonts/montserrat-latin.woff2';
+const DESK_FACES = new Set(['inter', 'barlow-condensed', 'montserrat', 'system', 'serif']);
+const cssName = (s) => String(s).replace(/[^A-Za-z0-9 -]/g, '');
+const face = (family, weight, file, range) => `@font-face{font-family:'${cssName(family)}';font-style:normal;font-weight:${weight};font-display:swap;src:url(${file}) format('woff2');unicode-range:${range}}`;
+const headingFaceHead = (b) => {
+  const f = FONT_BY_VALUE[b.heading];
+  if (f && !DESK_FACES.has(b.heading)) {
+    const files = BUILT_FILES.filter((x) => x.value === b.heading && x.style === 'normal');
+    return `<style data-brand>${files.map((x) => face(x.family, x.weight, `/site-assets/${x.file}`, x.subset === 'latin' ? LATIN : LATIN_EXT)).join('')}</style>`
+      + `<link rel="preload" as="font" type="font/woff2" href="/site-assets/${f.files.heading}" crossorigin data-brand />`;
+  }
+  const hf = b.headingFace;
+  if (!f && hf?.files?.length) {
+    return `<style data-brand>${hf.files.map((x) => face(hf.family, x.weight, `/api/site/fonts/file/${x.sha}.woff2`, x.range)).join('')}</style>`
+      + `<link rel="preload" as="font" type="font/woff2" href="/api/site/fonts/file/${hf.files[0].sha}.woff2" crossorigin data-brand />`;
+  }
+  return '';
+};
 const brandHead = (b) => {
   const out = [];
   if (b.css !== BASE_CSS) out.push(`<style id="brand">${b.css}</style>`);
@@ -227,6 +260,7 @@ const brandHead = (b) => {
   if (b.logo) out.push(`<link rel="preload" as="image" href="${attr(b.logo)}" data-brand${b.logoDark && !b.sideDark ? ' media="(prefers-color-scheme: light)"' : ''} />`);
   if (b.logoDark) out.push(`<link rel="preload" as="image" href="${attr(b.logoDark)}" data-brand${b.sideDark ? '' : ' media="(prefers-color-scheme: dark)"'} />`);
   if (b.heading === 'montserrat') out.push(`<link rel="preload" as="font" type="font/woff2" href="${MONTSERRAT}" crossorigin data-brand />`);
+  else out.push(headingFaceHead(b));
   return out.join('');
 };
 

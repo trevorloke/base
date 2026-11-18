@@ -24,6 +24,7 @@
 import { z } from 'zod';
 import { newModule, checkModules } from '@starbase/shared/site/catalogue';
 import { checkTheme } from '@starbase/shared/site/theme';
+import { fontsForCheck, themeProblem } from './fonts.js';
 import { newId } from '../../lib/events.js';
 import { httpError } from '../../actions/util.js';
 import { brandKey } from '../../lib/brand.js';
@@ -227,11 +228,9 @@ export const micrositeActions = (siteAction) => ({
       params.push(input.name); sets.push(`name = $${params.length}`); changed.name = input.name;
     }
     if (input.theme !== undefined) {
-      const { theme, problems } = checkTheme({ ...input.theme, follow: false, kept: false }, brandKey());
-      if (problems.length) {
-        const p = problems[0];
-        throw httpError(400, `${p.pair.label}: ${p.ratio.toFixed(1)}:1 is too hard to read — it needs 4.5:1. Pick a darker or lighter colour.`);
-      }
+      // The campaign's added fonts and the same speed budget as the main site (WA).
+      const { theme, problems } = checkTheme({ ...input.theme, follow: false, kept: false }, brandKey(), await fontsForCheck(tx, ws));
+      if (problems.length) throw httpError(400, themeProblem(problems[0]));
       params.push(JSON.stringify(theme)); sets.push(`theme = $${params.length}`); changed.theme = theme;
     }
     if (input.check_first !== undefined && input.check_first !== Boolean(cur.check_first)) {

@@ -4,15 +4,9 @@
 // type). Contrast is checked here — a pair that fails WCAG 2.2 AA (4.5:1 for
 // text) can't be saved — so no admin can skin the site into unreadable.
 
-export const FONTS = [
-  // Self-hosted (server/ext/site serves the files; no third-party requests).
-  { value: 'inter', label: 'Inter', stack: "'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif" },
-  { value: 'montserrat', label: 'Montserrat', stack: "'Montserrat', 'Inter', system-ui, Arial, sans-serif" },
-  { value: 'barlow-condensed', label: 'Barlow Condensed', stack: "'Barlow Condensed', 'Arial Narrow', 'Inter', system-ui, sans-serif" },
-  { value: 'system', label: 'System', stack: "system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" },
-  { value: 'serif', label: 'Serif', stack: "Georgia, 'Times New Roman', serif" },
-];
-export const FONT_BY_VALUE = Object.fromEntries(FONTS.map((f) => [f.value, f]));
+// The faces (built-in and a campaign's added Google fonts) live in fonts.js.
+import { FONTS, FONT_BY_VALUE, FONT_WORDS, fontFor, firstVisitKb, profileFor, profileCss } from './fonts.js';
+export { FONTS, FONT_BY_VALUE };
 
 export const RADII = [
   { value: 'square', label: 'Square', px: 2 },
@@ -89,9 +83,15 @@ export function contrast(a, b) {
 // Black or white, whichever reads better on a colour.
 export const inkFor = (bg) => (contrast('#000000', bg) >= contrast('#ffffff', bg) ? '#000000' : '#ffffff');
 
-// Check a theme: { theme, problems: [{ pair, ratio }] } — problems empty when
-// every pair reaches 4.5:1. Unknown or bad values fall back to the skin's.
-export function checkTheme(input, skin = 'base') {
+// Check a theme: { theme, problems: [{ pair, ratio } | { font, words }],
+// notes } — problems empty when every pair reaches 4.5:1 and the fonts are
+// readable and light enough (WA decision 10); notes are shown, never
+// refused. Unknown or bad values fall back to the skin's. `added` is the
+// campaign's added fonts (fonts.js): an added font that isn't among them
+// falls back too. Without `added` (a theme the server already checked, read
+// back) an added font's value is kept as it is. `punjabi`: the site is
+// offered in Punjabi, whose first visit is counted too.
+export function checkTheme(input, skin = 'base', { added, punjabi = false } = {}) {
   const base = SKINS[input?.skin] || SKINS[skin] || SKINS.base;
   const colors = {};
   const given = (k) => (hex(input?.colors?.[k]) ? `#${String(input.colors[k]).trim().replace('#', '').toLowerCase()}` : null);
@@ -102,9 +102,10 @@ export function checkTheme(input, skin = 'base') {
     colors.action = colors.brand;
     if (!given('actionInk')) colors.actionInk = colors.brandInk;
   }
+  const known = (v) => Boolean(FONT_BY_VALUE[v] || (added ? fontFor(v, added) : /^g:[a-z0-9-]{1,80}$/.test(String(v || ''))));
   const fonts = {
-    heading: FONT_BY_VALUE[input?.fonts?.heading] ? input.fonts.heading : base.fonts.heading,
-    body: FONT_BY_VALUE[input?.fonts?.body] ? input.fonts.body : base.fonts.body,
+    heading: known(input?.fonts?.heading) ? input.fonts.heading : base.fonts.heading,
+    body: known(input?.fonts?.body) ? input.fonts.body : base.fonts.body,
   };
   const radius = RADII.some((r) => r.value === input?.radius) ? input.radius : base.radius;
   const logo = {
@@ -123,7 +124,19 @@ export function checkTheme(input, skin = 'base') {
   // here underneath, to go back to (the server says so: site.settings.save).
   if (follow && input?.kept === true) theme.kept = true;
   const problems = PAIRS.map((p) => ({ pair: p, ratio: contrast(colors[p.fg], colors[p.bg]) })).filter((x) => x.ratio < 4.5);
-  return { theme, problems };
+  const notes = [];
+  if (added) {
+    // Body text only in a face checked for long reading.
+    const body = fontFor(fonts.body, added);
+    if (body && !body.body) problems.push({ font: 'body', words: FONT_WORDS.body });
+    const heading = fontFor(fonts.heading, added);
+    if (heading && (heading.kind === 'display' || heading.kind === 'handwriting')) notes.push({ font: 'heading', words: FONT_WORDS.display });
+    // The speed budget: the larger of the English and Punjabi first visits.
+    const kb = Math.max(firstVisitKb(theme, added, 'en'), punjabi ? firstVisitKb(theme, added, 'pa') : 0);
+    if (kb > 150) problems.push({ font: 'budget', kb, words: FONT_WORDS.budget(kb) });
+    else if (kb > 100) notes.push({ font: 'budget', kb, words: FONT_WORDS.slower(kb) });
+  }
+  return { theme, problems, notes };
 }
 
 // ── Colours worked out from a theme (an admin never types these) ──
@@ -183,11 +196,14 @@ export function themeColors(theme) {
 }
 
 // The CSS variables for a theme (the renderer puts them in the page head).
-export function themeCss(theme) {
-  const { theme: t } = checkTheme(theme);
+// `added`: the campaign's added fonts the theme may use.
+export function themeCss(theme, added) {
+  const { theme: t } = checkTheme(theme, undefined, { added });
+  const heading = fontFor(t.fonts.heading, added) || FONT_BY_VALUE[SKINS[t.skin]?.fonts.heading] || FONT_BY_VALUE.inter;
+  const body = fontFor(t.fonts.body, added) || FONT_BY_VALUE[SKINS[t.skin]?.fonts.body] || FONT_BY_VALUE.inter;
   const c = themeColors(t);
   const r = RADII.find((x) => x.value === t.radius)?.px ?? 10;
-  return `:root{--brand:${c.brand};--brand-ink:${c.brandInk};--accent:${c.accent};--accent-ink:${c.accentInk};--ink:${c.ink};--paper:${c.paper};--surface:${c.surface};--line:${c.line};--link:${c.link};--radius:${r}px;--font-heading:${FONT_BY_VALUE[t.fonts.heading].stack};--font-body:${FONT_BY_VALUE[t.fonts.body].stack};`
+  return `:root{--brand:${c.brand};--brand-ink:${c.brandInk};--accent:${c.accent};--accent-ink:${c.accentInk};--ink:${c.ink};--paper:${c.paper};--surface:${c.surface};--line:${c.line};--link:${c.link};--radius:${r}px;--font-heading:${heading.stack};--font-body:${body.stack};${profileCss(profileFor(heading))}`
     + `--action:${c.action};--action-ink:${c.actionInk};--muted:${c.muted};--brand-soft:${c.brandSoft};--field-line:${c.fieldLine};--brand-deep:${c.brandDeep};--danger:${c.danger};--accent-on-brand:${c.accentOnBrand};--accent-on-deep:${c.accentOnDeep};--heading-on-accent:${c.headingOnAccent};--pop:${c.pop};--pop-alt:${c.popAlt};`
     + `--ink-soft:${c.inkSoft};--accent-on-ink:${c.accentOnInk};--action-row:${c.actionRow}}`;
 }

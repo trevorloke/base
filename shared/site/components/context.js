@@ -51,6 +51,8 @@ export function normalizeSite(site) {
   const parentUrl = str(par.url).trim();
   return {
     theme,
+    // The campaign's added Google fonts the theme may use (WA).
+    fonts: arr(s.fonts).filter((f) => f && typeof f.slug === 'string' && Array.isArray(f.faces)),
     consent,
     site: str(own.name).trim() ? { name: str(own.name).trim(), key: str(own.key).trim() } : null,
     parent: /^https?:\/\/[^\s"'<>\\]+$/i.test(parentUrl) ? { name: str(par.name).trim() || name, url: parentUrl } : null,
