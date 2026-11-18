@@ -4,6 +4,7 @@
 import { cfg } from './config.mjs';
 import { currentKid } from './keys.mjs';
 import { appendLog } from './log.mjs';
+import { pickValues } from './snippets.mjs';
 
 // The door's own rule for a name, with no trailing dash.
 export const NAME_RE = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
@@ -166,7 +167,7 @@ export const saveEnv = async (tx, { name, env, display, serverUrl, operatorId })
 
 // A new campaign row and its environment (the wizard and "already running" use it).
 export const createCampaign = async (tx, { name, display, kind = 'client', values = {}, serverUrl = null, operatorId = null, action = 'campaign.create' }) => {
-  await tx.query('insert into campaigns (name, display, kind, values) values ($1, $2, $3, $4)', [name, display, kind, JSON.stringify(values)]);
+  await tx.query('insert into campaigns (name, display, kind, values) values ($1, $2, $3, $4)', [name, display, kind, JSON.stringify(pickValues(values))]);
   await tx.query('insert into environments (campaign, env, server_url) values ($1, $2, $3)', [name, kind === 'sample' ? 'staging' : 'production', serverUrl]);
   await appendLog(tx, { operatorId, action, campaign: name, payload: { display } });
 };

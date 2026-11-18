@@ -3,6 +3,7 @@ import { html, raw, num, clock, ago, dayClock } from './html.mjs';
 import { page, field, status, codeField } from './layout.mjs';
 import { logLine } from './log.mjs';
 import { openForm, inviteForm, checklist } from './desk.mjs';
+import { RULE_WORDS, RACES } from '../snippets.mjs';
 
 const ENV_WORD = { production: 'Production', staging: 'Staging' };
 const VALUE_WORDS = { city: 'City', province: 'Province', rules: 'Rules', tz: 'Time zone', races: 'Races' };
@@ -60,6 +61,12 @@ export const campaignsPage = ({ views, sampleStale = false, sampleValue = '', sa
       <p><a class="btn btn-quiet" href="/existing">Add a campaign that’s already running</a></p>
       ${archived.length ? html`<details class="oc-more"><summary class="btn btn-quiet">More</summary><h2>Archived</h2><ul>${archived.map((v) => html`<li><a href="/c/${v.campaign.name}">${v.campaign.display}</a></li>`)}</ul></details>` : ''}`}`,
   });
+};
+
+const valueWords = (k, val) => {
+  if (k === 'rules') return RULE_WORDS[val] || val;
+  if (k === 'races' && Array.isArray(val)) return val.map((r) => RACES.find(([code]) => code === r)?.[1] || r).join(', ');
+  return Array.isArray(val) ? val.join(', ') : val;
 };
 
 const ENTRY_WORDS = { ready: 'Ready', 'not-set-up': 'Not set up', 'wrong-key': 'Key in Render is wrong' };
@@ -127,13 +134,13 @@ export const campaignPage = ({ v, entry, logRows, names, done = new Map(), stale
     </section>
     ${client ? html`<section class="card"><h2>Checklist</h2>${checklist(c.name, done, { stale: stale.startsWith('tick:') ? stale.slice(5) : '' })}</section>` : ''}
     <details class="oc-more"${stale === 'archive' ? raw(' open') : ''}><summary class="btn btn-quiet">More</summary>
-      <p><a class="btn btn-quiet" href="/c/${c.name}/edit">Edit</a></p>
+      <p><a class="btn btn-quiet" href="/c/${c.name}/edit">Edit</a>${client ? html` <a class="btn btn-quiet" href="/c/${c.name}/setup">Set-up steps</a>` : ''}</p>
       ${client && done.has('first-manager-invited') && !v.block ? html`<h2>Invite another manager</h2>${inviteForm(v, { help: 'Opens the desk on Settings → Members with the invite made.' })}` : ''}
       ${c.kind === 'client' ? html`<form method="post" action="/c/${c.name}/${c.archived_at ? 'unarchive' : 'archive'}" class="oc-form">
         ${codeField(stale === 'archive')}
         <button class="btn btn-quiet" type="submit">${c.archived_at ? 'Bring it back' : 'Archive'}</button>
       </form>` : ''}
-      ${values.length ? html`<h2>Its values</h2><dl class="oc-dl">${values.map(([k, val]) => html`<div><dt>${VALUE_WORDS[k] || k}</dt><dd>${Array.isArray(val) ? val.join(', ') : val}</dd></div>`)}</dl>` : ''}
+      ${values.length ? html`<h2>Its values</h2><dl class="oc-dl">${values.map(([k, val]) => html`<div><dt>${VALUE_WORDS[k] || k}</dt><dd>${valueWords(k, val)}</dd></div>`)}</dl>` : ''}
       <h2>Its log</h2>
       ${logRows.length ? html`<ol class="oc-log">${logRows.map((r) => logLine(r, names))}</ol>` : html`<p>Nothing yet.</p>`}
     </details>`,

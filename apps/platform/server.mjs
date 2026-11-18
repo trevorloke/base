@@ -12,6 +12,7 @@ import { authRoutes, requireSession, makeLimits } from './auth-routes.mjs';
 import { verifyLog, listLog, PAGE } from './log.mjs';
 import { logPage } from './pages/log.mjs';
 import { campaignRoutes } from './campaign-routes.mjs';
+import { wizardRoutes } from './wizard-routes.mjs';
 import { startPoller } from './poller.mjs';
 
 const file = (rel) => readFileSync(new URL(rel, import.meta.url), 'utf8');
@@ -40,6 +41,7 @@ export const makeApp = ({ db, fetcher } = {}) => {
   authRoutes(app, ctx);
   app.use('*', requireSession(db));
   campaignRoutes(app, ctx);
+  wizardRoutes(app, ctx);
   app.get('/log', async (c) => {
     const before = /^\d{1,15}$/.test(c.req.query('before') || '') ? Number(c.req.query('before')) : null;
     const rows = await listLog(db, { before });
