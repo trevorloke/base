@@ -9,6 +9,7 @@
 // People is a desk screen: volunteers' /people opens Calls.
 // Shared widgets + helpers are exported from here for Person.jsx.
 // Ratings always render with the shared RatingChip / ratingSay words.
+import { useLiveChip } from '../components/GotvLive.js';
 import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useNavigate, useSearchParams, useLocation, Link, Navigate, useOutletContext } from 'react-router-dom';
 import { useQueries, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
@@ -32,7 +33,8 @@ import {
 } from '../components/TextingCard.jsx';
 import { KeyTies, KnowMeChip, MyPeopleLink, useKeyTies } from '../components/RelationshipsBits.jsx';
 import { hasArea } from '../Shell.jsx';
-import { VotedRow } from '../components/Voted.jsx';
+import { VotedRow, useVotedMode } from '../components/Voted.jsx';
+import './gotv.css';
 import AddressField, { lookupAddress, pinOf } from '../components/AddressField.jsx';
 import { CUT_KEYS, CutGroups, addCuts, cutChips, useTurfs, useWebDid } from '../components/FieldCuts.jsx';
 import ScriptLine, { useScripts } from '../components/ScriptLine.jsx';
@@ -1109,6 +1111,8 @@ function CallListsLink({ desk }) {
 }
 
 function CallsScreen() {
+  const liveChip = useLiveChip();
+  const votedMode = useVotedMode();
   useScripts(); // read with the list, so the phone script is kept for later
   const { me } = useOutletContext() ?? {};
   const location = useLocation();
@@ -1489,6 +1493,8 @@ function CallsScreen() {
       )}
 
       {listCopy && !offline && <p className="cl-copy"><span className="chip obx-copy">Offline copy</span></p>}
+      {/* GOTV: is this list live? ("Live", "Updated 3 min ago"). */}
+      {liveChip && !listCopy && <p className="cl-copy"><span className={`chip gv-live${liveChip.live ? ' is-live' : ''}`}>{liveChip.text}</span></p>}
       {persons.isError && !offline && !listCopy && <p className="error">{noAnswer(persons.error) ? 'No answer — check your signal' : persons.error.message}</p>}
 
       {offline ? (
@@ -1556,6 +1562,8 @@ function CallsScreen() {
                   state={{ from: { to: `${location.pathname}${location.search}`, label: channel === 'text' ? 'Texts' : 'Calls' } }}>
                   {current.name}
                 </Link>
+                {/* Marked voted elsewhere while this card was open (the live list). */}
+                {votedMode.on && current.voted_at && !current.voted_hidden && <span className="chip gv-live is-live">Voted — skip</span>}
                 <span className="cl-phone mono">{current.phone}</span>
                 {streetLine(current) && <span className="cl-addr">{streetLine(current)}</span>}
                 {current.rating && !mine && (

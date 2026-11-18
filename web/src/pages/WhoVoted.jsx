@@ -254,6 +254,16 @@ export default function WhoVoted({ me: given }) {
     );
   }
 
+  // A week after the last voting day, names never sent: asked once whether to delete them.
+  const lastDay = [...(status?.advance_days || []), status?.election_day].filter(Boolean).sort().at(-1);
+  const askedKey = me?.user?.id ? `${NS}gotv-notes-asked:${me.user.id}:${lastDay}` : null;
+  const askLeftovers = Boolean(lastDay && notes.length && Date.now() > Date.parse(`${lastDay}T12:00:00`) + 7 * 86_400_000
+    && (() => { try { return !localStorage.getItem(askedKey); } catch { return false; } })());
+  const answerLeftovers = (drop) => {
+    try { localStorage.setItem(askedKey, '1'); } catch { /* blocked */ }
+    if (drop) for (const n of notes) dropNote(me, n.id);
+    tick((x) => x + 1);
+  };
   const heldLine = closesAt
     ? `Names are sent after this voting place closes at ${closesHm ? hmWord(closesHm) : clock(closesAt)}.`
     : 'Names are sent when the office says polls are closed.';
@@ -277,6 +287,14 @@ export default function WhoVoted({ me: given }) {
       <p className="gv-line gv-phones">Phones away inside the voting place. Enter names outside.</p>
       {!sending && <p className="gv-line" role="status">{heldByServer && said ? said : heldLine}</p>}
       {overSaid && <p className="gv-line gv-warn" role="status">Practice is over — nothing was saved.</p>}
+      {askLeftovers && (
+        <div className="gv-ask" role="group" aria-label="Names not sent">
+          <span>Delete the {plural(notes.length, 'name')} you didn’t send?</span>
+          <button type="button" className="btn gv-small" onClick={() => answerLeftovers(true)}>Yes</button>
+          <button type="button" className="btn btn-quiet gv-small" onClick={() => answerLeftovers(false)}>No</button>
+        </div>
+      )}
+      {notes.length > 0 && <p className="gv-line">You have {plural(notes.length, 'name')} not sent</p>}
       {!placeId && !fixedPlace && <p className="gv-line">Pick the voting place on the sheet first.</p>}
 
       <form className="gv-form" onSubmit={(e) => { e.preventDefault(); if (noteMode) saveNote(text); }}>
