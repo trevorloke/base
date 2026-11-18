@@ -38,6 +38,9 @@ import { readFileSync } from 'node:fs';
 import { Readable } from 'node:stream';
 
 const NAME_RE = /^[a-z0-9][a-z0-9-]{0,62}$/;
+// Names kept for base.win itself (ops.base.win is the control centre, which
+// never goes through the door). The control centre refuses the same list.
+export const RESERVED = ['ops', 'hub', 'api', 'admin', 'platform', '_ops', '_hooks', 'www', 'door', 'status', 'help', 'mail', 'app', 'desk', 'field', 'site', 'login', 'assets', 'sample'];
 
 export const readClients = (raw = process.env.BASE_CLIENTS) => {
   let parsed;
@@ -45,6 +48,7 @@ export const readClients = (raw = process.env.BASE_CLIENTS) => {
   const out = new Map();
   for (const [key, c] of Object.entries(parsed || {})) {
     const name = key.toLowerCase();
+    if (RESERVED.includes(name)) throw new Error(`BASE_CLIENTS: “${key}” is kept for base.win; use another name`);
     if (!NAME_RE.test(name)) throw new Error(`BASE_CLIENTS: “${key}” isn’t a usable name (letters, digits, dashes)`);
     const given = c?.server ?? c?.ground;
     if (given == null || given === '') throw new Error(`BASE_CLIENTS: ${name} needs a server address`);
@@ -81,7 +85,7 @@ export const subdomainRedirect = (clients, hostHeader, pathname, search = '', ap
   const host = String(hostHeader || '').toLowerCase().replace(/:\d+$/, '').replace(/\.$/, '');
   if (!apex || !host.endsWith(`.${apex}`)) return null;
   const label = host.slice(0, -(apex.length + 1));
-  if (!NAME_RE.test(label) || !clients.has(label)) return null;
+  if (!NAME_RE.test(label) || RESERVED.includes(label) || !clients.has(label)) return null;
   const path = pathname.toLowerCase() === `/${label}` || pathname.toLowerCase().startsWith(`/${label}/`)
     ? pathname
     : `/${label}${pathname === '/' ? '/' : pathname}`;
