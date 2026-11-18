@@ -19,6 +19,8 @@ import Shell, { isDesk, hasArea } from './Shell.jsx';
 import { ADMIN_BASE, fieldView, landing, mayAdmin } from './mode.js';
 import { takeSignin } from './components/google.js';
 import Login from './pages/Login.jsx';
+import Forgot from './pages/Forgot.jsx';
+import Reset from './pages/Reset.jsx';
 import Signup from './pages/Signup.jsx';
 import Today from './pages/Today.jsx';
 const MapPage = lazy(() => import('./pages/Map.jsx'));
@@ -191,6 +193,8 @@ export default function App({ mode = 'field' }) {
         <Route path="/login" element={<Login mode={mode} />} />
         <Route path="/signup" element={<Signup mode={mode} />} />
         <Route path="/join/:token" element={<Join mode={mode} />} />
+        <Route path="/forgot" element={<Forgot />} />
+        <Route path="/reset" element={<Reset mode={mode} />} />
         <Route element={<RequireAuth mode={mode} />}>
           <Route path="/" element={<Today />} />
           <Route path="/map" element={<MapPage />} />
@@ -241,6 +245,8 @@ export default function App({ mode = 'field' }) {
       <Route path="/login" element={<Login mode={mode} />} />
       <Route path="/signup" element={<Signup mode={mode} />} />
       <Route path="/join/:token" element={<Join mode={mode} />} />
+      <Route path="/forgot" element={<Forgot />} />
+      <Route path="/reset" element={<Reset mode={mode} />} />
       <Route element={<RequireAuth mode={mode} />}>
         <Route path="/" element={<Today />} />
         <Route path="/map" element={<MapPage />} />
