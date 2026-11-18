@@ -86,3 +86,4 @@
 .oc-check-label input { width: 20px; height: 20px; }
 .oc-invite { max-width: 440px; }
 @media (min-width: 900px) and (pointer: fine) { .oc-check-label { min-height: 40px; } }
+.oc-main > .oc-inline-form { margin-bottom: 16px; }
