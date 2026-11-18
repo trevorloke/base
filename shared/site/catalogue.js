@@ -11,7 +11,11 @@
 //   markdown  rich text         { max }        rendered sanitized
 //   url       a link            { }            relative (/donate, /#join) or http(s)
 //   link      { label, href }   { }            a button or link
-//   image     { url, alt }      { }            url: /media/:id or a site asset path
+//   image     { url, alt, width?, height?, sizes?, focus?, decorative? }
+//                               { }            url: /media/:id or a site asset path;
+//                                              sizes: up to 3 smaller copies
+//                                              [{ url: /media/:id, w }]; focus:
+//                                              { x, y } 0–100, the spot kept in view
 //   select    one of options    { options: [{ value, label }] }
 //   toggle    true / false      { }
 //   number    whole number      { min, max }
@@ -31,6 +35,7 @@
 // come from its seed (server/ext/site/seeds/*.js), never from this file.
 
 import { samplePath } from './placeholders.js';
+import { describeWords, newUndescribed } from './pictures.js';
 
 export const TONES = [
   { value: 'paper', label: 'Plain' },
@@ -328,7 +333,26 @@ function checkField(f, v, path, strict = false) {
       const o = v && typeof v === 'object' ? v : {};
       const url = checkField({ key: 'url', type: 'url' }, o.url, where);
       if (strict && f.required && !url) throw new Error(`${where}: a picture is required`);
-      return { url, alt: checkField({ key: 'alt', type: 'text', max: 300 }, o.alt, where) };
+      const out = { url, alt: checkField({ key: 'alt', type: 'text', max: 300 }, o.alt, where) };
+      if (!url) return out;
+      const px = (n) => (Number.isInteger(n) && n >= 1 && n <= 20000 ? n : null);
+      if (px(o.width) && px(o.height)) { out.width = o.width; out.height = o.height; }
+      if (o.sizes != null) {
+        if (!Array.isArray(o.sizes) || o.sizes.length > 3) throw new Error(`${where}: at most 3 sizes`);
+        const sizes = o.sizes.map((z) => {
+          const u = String(z?.url ?? '').trim();
+          if (!/^\/media\/[0-9a-f-]{36}$/i.test(u) || !px(z?.w)) throw new Error(`${where}: a size must be an uploaded picture`);
+          return { url: u, w: z.w };
+        });
+        if (sizes.length) out.sizes = sizes;
+      }
+      if (o.focus != null) {
+        const pct = (n) => Number.isInteger(n) && n >= 0 && n <= 100;
+        if (!pct(o.focus?.x) || !pct(o.focus?.y)) throw new Error(`${where}: the spot to keep in view is off the picture`);
+        if (o.focus.x !== 50 || o.focus.y !== 50) out.focus = { x: o.focus.x, y: o.focus.y };
+      }
+      if (o.decorative === true) out.decorative = true;
+      return out;
     }
     case 'select': {
       const allowed = (f.options || []).map((o) => o.value);
@@ -370,8 +394,10 @@ function checkField(f, v, path, strict = false) {
 // strict: also every `required` field filled (publishing). A draft may be
 // incomplete; a published page may not. samples (with strict, unless said
 // otherwise): no box may hold sample words — a seed, whose words are
-// placeholders by design, says false.
-export function checkProps(kind, props, { strict = false, samples = strict } = {}) {
+// placeholders by design, says false. known (with strict): the picture
+// addresses already on the site (pictures.js knownPictures) — any other
+// picture must be described or marked decorative.
+export function checkProps(kind, props, { strict = false, samples = strict, known = null } = {}) {
   const m = MODULE_BY_KIND[kind];
   if (!m) throw new Error(`unknown module kind: ${kind}`);
   const src = { ...JSON.parse(JSON.stringify(m.defaults)), ...(props && typeof props === 'object' ? props : {}) };
@@ -381,11 +407,16 @@ export function checkProps(kind, props, { strict = false, samples = strict } = {
   // sample words (shared/site/placeholders.js).
   const sample = strict && samples ? samplePath(kind, out) : null;
   if (sample) throw new Error(`${sample}: still has the sample words`);
+  const pic = strict && known ? newUndescribed(m.fields, out, known) : null;
+  if (pic) throw new Error(`${pic.path}: ${describeWords(pic)}`);
   return out;
 }
 
+// One picture's value outside a module (a post's picture), checked the same way.
+export const checkImage = (v, where = 'image') => checkField({ key: where, type: 'image' }, v, '');
+
 // A whole page's module list: known kinds, unique ids, at most 60 modules.
-export function checkModules(list, { strict = false, samples = strict } = {}) {
+export function checkModules(list, { strict = false, samples = strict, known = null } = {}) {
   if (!Array.isArray(list)) throw new Error('modules: a list expected');
   if (list.length > 60) throw new Error('modules: at most 60 on a page');
   const ids = new Set();
@@ -396,6 +427,6 @@ export function checkModules(list, { strict = false, samples = strict } = {}) {
     if (ids.has(id)) throw new Error(`modules[${i}]: the same id twice`);
     ids.add(id);
     // Hidden modules aren't shown, so they needn't be complete to publish.
-    return { id, kind: m.kind, hidden: Boolean(m.hidden), props: checkProps(m.kind, m.props, { strict: strict && !m.hidden, samples: samples && !m.hidden }) };
+    return { id, kind: m.kind, hidden: Boolean(m.hidden), props: checkProps(m.kind, m.props, { strict: strict && !m.hidden, samples: samples && !m.hidden, known }) };
   });
 }

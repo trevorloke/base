@@ -305,4 +305,7 @@ create table if not exists site_font_files (
   created_at timestamptz not null default now(),
   primary key (workspace_id, sha256)
 );
+-- A website picture's smaller copies (WA decision 26) are media rows of
+-- their own, pointing at the picture; the picture list leaves them out.
+alter table media add column if not exists size_of uuid;
 `;

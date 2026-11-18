@@ -25,7 +25,7 @@ function PageView({ rc, page }) {
   const title = str(p.slug) === 'home' ? name || str(p.title) : str(p.title) || name;
   return html`<${Fragment}>
     ${heroFirst ? null : html`<${PageHead} title=${title} lede=${p.description} />`}
-    ${modules.map((m, i) => html`<${Module} key=${`${m.id}-${i}`} m=${m} rc=${rc} level=${heroFirst && i === 0 ? 1 : 2} />`)}
+    ${modules.map((m, i) => html`<${Module} key=${`${m.id}-${i}`} m=${m} rc=${rc} level=${heroFirst && i === 0 ? 1 : 2} first=${i === 0} />`)}
   <//>`;
 }
 
@@ -35,7 +35,7 @@ function PostView({ rc, post }) {
     <${PageHead} title=${str(p.title)} eyebrow=${dateOnly(p.published_at, rc.timeZone, rc.locale)} lede=${p.excerpt} />
     <article className="section tone-paper post" aria-label=${str(p.title)}>
       <div className="container narrow stack stack--lg">
-        <${Img} rc=${rc} image=${p.image} className="news-image" width=${1200} height=${675} eager />
+        <${Img} rc=${rc} image=${p.image} className="news-image" width=${1200} height=${675} sizes="min(100vw, 760px)" eager />
         <${Md} rc=${rc} text=${p.body} className="prose" />
         <${Island} name="share" props=${{ uid: 'post-share', url: rc.abs(pagePath(rc.loc)), here: pagePath(rc.loc), text: str(p.title), subject: str(p.title), label: rc.w('share.this'), ...rc.islandWords('share') }} />
         <p><a className="text-link" href=${rc.link('/news')}>${rc.w('news.allBack')}</a></p>
