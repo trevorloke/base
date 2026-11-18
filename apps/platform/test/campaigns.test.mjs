@@ -36,7 +36,7 @@ const stale = () => db.query("update ops_sessions set code_at = now() - interval
 test('before the first poll: Not checked yet; the sample row offers to set its address', async () => {
   const body = await (await b.get('/')).text();
   assert.match(body, /Sample \(staging\)/);
-  assert.match(body, /href="\/c\/sample\/edit">Set its address/);
+  assert.match(body, /<form method="post" action="\/sample"[\s\S]*Set its address<\/button>/);
   assert.match(body, /Example A<\/a>\s*<span class="oc-line">Not checked yet/);
   assert.equal([...body.matchAll(/btn-primary/g)].length, 1, 'one primary');
 });

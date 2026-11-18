@@ -9,6 +9,8 @@ import {
   listCampaigns, campaignView, getCampaign, getEnv, envOf, entryState, normalizeOrigin, saveEnv,
 } from './campaigns.mjs';
 import { campaignsPage, campaignPage, editPage } from './pages/campaigns.mjs';
+import { doneFor } from './checklist.mjs';
+import { deskRoutes } from './desk-routes.mjs';
 
 const names = async (db) => new Map((await db.query('select name, display from campaigns')).rows.map((r) => [r.name, r.display]));
 const WRONG_CODE = 'That code didn’t work. Type the one your app shows now.';
@@ -21,14 +23,31 @@ export const campaignRoutes = (app, ctx) => {
     const v = await campaignView(db, name);
     if (!v) return c.text('Not found', 404);
     const logRows = await listLog(db, { campaign: name, limit: 20 });
-    return c.html(String(campaignPage({ v, entry: entryState(v.server), logRows, names: await names(db), stale, message, openSlot: ctx.openSlot?.(v) || '' })), code);
+    const done = await doneFor(db, name);
+    return c.html(String(campaignPage({ v, entry: entryState(v.server), logRows, names: await names(db), done, stale, message })), code);
   };
+  deskRoutes(app, ctx, { showCampaign });
   const found = async (c) => {
     const name = c.req.param('name');
     return (await getCampaign(db, name)) ? name : null;
   };
 
   app.get('/', async (c) => c.html(String(campaignsPage({ views: await listCampaigns(db) }))));
+
+  // The sample's Render address, from the list.
+  app.post('/sample', async (c) => {
+    const f = await form(c);
+    const typed = String(f.server_url || '').trim().slice(0, 300);
+    const again = async (message, stale = false, code = 400) => c.html(String(campaignsPage({ views: await listCampaigns(db), sampleStale: stale, sampleValue: typed, sampleMessage: message })), code);
+    const w = await codeWindow(c, ctx, f);
+    if (w !== 'ok') return again(w === 'wrong' ? WRONG_CODE : '', true, 401);
+    const serverUrl = normalizeOrigin(typed);
+    if (!serverUrl) return again('That isn’t a Render address: it starts with https:// and has no path.');
+    const r = await db.transaction((tx) => saveEnv(tx, { name: 'sample', env: 'staging', serverUrl, operatorId: c.get('session').operator.id }));
+    if (!r.ok) return again(`That address is already saved for ${(await names(db)).get(r.taken) || r.taken}.`, false, 409);
+    await pollOnce(db, { only: 'sample', fetcher: ctx.fetcher });
+    return c.redirect('/c/sample', 303);
+  });
 
   app.get('/c/:name', async (c) => {
     const name = await found(c);

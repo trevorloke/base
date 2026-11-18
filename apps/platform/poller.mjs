@@ -8,6 +8,7 @@
 import { safeGet } from './safe-fetch.mjs';
 import { cfg } from './config.mjs';
 import { appendLog } from './log.mjs';
+import { autoTick } from './checklist.mjs';
 
 const str = (v) => (typeof v === 'string' ? v.slice(0, 200) : null);
 const bool = (v) => (typeof v === 'boolean' ? v : null);
@@ -96,6 +97,7 @@ export const pollOnce = async (db, { only = null, fetcher } = {}) => {
     }
   }
   await pool(tasks, 4);
+  await autoTick(db, { only });
   await db.query(SWEEP_SQL);
   return envs.length;
 };

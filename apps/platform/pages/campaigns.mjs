@@ -2,6 +2,7 @@
 import { html, raw, num, clock, ago, dayClock } from './html.mjs';
 import { page, field, status, codeField } from './layout.mjs';
 import { logLine } from './log.mjs';
+import { openForm, inviteForm, checklist } from './desk.mjs';
 
 const ENV_WORD = { production: 'Production', staging: 'Staging' };
 const VALUE_WORDS = { city: 'City', province: 'Province', rules: 'Rules', tz: 'Time zone', races: 'Races' };
@@ -24,7 +25,15 @@ export const statusLine = (v, now = Date.now()) => {
 
 const chips = (list) => (list.length ? html`<ul class="oc-chips" aria-label="Needs a look">${list.map((t) => html`<li class="chip chip-warn">${t}</li>`)}</ul>` : '');
 
-export const campaignsPage = ({ views }) => {
+// The sample's address, set from the list (POST /sample).
+const sampleForm = ({ stale = false, value = '', message = '' }) => html`<form method="post" action="/sample" class="oc-form">
+  ${field({ label: 'Its Render address', name: 'server_url', type: 'url', inputmode: 'url', value, required: true, id: 'sample-url', help: 'At the top of base-win-staging’s Render page.' })}
+  ${codeField(stale)}
+  ${status(message, message ? 'warn' : '')}
+  <button class="btn btn-quiet" type="submit">Set its address</button>
+</form>`;
+
+export const campaignsPage = ({ views, sampleStale = false, sampleValue = '', sampleMessage = '' }) => {
   const sample = views.find((v) => v.campaign.kind === 'sample');
   const clients = views.filter((v) => v.campaign.kind === 'client' && !v.campaign.archived_at);
   const archived = views.filter((v) => v.campaign.kind === 'client' && v.campaign.archived_at);
@@ -34,13 +43,14 @@ export const campaignsPage = ({ views }) => {
     ${sample ? html`<section class="oc-sample card" aria-label="${sample.campaign.display}">
       <a class="oc-name" href="/c/sample">${sample.campaign.display}</a>
       <span class="oc-line">${statusLine(sample)}</span>
-      ${sample.envRow.server_url ? '' : html`<a class="btn btn-quiet" href="/c/sample/edit">Set its address</a>`}
       ${chips(sample.chips)}
+      ${sample.envRow.server_url ? (sample.block ? '' : openForm(sample)) : sampleForm({ stale: sampleStale, value: sampleValue, message: sampleMessage })}
     </section>` : ''}
     ${clients.length ? html`<ul class="oc-cards">${clients.map((v) => html`<li class="card oc-card">
         <a class="oc-name" href="/c/${v.campaign.name}">${v.campaign.display}</a>
         <span class="oc-line">${statusLine(v)}</span>
         ${chips(v.chips)}
+        ${v.block ? '' : openForm(v)}
       </li>`)}</ul>
       <details class="oc-more"><summary class="btn btn-quiet">More</summary>
         <p><a href="/existing">Add a campaign that’s already running</a></p>
@@ -85,15 +95,26 @@ const strip = (hist) => html`<div class="oc-strip" role="img" aria-label="The la
   <p class="oc-help">${hist.total ? `Answered ${num(hist.answered)} of ${num(hist.total)} ${hist.total === 1 ? 'check' : 'checks'} today` : 'No checks yet today'}</p>`;
 
 // stale: which form's code window passed ('archive' | 'confirm'), so it shows a Code field.
-export const campaignPage = ({ v, entry, logRows, names, stale = '', message = '', openSlot = '' }) => {
+// The desk's buttons: Invite the first manager is the primary until it is
+// done (a client's production answering), then Open desk.
+const deskSlot = (v, done) => {
+  if (v.campaign.kind !== 'client') return openForm(v, { primary: true });
+  if (!done.has('first-manager-invited')) {
+    return html`<section class="card"><h2>Invite the first manager</h2>${inviteForm(v, { primary: true })}<p>${openForm(v)}</p></section>`;
+  }
+  return openForm(v, { primary: true });
+};
+
+export const campaignPage = ({ v, entry, logRows, names, done = new Map(), stale = '', message = '' }) => {
   const c = v.campaign;
   const values = Object.entries(c.values || {});
+  const client = c.kind === 'client';
   return page({
     title: c.display, nav: true, here: 'campaigns',
     body: html`<h1>${c.display}</h1>
     ${chips(v.chips)}
     ${status(message, message ? 'warn' : '')}
-    ${v.block ? html`<p class="oc-block">${BLOCK_WORDS[v.block] || ''}</p>` : openSlot}
+    ${v.block ? html`<p class="oc-block">${BLOCK_WORDS[v.block] || ''}</p>` : deskSlot(v, done)}
     ${v.block === 'changed' ? html`<form method="post" action="/c/${c.name}/confirm-server" class="oc-form">
       <input type="hidden" name="env" value="${v.env}">
       ${codeField(stale === 'confirm')}
@@ -102,10 +123,12 @@ export const campaignPage = ({ v, entry, logRows, names, stale = '', message = '
     <section class="card"><h2>Health</h2>
       ${health(v, entry)}
       ${strip(v.history)}
-      <form method="post" action="/c/${c.name}/check-now"><button class="btn btn-quiet" type="submit">Check now</button></form>
+      <form method="post" action="/c/${c.name}/check-now" data-busy="Checking…"><button class="btn btn-quiet" type="submit">Check now</button></form>
     </section>
+    ${client ? html`<section class="card"><h2>Checklist</h2>${checklist(c.name, done, { stale: stale.startsWith('tick:') ? stale.slice(5) : '' })}</section>` : ''}
     <details class="oc-more"${stale === 'archive' ? raw(' open') : ''}><summary class="btn btn-quiet">More</summary>
       <p><a class="btn btn-quiet" href="/c/${c.name}/edit">Edit</a></p>
+      ${client && done.has('first-manager-invited') && !v.block ? html`<h2>Invite another manager</h2>${inviteForm(v, { help: 'Opens the desk on Settings → Members with the invite made.' })}` : ''}
       ${c.kind === 'client' ? html`<form method="post" action="/c/${c.name}/${c.archived_at ? 'unarchive' : 'archive'}" class="oc-form">
         ${codeField(stale === 'archive')}
         <button class="btn btn-quiet" type="submit">${c.archived_at ? 'Bring it back' : 'Archive'}</button>
