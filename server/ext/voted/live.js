@@ -29,7 +29,7 @@ import { forgetSettings, forgetPosts, forgetScopes, gotvFor, scopeOf, isDesk, ro
 import { DEFAULT_TZ } from '../../lib/org.js';
 import { forgetHours } from './clock.js';
 import { forgetCounts } from './brief.js';
-import { updateTurf, updatePerson, rebuild, hasIndex } from './turfindex.js';
+import { updateTurf, updatePerson, rebuild, hasIndex, turfsOfPerson } from './turfindex.js';
 import { decide } from '../../lib/perms.js';
 import { forgetSummary } from './summary.js';
 
@@ -63,7 +63,9 @@ const flush = (sub) => {
 const offer = (sub, change) => {
   if (sub.closed) return;
   if (change.x && !sub.group) return;
-  if (!sub.all && !sub.ids.has(change.p)) return;
+  // In scope: as read at connect, or (someone new since) by the turf
+  // index as it stands now.
+  if (!sub.all && !sub.ids.has(change.p) && !turfsOfPerson(sub.ctx.workspaceId, change.p).some((t) => sub.turfs?.has(t))) return;
   sub.queue.set(`${change.p}:${change.x ? 1 : 0}`, { p: change.p, v: change.v, x: change.x ? 1 : 0 });
   if (change.f && change.f > sub.last) sub.last = change.f;
   if (!sub.timer) sub.timer = setTimeout(() => flush(sub), BATCH_MS);
@@ -74,7 +76,9 @@ export const publish = (ws, change) => { for (const sub of hubs.get(ws) || []) o
 // scope 'campaign'; else their turfs' and phone bank's people.
 export const scopeFor = async (db, ctx, g) => {
   const all = isDesk(ctx) || decide(ctx.perms, 'people') === true || g.s.scope === 'campaign';
-  return { all, ids: all ? new Set() : (await scopeOf(db, ctx)).ids };
+  if (all) return { all, ids: new Set(), turfs: new Set() };
+  const scope = await scopeOf(db, ctx);
+  return { all, ids: scope.ids, turfs: scope.turfs };
 };
 
 export const subscribe = (ws, sub) => {
@@ -134,8 +138,8 @@ onCommitted(async ({ workspaceId: ws, action, events }) => {
   }
   // Who is in whose turfs and phone banks: a turf, a bank, a post, or a
   // person added, moved or merged.
-  if (action.startsWith('turf.') || action.startsWith('bank.') || events.some((e) => e.entityType === 'gotv_post' || e.entityType === 'turf'
-    || (e.entityType === 'person' && (e.op !== 'update' || PERSON_PLACE.some((k) => k in (e.payload || {})))))) forgetScopes(ws);
+  const moved = events.some((e) => e.entityType === 'turf' || (e.entityType === 'person' && (e.op !== 'update' || PERSON_PLACE.some((k) => k in (e.payload || {})))));
+  if (moved || action.startsWith('turf.') || action.startsWith('bank.') || events.some((e) => e.entityType === 'gotv_post')) forgetScopes(ws);
   if (voted) { forgetCounts(ws); forgetSummary(ws, false); }
   if (hours) forgetHours(ws);
   if (settings) { forgetSettings(ws); forgetHours(ws); forgetSummary(ws, true); forgetScopes(ws); }
@@ -145,9 +149,9 @@ onCommitted(async ({ workspaceId: ws, action, events }) => {
   for (const ev of events) if ((ev.entityType === 'voted_mark' || ev.entityType === 'gotv_practice') && ev.payload?.feed_id) feedOf.set(ev.payload.person_id, Number(ev.payload.feed_id));
   for (const ev of events) {
     const p = ev.payload || {};
-    if (ev.entityType === 'turf' && hasIndex(ws)) await updateTurf(db, ws, ev.entityId);
+    if (ev.entityType === 'turf') await updateTurf(db, ws, ev.entityId);
     if (ev.entityType === 'person') {
-      if (hasIndex(ws) && (ev.op === 'create' || ev.op === 'void' || ev.op === 'merge' || PERSON_PLACE.some((k) => k in p))) await updatePerson(db, ws, ev.entityId);
+      if ((ev.op === 'create' || ev.op === 'void' || ev.op === 'merge' || PERSON_PLACE.some((k) => k in p))) await updatePerson(db, ws, ev.entityId);
       if (ev.op === 'update' && 'voted_at' in p) publish(ws, { p: ev.entityId, v: p.voted_at ?? null, f: feedOf.get(ev.entityId) || 0, x: false });
       else if (ev.op === 'update' && 'merged' in p) {
         // A merge: the kept person as they stand now.
@@ -159,6 +163,8 @@ onCommitted(async ({ workspaceId: ws, action, events }) => {
       publish(ws, { p: p.person_id, v: p.voted ? (p.at || new Date().toISOString()) : null, f: Number(p.feed_id) || 0, x: true });
     }
   }
+  // A scope read while the index was catching up is dropped once it has.
+  if (moved) forgetScopes(ws);
   if (settings) {
     // GOTV or practice just turned on: the turf index is built now, behind.
     const s = await rowOf(db, ws);

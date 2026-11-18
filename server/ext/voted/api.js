@@ -22,6 +22,7 @@ import { subscribe, scopeFor, refreshScope, pingMs, liveCount } from './live.js'
 import { findPeople, takeLookup, lookupsOf } from './find.js';
 import { mayEnterName, WORDS } from './actions.js';
 import { notOpenDays } from './posts.js';
+import { turfsOfPerson } from './turfindex.js';
 import { now } from '../../lib/clock.js';
 import { startOfDay } from '../../lib/tzsql.js';
 
@@ -176,8 +177,9 @@ const changesSince = async (db, ctx, g, scope, since) => {
   )).rows : [];
   if (real.length + practice.length > CHANGES_MAX) return { reload: true, last: head };
   const out = new Map();
-  for (const r of real) if (scope.all || scope.ids.has(r.person_id)) out.set(`${r.person_id}:0`, { p: r.person_id, v: iso(r.v), x: 0 });
-  for (const r of practice) if (scope.all || scope.ids.has(r.person_id)) out.set(`${r.person_id}:1`, { p: r.person_id, v: iso(r.v), x: 1 });
+  const inScope = (pid) => scope.all || scope.ids.has(pid) || turfsOfPerson(ws, pid).some((t) => scope.turfs?.has(t));
+  for (const r of real) if (inScope(r.person_id)) out.set(`${r.person_id}:0`, { p: r.person_id, v: iso(r.v), x: 0 });
+  for (const r of practice) if (inScope(r.person_id)) out.set(`${r.person_id}:1`, { p: r.person_id, v: iso(r.v), x: 1 });
   return { changes: [...out.values()], last: Math.max(head, since) };
 };
 

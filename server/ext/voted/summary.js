@@ -9,7 +9,7 @@
 //   practice   ?practice=1 while practice runs: practice marks over the
 //              record (only the Get out the vote screen asks)
 import { SUPPORT_CODES, countsOf, settingsOf } from './brief.js';
-import { turfIndex } from './turfindex.js';
+import { turfIndex, peopleInTurf } from './turfindex.js';
 import { hoursOf, tzOf, today, placesOpenOn, closeAt } from './clock.js';
 import { rowOf } from './state.js';
 import { startOfDay } from '../../lib/tzsql.js';
@@ -70,8 +70,11 @@ export const summaryOf = async (db, ctx, wantPractice) => {
   }
   const idx = await turfIndex(db, ws);
   const turfs = (await db.query('select id, name from turfs where workspace_id = $1 and deleted_at is null order by created_at', [ws])).rows;
+  // A turf drawn a moment ago, not in the index yet: read now.
+  const fresh = new Map();
+  for (const t of turfs) if (!idx.turfs.has(t.id)) fresh.set(t.id, await peopleInTurf(db, ws, t.id));
   const by_turf = turfs.map((t) => {
-    const ids = idx.turfs.get(t.id)?.ids || new Set();
+    const ids = idx.turfs.get(t.id)?.ids || fresh.get(t.id) || new Set();
     let sup = 0; let v = 0;
     for (const id of ids) if (supporters.has(id)) { sup += 1; if (voted.has(id)) v += 1; }
     return { turf_id: t.id, name: t.name, supporters: sup, voted: v, people: ids.size };

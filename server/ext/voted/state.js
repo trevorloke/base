@@ -14,7 +14,7 @@ import { decide } from '../../lib/perms.js';
 import { loginEmail } from '../../lib/viewer.js';
 import { localDay } from '../../lib/tzrule.js';
 import { now } from '../../lib/clock.js';
-import { turfIndex } from './turfindex.js';
+import { turfIndex, peopleInTurf } from './turfindex.js';
 import { tzOf } from './clock.js';
 
 const DESK = ['manager', 'treasurer', 'staff'];
@@ -103,7 +103,8 @@ export const scopeOf = async (db, ctx) => {
   const ids = new Set();
   if (turfs.size) {
     const idx = await turfIndex(db, ws);
-    for (const t of turfs) for (const id of idx.turfs.get(t)?.ids || []) ids.add(id);
+    // A turf the index doesn't have yet (drawn a moment ago): read now.
+    for (const t of turfs) for (const id of idx.turfs.get(t)?.ids || await peopleInTurf(db, ws, t)) ids.add(id);
   }
   const bank = new Set((await db.query(
     'select person_id from call_bank_numbers where workspace_id = $1 and assigned_to = $2 and done_at is null', [ws, uid],

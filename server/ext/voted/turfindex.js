@@ -22,6 +22,13 @@ const yieldNow = () => new Promise((r) => setImmediate(r));
 
 const indexes = new Map(); // ws → { turfs: Map(turfId → { ring, box, ids:Set }), byPerson: Map(personId → turfIds[]), at }
 const building = new Map(); // ws → Promise
+const missed = new Map(); // ws → { persons: Set, turfs: Set } — changes during a build
+const note = (ws, kind, id) => {
+  if (!building.has(ws)) return false;
+  if (!missed.has(ws)) missed.set(ws, { persons: new Set(), turfs: new Set() });
+  missed.get(ws)[kind].add(id);
+  return true;
+};
 
 const boxOf = (ring) => {
   let s = Infinity, w = Infinity, n = -Infinity, e = -Infinity;
@@ -76,6 +83,13 @@ export const rebuild = (db, ws) => {
     }
     const idx = { turfs, byPerson: reverse(turfs), at: Date.now() };
     indexes.set(ws, idx);
+    // What changed while it was being read (a person added, a turf redrawn)
+    // is applied now, so nothing is lost to the build.
+    const late = missed.get(ws);
+    missed.delete(ws);
+    building.delete(ws);
+    for (const t of late?.turfs || []) await updateTurf(db, ws, t);
+    for (const pid of late?.persons || []) await updatePerson(db, ws, pid);
     return idx;
   })().finally(() => building.delete(ws));
   building.set(ws, job);
@@ -95,6 +109,7 @@ export const dropIndex = (ws) => { indexes.delete(ws); };
 
 // One turf drawn, redrawn or removed: only that turf is read again.
 export const updateTurf = async (db, ws, turfId) => {
+  if (note(ws, 'turfs', turfId)) return;
   const idx = indexes.get(ws);
   if (!idx) return;
   const t = (await db.query('select polygon from turfs where id = $1 and workspace_id = $2 and deleted_at is null', [turfId, ws])).rows[0];
@@ -108,6 +123,7 @@ export const updateTurf = async (db, ws, turfId) => {
 
 // One person added, moved, located, removed or merged away: their entries.
 export const updatePerson = async (db, ws, personId) => {
+  if (note(ws, 'persons', personId)) return;
   const idx = indexes.get(ws);
   if (!idx) return;
   const p = (await db.query(
@@ -120,6 +136,13 @@ export const updatePerson = async (db, ws, personId) => {
     if (inside) { t.ids.add(personId); now.push(tid); } else t.ids.delete(personId);
   }
   if (now.length) idx.byPerson.set(personId, now); else idx.byPerson.delete(personId);
+};
+
+// One turf's people read now, outside the index (a turf drawn a moment
+// ago, while the index catches up).
+export const peopleInTurf = async (db, ws, turfId) => {
+  const t = (await db.query('select polygon from turfs where id = $1 and workspace_id = $2 and deleted_at is null', [turfId, ws])).rows[0];
+  return t ? turfPeople(db, ws, ringOf(t.polygon)) : new Set();
 };
 
 export const turfsOfPerson = (ws, personId) => indexes.get(ws)?.byPerson.get(personId) || [];

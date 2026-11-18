@@ -23,7 +23,9 @@ import { httpError } from '../../actions/util.js';
 import { newId } from '../../lib/events.js';
 import { forgetCounts } from './brief.js';
 import { now } from '../../lib/clock.js';
-import { gotvFor, isDesk, scopeOf, rowOf, onNow } from './state.js';
+import { gotvFor, isDesk, rowOf, onNow } from './state.js';
+import { pointInPolygon } from '../../lib/geo.js';
+import { loginEmail } from '../../lib/viewer.js';
 import { hoursOf, tzOf, dayOf, today, votingDays, inWindow, sendOpen } from './clock.js';
 import { postActions } from './posts.js';
 
@@ -156,9 +158,23 @@ export const recomputeVoted = async (tx, ws, personId) => {
 
 // May this volunteer mark this person? While GOTV is active and kept to
 // turfs: in their scope, or someone they added at a door in the last day.
+// One person, checked on their own (inside the write: never the turf
+// index, which may be building on another connection): a pin inside one of
+// their turfs, a number assigned to them, their own record.
 const onMyList = async (tx, ctx, personId) => {
-  const scope = await scopeOf(tx, ctx);
-  if (scope.ids.has(personId)) return true;
+  const ws = ctx.workspaceId;
+  const p = (await tx.query('select lat, lng, lower(email) as email from persons where id = $1 and workspace_id = $2', [personId, ws])).rows[0];
+  if (p?.email && p.email === loginEmail(ctx)) return true;
+  if (p?.lat != null && p?.lng != null) {
+    const rings = (await tx.query(
+      'select t.polygon from turfs t join turf_members m on m.turf_id = t.id and m.user_id = $2 where t.workspace_id = $1 and t.deleted_at is null',
+      [ws, ctx.user.id],
+    )).rows.map((t) => (typeof t.polygon === 'string' ? JSON.parse(t.polygon) : t.polygon) || []);
+    if (rings.some((r) => r.length >= 3 && pointInPolygon(Number(p.lat), Number(p.lng), r.map(([a, b]) => [Number(a), Number(b)])))) return true;
+  }
+  if ((await tx.query(
+    'select 1 from call_bank_numbers where workspace_id = $1 and person_id = $2 and assigned_to = $3 and done_at is null limit 1', [ws, personId, ctx.user.id],
+  )).rows[0]) return true;
   return Boolean((await tx.query(
     `select 1 from events where workspace_id = $1 and entity_type = 'person' and entity_id = $2 and op = 'create'
         and actor_id = $3 and server_ts > now() - interval '24 hours' limit 1`,
