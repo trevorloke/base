@@ -188,8 +188,10 @@ links, and a new ask never ends an earlier one. Without a sender or
 manager instead: **Settings → Members → Password link** on someone's row
 (not yourself, not another manager, not anyone in another campaign on the
 same server) makes a 24-hour link — emailed to them and never shown when
-email is set up, shown with Copy when it isn't. Both are on the event log,
-never the link (`server/ext/passwords`).
+email is set up, shown with Copy when it isn't; a link whose email doesn't
+go is ended at once. It needs `STARBASE_PUBLIC_URL` too (without it the
+button isn't shown). Both are on the event log, never the link
+(`server/ext/passwords`).
 
 ### Email from a person's page
 

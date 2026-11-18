@@ -437,11 +437,12 @@ export default function Team({ embedded = false }) {
   const googleTeam = useQuery({ queryKey: ['google-members'], queryFn: () => apiGet('/google/members'), enabled: isManager });
   const googleOf = new Map((Array.isArray(googleTeam.data) ? googleTeam.data : []).map((x) => [x.user_id, x]));
   const googleChanged = () => queryClient.invalidateQueries({ queryKey: ['google-members'] });
-  // Password links (ext/passwords): offered unless this is the public demo;
+  // Password links (ext/passwords): offered unless this is the public demo
+  // or the campaign has no address to build one from (STARBASE_PUBLIC_URL);
   // not for someone in another campaign here too.
   const pwLinks = useQuery({ queryKey: ['password-links'], queryFn: () => apiGet('/password-links'), enabled: isManager });
   const pwElsewhere = new Set(pwLinks.data?.elsewhere || []);
-  const pwLinkFor = (m) => Boolean(pwLinks.data?.on) && m.id !== me.user.id && m.role !== 'manager' && !pwElsewhere.has(m.id);
+  const pwLinkFor = (m) => Boolean(pwLinks.data?.on && pwLinks.data?.address) && m.id !== me.user.id && m.role !== 'manager' && !pwElsewhere.has(m.id);
   // Is email connected? (Same read Today and Shifts use; only that, so the
   // strip never says this screen is from Today's kept copy.)
   const brief = useQuery({ queryKey: ['brief'], queryFn: () => apiGet('/brief'), enabled: isManager, staleTime: Infinity, meta: { side: true } });

@@ -314,7 +314,8 @@ one tap away under **More**.
   every other device; the old password fails; with two-step on it asks the
   code next. With no sender (or no `STARBASE_PUBLIC_URL`) Forgot says to ask
   a manager, who taps *Password link* on the person's row in Settings →
-  Members: the link with Copy, or *Emailed* when email is set up.
+  Members: the link with Copy, or *Emailed* when email is set up (no
+  *Password link* at all without `STARBASE_PUBLIC_URL`).
   `server/test/password-reset.test.js` covers the server (limits, links that
   end, the log); `node e2e-reset.mjs` (PORT, SHOTS; the stand-in sender
   on PORT+1, its controls on PORT+4) walks it in a browser under a client's

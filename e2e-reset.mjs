@@ -10,7 +10,8 @@
 //     password, then signs in;
 //   · with no sender, Forgot says to ask a manager, with no form;
 //   · Settings → Members: a manager's Password link for a volunteer — with
-//     no sender the link with Copy; with one, "Emailed", and no link shown.
+//     no sender the link with Copy; with one, "Emailed", and no link shown;
+//     with no STARBASE_PUBLIC_URL, no Password link at all.
 // Phones: no sideways scroll, every control 48 px or more. Screenshots of
 // each screen, desktop and phone.
 //
@@ -264,6 +265,15 @@ try {
     await r.getByRole('button', { name: 'No' }).click();
     await ctx.close();
   }
+  // No campaign address: no Password link (every tap would be refused).
+  await control('/set', { env: { STARBASE_PUBLIC_URL: null } });
+  try {
+    await mgr.goto(`${DESK}/settings`);
+    const r = mgr.locator('.ot-item', { hasText: 'Sam Example' });
+    await r.getByRole('button', { name: 'Remove' }).waitFor();
+    await mgr.waitForLoadState('networkidle');
+    check('no address: no Password link', (await r.getByRole('button', { name: 'Password link' }).count()) === 0);
+  } finally { await control('/set', { env: { STARBASE_PUBLIC_URL: `${ORIGIN}${P}` } }); }
   await mgrCtx.close();
 } catch (e) {
   check('the walk finished', false, e.stack || e.message);
