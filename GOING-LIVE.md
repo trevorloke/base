@@ -110,7 +110,7 @@ the candidates the code ships with (`shared/scale.js`).
 | `STARBASE_ENV` | `staging` on the staging service, `production` on production (set by `render.yaml`) | the *Staging* badge; `/api/health` |
 | `STARBASE_FRAME_HOSTS`, `STARBASE_DEMO_EMAIL`, `STARBASE_SAMPLE`, `STARBASE_SAMPLE_RESET` | staging only, and ignored on production: the sites that may frame the app; the account every demo visitor is signed in as at `/api/auth/demo`; `vancouver` to make the sample campaign once on an empty database; and a new word to drop everything in staging's database and make the sample again | the demo on the base.win website (`server/lib/demo.js`, `server/lib/samplecampaign.js`). Anyone who opens the demo can do whatever the demo account can, so that server holds the sample campaign and nobody real |
 | `STARBASE_ORG_NAME`, `STARBASE_JURISDICTION`, `STARBASE_TZ`, `STARBASE_CITY`, `STARBASE_SLATES`, `STARBASE_CANDIDATES` | the campaign (README → *One deployment per client*) | the name the first sign-up sets up, the contribution rules, the campaign's day, addresses, the slates a gift can go to, the rating scale's first candidates |
-| `STARBASE_PUBLIC_URL` | `https://starbase.imaginesurrey.ca` (staging: its own address) | every link in an email: invites, unsubscribe, receipts; calendar links and files |
+| `STARBASE_PUBLIC_URL` | `https://starbase.imaginesurrey.ca` (staging: its own address) | every link in an email: invites, unsubscribe, receipts, password links (Forgot password is off without it); calendar links and files |
 | `RESEND_API_KEY`, `MAIL_FROM` | from Resend; `Imagine Surrey <team@imaginesurrey.ca>` on the campaign's domain (Settings → Services → Email → *Sending domain* walks through its DNS records) | email; without it invites are shown to copy and sends wait as *queued* |
 | `STARBASE_TWO_STEP_KEY` | 32 or more random characters (`openssl rand -base64 32`), a different one per environment | two-step sign-in's keys sealed with a key the database doesn't hold (INTEGRATIONS.md) |
 
@@ -589,6 +589,10 @@ shared, and the code names no client.
 ## 7 · Before the public link goes out
 
 - `https://starbase.imaginesurrey.ca/` loads over https and signs in.
+- Forgot password, once, on production with your own account: **Forgot your
+  password?** → your email → the link in the email → a new password → you're
+  in. *This campaign can’t send email yet* means production has no email key
+  or no `STARBASE_PUBLIC_URL`.
 - A test newsletter reaches a real inbox with a working unsubscribe link.
 - Set the campaign’s mailing address, an email or phone, and the financial
   agent in **Website → Settings**: they go at the bottom of every email. Until

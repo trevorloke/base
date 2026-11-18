@@ -52,10 +52,12 @@ built-in database on the server's disk (`STARBASE_DATA`, default
 
 `STARBASE_PUBLIC_URL` — this environment's own `https://` address
 (`https://starbase.imaginesurrey.ca`; staging its own). Every link in an
-email (invites, unsubscribe, receipts, pictures) is built from it, and so are
+email (invites, unsubscribe, receipts, pictures, password links) is built from it, and so are
 the addresses Twilio is told to call back (delivery reports, calls). Without
 it, links use whatever address the page was opened at, background sends
-(receipts) carry no link, and calls through the campaign's number are off.
+(receipts) carry no link, calls through the campaign's number are off, and
+Forgot password says to ask a manager (a password link is never built from
+the address a request came to).
 
 **Check:** Services → Public address fetches `<address>/api/health` and
 makes sure it's this base.win.
@@ -101,8 +103,10 @@ each address, so nothing more is set up at the sender; an address at any
 other domain is refused before it is saved (a secondary site's domain is a
 later step). The tracked links, the open pixel and every unsubscribe link
 stay on the main site's address (`STARBASE_PUBLIC_URL`). System mail —
-invites, shift notices, receipts, two-step, ladders — always goes from
-MAIL_FROM.
+invites, shift notices, receipts, two-step, password links, ladders — always
+goes from MAIL_FROM. Password links (Forgot password, a manager's Password
+link) need a sender: without one Forgot says to ask a manager, and a
+manager's link is shown to copy.
 
 **Resend**
 
