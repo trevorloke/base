@@ -23,6 +23,7 @@ export function TopBar({
       <div className="wb-top__row">
         <Link className="ops-back wb-top__back" to={pagesPath}>← Pages</Link>
         <div className="wb-top__title">
+          <h1 className="ws-sr">{title || 'Untitled page'}</h1>
           <label className="ws-sr" htmlFor="wb-title-in">Page title</label>
           <input id="wb-title-in" className="wb-top__in" value={title} maxLength={120} autoComplete="off"
             aria-invalid={!title.trim() ? 'true' : undefined} placeholder="Give the page a title"

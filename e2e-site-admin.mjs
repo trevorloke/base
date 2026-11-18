@@ -369,11 +369,12 @@ await page.fill('#wb-new-title', 'Sample: every section');
 await page.getByRole('button', { name: 'Make the page' }).click();
 await page.waitForURL(/\/website\/pages\/[0-9a-f-]{36}/, { timeout: 15000 });
 const allId = page.url().match(/pages\/([0-9a-f-]{36})/)[1];
-check('a blank page: one big “Add your first section”', await page.getByRole('button', { name: 'Add your first section' }).isVisible());
+await page.getByRole('button', { name: 'Add your first section' }).waitFor({ timeout: 10000 }).catch(() => {});
 await shot('5c-builder-empty');
+check('a blank page: one big “Add your first section”', await page.getByRole('button', { name: 'Add your first section' }).isVisible());
 const formless = [];
-for (const m of MODULES) {
-  if (!(await sections().count())) {
+for (const [mi, m] of MODULES.entries()) {
+  if (mi === 0) {
     await page.getByRole('button', { name: 'Add your first section' }).click();
     const dlg = page.getByRole('dialog', { name: 'Add a section' });
     await dlg.locator(`.wb-gal__card[data-kind="${m.kind}"]`).first().click();
@@ -625,7 +626,7 @@ await page.setViewportSize({ width: 390, height: 844 });
 const phone = [];
 for (const [path, name] of [['/website', 'overview'], ['/website/pages', 'pages'], [`/website/pages/${pageId}`, 'builder'], ['/website/theme', 'theme'], ['/website/settings', 'settings'], ['/website/news', 'news'], ['/website/petitions', 'petitions'], ['/website/sites', 'other websites']]) {
   await page.goto(`${BASE}/admin${path}`, { waitUntil: 'domcontentloaded' });
-  await page.locator('h1').first().waitFor();
+  await page.locator('h1:visible, .wb-top__in').first().waitFor();
   await sleep(700);
   phone.push([name, await overflow()]);
 }

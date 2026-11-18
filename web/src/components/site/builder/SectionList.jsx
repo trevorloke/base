@@ -27,7 +27,7 @@ export function SectionList({ modules, problems, campaigns, dnd, locked, onOpen,
   if (!modules.length) {
     return (
       <div className="wb-first">
-        <button type="button" className="btn btn-primary wb-first__btn" onClick={() => onAdd(0)} disabled={locked}>Add your first section</button>
+        <button type="button" className="btn wb-first__btn" onClick={() => onAdd(0)} disabled={locked}>Add your first section</button>
         <p className="wb-help">Pick one from the gallery — a headline, some words, a sign-up.</p>
       </div>
     );
