@@ -20,6 +20,7 @@ import { ADMIN_BASE, fieldView, landing, mayAdmin } from './mode.js';
 import { takeSignin } from './components/google.js';
 import Login from './pages/Login.jsx';
 import Forgot from './pages/Forgot.jsx';
+import Enter from './pages/Enter.jsx';
 import Reset from './pages/Reset.jsx';
 import Signup from './pages/Signup.jsx';
 import Today from './pages/Today.jsx';
@@ -247,6 +248,8 @@ export default function App({ mode = 'field' }) {
       <Route path="/join/:token" element={<Join mode={mode} />} />
       <Route path="/forgot" element={<Forgot />} />
       <Route path="/reset" element={<Reset mode={mode} />} />
+      {/* base.win support, from the control centre (desk only). */}
+      <Route path="/enter" element={<Enter />} />
       <Route element={<RequireAuth mode={mode} />}>
         <Route path="/" element={<Today />} />
         <Route path="/map" element={<MapPage />} />

@@ -17,6 +17,8 @@ import '../components/two-step.css';
 import '../components/google.css';
 import './candidates.css';
 import './reset.css';
+import '../components/operator.css';
+import { OPS_INVITE } from './Enter.jsx';
 
 const ROLES = [
   { code: 'volunteer', label: 'Volunteer', hint: 'Map, doors, calls, texts, signs' },
@@ -281,11 +283,13 @@ function MemberRow({ m, isMe, online, onRole, onChanged, twoStep = null, onTwoSt
         <span className="ot-row__main">
           <span className="ot-row__name">{m.name}{isMe ? <span className="muted"> (you)</span> : null}</span>
           <span className="ot-row__sub ot-row__sub--stack">
-            <span className="ot-email"><Email value={m.email} /></span>
+            <span className="ot-email">{m.email ? <Email value={m.email} /> : '—'}</span>
             <span>since {fmtDay(m.created_at)}{twoStep?.on && (twoStep.locked
               ? <span className="chip chip-warn tm-2step" title="Too many wrong codes in a row: codes from their app are locked until they use a recovery code or you reset it">Two-step locked</span>
               : <span className="chip chip-ok tm-2step">Two-step on</span>)}
-            {google && <span className="chip tm-google">Google</span>}</span>
+            {google && <span className="chip tm-google">Google</span>}
+            {m.support && <span className="chip op-chip">base.win support</span>}</span>
+            {m.support && <span className="op-row-note">Removing doesn’t stop base.win: turn off ‘base.win may sign in here’ below.</span>}
           </span>
         </span>
         <span className="ot-actions ot-row__acts">
@@ -407,6 +411,70 @@ function TwoStepRequirement({ data, online, onChanged }) {
   );
 }
 
+// The first manager's invite made by base.win support on its way in
+// (pages/Enter.jsx), read once.
+const takeOpsInvite = () => {
+  try {
+    const raw = sessionStorage.getItem(OPS_INVITE);
+    sessionStorage.removeItem(OPS_INVITE);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+};
+
+// Settings → Members: "base.win may sign in here" (ext/operator) — the
+// campaign's consent to the control centre opening its desk. Off also ends
+// a visit in progress. Hidden on the public demo; never changed by support.
+function OperatorSwitch({ me, online }) {
+  const queryClient = useQueryClient();
+  const op = useQuery({ queryKey: ['operator'], queryFn: () => apiGet('/operator') });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [said, setSaid] = useState(null);
+  const [want, setWant] = useState(null);
+  const hintId = useId();
+  if (op.data?.demo) return null;
+  const heading = <h2 className="ot-sec-h" id="op-sec-h">base.win support</h2>;
+  if (!op.data) {
+    return (
+      <section className="op-sec" aria-labelledby="op-sec-h">
+        {heading}
+        {op.isError
+          ? <p className="error">Unavailable — <button type="button" className="btn-link" onClick={() => op.refetch()}>Try again</button></p>
+          : <p className="muted">Loading…</p>}
+      </section>
+    );
+  }
+  const on = want ?? op.data.on;
+  const toggle = async (next) => {
+    setBusy(true); setError(null); setSaid(null); setWant(next);
+    try {
+      await action('workspace.operatorEntry', { on: next });
+      await queryClient.invalidateQueries({ queryKey: ['operator'] });
+      setSaid('Saved');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setWant(null); setBusy(false);
+    }
+  };
+  return (
+    <section className="op-sec" aria-labelledby="op-sec-h">
+      {heading}
+      <label className="ot-check">
+        <input type="checkbox" checked={on} disabled={busy || !online || Boolean(me.operator)}
+          aria-describedby={hintId} onChange={(e) => toggle(e.target.checked)} />
+        <span>base.win may sign in here</span>
+      </label>
+      <div id={hintId}>
+        <p className="muted op-hint">{me.operator ? 'Only the campaign’s own managers change this.' : 'Each visit shows in History and on Today. Turning it off ends a visit in progress.'}</p>
+        <p className="muted op-hint">People base.win invited stay on the team.</p>
+      </div>
+      <p className="muted op-hint" aria-live="polite">{said}</p>
+      {error && <p className="error" role="alert">{error}</p>}
+    </section>
+  );
+}
+
 function RolesHelp() {
   const [open, setOpen] = useState(false);
   const id = useId();
@@ -442,7 +510,9 @@ export default function Team({ embedded = false }) {
   // not for someone in another campaign here too.
   const pwLinks = useQuery({ queryKey: ['password-links'], queryFn: () => apiGet('/password-links'), enabled: isManager });
   const pwElsewhere = new Set(pwLinks.data?.elsewhere || []);
-  const pwLinkFor = (m) => Boolean(pwLinks.data?.on && pwLinks.data?.address) && m.id !== me.user.id && m.role !== 'manager' && !pwElsewhere.has(m.id);
+  // Never for base.win support, and never while in as it (ext/operator).
+  const pwLinkFor = (m) => Boolean(pwLinks.data?.on && pwLinks.data?.address) && m.id !== me.user.id && m.role !== 'manager'
+    && !pwElsewhere.has(m.id) && !m.support && !me.operator;
   // Is email connected? (Same read Today and Shifts use; only that, so the
   // strip never says this screen is from Today's kept copy.)
   const brief = useQuery({ queryKey: ['brief'], queryFn: () => apiGet('/brief'), enabled: isManager, staleTime: Infinity, meta: { side: true } });
@@ -452,7 +522,9 @@ export default function Team({ embedded = false }) {
   const [role, setRole] = useState('volunteer');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
-  const [sent, setSent] = useState(null); // { email, joinUrl, emailStatus }
+  // { email, joinUrl, emailStatus } — or the first manager's invite base.win
+  // support just made from the control centre (pages/Enter.jsx), once.
+  const [sent, setSent] = useState(takeOpsInvite);
   const online = useOnline();
 
   if (!isManager) return <Navigate to="/" replace />;
@@ -521,7 +593,9 @@ export default function Team({ embedded = false }) {
       </form>
       {!online && <NeedsSignalLine>Inviting, changing roles and removing need signal</NeedsSignalLine>}
       {error && <p className="error">{error}</p>}
-      {sent && <JoinLink sent={sent} testId="join-url" />}
+      {sent?.joinUrl && <JoinLink sent={sent} testId="join-url" />}
+      {sent?.done && <p className="muted" role="status">{sent.email} is already on the team.</p>}
+      {sent?.error && <p className="error" role="alert">Couldn’t invite {sent.email}: {sent.error}</p>}
 
       {/* Not loaded (no signal): say so, never "Members 0". */}
       {!team.data ? (
@@ -555,6 +629,7 @@ export default function Team({ embedded = false }) {
       )}
 
       <TwoStepRequirement data={twoStep.data} online={online} onChanged={twoStepChanged} />
+      <OperatorSwitch me={me} online={online} />
       <RolesHelp />
     </div>
   );

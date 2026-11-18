@@ -167,6 +167,8 @@ app.get('/setup', async (c) => {
     google: googleSetup().signin && rules.signin, googleDomain: rules.domain,
     // Forgot password can email a link (ext/passwords); else it says to ask a manager.
     resetByEmail: resetByEmail(),
+    // Closed because the control centre sets this campaign up (its key, no campaign yet).
+    fromControlCentre: !open && (await closedWords(db)) === FROM_CONTROL_CENTRE,
   });
 });
 

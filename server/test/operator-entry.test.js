@@ -202,6 +202,7 @@ test('a fresh server with the key: sign-up closed; the first entry makes the cam
   try {
     const setup = await new Client().get('/api/auth/setup');
     assert.equal(setup.json.open, false);
+    assert.equal(setup.json.fromControlCentre, true);
     const up = await new Client().signup({ email: 'stranger@example.org' });
     assert.equal(up.status, 403);
     assert.equal(up.json.error, 'This campaign is set up from the base.win control centre.');
