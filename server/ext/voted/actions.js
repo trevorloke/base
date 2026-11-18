@@ -235,9 +235,14 @@ export const markCore = async (tx, ctx, input, emit) => {
   }
   // A mark tapped before the person's latest one (it waited on a phone
   // while someone else changed it) goes in the history but changes
-  // nothing: the latest tap wins, not the latest to arrive.
+  // nothing: the latest tap wins, not the latest to arrive. Only standing
+  // marks count (as recomputeVoted's): an Undo is not a tap, so a note put
+  // back and matched again to the same person still marks them.
   const latest = (await tx.query(
-    'select max(created_at) as at from voted_marks where workspace_id = $1 and person_id = $2', [ws, input.person_id],
+    `select max(m.created_at) as at from voted_marks m
+      where m.workspace_id = $1 and m.person_id = $2 and m.undoes is null
+        and not exists (select 1 from voted_marks u where u.workspace_id = m.workspace_id and u.undoes = m.id)`,
+    [ws, input.person_id],
   )).rows[0]?.at;
   const stale = latest && new Date(latest) > new Date(at);
   const feed_id = Number((await tx.query(

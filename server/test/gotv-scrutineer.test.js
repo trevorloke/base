@@ -215,6 +215,19 @@ test('undo: 15 minutes from reaching the office, own marks only, the fact from t
   no(await k.volA.client.action('vote.undo', { client_id: cid2 }), 403, DUTY);
 });
 
+test('an undone note matched again to the same person marks them: the undo is not a later tap', async () => {
+  at(k.G, '21:00');
+  const p = await k.mgr.createPerson(`Rematch Example ${k.tag}`, { lat: 49.14, lng: -122.8402 });
+  // A note written two hours ago, matched now, undone now, matched again.
+  const written = new Date(Date.now() + Number(process.env.STARBASE_CLOCK_SHIFT_MS) - 2 * 3600_000).toISOString();
+  const cid = randomUUID();
+  ok(await sheet(k.scrut.client, p, k.p1, { client_id: cid, client_at: written }));
+  ok(await k.scrut.client.action('vote.undo', { client_id: cid }));
+  assert.equal((await k.mgr.get(`/api/persons/${p.id}`)).json.person.voted_at, null);
+  ok(await sheet(k.scrut.client, p, k.p1, { client_at: written }));
+  assert.equal((await k.mgr.get(`/api/persons/${p.id}`)).json.person.voted_at, written, 'voted when the note was written');
+});
+
 test('practice: a group only; never the record; undo is a row; ending wipes it; refused while GOTV is on', async () => {
   at(k.G, '12:00');
   no(await k.mgr.action('vote.settings', { mode: 'practice' }), 409, 'GOTV is on today — practice another day');

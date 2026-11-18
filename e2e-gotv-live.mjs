@@ -34,7 +34,7 @@
 //      refused at the closed place runs again at an open one
 //  12. the day after election day, 01:58: a name written at 19:58 is on
 //      Today ("You have 1 name not sent") and matched on Who voted; Undo
-//      puts it back to match again
+//      puts it back to match again, and matching it again marks them
 //  12b. an off-duty runner the day after: 201 election-day names all to
 //      match, today's to send; no place picker until a name is matched
 //   9. staff see the switch read-only and no Sign-in code
@@ -623,6 +623,13 @@ try {
       await until(async () => /Polls closed — match your 1 name/.test(await text(sam.page)) && (await sam.page.locator('.gv-note__match:has-text("quinn exa")').count()) === 1, 5000),
       (await text(sam.page)).slice(0, 300));
     await shot(sam.page, '27b-who-voted-undo-after-midnight-390');
+    // Matched again to the same person: the Undo is not a later tap, so it marks them.
+    await sam.page.click('.gv-note__match:has-text("quinn")');
+    await sam.page.click('.gv-row:has-text("Quinn Example")', { timeout: 8000 });
+    const again = await until(async () => Boolean((await api(mpage, `/voted/persons/${P.quinn.id}`)).json.voted_at), 10_000);
+    const qa = (await api(mpage, `/voted/persons/${P.quinn.id}`)).json;
+    check('12. matched again after Undo: voted, at 19:58', again && Date.parse(qa.voted_at) === Date.parse(wq), JSON.stringify({ voted_at: qa.voted_at }));
+    check('12. matched again: the note is gone', await until(async () => !/not sent|to send|match your/.test(await text(sam.page)), 5000), (await text(sam.page)).slice(0, 300));
   }
   // ── 12b. An off-duty runner the day after: 201 names from election day, one from today ──
   ok12b: {
