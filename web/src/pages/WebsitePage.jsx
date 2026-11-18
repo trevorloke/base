@@ -28,6 +28,7 @@ import { PreviewFrame } from '../components/site/builder/PreviewFrame.jsx';
 import { Gallery } from '../components/site/builder/Gallery.jsx';
 import { PageSettings } from '../components/site/builder/PageSettings.jsx';
 import { themeColors } from '@starbase/shared/site/theme';
+import { knownPictures, olderUndescribed, picturesIn } from '@starbase/shared/site/pictures';
 import { addressOf } from './WebsitePages.jsx';
 import './shifts.css';
 import '../editor.css';
@@ -40,6 +41,7 @@ export default function WebsitePage() {
 }
 
 const labelOf = (m) => MODULE_BY_KIND[m?.kind]?.label || 'the section';
+const picturesNeedingWords = (m, known) => picturesIn(MODULE_BY_KIND[m.kind]?.fields || [], m.props).filter((p) => !p.alt && !p.decorative && known.has(p.url));
 
 function Builder({ id }) {
   const [params] = useSearchParams();
@@ -71,6 +73,8 @@ function Builder({ id }) {
   const preview = usePreviewLink(id, Boolean(base?.id) && online);
 
   const campaigns = useMemo(() => campsQ.data?.campaigns || null, [campsQ.data]);
+  // The pictures already on the site: one added since needs its description.
+  const known = useMemo(() => knownPictures(base?.published || null), [base?.published]);
   const pages = useMemo(() => (msId ? msQ.data?.pages : siteQ.data?.pages) || null, [msId, msQ.data, siteQ.data]);
   const pagesPath = msId ? `/website/sites/${msId}/pages` : '/website/pages';
   const viewRoot = (msId ? msQ.data?.urls?.domains?.[0] || msQ.data?.urls?.site : siteQ.data?.urls?.site) || '/site/';
@@ -136,10 +140,10 @@ function Builder({ id }) {
   // ── Problems: a save's (loose), a publish's (strict) and the server's ──
   const problems = useMemo(() => {
     if (!draft) return [];
-    const list = strict ? problemsOf(draft.modules, { strict: true, campaigns, pages }) : d.looseProblems.filter((p) => draft.modules.some((m) => m.id === p.id));
+    const list = strict ? problemsOf(draft.modules, { strict: true, campaigns, pages, known }) : d.looseProblems.filter((p) => draft.modules.some((m) => m.id === p.id));
     if (serverProblem?.id && !list.some((p) => p.id === serverProblem.id)) list.push(serverProblem);
     return list;
-  }, [draft, strict, campaigns, pages, d.looseProblems, serverProblem]);
+  }, [draft, strict, campaigns, pages, known, d.looseProblems, serverProblem]);
   const errorsFor = (mid) => Object.fromEntries(problems.filter((p) => p.id === mid && p.path).map((p) => [p.path, p.text]));
 
   // ── Publish ──
@@ -148,7 +152,7 @@ function Builder({ id }) {
     setServerProblem(null);
     const saved = await d.flush();
     if (!saved) { setPublishing(false); setStrict(true); return; }
-    const list = problemsOf(d.current().modules, { strict: true, campaigns, pages });
+    const list = problemsOf(d.current().modules, { strict: true, campaigns, pages, known });
     if (list.length) { setStrict(true); openAt(list[0].id, list[0].path); setPublishing(false); return; }
     try {
       const res = await d.inTurn(() => action('site.page.publish', { id }));
@@ -157,8 +161,15 @@ function Builder({ id }) {
       const words = [...new Set(langs.map((c) => (c === 'pa' ? 'ਪੰਜਾਬੀ' : '中文')))];
       const noAuth = !String(siteQ.data?.settings?.org?.authorizationLine || '').trim();
       const href = `${viewRoot.replace(/\/$/, '')}${addressOf(res?.page || base)}`;
-      say(`Published.${words.length ? ` ${words.join(' and ')} update in about a minute.` : ''}${noAuth ? ' Your site has no ‘Authorized by’ line yet.' : ''}`, {
-        links: [{ label: 'View it', href, external: true }, noAuth && { label: 'Add it', to: '/website/settings#org' }].filter(Boolean),
+      // Pictures already on the site without words don't block; they're asked for.
+      const older = Number(res?.undescribed) || 0;
+      const describe = () => {
+        const m = d.current().modules.find((x) => !x.hidden && olderUndescribed(MODULE_BY_KIND[x.kind]?.fields || [], x.props, known));
+        const p = m && picturesNeedingWords(m, known)[0];
+        if (m) openAt(m.id, p?.path || null);
+      };
+      say(`Published.${words.length ? ` ${words.join(' and ')} update in about a minute.` : ''}${older ? ` ${older === 1 ? '1 older picture has' : `${older} older pictures have`} no description.` : ''}${noAuth ? ' Your site has no ‘Authorized by’ line yet.' : ''}`, {
+        links: [{ label: 'View it', href, external: true }, older && { label: 'Describe them', onClick: describe }, noAuth && { label: 'Add it', to: '/website/settings#org' }].filter(Boolean),
       });
       refreshSite();
     } catch (e) {

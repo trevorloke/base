@@ -43,7 +43,9 @@ export function picturesIn(fields, props) {
       if (f.type === 'image' && v && typeof v === 'object' && String(v.url || '').trim()) {
         out.push({ path: `${path}.alt`, url: String(v.url).trim(), alt: String(v.alt || '').trim(), decorative: v.decorative === true, md: false });
       } else if (f.type === 'markdown') {
-        for (const p of mdPictures(v)) out.push({ path, url: p.url, alt: p.alt, decorative: false, md: true });
+        // "picture" is the word the editor's Picture button selects for
+        // typing over: left as it is, it says nothing.
+        for (const p of mdPictures(v)) out.push({ path, url: p.url, alt: p.alt.toLowerCase() === 'picture' ? '' : p.alt, decorative: false, md: true });
       } else if (f.type === 'list' && Array.isArray(v)) {
         v.forEach((item, i) => walk(f.of, item, `${path}[${i}].`));
       }

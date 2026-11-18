@@ -1,0 +1,12 @@
+/* A picture's spot to keep in view (WA decision 26): the picture at its own
+   shape, so a tap maps to the picture, and a dot where the spot is. */
+.wb-image__thumb.wb-focus {
+  position: relative; width: min(240px, 100%); height: auto; padding: 0; cursor: crosshair;
+  background: var(--paper-1); font: inherit;
+}
+.wb-image__thumb.wb-focus img { width: 100%; height: auto; object-fit: initial; }
+.wb-focus:focus-visible { outline: 3px solid var(--mark); outline-offset: 2px; }
+.wb-focus__dot {
+  position: absolute; width: 22px; height: 22px; border-radius: 50%; transform: translate(-50%, -50%);
+  border: 3px solid var(--paper-0); box-shadow: 0 0 0 2px var(--ink); background: var(--mark); pointer-events: none;
+}

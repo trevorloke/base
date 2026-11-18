@@ -58,7 +58,7 @@ export function Toast({ toast, onClear }) {
       {toast && (
         <div className="toast wb-toast" data-undo={toast.undo ? '' : undefined}>
           <span>{toast.text}</span>
-          {(toast.links || []).map((l) => (l.to ? <Link key={l.to} className="btn" to={l.to}>{l.label}</Link> : (
+          {(toast.links || []).map((l) => (l.onClick ? <button key={l.label} type="button" className="btn" onClick={() => { onClear(); l.onClick(); }}>{l.label}</button> : l.to ? <Link key={l.to} className="btn" to={l.to}>{l.label}</Link> : (
             <a key={l.href} className="btn" href={l.href} target={l.external ? '_blank' : undefined} rel={l.external ? 'noopener' : undefined}>
               {l.label}{l.external && <span className="ws-sr"> (opens a new tab)</span>}
             </a>

@@ -17,13 +17,32 @@ import { Link } from 'react-router-dom';
 import { MODULE_BY_KIND } from '@starbase/shared/site/catalogue';
 import { Icon } from '@starbase/shared/site/components/icons';
 import { useDragDrop } from '../useDragDrop.js';
-import { MarkdownField, uploadImage } from '../MarkdownField.jsx';
+import { MarkdownField, shrinkImage, toDataUrl, uploadImage } from '../MarkdownField.jsx';
+import { pictureCopies } from '../brand-pictures.js';
+import './pictures.css';
+import { action } from '../../api.js';
 import { at } from '../../base.js';
 import { Dialog, MoreMenu } from './Bits.jsx';
 import { useSitePictures } from './useSite.js';
 import { isSiteLink, tidyLink } from './builder.js';
 
 export const uploadSitePicture = (file) => uploadImage(file, 'site.picture');
+// A section's or a post's picture: with its smaller copies (480, 960 and
+// 1,600 px), so a phone fetches a phone-sized one (WA decision 26).
+export async function uploadSizedPicture(file) {
+  const { blob, width, height } = await shrinkImage(file);
+  const copies = await pictureCopies(file).catch(() => []);
+  const sizes = [];
+  for (const c of copies) sizes.push({ data: await toDataUrl(c.blob), width: c.width, height: c.height });
+  const res = await action('site.picture', { data: await toDataUrl(blob), name: file.name.slice(0, 200), width, height, ...(sizes.length ? { sizes } : {}) });
+  return res.media;
+}
+// The picture's value as the catalogue keeps it, from an upload or the list.
+const pictureValue = (m, alt = '') => ({
+  url: m.url || `/media/${m.id}`, alt,
+  ...(m.width && m.height ? { width: m.width, height: m.height } : {}),
+  ...(m.sizes?.length ? { sizes: m.sizes } : {}),
+});
 const domId = (s) => String(s).replace(/[^A-Za-z0-9_-]+/g, '-');
 const LINK_HINT = 'A page of the site (/donate, /#m-join) or a full address (https://…)';
 
@@ -96,7 +115,7 @@ function LinkField({ id, label, value, onChange, errors, path, pages }) {
   );
 }
 
-// ── A picture: upload or pick one, and say what it shows ──
+// ── A picture: upload or pick one, the spot to keep in view, and what it shows ──
 export function ImageField({ id, label, value, onChange, error, altError, required, hint }) {
   const v = value && typeof value === 'object' ? value : { url: '', alt: '' };
   const file = useRef(null);
@@ -115,9 +134,9 @@ export function ImageField({ id, label, value, onChange, error, altError, requir
     setBusy(true);
     setUpErr(null);
     try {
-      const media = await uploadSitePicture(f);
+      const media = await uploadSizedPicture(f);
       const now = latest.current;
-      now.onChange({ url: media.url || `/media/${media.id}`, alt: now.v.alt || '' });
+      now.onChange(pictureValue(media, now.v.alt || ''));
     } catch (err) {
       setUpErr(err.message);
     } finally {
@@ -126,15 +145,15 @@ export function ImageField({ id, label, value, onChange, error, altError, requir
   };
   const errText = error || upErr;
   const errId = errText ? `${id}-err` : null;
-  const noAlt = v.url && !String(v.alt || '').trim();
+  const noAlt = v.url && !v.decorative && !String(v.alt || '').trim();
   return (
     <fieldset className="wb-group wb-image" aria-describedby={describe(errId)}>
       <legend>{label}{required && <span className="wb-req"> (needed to publish)</span>}</legend>
       {hint && <p className="wb-field__hint">{hint}</p>}
       <div className="wb-image__row">
-        <div className="wb-image__thumb" data-empty={v.url ? undefined : ''}>
-          {v.url ? <img src={at(v.url)} alt={v.alt ? `Chosen: ${v.alt}` : 'The chosen picture'} loading="lazy" /> : <span aria-hidden="true">No picture</span>}
-        </div>
+        {v.url ? <FocusSpot id={id} v={v} onChange={onChange} /> : (
+          <div className="wb-image__thumb" data-empty=""><span aria-hidden="true">No picture</span></div>
+        )}
         <div className="wb-image__tools">
           <input ref={file} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={pick} />
           <button type="button" id={`${id}-upload`} className="btn wb-tap" disabled={busy} onClick={() => file.current?.click()}>
@@ -145,13 +164,44 @@ export function ImageField({ id, label, value, onChange, error, altError, requir
         </div>
       </div>
       <Problem id={errId} text={errText} />
-      {v.url && (
-        <TextField id={`${id}-alt`} label="What the picture shows (for people who can’t see it)" max={300} value={v.alt}
+      {v.url && !v.decorative && (
+        <TextField id={`${id}-alt`} label="Describe the picture for people who can’t see it" max={300} value={v.alt}
           error={altError} hint={noAlt ? 'Say it in a few words, like “Volunteers knocking on doors on a sunny afternoon”.' : null}
           onChange={(alt) => onChange({ ...v, alt })} />
       )}
-      {picking && <PicturePicker onClose={() => setPicking(false)} onPick={(p) => { setPicking(false); onChange({ url: p.url, alt: v.alt || '' }); }} />}
+      {v.url && (
+        <ToggleField id={`${id}-deco`} label="Decorative (says nothing new)" value={v.decorative === true}
+          onChange={(on) => { const { decorative, ...rest } = v; onChange(on ? { ...rest, decorative: true } : rest); }} />
+      )}
+      {picking && <PicturePicker onClose={() => setPicking(false)} onPick={(p) => { setPicking(false); onChange(pictureValue(p, v.alt || '')); }} />}
     </fieldset>
+  );
+}
+
+// The spot that must stay in view when the picture is cropped (a phone's
+// narrow hero, a square card): tap it on the picture, or move it with the
+// arrow keys. A dot marks it; the middle until someone chooses.
+function FocusSpot({ id, v, onChange }) {
+  const f = v.focus || { x: 50, y: 50 };
+  const set = (x, y) => {
+    const c = (n) => Math.max(0, Math.min(100, Math.round(n)));
+    const next = { x: c(x), y: c(y) };
+    const { focus, ...rest } = v;
+    onChange(next.x === 50 && next.y === 50 ? rest : { ...rest, focus: next });
+  };
+  const tap = (e) => {
+    const box = e.currentTarget.getBoundingClientRect();
+    if (!box.width || !box.height || e.detail === 0) return; // a keyboard "click"
+    set(((e.clientX - box.left) / box.width) * 100, ((e.clientY - box.top) / box.height) * 100);
+  };
+  const keys = { ArrowLeft: [-5, 0], ArrowRight: [5, 0], ArrowUp: [0, -5], ArrowDown: [0, 5] };
+  return (
+    <button type="button" id={`${id}-focus`} className="wb-image__thumb wb-focus" onClick={tap}
+      onKeyDown={(e) => { const k = keys[e.key]; if (k) { e.preventDefault(); set(f.x + k[0], f.y + k[1]); } }}
+      aria-label={`The spot to keep in view: ${f.x}% across, ${f.y}% down. Tap the picture, or use the arrow keys.`}>
+      <img src={at(v.url)} alt="" loading="lazy" />
+      <span className="wb-focus__dot" style={{ left: `${f.x}%`, top: `${f.y}%` }} aria-hidden="true" />
+    </button>
   );
 }
 

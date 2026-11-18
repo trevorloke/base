@@ -1,9 +1,11 @@
 // Website → News (/website/news, /website/news/:id): the site's news posts.
 //   The list, newest first: title, published (and when) or a draft, its
 //   first lines. One yellow "New post".
-//   A post: its title, picture (and what it shows), a short excerpt (lists
-//   and shares use it), the words (Markdown, with a small toolbar and
-//   pictures), its address. A post has no separate draft once it's out:
+//   A post (WA decision 27): its title, picture (what it shows, the spot to
+//   keep in view), the words (Markdown in the body font, with a small
+//   toolbar and pictures) beside the post as it will look (≥ 1,100 px; Write
+//   · See it tabs on smaller screens), a short summary made from the words
+//   until someone types in it, its address. A post has no separate draft once it's out:
 //   saving a published post changes it on the site — so a draft's yellow
 //   button is "Publish" (with "Save draft" beside it) and a published one's
 //   is "Save changes" (with "Unpublish"). ⋯ → View on the site, Delete
@@ -17,6 +19,10 @@ import { NoSignal, noSignal, useOnline } from '../components/NoSignal.jsx';
 import { MarkdownField } from '../components/MarkdownField.jsx';
 import { MoreMenu, Toast, WebsiteTabs, useToast } from '../components/site/Bits.jsx';
 import { ImageField, TextField, uploadSitePicture } from '../components/site/Fields.jsx';
+import { useWidth } from '../components/site/builder/usePreview.js';
+import { renderMarkdown } from '@starbase/shared/markdown';
+import { POST_FIELDS, knownPictures, newUndescribed, summaryFrom } from '@starbase/shared/site/pictures';
+import '../components/site/posts.css';
 import { day, useSite, useSitePost, useSitePosts, useSiteRefresh } from '../components/site/useSite.js';
 import { rebaseForm, slugInput, slugify } from '../components/site/builder.js';
 import './shifts.css';
@@ -24,7 +30,7 @@ import '../editor.css';
 import './website.css';
 
 const blank = { title: '', slug: '', excerpt: '', body: '', image: { url: '', alt: '' } };
-const formOf = (p) => ({ title: p.title || '', slug: p.slug || '', excerpt: p.excerpt || '', body: p.body || '', image: { url: p.image?.url || '', alt: p.image?.alt || '' } });
+const formOf = (p) => ({ title: p.title || '', slug: p.slug || '', excerpt: p.excerpt || '', body: p.body || '', image: p.image?.url ? { ...p.image, alt: p.image.alt || '' } : { url: '', alt: '' } });
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 function PostList({ say }) {
@@ -115,6 +121,36 @@ function PostEditor({ id, say }) {
     return () => window.removeEventListener('beforeunload', warn);
   }, [dirty]);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  // The words: the summary follows them while nobody has typed in it (it is
+  // empty, or still what the words before made).
+  const setBody = (v) => setForm((f) => ({ ...f, body: v, excerpt: !f.excerpt.trim() || f.excerpt === summaryFrom(f.body) ? summaryFrom(v) : f.excerpt }));
+  const width = useWidth();
+  const beside = width >= 1100;
+  const [tab, setTab] = useState('write');
+  // A picture new to the site needs its description (WA 26): found here
+  // before anything is sent, the box opened, as the server would refuse.
+  const pictureProblem = (sent, going) => {
+    if (!going) return null;
+    const known = live && post ? knownPictures({ image: post.image, body: post.body }) : new Set();
+    return newUndescribed(POST_FIELDS, sent, known);
+  };
+  const showProblem = (p, sent) => {
+    setTab('write');
+    if (!p.md) {
+      setError('The picture: describe it for people who can’t see it');
+      setTimeout(() => document.getElementById('wb-p-image-alt')?.focus(), 0);
+      return;
+    }
+    setError('The post: a picture in it has no description');
+    setTimeout(() => {
+      const el = document.getElementById('wb-p-body');
+      if (!el) return;
+      const at = sent.body.indexOf(`](${p.url}`);
+      const open = at >= 0 ? sent.body.lastIndexOf('![', at) + 2 : 0;
+      el.focus();
+      el.setSelectionRange(open, Math.max(open, at));
+    }, 0);
+  };
   const live = post?.status === 'published';
   const siteRoot = (siteQ.data?.urls?.site || '/site/').replace(/\/$/, '');
 
@@ -125,6 +161,8 @@ function PostEditor({ id, say }) {
     setError(null);
     // What goes; whatever is typed while it's out stays (and stays "Not saved yet").
     const sent = form;
+    const pic = pictureProblem(sent, publish === true || (live && publish === null));
+    if (pic) { setBusy(false); showProblem(pic, sent); return null; }
     try {
       const res = await action('site.post.save', {
         ...(isNew ? {} : { id }), title: sent.title.trim(), slug: sent.slug.trim() || undefined,
@@ -202,14 +240,21 @@ function PostEditor({ id, say }) {
         </div>
       </div>
       {error && <p className="wb-alert" role="alert">{error}</p>}
-      <div className="card wb-editor">
+      {!beside && (
+        <div className="wb-post__tabs" role="group" aria-label="Write or see the post">
+          <button type="button" className="btn wb-tap" aria-pressed={tab === 'write'} onClick={() => setTab('write')}>Write</button>
+          <button type="button" className="btn wb-tap" aria-pressed={tab === 'see'} onClick={() => setTab('see')}>See it</button>
+        </div>
+      )}
+      <div className={`wb-post${beside ? ' wb-post--beside' : ''}`}>
+      <div className="card wb-editor" hidden={!beside && tab !== 'write'}>
         <TextField id="wb-p-title" label="Title" max={160} value={form.title} onChange={(v) => set('title', v)} />
         <ImageField id="wb-p-image" label="Picture" value={form.image} onChange={(v) => set('image', v)} />
-        <TextField id="wb-p-excerpt" label="Excerpt (in lists and when it’s shared)" max={400} multiline value={form.excerpt} onChange={(v) => set('excerpt', v)} />
-        <div className="wb-md">
-          <MarkdownField id="wb-p-body" label="The post" value={form.body} rows={14} onChange={(v) => set('body', v)} upload={uploadSitePicture}
+        <div className="wb-md wb-post__write">
+          <MarkdownField id="wb-p-body" label="The post" value={form.body} rows={14} onChange={setBody} upload={uploadSitePicture}
             links={(siteQ.data?.pages || []).map((p) => ({ label: p.title, url: p.slug === 'home' ? '/' : `/${p.slug}` }))} />
         </div>
+        <TextField id="wb-p-excerpt" label="Short summary (shown in lists and shares)" max={400} multiline value={form.excerpt} onChange={(v) => set('excerpt', v)} />
         <div className="field wb-field">
           <label htmlFor="wb-p-slug">Address</label>
           <div className="wb-slug">
@@ -220,7 +265,29 @@ function PostEditor({ id, say }) {
           {live && <p className="wb-field__hint">Changing it changes the live address: links to the old one stop working.</p>}
         </div>
       </div>
+      {(beside || tab === 'see') && <PostLook form={form} post={post} />}
+      </div>
     </div>
+  );
+}
+
+// The post as it will look: the site's post layout drawn from the words as
+// they are typed (shared/markdown.js, the site's own renderer).
+function PostLook({ form, post }) {
+  const f = form.image?.focus;
+  const when = post?.status === 'published' ? `Published ${day(post.published_at)}` : 'Not on the site yet';
+  return (
+    <section className="wb-postpv" aria-label="The post as it will look">
+      <p className="wb-postpv__when">{when}</p>
+      <h2 className="wb-postpv__title">{form.title.trim() || 'Your post’s title'}</h2>
+      {form.excerpt.trim() && <p className="wb-postpv__lede">{form.excerpt}</p>}
+      {form.image?.url && (
+        <img className="wb-postpv__pic" src={at(form.image.url)} alt={form.image.decorative ? '' : form.image.alt || ''}
+          style={f ? { objectPosition: `${f.x}% ${f.y}%` } : undefined} />
+      )}
+      {/* eslint-disable-next-line react/no-danger -- the site's own safe renderer: every character is escaped first */}
+      <div className="ws-prose wb-postpv__body" dangerouslySetInnerHTML={{ __html: renderMarkdown(form.body) || '<p class="muted">The words you write show here.</p>' }} />
+    </section>
   );
 }
 

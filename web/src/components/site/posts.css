@@ -1,0 +1,23 @@
+/* A news post's editor (WA decision 27): the words in the body font at
+   17 px (not monospace), beside the post as it will look at ≥ 1,100 px;
+   Write · See it tabs on smaller screens. */
+.wb-post__write .ws-md__text { font: 17px/1.55 var(--font-sans); min-height: 320px; }
+.wb-post { display: grid; gap: var(--s-4); min-width: 0; }
+.wb-post > * { min-width: 0; }
+.wb-post--beside { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+.wb-post--beside .wb-postpv { position: sticky; top: var(--s-4); max-height: calc(100vh - 2 * var(--s-4)); overflow: auto; }
+.wb-post__tabs { display: flex; gap: var(--s-1); margin-bottom: var(--s-3); }
+.wb-post__tabs .btn { flex: 1 1 0; }
+.wb-post__tabs .btn[aria-pressed="true"] { background: var(--ink); color: var(--paper-0); border-color: var(--ink); }
+
+.wb-postpv {
+  background: var(--paper-0); border: 1px solid var(--rule); border-radius: var(--r-card);
+  padding: var(--s-5); display: flex; flex-direction: column; gap: var(--s-3);
+}
+.wb-postpv__when { margin: 0; font-size: 13px; color: var(--text-3); }
+.wb-postpv__title { margin: 0; font-size: 26px; line-height: 1.15; font-weight: 800; letter-spacing: -0.01em; color: var(--text-1); overflow-wrap: anywhere; }
+.wb-postpv__lede { margin: 0; font-size: 17px; line-height: 1.5; color: var(--text-2); }
+.wb-postpv__pic { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: var(--r-ctrl); background: var(--paper-1); }
+.wb-postpv__body { font-size: 17px; line-height: 1.55; overflow-wrap: anywhere; }
+.wb-postpv__body img { max-width: 100%; height: auto; border-radius: var(--r-ctrl); }
+@media (max-width: 719px) { .wb-postpv { padding: var(--s-3); } .wb-postpv__title { font-size: 22px; } }
