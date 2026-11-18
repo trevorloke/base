@@ -502,7 +502,7 @@ try {
     }
   }
   const after = ((await api(mpage, '/gotv/posts')).json.posts.find((p) => p.user_id === sam.id) || {}).lookups || 0;
-  check(`10. ${NAMES} names at 180 ms a key in ${Math.round((Date.now() - tn) / 1000)} s: no 429, ≤ 3 look-ups a name (${after - before} look-ups, ${refused} refused, ${missed} without a row)`, refused === 0 && after - before <= 3 * NAMES && after - before >= NAMES);
+  check(`10. ${NAMES} names at 180 ms a key in ${Math.round((Date.now() - tn) / 1000)} s: no 429, ≤ 3 look-ups a name (${after - before} look-ups, ${refused} refused, ${missed} without a row)`, refused === 0 && missed === 0 && after - before <= 3 * NAMES && after - before >= NAMES);
 
   // ── 11. The guide's live correction ──
   await go(ana.page, `${FIELD}/vote-info`);
