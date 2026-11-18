@@ -846,7 +846,7 @@ seed):
 | `GET /api/site/pages/:id` | `{ page: { id, slug, title, description, status, version, show_in_nav, nav_order, published_at, created_at, updated_at, changed, modules (count), draft, published } }` |
 | `GET /api/site/posts` · `/:id` | `{ posts: [{ id, slug, title, excerpt, image, status, published_at, … }] }` · `{ post: { …, body } }` |
 | `GET /api/site/campaigns` · `/:id` | `{ campaigns: [{ id, slug, kind, title, excerpt, statement, goal, status, signatures, … }] }` · `{ campaign: { …, body } }` |
-| `GET /api/site/pictures` | `{ pictures: [{ id, url, name, width, height, bytes, created_at }] }` (Outreach's store too; not the brand's pictures) |
+| `GET /api/site/pictures` | `{ pictures: [{ id, url, name, width, height, bytes, created_at, sizes? }] }` (Outreach's store too; not the brand's pictures, not a picture's copies) |
 | `POST /api/site/preview-token` | `{ pageId }` → `{ url, expires_at }`: the draft for 30 minutes, `noindex`, frameable by the app only |
 
 Writes are actions (`POST /api/actions/:name`):
@@ -861,7 +861,7 @@ Writes are actions (`POST /api/actions/:name`):
 | `site.page.reorder` | `{ ids }` — the menu order |
 | `site.post.save` · `publish` · `delete` | `{ id?, title, slug?, excerpt?, body?, image? }` → `{ post }` · `{ id, published? = true }` · `{ id }` |
 | `site.campaign.save` · `close` · `delete` | `{ id?, kind, title, slug?, excerpt?, body?, statement?, goal? }` → `{ campaign }` · `{ id, open? }` · `{ id }` |
-| `site.picture` | `{ data (base64 or data: URL), name?, width?, height? }` → `{ media: { id, url: '/media/:id' } }` (JPG/PNG/WebP, 2 MB) |
+| `site.picture` | `{ data (base64 or data: URL), name?, width?, height?, sizes?: [{ data, width, height }] }` → `{ media: { id, url: '/media/:id', sizes?: [{ url, w }] } }` (JPG/PNG/WebP, 2 MB; up to 3 smaller copies, JPG or WebP, 600 KB each) |
 | `shift.public` | `{ id, public }` — the desk (Shifts area): the shift on the site — with the events or the volunteer openings, by its kind |
 
 Slugs: lowercase a–z, 0–9 and dashes; never `news`, `act`, `r`,
@@ -925,7 +925,7 @@ theirs, and the server refuses its data anyway).
 | `/website/pages/:id` | The builder (below) |
 | `/website/theme` | A skin, the colours (every `PAIRS` pair's contrast as it changes; under 4.5:1 blocks saving; "Fix it" picks the nearest readable text colour), fonts, corners, logo, a live sample |
 | `/website/settings` | Menu and title bar, announcement bar, footer, organization, social accounts, search and sharing, your own domain |
-| `/website/news` · `/:id` | Posts: list, editor (picture, excerpt, Markdown), publish/unpublish, delete (Undo) |
+| `/website/news` · `/:id` | Posts: list, editor (picture, the words beside the post as it will look, short summary), publish/unpublish, delete (Undo) |
 | `/website/petitions` · `/:id` | Petitions and pledges: signatures and a bar to the goal, "See who signed" (People by `signers_tag`), editor, close/open again, delete (Undo) |
 | `/website/sites` | Other websites: each one's name, Live / Draft, domain and sign-ups this week; New website (a manager: a name and, optionally, the address — checked as it's typed in the save's words); deleted ones whose address still says it has closed |
 | `/website/sites/:siteId` | One of them: Go live (a draft; a manager) or View site; while a draft, the checklist (home published, Authorized by, privacy link, address), each a tick or a link to fix it; sign-ups for 7 or 30 days and where they came from (30 days), "See everyone from this site" (`/people?web=site:<id>`); Pages · Look · Domain; ⋯ (a manager) Rename, Take offline, Delete (Undo), Release old address |
@@ -977,6 +977,38 @@ theirs, and the server refuses its data anyway).
   `{ type: 'wa:pick', section, field }` and the builder opens that box with
   the cursor in it (on a phone, in a sheet with Done). Links and forms in
   the frame do nothing. Never on a public page or a translated preview.
+
+### Pictures and posts (WA stage 2b)
+
+- **Sizes.** The desk uploads a section's or a post's picture with copies
+  480, 960 and 1,600 px wide (never wider than the picture), made on a
+  canvas (`brand-pictures.js pictureCopies`): WebP at 0.82, or JPEG at 0.82
+  when the browser hands back something else (Safari gives a PNG). The
+  copies are `media` rows of their own (`size_of` names the picture; the
+  picture list leaves them out and lists them with their picture). The
+  image field's value is `{ url, alt, width?, height?, sizes?: [{ url, w }],
+  focus?: { x, y }, decorative? }`; `sizes` are only `/media/:id`, at most 3;
+  `focus` whole numbers 0–100 (the middle is left out).
+- **Drawing.** `Img` writes a `srcset` from the copies and the picture
+  itself, with each place's `sizes` (hero `(min-width: 900px) 50vw, 100vw`,
+  news card `(min-width: 720px) 33vw, 100vw`, post `min(100vw, 760px)`),
+  `object-position` from `focus`, `alt=""` when decorative. The first
+  section's picture (and a post's) is fetched first (`fetchpriority`); the
+  rest are lazy. A picture without copies draws as before.
+- **Descriptions** (`shared/site/pictures.js`). Publish refuses a picture
+  added or replaced since the last publish — its address is nowhere in
+  what was published — that has no description and isn't ticked
+  *Decorative*: image fields and Markdown `![words](url)` (empty words, or
+  the toolbar's own "picture", count as none) in pages and posts. The
+  builder finds it before sending and opens its box. One already on the
+  site without words doesn't block: `site.page.publish` answers
+  `undescribed: <n>` and the toast says "1 older picture has no
+  description. **Describe them**". A post is checked as it goes on the
+  site, and a published post as it's saved (a save changes it live).
+- **The post editor**: the words in the body font at 17 px beside the post
+  as it will look (≥ 1,100 px; *Write · See it* below that), drawn by
+  `shared/markdown.js`. The short summary follows the first 160 characters
+  of the words (`summaryFrom`) until someone types in it.
 
 Careful with "your own domain": on a host in `domains` only the site answers
 (no sign-in, no app). So `site.settings.save` refuses (400, in plain words)

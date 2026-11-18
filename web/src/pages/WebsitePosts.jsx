@@ -206,7 +206,7 @@ function PostEditor({ id, say }) {
   if (!form) return <div className="wb-page"><p className="muted">Loading…</p></div>;
 
   return (
-    <div className="wb-page">
+    <div className={`wb-page${beside ? ' wb-page--wide' : ''}`}>
       <Link className="ops-back" to="/website/news">← News</Link>
       <div className="wb-build__head">
         <div className="wb-build__title">

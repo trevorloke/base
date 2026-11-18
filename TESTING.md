@@ -695,13 +695,20 @@ comes back, or asks if words were typed meanwhile).
   *Delete* then **Undo**. **Preview** opens the draft in a new tab. On a
   phone, **Preview** is full screen and a tap opens that section in a sheet.
   From **Website**, *Edit the home page* → tap the headline → type →
-  **Publish** (4 taps). The page is at `/site/<its address>`. **Theme**: make the brand colour light (white text
+  **Publish** (4 taps). The page is at `/site/<its address>`. **Pictures**:
+  add a *Picture* section and upload a photo — three sizes are stored; tap
+  the picture to choose the spot to keep in view (the preview follows);
+  **Publish** is refused until it's described (or ticked *Decorative*). A
+  page whose older picture has no words still publishes, and the toast asks
+  for it. **News** → *New post*: the short summary fills itself from the
+  words, the post as it will look sits beside (on a phone, *See it*). **Theme**: make the brand colour light (white text
   on it gets too hard to read) — *Save the look* is blocked until **Fix it**.
   **Petitions and pledges**: signatures against the goal, *See who signed*.
   A volunteer opening `/admin/website` is told it isn't theirs. Tests:
   `server/test/site-builder.test.js`, `server/test/site-website.test.js`,
   `server/test/site-editor.test.js` (starters, sample words, the preview's
-  browser path drawing every kind exactly as the server does);
+  browser path drawing every kind exactly as the server does),
+  `server/test/site-pictures.test.js` (sizes, focus, descriptions, srcset);
   in a browser: `e2e-site-admin.mjs`.
 
 - **Languages** (Website → Languages): with no key it says to add one;
