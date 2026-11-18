@@ -7,7 +7,8 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { handler, readClients, route } from './door.mjs';
+import { request } from 'node:http';
+import { handler, readClients, route, subdomainRedirect } from './door.mjs';
 
 const seen = [];
 const upstream = (name) => createServer((req, res) => {
@@ -143,4 +144,70 @@ test('nobody at that name, a server not answering: a plain page each, saying bas
   assert.doesNotMatch(homeText, /imaginesurrey/i, 'the home page lists no campaigns');
   for (const t of [noneText, homeText]) assert.doesNotMatch(t, /\bGround\b|\bAir\b|Base Web/, 'one name: base.win');
   assert.equal((await (await get('/healthz')).json()).ok, true);
+});
+
+// <client>.base.win: a short address that sends people on to base.win/<client>.
+const withHost = (host, path, method = 'GET', body) => new Promise((resolve, reject) => {
+  const u = new URL(base);
+  const req = request({ host: u.hostname, port: u.port, path, method, headers: { host } }, (res) => {
+    let text = '';
+    res.on('data', (d) => { text += d; });
+    res.on('end', () => resolve({ status: res.statusCode, location: res.headers.location, cache: res.headers['cache-control'], text }));
+  });
+  req.on('error', reject);
+  if (body) req.write(body);
+  req.end();
+});
+
+test('<client>.base.win sends people on to base.win/<client>, path and query kept', async () => {
+  const before = seen.length;
+  for (const [host, path, to] of [
+    ['imaginesurrey.base.win', '/', 'https://base.win/imaginesurrey/'],
+    ['imaginesurrey.base.win', '/desk', 'https://base.win/imaginesurrey/desk'],
+    ['imaginesurrey.base.win', '/field/?turf=3', 'https://base.win/imaginesurrey/field/?turf=3'],
+    ['ImagineSurrey.Base.Win:443', '/desk/', 'https://base.win/imaginesurrey/desk/'],
+    ['imaginesurrey.base.win.', '/site/', 'https://base.win/imaginesurrey/site/'],
+    // An old link that already names the client: not named twice.
+    ['imaginesurrey.base.win', '/imaginesurrey/desk', 'https://base.win/imaginesurrey/desk'],
+    ['imaginesurrey.base.win', '/imaginesurrey', 'https://base.win/imaginesurrey'],
+  ]) {
+    const r = await withHost(host, path);
+    assert.equal(r.status, 302, `${host}${path}`);
+    assert.equal(r.location, to, `${host}${path}`);
+    assert.equal(r.cache, 'no-store');
+  }
+  // The door's own health check answers on any address it is reached at.
+  const health = await withHost('imaginesurrey.base.win', '/healthz');
+  assert.equal(health.status, 200);
+  assert.equal(JSON.parse(health.text).service, 'base-door');
+  // A form sent to the short address keeps its method and body.
+  const post = await withHost('imaginesurrey.base.win', '/api/auth/login', 'POST', '{"a":1}');
+  assert.deepEqual([post.status, post.location], [307, 'https://base.win/imaginesurrey/api/auth/login']);
+  // None of it reached the client's server: the door only sends people on.
+  assert.equal(seen.length, before);
+});
+
+test('only the door\'s own domain and a client it knows: anything else is as before', async () => {
+  // A name the door doesn't know: the plain page, never a redirect.
+  const none = await withHost('nobody.base.win', '/desk');
+  assert.equal(none.status, 404);
+  // Somebody else's domain, or one merely ending in base.win: no redirect anywhere.
+  for (const host of ['imaginesurrey.evil.example', 'imaginesurrey.notbase.win', 'imaginesurrey.base.win.evil.example', 'x.imaginesurrey.base.win']) {
+    const r = await withHost(host, '/desk');
+    assert.notEqual(r.status, 302, host);
+    assert.notEqual(r.status, 307, host);
+  }
+  // base.win itself is the home page, and its paths route as they always have.
+  const home = await withHost('base.win', '/');
+  assert.equal(home.status, 200);
+  const site = await withHost('base.win', '/imaginesurrey');
+  assert.deepEqual([site.status, site.location], [302, '/imaginesurrey/site/']);
+  // Render's own address for the door still routes by path.
+  const own = await withHost('base-door.onrender.com', '/imaginesurrey/field/');
+  assert.equal(own.status, 200);
+  // Another apex when BASE_APEX says so (a staging door, say).
+  const c = readClients('{"x": {"server": "https://g.example"}}');
+  assert.equal(subdomainRedirect(c, 'x.door.example', '/desk', '', 'door.example'), 'https://door.example/x/desk');
+  assert.equal(subdomainRedirect(c, 'x.base.win', '/desk', '', 'door.example'), null);
+  assert.equal(subdomainRedirect(c, '', '/desk', ''), null);
 });

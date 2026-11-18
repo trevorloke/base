@@ -8,6 +8,10 @@
 //   base.win/<client>/api…     (and everything else)┘
 //   base.win/<client>/web…     → /<client>/desk/website — the website's back
 //                                office is the desk's Website area now
+//   <client>.base.win/…        → base.win/<client>/… — a short address that
+//                                only sends people on: signing in, phone
+//                                storage and offline copies all live at
+//                                base.win/<client>, so there is one of each
 //
 // The path goes through as it came (the server knows it lives under it), and
 // the door decides nothing about who may see what: signing in, and who may
@@ -67,6 +71,23 @@ export const route = (clients, pathname) => {
   return { client, upstream: client.origin };
 };
 
+// <client>.base.win → base.win/<client>: only for the door's own domain
+// (BASE_APEX, default base.win) and a client the door knows, so a made-up
+// Host can never send a visitor anywhere else. A path that already names the
+// client (an old link) isn't named twice. A form's POST keeps its method and
+// body (307); a page is 302, so the short address can change later.
+export const apexOf = (raw = process.env.BASE_APEX) => String(raw || 'base.win').trim().toLowerCase().replace(/^\.+|\.+$/g, '');
+export const subdomainRedirect = (clients, hostHeader, pathname, search = '', apex = apexOf()) => {
+  const host = String(hostHeader || '').toLowerCase().replace(/:\d+$/, '').replace(/\.$/, '');
+  if (!apex || !host.endsWith(`.${apex}`)) return null;
+  const label = host.slice(0, -(apex.length + 1));
+  if (!NAME_RE.test(label) || !clients.has(label)) return null;
+  const path = pathname.toLowerCase() === `/${label}` || pathname.toLowerCase().startsWith(`/${label}/`)
+    ? pathname
+    : `/${label}${pathname === '/' ? '/' : pathname}`;
+  return `https://${apex}${path}${search}`;
+};
+
 // Hop-by-hop headers stay on this side of the door.
 const HOP = new Set(['connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization', 'te', 'trailer', 'transfer-encoding', 'upgrade', 'host', 'content-length']);
 // Only the door says these (above): a visitor's own never go through.
@@ -98,6 +119,11 @@ export const handler = (clients, { fetchImpl = fetch, doorKey = doorKeyOf() } = 
   const url = new URL(req.url, 'http://door');
   const send = ({ status, headers, body }) => { res.writeHead(status, headers); res.end(body); };
   if (url.pathname === '/healthz') return send({ status: 200, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ok: true, service: 'base-door', clients: clients.size }) });
+  const short = subdomainRedirect(clients, req.headers.host, url.pathname, url.search);
+  if (short) {
+    const keep = req.method !== 'GET' && req.method !== 'HEAD';
+    return send({ status: keep ? 307 : 302, headers: { location: short, 'cache-control': 'no-store' }, body: '' });
+  }
   if (url.pathname === '/' || url.pathname === '') {
     return send({ ...page(200, 'base.win', ''), body: HOME });
   }

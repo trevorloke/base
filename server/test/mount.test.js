@@ -8,7 +8,7 @@ import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { freshDb } from './helpers.js';
 import { app } from '../index.js';
-import { basePath, mountAt, rewriters, here } from '../lib/mount.js';
+import { basePath, mountAt, rewriters, here, shortAddress } from '../lib/mount.js';
 
 const B = '/imaginesurrey';
 const door = mountAt(app, B);
@@ -111,4 +111,39 @@ test('at a site’s root (no BASE_PATH) nothing changes', async () => {
   assert.equal(h.status, 200);
   const res = await plain(new Request('http://root.test/api/auth/me'));
   assert.equal(res.status, 401);
+});
+
+test('the short address (imaginesurrey.base.win) sends people on to the public URL, path and query kept', async () => {
+  const before = process.env.STARBASE_PUBLIC_URL;
+  process.env.STARBASE_PUBLIC_URL = 'https://base.win/imaginesurrey';
+  try {
+    const at = (url, init) => door(new Request(url, init));
+    for (const [from, to] of [
+      ['https://imaginesurrey.base.win/', 'https://base.win/imaginesurrey/'],
+      ['https://imaginesurrey.base.win/desk', 'https://base.win/imaginesurrey/desk'],
+      ['https://imaginesurrey.base.win/admin', 'https://base.win/imaginesurrey/admin'],
+      ['https://imaginesurrey.base.win/field/?turf=3', 'https://base.win/imaginesurrey/field/?turf=3'],
+      ['https://imaginesurrey.base.win/imaginesurrey/desk/login', 'https://base.win/imaginesurrey/desk/login'],
+      ['https://IMAGINESURREY.BASE.WIN/api/auth/me', 'https://base.win/imaginesurrey/api/auth/me'],
+    ]) {
+      const r = await at(from);
+      assert.equal(r.status, 302, from);
+      assert.equal(r.headers.get('location'), to, from);
+      assert.equal(r.headers.get('cache-control'), 'no-store');
+    }
+    const post = await at('https://imaginesurrey.base.win/imaginesurrey/api/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+    assert.deepEqual([post.status, post.headers.get('location')], [307, 'https://base.win/imaginesurrey/api/auth/login']);
+    // Never the server's own address, the door's requests (which come to that address), the
+    // public host itself, or another domain.
+    assert.equal((await at('http://base-win.onrender.com/api/health')).status, 200);
+    assert.equal((await at(`https://base.win${B}/api/health`)).status, 200);
+    assert.equal(shortAddress(new URL('https://imaginesurrey.notbase.win/desk'), B), null);
+    assert.equal(shortAddress(new URL('https://base.win.evil.example/desk'), B), null);
+    assert.equal(shortAddress(new URL('https://www.imaginesurrey.ca/'), B), null);
+    // No public URL, or one that isn't an address: nothing changes.
+    assert.equal(shortAddress(new URL('https://imaginesurrey.base.win/'), B, ''), null);
+    assert.equal(shortAddress(new URL('https://imaginesurrey.base.win/'), B, 'not a url'), null);
+  } finally {
+    if (before === undefined) delete process.env.STARBASE_PUBLIC_URL; else process.env.STARBASE_PUBLIC_URL = before;
+  }
 });
