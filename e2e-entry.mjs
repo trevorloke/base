@@ -121,7 +121,9 @@ const phoneOk = async (page, name) => {
   check(`${name}: no sideways scroll at 390 px, controls ≥ 48 px`, !r.wide && !r.small.length, JSON.stringify(r));
 };
 const BANNER = /You’re in as base\.win support · until \d{1,2}:\d{2} [ap]m/;
+// A fresh load each time: from /admin/enter, a new #t alone would only move the fragment.
 const enter = async (page, origin, token, path = '/admin/enter') => {
+  await page.goto('about:blank');
   await page.goto(`${origin}${path}#t=${token}`);
 };
 
@@ -212,8 +214,10 @@ try {
   check('Today (a manager): "base.win support signed in"', true);
   await shot(mgr, 'today-visits-desktop');
   await mgr.goto(`${A}/admin/people/${pat.json.person.id}`);
-  await mgr.getByRole('button', { name: /History/ }).first().click();
-  await mgr.getByText('base.win support (via base.win)').waitFor();
+  const hist = mgr.locator('#pf-history .pf-sec__btn');
+  await mgr.locator('#pf-history .pf-sec__count').waitFor();
+  if ((await hist.getAttribute('aria-expanded')) !== 'true') await hist.click();
+  await mgr.getByText(/\(via base\.win\)/).first().waitFor();
   check('History: "(via base.win)"', true);
   await shot(mgr, 'history-via-desktop');
 

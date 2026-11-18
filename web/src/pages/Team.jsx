@@ -412,14 +412,12 @@ function TwoStepRequirement({ data, online, onChanged }) {
 }
 
 // The first manager's invite made by base.win support on its way in
-// (pages/Enter.jsx), read once.
-const takeOpsInvite = () => {
-  try {
-    const raw = sessionStorage.getItem(OPS_INVITE);
-    sessionStorage.removeItem(OPS_INVITE);
-    return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
+// (pages/Enter.jsx): read on the first render, forgotten once the screen
+// is up (a render thrown away while a screen loads must not lose it).
+const readOpsInvite = () => {
+  try { return JSON.parse(sessionStorage.getItem(OPS_INVITE) || 'null'); } catch { return null; }
 };
+const forgetOpsInvite = () => { try { sessionStorage.removeItem(OPS_INVITE); } catch { /* private mode */ } };
 
 // Settings → Members: "base.win may sign in here" (ext/operator) — the
 // campaign's consent to the control centre opening its desk. Off also ends
@@ -524,7 +522,8 @@ export default function Team({ embedded = false }) {
   const [error, setError] = useState(null);
   // { email, joinUrl, emailStatus } — or the first manager's invite base.win
   // support just made from the control centre (pages/Enter.jsx), once.
-  const [sent, setSent] = useState(takeOpsInvite);
+  const [sent, setSent] = useState(readOpsInvite);
+  useEffect(() => { forgetOpsInvite(); }, []);
   const online = useOnline();
 
   if (!isManager) return <Navigate to="/" replace />;
