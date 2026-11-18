@@ -2,8 +2,9 @@
 //   Start from a look (the skins: Base, Imagine Surrey), then the colours —
 //   each pair that must stay readable (theme.js PAIRS) shows its contrast as
 //   it changes, and one under 4.5:1 blocks saving, with "Fix it" (the
-//   nearest readable colour for its text). Then the type (heading and body
-//   fonts), the corners, the logo. A live sample beside it: the title bar,
+//   nearest readable colour for its text). Then the fonts (drawn in their
+//   own letters; Change fonts opens the sheet: FontSheet.jsx, WA), the
+//   corners, the logo. A live sample beside it: the title bar,
 //   text and a link, the buttons, a soft panel and a band, in these colours.
 //   One primary, "Save the look" (live on the site at once — there's no draft
 //   of the theme); the server checks the contrast again (site.settings.save).
@@ -20,7 +21,11 @@
 // site.microsite.save { theme }.
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useOutletContext, useParams } from 'react-router-dom';
-import { COLOR_KEYS, FONTS, FONT_BY_VALUE, RADII, SKINS } from '@starbase/shared/site/theme';
+import { COLOR_KEYS, FONT_BY_VALUE, RADII, SKINS } from '@starbase/shared/site/theme';
+import { fontFor, isAdded, profileFor } from '@starbase/shared/site/fonts';
+import FontSheet, { useAddedFonts } from '../components/site/FontSheet.jsx';
+import { stackOf, useFaces } from '../components/site/fontFaces.js';
+import { useSitePage } from '../components/site/useSite.js';
 import { action } from '../api.js';
 import { at } from '../base.js';
 import { NoSignal, noSignal, useOnline } from '../components/NoSignal.jsx';
@@ -40,7 +45,10 @@ const full = (t) => {
   const out = {
     skin: skin.key,
     colors: Object.fromEntries(COLOR_KEYS.map((k) => [k, hexOf(t?.colors?.[k]) || skin.colors[k]])),
-    fonts: { heading: FONT_BY_VALUE[t?.fonts?.heading] ? t.fonts.heading : skin.fonts.heading, body: FONT_BY_VALUE[t?.fonts?.body] ? t.fonts.body : skin.fonts.body },
+    fonts: {
+      heading: FONT_BY_VALUE[t?.fonts?.heading] || isAdded(t?.fonts?.heading) ? t.fonts.heading : skin.fonts.heading,
+      body: FONT_BY_VALUE[t?.fonts?.body] || isAdded(t?.fonts?.body) ? t.fonts.body : skin.fonts.body,
+    },
     radius: RADII.some((r) => r.value === t?.radius) ? t.radius : skin.radius,
     logo: { url: t?.logo?.url || '', alt: t?.logo?.alt || '' },
   };
@@ -71,14 +79,14 @@ function ColorRow({ k, value, onChange }) {
   );
 }
 
-function Sample({ t, org }) {
+function Sample({ t, org, added }) {
   const c = t.colors;
   const r = RADII.find((x) => x.value === t.radius)?.px ?? 10;
   const style = {
     '--s-brand': c.brand, '--s-brand-ink': c.brandInk, '--s-accent': c.accent, '--s-accent-ink': c.accentInk,
     '--s-ink': c.ink, '--s-paper': c.paper, '--s-surface': c.surface, '--s-line': c.line, '--s-link': c.link,
     '--s-action': c.action || c.brand, '--s-action-ink': c.actionInk || c.brandInk,
-    '--s-radius': `${r}px`, '--s-head': FONT_BY_VALUE[t.fonts.heading]?.stack, '--s-body': FONT_BY_VALUE[t.fonts.body]?.stack,
+    '--s-radius': `${r}px`, '--s-head': stackOf(t.fonts.heading, added), '--s-body': stackOf(t.fonts.body, added),
   };
   return (
     <div className="wb-sample" style={style} aria-label="How it looks: a sample">
@@ -101,6 +109,32 @@ function Sample({ t, org }) {
         <span className="wb-sample__btn wb-sample__btn--brand">Join us</span>
       </div>
     </div>
+  );
+}
+
+// The first sentence of the home page's hero paragraph.
+const heroWords = (page) => {
+  const hero = (page?.published?.modules || page?.draft?.modules || []).find((m) => m.kind === 'hero' && !m.hidden);
+  const text = String(hero?.props?.text || '').replace(/[*_#>`[\]]/g, '').trim();
+  return (/^.*?[.!?](\s|$)/.exec(text)?.[0] || text).trim().slice(0, 120);
+};
+
+// The theme's two fonts, drawn in their own files; Change fonts opens the sheet.
+function FontsCard({ t, added, org, words, onChange }) {
+  const [open, setOpen] = useState(false);
+  useFaces([t.fonts.heading, t.fonts.body], added);
+  const h = fontFor(t.fonts.heading, added) || FONT_BY_VALUE.inter;
+  const p = profileFor(h);
+  return (
+    <section className="card" aria-labelledby="wb-th-type">
+      <h2 id="wb-th-type" className="wb-card-h">Fonts</h2>
+      <p className="wb-fonts__h" style={{ fontFamily: h.stack, fontWeight: p.weight, textTransform: p.case, letterSpacing: p.tracking }}>{org || 'Your campaign’s name'}</p>
+      <p className="wb-fonts__p" style={{ fontFamily: stackOf(t.fonts.body, added) }}>{words || 'We’re working for a city where everyone has a fair say.'}</p>
+      <p className="wb-fonts__names">{h.label} for headings · {(fontFor(t.fonts.body, added) || FONT_BY_VALUE.inter).label} for body text</p>
+      <button type="button" className="btn wb-tap" onClick={() => setOpen(true)}>Change fonts</button>
+      <FontSheet open={open} onClose={() => setOpen(false)} value={t.fonts} siteName={org} words={words}
+        onPick={(fonts) => { onChange(fonts); setOpen(false); }} />
+    </section>
   );
 }
 
@@ -153,10 +187,10 @@ export default function WebsiteTheme() {
     if (failing.length) return;
     setState({ state: 'saving' });
     try {
-      await action(...(siteId ? ['site.microsite.save', { id: siteId, theme: t }] : ['site.settings.save', { theme: t }]));
+      const r = await action(...(siteId ? ['site.microsite.save', { id: siteId, theme: t }] : ['site.settings.save', { theme: t }]));
       setSaved(t);
       setState({ state: 'saved', at: Date.now() });
-      say('Saved — the site has its new look');
+      say(['Saved — the site has its new look', ...(r?.notes || [])].join('. '));
       refresh(siteId ? ['microsite', siteId] : ['site']);
     } catch (e) {
       setState({ state: 'error', text: e.message });
@@ -186,6 +220,11 @@ export default function WebsiteTheme() {
   };
 
   const shown = t && !(siteId && q.data?.deleted);
+  // The campaign's added fonts, and the home page's first words for the samples.
+  const added = useAddedFonts().data?.fonts || [];
+  const homeId = !siteId ? (q.data?.pages || []).find((p) => p.slug === 'home')?.id : null;
+  const home = useSitePage(homeId).data?.page;
+  const words = heroWords(home);
   const org = siteId ? q.data?.microsite?.name || '' : q.data?.settings?.org?.shortName || q.data?.settings?.org?.name || '';
   return (
     <div className="wb-page wb-page--wide">
@@ -234,7 +273,7 @@ export default function WebsiteTheme() {
             )}
           </section>
           <div className="wb-theme__sample wb-theme__sample--alone">
-            <Sample t={full(q.data.brand_theme)} org={org} />
+            <Sample t={full(q.data.brand_theme)} org={org} added={added} />
           </div>
         </>
       )}
@@ -310,21 +349,7 @@ export default function WebsiteTheme() {
                 </ul>
               </section>
 
-              <section className="card" aria-labelledby="wb-th-type">
-                <h2 id="wb-th-type" className="wb-card-h">Type</h2>
-                <div className="form-row">
-                  {[['heading', 'Headings'], ['body', 'Everything else']].map(([k, label]) => (
-                    <div className="field wb-field" key={k}>
-                      <label htmlFor={`wb-font-${k}`}>{label}</label>
-                      <select id={`wb-font-${k}`} className="input" value={t.fonts[k]}
-                        onChange={(e) => setT((x) => ({ ...x, fonts: { ...x.fonts, [k]: e.target.value } }))}>
-                        {FONTS.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
-                      </select>
-                    </div>
-                  ))}
-                </div>
-                <p className="wb-field__hint">The site loads its own fonts; the sample here may use a near match.</p>
-              </section>
+              <FontsCard t={t} added={added} org={org} words={words} onChange={(fonts) => setT((x) => ({ ...x, fonts }))} />
 
               <section className="card" aria-labelledby="wb-th-corners">
                 <h2 id="wb-th-corners" className="wb-card-h">Corners</h2>
@@ -353,7 +378,7 @@ export default function WebsiteTheme() {
               </section>
             </div>
             <div className="wb-theme__sample">
-              <Sample t={t} org={org} />
+              <Sample t={t} org={org} added={added} />
             </div>
           </div>
         </>

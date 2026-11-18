@@ -209,8 +209,10 @@ self.addEventListener('fetch', (event) => {
   }
   const path = inside(url.pathname);
   // The fonts include a heading face the app takes from the website's own
-  // folder (Montserrat, when the campaign's brand asks for it).
-  if (path.startsWith('/assets/') || path.startsWith('/fonts/') || path.startsWith('/site-assets/fonts/')) {
+  // folder (Montserrat, or any face base.win ships, when the campaign's brand
+  // asks for it), and a Google font the campaign added (WA): each file's
+  // address is its content's hash, so a kept copy is always right.
+  if (path.startsWith('/assets/') || path.startsWith('/fonts/') || path.startsWith('/site-assets/fonts/') || path.startsWith('/api/site/fonts/file/')) {
     event.respondWith(asset(req));
     return;
   }

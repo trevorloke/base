@@ -1,0 +1,95 @@
+/* "Choose fonts" (FontSheet.jsx): a sheet over Website → Theme and Settings →
+   Brand; full screen on phones (the Dialog's own rule). Rows and cards are
+   48 px targets or more; nothing scrolls sideways at 390 px. */
+
+.fs-sample {
+  position: sticky; top: calc(-1 * var(--s-4)); z-index: 1;
+  margin: 0 0 var(--s-4); padding: var(--s-4);
+  background: var(--paper-1); border: 1px solid var(--rule); border-radius: var(--r-card);
+}
+.fs-sample__h { margin: 0 0 6px; font-size: 26px; line-height: 1.15; color: var(--text-1); overflow-wrap: anywhere; }
+.fs-sample__p { margin: 0 0 8px; font-size: 16px; line-height: 1.55; color: var(--text-2); }
+.fs-sample__names, .fs-sample__note, .fs-sample__kb { margin: 0; font-size: 13px; color: var(--text-3); }
+.fs-sample__kb { color: var(--warn); }
+.fs-sample .wb-warn { margin: 4px 0; font-size: 14px; }
+
+.fs-tabs { display: flex; gap: 4px; margin: 0 0 var(--s-3); border-bottom: 1px solid var(--rule); }
+.fs-tab {
+  min-height: var(--ctl); padding: 0 var(--s-3); border: 0; border-bottom: 2px solid transparent;
+  background: none; color: var(--text-2); font: inherit; font-size: 15px; font-weight: 600; cursor: pointer;
+}
+.fs-tab[aria-selected='true'] { color: var(--text-1); border-bottom-color: var(--mark); }
+
+.fs-chips { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); margin: 0 0 var(--s-3); }
+.chip.fs-chip { min-height: 40px; cursor: pointer; }
+.chip.fs-chip[aria-pressed='true'] { border-color: var(--mark); background: var(--mark-soft); color: var(--text-1); }
+.input.fs-sort { width: auto; min-width: 150px; margin-left: auto; }
+@media (pointer: coarse) { .chip.fs-chip { min-height: 48px; } }
+
+.fs-pairs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-3); }
+@media (max-width: 719px) { .fs-pairs { grid-template-columns: minmax(0, 1fr); } }
+.fs-pair {
+  position: relative; display: flex; flex-direction: column; gap: 6px; min-width: 0;
+  padding: var(--s-4); border: 1px solid var(--rule); border-radius: var(--r-card); background: var(--paper-0); cursor: pointer;
+}
+.fs-pair:hover { border-color: var(--rule-2); }
+.fs-pair[data-on] { border-color: var(--mark); box-shadow: 0 0 0 2px var(--mark); }
+.fs-pair input { position: absolute; opacity: 0; pointer-events: none; }
+.fs-pair:focus-within { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
+.fs-pair__h { font-size: 22px; line-height: 1.15; color: var(--text-1); overflow-wrap: anywhere; padding-right: 28px; }
+.fs-pair__p { font-size: 15px; line-height: 1.5; color: var(--text-2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.fs-pair__names { font-size: 13px; color: var(--text-3); }
+.fs-pair__kb { font-size: 13px; color: var(--text-3); }
+.fs-pair__tick {
+  position: absolute; top: var(--s-3); right: var(--s-3); width: 24px; height: 24px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center; background: var(--mark); color: var(--mark-ink); font-size: 14px;
+}
+
+.fs-seg { display: inline-flex; margin: 0 0 var(--s-3); border: 1px solid var(--rule-2); border-radius: var(--r-ctrl); overflow: hidden; max-width: 100%; }
+.fs-seg__opt { display: inline-flex; align-items: center; min-height: var(--ctl); padding: 0 var(--s-3); font-size: 15px; cursor: pointer; color: var(--text-2); }
+.fs-seg__opt input { position: absolute; opacity: 0; pointer-events: none; }
+.fs-seg__opt[data-on] { background: var(--mark-soft); color: var(--text-1); font-weight: 600; }
+.fs-seg__opt:focus-within { outline: 2px solid var(--mark-deep); outline-offset: -2px; }
+.input.fs-search { width: 100%; margin: 0 0 var(--s-3); }
+.fs-built { margin: 0 0 var(--s-2); font-size: 12px; color: var(--text-3); }
+
+.fs-rows { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule); }
+.fs-row {
+  display: flex; flex-direction: column; justify-content: center; gap: 2px; min-height: 56px; min-width: 0;
+  padding: 8px var(--s-3); border-bottom: 1px solid var(--rule); cursor: pointer;
+}
+.fs-row:hover { background: var(--paper-1); }
+.fs-row[data-on] { background: var(--mark-soft); box-shadow: inset 3px 0 0 var(--mark); }
+.fs-row:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: -2px; }
+.fs-row__name { font-size: 20px; line-height: 1.25; color: var(--text-1); overflow-wrap: anywhere; }
+.fs-row__na { font-family: var(--font-sans); font-size: 13px; color: var(--text-3); }
+.fs-row__meta { font-size: 13px; color: var(--text-3); }
+.fs-more { height: 1px; }
+
+.fs-mine { margin: var(--s-4) 0 0; }
+.fs-mine > summary { min-height: var(--ctl); display: flex; align-items: center; cursor: pointer; font-size: 15px; font-weight: 600; color: var(--text-2); }
+.fs-mine__list { list-style: none; margin: 0; padding: 0; }
+.fs-mine__row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); min-height: 56px; border-bottom: 1px solid var(--rule); }
+.fs-mine__row .fs-row__name { flex: 1 1 160px; }
+
+.fs-foot {
+  position: sticky; bottom: calc(-1 * var(--s-5)); display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--s-3);
+  margin: var(--s-4) calc(-1 * var(--s-5)) calc(-1 * var(--s-5)); padding: var(--s-3) var(--s-5);
+  background: var(--paper-0); border-top: 1px solid var(--rule);
+}
+.fs-said { flex: 1 1 200px; margin: 0; font-size: 14px; color: var(--text-2); }
+@media (max-width: 640px) {
+  .fs-foot { margin: var(--s-4) calc(-1 * var(--s-4)) calc(-1 * var(--s-4)); padding: var(--s-3) var(--s-4); bottom: calc(-1 * var(--s-4)); }
+  .fs-foot .btn-primary { flex: 1 1 100%; }
+  .fs-sample__h { font-size: 22px; }
+}
+
+/* The Fonts card on Theme: the pair drawn in its own letters. */
+.wb-fonts__h { margin: 0 0 4px; font-size: 24px; line-height: 1.15; color: var(--text-1); overflow-wrap: anywhere; }
+.wb-fonts__p { margin: 0 0 var(--s-2); font-size: 16px; line-height: 1.55; color: var(--text-2); }
+.wb-fonts__names { margin: 0 0 var(--s-3); font-size: 13px; color: var(--text-3); }
+
+/* Settings → Brand: the heading face, drawn, and Change font. */
+.bs-label { display: block; font-size: 14px; font-weight: 600; color: var(--text-2); }
+.bs-heading { margin: 4px 0 var(--s-2); font-size: 22px; font-weight: 700; color: var(--text-1); }
+.btn.bs-heading-btn { min-height: var(--ctl); }
