@@ -21,11 +21,15 @@
 //      Send to the office → To check → Find
 //   6. Ben (turf B) never gets turf A's marks; his Calls has no A people
 //   7. the stream cut: "Updated … ago", and polling catches up within 25 s
-//  10. 40 names at 180 ms a key (the spec's 300 cut for time): no 429, at
-//      most 3 look-ups a name
+//  7b. Calls skips a person marked live; the card already open says
+//      "Voted — skip"; two tabs: the one holding the stream goes hidden and
+//      the visible one takes it over (Live, and the mark arrives)
+//  10. 300 names at 180 ms a key (GOTV_NAMES): no 429, at most 3 look-ups
+//      a name
 //  11. Place A closed today from Website → Voter guide: Ana's /vote-info
 //      strikes it live; Sam's mark is refused; election day it's open again;
-//      Settings → Closing times reads the guide's 8 p.m.
+//      Settings → Closing times reads the guide's 8 p.m.; a runner's look-up
+//      refused at the closed place runs again at an open one
 //   9. staff see the switch read-only and no Sign-in code
 //   8. Off: Ana's Voted ✓ goes and the stream closes
 //   Screens looked at 1440×900 and 390×844 (SHOTS).
@@ -43,7 +47,7 @@ const DESK = `${ORIGIN}/admin`;
 const FIELD = ORIGIN;
 const API = `${ORIGIN}/api`;
 const SHOTS = process.env.SHOTS || '/tmp/starbase-gotv-live';
-const NAMES = Number(process.env.GOTV_NAMES || 40);
+const NAMES = Number(process.env.GOTV_NAMES || 300);
 mkdirSync(SHOTS, { recursive: true });
 const DATA = mkdtempSync(join(tmpdir(), 'gotv-e2e-'));
 const results = [];
@@ -161,6 +165,7 @@ try {
   await mk('ola', 'Olamide Example', '1', 14060, '72 Ave', la - 0.0002, lo + 0.0003);
   await mk('uma', 'Umaima Example', '1', 14070, '72 Ave', la - 0.0002, lo + 0.0006);
   await mk('pia', 'Piauna Example', '1', 14080, '72 Ave', la - 0.0002, lo + 0.0009);
+  await mk('rae', 'Raeleen Example', '1', 14090, '72 Ave', la - 0.0004, lo);
   await mk('bea', 'Beatrix Example', '1', 15010, '80 Ave', 49.15, -122.83);
   for (let i = 0; i < NAMES; i += 1) {
     await act(mpage, 'person.create', { name: `Nina Zed${String(i).padStart(2, '0')}`, phone: '604-555-0199' });
@@ -260,6 +265,13 @@ try {
   const t0 = Date.now();
   await sam.page.click('.gv-row:has-text("Harjit Singh")');
   await sam.page.waitForSelector('.gv-toast__in', { timeout: 5000 }).catch(() => {});
+  // One line: the name and "· Undo" sit side by side, nothing hangs on its own line.
+  const toastLines = await sam.page.$eval('.gv-toast__in', (e) => {
+    const r = document.createRange(); r.selectNodeContents(e);
+    const mids = [...r.getClientRects()].filter((x) => x.width > 2).map((x) => x.top + x.height / 2).sort((x, y) => x - y);
+    return mids.filter((m, i) => i === 0 || m - mids[i - 1] > 8).length;
+  }).catch(() => 0);
+  check('2. the toast is one line at 390', toastLines === 1, toastLines);
   check('2. one tap marks: "Marked Harjit Singh · Undo", the box cleared', /Marked Harjit Singh · Undo/.test(await text(sam.page, '.gv-toast')) && (await sam.page.inputValue('#gv-q')) === '');
   await shot(sam.page, '08-who-voted-toast-390');
   const left = await until(async () => !(await hasDoor(ana.page, 'Harjit Singh')) && /1 door left your list — they voted/.test(await text(ana.page, '.gv-left')), 15_000, 250);
@@ -302,6 +314,12 @@ try {
   await ana.page.waitForSelector('.walk-door', { timeout: 10000 }).catch(() => {});
   await sleep(2500);
   check('3. Ana’s list hasn’t changed', await hasDoor(ana.page, 'Maya Example') && await hasDoor(ana.page, 'Jovan Example'));
+  // The desk's own Voted control on a person's page, while names are held.
+  await go(mpage, `${DESK}/people/${P.harjit.id}`);
+  await mpage.waitForSelector('.vt-row', { timeout: 10000 }).catch(() => {});
+  check('3. a person’s page: Voted, and "From a scrutineer’s or runner’s sheet? Use Enter a sheet: those wait until polls close."',
+    !!(await mpage.$('.vt-row')) && /From a scrutineer’s or runner’s sheet\? Use Enter a sheet: those wait until polls close\./.test(await text(mpage)), (await text(mpage, '.pf-rate')).slice(0, 300));
+  await shot(mpage, '10b-desk-person-held-line-1440');
   await go(sol.page, `${DESK}/gotv?place=${placeA}`);
   await sol.page.waitForSelector('#gv-q', { timeout: 10000 });
   // Staff's own page, before close, writes notes; the server says why if asked.
@@ -364,6 +382,7 @@ try {
   await sam.page.type('#gv-q', 'umaima', { delay: 40 });
   const noted = await until(async () => /Saved — we’ll match it when signal is back/.test(await text(sam.page)), 9000, 200);
   check(`5. a look-up with no answer becomes a note after 4 s, no retyping (${Math.round((Date.now() - tw) / 100) / 10} s)`, noted && (Date.now() - tw) < 7000 && /umaima/.test(await text(sam.page, '.gv-notes')));
+  check('5. in note mode the names wait: "… to send", none to match yet', /names? to send/.test(await text(sam.page, '.gv-notes')) && (await sam.page.locator('button.gv-note__match').count()) === 0, await text(sam.page, '.gv-notes'));
   await shot(sam.page, '15-who-voted-weak-signal-390');
   await sam.page.unroute('**/api/gotv/find**');
   // A name written hours ago, matched now, and taken back.
@@ -403,7 +422,7 @@ try {
 
   // ── 6. Scope ──
   const benChanges = (await api(ben.page, '/voted/changes?since=1')).json;
-  const aIds = [P.harjit, P.maya, P.jo, P.lee, P.kim, P.ola, P.uma, P.pia].map((p) => p.id);
+  const aIds = [P.harjit, P.maya, P.jo, P.lee, P.kim, P.ola, P.uma, P.pia, P.rae].map((p) => p.id);
   check('6. Ben gets none of turf A’s marks', !JSON.stringify(benChanges).match(new RegExp(aIds.join('|'))), JSON.stringify(benChanges).slice(0, 200));
   const benCalls = (await api(ben.page, '/persons?rating=1,2')).json;
   check('6. Ben’s Calls has no turf A people', Array.isArray(benCalls?.persons) && !benCalls.persons.some((p) => aIds.includes(p.id)), JSON.stringify(benCalls).slice(0, 200));
@@ -425,6 +444,45 @@ try {
   await go(ana.page, `${FIELD}/turfs/${turfA.id}`);
   check('7. back on the stream: "Live"', await until(async () => /Live/.test(await text(ana.page, '.gv-live')), 15_000));
   await shot(ana.page, '20-walk-live-chip-390');
+
+  // ── 7b. Calls skips who voted; two tabs ──
+  const mark = (p) => act(mpage, 'vote.mark', { person_id: p.id, voted: true, source: 'desk' });
+  const left3 = [P.harjit, P.ola, P.rae];
+  await go(ana.page, `${FIELD}/calls?rating=1,2&voted=no`);
+  await ana.page.waitForSelector('.cl-card', { timeout: 10000 }).catch(() => {});
+  const cname = (await ana.page.innerText('.cl-name').catch(() => '')).trim();
+  const cur = left3.find((p) => p.name === cname);
+  const other = left3.find((p) => p !== cur);
+  check('7b. Calls: three supporters not marked yet', Boolean(cur) && /3 to call/.test(await text(ana.page, '.cl-progress')), `${cname} | ${await text(ana.page, '.cl-progress')}`);
+  await mark(other);
+  const skipped = await until(async () => /2 to call/.test(await text(ana.page, '.cl-progress')), 10_000, 250);
+  check(`7b. Calls skips ${other?.name} once marked elsewhere`, skipped, await text(ana.page, '.cl-progress'));
+  await mark(cur);
+  const chipOn = await until(async () => /Voted — skip/.test(await text(ana.page, '.cl-card')) && (await ana.page.innerText('.cl-name')).trim() === cname, 10_000, 250);
+  check('7b. the card already open stays, with "Voted — skip"', chipOn);
+  await shot(ana.page, '20b-calls-voted-skip-390');
+  // Two tabs: the first (holding the stream) goes hidden; the second takes over.
+  const last1 = left3.find((p) => p !== cur && p !== other);
+  await go(ana.page, `${FIELD}/turfs/${turfA.id}`);
+  await ana.page.waitForSelector('.walk-door', { timeout: 10000 }).catch(() => {});
+  await until(async () => /Live/.test(await text(ana.page, '.gv-live')), 10_000);
+  const tab2 = watch(await ana.ctx.newPage(), 'ana-tab-2');
+  await go(tab2, `${FIELD}/turfs/${turfA.id}`);
+  await tab2.waitForSelector('.walk-door', { timeout: 10000 }).catch(() => {});
+  const setHidden = (pg, hidden) => pg.evaluate((h) => {
+    if (h) Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
+    else delete document.visibilityState;
+    document.dispatchEvent(new Event('visibilitychange'));
+  }, hidden);
+  await setHidden(ana.page, true);
+  await sleep(1500);
+  await mark(last1);
+  const t7b = Date.now();
+  const tookOver = await until(async () => !(await hasDoor(tab2, last1.name)), 15_000, 250);
+  check(`7b. the first tab hidden: the second gets ${last1?.name}’s mark (${Math.round((Date.now() - t7b) / 100) / 10} s incl. the 5 s fade)`, tookOver);
+  check('7b. …and says "Live"', /Live/.test(await text(tab2, '.gv-live')), await text(tab2, '.gv-live'));
+  await tab2.close();
+  await setHidden(ana.page, false);
 
   // ── 10. Many names at a runner's typing speed ──
   const before = ((await api(mpage, '/gotv/posts')).json.posts.find((p) => p.user_id === sam.id) || {}).lookups || 0;
@@ -460,9 +518,19 @@ try {
   await shot(mpage, '22-desk-voting-places-1440');
   await go(mpage, `${DESK}/voted?tab=scrutineers`);
   await mpage.click('button:has-text("Add a scrutineer")');
+  await mpage.waitForFunction(() => document.querySelectorAll('#gv-place option').length > 2, null, { timeout: 8000 }).catch(() => {});
   const opts = await mpage.$$eval('#gv-place option', (o) => o.map((x) => x.textContent));
   check('11. Add a scrutineer offers the guide’s places', opts.includes('Place A Example Hall') && opts.includes('Place B Example School'), opts.join('|'));
   await shot(mpage, '23-desk-add-scrutineer-1440');
+  // A runner's look-up at the closed place is refused; at an open one it runs.
+  await go(sol.page, `${DESK}/gotv?place=${placeA}`);
+  await sol.page.waitForSelector('#gv-q', { timeout: 10000 });
+  await sol.page.type('#gv-q', 'beatrix', { delay: 60 });
+  const refusedA = await until(async () => /That voting place is closed today/.test(await text(sol.page)), 8000, 250);
+  await sol.page.selectOption('.gv-pick__sel', placeB);
+  const ranB = await until(async () => (await sol.page.locator('.gv-row:has-text("Beatrix Example")').count()) === 1, 8000, 250);
+  check('11. a look-up refused at the closed place runs again at an open one', refusedA && ranB && !(await sol.page.$('button:has-text("Save name")')), (await text(sol.page)).slice(0, 300));
+  await shot(sol.page, '23b-who-voted-other-place-1440');
 
   // ── 9. Staff ──
   await go(sol.page, `${DESK}/voted`);

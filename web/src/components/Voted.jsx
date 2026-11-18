@@ -50,7 +50,7 @@ export function useVotedMode() {
   const active = d ? (d.active ?? d.on) : false;
   return {
     on: Boolean(active), everyone: Boolean(d?.on), practice: Boolean(d?.practice && active), election_day: d?.election_day ?? null,
-    ready: d !== undefined, status: d,
+    ready: d !== undefined, status: d, updatedAt: q.dataUpdatedAt,
   };
 }
 

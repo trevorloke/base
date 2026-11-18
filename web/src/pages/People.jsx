@@ -9,7 +9,7 @@
 // People is a desk screen: volunteers' /people opens Calls.
 // Shared widgets + helpers are exported from here for Person.jsx.
 // Ratings always render with the shared RatingChip / ratingSay words.
-import { useLiveChip } from '../components/GotvLive.js';
+import { useLiveChip, usePracticeOverlay } from '../components/GotvLive.js';
 import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useNavigate, useSearchParams, useLocation, Link, Navigate, useOutletContext } from 'react-router-dom';
 import { useQueries, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
@@ -33,7 +33,7 @@ import {
 } from '../components/TextingCard.jsx';
 import { KeyTies, KnowMeChip, MyPeopleLink, useKeyTies } from '../components/RelationshipsBits.jsx';
 import { hasArea } from '../Shell.jsx';
-import { VotedRow, useVotedMode } from '../components/Voted.jsx';
+import { VotedRow, pendingVoted, useVotedMode, votedOf } from '../components/Voted.jsx';
 import './gotv.css';
 import AddressField, { lookupAddress, pinOf } from '../components/AddressField.jsx';
 import { CUT_KEYS, CutGroups, addCuts, cutChips, useTurfs, useWebDid } from '../components/FieldCuts.jsx';
@@ -1242,7 +1242,14 @@ function CallsScreen() {
   // A rating moves the map pin colour and the housemates' household lists.
   const act = useAction(() => { invalidatePersonData(queryClient); });
 
-  const queue = rows.filter((p) => !done[p.id]);
+  // While GOTV is on, someone marked voted (live from a scrutineer, a door,
+  // or this phone's own outbox; in practice, the practice marks) leaves the
+  // queue. The card already open stays, with "Voted — skip".
+  const outbox = useOutbox();
+  const practiceVoted = usePracticeOverlay();
+  const pendingV = useMemo(() => pendingVoted(outbox.items), [outbox.items]);
+  const votedNow = (p) => Boolean(votedMode.on && p && !p.voted_hidden && votedOf(p, pendingV, practiceVoted).voted);
+  const queue = rows.filter((p) => !done[p.id] && (p.id === currentId || !votedNow(p)));
   const current = queue.find((p) => p.id === currentId) || (held?.id === currentId ? held : null) || queue[0] || null;
   const at = current ? queue.indexOf(current) : -1; // -1: a held person outside the list
   // Called and still on the list as loaded; and called in this sitting. A
@@ -1288,7 +1295,6 @@ function CallsScreen() {
   const bankEnd = Boolean(bankId && bank && !persons.isPlaceholderData && !bankMore && rows.length > 0 && !current);
   const endKey = `${bankId}:${calledHere}`;
   const bankEnded = useRef('');
-  const outbox = useOutbox();
   const unsent = useMemo(() => {
     if (!bankId) return 0;
     const ids = new Set(rows.map((p) => p.id));
@@ -1563,7 +1569,7 @@ function CallsScreen() {
                   {current.name}
                 </Link>
                 {/* Marked voted elsewhere while this card was open (the live list). */}
-                {votedMode.on && current.voted_at && !current.voted_hidden && <span className="chip gv-live is-live">Voted — skip</span>}
+                {votedNow(current) && <span className="chip gv-live is-live">Voted — skip</span>}
                 <span className="cl-phone mono">{current.phone}</span>
                 {streetLine(current) && <span className="cl-addr">{streetLine(current)}</span>}
                 {current.rating && !mine && (

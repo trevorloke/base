@@ -470,9 +470,13 @@ one tap away under **More**.
   name saved offline and matched with its written time, a look-up delayed
   10 s turned into a note at 4 s, Undo of a name written hours ago, To
   check resolved with Find, turf B never seeing turf A, the stream cut and
-  polling catching up, 40 names at 180 ms a key (`GOTV_NAMES`; the spec's
-  300 take about 20 minutes) with no 429 and one look-up a name, the
-  guide's *Closed today* reaching an open phone, staff read-only, and Off.
+  polling catching up, Calls skipping a person marked elsewhere (the open
+  card says *Voted — skip*), two tabs (the one holding the stream goes
+  hidden and the other takes it over), 300 names at 180 ms a key (about 20
+  minutes; `GOTV_NAMES=40` for a quicker run) with no 429 and one look-up a
+  name, the guide's *Closed today* reaching an open phone, a runner's
+  look-up refused at a closed place running again at an open one, the held
+  line under a person's Voted, staff read-only, and Off.
   A browser's own zone data may predate B.C.'s permanent UTC-7, so closing
   times on screen come from the server as wall times.
 - **GOTV** (Today → Go to → *Get out the vote*) — set *Election day* to

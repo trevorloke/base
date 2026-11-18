@@ -22,6 +22,7 @@ import { newClientId, onOutboxSent, practiceWasOver, queueAction, undoQueued, us
 import { useVotedMode } from '../components/Voted.jsx';
 import { addNote, dropNote, onNotes, readNotes } from '../components/gotvNotes.js';
 import { useOnline } from '../components/NoSignal.jsx';
+import { zoneOf } from '../components/shiftTime.js';
 import './gotv.css';
 
 const DEBOUNCE_MS = 400;
@@ -32,18 +33,21 @@ const TOAST_MS = 8000;
 const fold = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const words = (t) => fold(t).replace(/[,–—-]/g, ' ').split(/\s+/).filter((w) => w && !/^x+$/.test(w));
 const firstName = (n) => String(n || '').trim().split(/\s+/)[0] || '';
-const clock = (iso) => new Date(iso).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit' });
+// Times in the campaign's zone, as the desk shows them, whatever the phone's own clock says.
+const clockIn = (tz) => (iso) => new Date(iso).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', ...(tz ? { timeZone: tz } : {}) });
 // "8:00 p.m." from the campaign's wall time "20:00".
 const hmWord = (hm) => { const [h, m] = hm.split(':').map(Number); return `${((h + 11) % 12) + 1}:${String(m).padStart(2, '0')} ${h < 12 ? 'a.m.' : 'p.m.'}`; };
-const sameDay = (a, b) => new Date(a).toDateString() === new Date(b).toDateString();
 const num = (n) => Number(n || 0).toLocaleString('en-CA');
 const plural = (n, one, many = `${one}s`) => `${num(n)} ${n === 1 ? one : many}`;
 
-// This phone's own entries today (never anyone else's): { cid, name, at, sent_at, undone }.
+// This phone's own entries of the last day (never anyone else's): { cid, name, at, sent_at, undone }.
+// Kept by when they were entered or sent, not when the name was written, so a
+// name written at 19:58 and matched after midnight keeps its 15-minute Undo.
 const enteredKey = (me) => (me?.user?.id && me?.workspace?.id ? `${NS}gotv-entered:${me.workspace.id}:${me.user.id}` : null);
 const readEntered = (me) => {
   const k = enteredKey(me);
-  try { return (JSON.parse(localStorage.getItem(k) || '[]') || []).filter((e) => sameDay(e.at, Date.now())); } catch { return []; }
+  const recent = (e) => Date.now() - Date.parse(e.sent_at || e.entered_at || e.at) < 24 * 3600_000;
+  try { return (JSON.parse(localStorage.getItem(k) || '[]') || []).filter(recent); } catch { return []; }
 };
 const writeEntered = (me, list) => {
   const k = enteredKey(me);
@@ -87,7 +91,13 @@ export default function WhoVoted({ me: given }) {
   const closesHm = fixedPlace ? status?.closes_hm : place?.closes_hm ?? null;
   const open = practice || status?.send === 'live' || (fixedPlace ? Boolean(status?.send_open)
     : Boolean(status?.send_open) || Boolean(closesAt && Date.now() >= Date.parse(closesAt)));
-  const [heldByServer, setHeldByServer] = useState(false);
+  // The server said "not now" (409) for this place, practice and sending rule
+  // as the status read had them. A new place, practice, rule or status read
+  // means it no longer holds: look-ups run again.
+  const holdKey = `${placeId}|${practice}|${status?.send}|${Boolean(status?.send_open)}|${mode.updatedAt}`;
+  const [heldFor, setHeldFor] = useState(null);
+  const heldByServer = heldFor === holdKey;
+  useEffect(() => { if (heldFor && heldFor !== holdKey) { setHeldFor(null); setSaid(null); } }, [holdKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const [noteUntil, setNoteUntil] = useState(0);
   const [, tick] = useState(0);
   useEffect(() => {
@@ -139,10 +149,12 @@ export default function WhoVoted({ me: given }) {
     const t = String(typed || '').trim();
     if (t.length < 2) return;
     addNote(me, { id: newClientId(), typed: t.slice(0, 120), written_at: writtenAt || new Date().toISOString(), place_id: placeId });
+    // A note being matched, saved again: one copy, not two.
+    if (matching) dropNote(me, matching.id);
     setText(''); setRows(null); setWrittenAt(null); setMatching(null);
     setSaid(line || null);
     focus();
-  }, [me, placeId, writtenAt]);
+  }, [me, placeId, writtenAt, matching]);
 
   // The look-up: after 3 letters and 400 ms without typing; a new key
   // cancels the one in flight; 4 s without an answer makes it a note.
@@ -166,7 +178,7 @@ export default function WhoVoted({ me: given }) {
         setSaid(null);
       } catch (e) {
         if (e?.name === 'AbortError' && !timedOut) return;
-        if (e instanceof ApiError && e.status === 409) { setHeldByServer(true); setSaid(e.message); return; }
+        if (e instanceof ApiError && e.status === 409) { setHeldFor(holdKey); setSaid(e.message); return; }
         if (e instanceof ApiError && e.status === 429 && /limit/i.test(e.message)) { saveNote(q, e.message); return; }
         if (e instanceof ApiError && e.status < 500) { setSaid(e.message); return; }
         // No answer: keep the name, try look-ups again in a minute.
@@ -178,7 +190,7 @@ export default function WhoVoted({ me: given }) {
       }
     }, DEBOUNCE_MS);
     return () => clearTimeout(t);
-  }, [text, noteMode, placeId, practice, writtenAt, saveNote]);
+  }, [text, noteMode, placeId, practice, writtenAt, saveNote, holdKey]);
 
   const mark = async (row) => {
     const cid = newClientId();
@@ -190,7 +202,7 @@ export default function WhoVoted({ me: given }) {
         person_id: row.id, voted: true, source: 'scrutineer', place_id: placeId, client_id: cid,
         ...(writtenAt ? { client_at: writtenAt } : {}), ...(practice ? { practice: true } : {}),
       }, { who: row.name });
-      const entry = { cid, name: row.name, at: writtenAt || at, sent_at: r.queued ? null : new Date().toISOString(), undone: false };
+      const entry = { cid, name: row.name, at: writtenAt || at, entered_at: at, sent_at: r.queued ? null : new Date().toISOString(), undone: false };
       const next = [entry, ...entered];
       setEntered(next); writeEntered(me, next);
       if (matching) dropNote(me, matching.id);
@@ -241,6 +253,7 @@ export default function WhoVoted({ me: given }) {
   const queuedIds = useMemo(() => new Set(outbox.items.filter((i) => i.name === 'vote.mark' && i.state === 'pending').map((i) => i.cid)), [outbox.items]);
   const live = entered.filter((e) => !e.undone);
   const mayUndo = (e) => !e.undone && (queuedIds.has(e.cid) || !e.sent_at || Date.now() - Date.parse(e.sent_at) < UNDO_MS);
+  const clock = clockIn(zoneOf(me));
   const myNotes = notes.filter((n) => !placeId || !n.place_id || n.place_id === placeId || fixedPlace);
 
   if (!mode.ready) return <div className="gv-page"><h1>Who voted</h1><p className="muted">Loading…</p></div>;
@@ -329,11 +342,11 @@ export default function WhoVoted({ me: given }) {
 
       {myNotes.length > 0 && (
         <section className="gv-notes" aria-labelledby="gv-notes-h">
-          <h2 id="gv-notes-h" className="gv-h">{sending && online ? `Polls closed — match your ${plural(myNotes.length, 'name')}` : `${plural(myNotes.length, 'name')} to send`}</h2>
+          <h2 id="gv-notes-h" className="gv-h">{!noteMode ? `Polls closed — match your ${plural(myNotes.length, 'name')}` : `${plural(myNotes.length, 'name')} to send`}</h2>
           <ul className="gv-notelist">
             {myNotes.map((n) => (
               <li key={n.id} className="gv-note">
-                {sending && online ? (
+                {!noteMode ? (
                   <button type="button" className="gv-note__match" onClick={() => matchNote(n)}>
                     <span className="gv-note__typed">{n.typed}</span><span className="gv-note__at mono">{clock(n.written_at)}</span>
                   </button>
@@ -383,7 +396,7 @@ export default function WhoVoted({ me: given }) {
         {toast && (
           <span className="gv-toast__in">
             {toast.text}
-            {toast.undo && <> · <button type="button" className="gv-toast__act" onClick={() => { undo(toast.undo); }}>Undo</button></>}
+            {toast.undo && <span className="gv-toast__undo"> · <button type="button" className="gv-toast__act" onClick={() => { undo(toast.undo); }}>Undo</button></span>}
           </span>
         )}
       </div>

@@ -3,8 +3,9 @@
 //
 //   - EventSource('/api/voted/live') only while GOTV is active for this
 //     person (status.active), they aren't scrutineer-only, and the tab is
-//     visible. One tab holds it (navigator.locks); the others hear it over
-//     BroadcastChannel('gotv-live').
+//     visible. One visible tab holds it (navigator.locks; a hidden tab lets
+//     go); the others hear it over BroadcastChannel('gotv-live'), with a
+//     beat every 10 s, and poll on their own after 30 s of silence.
 //   - A real change ({ p, v, x: 0 }) is written into the screens' copies in
 //     place (LIVE_KEYS), never a list refetch.
 //   - A practice change (x: 1) never touches voted_at anywhere: it goes into
@@ -29,6 +30,8 @@ export const LIVE_KEYS = [['turf'], ['doors'], ['persons'], ['person'], ['voted'
 const POLL_MS = 20_000;
 const RETRY_STREAM_MS = 120_000;
 const COUNTS_MS = 30_000;
+const BEAT_MS = 10_000;
+const SILENT_MS = 30_000;
 
 // ── A tiny store for the chip and the practice overlay ──
 const state = { conn: 'off', at: 0, practice: new Map(), left: 0 };
@@ -152,7 +155,7 @@ export function useGotvLive(status, me) {
       const practiceOnes = changes.filter((c) => c.x);
       if (practiceOnes.length) putPractice(practiceOnes);
       if (applyChanges(queryClient, changes)) countsSoon();
-      if (from !== 'bc') bc?.postMessage({ t: 'voted', changes, last });
+      if (from !== 'bc') bc?.postMessage({ t: 'voted', changes, last, h: holding });
     };
     const onMode = (s, from) => {
       queryClient.setQueryData(['voted', 'status'], (d) => ({ ...(d || {}), ...s }));
@@ -181,9 +184,9 @@ export function useGotvLive(status, me) {
       retryT = setTimeout(() => { fails = []; clearInterval(pollT); pollT = null; open(); }, RETRY_STREAM_MS);
     };
     const open = () => {
-      if (stopped || es || document.visibilityState !== 'visible') return;
+      if (stopped || !holding || es || document.visibilityState !== 'visible') return;
       es = new EventSource(at('/api/voted/live'), { withCredentials: true });
-      es.onopen = () => { setConn('live'); catchUp(); };
+      es.onopen = () => { setConn('live'); beat(); catchUp(); };
       es.addEventListener('voted', (e) => {
         try { const list = JSON.parse(e.data); last = Math.max(last, Number(e.lastEventId) || 0); take(list); setConn('live'); } catch { /* a bad message */ }
       });
@@ -197,46 +200,88 @@ export function useGotvLive(status, me) {
         es = null;
         if (stopped) return;
         fails = [...fails.filter((t) => Date.now() - t < 60_000), Date.now()];
-        if (state.conn === 'live') setConn('poll');
+        if (state.conn === 'live') { setConn('poll'); beat(); }
         if (fails.length >= 2) startPolling();
         else setTimeout(open, 3000);
       };
     };
     const close = () => { es?.close(); es = null; clearInterval(pollT); pollT = null; clearTimeout(retryT); };
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') { catchUp(); if (!es && !pollT) open(); }
-      else { es?.close(); es = null; }
-    };
-    const onOnline = () => { catchUp(); if (!es && !pollT) open(); };
 
-    // One tab holds the stream; the others listen.
+    // One visible tab holds the stream (navigator.locks) and tells the others
+    // over the channel, with a beat every 10 s. A tab that goes hidden lets
+    // the lock go, so a visible tab takes it over. A tab that hears no beat
+    // for 30 s polls on its own and says so on its chip.
+    const locks = globalThis.navigator?.locks;
+    let holding = false;
+    let waiting = null;
+    let heard = 0;
+    let beatT = null;
+    const beat = () => { if (holding) bc?.postMessage({ t: 'hb', conn: state.conn, at: state.at, last }); };
+    const hold = () => {
+      holding = true;
+      setConn('poll');
+      catchUp();
+      open();
+      clearInterval(beatT);
+      beatT = setInterval(beat, BEAT_MS);
+    };
+    const letGo = () => {
+      close();
+      clearInterval(beatT); beatT = null;
+      holding = false;
+      release?.(); release = null;
+    };
+    const acquire = () => {
+      if (stopped || holding || waiting || document.visibilityState !== 'visible') return;
+      if (!locks?.request) { hold(); return; }
+      const c = new AbortController();
+      waiting = c;
+      locks.request(`gotv-live:${userId}`, { signal: c.signal }, () => new Promise((res) => {
+        waiting = null;
+        release = res;
+        if (stopped || document.visibilityState !== 'visible') { release = null; res(); return; }
+        hold();
+      })).catch((e) => {
+        if (waiting === c) waiting = null;
+        if (e?.name !== 'AbortError' && !stopped && !holding) hold();
+      });
+      // Another tab may hold it: ask it to say how it is.
+      bc?.postMessage({ t: 'hello' });
+    };
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') { catchUp(); acquire(); if (holding && !es && !pollT) open(); }
+      else { waiting?.abort(); waiting = null; if (holding) letGo(); }
+    };
+    const onOnline = () => { catchUp(); if (holding && !es && !pollT) open(); };
+    const watchT = setInterval(() => {
+      if (holding || document.visibilityState !== 'visible' || Date.now() - heard < SILENT_MS) return;
+      if (state.conn === 'live') setConn('poll');
+      catchUp();
+    }, POLL_MS);
+
     if (bc) {
       bc.onmessage = (e) => {
         const m = e.data || {};
-        if (m.t === 'voted') { last = Math.max(last, Number(m.last) || 0); take(m.changes || [], 'bc'); if (state.conn === 'off') setConn('live'); }
+        if (m.t === 'voted') { last = Math.max(last, Number(m.last) || 0); take(m.changes || [], 'bc'); if (m.h) heard = Date.now(); }
+        else if (m.t === 'hb') {
+          heard = Date.now();
+          last = Math.max(last, Number(m.last) || 0);
+          if (!holding) { state.conn = m.conn === 'live' ? 'live' : 'poll'; state.at = m.at || state.at; changed(); }
+        } else if (m.t === 'hello') beat();
         else if (m.t === 'mode') onMode(m.s, 'bc');
         else if (m.t === 'guide') onGuide('bc');
       };
     }
-    const start = () => {
-      setConn('poll');
-      catchUp();
-      open();
-      document.addEventListener('visibilitychange', onVisible);
-      window.addEventListener('online', onOnline);
-    };
-    const locks = globalThis.navigator?.locks;
-    if (locks?.request) {
-      locks.request(`gotv-live:${userId}`, () => new Promise((res) => { release = res; if (!stopped) start(); else res(); }))
-        .catch(() => { if (!stopped) start(); });
-      // Waiting for another tab's lock: that tab holds the stream and shares it.
-      setConn('live');
-    } else start();
+    setConn('poll');
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('online', onOnline);
+    acquire();
 
     return () => {
       stopped = true;
-      close();
-      release?.();
+      waiting?.abort();
+      letGo();
+      clearInterval(watchT);
       bc?.close();
       document.removeEventListener('visibilitychange', onVisible);
       window.removeEventListener('online', onOnline);
