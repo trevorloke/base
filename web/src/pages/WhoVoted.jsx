@@ -265,7 +265,7 @@ export default function WhoVoted({ me: given }) {
     tick((x) => x + 1);
   };
   const heldLine = closesAt
-    ? `Names are sent after this voting place closes at ${closesHm ? hmWord(closesHm) : clock(closesAt)}.`
+    ? `Names are sent after this voting place closes at ${closesHm ? hmWord(closesHm) : clock(closesAt)}`.replace(/\.?$/, '.')
     : 'Names are sent when the office says polls are closed.';
   const placeholder = !online ? 'No signal — write the name, we’ll match it later' : noteMode ? 'Write a name' : 'Name, street or voter number';
   const q = text.trim();
