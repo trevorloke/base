@@ -117,7 +117,16 @@ api.get('/voted/live', async (c) => {
     const ended = new Promise((r) => { done = r; });
     const sub = {
       ctx, ...scope, group: g.group || g.on, last: since, queue: new Map(), timer: null, closed: false, at: Date.now(), scopeAt: Date.now(),
-      send: (m) => (sub.closed ? Promise.resolve() : stream.writeSSE(m).catch(() => sub.close())),
+      // A phone that stops reading (asleep, a dead connection not yet
+      // noticed) never piles messages up here: past 200 unread it is
+      // closed, and catches up when it comes back (Last-Event-ID).
+      backlog: 0,
+      send: (m) => {
+        if (sub.closed) return Promise.resolve();
+        if (sub.backlog > 200) { sub.close(); return Promise.resolve(); }
+        sub.backlog += 1;
+        return stream.writeSSE(m).then(() => { sub.backlog -= 1; }, () => sub.close());
+      },
       statusOf: (d) => statusOf(d, ctx),
       close: () => { if (sub.closed) return; sub.closed = true; clearTimeout(sub.timer); done(); },
     };
@@ -128,6 +137,7 @@ api.get('/voted/live', async (c) => {
     // A comment now and every 25 s: under any proxy's idle limit.
     stream.write(': live\n\n').catch(() => sub.close());
     const ping = setInterval(() => {
+      if (sub.backlog > 200) { sub.close(); return; }
       stream.write(': ping\n\n').catch(() => sub.close());
       refreshScope(sub).catch(() => {});
     }, pingMs());

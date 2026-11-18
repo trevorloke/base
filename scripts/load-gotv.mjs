@@ -74,10 +74,12 @@ const tSeed = Date.now();
 const S = 49.0; const N = 49.2; const W = -122.9; const E = -122.7;
 await db.query(
   `insert into persons (id, workspace_id, name, first_name, last_name, address, house_number, lat, lng, rating)
-   select gen_random_uuid(), $1, 'First' || g || ' Example' || (g % 5000), 'First' || g, 'Example' || (g % 5000),
+   select gen_random_uuid(), $1, f.n || ' ' || l.n, f.n, l.n,
           ((g % 180) * 100 + 10000)::text || ' ' || (g % 120 + 1)::text || ' Ave', ((g % 180) * 100 + 10000)::text,
           $2::float8 + random() * ($3::float8 - $2::float8), $4::float8 + random() * ($5::float8 - $4::float8), (array['1','2','3','4',null])[1 + g % 5]
-     from generate_series(1, $6::int) g`,
+     from generate_series(1, $6::int) g
+     cross join lateral (select 'Given' || chr(65 + g % 26) || chr(65 + (g / 26) % 26) || chr(97 + (g / 676) % 26) as n) f
+     cross join lateral (select 'Family' || chr(65 + (g / 17) % 26) || chr(97 + (g / 442) % 26) || chr(97 + (g / 11492) % 26) as n) l`,
   [ws, S, N, W, E, PEOPLE],
 );
 // 200 turfs: a 20 × 10 grid over the box.
@@ -128,6 +130,9 @@ for (const body of [{ ceo_answer: { allows_live: true, note: 'Load test' } }, { 
   if (r.status !== 200) throw new Error(`vote.settings ${JSON.stringify(r.json)}`);
 }
 const people = (await db.query('select id, lat, lng from persons where workspace_id = $1 and lat is not null', [ws])).rows;
+// What a scrutineer types: a given name and a family name, as written.
+const lookups = (await db.query('select first_name, last_name from persons where workspace_id = $1 order by random() limit 2000', [ws])).rows
+  .map((r, i) => (i % 2 ? `${r.last_name}, ${r.first_name}` : `${r.first_name} ${r.last_name}`));
 const seedMs = Date.now() - tSeed;
 console.log(`seeded ${PEOPLE.toLocaleString('en-CA')} people, 200 turfs, 60 places, 100 posts in ${(seedMs / 1000).toFixed(0)} s`);
 // The first request after GOTV turns on waits for the turf index: once, here.
@@ -214,7 +219,8 @@ timers.push(every(86, async () => { const r = await call(everyone[s2++ % everyon
 let f = 0;
 timers.push(every(26, async () => {
   const u = scrutineers[f++ % 20];
-  const r = await call(u.cookie, 'GET', `/api/gotv/find?q=${encodeURIComponent(`first${10000 + ((f * 7919) % Math.max(1, PEOPLE - 10000))} example`)}`);
+  const pick = lookups[(f * 7919) % lookups.length];
+  const r = await call(u.cookie, 'GET', `/api/gotv/find?q=${encodeURIComponent(pick)}`);
   lat.find.push(r.ms); if (r.status === 429) counts.find429 += 1;
 }));
 // The catch-up read and the desk's summary.
@@ -289,6 +295,8 @@ row('guide event to every stream ≤ 5 s (late)', guideLate, guideLate === 0);
 row('guide refetch p95 (ms)', Math.round(pct(guideReads, 95) ?? -1), (pct(guideReads, 95) ?? 1e9) <= 300);
 row('other errors', counts.otherErr + counts.markErr);
 for (const e of events) console.log(`  ${e}`);
+const errs = serverLog.split('\n').filter((l) => /error|Error/.test(l));
+if (errs.length) console.log(`server errors (${errs.length}), first: ${errs.slice(0, 3).join(' | ').slice(0, 400)}`);
 stop();
 await db.end();
 process.exit(0);

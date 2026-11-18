@@ -324,7 +324,9 @@ check('the strip’s chip is gone', !(await vpage.$('.offline-strip__chip')));
 // A replay of the same tap is a duplicate: still one mark.
 const sent = (await D.api('/export')).json.voted_marks.find((x) => x.person_id === P.dev.id);
 const replay = await V.api('/actions/vote.mark', { person_id: P.dev.id, voted: true, source: 'door', client_id: sent.client_id });
-check('the same client_id replayed answers duplicate, no second row', replay.json?.duplicate === true && (await marksOf(P.dev.id)).marks.length === 1, replay.raw);
+// A volunteer's answer is the same bytes whatever was there (GOTV decision 13).
+check('the same client_id replayed answers the same, no second row', replay.json?.ok === true && replay.json?.client_id === sent.client_id
+  && !('duplicate' in (replay.json || {})) && (await marksOf(P.dev.id)).marks.length === 1, replay.raw);
 
 // ── 9. The Election day screen: by band and by turf ──
 await D.go('/voted');

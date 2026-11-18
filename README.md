@@ -677,6 +677,29 @@ than a week after they came off is refused. Contacts are door, phone, text or
   offers *Needs a ride to vote*, a request for the drivers. Shift roles
   include Driver, Scrutineer (a voting place), Runner, Poll greeter and Zone
   house captain.
+- **Live GOTV** (the server; its screens come next): a manager posts
+  volunteers as **scrutineers** at the voter guide's voting places, or as
+  **runners** for any place, and can make an election-day **sign-in code**
+  (a link and QR, once, 15 minutes) whose sign-in works for *Who voted*
+  only. Scrutineers find one person by name, street or voter number
+  (`GET /api/gotv/find`: at most 8, nothing about who voted; 120 a minute,
+  5,000 a day) and mark them; their answer never says whether that person
+  had voted already, and they can undo their own mark for 15 minutes.
+  **Names from a voting place reach the office only after that place
+  closes** (its own hours from the voter guide, else a manager's closing
+  time for the day, else the guide's day; nothing assumed), by every route
+  (a scrutineer, a runner, the desk's sheet, a file), until a manager
+  presses *Polls are closed — send names now* or records the Chief Election
+  Officer's yes and switches to *As soon as entered*. Door, phone and desk
+  marks are never held. Marks reach canvassers within seconds on a live
+  feed (`GET /api/voted/live`, server-sent events, plus
+  `/api/voted/changes?since=` to catch up), only for the people in their
+  own turfs and phone banks — while GOTV is on a volunteer's People, Calls,
+  map and History of who voted are kept to those (a manager may choose
+  *Anywhere in the city*). **Off · Practice · On**: practice runs with the
+  people posted plus those a manager ticks, writes nothing to the real
+  record, shows to nobody else, and is wiped when it ends. One server holds
+  every stream: no deploys on voting days.
 - **Scheduling by tap** (Shifts → **Week**, the desk's): each day is a
   list of its shifts in start order — *Early* (before 9), *Morning*,
   *Afternoon*, *Evening* — any number to a part, and a card shows the kind,

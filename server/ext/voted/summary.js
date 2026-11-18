@@ -27,6 +27,21 @@ const bandOfRating = (r) => {
 };
 const iso = (d) => (d ? new Date(d).toISOString() : null);
 
+// The supporters (rated 1 or 2): a rating changes them, never a mark, so
+// the set is kept a minute per campaign (at 300,000 people it is the
+// summary's biggest read).
+const SUPPORTERS_MS = 60_000;
+const supportersKept = new Map(); // ws -> { at, ids }
+const supporterIds = async (db, ws) => {
+  const hit = supportersKept.get(ws);
+  if (hit && Date.now() - hit.at < SUPPORTERS_MS) return hit.ids;
+  const ids = new Set((await db.query(
+    `select id from persons where workspace_id = $1 and deleted_at is null and rating in ('1', '2')`, [ws],
+  )).rows.map((r) => r.id));
+  supportersKept.set(ws, { at: Date.now(), ids });
+  return ids;
+};
+
 export const summaryOf = async (db, ctx, wantPractice) => {
   const ws = ctx.workspaceId;
   const s = await rowOf(db, ws);
@@ -45,9 +60,7 @@ export const summaryOf = async (db, ctx, wantPractice) => {
   for (const b of (await db.query(
     'select rating, count(*)::int as n from persons where workspace_id = $1 and deleted_at is null and voted_at is not null group by rating', [ws],
   )).rows) by_band[bandOfRating(b.rating)] += b.n;
-  const supporters = new Set((await db.query(
-    `select id from persons where workspace_id = $1 and deleted_at is null and rating in ('1', '2')`, [ws],
-  )).rows.map((r) => r.id));
+  const supporters = await supporterIds(db, ws);
   const voted = new Set((await db.query(
     `select id from persons where workspace_id = $1 and deleted_at is null and voted_at is not null and rating in ('1', '2')`, [ws],
   )).rows.map((r) => r.id));

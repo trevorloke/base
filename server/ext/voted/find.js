@@ -21,6 +21,7 @@ import { localDay } from '../../lib/tzrule.js';
 const PER_MINUTE = 120;
 const PER_DAY = 5_000;
 const ROWS = 8;
+const LEAD_CAP = 2_000;
 export const SLOW = 'Slow down — try again in a minute.';
 export const DAY_LIMIT = 'Today’s look-up limit is reached — names are kept to match later. The office has been told.';
 export const TOO_SHORT = 'Type at least 3 letters or a voter number.';
@@ -85,10 +86,22 @@ export const findPeople = async (db, ws, q) => {
     if (rows.length || letters < 3) return { status: 200, body: { people: rows.slice(0, ROWS).map((r) => ({ id: r.id, name: r.name, where: whereOf(r) })), more: false } };
   }
   if (letters < 3) return { status: 400, body: { error: TOO_SHORT } };
-  // The leading name word: the longest word of letters.
-  const named = words.filter((w) => /^[a-z]/.test(w) && !/\d/.test(w));
+  // The leading name word: the one the name indexes narrow most ("harjit"
+  // before "singh" in a city of Singhs), each counted up to 2,000 on
+  // persons_ws_name_fold_idx / persons_ws_last_fold_idx in one query.
+  const named = [...new Set(words.filter((w) => /^[a-z]/.test(w) && w.length >= 2))].slice(0, 4);
   if (!named.length) return { status: 400, body: { error: TOO_SHORT } };
-  const lead = [...named].sort((a, b) => b.length - a.length)[0];
+  let lead = named[0];
+  if (named.length > 1) {
+    const counts = (await db.query(
+      `select ${named.map((_, i) => `(select count(*)::int from (select 1 from persons p where p.workspace_id = $1 and p.deleted_at is null
+          and (person_fold(p.name) like $${i + 2} or person_fold(p.last_name) like $${i + 2}) limit ${LEAD_CAP}) x) as c${i}`).join(', ')}`,
+      [ws, ...named.map((w) => `${escLike(w)}%`)],
+    )).rows[0];
+    // A word no name starts with ("ave") is the address's, never the lead.
+    const n = (w) => counts[`c${named.indexOf(w)}`] || Infinity;
+    lead = named.reduce((best, w) => (n(w) < n(best) ? w : best), named[0]);
+  }
   const rest = words.filter((w, i) => i !== words.indexOf(lead));
   const params = [ws, `${escLike(lead)}%`];
   const add = (v) => { params.push(v); return `$${params.length}`; };
@@ -105,7 +118,7 @@ export const findPeople = async (db, ws, q) => {
       conds.push(`(person_fold(p.name) like ${like} or lower(coalesce(p.address, '')) like ${like})`);
     }
   }
-  const full = add(named.join(' '));
+  const full = add(words.filter((w) => /^[a-z]/.test(w)).join(' '));
   const rows = (await db.query(
     `select p.id, p.name, p.address, p.house_number from persons p
       where p.workspace_id = $1 and p.deleted_at is null

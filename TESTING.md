@@ -429,6 +429,21 @@ one tap away under **More**.
   or removed with ✕. **Take off** keeps everything filled in (still in *Export all
   data*); *Taken off → Bring back* restores it. The sample adds *Language at
   home*, *Strata council member* and *Union local*.
+- **Live GOTV (server)** — `server/test/gotv-clock.test.js` (each voting
+  place's close from the voter guide, the override, a release, a mark's own
+  day and the work window, on the moved clock), `gotv-scrutineer.test.js`
+  (the hold on every route, live sending after the CEO's yes, the
+  manager's own actions, posts, the look-up and its limits, same-bytes
+  answers, undo, practice, turf scope, the sign-in code) and
+  `gotv-live.test.js` (the SSE feed read raw: scope, practice, merges,
+  `mode` and `guide` events, three streams a person, no pool connection
+  held; `STARBASE_GOTV_PING_MS` shortens the heartbeat). Its last test needs
+  a real Postgres: `GOTV_REAL_PG=1 DATABASE_URL=postgres://… node --test
+  server/test/gotv-live.test.js` (a held campaign lock makes a mark answer
+  503 *Busy — will try again* after `STARBASE_GOTV_LOCK_MS`, 5 s by
+  default). The load test, `DATABASE_URL=postgres://… PORT=5507 node
+  scripts/load-gotv.mjs` (`LOAD_PEOPLE`, `LOAD_MINUTES`), seeds 300,000
+  people and prints its numbers against the pass lines.
 - **GOTV** (Today → More → *GOTV & voting days*) — set *Election day* to
   today (or add today as an advance-voting day) and **Save**: it reads *On*
   by itself; or switch *On by hand*. Every volunteer's walk list, door card
