@@ -38,6 +38,8 @@ export const settingsOf = async (db, ctx) => {
 // mark, so it is kept a minute per campaign and no mark drops it.
 const SUPPORTERS_MS = 60_000;
 const supportersKept = new Map(); // ws → { at, n }
+// A rating changed (live.js, after commit): counted again at the next read.
+export const forgetSupporters = (ws) => { supportersKept.delete(ws); };
 const supportersOf = async (db, ws) => {
   const hit = supportersKept.get(ws);
   if (hit && Date.now() - hit.at < SUPPORTERS_MS) return hit.n;

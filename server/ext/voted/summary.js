@@ -32,6 +32,7 @@ const iso = (d) => (d ? new Date(d).toISOString() : null);
 // summary's biggest read).
 const SUPPORTERS_MS = 60_000;
 const supportersKept = new Map(); // ws -> { at, ids }
+export const forgetSupporterIds = (ws) => { supportersKept.delete(ws); };
 const supporterIds = async (db, ws) => {
   const hit = supportersKept.get(ws);
   if (hit && Date.now() - hit.at < SUPPORTERS_MS) return hit.ids;

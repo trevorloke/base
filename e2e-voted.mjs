@@ -352,6 +352,9 @@ await MP.full('10-election-day-phone');
 await pm.close();
 
 // ── 10. A voted file: People → Import with a Voted column ──
+// Today is a voting day with no closing hours entered: a voted file waits
+// for polls to close (GOTV decision 9) until a manager says they have.
+check('a manager says polls are closed (names held till then)', (await D.api('/actions/vote.settings', { release: true })).status === 200);
 await D.go('/people/import');
 await page.click('button:has-text("Paste text")');
 await page.fill('#imp-paste', `Name,Phone,Voted\nFile Example,604-555-0146,1\nNope Example,604-555-0147,0\nGrace Example,604-555-0145,1\nHarjit Example,604-555-0141,0`);

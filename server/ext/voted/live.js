@@ -28,10 +28,10 @@ import { getDb } from '../../db/client.js';
 import { forgetSettings, forgetPosts, forgetScopes, gotvFor, scopeOf, isDesk, rowOf, onNow } from './state.js';
 import { DEFAULT_TZ } from '../../lib/org.js';
 import { forgetHours } from './clock.js';
-import { forgetCounts } from './brief.js';
+import { forgetCounts, forgetSupporters } from './brief.js';
 import { updateTurf, updatePerson, rebuild, hasIndex, turfsOfPerson } from './turfindex.js';
 import { decide } from '../../lib/perms.js';
-import { forgetSummary } from './summary.js';
+import { forgetSummary, forgetSupporterIds } from './summary.js';
 
 const BATCH_MS = 1_000;
 const MAX_BATCH = 500;
@@ -141,6 +141,10 @@ onCommitted(async ({ workspaceId: ws, action, events }) => {
   const moved = events.some((e) => e.entityType === 'turf' || (e.entityType === 'person' && (e.op !== 'update' || PERSON_PLACE.some((k) => k in (e.payload || {})))));
   if (moved || action.startsWith('turf.') || action.startsWith('bank.') || events.some((e) => e.entityType === 'gotv_post')) forgetScopes(ws);
   if (voted) { forgetCounts(ws); forgetSummary(ws, false); }
+  // A rating changed (a knock, a call, an import, the desk): the supporters.
+  if (events.some((e) => e.entityType === 'person' && 'rating' in (e.payload || {})) || events.some((e) => e.entityType === 'contact' && e.payload?.rating)) {
+    forgetSupporters(ws); forgetSupporterIds(ws); forgetCounts(ws);
+  }
   if (hours) forgetHours(ws);
   if (settings) { forgetSettings(ws); forgetHours(ws); forgetSummary(ws, true); forgetScopes(ws); }
 
