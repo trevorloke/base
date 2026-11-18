@@ -49,7 +49,7 @@ before(async () => {
   ok(await mgr.action('site.settings.save', { org: { ...s.org, name: 'Harbour City Together', shortName: '', agentName: AGENT, agentContact: CONTACT } }));
   about = await page('about', 'About us', [
     { id: 'band01', kind: 'band', hidden: false, props: { title: 'When we organize,', highlight: 'we win', cta: { label: 'Join us', href: '/join' }, tone: 'accent' } },
-    { id: 'text01', kind: 'text', hidden: false, props: { title: 'Our story', body: 'First paragraph about the work.\n\n- One list item\n- Another list item with Q&A <3\n\nSecond line\nkeeps its break.', tone: 'paper' } },
+    { id: 'text01', kind: 'text', hidden: false, props: { title: 'How we started', body: 'First paragraph about the work.\n\n- One list item\n- Another list item with Q&A <3\n\nSecond line\nkeeps its break.', tone: 'paper' } },
     { id: 'news01', kind: 'newsletter', hidden: false, props: { title: 'Get the newsletter', intro: 'News and events.', askPhone: true, buttonLabel: 'Sign up', tone: 'surface' } },
   ]);
   const c = ok(await mgr.action('site.campaign.save', { kind: 'petition', title: 'Fix the crossing', statement: 'We ask the city to fix the crossing at Main Street.', excerpt: 'A safer walk to school.' }));
@@ -660,6 +660,39 @@ test('another website: the switch, and /pa/ on its own domain and under /site/si
   const app = await hit(`/site/sites/${m.key}/pa/`);
   assert.equal(app.status, 200);
   assert.match(app.text, new RegExp(`action="/site/sites/${m.key}/pa/api/forms/`));
+});
+
+test('Google fonts (WA): one file for every language, served under each prefix; /pa preloads the body and Gurmukhi', async () => {
+  const { startFakeGoogleFonts } = await import('./fake-google-fonts.js');
+  const fonts = await startFakeGoogleFonts();
+  const was = { css: process.env.GOOGLE_FONTS_CSS_BASE, hosts: process.env.GOOGLE_FONTS_FILE_HOSTS };
+  Object.assign(process.env, { GOOGLE_FONTS_CSS_BASE: fonts.url, GOOGLE_FONTS_FILE_HOSTS: fonts.host });
+  try {
+    const added = await mgr.action('site.font.add', { family: 'Fake Display' });
+    assert.equal(added.status, 200, JSON.stringify(added.json));
+    const { font } = added.json;
+    const sha = font.faces.find((f) => f.subset === 'latin').sha256;
+    const s = await settingsNow();
+    const saved = await mgr.action('site.settings.save', { theme: { ...s.theme, fonts: { heading: 'g:fake-display', body: 'inter' } } });
+    assert.equal(saved.status, 200, JSON.stringify(saved.json));
+    const pa = await hit('/site/pa/about');
+    assert.equal(pa.status, 200);
+    assert.ok(pa.text.includes(`url(/site/site-assets/fonts/g/${sha}.woff2)`), 'no language in the face’s address');
+    assert.ok(!pa.text.includes('/pa/site-assets/fonts/g/'));
+    const preloads = [...pa.text.matchAll(/<link rel="preload" href="([^"]+)" as="font"/g)].map((m) => m[1].split('?')[0]);
+    assert.deepEqual(preloads, ['/site-assets/fonts/inter-latin.woff2', '/site-assets/fonts/noto-gurmukhi-400.woff2']);
+    assert.ok(pa.text.includes("--font-heading:'Fake Display', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, 'Noto Sans Gurmukhi', var(--cjk, system-ui)"));
+    for (const prefix of ['/site/pa', '/site/zh', '/site']) {
+      const f = await hit(`${prefix}/site-assets/fonts/g/${sha}.woff2`);
+      assert.equal(f.status, 200, prefix);
+      assert.equal(f.headers.get('content-type'), 'font/woff2');
+      assert.match(f.headers.get('cache-control'), /immutable/);
+      assert.equal((await hit(`${prefix}/site-assets/fonts/g/${'e'.repeat(64)}.woff2`)).status, 404, `${prefix}: not this campaign’s`);
+    }
+  } finally {
+    await fonts.close();
+    for (const [k, v] of [['GOOGLE_FONTS_CSS_BASE', was.css], ['GOOGLE_FONTS_FILE_HOSTS', was.hosts]]) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+  }
 });
 
 test('donate on /zh: the declaration as approved, Stripe in Chinese with the item named in it; Back lands on /zh', async () => {

@@ -21,6 +21,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CORNERS, HEADINGS, SIDEBARS, deriveLook, lookTokens } from '@starbase/shared/brand-look';
 import { FONT_BY_VALUE } from '@starbase/shared/site/theme';
+import { fontFor, isAdded } from '@starbase/shared/site/fonts';
+import FontSheet, { useAddedFonts } from './site/FontSheet.jsx';
+import { stackOf, useFaces } from './site/fontFaces.js';
 import { action, initials } from '../api.js';
 import { at, NS } from '../base.js';
 import { BRAND } from '../brand.js';
@@ -48,7 +51,9 @@ const formOf = (saved) => (saved?.v === 1 ? {
   color: hexOf(saved.color) || BRAND.color, second: hexOf(saved.second) || '',
   sidebar: SIDEBARS.includes(saved.sidebar) ? saved.sidebar : 'light',
   corners: CORNERS[saved.corners] ? saved.corners : 'soft',
-  heading: HEADINGS.includes(saved.heading) ? saved.heading : 'inter',
+  heading: HEADINGS.includes(saved.heading) || (isAdded(saved.heading) && saved.headingFace?.family) ? saved.heading : 'inter',
+  // An added Google font as the heading (WA): its name and kind, for the sample.
+  headingFace: isAdded(saved.heading) && saved.headingFace?.family ? { family: saved.headingFace.family, kind: saved.headingFace.kind } : null,
   learn: saved.learn || BRAND.learn, shortName: saved.shortName || 'base.win', emailHeader: saved.emailHeader === true,
   logo: kept(saved.logo), logoDark: kept(saved.logoDark), mark: kept(saved.mark), icons: saved.icons || null,
 } : {
@@ -64,7 +69,29 @@ const draftOf = (key, start) => {
   return d?.f && d.from === JSON.stringify(start) && !same(d.f, start) ? { ...start, ...d.f } : null;
 };
 // What the shades are worked out from.
-const lookOf = (f) => ({ color: f.color, second: f.second || null, sidebar: f.sidebar, corners: f.corners, heading: f.heading, logo: f.logo, logoDark: f.logoDark });
+const lookOf = (f) => ({ color: f.color, second: f.second || null, sidebar: f.sidebar, corners: f.corners, heading: f.heading, headingFace: f.headingFace || null, logo: f.logo, logoDark: f.logoDark });
+
+// Settings → Brand's heading face: drawn in its own letters; Change font
+// opens the website's font sheet, headings only (WA decision 15).
+function HeadingPick({ f, set, name }) {
+  const [open, setOpen] = useState(false);
+  const added = useAddedFonts().data?.fonts || [];
+  useFaces([f.heading], added);
+  const label = FONT_BY_VALUE[f.heading]?.label || f.headingFace?.family || 'Inter';
+  return (
+    <div className="field bs-field">
+      <span className="bs-label" id="bs-heading-l">Headings</span>
+      <p className="bs-heading" style={{ fontFamily: stackOf(f.heading, added) }} aria-labelledby="bs-heading-l">{label}</p>
+      <button type="button" className="btn bs-heading-btn" onClick={() => setOpen(true)}>Change font</button>
+      <FontSheet open={open} onClose={() => setOpen(false)} headingsOnly value={{ heading: f.heading, body: 'inter' }} siteName={name}
+        onPick={(fonts, list) => {
+          const g = isAdded(fonts.heading) ? fontFor(fonts.heading, list || []) : null;
+          set({ heading: fonts.heading, headingFace: g ? { family: g.family, kind: g.kind } : null });
+          setOpen(false);
+        }} />
+    </div>
+  );
+}
 
 function ColourField({ id, label, value, fallback, onChange, hint, optional }) {
   const [typed, setTyped] = useState(null);
@@ -357,12 +384,7 @@ export default function BrandSettings({ me }) {
         <h2 className="ot-sec-h">Shape</h2>
         <PickOne id="bs-sidebar" label="Sidebar" value={f.sidebar} options={SIDEBARS} words={SIDEBAR_WORD} onChange={(v) => set({ sidebar: v })} />
         <PickOne id="bs-corners" label="Corners" value={f.corners} options={Object.keys(CORNERS)} words={CORNER_WORD} onChange={(v) => set({ corners: v })} />
-        <div className="field bs-field">
-          <label htmlFor="bs-heading">Headings</label>
-          <select id="bs-heading" className="input" value={f.heading} onChange={(e) => set({ heading: e.target.value })}>
-            {HEADINGS.map((h) => <option key={h} value={h}>{FONT_BY_VALUE[h].label}</option>)}
-          </select>
-        </div>
+        <HeadingPick f={f} set={set} name={name} />
 
         <button type="button" className="btn btn-quiet disclose disclose--inline bs-more" aria-expanded={more} aria-controls="bs-more" onClick={() => setMore((m) => !m)}>More</button>
         <div id="bs-more" hidden={!more}>

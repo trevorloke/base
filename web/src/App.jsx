@@ -86,6 +86,9 @@ const WebsiteLanguageLegal = lazy(() => import('./pages/WebsiteLanguageLegal.jsx
 const PathToWin = lazy(() => import('./pages/PathToWin.jsx'));
 // The voter guide (VG): "Where to vote" for every role, and its desk screen.
 const VoteInfo = lazy(() => import('./pages/VoteInfo.jsx'));
+// Live GOTV: Who voted, a scrutineer's or runner's screen (and the desk's Enter a sheet).
+const WhoVoted = lazy(() => import('./pages/WhoVoted.jsx'));
+import GotvOnly from './components/GotvOnly.jsx';
 const WebsiteGuide = lazy(() => import('./pages/WebsiteGuide.jsx'));
 // The managers' dashboard, its own screen (reached from Today and the search).
 const Activity = lazy(() => import('./pages/Dashboard.jsx'));
@@ -121,6 +124,8 @@ function RequireAuth({ mode }) {
   // The campaign requires two-step sign-in for this role and it isn't on
   // yet: its set-up stands before everything else (components/TwoStep.jsx).
   if (me.data?.two_step?.must_set_up || twoStepHeld) return <TwoStepRequired me={me.data} onHold={setTwoStepHeld} />;
+  // An election-day sign-in code works for Who voted only (ext/voted).
+  if (me.data?.scope === 'gotv') return <GotvOnly me={me.data} screen={WhoVoted} />;
   if (mode === 'admin' && me.data?.user && !mayAdmin(me.data)) return <NotForYou me={me.data} />;
   return <Shell me={me.data} mode={mode} />;
 }
@@ -224,6 +229,7 @@ export default function App({ mode = 'field' }) {
           <Route path="/banks" element={<Banks />} />
           <Route path="/banks/:id" element={<Banks />} />
           <Route path="/vote-info" element={<VoteInfo />} />
+          <Route path="/gotv" element={<WhoVoted />} />
           <Route path="*" element={<FieldFallback />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
@@ -309,6 +315,7 @@ export default function App({ mode = 'field' }) {
           <Route path="/rating-scale" element={<RatingScale />} />
           <Route path="/passes" element={<Passes />} />
           <Route path="/voted" element={<Voted />} />
+          <Route path="/gotv" element={<WhoVoted />} />
           <Route path="/requests" element={<Requests />} />
           <Route path="/field-report" element={<FieldReport />} />
           {/* Website (the 'site' area): the campaign's public site. */}

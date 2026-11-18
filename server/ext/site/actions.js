@@ -39,7 +39,8 @@
 //                        the site's events, where anyone may sign up for it
 import { z } from 'zod';
 import { createHash } from 'node:crypto';
-import { checkModules, MODULE_BY_KIND } from '@starbase/shared/site/catalogue';
+import { checkImage, checkModules, MODULE_BY_KIND } from '@starbase/shared/site/catalogue';
+import { POST_FIELDS, knownPictures, newUndescribed, olderUndescribed } from '@starbase/shared/site/pictures';
 import { checkTheme } from '@starbase/shared/site/theme';
 import { newId, canonical } from '../../lib/events.js';
 import { httpError } from '../../actions/util.js';
@@ -51,6 +52,7 @@ import { cacheClear } from './cache.js';
 import { micrositeActions, hostProblem, takeHeld, roomForPage } from './microsites.js';
 import { languageActions } from './language-actions.js';
 import { markRetranslate } from './translate.js';
+import { fontActions, themeProblem, fontsForCheck } from './fonts.js';
 
 const MANAGER = ['manager'];
 const DESK = ['manager', 'treasurer', 'staff'];
@@ -102,6 +104,14 @@ const checked = (modules, opts = {}) => {
     }
     throw moduleProblem(e, modules);
   }
+};
+
+// A post's picture or a picture in its words, new since it went on the
+// site and with no description: refused, naming the box.
+const postPictureProblem = (post, known) => {
+  const p = newUndescribed(POST_FIELDS, post, known);
+  if (!p) return;
+  throw httpError(400, p.md ? 'The post: a picture in it has no description' : 'The picture: describe it for people who can’t see it');
 };
 
 // A page holds at most one voter guide (VG decision 12).
@@ -208,6 +218,7 @@ export const actions = {
     const sets = [];
     const params = [ws];
     const changed = {};
+    let themeNotes = [];
     // The website's languages (TR): turning one on publishes election
     // advertising in it, and the budget is a campaign expense — a manager's.
     let langWas = null;
@@ -261,11 +272,9 @@ export const actions = {
       // since it was made has none. Never the save's own word for it.
       const kept = follow && Boolean(was) && (was.follow === true ? was.kept === true : true);
       const given = { ...input.theme, follow, kept };
-      const { theme, problems } = checkTheme(given, brandKey());
-      if (problems.length) {
-        const p = problems[0];
-        throw httpError(400, `${p.pair.label}: ${p.ratio.toFixed(1)}:1 is too hard to read — it needs 4.5:1. Pick a darker or lighter colour.`);
-      }
+      const { theme, problems, notes } = checkTheme(given, brandKey(), { ...await fontsForCheck(tx, ws, input.languages?.on), keepBody: was?.fonts?.body });
+      if (problems.length) throw httpError(400, themeProblem(problems[0]));
+      themeNotes = notes;
       params.push(JSON.stringify(theme));
       sets.push(`theme = $${params.length}`);
       changed.theme = theme;
@@ -315,7 +324,7 @@ export const actions = {
       if (added.length) await markRetranslate(tx, ws, added);
     }
     const row = (await tx.query('select updated_at from site_settings where workspace_id = $1', [ws])).rows[0];
-    return { saved: Object.keys(changed), updated_at: iso(row.updated_at) };
+    return { saved: Object.keys(changed), updated_at: iso(row.updated_at), ...(themeNotes.length ? { notes: themeNotes.map((n) => n.words) } : {}) };
   }),
 
   'site.page.create': siteAction(z.object({
@@ -404,7 +413,10 @@ export const actions = {
     const ws = ctx.workspaceId;
     const cur = await loadPage(tx, ws, input.id);
     const draft = parseJ(cur.draft, {});
-    const modules = checked(draft.modules || [], { strict: true });
+    // A picture added since the last publish needs its description; one
+    // already on the site without words is counted, not refused (WA 26).
+    const known = knownPictures(parseJ(cur.published, null));
+    const modules = checked(draft.modules || [], { strict: true, known });
     const problem = await refsProblem(tx, ws, modules, cur.site_id || null);
     if (problem) throw httpError(400, problem);
     const live = withImage({ title: cur.title, description: cur.description || '', modules, ...(draft.checkFirst === true ? { checkFirst: true } : {}) }, draft.image);
@@ -415,7 +427,8 @@ export const actions = {
     )).rows[0];
     // What went live, in full: the record of what the public saw.
     emit('site_page', cur.id, 'update', { published: true, version: row.version, slug: row.slug, content: live });
-    return { page: pageOut(row) };
+    const older = modules.filter((m) => !m.hidden).reduce((n, m) => n + olderUndescribed(MODULE_BY_KIND[m.kind].fields, m.props, known), 0);
+    return { page: pageOut(row), ...(older ? { undescribed: older } : {}) };
   }),
 
   'site.page.unpublish': siteAction(z.object({ id: uuid() }), async (tx, ctx, input, emit) => {
@@ -494,14 +507,20 @@ export const actions = {
     slug: z.string().max(80).nullish(),
     excerpt: text(400).nullish(),
     body: z.string().max(50000).nullish(),
-    image: z.object({ url: z.string().max(500).default(''), alt: text(300).default('') }).nullish(),
+    image: z.object({ url: z.string().max(500).default(''), alt: text(300).default('') }).passthrough().nullish(),
   }), async (tx, ctx, input, emit) => {
     const ws = ctx.workspaceId;
-    const image = input.image || { url: '', alt: '' };
-    if (image.url && !/^(\/(?!\/)|https:\/\/)/.test(image.url)) throw httpError(400, 'image: a picture from Website → Pictures (/media/…)');
+    if (input.image?.url && !/^(\/(?!\/)|https:\/\/)/.test(input.image.url)) throw httpError(400, 'image: a picture from Website → Pictures (/media/…)');
+    let image;
+    try { image = checkImage(input.image || { url: '', alt: '' }); } catch (e) { throw httpError(400, String(e.message)); }
     if (input.id) {
       const cur = (await tx.query('select * from site_posts where id = $1 and workspace_id = $2 and deleted_at is null for update', [input.id, ws])).rows[0];
       if (!cur) throw httpError(404, 'That post is gone — reload the list');
+      // A published post changes on the site as it's saved: a picture added
+      // to it needs its description now (WA 26).
+      if (cur.status === 'published') {
+        postPictureProblem({ image: input.image ? image : parseJ(cur.image, {}), body: input.body ?? cur.body }, knownPictures({ image: parseJ(cur.image, {}), body: cur.body }));
+      }
       const slug = input.slug && input.slug.trim().toLowerCase() !== cur.slug
         ? await freeSlug(tx, ws, 'site_posts', input.slug, null, cur.id, { pages: false }) : cur.slug;
       const row = (await tx.query(
@@ -526,6 +545,9 @@ export const actions = {
     const ws = ctx.workspaceId;
     const cur = (await tx.query('select * from site_posts where id = $1 and workspace_id = $2 and deleted_at is null for update', [input.id, ws])).rows[0];
     if (!cur) throw httpError(404, 'That post is gone — reload the list');
+    // Going on the site: every picture says what it shows (WA 26). A post
+    // isn't kept as published apart from its draft, so each is new here.
+    if (input.published && cur.status !== 'published') postPictureProblem({ image: parseJ(cur.image, {}), body: cur.body }, new Set());
     const row = (await tx.query(
       `update site_posts set status = $3, published_at = case when $3 = 'published' then coalesce(published_at, now()) else published_at end, updated_at = now()
        where id = $1 and workspace_id = $2 returning *`,
@@ -628,18 +650,40 @@ export const actions = {
     name: z.string().trim().max(200).optional(),
     width: z.number().int().min(1).max(20_000).optional(),
     height: z.number().int().min(1).max(20_000).optional(),
+    // Smaller copies the desk made (WA decision 26): 480, 960 and 1,600 px
+    // wide, never wider than the picture; JPEG or WebP.
+    sizes: z.array(z.object({
+      data: z.string().min(1).max(830_000),
+      width: z.number().int().min(1).max(20_000),
+      height: z.number().int().min(1).max(20_000),
+    })).max(3, 'At most 3 sizes of a picture').optional(),
   }), async (tx, ctx, input, emit) => {
     const up = readUpload(input.data);
     if (up.error) throw httpError(400, up.error);
-    const id = newId();
-    await tx.query(
-      `insert into media (id, workspace_id, content_type, bytes, width, height, name, data, created_by)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-      [id, ctx.workspaceId, up.type, up.buf.length, input.width ?? null, input.height ?? null, input.name || null, up.buf, ctx.user?.id || null],
-    );
-    const media = { id, content_type: up.type, bytes: up.buf.length, width: input.width ?? null, height: input.height ?? null, name: input.name || null };
-    emit('media', id, 'create', { ...media, for: 'site' });
-    return { media: { ...media, url: `/media/${id}` } };
+    const copies = (input.sizes || []).map((z) => {
+      const one = readUpload(z.data);
+      if (one.error) throw httpError(400, `A smaller copy: ${one.error}`);
+      if (!['image/jpeg', 'image/webp'].includes(one.type)) throw httpError(400, 'A smaller copy must be a JPG or WebP');
+      if (one.buf.length > SIZE_MAX) throw httpError(400, 'A smaller copy is too big — 600 KB at most');
+      return { ...one, width: z.width, height: z.height };
+    });
+    const store = async (one, name, width, height, of = null) => {
+      const id = newId();
+      await tx.query(
+        `insert into media (id, workspace_id, content_type, bytes, width, height, name, data, created_by, size_of)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        [id, ctx.workspaceId, one.type, one.buf.length, width ?? null, height ?? null, name || null, one.buf, ctx.user?.id || null, of],
+      );
+      return { id, content_type: one.type, bytes: one.buf.length, width: width ?? null, height: height ?? null, name: name || null };
+    };
+    const media = await store(up, input.name, input.width, input.height);
+    const sizes = [];
+    for (const c of copies) {
+      const m = await store(c, input.name ? `${input.name} (${c.width} px)` : null, c.width, c.height, media.id);
+      sizes.push({ id: m.id, url: `/media/${m.id}`, w: c.width, bytes: m.bytes, content_type: m.content_type });
+    }
+    emit('media', media.id, 'create', { ...media, for: 'site', ...(sizes.length ? { sizes: sizes.map(({ id, w, bytes, content_type }) => ({ id, w, bytes, content_type })) } : {}) });
+    return { media: { ...media, url: `/media/${media.id}`, ...(sizes.length ? { sizes: sizes.map(({ url, w }) => ({ url, w })) } : {}) } };
   }),
 
   'shift.public': {
@@ -663,5 +707,8 @@ export const actions = {
 
 Object.assign(actions, micrositeActions(siteAction));
 Object.assign(actions, languageActions(siteAction));
+Object.assign(actions, fontActions);
+
+const SIZE_MAX = 600 * 1024;
 
 const SIG = `(select count(distinct a.person_id)::int from site_actions a where a.workspace_id = c.workspace_id and a.campaign_id = c.id and a.kind in ('petition', 'pledge'))`;

@@ -216,7 +216,7 @@ export default function WebsiteSettings() {
             <TextField id="wb-s-ack" label="Land acknowledgement" max={600} multiline rows={4} value={s.footer.acknowledgement}
               hint="Shown at the foot of every page, in your own words." onChange={(v) => set('footer', 'acknowledgement', v)} />
             <ListField id="wb-s-flinks" f={F.footerLinks} path="links" value={s.footer.links} ctx={ctx} onChange={(v) => set('footer', 'links', v)} />
-            <ImageField id="wb-s-flogo" label="Footer logo" value={s.footer.logo} onChange={(v) => set('footer', 'logo', v)} />
+            <ImageField plain id="wb-s-flogo" label="Footer logo" value={s.footer.logo} onChange={(v) => set('footer', 'logo', v)} />
           </section>
 
           <section className="card" id="org" aria-labelledby="wb-s-org">
@@ -256,7 +256,7 @@ export default function WebsiteSettings() {
             <h2 id="wb-s-seo" className="wb-card-h">Search and sharing</h2>
             <TextField id="wb-s-seot" label="The site’s title (in search results and browser tabs)" max={80} value={s.seo.title} onChange={(v) => set('seo', 'title', v)} />
             <TextField id="wb-s-seod" label="Description (under the title in search results)" max={300} multiline value={s.seo.description} onChange={(v) => set('seo', 'description', v)} />
-            <ImageField id="wb-s-share" label="Share picture" value={s.seo.shareImage}
+            <ImageField plain id="wb-s-share" label="Share picture" value={s.seo.shareImage}
               hint="Shown when a link to the site is shared. A page’s own share picture (Pages → Page details) comes first."
               onChange={(v) => set('seo', 'shareImage', v)} />
           </section>

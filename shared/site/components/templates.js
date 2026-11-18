@@ -11,6 +11,7 @@ import { Announcement, Footer, Header, LanguageSwitch, PageHead, PreviewBanner, 
 import { VoteBanner, EmbedView } from './voteguide.js';
 import { arr, dateOnly, obj, str } from './util.js';
 import { pagePath } from './links.js';
+import { fontFilesFor } from '../fonts.js';
 
 export const visibleModules = (page) => arr(obj(page).modules).filter((m) => m && typeof m === 'object' && !m.hidden && MODULE_COMPONENTS[m.kind]);
 
@@ -24,7 +25,7 @@ function PageView({ rc, page }) {
   const title = str(p.slug) === 'home' ? name || str(p.title) : str(p.title) || name;
   return html`<${Fragment}>
     ${heroFirst ? null : html`<${PageHead} title=${title} lede=${p.description} />`}
-    ${modules.map((m, i) => html`<${Module} key=${`${m.id}-${i}`} m=${m} rc=${rc} level=${heroFirst && i === 0 ? 1 : 2} />`)}
+    ${modules.map((m, i) => html`<${Module} key=${`${m.id}-${i}`} m=${m} rc=${rc} level=${heroFirst && i === 0 ? 1 : 2} first=${i === 0} />`)}
   <//>`;
 }
 
@@ -34,7 +35,7 @@ function PostView({ rc, post }) {
     <${PageHead} title=${str(p.title)} eyebrow=${dateOnly(p.published_at, rc.timeZone, rc.locale)} lede=${p.excerpt} />
     <article className="section tone-paper post" aria-label=${str(p.title)}>
       <div className="container narrow stack stack--lg">
-        <${Img} rc=${rc} image=${p.image} className="news-image" width=${1200} height=${675} eager />
+        <${Img} rc=${rc} image=${p.image} className="news-image" width=${1200} height=${675} sizes="min(100vw, 760px)" eager />
         <${Md} rc=${rc} text=${p.body} className="prose" />
         <${Island} name="share" props=${{ uid: 'post-share', url: rc.abs(pagePath(rc.loc)), here: pagePath(rc.loc), text: str(p.title), subject: str(p.title), label: rc.w('share.this'), ...rc.islandWords('share') }} />
         <p><a className="text-link" href=${rc.link('/news')}>${rc.w('news.allBack')}</a></p>
@@ -109,12 +110,6 @@ export function SiteBody({ rc, kind, page, post, campaign }) {
   <//>`;
 }
 
-// The font files a theme's heading and body faces load first (preloaded).
-const FONT_FILES = {
-  inter: 'fonts/inter-latin.woff2',
-  montserrat: 'fonts/montserrat-latin.woff2',
-  'barlow-condensed': 'fonts/barlow-condensed-800-latin.woff2',
-};
 
 // What goes in <head>, as data (the server writes it out, escaped).
 export function headFor(rc, { kind, page, post, campaign }) {
@@ -149,11 +144,9 @@ export function headFor(rc, { kind, page, post, campaign }) {
     title = `${rc.w('page.notFound')} · ${siteTitle}`;
   }
   const imageUrl = rc.img(obj(image).url);
-  // A Punjabi page: the body's file and Gurmukhi, in place of the heading's
-  // (two preloads at most).
-  const fonts = rc.lang === 'pa'
-    ? [FONT_FILES[site.theme.fonts.body], 'fonts/noto-gurmukhi-400.woff2'].filter(Boolean)
-    : [...new Set([site.theme.fonts.heading, site.theme.fonts.body].map((f) => FONT_FILES[f]).filter(Boolean))];
+  // The body's file and the heading's (a Punjabi page: the body's and
+  // Gurmukhi, in place of the heading's): two preloads at most.
+  const fonts = fontFilesFor(site.theme, site.fonts, rc.lang);
   return {
     title: title || rc.w('page.website'),
     description: description.slice(0, 300),
@@ -168,7 +161,7 @@ export function headFor(rc, { kind, page, post, campaign }) {
     noindex: kind === 'notFound' || rc.preview || site.seo.noindex,
     themeColor: site.theme.colors.brand,
     published: kind === 'post' ? str(obj(post).published_at) : '',
-    fonts: fonts.map((f) => loc.assets + f),
+    fonts: fonts.map((f) => (f.startsWith('fonts/g/') ? loc.fontAssets : loc.assets) + f),
     organization: {
       '@context': 'https://schema.org',
       '@type': 'Organization',

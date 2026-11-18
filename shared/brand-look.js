@@ -13,12 +13,26 @@
 // (server/lib/brand.js). web/src/app.css holds the base preset's values for a
 // page nobody wrote into; server/test/brand-look.test.js keeps the two the
 // same and sweeps 5,000 colours through every check.
-import { contrast, mix, inkFor, FONT_BY_VALUE } from './site/theme.js';
+import { contrast, mix, inkFor, FONT_BY_VALUE, FONTS } from './site/theme.js';
+import { isAdded, stackFor } from './site/fonts.js';
 
 export const SIDEBARS = ['light', 'brand', 'dark'];
 // Small things (key hints, chips in a table), controls, cards.
 export const CORNERS = { square: [4, 6, 8], soft: [6, 8, 12], round: [8, 12, 18] };
-export const HEADINGS = ['inter', 'barlow-condensed', 'montserrat', 'system', 'serif'];
+// Every face base.win ships (shared/site/fonts.js); a campaign's added
+// Google font ('g:<slug>') too, carried with its face (headingFace: the
+// brand save writes it from the campaign's added fonts).
+export const HEADINGS = FONTS.map((f) => f.value);
+export const headingOf = (brand) => {
+  const h = brand?.heading;
+  if (HEADINGS.includes(h)) return h;
+  return isAdded(h) && typeof brand?.headingFace?.family === 'string' ? h : 'inter';
+};
+// The heading face's CSS stack.
+export const headingStack = (brand) => {
+  const h = headingOf(brand);
+  return FONT_BY_VALUE[h]?.stack || stackFor({ family: brand.headingFace.family, kind: brand.headingFace.kind });
+};
 export const DEFAULT_COLOR = '#4f46e5'; // base.win's indigo
 
 // The grounds: page, a card on it, soft panels, hairlines, text. Neutral in
@@ -83,7 +97,7 @@ export function deriveLook(brand, scheme = 'light') {
   const second = secondSet || accent; // none chosen: the brand stands in
   const sidebar = oneOf(brand?.sidebar, SIDEBARS, 'light');
   const corners = oneOf(brand?.corners, Object.keys(CORNERS), 'soft');
-  const heading = oneOf(brand?.heading, HEADINGS, 'inter');
+  const heading = headingOf(brand);
   const toward = dark ? '#ffffff' : '#000000';
   const grounds = [n.page, n.card, n.panel];
 
@@ -170,7 +184,7 @@ export function lookTokens(brand) {
       ...colours(light),
       '--brand-ink': light.accentWords, '--brand-ink-2': light.secondInk, '--brand-spark': light.second,
       '--r-sm': `${sm}px`, '--r-ctrl': `${ctrl}px`, '--r-card': `${card}px`, '--r-sheet': `${card + 4}px`,
-      '--font-display': FONT_BY_VALUE[light.heading].stack,
+      '--font-display': headingStack(brand),
     },
     dark: colours(dark),
   };

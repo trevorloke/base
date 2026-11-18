@@ -429,9 +429,61 @@ one tap away under **More**.
   or removed with ✕. **Take off** keeps everything filled in (still in *Export all
   data*); *Taken off → Bring back* restores it. The sample adds *Language at
   home*, *Strata council member* and *Union local*.
-- **GOTV** (Today → More → *GOTV & voting days*) — set *Election day* to
-  today (or add today as an advance-voting day) and **Save**: it reads *On*
-  by itself; or switch *On by hand*. Every volunteer's walk list, door card
+- **Live GOTV (server)** — `server/test/gotv-clock.test.js` (each voting
+  place's close from the voter guide, the override, a release, a mark's own
+  day and the work window, on the moved clock), `gotv-scrutineer.test.js`
+  (the hold on every route, live sending after the CEO's yes, the
+  manager's own actions, posts, the look-up and its limits, same-bytes
+  answers, undo, practice, turf scope, the sign-in code) and
+  `gotv-live.test.js` (the SSE feed read raw: scope, practice, merges,
+  `mode` and `guide` events, three streams a person, no pool connection
+  held; `STARBASE_GOTV_PING_MS` shortens the heartbeat). Its last test needs
+  a real Postgres: `GOTV_REAL_PG=1 DATABASE_URL=postgres://… node --test
+  server/test/gotv-live.test.js` (a held campaign lock makes a mark answer
+  503 *Busy — will try again* after `STARBASE_GOTV_LOCK_MS`, 5 s by
+  default). The load test, `DATABASE_URL=postgres://… PORT=5507 node
+  scripts/load-gotv.mjs` (`LOAD_PEOPLE`, `LOAD_MINUTES`), seeds 300,000
+  people and prints its numbers against the pass lines. Measured on a
+  4-core builder box with Postgres 16, the server and the load generator
+  on the same machine (PG_POOL_MAX 10, 300,000 people, 5 minutes, 600
+  streams, 14,582 marks): mark to stream p95 991 ms, max 1.7 s, no change
+  lost of 1.49 million expected deliveries; event-loop delay p99 18 ms;
+  the guide correction reached all 600 streams within 5 s. Not met there:
+  vote.mark p95 790 ms, /voted/changes 1.9 s, walk list 1.9 s, /brief
+  4.3 s, summary 392 ms, guide refetch 566 ms, server RSS growth 1 GB,
+  and the pool had a waiter for up to 40 s at a time. The campaign's one
+  write lock is the limit: about 68 writes a second (marks and knocks)
+  each wait 25 ms on average for it, holding a pool connection while they
+  wait, so reads queue behind them. A second run with PG_POOL_MAX 30 was
+  worse (more waiters on the same lock, and the box was shared with
+  another full test suite). Measure on the real Render plan before a
+  voting day; see GOTV.md's owner items 8 and 9.
+- **Live GOTV (screens)** — `server/test/gotv-screens.test.js` (the desk's
+  Settings and Ready list, closing times as the campaign's wall time, every
+  voting place listed, *Practice run done*, the stream only for someone
+  with a list, the code session's `scope`), and `e2e-gotv-live.mjs`
+  (`flock -o …/browser.lock node e2e-gotv-live.mjs`; its own server on
+  5500 with a file database, restarted with the clock moved): practice for
+  a ticked canvasser only, the scrutineer's one-primary Today, a sign-in
+  code (two GETs leave it usable; its session gets 403 on people), names
+  held until a release then matched, the CEO's yes and live sending, a
+  name saved offline and matched with its written time, a look-up delayed
+  10 s turned into a note at 4 s, Undo of a name written hours ago, To
+  check resolved with Find, turf B never seeing turf A, the stream cut and
+  polling catching up, Calls skipping a person marked elsewhere (the open
+  card says *Voted — skip*), two tabs (the one holding the stream goes
+  hidden and the other takes it over), 300 names at 180 ms a key (about 20
+  minutes; `GOTV_NAMES=40` for a quicker run) with no 429 and one look-up a
+  name, the guide's *Closed today* reaching an open phone, a runner's
+  look-up refused at a closed place running again at an open one, the held
+  line under a person's Voted, a 19:58 name matched after midnight and
+  back to match after Undo, an off-duty runner's 201 names all matchable
+  with no place picker until one is matched, staff read-only, and Off.
+  A browser's own zone data may predate B.C.'s permanent UTC-7, so closing
+  times on screen come from the server as wall times.
+- **GOTV** (Today → Go to → *Get out the vote*) — set *Election day* to
+  today (or add today as an advance-voting day) under *Settings* and **Save
+  days**: it reads *On by itself today*; or switch *On*. Every volunteer's walk list, door card
   and Calls card now has a 48px *Voted ✓*; mark one person yourself from a
   door card. Today opens with the GOTV card (*1 of N supporters have voted ·
   … to go*, *Call who hasn't voted*, *Map: who hasn't voted*); write a GOTV
@@ -681,19 +733,34 @@ comes back, or asks if words were typed meanwhile).
 
 - **Website (the admin)** — **Website** in the desk's menu (managers, or
   whoever a manager grants the Website area). **Overview**: live or not,
-  where it is (**View site**), this week's sign-ups. **Pages → New page**:
-  in its builder **+ Add a section** (Hero, Text block, Newsletter…), type
-  in each one's boxes (it says *Saved* by itself), drag a section by its
-  handle (or tap the handle, then *Move here*; or ⋯ → *Move up*), ⋯ →
-  *Hide from the page*, ⋯ → *Delete* then **Undo**. **Preview** opens the
-  draft in a new tab (and beside the editor on a wide screen). Add a
-  *Petition or pledge* without picking one and **Publish**: it says which
-  section and which box; pick one and publish — the page is at
-  `/site/<its address>`. **Theme**: make the brand colour light (white text
+  where it is (**View site**), this week's sign-ups. **Pages → New page →
+  An issue**, a name, **Make the page**: the builder opens on the page with
+  the preview beside it and the headline's sample words selected; type —
+  the preview changes before *Saved*. Tap a paragraph or a point in the
+  preview: its box opens with the cursor in it. **Publish** with a sample
+  box left: it's refused and that box opens. **+ Add a section** (a gallery
+  with a search box): Events shows in the preview at once; **Undo** /
+  **Redo** (or Ctrl+Z / Shift+Ctrl+Z) take it away and back. Make a petition
+  in another tab, add a *Petition or pledge* and pick it: "Updating
+  preview…", then it shows. Drag a section by its handle (or tap the handle,
+  then *Move here*; or ⋯ → *Move up*), ⋯ → *Hide from the page*, ⋯ →
+  *Delete* then **Undo**. **Preview** opens the draft in a new tab. On a
+  phone, **Preview** is full screen and a tap opens that section in a sheet.
+  From **Website**, *Edit the home page* → tap the headline → type →
+  **Publish** (4 taps). The page is at `/site/<its address>`. **Pictures**:
+  add a *Picture* section and upload a photo — three sizes are stored; tap
+  the picture to choose the spot to keep in view (the preview follows);
+  **Publish** is refused until it's described (or ticked *Decorative*). A
+  page whose older picture has no words still publishes, and the toast asks
+  for it. **News** → *New post*: the short summary fills itself from the
+  words, the post as it will look sits beside (on a phone, *See it*). **Theme**: make the brand colour light (white text
   on it gets too hard to read) — *Save the look* is blocked until **Fix it**.
   **Petitions and pledges**: signatures against the goal, *See who signed*.
   A volunteer opening `/admin/website` is told it isn't theirs. Tests:
-  `server/test/site-builder.test.js`, `server/test/site-website.test.js`;
+  `server/test/site-builder.test.js`, `server/test/site-website.test.js`,
+  `server/test/site-editor.test.js` (starters, sample words, the preview's
+  browser path drawing every kind exactly as the server does),
+  `server/test/site-pictures.test.js` (sizes, focus, descriptions, srcset);
   in a browser: `e2e-site-admin.mjs`.
 
 - **Languages** (Website → Languages): with no key it says to add one;
@@ -708,6 +775,17 @@ comes back, or asks if words were typed meanwhile).
   browser, `e2e-site-translate.mjs` (it runs its own server on PORT, the
   stand-in Google on PORT+1 and Stripe on PORT+2; it needs a CJK font —
   `apt-get install -y fonts-noto-cjk` — and stops saying so without one).
+
+- **Google fonts** (Website → Theme → **Change fonts**, a manager): pick the
+  Fraunces / Inter pairing and **Save the look** — the site's headings are
+  Fraunces; under **Any Google font** search a family, **Get … and use it**,
+  save — the site loads it from its own address. Body text lists only fonts
+  checked for reading. Tests: `server/test/site-fonts.test.js` (with
+  `server/test/fake-google-fonts.js`; the font file under `/pa` and `/zh` in
+  `site-lang.test.js`); in a browser, `e2e-site-fonts.mjs` (its own server on
+  PORT, 5490; the stand-in Google Fonts on PORT+1 and Translation on PORT+2;
+  every pairing's real first visit on a phone ≤ 150 KB; no request leaves the
+  machine).
 
 - **Other websites** (Website → Other websites, a manager): **New website**
   "Doug Didn’t Example" at a domain; its overview is a draft with the

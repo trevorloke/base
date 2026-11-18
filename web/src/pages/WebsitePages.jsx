@@ -1,5 +1,5 @@
 // Website → Pages (/website/pages): every page of the site, in the menu's
-// order. One yellow "New page" (a title, then straight into its builder,
+// order. One yellow "New page" (what it's for, a name, then straight into its builder,
 // WebsitePage.jsx). Each row: its title (opens it), its address, on the
 // site or a draft (and whether it has changes not on the site yet), "In the
 // menu", and ⋯ — Move up / Move down, View on the site, Duplicate, Delete
@@ -14,14 +14,17 @@ import { useQueryClient } from '@tanstack/react-query';
 import { action } from '../api.js';
 import { NoSignal, noSignal, useOnline } from '../components/NoSignal.jsx';
 import { useDragDrop } from '../components/useDragDrop.js';
-import { MoreMenu, Toast, WebsiteTabs, useToast } from '../components/site/Bits.jsx';
+import { Dialog, MoreMenu, Toast, WebsiteTabs, useToast } from '../components/site/Bits.jsx';
+import { STARTERS, starterModules } from '@starbase/shared/site/starters';
+import { StarterThumb } from '../components/site/thumbs.jsx';
 import { useMicrosite, useSite, useSiteRefresh } from '../components/site/useSite.js';
 import { SiteBack, SiteGone } from './WebsiteSite.jsx';
-import { moveModule, slugInput, slugify } from '../components/site/builder.js';
+import { moveModule, newModuleId, slugInput, slugify } from '../components/site/builder.js';
 import './shifts.css';
 import '../editor.css';
 import './website.css';
 import './website-sites.css';
+import '../components/site/starters.css';
 
 export const addressOf = (p) => (p.slug === 'home' ? '/' : `/${p.slug}`);
 export function PageStatus({ p }) {
@@ -30,56 +33,83 @@ export function PageStatus({ p }) {
   return <span className="chip chip-ok">On the site</span>;
 }
 
-function NewPageForm({ onClose, siteId, siteKey }) {
+// New page (WA decision 18): "What's this page for?" — a starter, a name
+// and the address it will get, then straight into its builder on the first
+// box still holding sample words.
+function NewPageSheet({ onClose, siteId, siteKey, siteAddress, social }) {
   const navigate = useNavigate();
   const refresh = useSiteRefresh();
+  const [kind, setKind] = useState(null);
   const [title, setTitle] = useState('');
   const [slug, setSlug] = useState('');
-  const [nav, setNav] = useState(false);
+  const [editSlug, setEditSlug] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const auto = slugify(title);
+  const shown = slug || auto;
   const submit = async (e) => {
     e.preventDefault();
-    if (!title.trim()) { setError('Give the page a title'); return; }
+    if (!kind) { setError('Pick what the page is for'); return; }
+    if (!title.trim()) { setError('Give the page a name'); document.getElementById('wb-new-title')?.focus(); return; }
     setBusy(true);
     setError(null);
     try {
-      const res = await action('site.page.create', { title: title.trim(), slug: slug.trim() || undefined, show_in_nav: nav, ...(siteId ? { site_id: siteId } : {}) });
+      const modules = starterModules(kind, { newId: newModuleId, social });
+      const res = await action('site.page.create', { title: title.trim(), slug: slug.trim() || undefined, modules, ...(siteId ? { site_id: siteId } : {}) });
       await refresh(siteKey, ['site']);
-      navigate(`/website/pages/${res.page.id}?new=1`);
+      navigate(`/website/pages/${res.page.id}${modules.length ? '?start=1' : ''}`);
     } catch (err) {
       setError(err.message);
       setBusy(false);
     }
   };
+  const move = (e) => {
+    const d = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+    if (!d) return;
+    e.preventDefault();
+    const i = Math.max(0, STARTERS.findIndex((s) => s.key === kind));
+    const next = STARTERS[(i + d + STARTERS.length) % STARTERS.length];
+    setKind(next.key);
+    document.getElementById(`wb-start-${next.key}`)?.focus();
+  };
   return (
-    <form className="card wb-new" onSubmit={submit} aria-label="New page">
-      <div className="field">
-        <label htmlFor="wb-new-title">Title</label>
-        <input id="wb-new-title" className="input" required autoFocus maxLength={120} autoComplete="off"
-          placeholder="Town hall" value={title} onChange={(e) => setTitle(e.target.value)} />
-      </div>
-      <div className="field">
-        <label htmlFor="wb-new-slug">Address</label>
-        <div className="wb-slug">
-          <span className="wb-slug__root" aria-hidden="true">/</span>
-          <input id="wb-new-slug" className="input" maxLength={60} autoComplete="off" spellCheck={false}
-            placeholder={auto || 'town-hall'} value={slug} aria-describedby="wb-new-slug-hint"
-            onChange={(e) => setSlug(slugInput(e.target.value))} />
+    <Dialog open title="What’s this page for?" onClose={onClose} wide>
+      <form className="wb-new" onSubmit={submit} aria-label="New page">
+        <div className="wb-starts" role="radiogroup" aria-label="What’s this page for?" onKeyDown={move}>
+          {STARTERS.map((s, i) => (
+            <button key={s.key} id={`wb-start-${s.key}`} type="button" role="radio" aria-checked={kind === s.key}
+              tabIndex={kind ? (kind === s.key ? 0 : -1) : (i === 0 ? 0 : -1)} className="wb-start" onClick={() => { setKind(s.key); setError(null); }}>
+              <StarterThumb sections={s.sections} />
+              <span className="wb-start__name">{s.label}</span>
+              {kind === s.key && <span className="wb-start__tick" aria-hidden="true">✓</span>}
+            </button>
+          ))}
         </div>
-        <p className="wb-field__hint" id="wb-new-slug-hint">Leave it empty to use {auto ? `/${auto}` : 'one made from the title'}.</p>
-      </div>
-      <div className="wb-toggle">
-        <input id="wb-new-nav" type="checkbox" className="wb-toggle__box" checked={nav} onChange={(e) => setNav(e.target.checked)} />
-        <label htmlFor="wb-new-nav">Show it in the site’s menu (once it’s published)</label>
-      </div>
-      {error && <p className="error" role="alert">{error}</p>}
-      <div className="ops-actions">
-        <button type="submit" className="btn btn-primary ops-tap" disabled={busy}>{busy ? 'Making it…' : 'Make the page'}</button>
-        <button type="button" className="btn btn-quiet ops-tap" onClick={onClose}>Cancel</button>
-      </div>
-    </form>
+        <div className="field">
+          <label htmlFor="wb-new-title">Page name</label>
+          <input id="wb-new-title" className="input" maxLength={120} autoComplete="off"
+            placeholder="Transit" value={title} onChange={(e) => setTitle(e.target.value)} />
+          <p className="wb-field__hint" id="wb-new-addr">
+            {siteAddress.replace(/\/$/, '')}/{shown || 'transit'}{' '}
+            {!editSlug && <button type="button" className="btn-link" onClick={() => setEditSlug(true)}>Change<span className="ws-sr"> the address</span></button>}
+          </p>
+        </div>
+        {editSlug && (
+          <div className="field">
+            <label htmlFor="wb-new-slug">Address</label>
+            <div className="wb-slug">
+              <span className="wb-slug__root" aria-hidden="true">/</span>
+              <input id="wb-new-slug" className="input" maxLength={60} autoComplete="off" spellCheck={false} autoFocus
+                placeholder={auto || 'transit'} value={slug} onChange={(e) => setSlug(slugInput(e.target.value))} />
+            </div>
+          </div>
+        )}
+        {error && <p className="error" role="alert">{error}</p>}
+        <div className="ops-actions">
+          <button type="submit" className="btn btn-primary ops-tap" disabled={busy}>{busy ? 'Making it…' : 'Make the page'}</button>
+        </div>
+      </form>
+    </Dialog>
   );
 }
 
@@ -177,7 +207,11 @@ export default function WebsitePages() {
         {!showNew && online && editable && <button type="button" className="btn btn-primary ops-tap" onClick={() => setParams({ new: '1' })}>New page</button>}
       </div>
       {siteId ? null : <WebsiteTabs />}
-      {showNew && editable && <NewPageForm onClose={() => setParams({})} siteId={siteId} siteKey={key} />}
+      {showNew && editable && (
+        <NewPageSheet onClose={() => setParams({})} siteId={siteId} siteKey={key}
+          siteAddress={(q.data?.urls?.domains?.[0] ? `${q.data.urls.domains[0]}/` : null) || q.data?.urls?.site || '/site/'}
+          social={q.data?.settings?.social || mainQ.data?.settings?.social} />
+      )}
 
       {noSignal(q) && <NoSignal />}
       {q.isPending && !noSignal(q) && <p className="muted">Loading…</p>}

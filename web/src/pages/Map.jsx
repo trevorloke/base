@@ -27,6 +27,7 @@
 // Pins go through the outbox too. Tiles come from GET /api/map/config
 // (OpenStreetMap unless STARBASE_TILE_* say otherwise); the service worker
 // keeps the ones already looked at, so a turf seen with signal still draws.
+import { usePracticeOverlay } from '../components/GotvLive.js';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useOutletContext, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
@@ -1530,8 +1531,10 @@ export default function MapPage() {
   const filters = [...(mineKeys?.size ? [MINE] : []), FILTERS[0], FILTERS[1], ...ratingFilters(scale), ...FILTERS.slice(2), ...(voting ? VOTED_FILTERS : []), ...opponents];
   const labelOf = (key) => FILTER_LABEL[key] || filters.find((f) => f.key === key)?.label || key;
   // Voted: the server's mark, or a tap still on this phone.
+  // In practice, a practice mark (in memory only, components/GotvLive.js) over the record.
   const votes = useMemo(() => pendingVoted(outbox.items), [outbox.items]);
-  const hasVoted = useCallback((p) => (votes[p.id] ? votes[p.id].voted : Boolean(p.voted_at)), [votes]);
+  const practiced = usePracticeOverlay();
+  const hasVoted = useCallback((p) => (votes[p.id] ? votes[p.id].voted : practiced.has(p.id) ? Boolean(practiced.get(p.id)) : Boolean(p.voted_at)), [votes, practiced]);
   // Volunteers start on their turf; everyone else on all doors.
   // GOTV mode on: the desk opens on who hasn't voted (a volunteer on their turf).
   const want = filterPick || (showParam && filters.some((f) => f.key === showParam) ? showParam : null);

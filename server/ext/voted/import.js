@@ -10,6 +10,8 @@
 //                the books; one already marked is left as they are; a 0
 //                never un-marks anyone. Says 'voted' for the decision.
 import { newId } from '../../lib/events.js';
+import { gotvFor } from './state.js';
+import { hoursOf, tzOf, today, votingDays, sendOpen } from './clock.js';
 
 const YES = new Set(['1', 'yes', 'y', 'true', 't', 'x', 'voted']);
 const NO = new Set(['0', 'no', 'n', 'false', 'f']);
@@ -31,9 +33,24 @@ export const readVoted = (v) => {
   return { error: WORDS };
 };
 
+// A file is another route for a voting place's names: on a voting day,
+// while names are held (send 'after_close') and before that day's latest
+// close, rows that set Voted are refused until a manager releases the day
+// (decision 9). hold: the words, or null.
+export const HELD_FILE = 'Voted lists from voting places go in after polls close.';
+const holdOf = async (db, ctx) => {
+  const g = await gotvFor(db, ctx);
+  const tz = tzOf(ctx);
+  const day = today(tz);
+  if (!votingDays(g.s).includes(day)) return null;
+  return sendOpen(await hoursOf(db, ctx.workspaceId), g.s, day, null, tz) ? null : HELD_FILE;
+};
+
 export const importRows = async (db, ctx, extras) => {
   const ws = ctx.workspaceId;
+  const hold = await holdOf(db, ctx);
   extras.push({
+    hold,
     check(raw) { return readVoted(raw?.voted); },
     async apply(tx, personId, value, { write }, emit) {
       if (value !== true) return [];
@@ -51,7 +68,8 @@ export const importRows = async (db, ctx, extras) => {
           `insert into voted_marks (id, workspace_id, person_id, voted, source, marked_by) values ($1, $2, $3, true, 'file', $4)`,
           [id, ws, personId, ctx.user?.id || null],
         );
-        emit('voted_mark', id, 'create', { id, person_id: personId, voted: true, source: 'file', client_id: null });
+        const feed_id = Number((await tx.query('select feed_id from voted_marks where id = $1', [id])).rows[0]?.feed_id || 0);
+        emit('voted_mark', id, 'create', { id, person_id: personId, voted: true, source: 'file', client_id: null, feed_id });
         emit('person', personId, 'update', { voted_at: new Date(row.voted_at).toISOString(), source: 'file' });
       }
       return ['voted'];

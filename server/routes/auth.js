@@ -28,6 +28,9 @@ import { candidateOut, linkOnJoin } from '../ext/candidates/invite.js';
 // person's own link.
 import { googleSetup, signinRules } from '../lib/google/config.js';
 import { loginOf } from '../lib/google/flow.js';
+// Election-day sign-in codes (ext/voted).
+import { usableCode, EXPIRED } from '../ext/voted/signin.js';
+import { codeSessionEnds } from '../ext/voted/clock.js';
 
 const app = new Hono();
 
@@ -96,6 +99,8 @@ const meOut = (ctx) => ({
   two_step: twoStepOut(ctx),
   // A volunteer with a candidate's seat (ext/candidates), else null.
   candidate: candidateOut(ctx.candidate),
+  // A sign-in limited to Who voted (an election-day code, ext/voted): 'gotv'.
+  scope: ctx.scope || null,
 });
 // …and their Google sign-in link (ext/google): whether Google sign-in is on
 // here for their campaign, linked, and to which Google address — their
@@ -409,6 +414,32 @@ app.post('/join', async (c) => {
   setCookie(c, SESSION_COOKIE, sessionToken, cookieOpts);
   const ctx = await loadContext(db, sessionToken);
   return c.json(await meFor(db, ctx));
+});
+
+// An election-day sign-in code (ext/voted decision 17): once, within its 15
+// minutes, for someone still in the campaign with an open post. The
+// session it makes works for Who voted only (lib/auth.js scopeAllows) and
+// ends with the post's last voting day's work, at most 30 days. The page
+// that asks (GET /go/:token) never uses the code.
+app.post('/go', async (c) => {
+  const db = await getDb();
+  if (triesFrom(clientIp(c))) return c.json({ error: TOO_MANY }, 429);
+  const { token } = await c.req.json().catch(() => ({}));
+  const row = await usableCode(db, token);
+  if (!row) return c.json({ error: EXPIRED }, 410);
+  // Used now, under the campaign's lock: two taps make one session.
+  const ctx = { workspaceId: row.workspace_id, workspace: { settings: typeof row.settings === 'string' ? JSON.parse(row.settings) : row.settings || {} } };
+  const ends = await codeSessionEnds(db, ctx, row.user_id);
+  const { result } = await runAction(db, { workspaceId: row.workspace_id, actorId: row.user_id, action: 'gotv.signin.use' }, async (tx, emit) => {
+    const used = (await tx.query('update gotv_signin set used_at = now() where id = $1 and used_at is null and expires_at > now() returning id', [row.id])).rows[0];
+    if (!used) return null;
+    emit('session', row.id, 'create', { via: row.id, user_id: row.user_id, scope: 'gotv' });
+    return createSession(tx, row.user_id, row.workspace_id, { scope: 'gotv', via: row.id, expiresAt: ends });
+  });
+  if (!result) return c.json({ error: EXPIRED }, 410);
+  setCookie(c, SESSION_COOKIE, result, cookieOpts);
+  const base = c.env?.base || '';
+  return c.json({ ok: true, to: base ? `${base}/field/gotv` : '/gotv' });
 });
 
 app.post('/logout', async (c) => {

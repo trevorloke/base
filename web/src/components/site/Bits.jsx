@@ -1,7 +1,8 @@
 // Small pieces every Website screen shares:
 //   <WebsiteTabs />        Overview · Pages · News · Petitions and pledges · Other websites · Languages · Voter guide · Theme · Settings
-//   useToast()             one message at a time, with an optional Undo
-//                          ({ toast, say(text, { undo }) } and <Toast toast={…} />)
+//   useToast()             one message at a time, with an optional Undo and
+//                          links ({ toast, say(text, { undo, links: [{ label,
+//                          href, external? } or { label, to }] }) } and <Toast toast={…} />)
 //   <MoreMenu label>       a "⋯" button that opens a short list of actions
 //                          (a disclosure: Tab moves through it, Escape or a
 //                          tap outside closes it, and so does picking one)
@@ -9,7 +10,7 @@
 //                          Escape closes it)
 //   <SaveState state />    "Saving…" · "Saved 2:14 pm" · "Not saved — …"
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { NavLink, useOutletContext } from 'react-router-dom';
+import { Link, NavLink, useOutletContext } from 'react-router-dom';
 import { clock } from './useSite.js';
 import './tabs.css';
 
@@ -39,11 +40,11 @@ export function useToast() {
   const [toast, setToast] = useState(null);
   const timer = useRef(null);
   const clear = useCallback(() => { clearTimeout(timer.current); setToast(null); }, []);
-  const say = useCallback((text, { undo = null, ms } = {}) => {
+  const say = useCallback((text, { undo = null, links = null, ms } = {}) => {
     clearTimeout(timer.current);
-    const t = { text, undo, n: Date.now() };
+    const t = { text, undo, links, n: Date.now() };
     setToast(t);
-    timer.current = setTimeout(() => setToast((cur) => (cur === t ? null : cur)), ms ?? (undo ? 10_000 : 4000));
+    timer.current = setTimeout(() => setToast((cur) => (cur === t ? null : cur)), ms ?? (undo || links ? 10_000 : 4000));
   }, []);
   useEffect(() => () => clearTimeout(timer.current), []);
   return { toast, say, clear };
@@ -57,6 +58,11 @@ export function Toast({ toast, onClear }) {
       {toast && (
         <div className="toast wb-toast" data-undo={toast.undo ? '' : undefined}>
           <span>{toast.text}</span>
+          {(toast.links || []).map((l) => (l.onClick ? <button key={l.label} type="button" className="btn" onClick={() => { onClear(); l.onClick(); }}>{l.label}</button> : l.to ? <Link key={l.to} className="btn" to={l.to}>{l.label}</Link> : (
+            <a key={l.href} className="btn" href={l.href} target={l.external ? '_blank' : undefined} rel={l.external ? 'noopener' : undefined}>
+              {l.label}{l.external && <span className="ws-sr"> (opens a new tab)</span>}
+            </a>
+          )))}
           {toast.undo && (
             <button type="button" className="btn" onClick={() => { const u = toast.undo; onClear(); u(); }}>Undo</button>
           )}

@@ -68,18 +68,20 @@ import { BASE, NS } from './base.js';
 // person.move: after a Moved tap, a new address or Address unknown (ext/moves;
 // the server dedupes it on client_id; a typed address is sent as typed — the
 // server places it, never this phone).
-export const FIELD_ACTIONS = ['contact.log', 'person.create', 'person.addAtDoor', 'person.locate', 'sign.place', 'sign.cancel', 'shift.join', 'shift.leave', 'shift.hours', 'relationship.add', 'person.tag', 'person.details', 'vote.mark', 'request.ask', 'mainstreet.meet', 'calltime.log', 'person.move',
+// vote.undo: a Who voted mark taken back (by the mark's client_id; the server
+// treats a replay as done). gotv.check: a name sent to the office's To check.
+export const FIELD_ACTIONS = ['contact.log', 'person.create', 'person.addAtDoor', 'person.locate', 'sign.place', 'sign.cancel', 'shift.join', 'shift.leave', 'shift.hours', 'relationship.add', 'person.tag', 'person.details', 'vote.mark', 'vote.undo', 'gotv.check', 'request.ask', 'mainstreet.meet', 'calltime.log', 'person.move',
   // Letters (ext/letters): the writer's own, keyed by the phone's client_id.
   'myletter.submit', 'myletter.revise', 'myletter.note', 'myletter.sent', 'myletter.published', 'myletter.not_published'];
 // Keyed by a client_id the server dedupes on.
-const CLIENT_KEYED = ['contact.log', 'sign.place', 'person.tag', 'vote.mark', 'request.ask', 'mainstreet.meet', 'calltime.log', 'person.move',
+const CLIENT_KEYED = ['contact.log', 'sign.place', 'person.tag', 'vote.mark', 'gotv.check', 'request.ask', 'mainstreet.meet', 'calltime.log', 'person.move',
   'myletter.submit', 'myletter.revise', 'myletter.note', 'myletter.sent', 'myletter.published', 'myletter.not_published'];
 // The writes that add a person, on an id made here.
 export const NEW_PERSON = ['person.create', 'person.addAtDoor'];
 const CALLTIME_WORD = { pledged: 'Pledged', no: 'Not now', no_answer: 'No answer', left_message: 'Left message' };
 // What can be taken back while it waits: a sign request (its cancel is
-// sign.cancel) and "Count me in" (shift.leave).
-const UNDOABLE = ['sign.place', 'shift.join'];
+// sign.cancel), "Count me in" (shift.leave) and a Voted mark (vote.undo).
+const UNDOABLE = ['sign.place', 'shift.join', 'vote.mark'];
 // The person an item is about (a knock, a pin, a sign request).
 const personOf = (it) => (it.name === 'person.locate' || it.name === 'person.tag' ? it.input?.id : it.input?.person_id) || null;
 // Kept on an item about someone this phone added, whose adding was refused.
@@ -288,6 +290,13 @@ const waitingHoursItem = (shiftId) => memory.find((x) => x.name === 'shift.hours
 //    the hours have nothing to change, so they are dropped, not kept as
 //    refused. Other refusals ("that shift is over", 400) are kept.
 const hoursMoot = (name, err) => name === 'shift.hours' && err instanceof ApiError && err.status === 409;
+// A practice mark or check that reaches the server after practice ended:
+// nothing was saved and nothing needs saying item by item (Who voted says
+// "Practice is over — nothing was saved." once). Dropped, not kept as refused.
+const PRACTICE_OVER = new Set();
+export const practiceWasOver = () => { const n = PRACTICE_OVER.size; PRACTICE_OVER.clear(); return n; };
+const practiceMoot = (item, err) => (item.name === 'vote.mark' || item.name === 'gotv.check') && item.input?.practice === true
+  && err instanceof ApiError && err.status === 409 && /practice is over/i.test(err.message || '');
 
 async function send(item, { replay }) {
   try {
@@ -387,7 +396,8 @@ async function runFlush() {
       const undone = find(next.cid)?.undo;
       const follow = undone && next.name === 'sign.place' && result?.sign?.id ? { name: 'sign.cancel', input: { id: result.sign.id } }
         : undone && next.name === 'shift.join' ? { name: 'shift.leave', input: { shift_id: next.input.shift_id } }
-          : null;
+          : undone && next.name === 'vote.mark' ? { name: 'vote.undo', input: { client_id: next.input.client_id } }
+            : null;
       if (follow) {
         told(next, result, true);
         done = { ...next, ...follow, undo: false, tries: 1 };
@@ -403,6 +413,7 @@ async function runFlush() {
       if (isSignedOut(err)) { lastError = 'Sign in again to send what’s saved'; signedOutNow = true; break; }
       if (next.name === 'shift.join') dropHoursFor(next.input.shift_id);
       if (hoursMoot(next.name, err)) { remove(next.cid); continue; }
+      if (practiceMoot(next, err)) { PRACTICE_OVER.add(next.cid); remove(next.cid); continue; }
       // Taken back, and the server said no to it anyway: nothing to keep.
       if (find(next.cid)?.undo && UNDOABLE.includes(find(next.cid).name)) { remove(next.cid); continue; }
       // Refused: kept, with the server's reason, until dismissed or retried.
@@ -574,7 +585,9 @@ export function itemText(item, nameOf = () => '') {
     case 'shift.hours': what = 'My hours'; break;
     case 'relationship.add': what = 'Someone you know'; break;
     case 'person.tag': what = tagChangeText(i); break;
-    case 'vote.mark': what = i.voted === false ? 'Not voted' : 'Voted'; break;
+    case 'vote.mark': what = item.undo ? 'Voted · undo' : i.voted === false ? 'Not voted' : 'Voted'; break;
+    case 'vote.undo': what = 'Voted · undo'; break;
+    case 'gotv.check': what = `To check · ${i.typed || ''}`; break;
     case 'request.ask': what = `Ask the office · ${KIND_WORDS[i.kind] || 'Something else'}`; break;
     case 'mainstreet.meet': what = `Met · ${i.place || 'mainstreeting'}`; break;
     // Call time (pages/CallTime.jsx): the answer, never the note.

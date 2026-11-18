@@ -18,6 +18,7 @@ import { useQuery } from '@tanstack/react-query';
 import { apiGet } from '../api.js';
 import { queueAction, useOutbox } from '../offline.js';
 import { queuedChip, queuedSaid } from './queued.js';
+import { usePracticeOverlay } from './GotvLive.js';
 import './voted.css';
 
 const firstName = (name) => String(name || '').trim().split(/\s+/)[0] || '';
@@ -35,33 +36,52 @@ export const votedWord = (iso) => {
   return when ? `Voted · ${when}` : 'Voted';
 };
 
+// on: GOTV is active for this person — On for everyone, or Practice and
+// they are in the practice group (status.active; an old server's `on`).
+// Asked again every minute while the tab is open, so a switch turned on
+// reaches every open phone within a minute (the live stream sooner).
+const visibleNow = () => typeof document === 'undefined' || document.visibilityState === 'visible';
 export function useVotedMode() {
-  const q = useQuery({ queryKey: ['voted', 'status'], queryFn: () => apiGet('/voted/status'), staleTime: 60_000, meta: { side: true } });
-  return { on: Boolean(q.data?.on), election_day: q.data?.election_day ?? null, ready: q.data !== undefined };
+  const q = useQuery({
+    queryKey: ['voted', 'status'], queryFn: () => apiGet('/voted/status'), staleTime: 60_000, meta: { side: true },
+    refetchInterval: () => (visibleNow() ? 60_000 : false),
+  });
+  const d = q.data;
+  const active = d ? (d.active ?? d.on) : false;
+  return {
+    on: Boolean(active), everyone: Boolean(d?.on), practice: Boolean(d?.practice && active), election_day: d?.election_day ?? null,
+    ready: d !== undefined, status: d, updatedAt: q.dataUpdatedAt,
+  };
 }
 
 // The marks still on this phone, by person: { voted, at } — the latest wins.
 export function pendingVoted(items = []) {
   const out = {};
   for (const it of items) {
-    if (it.state !== 'pending' || it.name !== 'vote.mark' || !it.input?.person_id) continue;
+    if (it.state !== 'pending' || it.name !== 'vote.mark' || it.undo || !it.input?.person_id) continue;
     out[it.input.person_id] = { voted: it.input.voted !== false, at: it.at };
   }
   return out;
 }
 
-// What a person's row says now: the server's fact, or the mark on its way.
-const stateOf = (person, pending) => {
+// What a person's row says now: the mark on its way, then a practice mark
+// (practice only, in memory: components/GotvLive.js), then the server's fact.
+const stateOf = (person, pending, practice) => {
   const p = pending[person.id];
   if (p) return { voted: p.voted, at: p.at, queued: true };
+  if (practice?.has(person.id)) { const v = practice.get(person.id); return { voted: Boolean(v), at: v || null, queued: false }; }
   return { voted: Boolean(person.voted_at), at: person.voted_at || null, queued: false };
 };
+// The voted state the lists use (Turfs, the map): the outbox and the practice overlay over the row.
+export const votedOf = (person, pending, practice) => stateOf(person, pending, practice);
 
 export function VotedChip({ persons = [], items }) {
   const outbox = useOutbox();
+  const practice = usePracticeOverlay();
   const pending = pendingVoted(items || outbox.items);
-  if (!persons.length) return null;
-  const states = persons.map((p) => stateOf(p, pending));
+  // Someone the server says is outside this person's turfs: nothing to say.
+  if (!persons.length || persons.some((p) => p.voted_hidden)) return null;
+  const states = persons.map((p) => stateOf(p, pending, practice));
   if (!states.every((s) => s.voted)) return null;
   const waiting = states.some((s) => s.queued);
   return (
@@ -76,12 +96,15 @@ export function VotedChip({ persons = [], items }) {
 export function VotedRow({ person, source = 'door', toast, onMarked }) {
   const mode = useVotedMode();
   const outbox = useOutbox();
+  const practice = usePracticeOverlay();
   const [busy, setBusy] = useState(false);
   // What this row just did, until the screen loads the server's answer.
   const [local, setLocal] = useState(null); // { id, voted, at }
   useEffect(() => { setLocal(null); }, [person?.id, person?.voted_at]);
-  if (!mode.on || !person) return null;
-  const fromOutbox = stateOf(person, pendingVoted(outbox.items));
+  // Outside their turfs and phone banks (voted_hidden): no Voted ✓, no
+  // "Not marked yet" — the server didn't say, so neither does the row.
+  if (!mode.on || !person || person.voted_hidden) return null;
+  const fromOutbox = stateOf(person, pendingVoted(outbox.items), practice);
   const mine = local && local.id === person.id ? local : null;
   const voted = mine ? mine.voted : fromOutbox.voted;
   const at = mine ? mine.at : fromOutbox.at;
@@ -91,7 +114,8 @@ export function VotedRow({ person, source = 'door', toast, onMarked }) {
     if (busy) return;
     setBusy(true);
     try {
-      const r = await queueAction('vote.mark', { person_id: person.id, voted: v, source }, { who: person.name });
+      // A practice tap is said so at the tap, from the status this phone held.
+      const r = await queueAction('vote.mark', { person_id: person.id, voted: v, source, ...(mode.practice ? { practice: true } : {}) }, { who: person.name });
       setLocal({ id: person.id, voted: v, at: new Date().toISOString() });
       const tone = r.queued ? 'queued' : 'ok';
       if (v) {

@@ -248,7 +248,9 @@ const kept = await D.kept();
 check('reload with no signal: the kept copy (Newton block 3 (75%)) and "No signal · from <time>"', dReady && KEPT.test(kept)
   && (await tableRows('fr-turfs')).find((r) => r[0] === 'Newton block')?.[2] === '3 (75%)' && !/No signal — this loads/.test(t), `${dReady} · ${kept} · ${t.slice(0, 160)}`);
 await D.shot('02-field-report-no-signal');
-await D.go(`/field-report?from=${daysBack(2)}&to=${today}`);
+// A range no button loads: every preset ends today (Monday..today would be
+// "This week", already kept, on a Wednesday).
+await D.go(`/field-report?from=${daysBack(3)}&to=${daysBack(1)}`);
 await sleep(600);
 t = await D.text();
 check('…a range never loaded, with no signal: the No signal line', /No signal — this loads when you’re back online\./.test(t), t.slice(0, 200));

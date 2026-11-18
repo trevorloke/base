@@ -182,7 +182,7 @@ test('links: the catalogue’s safe-url rule, stricter, and under the site root'
   assert.equal(imageFor(loc, 'http://insecure.example/a.jpg'), null, 'pictures only over https');
   assert.equal(imageFor(loc, 'mailto:a@example.org'), null);
   assert.equal(linkFor(locFrom({}), '/donate'), '/donate', 'on the campaign’s domain the root is /');
-  assert.deepEqual(locFrom({ root: '/site/', path: '/site/news/a' }), { root: '/site/', assets: '/site/site-assets/', media: '/media/', origin: '', path: '/news/a' });
+  assert.deepEqual(locFrom({ root: '/site/', path: '/site/news/a' }), { root: '/site/', assets: '/site/site-assets/', media: '/media/', origin: '', path: '/news/a', fontAssets: '/site/site-assets/' });
   // Uploaded pictures under the client's path when the server says so (an absolute og:image needs it).
   assert.equal(linkFor(locFrom({ root: '/imaginesurrey/site/', media: '/imaginesurrey/media' }), '/media/abc'), '/imaginesurrey/media/abc');
   assert.equal(linkFor(locFrom({ media: '//evil.example/' }), '/media/abc'), '/media/abc', 'never another site');
@@ -212,7 +212,8 @@ test('the head: title, description, canonical, Open Graph, theme, fonts, stylesh
   assert.match(html, /<html lang="en" data-skin="imagine-surrey" data-heading="montserrat" data-body="montserrat">/);
   assert.ok(!head.includes('noindex'));
   // The hero picture is preloaded (it is the first thing seen), in the head.
-  assert.match(head, /<link rel="preload" as="image" href="\/media\/hero-park"\/>/);
+  // The first section's picture is fetched first (WA 26): React preloads it at high priority.
+  assert.match(head, /<link rel="preload" as="image" href="\/media\/hero-park" fetchPriority="high"\/>/);
   // A page other than home: "Title · Site".
   const about = render({ modules: [newModule('text', 'about1')] });
   assert.match(about.html, /<title>About · Example Campaign<\/title>/);

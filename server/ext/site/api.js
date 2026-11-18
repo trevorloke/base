@@ -9,6 +9,7 @@ import { sign, PREVIEW_TTL } from './tokens.js';
 import { paymentsReady } from './payments.js';
 import { mountMicrositeReads } from './microsite-reads.js';
 import { mountLanguageReads } from './language-reads.js';
+import { mountFontReads } from './fonts.js';
 
 export const api = new Hono();
 
@@ -37,6 +38,8 @@ const opened = async (c) => {
 
 // The campaign's other websites (microsite-reads.js).
 mountMicrositeReads(api, opened);
+// Google fonts (fonts.js).
+mountFontReads(api, (c) => opened(c));
 // The website in other languages (language-reads.js).
 mountLanguageReads(api, opened);
 
@@ -146,9 +149,15 @@ api.get('/site/campaigns/:id', async (c) => {
 api.get('/site/pictures', async (c) => {
   const ws = await opened(c);
   const rows = (await c.get('db').query(
-    'select id, content_type, bytes, width, height, name, created_at from media where workspace_id = $1 and brand_kind is null order by created_at desc limit 200', [ws],
+    'select id, content_type, bytes, width, height, name, created_at from media where workspace_id = $1 and brand_kind is null and size_of is null order by created_at desc limit 200', [ws],
   )).rows;
-  return c.json({ pictures: rows.map((r) => ({ ...r, created_at: iso(r.created_at), url: `/media/${r.id}` })) });
+  // Each picture's smaller copies (WA decision 26), so a picture picked
+  // again keeps them.
+  const copies = rows.length ? (await c.get('db').query(
+    'select id, width, size_of from media where workspace_id = $1 and size_of = any($2::uuid[]) order by width', [ws, rows.map((r) => r.id)],
+  )).rows : [];
+  const sizesOf = (id) => copies.filter((x) => x.size_of === id && x.width).map((x) => ({ url: `/media/${x.id}`, w: x.width }));
+  return c.json({ pictures: rows.map((r) => ({ ...r, created_at: iso(r.created_at), url: `/media/${r.id}`, ...(sizesOf(r.id).length ? { sizes: sizesOf(r.id) } : {}) })) });
 });
 
 // A link that shows a page's draft for half an hour (the admin's preview

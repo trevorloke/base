@@ -677,6 +677,52 @@ than a week after they came off is refused. Contacts are door, phone, text or
   offers *Needs a ride to vote*, a request for the drivers. Shift roles
   include Driver, Scrutineer (a voting place), Runner, Poll greeter and Zone
   house captain.
+- **Live GOTV**: a manager posts
+  volunteers as **scrutineers** at the voter guide's voting places, or as
+  **runners** for any place, and can make an election-day **sign-in code**
+  (a link and QR, once, 15 minutes) whose sign-in works for *Who voted*
+  only. Scrutineers find one person by name, street or voter number
+  (`GET /api/gotv/find`: at most 8, nothing about who voted; 120 a minute,
+  5,000 a day) and mark them; their answer never says whether that person
+  had voted already, and they can undo their own mark for 15 minutes.
+  **Names from a voting place reach the office only after that place
+  closes** (its own hours from the voter guide, else a manager's closing
+  time for the day, else the guide's day; nothing assumed), by every route
+  (a scrutineer, a runner, the desk's sheet, a file), until a manager
+  presses *Polls are closed — send names now* or records the Chief Election
+  Officer's yes and switches to *As soon as entered*. Names kept on a
+  phone are judged by the day they were written (`GET /api/gotv/open`), so
+  a name written at 19:58 is still matched after midnight, within the
+  day's work window; one matched to the wrong person and taken back goes
+  back to be matched again. Door, phone and desk
+  marks are never held. Marks reach canvassers within seconds on a live
+  feed (`GET /api/voted/live`, server-sent events, plus
+  `/api/voted/changes?since=` to catch up), only for the people in their
+  own turfs and phone banks — while GOTV is on a volunteer's People, Calls,
+  map and History of who voted are kept to those (a manager may choose
+  *Anywhere in the city*). **Off · Practice · On**: practice runs with the
+  people posted plus those a manager ticks, writes nothing to the real
+  record, shows to nobody else, and is wiped when it ends. One server holds
+  every stream: no deploys on voting days.
+  **The screens**: *Get out the vote* (`/voted`, the desk) has the switch
+  **Off · Practice · On** (managers; it asks first), the held line while
+  scrutineers' names wait for the Chief Election Officer's answer, four
+  numbers (supporters voted, marked in the last hour, scrutineers on duty,
+  To check) and five tabs: **Turnout** (by turf, most not marked yet
+  first, live), **Voting places** (the voter guide's, with *Enter a sheet*
+  and a flag for a place silent 45 minutes), **Scrutineers** (posts,
+  *Signed in*, *Appointed*, the sign-in code's QR), **To check** (names a
+  scrutineer couldn't match: *Find* or *Not ours*) and **Settings** (voting
+  days, closing times from the guide or typed, when names are sent, who
+  sees who voted, a voted file, and the nine-line **Ready** list).
+  **Who voted** (`/gotv`) is the scrutineer's and runner's screen: a few
+  letters, one tap, the next name; before close, or with no signal, or
+  when a look-up takes 4 s, the typed name is kept on the phone and
+  matched later. While someone is on duty, *Enter who voted* is their
+  Today's one button. The walk list, map, Calls and Today follow the live
+  feed (one stream per browser, polling when it drops: *Live* or *Updated
+  3 min ago*); in a GOTV pass a door whose supporters all voted fades and
+  leaves with *1 door left your list — they voted*.
 - **Scheduling by tap** (Shifts → **Week**, the desk's): each day is a
   list of its shifts in start order — *Early* (before 9), *Morning*,
   *Afternoon*, *Evening* — any number to a part, and a card shows the kind,

@@ -11,7 +11,11 @@
 //   markdown  rich text         { max }        rendered sanitized
 //   url       a link            { }            relative (/donate, /#join) or http(s)
 //   link      { label, href }   { }            a button or link
-//   image     { url, alt }      { }            url: /media/:id or a site asset path
+//   image     { url, alt, width?, height?, sizes?, focus?, decorative? }
+//                               { }            url: /media/:id or a site asset path;
+//                                              sizes: up to 3 smaller copies
+//                                              [{ url: /media/:id, w }]; focus:
+//                                              { x, y } 0–100, the spot kept in view
 //   select    one of options    { options: [{ value, label }] }
 //   toggle    true / false      { }
 //   number    whole number      { min, max }
@@ -30,6 +34,9 @@
 // Defaults here are neutral (the generic template). A client's own words
 // come from its seed (server/ext/site/seeds/*.js), never from this file.
 
+import { samplePath } from './placeholders.js';
+import { describeWords, newUndescribed } from './pictures.js';
+
 export const TONES = [
   { value: 'paper', label: 'Plain' },
   { value: 'surface', label: 'Soft' },
@@ -38,20 +45,24 @@ export const TONES = [
   { value: 'ink', label: 'Dark' },
 ];
 
+// The columns' icons (shared/site/components/icons.js), by name.
+const ICONS = [['shield', 'Shield'], ['bus', 'Bus'], ['trend', 'Rising line'], ['tag', 'Price tag'], ['civic', 'City hall'], ['home', 'Home'], ['leaf', 'Leaf'], ['heart', 'Heart'], ['people', 'People'], ['school', 'School']]
+  .map(([value, label]) => ({ value, label }));
+
 const tone = { key: 'tone', type: 'select', label: 'Background', options: TONES };
 const heading = (max = 80) => ({ key: 'title', type: 'text', label: 'Heading', max });
 const intro = (max = 500) => ({ key: 'intro', type: 'textarea', label: 'Intro', max });
 const button = (key = 'cta', label = 'Button') => ({ key, type: 'link', label });
 
 export const CATEGORIES = [
-  { key: 'basics', label: 'Text and pictures' },
-  { key: 'actions', label: 'Actions (people land in base.win)' },
-  { key: 'live', label: 'Live from base.win' },
-  { key: 'org', label: 'About the organization' },
+  { key: 'basics', label: 'Words and pictures' },
+  { key: 'actions', label: 'Ask people to act' },
+  { key: 'live', label: 'Show what’s on' },
+  { key: 'org', label: 'About us' },
 ];
 
 export const MODULES = [
-  // ── Text and pictures ──
+  // ── Words and pictures ──
   {
     kind: 'hero',
     category: 'basics',
@@ -106,7 +117,7 @@ export const MODULES = [
     fields: [
       heading(), intro(),
       { key: 'items', type: 'list', label: 'Points', max: 8, of: [
-        { key: 'icon', type: 'select', label: 'Icon', options: ['shield', 'bus', 'trend', 'tag', 'civic', 'home', 'leaf', 'heart', 'people', 'school'].map((v) => ({ value: v, label: v })) },
+        { key: 'icon', type: 'select', label: 'Icon', options: ICONS },
         { key: 'title', type: 'text', label: 'Title', max: 60 },
         { key: 'body', type: 'textarea', label: 'Text', max: 400 },
       ] },
@@ -140,7 +151,7 @@ export const MODULES = [
     defaults: { quote: '', name: '', role: '', photo: { url: '', alt: '' }, tone: 'surface' },
   },
 
-  // ── Actions: every submission is a person and an action in base.win ──
+  // ── Ask people to act: every submission is a person and an action in base.win ──
   {
     kind: 'newsletter',
     category: 'actions',
@@ -177,7 +188,7 @@ export const MODULES = [
     kind: 'volunteer',
     category: 'actions',
     label: 'Volunteer sign-up',
-    description: 'Name, contact, what they would like to do and when they are free; they reach a named organizer in base.win within a day.',
+    description: 'Name, contact, what they would like to do and when they are free; a named organizer gets back to them within a day.',
     fields: [heading(), intro(300), { key: 'roles', type: 'words', label: 'What they can pick (the volunteer roles)', max: 20, itemMax: 60, translate: 'label' }, { key: 'askAvailability', type: 'toggle', label: 'Ask when they are free' }, tone],
     defaults: { title: 'Volunteer', intro: 'Tell us how you would like to help. An organizer will be in touch within a day.', roles: [], askAvailability: true, tone: 'paper' },
   },
@@ -185,7 +196,7 @@ export const MODULES = [
     kind: 'shifts',
     category: 'actions',
     label: 'Volunteer openings',
-    description: 'Upcoming public shifts and events from base.win, with one-tap sign-up.',
+    description: 'Upcoming public shifts and events, with one-tap sign-up.',
     fields: [heading(), intro(300), { key: 'limit', type: 'number', label: 'How many to show', min: 1, max: 24 }, { key: 'showMap', type: 'toggle', label: 'Show a map' }],
     defaults: { title: 'Volunteer openings', intro: '', limit: 6, showMap: true },
   },
@@ -193,12 +204,12 @@ export const MODULES = [
     kind: 'contact',
     category: 'actions',
     label: 'Contact form',
-    description: 'A message to the campaign; it lands in base.win as a follow-up.',
+    description: 'A message to the campaign; someone follows it up.',
     fields: [heading(), intro(300), { key: 'topics', type: 'words', label: 'Topics they can pick', max: 10, itemMax: 60, translate: 'label' }],
     defaults: { title: 'Get in touch', intro: '', topics: [] },
   },
 
-  // ── Live from base.win ──
+  // ── Show what's on (live from base.win) ──
   {
     kind: 'actNow',
     category: 'live',
@@ -246,7 +257,7 @@ export const MODULES = [
     defaults: { title: 'Promise tracker', intro: '', items: [] },
   },
 
-  // ── About the organization ──
+  // ── About us ──
   {
     kind: 'people',
     category: 'org',
@@ -322,7 +333,26 @@ function checkField(f, v, path, strict = false) {
       const o = v && typeof v === 'object' ? v : {};
       const url = checkField({ key: 'url', type: 'url' }, o.url, where);
       if (strict && f.required && !url) throw new Error(`${where}: a picture is required`);
-      return { url, alt: checkField({ key: 'alt', type: 'text', max: 300 }, o.alt, where) };
+      const out = { url, alt: checkField({ key: 'alt', type: 'text', max: 300 }, o.alt, where) };
+      if (!url) return out;
+      const px = (n) => (Number.isInteger(n) && n >= 1 && n <= 20000 ? n : null);
+      if (px(o.width) && px(o.height)) { out.width = o.width; out.height = o.height; }
+      if (o.sizes != null) {
+        if (!Array.isArray(o.sizes) || o.sizes.length > 3) throw new Error(`${where}: at most 3 sizes`);
+        const sizes = o.sizes.map((z) => {
+          const u = String(z?.url ?? '').trim();
+          if (!/^\/media\/[0-9a-f-]{36}$/i.test(u) || !px(z?.w)) throw new Error(`${where}: a size must be an uploaded picture`);
+          return { url: u, w: z.w };
+        });
+        if (sizes.length) out.sizes = sizes;
+      }
+      if (o.focus != null) {
+        const pct = (n) => Number.isInteger(n) && n >= 0 && n <= 100;
+        if (!pct(o.focus?.x) || !pct(o.focus?.y)) throw new Error(`${where}: the spot to keep in view is off the picture`);
+        if (o.focus.x !== 50 || o.focus.y !== 50) out.focus = { x: o.focus.x, y: o.focus.y };
+      }
+      if (o.decorative === true) out.decorative = true;
+      return out;
     }
     case 'select': {
       const allowed = (f.options || []).map((o) => o.value);
@@ -362,18 +392,31 @@ function checkField(f, v, path, strict = false) {
 }
 
 // strict: also every `required` field filled (publishing). A draft may be
-// incomplete; a published page may not.
-export function checkProps(kind, props, { strict = false } = {}) {
+// incomplete; a published page may not. samples (with strict, unless said
+// otherwise): no box may hold sample words — a seed, whose words are
+// placeholders by design, says false. known (with strict): the picture
+// addresses already on the site (pictures.js knownPictures) — any other
+// picture must be described or marked decorative.
+export function checkProps(kind, props, { strict = false, samples = strict, known = null } = {}) {
   const m = MODULE_BY_KIND[kind];
   if (!m) throw new Error(`unknown module kind: ${kind}`);
   const src = { ...JSON.parse(JSON.stringify(m.defaults)), ...(props && typeof props === 'object' ? props : {}) };
   const out = {};
   for (const f of m.fields) out[f.key] = checkField(f, src[f.key], '', strict);
+  // Publishing: no box may still hold a starter's (or this catalogue's)
+  // sample words (shared/site/placeholders.js).
+  const sample = strict && samples ? samplePath(kind, out) : null;
+  if (sample) throw new Error(`${sample}: still has the sample words`);
+  const pic = strict && known ? newUndescribed(m.fields, out, known) : null;
+  if (pic) throw new Error(`${pic.path}: ${describeWords(pic)}`);
   return out;
 }
 
+// One picture's value outside a module (a post's picture), checked the same way.
+export const checkImage = (v, where = 'image') => checkField({ key: where, type: 'image' }, v, '');
+
 // A whole page's module list: known kinds, unique ids, at most 60 modules.
-export function checkModules(list, { strict = false } = {}) {
+export function checkModules(list, { strict = false, samples = strict, known = null } = {}) {
   if (!Array.isArray(list)) throw new Error('modules: a list expected');
   if (list.length > 60) throw new Error('modules: at most 60 on a page');
   const ids = new Set();
@@ -384,6 +427,6 @@ export function checkModules(list, { strict = false } = {}) {
     if (ids.has(id)) throw new Error(`modules[${i}]: the same id twice`);
     ids.add(id);
     // Hidden modules aren't shown, so they needn't be complete to publish.
-    return { id, kind: m.kind, hidden: Boolean(m.hidden), props: checkProps(m.kind, m.props, { strict: strict && !m.hidden }) };
+    return { id, kind: m.kind, hidden: Boolean(m.hidden), props: checkProps(m.kind, m.props, { strict: strict && !m.hidden, samples: samples && !m.hidden, known }) };
   });
 }

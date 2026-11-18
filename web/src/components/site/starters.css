@@ -1,0 +1,17 @@
+/* New page: "What's this page for?" (WebsitePages.jsx NewPageSheet). */
+.wb-new { display: flex; flex-direction: column; gap: var(--s-3); }
+.wb-starts { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 132px), 1fr)); gap: var(--s-2); }
+.wb-start {
+  position: relative; display: flex; flex-direction: column; align-items: stretch; gap: 6px; padding: var(--s-2);
+  min-height: 48px; background: var(--paper-0); border: 1px solid var(--rule-2); border-radius: var(--r-card);
+  font: inherit; color: inherit; text-align: left; cursor: pointer;
+}
+@media (hover: hover) { .wb-start:hover { border-color: var(--mark); } }
+.wb-start:focus-visible { outline: 2px solid var(--mark); outline-offset: 2px; }
+.wb-start[aria-checked='true'] { border-color: var(--mark); box-shadow: 0 0 0 2px var(--mark); background: var(--mark-soft); }
+.wb-start__name { font-weight: 700; font-size: 15px; }
+.wb-start__tick {
+  position: absolute; top: 8px; right: 8px; width: 24px; height: 24px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center; background: var(--mark); color: var(--mark-ink); font-size: 14px; font-weight: 800;
+}
+@media (max-width: 560px) { .wb-starts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

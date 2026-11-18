@@ -61,8 +61,15 @@ const listedDays = async (tx, ws) => (await tx.query(
 )).rows;
 
 // ── Where a place is used: Shifts (and GOTV, which extends this) ──
+// In use: a shift, or GOTV (a post open or ended, a mark, a check, a
+// practice mark) names the place — it is never soft-deleted then.
 export const placeInUse = async (tx, ws, id) => Boolean((await tx.query(
-  'select 1 from shifts where workspace_id = $1 and place_id = $2 and deleted_at is null limit 1', [ws, id],
+  `select 1 from shifts where workspace_id = $1 and place_id = $2 and deleted_at is null
+   union all select 1 from gotv_posts where workspace_id = $1 and place_id = $2
+   union all select 1 from voted_marks where workspace_id = $1 and place_id = $2
+   union all select 1 from gotv_checks where workspace_id = $1 and place_id = $2
+   union all select 1 from gotv_practice where workspace_id = $1 and place_id = $2
+   limit 1`, [ws, id],
 )).rows[0]);
 
 // Out of the guide (decision 1): the places row goes too unless Shifts or

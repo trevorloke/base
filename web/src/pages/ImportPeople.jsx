@@ -12,12 +12,13 @@ import {
   readTable as readCsvTable, shapeTable, decodeBytes, isSpreadsheetBinary, breathe, DELIM_NAMES,
 } from '../components/csv.js';
 import { Link, Navigate, useOutletContext } from 'react-router-dom';
+import '../pages/gotv.css';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { matchRating, offeredCandidates, offeredCodes } from '@starbase/shared/scale';
 import { VOLUNTEER_ROLES } from '@starbase/shared/canvass';
 import { splitFirst } from '@starbase/shared/names';
 import { looksLikeContacts } from '@starbase/shared/contactsfile';
-import { apiPost } from '../api.js';
+import { apiPost, apiGet, action } from '../api.js';
 import GeocodeButton from '../components/GeocodeButton.jsx';
 import DriveImport from '../components/DriveImport.jsx';
 import { RatingChip, useScale } from '../components/RatingButtons.jsx';
@@ -639,6 +640,9 @@ function ImportFlow() {
 
   // Step 2 — mapping, then the check (a dry run). Any mapping/tag change throws the check away.
   const [mapping, setMapping] = useState([]);
+  // GOTV's hold on a voting day (GET /gotv/setup): a Voted column waits for polls to close.
+  const votedSetup = useQuery({ queryKey: ['gotv', 'setup'], queryFn: () => apiGet('/gotv/setup'), staleTime: 30_000, retry: false });
+  const votedHeld = Boolean(votedSetup.data?.voting_day && votedSetup.data?.held_today && votedSetup.data?.send === 'after_close');
   const [ratingMap, setRatingMap] = useState({}); // the rating column's values → codes ('' unrated), by choice
   const [roleMap, setRoleMap] = useState({}); // volunteer-role tags (lower-cased words) → role codes ('' a tag only), by choice
   const [historyMap, setHistoryMap] = useState({}); // Interaction Status values → 'door:no_answer'… ('' a field only), by choice
@@ -1201,6 +1205,17 @@ function ImportFlow() {
               />
               First row is column names
             </label>
+            {/* A voting day, names held until polls close (GOTV): a Voted list waits too. */}
+            {mapping.includes('voted') && votedHeld && (
+              <p className="gv-under gv-flag" role="status">
+                Voted lists from voting places go in after polls close.{' '}
+                {me?.role === 'manager' && (
+                  <button type="button" className="btn" onClick={async () => { try { await action('vote.settings', { release: true }); } catch { /* the import says why */ } votedSetup.refetch(); }}>
+                    Polls are closed — send names now
+                  </button>
+                )}
+              </p>
+            )}
             <ul className="imp-map">
               {source.headers.map((h, i) => {
                 const id = `imp-col-${i}`;

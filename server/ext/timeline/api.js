@@ -5,6 +5,7 @@ import { Hono } from 'hono';
 import { decide } from '../../lib/perms.js';
 import { DEFAULT_TZ } from '../../lib/org.js';
 import { SOURCES, GROUPS } from './sources.js';
+import { gotvFor, scopeOf } from '../voted/state.js';
 
 export const api = new Hono();
 
@@ -54,6 +55,11 @@ api.get('/persons/:id/timeline', async (c) => {
   if (!person) return c.json({ error: 'not found' }, 404);
 
   const viewer = viewerOf(ctx);
+  // Who voted, while GOTV keeps a volunteer to their own turfs and phone
+  // banks (ext/voted): nothing for a person outside them.
+  const g = await gotvFor(db, ctx);
+  viewer.practice = g.overlay;
+  viewer.votedHidden = g.limited && !(await scopeOf(db, ctx)).ids.has(person.id);
   const mine = SOURCES.filter((s) => s.can(viewer));
   const groups = GROUPS.filter((g) => mine.some((s) => s.group === g));
   const group = c.req.query('group') || 'all';
