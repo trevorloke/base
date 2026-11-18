@@ -37,9 +37,17 @@ export const ownOrigin = () => `${cfg().insecureCookies ? 'http' : 'https'}://${
 
 // Every POST is a form from this console: its Origin is the console's own,
 // and its body is a form (never JSON from elsewhere).
+// A form with rel="noreferrer" (Open desk and Invite, so nothing of this
+// page reaches the campaign) is posted with "Origin: null"; the browser's
+// own Sec-Fetch-Site, which no page can set, still says it came from here.
+export const fromHere = (c) => {
+  const origin = c.req.header('origin');
+  if (origin === ownOrigin()) return true;
+  return origin === 'null' && c.req.header('sec-fetch-site') === 'same-origin';
+};
 export const sameOrigin = async (c, next) => {
   if (c.req.method !== 'POST') return next();
-  if (c.req.header('origin') !== ownOrigin()) return c.text('Refused: this form must come from the control centre.', 403);
+  if (!fromHere(c)) return c.text('Refused: this form must come from the control centre.', 403);
   const type = c.req.header('content-type') || '';
   if (!/^application\/x-www-form-urlencoded\b/i.test(type)) return c.text('Refused: send a form.', 415);
   return next();

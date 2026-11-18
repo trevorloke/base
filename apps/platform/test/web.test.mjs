@@ -56,6 +56,12 @@ test('a POST without the console’s own Origin is refused, in both cookie modes
     assert.notEqual(ok.status, 403, `${insecure}: the right origin passes`);
     const json = await b.post('/signin', { email: 'x' }, { headers: { origin: right, 'content-type': 'application/json' } });
     assert.equal(json.status, 415);
+    // Open desk's form is rel="noreferrer": "Origin: null", but the browser's own Sec-Fetch-Site says it came from here.
+    assert.notEqual((await b.post('/signin', { email: 'x' }, { headers: { origin: 'null', 'sec-fetch-site': 'same-origin' } })).status, 403);
+    for (const site of ['cross-site', 'same-site', 'none', null]) {
+      assert.equal((await b.post('/signin', { email: 'x' }, { headers: { origin: 'null', 'sec-fetch-site': site } })).status, 403, `null with ${site}`);
+    }
+    assert.equal((await b.post('/signin', { email: 'x' }, { headers: { origin: 'https://evil.example', 'sec-fetch-site': 'same-origin' } })).status, 403);
   }
   baseEnv();
 });
