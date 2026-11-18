@@ -61,9 +61,10 @@ Every Render change ends with **Save and deploy**, then wait for “Live”.
   password, app and codes; every console session ends.
 - **Stop base.win sign-in on one campaign at once:** empty its
   `BASE_PLATFORM_PUBKEY`, Save and deploy. Entry stops and open visits end.
-- **Changing the signing key:** set `PLATFORM_SIGNING_KEY` to `<old>,<new>`
-  (press Generate for a new value, then put the old one before it with a
-  comma); the old one still signs, so nothing stops. Paste the two keys
+- **Changing the signing key:** first copy the current `PLATFORM_SIGNING_KEY`
+  value somewhere safe. Then press Generate for a new value and set the field
+  to `<old>,<new>` (the copied value, a comma, the new one); the old one
+  still signs, so nothing stops. Paste the two keys
   **base.win’s key** shows into each campaign. When that page no longer
   lists anyone without the new key, set `PLATFORM_SIGNING_KEY` to `<new>`
   alone; later remove the old key from each campaign.

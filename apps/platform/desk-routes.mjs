@@ -8,7 +8,7 @@ import { form } from './web.mjs';
 import { appendLog } from './log.mjs';
 import { sha256 } from './ops-auth.mjs';
 import { mintFor } from './mint.mjs';
-import { platformKeys, newKid } from './keys.mjs';
+import { platformKeys, newKid, shortValues } from './keys.mjs';
 import { campaignView, getCampaign, envOf, latestChecks } from './campaigns.mjs';
 import { setItem, MANUAL } from './checklist.mjs';
 import { typeCodePage, keyPage } from './pages/desk.mjs';
@@ -94,6 +94,6 @@ export const deskRoutes = (app, ctx, { showCampaign }) => {
         where c.archived_at is null and e.server_url is not null order by c.display`)).rows;
       missing = envs.filter((e) => !(checks.get(`${e.campaign}/${e.env}/server`)?.platform_kids || []).includes(kid)).map((e) => e.display);
     }
-    return c.html(String(keyPage({ keys, missing })));
+    return c.html(String(keyPage({ keys, missing, short: shortValues() })));
   });
 };

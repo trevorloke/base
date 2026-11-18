@@ -28,6 +28,11 @@ export const signingValues = (value = cfg().signingKey) => {
   const values = String(value || '').split(',').map((v) => v.trim());
   return values[0].length >= SIGNING_KEY_MIN ? values.filter((v) => v.length >= SIGNING_KEY_MIN) : [];
 };
+// How many values after the first are set but too short to use (they are left out).
+export const shortValues = (value = cfg().signingKey) => {
+  const values = String(value || '').split(',').map((v) => v.trim());
+  return values[0].length >= SIGNING_KEY_MIN ? values.slice(1).filter((v) => v && v.length < SIGNING_KEY_MIN).length : 0;
+};
 export const platformKeys = () => signingValues().map((v) => ({ ...publicKeyOf(v), value: v }));
 // The kid that signs now, or null when there is no usable key.
 export const currentKid = () => platformKeys()[0]?.kid || null;

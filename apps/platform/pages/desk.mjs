@@ -38,9 +38,10 @@ export const checklist = (name, done, { stale = '' } = {}) => html`<ol class="oc
 })}</ol>`;
 
 // base.win’s key: what each campaign's BASE_PLATFORM_PUBKEY holds.
-export const keyPage = ({ keys, missing }) => page({
+export const keyPage = ({ keys, missing, short = 0 }) => page({
   title: 'base.win’s key', nav: true, here: 'key',
   body: html`<section class="card oc-narrow oc-keypage"><h1>base.win’s key</h1>
+  ${keys.length && short ? status(`PLATFORM_SIGNING_KEY in Render has ${short === 1 ? 'a value' : `${short} values`} after the first that ${short === 1 ? 'is' : 'are'} too short, so ${short === 1 ? 'it is' : 'they are'} left out. Press Generate for a new key, keeping the old one first.`, 'warn') : ''}
   ${keys.length ? html`<p>Paste this as BASE_PLATFORM_PUBKEY on each campaign’s service in Render, then Save and deploy.</p>
     <div class="oc-copy">
       <p class="oc-help">The setting</p>
