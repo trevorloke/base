@@ -212,7 +212,8 @@ test('the head: title, description, canonical, Open Graph, theme, fonts, stylesh
   assert.match(html, /<html lang="en" data-skin="imagine-surrey" data-heading="montserrat" data-body="montserrat">/);
   assert.ok(!head.includes('noindex'));
   // The hero picture is preloaded (it is the first thing seen), in the head.
-  assert.match(head, /<link rel="preload" as="image" href="\/media\/hero-park"\/>/);
+  // The first section's picture is fetched first (WA 26): React preloads it at high priority.
+  assert.match(head, /<link rel="preload" as="image" href="\/media\/hero-park" fetchPriority="high"\/>/);
   // A page other than home: "Title · Site".
   const about = render({ modules: [newModule('text', 'about1')] });
   assert.match(about.html, /<title>About · Example Campaign<\/title>/);
