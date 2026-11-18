@@ -1,623 +1,263 @@
-// Website → a page's builder (/website/pages/:id).
-//   The page's sections in order. Drag one by its handle to move it — or tap
-//   the handle, then "Move here"; ⋯ also has Move up / Move down (keyboard).
-//   "Add a section" opens the catalogue, grouped (Text and pictures,
-//   Actions, Live from base.win, About the organization) with what each one
-//   does. Tap a section to open its form (made from its fields: Fields.jsx);
-//   ⋯ hides or shows it, duplicates it, adds one below, or deletes it (Undo).
-//   Page details: title, address, description and share picture, "In the
-//   menu".
-//   Every change saves the draft by itself (a moment after the last one):
-//   "Saving…" · "Saved 2:14 pm". A draft may be unfinished; what's on the
-//   site doesn't change until Publish. Publish checks every section first
-//   (the catalogue's strict check, and the petitions and pages they point
-//   at) and says exactly which section and which box needs a look — and
-//   opens it there.
-//   Preview: the draft in a new tab (a link that lasts half an hour), and on
-//   a wide screen beside the editor, as a phone or a computer shows it,
-//   fresh after every save.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
+// Website → a page's builder (/website/pages/:id), WA decision 19: the page
+// itself. The top bar (title in place, status, Saved, Undo / Redo, Phone /
+// Computer, Preview, ⋯, Publish); a column with the sections in order (or
+// the open section's form); the live preview beside it, updated as you
+// type, where a tap on a headline, words or a picture opens that box. On a
+// phone: the list, with Preview opening the page full screen (a tap opens
+// that section's form in a sheet). The parts are in
+// components/site/builder/; this file wires them.
+//   Every change saves the draft by itself; what's on the site doesn't
+//   change until Publish, which checks every section first (sample words
+//   included) and opens the first box that needs a look.
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { MODULE_BY_KIND } from '@starbase/shared/site/catalogue';
-import { action, apiPost } from '../api.js';
+import { samplePath } from '@starbase/shared/site/starters';
+import { action } from '../api.js';
 import { NoSignal, noSignal, useOnline } from '../components/NoSignal.jsx';
 import { useDragDrop } from '../components/useDragDrop.js';
-import { Dialog, MoreMenu, SaveState, Toast, useToast } from '../components/site/Bits.jsx';
-import { ImageField, ModuleForm, TextField, ToggleField } from '../components/site/Fields.jsx';
+import { Dialog, Toast, useToast } from '../components/site/Bits.jsx';
 import { useMicrosite, useSite, useSiteCampaigns, useSitePage, useSiteRefresh } from '../components/site/useSite.js';
-import {
-  addModule, duplicateModule, groups, moveModule, problemWords, problemsOf, putBack, removeModule,
-  sectionFromServer, setHidden, setProps, slugInput, summaryOf,
-} from '../components/site/builder.js';
-import { PageStatus, addressOf } from './WebsitePages.jsx';
+import { addModule, duplicateModule, moveModule, problemWords, problemsOf, putBack, removeModule, sectionFromServer, setHidden, setProps, slugify } from '../components/site/builder.js';
+import { useDraft } from '../components/site/builder/useDraft.js';
+import { usePreviewLink, useWidth } from '../components/site/builder/usePreview.js';
+import { TopBar } from '../components/site/builder/TopBar.jsx';
+import { SectionList } from '../components/site/builder/SectionList.jsx';
+import { SectionForm } from '../components/site/builder/SectionForm.jsx';
+import { PreviewFrame } from '../components/site/builder/PreviewFrame.jsx';
+import { Gallery } from '../components/site/builder/Gallery.jsx';
+import { PageSettings } from '../components/site/builder/PageSettings.jsx';
+import { themeColors } from '@starbase/shared/site/theme';
+import { addressOf } from './WebsitePages.jsx';
 import './shifts.css';
 import '../editor.css';
 import './website.css';
+import '../components/site/builder/builder.css';
 
-const SAVE_AFTER_MS = 800;
-const TOKEN_FOR_MS = 20 * 60_000; // a preview link lasts 30 minutes; a new one after 20
-const wideNow = () => typeof window !== 'undefined' && window.matchMedia?.('(min-width: 1280px)').matches;
-const SYSTEM = { home: 'The home page is always at /.', news: 'The news page is always at /news.' };
-
-// ── Add a section: the catalogue ──
-function Catalogue({ open, onClose, onPick, paymentsReady }) {
-  return (
-    <Dialog open={open} title="Add a section" onClose={onClose} wide>
-      {groups().map((g) => (
-        <section key={g.key} className="wb-cat" aria-labelledby={`wb-cat-${g.key}`}>
-          <h3 id={`wb-cat-${g.key}`} className="wb-cat__h">{g.label}</h3>
-          <ul className="wb-cat__list">
-            {g.modules.map((m) => (
-              <li key={m.kind}>
-                <button type="button" className="wb-cat__item" onClick={() => onPick(m.kind)}>
-                  <span className="wb-cat__name">{m.label}</span>
-                  <span className="wb-cat__what">{m.description}</span>
-                  {['donate', 'join'].includes(m.kind) && !paymentsReady && (
-                    <span className="wb-cat__note">Online giving isn’t set up yet — until it is, the form says so.</span>
-                  )}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ))}
-    </Dialog>
-  );
-}
-
-// One builder per page: another page's address starts afresh (its own
-// draft, saving, preview link).
 export default function WebsitePage() {
   const { id } = useParams();
   return <Builder key={id} id={id} />;
 }
 
+const labelOf = (m) => MODULE_BY_KIND[m?.kind]?.label || 'the section';
+
 function Builder({ id }) {
   const [params] = useSearchParams();
   const navigate = useNavigate();
-  const qc = useQueryClient();
   const refresh = useSiteRefresh();
   const online = useOnline();
   const q = useSitePage(id);
   const siteQ = useSite();
-  // A page of another website: its pages, its address, its name.
   const msId = q.data?.page?.site_id || null;
   const msQ = useMicrosite(msId);
   const campsQ = useSiteCampaigns({ fresh: true });
   const { toast, say, clear } = useToast();
-
-  const [draft, setDraftState] = useState(null);
-  const [base, setBase] = useState(null);
-  const [save, setSave] = useState({ state: 'saved' });
+  const [savedN, setSavedN] = useState(0);
+  const d = useDraft(id, q.data?.page && !q.isFetching ? q.data.page : null, { onSaved: () => setSavedN((n) => n + 1) });
+  const { draft, base } = d;
+  const width = useWidth();
   const [openId, setOpenId] = useState(null);
+  const [focus, setFocus] = useState(null); // { path, n }
   const [strict, setStrict] = useState(false);
-  const [looseProblems, setLooseProblems] = useState([]);
   const [serverProblem, setServerProblem] = useState(null);
   const [publishing, setPublishing] = useState(false);
-  const [adding, setAdding] = useState(null); // { at } while the catalogue is open
-  const [details, setDetails] = useState(params.get('new') === '1');
-  const [slug, setSlug] = useState('');
-  const [slugErr, setSlugErr] = useState(null);
-  const [preview, setPreview] = useState(null); // { url, at }
-  const [frameKey, setFrameKey] = useState(0);
-  const [showFrame, setShowFrame] = useState(wideNow);
-  const [frameSize, setFrameSize] = useState('phone');
+  const [adding, setAdding] = useState(null); // { at } while the gallery is open
+  const [settings, setSettings] = useState(false);
+  const [size, setSize] = useState('phone');
+  const [side, setSide] = useState(false); // 720–1099 px: the preview beside, when asked
+  const [full, setFull] = useState(false); // a phone: the preview full screen
+  const [sheet, setSheet] = useState(null); // a phone: a section's form over the preview
   const [said, setSaid] = useState('');
+  const preview = usePreviewLink(id, Boolean(base?.id) && online);
 
-  const draftRef = useRef(null);
-  const baseRef = useRef(null);
-  const dirty = useRef(false);
-  const timer = useRef(null);
-  const inflight = useRef(null);
-  const stopped = useRef(false); // someone else saved: no more autosaves until a reload
-
-  // null while they load: a publish's check then leaves them to the server.
   const campaigns = useMemo(() => campsQ.data?.campaigns || null, [campsQ.data]);
   const pages = useMemo(() => (msId ? msQ.data?.pages : siteQ.data?.pages) || null, [msId, msQ.data, siteQ.data]);
   const pagesPath = msId ? `/website/sites/${msId}/pages` : '/website/pages';
   const viewRoot = (msId ? msQ.data?.urls?.domains?.[0] || msQ.data?.urls?.site : siteQ.data?.urls?.site) || '/site/';
   const refreshSite = () => refresh(['site'], ...(msId ? [['microsite', msId]] : []));
-  const paymentsReady = Boolean(siteQ.data?.payments?.ready);
+  const colors = useMemo(() => { try { return themeColors(siteQ.data?.settings?.theme || {}); } catch { return null; } }, [siteQ.data]);
 
-  // The page as opened: once, from a fresh read (later reads must never
-  // overwrite what's being typed). Leaving marks the copy old, so the next
-  // visit reads it again.
-  useEffect(() => {
-    const p = q.data?.page;
-    if (!p || q.isFetching || baseRef.current?.id === p.id) return;
-    const d = p.draft || {};
-    const next = {
-      title: d.title || p.title || '', description: d.description ?? p.description ?? '',
-      image: d.image || { url: '', alt: '' }, show_in_nav: Boolean(p.show_in_nav), modules: Array.isArray(d.modules) ? d.modules : [],
-      check_first: d.checkFirst === true,
-    };
-    draftRef.current = next;
-    baseRef.current = p;
-    setDraftState(next);
-    setBase(p);
-    setSlug(p.slug);
-  }, [q.data, q.isFetching]);
-  useEffect(() => () => { qc.invalidateQueries({ queryKey: ['site-page', id] }); }, [qc, id]);
-
-  // ── Saving the draft ──
-  // One write to the page at a time: a save waits for whatever is out (a
-  // save, a publish, a new address) and goes with the page as that left
-  // it, so it never carries an old updated_at (a false "someone else saved").
-  const flush = useCallback(async () => {
-    clearTimeout(timer.current);
-    while (inflight.current) await inflight.current;
-    if (!dirty.current || stopped.current || !draftRef.current) return !stopped.current;
-    const d = draftRef.current;
-    if (!d.title.trim()) { setSave({ state: 'blocked', text: 'give the page a title' }); return false; }
-    const loose = problemsOf(d.modules);
-    setLooseProblems(loose);
-    if (loose.length) { setSave({ state: 'blocked', text: problemWords(loose[0]) }); return false; }
-    dirty.current = false;
-    setSave({ state: 'saving' });
-    const run = (async () => {
-      try {
-        const res = await action('site.page.save', {
-          id, title: d.title.trim(), description: d.description || '', image: d.image?.url ? d.image : null,
-          show_in_nav: d.show_in_nav, modules: d.modules, check_first: d.check_first, updated_at: baseRef.current?.updated_at,
-        });
-        baseRef.current = res.page;
-        setBase(res.page);
-        qc.setQueryData(['site-page', id], { page: res.page });
-        setSave(dirty.current ? { state: 'waiting' } : { state: 'saved', at: Date.now() });
-        setFrameKey((k) => k + 1);
-        return true;
-      } catch (e) {
-        if (e.status === 409) {
-          stopped.current = true;
-          setSave({ state: 'conflict', text: 'Someone else saved this page since you opened it. Reload to see their changes (yours since then aren’t saved).' });
-          return false;
-        }
-        dirty.current = true;
-        setSave({ state: 'error', text: e.message });
-        return false;
-      }
-    })();
-    inflight.current = run;
-    const ok = await run;
-    if (inflight.current === run) inflight.current = null;
-    if (ok && dirty.current) return flush();
-    return ok;
-  }, [id, qc]);
-
-  // Publish, take off the site, a new address: in turn with the autosave
-  // (above). The page that comes back is the one the next save goes with.
-  const inTurn = useCallback(async (send) => {
-    while (inflight.current) await inflight.current;
-    const run = send().then((res) => {
-      if (res?.page) {
-        baseRef.current = res.page;
-        setBase(res.page);
-        qc.setQueryData(['site-page', id], { page: res.page });
-      }
-      return res;
-    });
-    const done = run.then(() => true, () => true);
-    inflight.current = done;
-    try {
-      return await run;
-    } finally {
-      if (inflight.current === done) inflight.current = null;
-    }
-  }, [id, qc]);
-
-  const change = useCallback((fn) => {
-    if (!draftRef.current) return;
-    const next = fn(draftRef.current);
-    draftRef.current = next;
-    setDraftState(next);
-    setServerProblem(null);
-    if (stopped.current) return;
-    dirty.current = true;
-    setSave({ state: 'waiting' });
-    clearTimeout(timer.current);
-    timer.current = setTimeout(() => { flush(); }, SAVE_AFTER_MS);
-  }, [flush]);
-
-  // Leaving: what's typed still saves. Closing the tab mid-save: asked first.
-  useEffect(() => () => { if (dirty.current) flush(); }, [flush]);
-  useEffect(() => {
-    const warn = (e) => { if (dirty.current || inflight.current) { e.preventDefault(); e.returnValue = ''; } };
-    window.addEventListener('beforeunload', warn);
-    return () => window.removeEventListener('beforeunload', warn);
+  // Open a section's form, with the cursor in one box (path) or its first.
+  const openAt = useCallback((mid, path = null) => {
+    setOpenId(mid);
+    setFocus((f) => ({ path, n: (f?.n || 0) + 1 }));
   }, []);
-
-  // ── Preview: a link to the draft (renewed before it runs out) ──
-  const previewUrl = useCallback(async () => {
-    if (preview && Date.now() - preview.at < TOKEN_FOR_MS) return preview.url;
-    const r = await apiPost('/site/preview-token', { pageId: id });
-    setPreview({ url: r.url, at: Date.now() });
-    return r.url;
-  }, [id, preview]);
+  // A page made from a starter opens on its first sample box.
   useEffect(() => {
-    if (!base?.id || !online) return undefined;
-    previewUrl().catch(() => {});
-    const t = setInterval(() => { previewUrl().catch(() => {}); }, TOKEN_FOR_MS);
-    return () => clearInterval(t);
-  }, [base?.id, online, previewUrl]);
-  const openPreview = async (e) => {
-    // Saved and fresh: the link opens as it is. Otherwise save first.
-    if (!dirty.current && !inflight.current && preview && Date.now() - preview.at < TOKEN_FOR_MS) return;
-    e.preventDefault();
-    const w = window.open('about:blank', '_blank');
-    await flush();
-    try {
-      const url = await previewUrl();
-      if (w) w.location.replace(url); else window.open(url, '_blank', 'noopener');
-    } catch (err) {
-      w?.close();
-      say(`The preview didn’t open — ${err.message}`);
-    }
-  };
+    if (!draft || params.get('start') !== '1') return;
+    const m = draft.modules.find((x) => samplePath(x.kind, x.props));
+    if (m) openAt(m.id, samplePath(m.kind, m.props));
+    navigate('.', { replace: true });
+  }, [Boolean(draft)]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Ctrl/Cmd+Z, Shift+Ctrl/Cmd+Z and Ctrl+Y, everywhere in the builder.
+  useEffect(() => {
+    const key = (e) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+      const k = e.key.toLowerCase();
+      if (k === 'z' && !e.shiftKey) { e.preventDefault(); if (d.undo()) setSaid('Undone'); } else if ((k === 'z' && e.shiftKey) || (k === 'y' && e.ctrlKey)) { e.preventDefault(); if (d.redo()) setSaid('Redone'); }
+    };
+    window.addEventListener('keydown', key);
+    return () => window.removeEventListener('keydown', key);
+  }, [d]);
 
   // ── Sections ──
-  const announce = (text) => setSaid(text);
-  const at = (mid) => draftRef.current?.modules.findIndex((m) => m.id === mid) ?? -1;
+  const at = (mid) => d.current()?.modules.findIndex((m) => m.id === mid) ?? -1;
+  const mods = (fn, key) => d.change((x) => ({ ...x, modules: fn(x.modules) }), key);
   const moveTo = (from, to) => {
-    const list = draftRef.current.modules;
+    const list = d.current().modules;
     if (to < 0 || to >= list.length || from === to) return;
-    const m = list[from];
-    change((d) => ({ ...d, modules: moveModule(d.modules, from, to) }));
-    announce(`Moved ${MODULE_BY_KIND[m.kind]?.label || 'the section'} to ${to + 1} of ${list.length}`);
+    mods((l) => moveModule(l, from, to));
+    setSaid(`Moved ${labelOf(list[from])} to ${to + 1} of ${list.length}`);
   };
-  const dnd = useDragDrop({
-    enabled: !stopped.current,
-    onDrop: (item, key) => {
-      const to = at(key.replace(/^sec:/, ''));
-      const from = at(item.id);
-      if (from >= 0 && to >= 0) moveTo(from, to);
-    },
-  });
-  const picked = dnd.picked;
-
-  const focusSection = (mid, field = true) => {
-    setTimeout(() => {
-      const el = document.getElementById(`wb-sec-${mid}`);
-      if (!el) return;
-      el.scrollIntoView({ block: 'start', behavior: 'smooth' });
-      const target = (field && el.querySelector('[aria-invalid="true"]')) || el.querySelector('.wb-sec__body input, .wb-sec__body textarea, .wb-sec__body select') || el.querySelector('.wb-sec__toggle');
-      target?.focus({ preventScroll: true });
-    }, 60);
-  };
+  const dnd = useDragDrop({ enabled: !d.stopped(), onDrop: (item, key) => { const to = at(key.replace(/^sec:/, '')); const from = at(item.id); if (from >= 0 && to >= 0) moveTo(from, to); } });
   const addAt = (kind) => {
-    const where = adding?.at ?? draftRef.current.modules.length;
+    const where = adding?.at ?? d.current().modules.length;
     let made = null;
-    change((d) => { const r = addModule(d.modules, kind, where); made = r.module; return { ...d, modules: r.list }; });
+    mods((l) => { const r = addModule(l, kind, where); made = r.module; return r.list; });
     setAdding(null);
-    if (made) {
-      setOpenId(made.id);
-      announce(`Added ${MODULE_BY_KIND[kind].label} as section ${where + 1}`);
-      focusSection(made.id, false);
-    }
-  };
-  const duplicate = (i) => {
-    let made = null;
-    change((d) => { const r = duplicateModule(d.modules, i); made = r.module; return { ...d, modules: r.list }; });
-    if (made) { setOpenId(made.id); say(`Copied — the copy is section ${i + 2}`); }
+    if (made) { openAt(made.id); setSaid(`Added ${MODULE_BY_KIND[kind].label} as section ${where + 1}`); }
   };
   const remove = (i) => {
     let gone = null;
-    change((d) => { const r = removeModule(d.modules, i); gone = r.removed; return { ...d, modules: r.list }; });
+    mods((l) => { const r = removeModule(l, i); gone = r.removed; return r.list; });
     if (!gone) return;
-    // The section's gone, and with it the button that was focused: the next
-    // one takes the focus (or "Add a section").
-    setTimeout(() => {
-      const rows = document.querySelectorAll('.wb-sec__toggle');
-      (rows[i] || rows[i - 1] || document.querySelector('.wb-add'))?.focus();
-    }, 30);
-    const label = MODULE_BY_KIND[gone.module.kind]?.label || 'the section';
-    say(`Deleted section ${gone.index + 1} (${label})`, {
-      undo: () => { change((d) => ({ ...d, modules: putBack(d.modules, gone) })); say(`${label} is back`); },
-    });
+    if (openId === gone.module.id) setOpenId(null);
+    const label = labelOf(gone.module);
+    say(`Deleted section ${gone.index + 1} (${label})`, { undo: () => { mods((l) => putBack(l, gone)); say(`${label} is back`); } });
   };
-  const hide = (i, hidden) => {
-    const m = draftRef.current.modules[i];
-    change((d) => ({ ...d, modules: setHidden(d.modules, i, hidden) }));
-    say(hidden ? `${MODULE_BY_KIND[m.kind]?.label} is hidden — it won’t show on the page` : `${MODULE_BY_KIND[m.kind]?.label} shows on the page again`);
-  };
+  const setField = (mid) => (key, v) => mods((l) => {
+    const i = l.findIndex((x) => x.id === mid);
+    if (i < 0) return l;
+    const cur = l[i].props || {};
+    return setProps(l, i, { ...cur, [key]: typeof v === 'function' ? v(cur[key]) : v });
+  }, typeof v === 'function' ? null : `${mid}.${key}`);
 
   // ── Problems: a save's (loose), a publish's (strict) and the server's ──
   const problems = useMemo(() => {
     if (!draft) return [];
-    const list = strict ? problemsOf(draft.modules, { strict: true, campaigns, pages }) : looseProblems.filter((p) => draft.modules.some((m) => m.id === p.id));
+    const list = strict ? problemsOf(draft.modules, { strict: true, campaigns, pages }) : d.looseProblems.filter((p) => draft.modules.some((m) => m.id === p.id));
     if (serverProblem?.id && !list.some((p) => p.id === serverProblem.id)) list.push(serverProblem);
     return list;
-  }, [draft, strict, campaigns, pages, looseProblems, serverProblem]);
+  }, [draft, strict, campaigns, pages, d.looseProblems, serverProblem]);
   const errorsFor = (mid) => Object.fromEntries(problems.filter((p) => p.id === mid && p.path).map((p) => [p.path, p.text]));
-  // Loose problems are fixed as they're typed: check again on every change.
-  useEffect(() => {
-    if (!draft || !looseProblems.length) return;
-    const now = problemsOf(draft.modules);
-    if (now.map(problemWords).join('|') !== looseProblems.map(problemWords).join('|')) setLooseProblems(now);
-  }, [draft, looseProblems]);
 
   // ── Publish ──
   const publish = async () => {
     setPublishing(true);
     setServerProblem(null);
-    const saved = await flush();
+    const saved = await d.flush();
     if (!saved) { setPublishing(false); setStrict(true); return; }
-    const list = problemsOf(draftRef.current.modules, { strict: true, campaigns, pages });
-    if (list.length) {
-      setStrict(true);
-      setOpenId(list[0].id);
-      focusSection(list[0].id);
-      setPublishing(false);
-      return;
-    }
+    const list = problemsOf(d.current().modules, { strict: true, campaigns, pages });
+    if (list.length) { setStrict(true); openAt(list[0].id, list[0].path); setPublishing(false); return; }
     try {
-      await inTurn(() => action('site.page.publish', { id }));
+      const res = await d.inTurn(() => action('site.page.publish', { id }));
       setStrict(false);
-      // The website in other languages (TR): translated in about a minute.
       const langs = siteQ.data?.settings?.languages?.on || [];
       const words = [...new Set(langs.map((c) => (c === 'pa' ? 'ਪੰਜਾਬੀ' : '中文')))];
-      say(`Published — it’s on the site now${words.length ? `. ${words.join(' and ')} update in about a minute` : ''}`);
+      const noAuth = !String(siteQ.data?.settings?.org?.authorizationLine || '').trim();
+      const href = `${viewRoot.replace(/\/$/, '')}${addressOf(res?.page || base)}`;
+      say(`Published.${words.length ? ` ${words.join(' and ')} update in about a minute.` : ''}${noAuth ? ' Your site has no ‘Authorized by’ line yet.' : ''}`, {
+        links: [{ label: 'View it', href, external: true }, noAuth && { label: 'Add it', to: '/website/settings#org' }].filter(Boolean),
+      });
       refreshSite();
     } catch (e) {
       const s = sectionFromServer(e.message);
-      const m = s ? draftRef.current.modules[s.index] : null;
-      if (m) {
-        setServerProblem({ index: s.index, id: m.id, kind: m.kind, label: MODULE_BY_KIND[m.kind]?.label || '', path: s.path, text: s.text });
-        setOpenId(m.id);
-        focusSection(m.id);
-      } else {
-        setServerProblem({ text: e.message });
-      }
-    } finally {
-      setPublishing(false);
-    }
+      const m = s ? d.current().modules[s.index] : null;
+      if (m) { setServerProblem({ index: s.index, id: m.id, kind: m.kind, label: labelOf(m), path: s.path, text: s.text }); openAt(m.id, s.path); } else setServerProblem({ text: e.message });
+    } finally { setPublishing(false); }
   };
-  const unpublish = async () => {
-    await flush();
-    try {
-      await inTurn(() => action('site.page.unpublish', { id }));
-      say('Taken off the site — it’s a draft now');
-      refreshSite();
-    } catch (e) { say(e.message); }
+  const run = async (name, input, words) => {
+    await d.flush();
+    try { const r = await d.inTurn(() => action(name, input)); if (words) say(words); refreshSite(); return r; } catch (e) { say(e.message); return null; }
   };
-  const deletePage = async () => {
-    await flush();
+  const changeSlug = async (slug) => {
+    await d.flush();
     try {
-      await action('site.page.delete', { id });
-      await refreshSite();
-      navigate(pagesPath, { replace: true, state: { deleted: { id, title: draftRef.current?.title || base.title, slug: base.slug } } });
-    } catch (e) { say(e.message); }
-  };
-  const changeSlug = async (e) => {
-    e.preventDefault();
-    setSlugErr(null);
-    if (!slug || slug === base.slug) return;
-    await flush();
-    try {
-      // updated_at read when it goes, after anything still out.
-      const res = await inTurn(() => action('site.page.save', { id, slug, updated_at: baseRef.current?.updated_at }));
-      setSlug(res.page.slug);
+      const res = await d.inTurn(() => action('site.page.save', { id, slug, updated_at: base.updated_at }));
       say(`The address is now ${addressOf(res.page)}`);
       refreshSite();
-    } catch (err) { setSlugErr(err.message); }
+      return { slug: res.page.slug };
+    } catch (e) { return { error: e.message }; }
+  };
+  // The title edited in place: a page never published takes its address
+  // from it.
+  const titleDone = () => {
+    const t = d.current()?.title.trim();
+    if (t && !base.version && base.slug !== 'home' && slugify(t) && slugify(t) !== base.slug) changeSlug(slugify(t));
   };
 
-  // ── Drawing ──
   if (noSignal(q)) return <div className="wb-page"><NoSignal /></div>;
-  if (q.isError) {
-    return (
-      <div className="wb-page">
-        <Link className="ops-back" to={pagesPath}>← Pages</Link>
-        <p className="error" role="alert">{q.error.status === 404 ? 'That page is gone — it may have been deleted.' : q.error.message}</p>
-      </div>
-    );
-  }
+  if (q.isError) return <div className="wb-page"><p className="error" role="alert">{q.error.status === 404 ? 'That page is gone — it may have been deleted.' : q.error.message}</p></div>;
   if (!draft || !base) return <div className="wb-page"><p className="muted">Loading…</p></div>;
 
   const live = base.status === 'published';
-  const nothingNew = live && !base.changed && !dirty.current && save.state === 'saved';
-  const ctx = { campaigns, pages: pages || [], toast: (text, undo) => say(text, { undo }), announce };
-  const frame = showFrame && preview?.url;
+  const nothingNew = live && !base.changed && !d.dirty() && d.save.state === 'saved';
+  const ctx = { campaigns, pages: pages || [], colors, toast: (text, undo) => say(text, { undo }), announce: setSaid };
+  const showFrame = width >= 1100 || (width >= 720 && side);
+  const open = draft.modules.find((m) => m.id === openId);
+  const general = (mid) => problems.find((p) => p.id === mid && !p.path)?.text;
+  const form = (m, back, bare = false) => (
+    <SectionForm module={m} index={draft.modules.indexOf(m)} errors={errorsFor(m.id)} general={general(m.id)} ctx={ctx} focus={focus}
+      onChange={setField(m.id)} onBack={back} bare={bare} />
+  );
+  const pick = (mid, field) => {
+    if (!draft.modules.some((m) => m.id === mid)) return;
+    openAt(mid, field);
+    if (full) setSheet(mid);
+  };
+  const frame = (isFull) => (
+    <PreviewFrame url={preview.url} modules={draft.modules} size={isFull ? 'phone' : size} focusId={openId} savedN={savedN} onPick={pick}
+      title={`Preview of ${draft.title || 'the page'} (the draft)`} full={isFull} onClose={() => setFull(false)} />
+  );
   const strictList = strict ? problems : [];
 
   return (
-    <div className={`wb-build${frame ? ' wb-build--frame' : ''}`}>
-      <div className="wb-build__main">
-        <Link className="ops-back" to={pagesPath}>← Pages</Link>
-        <div className="wb-build__head">
-          <div className="wb-build__title">
-            <h1>{draft.title || 'Untitled page'}</h1>
-            {msId && <p className="wb-build__on">On {msQ.data?.microsite?.name || 'another website'}</p>}
-            <span className="wb-build__meta">
-              <span className="wb-row__addr">{addressOf(base)}</span>
-              <PageStatus p={{ ...base, changed: base.changed || dirty.current }} />
-              <SaveState state={save} onRetry={() => { dirty.current = true; flush(); }} />
-            </span>
-          </div>
-          <div className="wb-build__actions">
-            {preview?.url ? (
-              <a className="btn ops-tap" href={preview.url} target="_blank" rel="noopener" onClick={openPreview}>
-                Preview<span aria-hidden="true"> ↗</span><span className="ws-sr"> (opens a new tab)</span>
-              </a>
-            ) : (
-              <button type="button" className="btn ops-tap" disabled>Preview</button>
-            )}
-            <button type="button" className="btn btn-primary ops-tap" onClick={publish}
-              disabled={publishing || !online || save.state === 'conflict' || nothingNew}>
-              {publishing ? 'Publishing…' : nothingNew ? 'Published' : live ? 'Publish changes' : 'Publish'}
-            </button>
-            <MoreMenu label="More for this page" items={[
-              live && { label: 'View on the site', href: `${viewRoot.replace(/\/$/, '')}${addressOf(base)}`, external: true },
-              { label: showFrame ? 'Hide the preview beside' : 'Show the preview beside', onClick: () => setShowFrame((v) => !v) },
-              live && base.slug !== 'home' && { label: 'Take it off the site', onClick: unpublish },
-              base.slug !== 'home' && { label: 'Delete this page', onClick: deletePage, danger: true },
-            ]} />
-          </div>
-        </div>
-
-        {save.state === 'conflict' && (
-          <div className="wb-alert" role="alert">
-            <p>{save.text}</p>
-            <button type="button" className="btn ops-tap" onClick={() => window.location.reload()}>Reload</button>
-          </div>
-        )}
-        {(strictList.length > 0 || (serverProblem && !serverProblem.id)) && (
-          <div className="wb-alert" role="alert" aria-labelledby="wb-before">
-            <h2 id="wb-before" className="wb-alert__h">Before it goes on the site</h2>
-            <ul className="wb-alert__list">
-              {strictList.map((p) => (
-                <li key={`${p.id}-${p.path}`}>
-                  <button type="button" className="btn-link" onClick={() => { setOpenId(p.id); focusSection(p.id); }}>{problemWords(p)}</button>
-                </li>
-              ))}
-              {serverProblem && !serverProblem.id && <li>{serverProblem.text}</li>}
-            </ul>
-          </div>
-        )}
-
-        <section className="wb-details" aria-label="Page details">
-          <button type="button" className="disclose" aria-expanded={details} aria-controls="wb-details-body" onClick={() => setDetails((v) => !v)}>
-            Page details — title, address, description, share picture
-          </button>
-          {details && (
-            <div id="wb-details-body" className="wb-details__body">
-              <TextField id="wb-title" label="Title" max={120} value={draft.title} error={!draft.title.trim() ? 'Give the page a title' : null}
-                onChange={(v) => change((d) => ({ ...d, title: v }))} />
-              <form className="field wb-field" onSubmit={changeSlug}>
-                <label htmlFor="wb-slug">Address</label>
-                {SYSTEM[base.slug] ? (
-                  <p className="wb-fixed">{SYSTEM[base.slug]}</p>
-                ) : (
-                  <>
-                    <div className="wb-slug">
-                      <span className="wb-slug__root" aria-hidden="true">/</span>
-                      <input id="wb-slug" className="input" maxLength={60} autoComplete="off" spellCheck={false} value={slug}
-                        aria-invalid={slugErr ? 'true' : undefined} aria-describedby="wb-slug-hint"
-                        onChange={(e) => { setSlug(slugInput(e.target.value)); setSlugErr(null); }} />
-                      <button type="submit" className="btn wb-tap" disabled={!slug || slug === base.slug}>Change address</button>
-                    </div>
-                    <p className="wb-field__hint" id="wb-slug-hint">
-                      {live ? 'Changes at once, on the live page too: links to the old address stop working.' : 'Lowercase letters, numbers and dashes.'}
-                    </p>
-                    {slugErr && <p className="wb-field__err">{slugErr}</p>}
-                  </>
-                )}
-              </form>
-              <TextField id="wb-desc" label="Description (for search engines and shares)" max={300} multiline value={draft.description}
-                onChange={(v) => change((d) => ({ ...d, description: v }))} />
-              <ImageField id="wb-share" label="Share picture" value={draft.image}
-                hint="Shown when the page is shared on social media or in a message. Without one, the site’s own (Settings → Search and sharing)."
-                onChange={(v) => change((d) => ({ ...d, image: v }))} />
-              <ToggleField id="wb-nav" label="Show this page in the site’s menu" value={draft.show_in_nav}
-                hint={live ? null : 'Once it’s published.'} onChange={(v) => change((d) => ({ ...d, show_in_nav: v }))} />
-              {(siteQ.data?.settings?.languages?.on || []).length > 0 && (
-                <ToggleField id="wb-check-first" label="Show translated only after a person checks it" value={draft.check_first}
-                  hint="Until then this page shows in English in the other languages." onChange={(v) => change((d) => ({ ...d, check_first: v }))} />
-              )}
-            </div>
-          )}
-        </section>
-
-        <h2 className="wb-h2">Sections</h2>
-        {draft.modules.length === 0 && <p className="ops-empty">Nothing on this page yet. Add its first section.</p>}
-        {draft.modules.length > 1 && <p className="wb-help">Drag a section by its handle to move it — or tap the handle, then “Move here”.</p>}
-        <ol className="wb-secs" aria-label="Sections, top to bottom">
-          {draft.modules.map((m, i) => {
-            const def = MODULE_BY_KIND[m.kind];
-            const label = def?.label || m.kind;
-            const isOpen = openId === m.id;
-            const isPicked = picked?.id === m.id;
-            const bad = problems.some((p) => p.id === m.id);
-            const general = problems.find((p) => p.id === m.id && !p.path);
-            const sum0 = summaryOf(m, { campaigns });
-            const sum = sum0 && sum0.toLowerCase() !== label.toLowerCase() ? sum0 : '';
-            return (
-              <li key={m.id} id={`wb-sec-${m.id}`} className="wb-sec" data-drop-key={`sec:${m.id}`} data-over={dnd.over(`sec:${m.id}`)}
-                data-open={isOpen ? '' : undefined} data-hidden={m.hidden ? '' : undefined} data-bad={bad ? '' : undefined}
-                data-picked={isPicked ? '' : undefined} data-kind={m.kind}>
-                <div className="wb-sec__head">
-                  <button type="button" className="wb-handle" {...dnd.itemProps({ id: m.id, label })} disabled={stopped.current}
-                    aria-label={isPicked ? `${label}: picked up — choose where it goes` : `Move section ${i + 1}, ${label}`}>
-                    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><circle cx="9" cy="6" r="1.6" /><circle cx="15" cy="6" r="1.6" /><circle cx="9" cy="12" r="1.6" /><circle cx="15" cy="12" r="1.6" /><circle cx="9" cy="18" r="1.6" /><circle cx="15" cy="18" r="1.6" /></svg>
-                  </button>
-                  <button type="button" className="wb-sec__toggle" aria-expanded={isOpen} aria-controls={`wb-sec-${m.id}-body`}
-                    onClick={() => setOpenId(isOpen ? null : m.id)}>
-                    <span className="wb-sec__num" aria-hidden="true">{i + 1}</span>
-                    <span className="wb-sec__words">
-                      <span className="wb-sec__label"><span className="ws-sr">Section {i + 1}: </span>{label}</span>
-                      {sum && <span className="wb-sec__sum">{sum}</span>}
-                    </span>
-                    {m.hidden && <span className="chip ops-chip-muted">Hidden</span>}
-                    {bad && <span className="chip chip-danger">Needs a look</span>}
-                  </button>
-                  {picked && !isPicked ? (
-                    <button type="button" className="btn wb-here" onClick={() => dnd.dropPicked(`sec:${m.id}`)}>Move here</button>
-                  ) : (
-                    <MoreMenu label={`More for section ${i + 1}, ${label}`} items={[
-                      i > 0 && { label: 'Move up', onClick: () => moveTo(i, i - 1) },
-                      i < draft.modules.length - 1 && { label: 'Move down', onClick: () => moveTo(i, i + 1) },
-                      { label: m.hidden ? 'Show on the page' : 'Hide from the page', onClick: () => hide(i, !m.hidden) },
-                      { label: 'Duplicate', onClick: () => duplicate(i) },
-                      { label: 'Add a section below', onClick: () => setAdding({ at: i + 1 }) },
-                      { label: 'Delete', onClick: () => remove(i), danger: true },
-                    ]} />
-                  )}
-                </div>
-                {isOpen && (
-                  <div className="wb-sec__body" id={`wb-sec-${m.id}-body`}>
-                    {def?.description && <p className="wb-sec__what">{def.description}</p>}
-                    {m.hidden && <p className="wb-note">Hidden: it stays in the draft but isn’t shown on the page.</p>}
-                    {general && <p className="wb-field__err">{general.text}</p>}
-                    <ModuleForm module={m} errors={errorsFor(m.id)} ctx={ctx}
-                      onChange={(key, v) => change((d) => {
-                        // The section as it is now (by id: it may have moved), not as it was drawn.
-                        const at2 = d.modules.findIndex((x) => x.id === m.id);
-                        if (at2 < 0) return d;
-                        const cur = d.modules[at2].props || {};
-                        return { ...d, modules: setProps(d.modules, at2, { ...cur, [key]: typeof v === 'function' ? v(cur[key]) : v }) };
-                      })} />
-                    <div className="wb-sec__foot">
-                      <button type="button" className="btn btn-quiet wb-tap" onClick={() => {
-                        setOpenId(null);
-                        // Back to the section's own row (the button pressed is gone).
-                        setTimeout(() => document.querySelector(`#wb-sec-${m.id} .wb-sec__toggle`)?.focus(), 0);
-                      }}>Done</button>
-                    </div>
-                  </div>
-                )}
-              </li>
-            );
-          })}
-        </ol>
-        {picked && (
-          <div className="wb-hand" role="status">
-            <span>Moving <b>{picked.label}</b> — tap “Move here” on the section it should take the place of.</span>
-            <button type="button" className="btn btn-quiet" onClick={() => dnd.setPicked(null)}>Cancel</button>
-          </div>
-        )}
-        <div className="wb-ghost" ref={dnd.ghostRef} hidden={!dnd.dragging} aria-hidden="true">{dnd.dragging?.label}</div>
-        <button type="button" className="btn wb-add ops-tap" onClick={() => setAdding({ at: draft.modules.length })} disabled={draft.modules.length >= 60}>
-          + Add a section
-        </button>
-        <p className="ws-sr" aria-live="polite">{said}</p>
-      </div>
-
-      {frame && (
-        <aside className="wb-frame" data-size={frameSize} aria-label="Preview of the draft">
-          <div className="wb-frame__bar">
-            <span className="wb-frame__h">Preview</span>
-            <div className="ops-seg wb-frame__seg" role="group" aria-label="Show it as">
-              <button type="button" aria-pressed={frameSize === 'phone'} onClick={() => setFrameSize('phone')}>Phone</button>
-              <button type="button" aria-pressed={frameSize === 'wide'} onClick={() => setFrameSize('wide')}>Computer</button>
-            </div>
-          </div>
-          <div className="wb-frame__box">
-            <iframe key={`${frameKey}-${preview.url}`} title={`Preview of ${draft.title || 'the page'} (the draft)`} src={preview.url} />
-          </div>
-        </aside>
+    <div className={`wb-builder${showFrame ? ' wb-builder--frame' : ''}`}>
+      <TopBar pagesPath={pagesPath} title={draft.title} onTitle={(v) => d.change((x) => ({ ...x, title: v }), 'title')} onTitleDone={titleDone}
+        base={base} dirty={d.dirty()} save={d.save} onRetry={d.retry} onSite={msId ? msQ.data?.microsite?.name || 'another website' : null}
+        undo={() => d.undo()} redo={() => d.redo()} canUndo={d.canUndo} canRedo={d.canRedo} size={size} onSize={setSize}
+        preview={preview.url} onPreview={(e) => preview.open(e, d)} showSide={side} onSide={() => setSide((v) => !v)} onFull={() => setFull(true)}
+        publishing={publishing} canPublish={online && d.save.state !== 'conflict'} nothingNew={nothingNew} onPublish={publish}
+        more={[
+          { label: 'Page settings', onClick: () => setSettings(true) },
+          live && { label: 'View on the site', href: `${viewRoot.replace(/\/$/, '')}${addressOf(base)}`, external: true },
+          { label: 'Duplicate', onClick: async () => { const r = await run('site.page.duplicate', { id }); if (r?.page) navigate(`/website/pages/${r.page.id}`); } },
+          live && base.slug !== 'home' && { label: 'Take it off the site', onClick: () => run('site.page.unpublish', { id }, 'Taken off the site — it’s a draft now') },
+          base.slug !== 'home' && { label: 'Delete this page', danger: true, onClick: async () => { if (await run('site.page.delete', { id })) navigate(pagesPath, { replace: true, state: { deleted: { id, title: draft.title || base.title, slug: base.slug } } }); } },
+        ]} />
+      {d.save.state === 'conflict' && (
+        <div className="wb-alert" role="alert"><p>{d.save.text}</p><button type="button" className="btn ops-tap" onClick={() => window.location.reload()}>Reload</button></div>
       )}
-
-      <Catalogue open={Boolean(adding)} onClose={() => setAdding(null)} onPick={addAt} paymentsReady={paymentsReady} />
+      {(strictList.length > 0 || (serverProblem && !serverProblem.id)) && (
+        <div className="wb-alert" role="alert" aria-labelledby="wb-before">
+          <h2 id="wb-before" className="wb-alert__h">Before it goes on the site</h2>
+          <ul className="wb-alert__list">
+            {strictList.map((p) => <li key={`${p.id}-${p.path}`}><button type="button" className="btn-link" onClick={() => openAt(p.id, p.path)}>{problemWords(p)}</button></li>)}
+            {serverProblem && !serverProblem.id && <li>{serverProblem.text}</li>}
+          </ul>
+        </div>
+      )}
+      <div className="wb-builder__body">
+        <div className="wb-col">
+          {open ? form(open, () => { setOpenId(null); setTimeout(() => document.querySelector(`#wb-sec-${open.id} .wb-card__open`)?.focus(), 0); }) : (
+            <SectionList modules={draft.modules} problems={problems} campaigns={campaigns} dnd={dnd} locked={d.stopped()}
+              onOpen={(mid) => openAt(mid)} onAdd={(i) => setAdding({ at: i })} onMove={moveTo}
+              onHide={(i, h) => { mods((l) => setHidden(l, i, h)); say(h ? `${labelOf(draft.modules[i])} is hidden — it won’t show on the page` : `${labelOf(draft.modules[i])} shows on the page again`); }}
+              onDuplicate={(i) => { let made = null; mods((l) => { const r = duplicateModule(l, i); made = r.module; return r.list; }); if (made) say(`Copied — the copy is section ${i + 2}`); }}
+              onRemove={remove} />
+          )}
+        </div>
+        {showFrame && <aside className="wb-side" aria-label="Preview of the draft">{frame(false)}</aside>}
+      </div>
+      {full && !showFrame && <div className="wb-fullpv" role="dialog" aria-label="Preview of the draft">{frame(true)}</div>}
+      <Dialog open={Boolean(sheet && full)} title={labelOf(draft.modules.find((m) => m.id === sheet))} onClose={() => setSheet(null)}>
+        {sheet && draft.modules.find((m) => m.id === sheet) && form(draft.modules.find((m) => m.id === sheet), () => setSheet(null), true)}
+      </Dialog>
+      <PageSettings open={settings} onClose={() => setSettings(false)} draft={draft} base={base} change={d.change} onSlug={changeSlug}
+        languagesOn={(siteQ.data?.settings?.languages?.on || []).length > 0} />
+      <Gallery open={Boolean(adding)} onClose={() => setAdding(null)} onPick={addAt} modules={draft.modules} paymentsReady={Boolean(siteQ.data?.payments?.ready)} />
+      <p className="ws-sr" aria-live="polite">{said}</p>
       <Toast toast={toast} onClear={clear} />
     </div>
   );

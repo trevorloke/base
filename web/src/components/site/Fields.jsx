@@ -3,9 +3,11 @@
 // with nothing else to write. One component per field type:
 //   text · textarea · markdown (a small toolbar, Preview, pictures) · url ·
 //   link ({ label, href }) · image (upload or pick, a description for people
-//   who can't see it) · select · toggle · number · words (chips) · list
-//   (repeatable groups: open, move, remove) · campaign (a petition or
-//   pledge) · page (one of the site's pages)
+//   who can't see it) · select (the columns' icon: a grid of the drawn
+//   icons; a background: swatches in the theme's colours) · toggle · number
+//   · words (chips) · list (repeatable groups: a drag handle, ⋯ to move or
+//   remove, Undo) · campaign (a petition or pledge) · page (one of the
+//   site's pages)
 // Every box has its own label; a problem shows under its box (errors, keyed
 // by the catalogue's path: 'items[2].title') and the box says it's invalid.
 // ImageField is also the share picture's and the logo's (pages, settings,
@@ -13,9 +15,11 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { MODULE_BY_KIND } from '@starbase/shared/site/catalogue';
+import { Icon } from '@starbase/shared/site/components/icons';
+import { useDragDrop } from '../useDragDrop.js';
 import { MarkdownField, uploadImage } from '../MarkdownField.jsx';
 import { at } from '../../base.js';
-import { Dialog } from './Bits.jsx';
+import { Dialog, MoreMenu } from './Bits.jsx';
 import { useSitePictures } from './useSite.js';
 import { isSiteLink, tidyLink } from './builder.js';
 
@@ -133,7 +137,7 @@ export function ImageField({ id, label, value, onChange, error, altError, requir
         </div>
         <div className="wb-image__tools">
           <input ref={file} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={pick} />
-          <button type="button" className="btn wb-tap" disabled={busy} onClick={() => file.current?.click()}>
+          <button type="button" id={`${id}-upload`} className="btn wb-tap" disabled={busy} onClick={() => file.current?.click()}>
             {busy ? 'Uploading…' : v.url ? 'Upload another' : 'Upload a picture'}
           </button>
           <button type="button" className="btn btn-quiet wb-tap" onClick={() => setPicking(true)}>Choose one uploaded</button>
@@ -187,6 +191,54 @@ function SelectField({ id, label, value, options, onChange, error }) {
       </select>
       <Problem id={errId} text={error} />
     </div>
+  );
+}
+
+// The columns' icon: the drawn icons, each a radio with its name.
+function IconField({ id, label, value, options, onChange }) {
+  const cur = value || options[0]?.value;
+  const at = Math.max(0, options.findIndex((o) => o.value === cur));
+  const move = (e) => {
+    const d = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+    if (!d) return;
+    e.preventDefault();
+    const next = options[(at + d + options.length) % options.length];
+    onChange(next.value);
+    setTimeout(() => document.getElementById(`${id}-${next.value}`)?.focus(), 0);
+  };
+  return (
+    <fieldset className="wb-group">
+      <legend>{label}</legend>
+      <div className="wb-icons" role="radiogroup" aria-label={label} onKeyDown={move}>
+        {options.map((o) => (
+          <button key={o.value} type="button" id={`${id}-${o.value}`} role="radio" aria-checked={o.value === cur}
+            tabIndex={o.value === cur ? 0 : -1} className="wb-icons__btn" title={o.label} aria-label={o.label}
+            onClick={() => onChange(o.value)}>
+            <Icon name={o.value} size={24} />
+          </button>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
+// A background: swatches in the theme's colours, with their names.
+const TONE_COLOUR = { paper: 'paper', surface: 'surface', brand: 'brand', accent: 'accent', ink: 'ink' };
+function ToneField({ id, label, value, options, onChange, colors }) {
+  const cur = value || options[0]?.value;
+  return (
+    <fieldset className="wb-group">
+      <legend>{label}</legend>
+      <div className="wb-tones" role="radiogroup" aria-label={label}>
+        {options.map((o) => (
+          <label key={o.value} className="wb-tones__one" htmlFor={`${id}-${o.value}`}>
+            <input type="radio" id={`${id}-${o.value}`} name={id} value={o.value} checked={o.value === cur} onChange={() => onChange(o.value)} />
+            <span className="wb-tones__sw" style={colors?.[TONE_COLOUR[o.value]] ? { background: colors[TONE_COLOUR[o.value]] } : undefined} data-tone={o.value} aria-hidden="true" />
+            <span>{o.label}</span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
   );
 }
 
@@ -307,16 +359,29 @@ export function ListField({ id, f, value, onChange, errors, path, ctx }) {
     const bad = badKey.split('|').map((k) => Number(k.slice(path.length + 1).split(']')[0])).filter(Number.isInteger);
     setOpen((s) => (bad.every((i) => s.has(i)) ? s : new Set([...s, ...bad])));
   }, [badKey, path]);
+  // A box to put the cursor in (a tap in the preview): its item opens.
+  const want = ctx?.focus && String(ctx.focus).startsWith(`${path}[`) ? Number(String(ctx.focus).slice(path.length + 1).split(']')[0]) : null;
+  useEffect(() => {
+    if (Number.isInteger(want)) setOpen((s) => (s.has(want) ? s : new Set([...s, want])));
+  }, [want]);
   const toggle = (i) => setOpen((s) => { const n = new Set(s); if (n.has(i)) n.delete(i); else n.add(i); return n; });
-  const move = (i, d) => {
-    const j = i + d;
-    if (j < 0 || j >= items.length) return;
+  // From one place to another (dragged, or ⋯ Move up / Move down).
+  const moveTo = (i, j) => {
+    if (j < 0 || j >= items.length || i === j) return;
     const next = [...items];
-    [next[i], next[j]] = [next[j], next[i]];
+    const [x] = next.splice(i, 1);
+    next.splice(j, 0, x);
     onChange(next);
-    setOpen((s) => { const n = new Set(); for (const k of s) n.add(k === i ? j : k === j ? i : k); return n; });
+    setOpen(new Set());
     ctx?.announce?.(`Moved to ${j + 1} of ${items.length}`);
   };
+  const move = (i, d) => moveTo(i, i + d);
+  const dnd = useDragDrop({
+    onDrop: (item, key) => {
+      const to = Number(String(key).split(':').pop());
+      if (Number.isInteger(to)) moveTo(item.i, to);
+    },
+  });
   const remove = (i) => {
     const gone = items[i];
     onChange(items.filter((_, k) => k !== i));
@@ -341,17 +406,30 @@ export function ListField({ id, f, value, onChange, errors, path, ctx }) {
             const bodyId = `${id}-${i}-body`;
             const isOpen = open.has(i);
             const bad = Object.keys(errors || {}).some((k) => k.startsWith(`${path}[${i}]`));
+            const name = itemSummary(f, item, i);
+            const dropKey = `${id}:${i}`;
+            const isPicked = dnd.picked?.i === i;
             return (
-              <li key={i} className="wb-list__item" data-open={isOpen ? '' : undefined} data-bad={bad ? '' : undefined}>
+              <li key={i} className="wb-list__item" data-open={isOpen ? '' : undefined} data-bad={bad ? '' : undefined}
+                data-drop-key={dropKey} data-over={dnd.over(dropKey)} data-picked={isPicked ? '' : undefined}>
                 <div className="wb-list__head">
+                  <button type="button" className="wb-handle" {...dnd.itemProps({ id: `${id}:${i}`, i, label: name })}
+                    aria-label={isPicked ? `${name}: picked up — choose where it goes` : `Move ${name}`}>
+                    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><circle cx="9" cy="6" r="1.6" /><circle cx="15" cy="6" r="1.6" /><circle cx="9" cy="12" r="1.6" /><circle cx="15" cy="12" r="1.6" /><circle cx="9" cy="18" r="1.6" /><circle cx="15" cy="18" r="1.6" /></svg>
+                  </button>
                   <button type="button" className="wb-list__toggle" aria-expanded={isOpen} aria-controls={bodyId} onClick={() => toggle(i)}>
-                    <span className="wb-list__num" aria-hidden="true">{i + 1}</span>
-                    <span className="wb-list__sum">{itemSummary(f, item, i)}</span>
+                    <span className="wb-list__sum">{name}</span>
                     {bad && <span className="chip chip-danger">Needs a look</span>}
                   </button>
-                  <button type="button" className="btn btn-quiet wb-icon" aria-label={`Move ${itemSummary(f, item, i)} up`} disabled={i === 0} onClick={() => move(i, -1)}>↑</button>
-                  <button type="button" className="btn btn-quiet wb-icon" aria-label={`Move ${itemSummary(f, item, i)} down`} disabled={i === items.length - 1} onClick={() => move(i, 1)}>↓</button>
-                  <button type="button" className="btn btn-quiet wb-icon wb-icon--danger" aria-label={`Remove ${itemSummary(f, item, i)}`} onClick={() => remove(i)}>✕</button>
+                  {dnd.picked && !isPicked ? (
+                    <button type="button" className="btn wb-here" onClick={() => dnd.dropPicked(dropKey)}>Move here</button>
+                  ) : (
+                    <MoreMenu label={`More for ${name}`} items={[
+                      i > 0 && { label: 'Move up', onClick: () => move(i, -1) },
+                      i < items.length - 1 && { label: 'Move down', onClick: () => move(i, 1) },
+                      { label: 'Remove', onClick: () => remove(i), danger: true },
+                    ]} />
+                  )}
                 </div>
                 {isOpen && (
                   <div className="wb-list__body" id={bodyId}>
@@ -367,6 +445,7 @@ export function ListField({ id, f, value, onChange, errors, path, ctx }) {
           })}
         </ol>
       )}
+      <div className="wb-ghost" ref={dnd.ghostRef} hidden={!dnd.dragging} aria-hidden="true">{dnd.dragging?.label}</div>
       <button type="button" className="btn wb-tap wb-list__add" disabled={full} onClick={add}>
         {full ? `That’s the most (${f.max})` : `Add ${/^[aeiou]/i.test(one) ? 'an' : 'a'} ${one}`}
       </button>
@@ -434,7 +513,10 @@ export function Field({ f, id, path, value, onChange, errors, ctx }) {
     case 'url': return <UrlField {...common} error={err} pages={ctx?.pages} />;
     case 'link': return <LinkField {...common} errors={errors} path={path} pages={ctx?.pages} />;
     case 'image': return <ImageField {...common} error={err || errors?.[`${path}.url`]} altError={errors?.[`${path}.alt`]} />;
-    case 'select': return <SelectField {...common} options={f.options || []} error={err} />;
+    case 'select':
+      if (f.key === 'icon') return <IconField {...common} options={f.options || []} />;
+      if (f.key === 'tone') return <ToneField {...common} options={f.options || []} colors={ctx?.colors} />;
+      return <SelectField {...common} options={f.options || []} error={err} />;
     case 'toggle': return <ToggleField {...common} />;
     case 'number': return <NumberField {...common} min={f.min} max={f.max} error={err} />;
     case 'words': return <WordsField {...common} max={f.max} itemMax={f.itemMax} error={err || Object.entries(errors || {}).find(([k]) => k.startsWith(`${path}.`))?.[1]} />;

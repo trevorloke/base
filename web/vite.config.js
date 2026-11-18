@@ -6,11 +6,14 @@ import { fileURLToPath } from 'node:url';
 // one self-contained file with a stable name, dist/site-islands.js, that
 // the server serves at {site root}site-assets/site-islands.js (SITE.md). It
 // carries its own React, so the public site loads nothing of the app's.
+// The draft's live preview (src/site-preview.js, WA) is built the same way,
+// as dist/site-preview.js, loaded only on preview pages.
+const SITE_ENTRIES = ['site-islands', 'site-preview'];
 const siteIslands = () => ({
   name: 'site-islands',
   apply: 'build',
   async closeBundle() {
-    await build({
+    for (const entry of SITE_ENTRIES) await build({
       configFile: false,
       root: fileURLToPath(new URL('.', import.meta.url)),
       logLevel: 'warn',
@@ -22,8 +25,8 @@ const siteIslands = () => ({
         modulePreload: false,
         target: 'es2020',
         rollupOptions: {
-          input: fileURLToPath(new URL('./src/site-islands.js', import.meta.url)),
-          output: { format: 'es', entryFileNames: 'site-islands.js', inlineDynamicImports: true },
+          input: fileURLToPath(new URL(`./src/${entry}.js`, import.meta.url)),
+          output: { format: 'es', entryFileNames: `${entry}.js`, inlineDynamicImports: true },
         },
       },
     });
