@@ -53,7 +53,7 @@ export const createSession = async (db, userId, workspaceId, { scope = null, via
 // a mark, an undo, a check, the switch's state and signing out. Checked
 // here, with the session, so no route can forget it.
 export const GOTV_ONLY = 'This sign-in only works for Who voted.';
-const GOTV_READS = [/^\/api\/gotv\/(find|places)$/, /^\/api\/voted\/status$/, /^\/api\/auth(\/|$)/];
+const GOTV_READS = [/^\/api\/gotv\/(find|places|open)$/, /^\/api\/voted\/status$/, /^\/api\/auth(\/|$)/];
 const GOTV_WRITES = /^\/api\/actions\/(vote\.mark|vote\.undo|gotv\.check)$/;
 export const scopeAllows = (ctx, method, path) => {
   if (!ctx?.scope) return true;

@@ -101,7 +101,7 @@ const votingPlace = (h, id) => {
 // On duty for day D: an open post, D a voting day in the post's days (or
 // every day), GOTV not switched off with auto off, now inside D's window.
 // In practice: an open post, practice on, and today.
-const onDuty = (g, h, day, tz, practice) => {
+export const onDuty = (g, h, day, tz, practice) => {
   const post = g.post;
   if (!post) return false;
   if (practice) return g.practice && day === today(tz);

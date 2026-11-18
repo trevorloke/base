@@ -101,6 +101,26 @@ test('advance day 1’s names: matched on a day between, still sending on day 2�
   assert.ok(windowEnd(h, sett, k.G, TZ) <= atLocal(plus(28), '00:00', TZ));
 });
 
+test('a note’s own day: status keeps the post on a day between, and /gotv/open says which notes may be matched', async () => {
+  const w1 = new Date(atLocal(k.A1, '19:58', TZ)).toISOString();
+  at(plus(11), '01:58'); // after midnight, a non-voting day between A1 and A2
+  const st = ok(await k.scrut.client.get('/api/voted/status'));
+  assert.equal(st.on_duty, null, 'not on duty today');
+  assert.deepEqual(st.post, { role: 'scrutineer', place: { id: k.p1, name: st.post?.place?.name } });
+  assert.equal(st.today_from, new Date(atLocal(plus(11), '00:00', TZ)).toISOString());
+  const wToday = new Date(atLocal(plus(11), '01:00', TZ)).toISOString();
+  const r = ok(await k.scrut.client.get(`/api/gotv/open?${new URLSearchParams({ place_id: k.p1, written_at: `${w1},${wToday}` })}`));
+  assert.deepEqual(r.notes.map((n) => [n.written_at, n.day, n.on_duty, n.open]), [[w1, k.A1, true, true], [wToday, plus(11), false, false]]);
+  // Day 2's morning: day 1's note still matches; a note written today waits for today's close.
+  at(k.A2, '07:45');
+  const w2 = new Date(atLocal(k.A2, '07:40', TZ)).toISOString();
+  const r2 = ok(await k.scrut.client.get(`/api/gotv/open?${new URLSearchParams({ place_id: k.p1, written_at: `${w1},${w2}` })}`));
+  assert.deepEqual(r2.notes.map((n) => [n.day, n.on_duty, n.open]), [[k.A1, true, true], [k.A2, true, false]]);
+  assert.equal(r2.notes[1].closes_hm, '20:00');
+  // Not posted: refused, as the look-up is.
+  no(await k.volA.client.get(`/api/gotv/open?${new URLSearchParams({ place_id: k.p1, written_at: w1 })}`), 403);
+});
+
 test('a place closed today refuses today’s marks only', async () => {
   at(k.A2, '21:00');
   const db = await getDb();

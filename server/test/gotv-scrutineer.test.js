@@ -319,6 +319,7 @@ test('the sign-in code: GETs leave it unused; one POST signs in to Who voted onl
   no(await phone.get('/api/turfs'), 403, 'This sign-in only works for Who voted.');
   no(await phone.get('/api/voted/summary'), 403);
   ok(await phone.get('/api/voted/status'));
+  ok(await phone.get(`/api/gotv/open?place_id=${k.p1}&written_at=${new Date().toISOString()}`), 'kept names can be judged');
   ok(await find(phone, 'harjit'));
   const cid = randomUUID();
   ok(await phone.action('vote.mark', { person_id: k.inA2.id, source: 'scrutineer', place_id: k.p1, client_id: cid }));

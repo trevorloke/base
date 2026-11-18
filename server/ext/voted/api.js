@@ -10,6 +10,9 @@
 // GET /voted/changes?since=  the same changes since a feed id: the catch-up read
 // GET /gotv/find           a scrutineer's look-up (find.js)
 // GET /gotv/places         the voting places, for the pickers (posted people and the desk)
+// GET /gotv/open?place_id=&written_at=a,b  for names kept on a phone: each
+//                          one's own day, whether its writer is on duty for
+//                          it and whether it may reach the office yet
 // GET /gotv/posts          desk: who works where, signed in, marks today, look-up flag
 // GET /gotv/checks?open=1  desk: To check
 import { Hono } from 'hono';
@@ -20,11 +23,11 @@ import { hoursOf, tzOf, today, dayOf, closeAt, sendOpen, votingDays, inWindow } 
 import { summaryOf } from './summary.js';
 import { subscribe, scopeFor, refreshScope, pingMs, liveCount } from './live.js';
 import { findPeople, takeLookup, lookupsOf } from './find.js';
-import { mayEnterName, WORDS } from './actions.js';
+import { mayEnterName, onDuty, WORDS } from './actions.js';
 import { notOpenDays } from './posts.js';
 import { turfsOfPerson } from './turfindex.js';
 import { now } from '../../lib/clock.js';
-import { localHm } from '../../lib/tzrule.js';
+import { atLocal, localHm } from '../../lib/tzrule.js';
 import { startOfDay } from '../../lib/tzsql.js';
 
 export const api = new Hono();
@@ -47,6 +50,8 @@ const hasList = async (db, ctx) => Boolean((await db.query(
        or exists (select 1 from call_bank_numbers where workspace_id = $1 and assigned_to = $2 and done_at is null) as yes`,
   [ctx.workspaceId, ctx.user.id],
 )).rows[0]?.yes);
+
+const postOf = (g) => ({ role: g.post.role, place: g.post.place_id ? { id: g.post.place_id, name: g.post.place_name } : null });
 
 export const statusOf = async (db, ctx) => {
   const ws = ctx.workspaceId;
@@ -74,7 +79,12 @@ export const statusOf = async (db, ctx) => {
     closes_hm: close ? localHm(close, tz) : null,
     ...(isDesk(ctx) ? { held_line: heldLine(g.s, g.on) } : {}),
     feed: Number(feed || 0),
-    on_duty: dutyToday ? { role: g.post.role, place: g.post.place_id ? { id: g.post.place_id, name: g.post.place_name } : null } : null,
+    on_duty: dutyToday ? postOf(g) : null,
+    // The post whatever the day: names written yesterday are judged by their
+    // own day (GET /gotv/open), so Who voted still shows them after midnight.
+    post: g.post ? postOf(g) : null,
+    // When the campaign's today began: "entered today" counts from here.
+    today_from: iso(atLocal(day, '00:00', tz)),
     scope: g.s.scope,
     // A volunteer kept to their turfs and phone bank with neither: Today says so.
     // (Two existence reads, not the scope: that is kept a minute, and a
@@ -229,6 +239,36 @@ api.get('/gotv/find', async (c) => {
   if (limited) return c.json({ error: limited }, 429);
   const r = await findPeople(db, ctx.workspaceId, c.req.query('q'));
   return c.json(r.body, r.status);
+});
+
+// Names kept on a phone are judged by the day they were written, as the
+// look-up and the mark judge them: a note from 19:58 is matched at 01:58.
+// Reads only; no look-up is spent.
+const NOTES_MAX = 200;
+api.get('/gotv/open', async (c) => {
+  const ctx = c.get('ctx');
+  const db = c.get('db');
+  const g = await gotvFor(db, ctx);
+  const desk = isDesk(ctx);
+  if (!desk && !g.post) return c.json({ error: WORDS.duty }, 403);
+  const placeId = c.req.query('place_id') || g.post?.place_id || null;
+  if (!placeId || !UUID.test(placeId)) return c.json({ error: WORDS.place }, 400);
+  const tz = tzOf(ctx);
+  const h = await hoursOf(db, ctx.workspaceId);
+  const place = h.places.get(placeId);
+  if (!place || place.gone) return c.json({ error: WORDS.place }, 400);
+  const ats = String(c.req.query('written_at') || '').split(',').filter((t) => t && !Number.isNaN(Date.parse(t))).slice(0, NOTES_MAX);
+  const notes = ats.map((written_at) => {
+    const day = dayOf(Math.min(Date.parse(written_at), now()), tz);
+    const duty = desk || (onDuty(g, h, day, tz, false) && (g.post.role !== 'scrutineer' || g.post.place_id === placeId));
+    const close = closeAt(h, g.s, day, placeId, tz);
+    return {
+      written_at, day, on_duty: duty,
+      open: duty && place.closed_on !== day && sendOpen(h, g.s, day, placeId, tz),
+      closes_at: iso(close), closes_hm: close ? localHm(close, tz) : null,
+    };
+  });
+  return c.json({ notes });
 });
 
 api.get('/gotv/places', async (c) => {
