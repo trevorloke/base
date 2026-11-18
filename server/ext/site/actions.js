@@ -263,7 +263,7 @@ export const actions = {
       // since it was made has none. Never the save's own word for it.
       const kept = follow && Boolean(was) && (was.follow === true ? was.kept === true : true);
       const given = { ...input.theme, follow, kept };
-      const { theme, problems, notes } = checkTheme(given, brandKey(), await fontsForCheck(tx, ws, input.languages?.on));
+      const { theme, problems, notes } = checkTheme(given, brandKey(), { ...await fontsForCheck(tx, ws, input.languages?.on), keepBody: was?.fonts?.body });
       if (problems.length) throw httpError(400, themeProblem(problems[0]));
       themeNotes = notes;
       params.push(JSON.stringify(theme));

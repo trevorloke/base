@@ -112,6 +112,7 @@ test('checkTheme: a heading-only font for body is refused; an added font not the
   const bad = checkTheme({ fonts: { heading: 'inter', body: 'fraunces' } }, 'base', { added: [] });
   assert.deepEqual(bad.problems.map((x) => x.words), [F.FONT_WORDS.body]);
   assert.deepEqual(checkTheme({ fonts: { heading: 'inter', body: 'g:fake-serif' } }, 'base', { added }).problems.map((x) => x.words), [F.FONT_WORDS.body], 'a serif not on the reviewed list');
+  assert.deepEqual(checkTheme({ fonts: { heading: 'inter', body: 'barlow-condensed' } }, 'base', { added: [], keepBody: 'barlow-condensed' }).problems, [], 'a theme saved before the rule keeps its body font');
   const gone = checkTheme({ fonts: { heading: 'g:nope', body: 'inter' } }, 'base', { added });
   assert.equal(gone.theme.fonts.heading, 'inter', 'falls back to the skin’s');
   assert.equal(checkTheme({ fonts: { heading: 'g:fake-serif', body: 'inter' } }, 'base', { added }).theme.fonts.heading, 'g:fake-serif');

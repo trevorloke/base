@@ -90,8 +90,10 @@ export const inkFor = (bg) => (contrast('#000000', bg) >= contrast('#ffffff', bg
 // campaign's added fonts (fonts.js): an added font that isn't among them
 // falls back too. Without `added` (a theme the server already checked, read
 // back) an added font's value is kept as it is. `punjabi`: the site is
-// offered in Punjabi, whose first visit is counted too.
-export function checkTheme(input, skin = 'base', { added, punjabi = false } = {}) {
+// offered in Punjabi, whose first visit is counted too. `keepBody`: the body
+// font the theme was saved with — a theme saved before the rule (Barlow
+// Condensed for body text) keeps working and can still be saved.
+export function checkTheme(input, skin = 'base', { added, punjabi = false, keepBody } = {}) {
   const base = SKINS[input?.skin] || SKINS[skin] || SKINS.base;
   const colors = {};
   const given = (k) => (hex(input?.colors?.[k]) ? `#${String(input.colors[k]).trim().replace('#', '').toLowerCase()}` : null);
@@ -128,7 +130,7 @@ export function checkTheme(input, skin = 'base', { added, punjabi = false } = {}
   if (added) {
     // Body text only in a face checked for long reading.
     const body = fontFor(fonts.body, added);
-    if (body && !body.body) problems.push({ font: 'body', words: FONT_WORDS.body });
+    if (body && !body.body && fonts.body !== keepBody) problems.push({ font: 'body', words: FONT_WORDS.body });
     const heading = fontFor(fonts.heading, added);
     if (heading && (heading.kind === 'display' || heading.kind === 'handwriting')) notes.push({ font: 'heading', words: FONT_WORDS.display });
     // The speed budget: the larger of the English and Punjabi first visits.

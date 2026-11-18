@@ -229,7 +229,7 @@ export const micrositeActions = (siteAction) => ({
     }
     if (input.theme !== undefined) {
       // The campaign's added fonts and the same speed budget as the main site (WA).
-      const { theme, problems } = checkTheme({ ...input.theme, follow: false, kept: false }, brandKey(), await fontsForCheck(tx, ws));
+      const { theme, problems } = checkTheme({ ...input.theme, follow: false, kept: false }, brandKey(), { ...await fontsForCheck(tx, ws), keepBody: parseJ(cur.theme, {})?.fonts?.body });
       if (problems.length) throw httpError(400, themeProblem(problems[0]));
       params.push(JSON.stringify(theme)); sets.push(`theme = $${params.length}`); changed.theme = theme;
     }
