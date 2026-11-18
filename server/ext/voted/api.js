@@ -42,6 +42,12 @@ const heldLine = (s, on) => {
     : 'Scrutineers’ names are held until polls close — Chief Election Officer not asked yet.';
 };
 
+const hasList = async (db, ctx) => Boolean((await db.query(
+  `select exists (select 1 from turf_members where workspace_id = $1 and user_id = $2)
+       or exists (select 1 from call_bank_numbers where workspace_id = $1 and assigned_to = $2 and done_at is null) as yes`,
+  [ctx.workspaceId, ctx.user.id],
+)).rows[0]?.yes);
+
 export const statusOf = async (db, ctx) => {
   const ws = ctx.workspaceId;
   const tz = tzOf(ctx);
@@ -71,7 +77,9 @@ export const statusOf = async (db, ctx) => {
     on_duty: dutyToday ? { role: g.post.role, place: g.post.place_id ? { id: g.post.place_id, name: g.post.place_name } : null } : null,
     scope: g.s.scope,
     // A volunteer kept to their turfs and phone bank with neither: Today says so.
-    ...(g.limited ? { has_list: await (async () => { const sc = await scopeOf(db, ctx); return sc.turfs.size > 0 || sc.bank.size > 0; })() } : {}),
+    // (Two existence reads, not the scope: that is kept a minute, and a
+    // status read must not freeze it before a new person reaches the index.)
+    ...(g.limited ? { has_list: await hasList(db, ctx) } : {}),
     // A scrutineer with no turf and no calls has nothing to receive live.
     ...(g.post && g.active ? { stream: !(await scrutineerOnly(db, ctx, g)) } : {}),
   };
