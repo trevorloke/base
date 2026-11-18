@@ -3,14 +3,14 @@
 //   by_turf    from the turf index and one set of the supporters who voted —
 //              never every located person in Node on every request
 //   by_place   the voting places, today's open ones first (open_today): names today, the last one's
-//              time, scrutineers on duty, the close
+//              time, scrutineers on duty (as vote.mark counts it), the close
 //   held       the To check names waiting (names still on phones can't be
 //              counted); marked_hour: scrutineer marks saved in the last hour
 //   practice   ?practice=1 while practice runs: practice marks over the
 //              record (only the Get out the vote screen asks)
 import { SUPPORT_CODES, countsOf, settingsOf } from './brief.js';
 import { turfIndex, peopleInTurf } from './turfindex.js';
-import { hoursOf, tzOf, today, placesOpenOn, closeAt } from './clock.js';
+import { hoursOf, tzOf, today, placesOpenOn, closeAt, votingDays, inWindow } from './clock.js';
 import { rowOf } from './state.js';
 import { startOfDay } from '../../lib/tzsql.js';
 import { localHm } from '../../lib/tzrule.js';
@@ -98,10 +98,15 @@ export const summaryOf = async (db, ctx, wantPractice) => {
   const posts = (await db.query(
     "select place_id, days from gotv_posts where workspace_id = $1 and ended_at is null and role = 'scrutineer'", [ws],
   )).rows;
-  const onDutyAt = (pid) => posts.filter((p) => p.place_id === pid && (() => {
+  // On duty as vote.mark has it (actions.js onDuty): today a voting day,
+  // GOTV not off with auto off, inside the day's window, the place open
+  // today, and today among the post's days (or every day). In practice:
+  // every open post.
+  const dutyToday = practice || (votingDays(s).includes(day) && (s.on_day || s.auto) && inWindow(h, s, day, tz));
+  const onDutyAt = (pid) => (!dutyToday || (!practice && !openIds.has(pid)) ? 0 : posts.filter((p) => p.place_id === pid && (() => {
     const days = typeof p.days === 'string' ? JSON.parse(p.days) : p.days || [];
-    return !days.length || days.includes(day);
-  })()).length;
+    return practice || !days.length || days.includes(day);
+  })()).length);
   const by_place = open.map((p) => ({
     place_id: p.id, name: p.name, open_today: openIds.has(p.id), marks_today: marks.get(p.id)?.n || 0, last_at: iso(marks.get(p.id)?.last_at),
     scrutineers_on_duty: onDutyAt(p.id), ...(() => { const c = closeAt(h, s, day, p.id, tz); return { closes_at: iso(c), closes_hm: c ? localHm(c, tz) : null }; })(),

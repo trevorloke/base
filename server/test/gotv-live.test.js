@@ -16,6 +16,7 @@ import { getDb } from '../db/client.js';
 import { app } from '../index.js';
 import { campaign, ok, no, readSSE, clockBack, square, plus, at } from './gotv-helpers.js';
 import { turfIndex, rebuild, dropIndex } from '../ext/voted/turfindex.js';
+import { forgetSummary } from '../ext/voted/summary.js';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
 
 process.env.STARBASE_GOTV_PING_MS = '300';
@@ -268,6 +269,24 @@ test('the summary: by voting place, marked in the last hour by when it reached t
   const again = ok(await k.mgr.get('/api/voted/summary'));
   assert.equal(again.held, sum.held, 'kept');
   void at;
+});
+
+test('scrutineers on duty: only on a voting day, inside its window, at a place open today (not on a day off)', async () => {
+  // The days as the tests above left them: GOTV's election day plus(31),
+  // Place One open on plus(30) (a guide day only) and plus(31).
+  const E = plus(31);
+  ok(await k.mgr.action('vote.settings', { election_day: E, advance_days: [], auto: true }));
+  ok(await k.mgr.action('site.guide.place.save', { id: k.p1, name: `Place One ${k.tag}`, address: '100 Example Ave', lat: 49.15, lng: -122.8, days: [{ day: plus(30) }, { day: E }] }));
+  const onDutyAt = async (day) => {
+    at(day, '10:00');
+    forgetSummary(k.ws, true);
+    const sum = ok(await k.mgr.get('/api/voted/summary'));
+    return sum.by_place.find((p) => p.place_id === k.p1).scrutineers_on_duty;
+  };
+  assert.equal(await onDutyAt(E), 1, 'election day: the scrutineer is on duty at Place One');
+  assert.equal(await onDutyAt(plus(30)), 0, 'the place is open but it isn’t a GOTV voting day: nobody is');
+  assert.equal(await onDutyAt(plus(32)), 0, 'a day off: nobody is');
+  forgetSummary(k.ws, true);
 });
 
 test('a held campaign lock: vote.mark answers 503 after the wait, which the outbox retries (real Postgres only)', async (t) => {
