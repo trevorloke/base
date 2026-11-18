@@ -208,3 +208,10 @@ test('a page made from a starter saves as a draft and won’t publish with its s
   assert.ok(saved);
   ok(await mgr.action('site.page.publish', { id: page.id }));
 });
+
+test('every kind of section has its drawing in the gallery (thumbs.jsx); a new kind without one is named here', async () => {
+  const { readFileSync } = await import('node:fs');
+  const src = readFileSync(new URL('../../web/src/components/site/thumbs.jsx', import.meta.url), 'utf8');
+  const missing = MODULES.map((m) => m.kind).filter((k) => !new RegExp(`^  ${k}: \\[`, 'm').test(src));
+  assert.deepEqual(missing, [], `kinds with no drawing: ${missing.join(', ')}`);
+});

@@ -27,22 +27,22 @@ const TEXTY = 'h1,h2,h3,h4,p,li,a,span,strong,em,blockquote,figcaption,dt,dd,sum
 function markFields(section, m) {
   const def = MODULE_BY_KIND[m?.kind];
   if (!def || !section) return;
+  // Marked afresh each time (a section kept as it was keeps its old marks).
+  for (const n of section.querySelectorAll('[data-wa-field]')) n.removeAttribute('data-wa-field');
   const used = new Set();
   const nodes = [...section.querySelectorAll(TEXTY)];
+  // The innermost element holding the words, not one holding a box
+  // already found (three points with the same words: one each, in order).
   const byText = (value, markdown) => {
     const want = norm(markdown ? markdownText(value, 400) : value);
     if (!want) return null;
     const head = want.slice(0, 60);
-    let best = null;
-    for (const n of nodes) {
-      if (used.has(n) || n.hasAttribute('data-wa-field')) continue;
+    const hits = nodes.filter((n) => {
+      if (used.has(n)) return false;
       const t = norm(n.textContent);
-      if (t === want || (head.length >= 12 && t.startsWith(head))) {
-        // The innermost element holding it.
-        if (!best || best.contains(n)) best = n;
-      }
-    }
-    return best;
+      return t === want || (head.length >= 12 && t.startsWith(head));
+    });
+    return hits.find((n) => !hits.some((o) => o !== n && n.contains(o)) && ![...used].some((u) => n.contains(u) || u.contains(n))) || null;
   };
   const byImg = (url) => (url ? [...section.querySelectorAll('img')].find((i) => !used.has(i) && (i.getAttribute('src') || '').includes(url)) : null);
   const put = (node, key) => { if (node) { node.setAttribute('data-wa-field', key); used.add(node); } };

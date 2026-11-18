@@ -193,7 +193,7 @@ function Builder({ id }) {
 
   const live = base.status === 'published';
   const nothingNew = live && !base.changed && !d.dirty() && d.save.state === 'saved';
-  const ctx = { campaigns, pages: pages || [], colors, toast: (text, undo) => say(text, { undo }), announce: setSaid };
+  const ctx = { campaigns, refreshCampaigns: () => campsQ.refetch(), pages: pages || [], colors, toast: (text, undo) => say(text, { undo }), announce: setSaid };
   const showFrame = width >= 1100 || (width >= 720 && side);
   const open = draft.modules.find((m) => m.id === openId);
   const general = (mid) => problems.find((p) => p.id === mid && !p.path)?.text;

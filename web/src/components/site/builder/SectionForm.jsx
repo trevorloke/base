@@ -1,6 +1,6 @@
 // One section's form in the builder's column (WA decision 19): "← All
-// sections" at the top (bare: in a phone's sheet, which has its own title), the section's boxes (Fields.jsx, from the catalogue),
-// and Done. focus: { path, n } — the box to put the cursor in (a tap in the
+// sections" at the top (bare: in a phone's sheet, which has its own
+// title), the section's boxes (Fields.jsx, from the catalogue), and Done. focus: { path, n } — the box to put the cursor in (a tap in the
 // preview, a problem Publish found): the catalogue's path ('titlePrefix',
 // 'items[2].title') or the preview's ('items.2.title').
 import { useEffect, useRef } from 'react';
@@ -15,7 +15,9 @@ export function boxFor(root, moduleId, path) {
   if (!root || !path) return null;
   const tail = `-${domId(moduleId)}-${catalogPath(path).replace(/\[(\d+)\]/g, '.$1').split('.').map(domId).join('-')}`;
   for (const end of ['', '-label', '-upload', '-alt', '-href']) {
-    const el = root.querySelector(`[id$="${tail}${end}"]`);
+    // A box, not a part of the form that happens to share the name (a list
+    // item's own "-body").
+    const el = root.querySelector(['input', 'textarea', 'select', 'button'].map((t) => `${t}[id$="${tail}${end}"]`).join(', '));
     if (el) return el;
   }
   return null;

@@ -455,15 +455,16 @@ export function ListField({ id, f, value, onChange, errors, path, ctx }) {
 
 // ── A petition or pledge ──
 // campaigns: null while they load (nothing is said to be gone till then).
-function CampaignField({ id, label, value, kinds, onChange, error, required, campaigns = null }) {
+function CampaignField({ id, label, value, kinds, onChange, error, required, campaigns = null, refresh }) {
   const errId = error ? `${id}-err` : null;
   const list = (campaigns || []).filter((c) => !kinds || kinds.includes(c.kind));
   const missing = value && !(campaigns || []).some((c) => c.id === value);
   return (
     <div className="field wb-field">
       <label htmlFor={id}>{label}{required && <span className="wb-req"> (needed to publish)</span>}</label>
+      {/* One made in another tab since: read again when the box is opened. */}
       <select id={id} className="input" value={value || ''} aria-invalid={error ? 'true' : undefined} aria-describedby={describe(errId)}
-        onChange={(e) => onChange(e.target.value)}>
+        onChange={(e) => onChange(e.target.value)} onFocus={() => refresh?.()}>
         <option value="">Pick one…</option>
         {missing && <option value={value}>{campaigns ? '(one that’s gone — pick another)' : 'Loading…'}</option>}
         {list.map((c) => (
@@ -521,7 +522,7 @@ export function Field({ f, id, path, value, onChange, errors, ctx }) {
     case 'number': return <NumberField {...common} min={f.min} max={f.max} error={err} />;
     case 'words': return <WordsField {...common} max={f.max} itemMax={f.itemMax} error={err || Object.entries(errors || {}).find(([k]) => k.startsWith(`${path}.`))?.[1]} />;
     case 'list': return <ListField id={id} f={f} value={value} onChange={onChange} errors={errors} path={path} ctx={ctx} />;
-    case 'campaign': return <CampaignField {...common} kinds={f.kinds} error={err} campaigns={ctx?.campaigns} />;
+    case 'campaign': return <CampaignField {...common} kinds={f.kinds} error={err} campaigns={ctx?.campaigns} refresh={ctx?.refreshCampaigns} />;
     case 'page': return <PageField {...common} error={err} pages={ctx?.pages} />;
     default: return null;
   }

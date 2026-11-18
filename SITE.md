@@ -920,9 +920,9 @@ theirs, and the server refuses its data anyway).
 
 | Address | Screen |
 |---|---|
-| `/website` | Overview: live or not, where it lives, "View site", this week's sign-ups by kind, pages, news, petitions, online giving |
-| `/website/pages` | Pages in the menu's order: New page, In the menu, ⋯ Move up/down · Duplicate · Delete (Undo); drag by the handle or tap it and "Move here" |
-| `/website/pages/:id` | The builder: sections (drag, tap or ⋯ to move; hide/show, duplicate, add below, delete with Undo), each a form made from its catalogue fields (`components/site/Fields.jsx`); page details (title, address, description, share picture, in the menu); the draft saves itself; Preview (a new tab, and beside the editor on a wide screen); Publish names the section and box that needs a look (`components/site/builder.js problemsOf`, the catalogue's own check) |
+| `/website` | Overview: live or not, where it lives, "View site", this week's sign-ups by kind, pages ("Edit the home page"), news, petitions, online giving |
+| `/website/pages` | Pages in the menu's order: New page ("What's this page for?": a starter, a name and its address), In the menu, ⋯ Move up/down · Duplicate · Delete (Undo); drag by the handle or tap it and "Move here" |
+| `/website/pages/:id` | The builder (below) |
 | `/website/theme` | A skin, the colours (every `PAIRS` pair's contrast as it changes; under 4.5:1 blocks saving; "Fix it" picks the nearest readable text colour), fonts, corners, logo, a live sample |
 | `/website/settings` | Menu and title bar, announcement bar, footer, organization, social accounts, search and sharing, your own domain |
 | `/website/news` · `/:id` | Posts: list, editor (picture, excerpt, Markdown), publish/unpublish, delete (Undo) |
@@ -931,6 +931,52 @@ theirs, and the server refuses its data anyway).
 | `/website/sites/:siteId` | One of them: Go live (a draft; a manager) or View site; while a draft, the checklist (home published, Authorized by, privacy link, address), each a tick or a link to fix it; sign-ups for 7 or 30 days and where they came from (30 days), "See everyone from this site" (`/people?web=site:<id>`); Pages · Look · Domain; ⋯ (a manager) Rename, Take offline, Delete (Undo), Release old address |
 | `/website/sites/:siteId/pages` · `/look` | Today's Pages and Theme with the site passed in (its own pages; its own look, saved with `site.microsite.save`, "Start from the campaign's brand" copies the brand's once); the builder says "On <site>" and previews and views it at the site's address |
 | `/website/sites/:siteId/domain` | The address (the `www.` is added), then — only once it's saved — the three steps in the safe order (buy it; add it in Render; the registrar's DNS records, pointing `www` at `RENDER_EXTERNAL_HOSTNAME`), each with Copy, and "Open https://…" |
+
+### The builder (WA stage 2a, `web/src/components/site/builder/`)
+
+- **Starters** (`shared/site/starters.js`): An issue, An event, A
+  petition, About us, Contact (Follow along only when Settings has social
+  accounts), Get involved, Blank. Every word a starter adds beyond the
+  catalogue's defaults is in `PLACEHOLDERS` (`shared/site/placeholders.js`),
+  with the catalogue's own hero sample. A draft may hold them; the
+  catalogue's strict check (Publish) refuses a box still holding one —
+  "still has the sample words" — and the builder opens that box. A seed's
+  placeholders go live as made (`checkModules(…, { samples: false })`); its
+  next Publish asks for real words. A new page opens on its first sample box.
+- **The page itself**: a top bar (← Pages, the title edited in place — a
+  page never published takes its address from it — Draft · Published ·
+  Published, with changes, "Saved 2:14 pm", Undo, Redo, Phone / Computer,
+  Preview in a new tab, ⋯ Page settings · View on the site · Duplicate ·
+  Take it off the site · Delete, and Publish); a 440 px column with the
+  sections as cards (handle, drawing, name, first words, ⋯ Hide ·
+  Duplicate · Move up · Move down · Delete; a + between every two) or the
+  open section's form; the live preview filling the rest at 1,100 px and
+  wider (Show preview at 720–1,099 px; under 720 px Preview opens it full
+  screen). Add a section is a gallery of drawings (`thumbs.jsx`) with a
+  search box, Most used first; the voter guide shows "Already on this
+  page" once there is one.
+- **Undo and Redo** (`history.js`): this visit's changes, 100 steps,
+  typing in one box one step a second; Ctrl/Cmd+Z, Shift+Ctrl/Cmd+Z,
+  Ctrl+Y. An undo is a change: it autosaves.
+- **The live preview**: the builder frames `/__preview/:id?…&edit=1`. A
+  draft's English preview carries the renderer's inputs as
+  `<script type="application/json" id="wa-rc">` and loads
+  `site-assets/site-preview.js` (`web/src/site-preview.js`, built as its
+  own file like the islands). The builder posts `{ type: 'wa:modules' }`
+  at most every 100 ms; the script calls the same `renderContext` and
+  components (`shared/site/components/preview.js drawBody`) and swaps only
+  the sections whose markup changed — before the autosave. A section
+  pointing at a petition the frame's data doesn't hold (`needsReload`,
+  `context.js`) shows "Updating preview…" and the frame is drawn again once
+  the autosave lands. Messages go only between the builder and its frame,
+  on one origin.
+- **Tap to edit**: with `edit=1` each section carries
+  `data-wa-section="<id>"` (the server marks them) and the script marks
+  each headline, paragraph, button and picture with `data-wa-field`
+  (`items.2.title`) by matching the section's own words; a tap posts
+  `{ type: 'wa:pick', section, field }` and the builder opens that box with
+  the cursor in it (on a phone, in a sheet with Done). Links and forms in
+  the frame do nothing. Never on a public page or a translated preview.
 
 Careful with "your own domain": on a host in `domains` only the site answers
 (no sign-in, no app). So `site.settings.save` refuses (400, in plain words)

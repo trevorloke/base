@@ -127,6 +127,10 @@ export default function WebsiteHome() {
               <h2 id="wb-t-pages" className="wb-tile__h">Pages</h2>
               <p className="wb-tile__n">{c.pages ?? 0}</p>
               <p className="wb-tile__sub">{c.published ?? 0} on the site{drafts.length ? ` · ${plural(drafts.length, 'draft')}` : ''}</p>
+              {/* A typo on the home page: fixed and published in a few taps (WA). */}
+              {(d.pages || []).some((p) => p.slug === 'home') && (
+                <Link className="wb-tile__go" to={`/website/pages/${d.pages.find((p) => p.slug === 'home').id}`}>Edit the home page</Link>
+              )}
               <Link className="wb-tile__go" to="/website/pages">Edit pages</Link>
             </section>
             <section className="wb-tile" aria-labelledby="wb-t-news">

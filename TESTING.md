@@ -681,19 +681,27 @@ comes back, or asks if words were typed meanwhile).
 
 - **Website (the admin)** — **Website** in the desk's menu (managers, or
   whoever a manager grants the Website area). **Overview**: live or not,
-  where it is (**View site**), this week's sign-ups. **Pages → New page**:
-  in its builder **+ Add a section** (Hero, Text block, Newsletter…), type
-  in each one's boxes (it says *Saved* by itself), drag a section by its
-  handle (or tap the handle, then *Move here*; or ⋯ → *Move up*), ⋯ →
-  *Hide from the page*, ⋯ → *Delete* then **Undo**. **Preview** opens the
-  draft in a new tab (and beside the editor on a wide screen). Add a
-  *Petition or pledge* without picking one and **Publish**: it says which
-  section and which box; pick one and publish — the page is at
-  `/site/<its address>`. **Theme**: make the brand colour light (white text
+  where it is (**View site**), this week's sign-ups. **Pages → New page →
+  An issue**, a name, **Make the page**: the builder opens on the page with
+  the preview beside it and the headline's sample words selected; type —
+  the preview changes before *Saved*. Tap a paragraph or a point in the
+  preview: its box opens with the cursor in it. **Publish** with a sample
+  box left: it's refused and that box opens. **+ Add a section** (a gallery
+  with a search box): Events shows in the preview at once; **Undo** /
+  **Redo** (or Ctrl+Z / Shift+Ctrl+Z) take it away and back. Make a petition
+  in another tab, add a *Petition or pledge* and pick it: "Updating
+  preview…", then it shows. Drag a section by its handle (or tap the handle,
+  then *Move here*; or ⋯ → *Move up*), ⋯ → *Hide from the page*, ⋯ →
+  *Delete* then **Undo**. **Preview** opens the draft in a new tab. On a
+  phone, **Preview** is full screen and a tap opens that section in a sheet.
+  From **Website**, *Edit the home page* → tap the headline → type →
+  **Publish** (4 taps). The page is at `/site/<its address>`. **Theme**: make the brand colour light (white text
   on it gets too hard to read) — *Save the look* is blocked until **Fix it**.
   **Petitions and pledges**: signatures against the goal, *See who signed*.
   A volunteer opening `/admin/website` is told it isn't theirs. Tests:
-  `server/test/site-builder.test.js`, `server/test/site-website.test.js`;
+  `server/test/site-builder.test.js`, `server/test/site-website.test.js`,
+  `server/test/site-editor.test.js` (starters, sample words, the preview's
+  browser path drawing every kind exactly as the server does);
   in a browser: `e2e-site-admin.mjs`.
 
 - **Languages** (Website → Languages): with no key it says to add one;
