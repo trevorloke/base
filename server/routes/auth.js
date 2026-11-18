@@ -31,6 +31,8 @@ import { loginOf } from '../lib/google/flow.js';
 // Election-day sign-in codes (ext/voted).
 import { usableCode, EXPIRED } from '../ext/voted/signin.js';
 import { codeSessionEnds } from '../ext/voted/clock.js';
+// Forgot password (ext/passwords).
+import { RUN_OUT, TOKEN_RE, checkLink, queueReset, resetByEmail, resetEvent, useLink } from '../ext/passwords/reset.js';
 
 const app = new Hono();
 
@@ -162,6 +164,8 @@ app.get('/setup', async (c) => {
   return c.json({
     open, organization: open ? orgName() : await campaignName(db), org: orgOut(),
     google: googleSetup().signin && rules.signin, googleDomain: rules.domain,
+    // Forgot password can email a link (ext/passwords); else it says to ask a manager.
+    resetByEmail: resetByEmail(),
   });
 });
 
@@ -322,6 +326,81 @@ app.post('/login/code', async (c) => {
   // Google stood in for the password: the link counts as used now.
   if (pending.via === 'google') await db.query('update google_logins set last_used_at = now() where user_id = $1', [pending.user_id]);
   return c.json({ ...(await meFor(db, ctx)), ...(r.used === 'recovery' ? { recovery_left: r.left } : {}) });
+});
+
+// ── Forgot password (ext/passwords/reset.js) ──
+// Asking for a link: the same answer, at once, whatever the address — the
+// work runs after it. Ten asks an hour from one address and three for one
+// email (Sam@… and sam@… are one), on top of sign-in's own limit; past a
+// limit the answer is the same and nothing is sent.
+const asksFrom = makeLimiter({ windowMs: 60 * 60_000, max: 10 });
+const asksFor = makeLimiter({ windowMs: 60 * 60_000, max: 3 });
+app.post('/forgot', async (c) => {
+  const { email } = await c.req.json().catch(() => ({}));
+  const e = String(email ?? '').trim().toLowerCase().slice(0, 320);
+  const ip = clientIp(c);
+  // Each limit counts this ask, in order; any one over stops it.
+  const over = triesFrom(ip) || asksFrom(ip) || (e && asksFor(e));
+  if (e && !over) queueReset(await getDb(), e);
+  return c.json({ ok: true });
+});
+
+// The Reset screen, with the token from the link's #t=: whose link it is.
+// No route takes the token in its path (it would land in logs).
+app.post('/reset/check', async (c) => {
+  if (triesFrom(clientIp(c))) return c.json({ error: TOO_MANY }, 429);
+  const { token } = await c.req.json().catch(() => ({}));
+  const row = await checkLink(await getDb(), token);
+  if (!row) return c.json({ error: RUN_OUT }, 404);
+  return c.json({ email: row.email });
+});
+
+class RunOut extends Error {}
+const resetInput = z.object({ token: z.string().regex(TOKEN_RE), password: z.string().min(8).max(200) });
+// A new password: the link used, every sign-in of the account ended, and on
+// the log of each campaign it's in. Two-step sign-in still asks its code.
+app.post('/reset', async (c) => {
+  const db = await getDb();
+  if (triesFrom(clientIp(c))) return c.json({ error: TOO_MANY }, 429);
+  const body = await c.req.json().catch(() => ({}));
+  if (!TOKEN_RE.test(String(body?.token ?? ''))) return c.json({ error: RUN_OUT }, 404);
+  const parsed = resetInput.safeParse(body);
+  if (!parsed.success) return c.json({ error: 'Choose a password of 8 or more characters.' }, 400);
+  const { token, password } = parsed.data;
+  const link = await checkLink(db, token);
+  if (!link) return c.json({ error: RUN_OUT }, 404);
+  const campaigns = (await db.query(
+    'select workspace_id from memberships where user_id = $1 order by created_at', [link.user_id],
+  )).rows.map((r) => r.workspace_id);
+  if (!campaigns.length) return c.json({ error: RUN_OUT }, 404);
+  // The slow hash first, outside any lock.
+  const passwordHash = await hashPassword(password);
+  let used;
+  try {
+    ({ result: used } = await runAction(db, { workspaceId: campaigns[0], actorId: link.user_id, action: 'auth.password.reset' }, async (tx, emit) => {
+      const row = await useLink(tx, token, passwordHash);
+      if (!row) throw new RunOut();
+      emit('user', row.user_id, 'update', resetEvent(row));
+      return row;
+    }));
+  } catch (e) {
+    if (e instanceof RunOut) return c.json({ error: RUN_OUT }, 404);
+    throw e;
+  }
+  // Their other campaigns here keep the same line on their own logs.
+  for (const ws of campaigns.slice(1)) {
+    await runAction(db, { workspaceId: ws, actorId: used.user_id, action: 'auth.password.reset' }, async (tx, emit) => {
+      emit('user', used.user_id, 'update', resetEvent(used));
+    });
+  }
+  failsFor.clear(`email:${link.email}`);
+  if ((await twoStepRow(db, used.user_id))?.on_since) {
+    setCookie(c, PENDING_COOKIE, await startPending(db, used.user_id, campaigns[0]), pendingCookie);
+    return c.json({ two_step: 'code' });
+  }
+  const sessionToken = await createSession(db, used.user_id, campaigns[0]);
+  setCookie(c, SESSION_COOKIE, sessionToken, cookieOpts);
+  return c.json(await meFor(db, await loadContext(db, sessionToken)));
 });
 
 // ── Invites: look up, then join (new account, or an existing one by password) ──
