@@ -70,7 +70,7 @@ export function useLiveChip() {
   const c = useSyncExternalStore(sub, chipSnap, chipSnap);
   if (c.conn === 'off') return null;
   if (c.conn === 'live') return { text: 'Live', live: true };
-  return { text: c.at ? ago(c.at) : 'Updated —', live: false };
+  return { text: c.at ? ago(c.at) : 'Connecting…', live: false };
 }
 
 // ── Writing a change into the copies ──
@@ -229,8 +229,8 @@ export function useGotvLive(status, me) {
     if (locks?.request) {
       locks.request(`gotv-live:${userId}`, () => new Promise((res) => { release = res; if (!stopped) start(); else res(); }))
         .catch(() => { if (!stopped) start(); });
-      // Waiting for another tab's lock: say it's live (that tab shares).
-      setConn('poll');
+      // Waiting for another tab's lock: that tab holds the stream and shares it.
+      setConn('live');
     } else start();
 
     return () => {
