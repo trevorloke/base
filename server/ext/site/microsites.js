@@ -153,11 +153,12 @@ const setDomains = async (tx, ctx, row, list, emit) => {
 };
 
 // Its first page: a hero with its name, then the newest open petition
-// (Website → Petitions) — else the newsletter. The catalogue's own words;
-// no buttons to pages it doesn't have.
+// (Website → Petitions) — else the newsletter. The catalogue's own words,
+// but never its sample paragraph (Publish refuses it); no buttons to pages
+// it doesn't have.
 const homeModules = async (tx, ws, name) => {
   const hero = newModule('hero', 'hero');
-  hero.props = { ...hero.props, titlePrefix: name.slice(0, 80), primaryCta: { label: '', href: '' }, secondaryCtas: [] };
+  hero.props = { ...hero.props, titlePrefix: name.slice(0, 80), text: '', primaryCta: { label: '', href: '' }, secondaryCtas: [] };
   const petition = (await tx.query(
     "select id from site_campaigns where workspace_id = $1 and deleted_at is null and status = 'open' and kind = 'petition' order by created_at desc, id limit 1", [ws],
   )).rows[0];

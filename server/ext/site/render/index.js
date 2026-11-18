@@ -26,7 +26,8 @@ import { withFallbacks } from '../../../../shared/site/components/lang.js';
 import { propsFor } from '../../../../shared/site/components/modules.js';
 import { moduleSegments } from '../../../../shared/site/segments.js';
 import { LANG_BY_CODE } from '../../../../shared/site/languages.js';
-import { assetUrl, islandsBuilt } from './assets.js';
+import { markSections, waInputs } from '../../../../shared/site/components/preview.js';
+import { assetUrl, islandsBuilt, previewBuilt } from './assets.js';
 
 // The switch's slide from one language to the next (TR): cross-document
 // view transitions, only on a website that draws the switch, and never for
@@ -95,11 +96,21 @@ export function renderSite({ kind = 'page', site, page: rawPage, post, campaign,
   // share sheet, sign-ups, the rotating words); the Menu alone works
   // without it, so a plain page loads no JavaScript.
   const script = / data-island="(?!menu")/.test(body) ? islandScript(ctx, rc.loc) : null;
+  // A draft's preview in English (WA decision 20): the renderer's inputs as
+  // data and the script that draws a section again as it's typed; with
+  // ?edit=1 (the builder's own frame) each section is marked for tap to edit.
+  // Never on a public page.
+  const live = Boolean(ctx?.preview) && k === 'page' && rc.lang === 'en';
+  const edit = live && ctx?.edit === true;
+  if (edit) body = markSections(body);
+  const wa = live
+    ? `<script type="application/json" id="wa-rc">${jsonForScript(waInputs({ kind: k, site, page, data, ctx }))}</script>${previewBuilt() ? `<script type="module" src="${esc(assetUrl(rc.loc.assets, 'site-preview.js'))}"></script>` : ''}`
+    : '';
   const meta = (name, content) => (content ? `<meta name="${name}" content="${esc(content)}">` : '');
   const prop = (name, content) => (content ? `<meta property="${name}" content="${esc(content)}">` : '');
   const ogTitle = head.title.replace(/ · [^·]*$/, '') || head.title;
   const html = '<!doctype html>'
-    + `<html lang="${esc(rc.lang)}" data-skin="${esc(t.skin)}" data-heading="${esc(t.fonts.heading)}" data-body="${esc(t.fonts.body)}">`
+    + `<html lang="${esc(rc.lang)}"${edit ? ' data-wa-edit=""' : ''} data-skin="${esc(t.skin)}" data-heading="${esc(t.fonts.heading)}" data-body="${esc(t.fonts.body)}">`
     + '<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
     + `<title>${esc(head.title)}</title>`
     // The voter guide in another website's frame: its links open in the
@@ -124,7 +135,7 @@ export function renderSite({ kind = 'page', site, page: rawPage, post, campaign,
     + hints
     + `<script type="application/ld+json">${jsonForScript(head.organization)}</script>`
     + '</head>'
-    + `<body>${body}${script ? `<script type="module" src="${esc(script)}"></script>` : ''}</body></html>`;
+    + `<body>${body}${script ? `<script type="module" src="${esc(script)}"></script>` : ''}${wa}</body></html>`;
   return { status: k === 'notFound' ? 404 : 200, html };
 }
 

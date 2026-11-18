@@ -917,7 +917,10 @@ export const makeSiteApp = (at) => {
     const settings = await settingsOf(site);
     const want = String(c.req.query('lang') || '');
     const lang = isOther(want) && (settings.languages?.on || []).includes(want) ? want : 'en';
-    return draw(c, site, { kind: 'page', page, key: null, ctx: { preview: true, lang } });
+    // ?edit=1: the builder's own frame, its sections marked for tap to edit
+    // (English only; a translated preview is looked at, not edited).
+    const edit = lang === 'en' && c.req.query('edit') === '1';
+    return draw(c, site, { kind: 'page', page, key: null, ctx: { preview: true, lang, ...(edit ? { edit: true } : {}) } });
   });
 
   // ── Pages ──
