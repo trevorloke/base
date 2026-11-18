@@ -197,6 +197,11 @@ export default function WhoVoted({ me: given }) {
     const at = new Date().toISOString();
     setFlash(row.id);
     setTimeout(() => setFlash(null), 600);
+    // Clear the box now, not after the send: a runner already typing the
+    // next name must not lose its first letters when the answer lands.
+    const was = { text, writtenAt, matching };
+    setText(''); setRows(null); setWrittenAt(null); setMatching(null); setSaid(null);
+    focus();
     try {
       const r = await queueAction('vote.mark', {
         person_id: row.id, voted: true, source: 'scrutineer', place_id: placeId, client_id: cid,
@@ -206,12 +211,12 @@ export default function WhoVoted({ me: given }) {
       const next = [entry, ...entered];
       setEntered(next); writeEntered(me, next);
       if (matching) dropNote(me, matching.id);
-      setText(''); setRows(null); setWrittenAt(null); setMatching(null); setSaid(null);
       say({ text: `Marked ${row.name}`, undo: cid });
     } catch (e) {
+      // Not taken: the name comes back unless a new one is being typed.
+      setText((t) => t || was.text); setWrittenAt((w) => w || was.writtenAt); setMatching((m) => m || was.matching);
       setSaid(e.message);
     }
-    focus();
   };
 
   const undo = async (cid) => {
@@ -231,17 +236,19 @@ export default function WhoVoted({ me: given }) {
   const toOffice = async () => {
     const typed = text.trim();
     if (typed.length < 2) return;
+    const was = { writtenAt, matching };
+    setText(''); setRows(null); setWrittenAt(null); setMatching(null); setSaid(null);
+    focus();
     try {
       await queueAction('gotv.check', {
         typed, place_id: placeId, written_at: writtenAt || new Date().toISOString(), ...(practice ? { practice: true } : {}),
       }, { who: typed });
       if (matching) dropNote(me, matching.id);
-      setText(''); setRows(null); setWrittenAt(null); setMatching(null); setSaid(null);
       say({ text: 'Sent to the office' });
     } catch (e) {
+      setText((t) => t || typed); setWrittenAt((w) => w || was.writtenAt); setMatching((m) => m || was.matching);
       setSaid(e.message);
     }
-    focus();
   };
 
   const matchNote = (n) => {

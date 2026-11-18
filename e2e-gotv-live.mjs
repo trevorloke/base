@@ -487,6 +487,7 @@ try {
   // ── 10. Many names at a runner's typing speed ──
   const before = ((await api(mpage, '/gotv/posts')).json.posts.find((p) => p.user_id === sam.id) || {}).lookups || 0;
   let refused = 0;
+  let missed = 0;
   sam.page.on('response', (r) => { if (r.url().includes('/api/gotv/find') && r.status() === 429) refused += 1; });
   await go(sam.page, `${FIELD}/gotv`);
   const tn = Date.now();
@@ -494,10 +495,14 @@ try {
     const nm = `Nina Zed${String(i).padStart(2, '0')}`;
     await sam.page.fill('#gv-q', '');
     await sam.page.type('#gv-q', `zed${String(i).padStart(2, '0')}`, { delay: 180 });
-    await sam.page.click(`.gv-row:has-text("${nm}")`, { timeout: 8000 }).catch(() => {});
+    const ok = await sam.page.click(`.gv-row:has-text("${nm}")`, { timeout: 8000 }).then(() => true, () => false);
+    if (!ok) {
+      missed += 1;
+      if (missed <= 3) console.log(`   10. no row for ${nm}: ${(await text(sam.page, 'main').catch(() => '')).slice(0, 300)}`);
+    }
   }
   const after = ((await api(mpage, '/gotv/posts')).json.posts.find((p) => p.user_id === sam.id) || {}).lookups || 0;
-  check(`10. ${NAMES} names at 180 ms a key in ${Math.round((Date.now() - tn) / 1000)} s: no 429, ≤ 3 look-ups a name (${after - before})`, refused === 0 && after - before <= 3 * NAMES && after - before >= NAMES);
+  check(`10. ${NAMES} names at 180 ms a key in ${Math.round((Date.now() - tn) / 1000)} s: no 429, ≤ 3 look-ups a name (${after - before} look-ups, ${refused} refused, ${missed} without a row)`, refused === 0 && after - before <= 3 * NAMES && after - before >= NAMES);
 
   // ── 11. The guide's live correction ──
   await go(ana.page, `${FIELD}/vote-info`);
