@@ -1,0 +1,38 @@
+/* The control centre's own pieces, on the app's variables and shared
+   classes (app.css). The system font: the console loads no web font. */
+.oc-body {
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-display: var(--font-sans);
+  background: var(--paper, var(--page));
+  min-height: 100vh;
+}
+.oc-top {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px;
+  padding: 8px 16px; border-bottom: 1px solid var(--rule, var(--line));
+  background: var(--paper-0, var(--card));
+}
+.oc-brand { font-weight: 600; font-size: 16px; text-decoration: none; min-height: 48px; display: inline-flex; align-items: center; }
+.oc-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-left: auto; }
+.oc-nav a { min-height: 48px; display: inline-flex; align-items: center; padding: 0 6px; font-size: 14px; color: var(--text-2); text-decoration: none; }
+.oc-nav a[aria-current='page'] { color: var(--text-1, var(--text)); font-weight: 600; text-decoration: underline; text-underline-offset: 6px; }
+.oc-inline { display: inline; margin: 0; }
+.oc-main { max-width: 1040px; margin: 0 auto; padding: 24px 16px 64px; }
+.oc-narrow { max-width: 440px; margin: 24px auto; }
+.oc-form { margin-top: 16px; }
+.oc-wide { width: 100%; }
+.oc-help { margin: 2px 0 0; font-size: 13px; color: var(--text-3, var(--quiet)); }
+.oc-status { min-height: 1.5em; margin: 8px 0; font-size: 14px; }
+.oc-status:empty { min-height: 0; margin: 0; }
+.oc-warn { color: var(--warn); }
+.oc-ok { color: var(--ok); }
+.oc-danger { color: var(--danger); }
+.oc-qr { display: block; width: 200px; height: 200px; margin: 8px auto 12px; }
+.oc-key { font-size: 15px; font-variant-numeric: tabular-nums; letter-spacing: 0.04em; word-break: break-all; color: var(--text-2); }
+.oc-codes { columns: 2; font-size: 16px; font-variant-numeric: tabular-nums; padding-left: 24px; }
+.oc-codes li { margin: 4px 0; }
+.oc-body .btn { min-height: 48px; }
+.oc-body .input { min-height: 48px; }
+@media (min-width: 900px) and (pointer: fine) {
+  .oc-body .btn, .oc-body .input { min-height: var(--ctl); }
+  .oc-nav a, .oc-brand { min-height: 40px; }
+}

@@ -8,6 +8,9 @@ import { Hono } from 'hono';
 import { cfg } from './config.mjs';
 import { openDb, dbAnswers } from './db.mjs';
 import { headers, hostSplit, sameOrigin } from './web.mjs';
+import { authRoutes, requireSession, makeLimits } from './auth-routes.mjs';
+import { html } from './pages/html.mjs';
+import { page } from './pages/layout.mjs';
 
 const file = (rel) => readFileSync(new URL(rel, import.meta.url), 'utf8');
 // The app's own look: its variables and shared classes, read once at start.
@@ -30,6 +33,10 @@ export const makeApp = ({ db }) => {
     app.get(path, (c) => c.body(body, 200, { 'Content-Type': type, 'Cache-Control': 'public, max-age=300' }));
   }
   app.use('*', sameOrigin);
+  const ctx = { db, limits: makeLimits() };
+  authRoutes(app, ctx);
+  app.use('*', requireSession(db));
+  app.get('/', (c) => c.html(String(page({ title: 'Campaigns', nav: true, here: 'campaigns', body: html`<h1>Campaigns</h1><p>No campaigns yet.</p>` }))));
   return app;
 };
 

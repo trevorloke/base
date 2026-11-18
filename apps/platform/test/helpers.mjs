@@ -66,3 +66,37 @@ export const browser = (app, { ip = '203.0.113.9' } = {}) => {
 };
 
 export const text = async (res) => res.text();
+
+// ── The operator, set up through the real screens ──
+import { totp, base32Decode } from '../../../server/lib/twostep.js';
+export const EMAIL = 'owner@example.org';
+export const PASSWORD = 'a long test password 1';
+
+export const keyFromPage = (body) => /class="oc-key"[^>]*>([A-Z2-7 ]+)</.exec(body)[1].replace(/ /g, '');
+// A code the app would show now. The step a code used can't be used again,
+// so tests that need another forget the last one first.
+export const codeNow = async (db, secret) => {
+  await db.query('update operators set totp_last_step = null');
+  return totp(base32Decode(secret), Date.now());
+};
+
+export const setUp = async (app, db, { email = EMAIL, password = PASSWORD, name = 'Olive Example', ip } = {}) => {
+  const b = browser(app, { ip });
+  let res = await b.post('/setup', { code: process.env.OPS_SETUP_CODE });
+  if (res.status !== 303) throw new Error(`setup code: ${res.status}`);
+  res = await b.post('/setup/you', { name, email, password });
+  if (res.status !== 303) throw new Error(`setup you: ${res.status} ${await res.text()}`);
+  const secret = keyFromPage(await (await b.get('/setup/app')).text());
+  res = await b.post('/setup/app', { code: totp(base32Decode(secret), Date.now()) });
+  if (res.status !== 303) throw new Error(`setup app: ${res.status} ${await res.text()}`);
+  const codesPage = await (await b.get('/setup/codes')).text();
+  const codes = [...codesPage.matchAll(/<li>([a-z0-9-]+)<\/li>/g)].map((m) => m[1]);
+  return { b, secret, codes, email, password };
+};
+
+export const signInAs = async (app, db, { email = EMAIL, password = PASSWORD, secret, ip } = {}) => {
+  const b = browser(app, { ip });
+  const res = await b.post('/signin', { email, password, code: await codeNow(db, secret) });
+  if (res.status !== 303) throw new Error(`signin: ${res.status}`);
+  return b;
+};
