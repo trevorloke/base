@@ -412,6 +412,11 @@ app.post('/import', async (c) => {
     else clean.push({ ...r.row, tags: tag ? [...new Set([...r.row.tags, tag])] : r.row.tags, index: i, extras: more.map((m) => m.value) });
   });
 
+  // A feature may hold a column back today (ext/voted: a Voted column on a
+  // voting day before polls close): the whole file waits, with its words.
+  const held = extras.find((x, k) => x.hold && clean.some((r) => r.extras[k] === true));
+  if (held) return c.json({ error: held.hold }, 409);
+
   await statsReady(c.get('db'));
   // Volunteer roles: the ones a row names that the person doesn't have yet.
   const addRoles = async (tx, personId, roles, write, emit, fresh = false) => {

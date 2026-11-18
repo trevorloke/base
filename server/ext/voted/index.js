@@ -16,7 +16,19 @@
 //   api.js      GET /voted/status (anyone) · /voted/summary (desk) · /voted/persons/:id
 //   import.js   the import's Voted column (importRows hook)
 //   brief.js    Today's numbers (brief hook), shared with the summary
+//
+// Live GOTV (scrutineers, the live feed, practice):
+//   clock.js     voting days, each place's close, the work window, sending open
+//   state.js     settings (kept 5 s), posts, active / practice / scope, votedCol
+//   posts.js     gotv.post.set · .end · gotv.signin.code · gotv.practice.clear
+//   find.js      a scrutineer's look-up, its limits
+//   live.js      the after-commit listener, the hub, notifyGuide, touchVotedFeed
+//   turfindex.js who is in each turf, in memory, sliced builds
+//   summary.js   the desk's numbers, kept 15 s
+//   scope.js     what routes/api.js asks (the row limit, the lock wait)
+//   signin.js    GET /go/:token (the confirm page) and the code's session
 export { sql } from './sql.js';
+import './live.js';
 export { actions } from './actions.js';
 export { api } from './api.js';
 import { importRows } from './import.js';
@@ -25,8 +37,10 @@ import { briefVoted } from './brief.js';
 export const hooks = { importRows, brief: briefVoted };
 
 // In the full export: every mark (and take-back) and the settings.
-export const exportTables = ['voted_marks', 'voted_settings'];
+// gotv_practice is not exported: it is wiped when practice ends.
+export const exportTables = ['voted_marks', 'voted_settings', 'gotv_posts', 'gotv_checks'];
+export { publicRoutes } from './signin.js';
 
 // The numbers by band and by turf are the desk's; the switch's state and a
 // person's own marks are anyone's.
-export const deskOnlyReads = ['/voted/summary'];
+export const deskOnlyReads = ['/voted/summary', '/gotv/posts', '/gotv/checks'];

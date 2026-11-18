@@ -7,7 +7,7 @@ import { Hono } from 'hono';
 import { getCookie } from 'hono/cookie';
 import { compress } from 'hono/compress';
 import { getDb } from '../db/client.js';
-import { loadContext, SESSION_COOKIE } from '../lib/auth.js';
+import { loadContext, SESSION_COOKIE, scopeAllows, GOTV_ONLY } from '../lib/auth.js';
 import { openWhileSettingUp, SETUP_FIRST } from '../lib/twostep.js';
 import { runAction, verifyChain } from '../lib/events.js';
 import { ACTIONS, httpError } from '../actions/index.js';
@@ -50,6 +50,9 @@ import { myBookingSql } from '../ext/schedule/hours.js';
 import { inMyTurf } from '../ext/core/index.js';
 import { deskList } from '../ext/todaycounts/index.js';
 import { guideLangs } from '../ext/voteguide/read.js';
+// Live GOTV (ext/voted): who may see who voted, and the voting-day lock wait.
+import { GOTV_LOCKED, gotvLockMs, gotvRead, rowLimit } from '../ext/voted/scope.js';
+import { votedCol, scopeOf } from '../ext/voted/state.js';
 
 // Gift rows flagged as maybe one donor (idsOf: the ids a row names, as
 // stored) get maybe_same_as: those records by name, as things stand.
@@ -77,6 +80,8 @@ app.use('*', async (c, next) => {
   const db = await getDb();
   const ctx = await loadContext(db, getCookie(c, SESSION_COOKIE));
   if (!ctx) return c.json({ error: 'not signed in' }, 401);
+  // An election-day code's sign-in works for Who voted only (lib/auth.js).
+  if (!scopeAllows(ctx, c.req.method, c.req.path)) return c.json({ error: GOTV_ONLY }, 403);
   // Two-step sign-in the campaign requires for this role and not set up yet
   // (lib/twostep.js): the set-up answers, nothing else does. 401, so the
   // phone keeps anything still to send until it's done.
@@ -127,6 +132,19 @@ app.use('*', async (c, next) => {
   await next();
 });
 
+// Live GOTV (ext/voted): the reads that carry who voted get this person's
+// GOTV state once (kept 5 s per campaign): practice marks over voted_at for
+// someone practising, and a volunteer's people kept to their own turfs and
+// phone banks while GOTV is on.
+const GOTV_READS = /^\/api\/(map|persons|turfs|passes)(\/|$)/;
+app.use('*', async (c, next) => {
+  const ctx = c.get('ctx');
+  if (c.req.method === 'GET' && GOTV_READS.test(c.req.path)) ctx.gotv = await gotvRead(c.get('db'), ctx);
+  await next();
+});
+// The voted_at a field read carries (ext/voted votedCol), on the unaliased table.
+const doorCols = (ctx) => (ctx.gotv?.overlay ? DOOR_COLS.replace('voted_at', `${votedCol(ctx.gotv, 'persons')} as voted_at`) : DOOR_COLS);
+
 // Path ids are uuids; anything else is simply not found (not a 500).
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const badId = (c) => !UUID_RE.test(c.req.param('id') || '');
@@ -149,17 +167,26 @@ app.post('/actions/:name', async (c) => {
     // Slow work that must never hold the campaign's write lock (a slow
     // hash): done first, and handed to the handler.
     const ready = action.before ? await action.before(c.get('db'), ctx, parsed.data) : undefined;
+    // A voting day's marks and knocks never queue long for the campaign's
+    // lock: 503 after 5 s, which the phone's outbox tries again (ext/voted).
+    const lockTimeoutMs = GOTV_LOCKED.has(name) ? await gotvLockMs(c.get('db'), ctx) : undefined;
     const { result, lastSeq } = await runAction(
       c.get('db'),
-      { workspaceId: ctx.workspaceId, actorId: ctx.user.id, action: name },
+      { workspaceId: ctx.workspaceId, actorId: ctx.user.id, action: name, lockTimeoutMs },
       (tx, emit) => action.handler(tx, ctx, parsed.data, emit, ready),
     );
     // What this person may read of what was saved (person.update: lib/viewer.js).
-    if (!action.after) return c.json({ ...(action.answer ? action.answer(ctx, result) : result), seq: lastSeq });
+    // bareFor: an answer that must be the same bytes every time (a
+    // scrutineer's mark) carries no seq either.
+    const shaped = (r, seq) => {
+      const body = action.answer ? action.answer(ctx, r) : r;
+      return action.bareFor?.(ctx) ? body : { ...body, seq };
+    };
+    if (!action.after) return c.json(shaped(result, lastSeq));
     // Committed: now the work that must never hold the campaign lock (an
     // email send). Its writes are runActions of their own.
     const done = await action.after(c.get('db'), ctx, result);
-    return c.json({ ...done.result, seq: done.lastSeq ?? lastSeq });
+    return c.json(shaped(done.result, done.lastSeq ?? lastSeq));
   } catch (e) {
     if (e.status) return c.json({ error: e.message, ...(e.field ? { field: e.field } : {}), ...(e.link !== undefined ? { link: e.link } : {}) }, e.status);
     throw e;
@@ -213,9 +240,13 @@ app.get('/persons', async (c) => {
   // card needs no per-person fetch. Nothing else from attrs is exposed.
   // followers (ext/socials): only on the desk's rows sorted by a following.
   const withFollowers = ctx.role !== 'volunteer' && Boolean(c.req.query('followers'));
+  // While GOTV keeps a volunteer to their turfs and phone banks, the rows
+  // outside them are not sent (never sent with a false "not voted").
+  from += await rowLimit(c.get('db'), ctx, params);
+  const field = ctx.role === 'volunteer' ? ctx.gotv : null;
   const { rows } = await c.get('db').query(
     `select p.id, p.kind, p.name, p.first_name, p.middle_name, p.last_name, p.email, p.phone, p.address, p.house_number, p.unit, p.city, p.postal,
-            p.lat, p.lng, p.tags, p.socials, p.rating, p.rated_at, p.voted_at, p.attrs->>'note' as note${withFollowers ? ', p.followers' : ''}
+            p.lat, p.lng, p.tags, p.socials, p.rating, p.rated_at, ${votedCol(field, 'p')} as voted_at, p.attrs->>'note' as note${withFollowers ? ', p.followers' : ''}
      from persons p where ${where}${reachSql(c.req.query('reach'))}${from}
      order by ${azKey('p')} limit $4`,
     params,
@@ -230,7 +261,8 @@ app.get('/persons/count', async (c) => {
   const ctx = c.get('ctx');
   const { where, params } = await personsWhere(c.get('db'), ctx, c.req.query());
   params[3] = 1;
-  const { rows } = await c.get('db').query(`select count(*)::int as total from persons p where ${where}${reachSql(c.req.query('reach'))}`, params);
+  const limit = await rowLimit(c.get('db'), ctx, params);
+  const { rows } = await c.get('db').query(`select count(*)::int as total from persons p where ${where}${reachSql(c.req.query('reach'))}${limit}`, params);
   return c.json({ total: rows[0].total });
 });
 
@@ -240,8 +272,10 @@ app.get('/persons/count', async (c) => {
 // Permissions → Volunteers' map): then only the doors inside those turfs
 // (and their own) reach the phone — and its kept copy. A volunteer given
 // Map & turfs sees every door, as the desk does.
+// While GOTV is on and keeps volunteers to their turfs (ext/voted), their
+// map is their turfs whatever this setting says.
 const turfsOnly = (ctx) => ctx.role === 'volunteer'
-  && ctx.workspace?.settings?.permissions?.volunteerDoors === 'turfs'
+  && (ctx.workspace?.settings?.permissions?.volunteerDoors === 'turfs' || Boolean(ctx.gotv?.active && ctx.gotv.s.scope === 'turfs'))
   && decide(ctx.perms, 'map') !== true;
 
 // Up to MAP_ALL located people the map loads them all at once (and keeps a
@@ -293,7 +327,7 @@ const turfDoors = async (db, ctx, { signs: withSigns = true } = {}) => {
   const byAddress = (a, b) => String(a.address || '').toLowerCase().localeCompare(String(b.address || '').toLowerCase())
     || String(a.name || '').toLowerCase().localeCompare(String(b.name || '').toLowerCase());
   const persons = (await db.query(
-    `select ${DOOR_COLS} from persons
+    `select ${doorCols(ctx)} from persons
      where workspace_id = $1 and deleted_at is null and lat is not null and lng is not null
        and (${[...near, `($2 <> '' and lower(email) = $2)`].join(' or ')})`,
     params,
@@ -355,7 +389,7 @@ const doorOf = async (db, ctx, id) => {
     ? `(lower(btrim(address)) = lower(btrim($7::text)) and lower(btrim(coalesce(unit, ''))) = lower(btrim(coalesce($8::text, ''))))`
     : 'address is null';
   const persons = (await db.query(
-    `select ${DOOR_COLS} from persons
+    `select ${doorCols(ctx)} from persons
      where workspace_id = $1 and deleted_at is null and lat between $2 and $3 and lng between $4 and $5
        and (id = $6 or ${sameDoor})
      order by lower(name) limit 500`,
@@ -435,7 +469,7 @@ app.get('/map/doors', async (c) => {
     const inBox = 'workspace_id = $1 and deleted_at is null and lat between $2 and $4 and lng between $3 and $5';
     const count = (await db.query(`select count(*)::int as n from persons where ${inBox}`, [ctx.workspaceId, ...bbox])).rows[0].n;
     if (count <= rowsMax) {
-      const rows = (await db.query(`select ${DOOR_COLS} from persons where ${inBox}`, [ctx.workspaceId, ...bbox])).rows;
+      const rows = (await db.query(`select ${doorCols(ctx)} from persons where ${inBox}`, [ctx.workspaceId, ...bbox])).rows;
       return c.json({
         persons: rows.map(personRow).map(forViewer(ctx)), signs: await signsIn(db, ctx.workspaceId, bbox),
         unlocated, scope: 'view', truncated: false, count,
@@ -467,7 +501,7 @@ app.get('/map/doors', async (c) => {
     });
   }
   const persons = (await db.query(
-    `select ${DOOR_COLS} from persons
+    `select ${doorCols(ctx)} from persons
      where workspace_id = $1 and deleted_at is null and lat is not null and lng is not null
      order by lower(address), lower(name)`,
     [ctx.workspaceId],
@@ -510,7 +544,7 @@ app.get('/persons/:id', async (c) => {
   const ctx = c.get('ctx');
   const db = c.get('db');
   const person = (await db.query(
-    `select id, kind, name, first_name, middle_name, last_name, email, phone, address, house_number, unit, city, postal, lat, lng, tags, socials, rating, rated_at, voted_at, created_at,
+    `select id, kind, name, first_name, middle_name, last_name, email, phone, address, house_number, unit, city, postal, lat, lng, tags, socials, rating, rated_at, ${votedCol(ctx.role === 'volunteer' ? ctx.gotv : null, 'persons')} as voted_at, created_at,
             attrs->>'note' as note, social_reach, followers, address_status${ctx.role === 'volunteer' ? '' : `,
             ${whyNotSql('email', 'direct', personCols('persons', '$2'))} as email_why`}
      from persons where id = $1 and workspace_id = $2 and deleted_at is null`,
@@ -588,6 +622,12 @@ app.get('/persons/:id', async (c) => {
     // what happened (lib/viewer.js would pass every column through).
     const mayMove = decide(ctx.perms, 'people') === true
       || (person.lat != null && person.lng != null && await inMyTurf(db, ctx, person.lat, person.lng));
+    // Outside their turfs and phone banks while GOTV keeps them there: no
+    // voted state at all (ext/voted), never a false "not voted".
+    if (ctx.gotv?.limited && !(await scopeOf(db, ctx)).ids.has(person.id)) {
+      delete person.voted_at;
+      person.voted_hidden = true;
+    }
     return c.json({
       person: forViewer(ctx)(personRow(person)), gifts: [], totals: [], contacts, roles, signs, shifts, donor: null,
       household: household.map(({ id, name, rating }) => ({ id, name, rating })),
@@ -620,7 +660,7 @@ const loadLocated = async (db, ctx, pass = null, box = null, onList = null, { na
   const params = box ? [ctx.workspaceId, pass?.id || null, ...box] : [ctx.workspaceId, pass?.id || null];
   const listed = onList ? `coalesce((${joinWhere(params, onList)}), false)` : null;
   return (await db.query(
-    `select p.id, p.name,${names ? ' p.first_name, p.last_name,' : ''} p.email, p.phone, p.address, p.house_number, p.unit, p.city, p.lat, p.lng, p.rating, p.tags, p.voted_at,
+    `select p.id, p.name,${names ? ' p.first_name, p.last_name,' : ''} p.email, p.phone, p.address, p.house_number, p.unit, p.city, p.lat, p.lng, p.rating, p.tags, ${votedCol(ctx.gotv, 'p')} as voted_at,
             (select max(c.created_at) from contacts c where c.person_id = p.id and c.workspace_id = p.workspace_id) as last_contact_at,
             (select c.outcome from contacts c where c.person_id = p.id and c.workspace_id = p.workspace_id order by c.created_at desc limit 1) as last_outcome,
             exists (select 1 from contacts c where c.person_id = p.id and c.workspace_id = p.workspace_id and c.channel = 'door') as door_knocked,

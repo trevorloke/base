@@ -36,14 +36,30 @@ const hashToken = (t) => createHash('sha256').update(t).digest('hex');
 export const SESSION_COOKIE = 'mv2_session';
 const SESSION_DAYS = 30;
 
-export const createSession = async (db, userId, workspaceId) => {
+// { scope, via, expiresAt }: a limited sign-in (an election-day code,
+// ext/voted: scope 'gotv', made by the gotv_signin row `via`), ending at
+// expiresAt and never later than the usual 30 days.
+export const createSession = async (db, userId, workspaceId, { scope = null, via = null, expiresAt = null } = {}) => {
   const token = randomBytes(32).toString('hex');
   await db.query(
-    `insert into sessions (token_hash, user_id, workspace_id, expires_at)
-     values ($1, $2, $3, now() + interval '${SESSION_DAYS} days')`,
-    [hashToken(token), userId, workspaceId],
+    `insert into sessions (token_hash, user_id, workspace_id, expires_at, scope, via)
+     values ($1, $2, $3, least(now() + interval '${SESSION_DAYS} days', coalesce($4::timestamptz, 'infinity')), $5, $6)`,
+    [hashToken(token), userId, workspaceId, expiresAt, scope, via],
   );
   return token;
+};
+
+// A sign-in limited to Who voted (scope 'gotv'): its page, the look-up,
+// a mark, an undo, a check, the switch's state and signing out. Checked
+// here, with the session, so no route can forget it.
+export const GOTV_ONLY = 'This sign-in only works for Who voted.';
+const GOTV_READS = [/^\/api\/gotv\/(find|places)$/, /^\/api\/voted\/status$/, /^\/api\/auth(\/|$)/];
+const GOTV_WRITES = /^\/api\/actions\/(vote\.mark|vote\.undo|gotv\.check)$/;
+export const scopeAllows = (ctx, method, path) => {
+  if (!ctx?.scope) return true;
+  if (ctx.scope !== 'gotv') return false;
+  if (method === 'GET' || method === 'HEAD') return GOTV_READS.some((re) => re.test(path));
+  return GOTV_WRITES.test(path) || /^\/api\/auth\/logout$/.test(path);
 };
 
 export const destroySession = async (db, token) => {
@@ -56,7 +72,7 @@ export const loadContext = async (db, token) => {
   const { rows } = await db.query(
     `select u.id as user_id, u.email, u.name as user_name, m.role, m.permissions,
             w.id as workspace_id, w.name as ws_name, w.slug as ws_slug, w.candidate, w.jurisdiction, w.settings,
-            t.on_since is not null as two_step_on,
+            t.on_since is not null as two_step_on, s.scope as session_scope,
             c.id as cand_id, c.name as cand_name, c.office as cand_office, c.race as cand_race
      from sessions s
      join users u on u.id = s.user_id
@@ -88,6 +104,8 @@ export const loadContext = async (db, token) => {
     candidate,
     // This sign-in (its hash), so an action can keep it and end the others.
     session: hashToken(token),
+    // null: the whole app; 'gotv': Who voted only (scopeAllows).
+    scope: r.session_scope || null,
     twoStep: { on: Boolean(r.two_step_on), required, mustSetUp: required && !r.two_step_on },
     perms,
     workspaceId: r.workspace_id,

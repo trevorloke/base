@@ -9,10 +9,10 @@ import { DEFAULT_TZ } from '../../lib/org.js';
 import { startOfDay } from '../../lib/tzsql.js';
 import { now } from '../../lib/clock.js';
 import { localDay } from '../../lib/tzrule.js';
+import { rowOf } from './state.js';
 
 export const SUPPORT_CODES = ['1', '2'];
 const START_OF_TODAY = startOfDay('$2::text');
-const dateOnly = (d) => (d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10));
 
 // GOTV mode: on by hand (manual), or by itself on a voting day — an
 // advance-voting day or election day, in the campaign's day — while auto is
@@ -22,17 +22,14 @@ const dateOnly = (d) => (d instanceof Date ? d.toISOString().slice(0, 10) : Stri
 // B.C.'s current rule (lib/tzrule.js); a zone Intl doesn't know throws.
 const campaignDay = (tz) => { new Intl.DateTimeFormat('en-CA', { timeZone: tz }); return localDay(now(), tz); };
 export const settingsOf = async (db, ctx) => {
-  const ws = ctx.workspaceId;
   const tz = ctx.workspace?.settings?.tz || DEFAULT_TZ;
-  const s = (await db.query('select on_day, election_day, advance_days, auto from voted_settings where workspace_id = $1', [ws])).rows[0];
-  const election_day = s?.election_day ? dateOnly(s.election_day) : null;
-  const raw = typeof s?.advance_days === 'string' ? JSON.parse(s.advance_days) : (s?.advance_days || []);
-  const advance_days = [...new Set(raw.filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)))].sort();
-  const auto = s ? s.auto !== false : true;
+  // The settings row, kept 5 s and dropped on every settings commit (state.js).
+  const s = await rowOf(db, ctx.workspaceId);
+  const { election_day, advance_days, auto } = s;
   let day = null;
   try { day = campaignDay(tz); } catch { day = campaignDay(DEFAULT_TZ); }
   const voting_day = day === election_day ? 'election' : advance_days.includes(day) ? 'advance' : null;
-  const manual = Boolean(s?.on_day);
+  const manual = s.on_day;
   return { on: manual || (auto && Boolean(voting_day)), manual, auto, election_day, advance_days, voting_day };
 };
 

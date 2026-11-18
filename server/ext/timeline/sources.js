@@ -109,14 +109,29 @@ const signs = async (db, q) => (await rowsOf(db, `
 }));
 
 // ── Voted marks ──
-const VOTED_WHERE = { door: 'At the door', phone: 'On a call', desk: 'At the desk', file: 'From a voted list' };
-const voted = async (db, q) => (await rowsOf(db, `
-  select ${ms('m.created_at')} as at, 'voted:' || m.id::text as key, m.voted, m.source, u.name as by_name
-    from voted_marks m left join users u on u.id = m.marked_by
-   where m.workspace_id = $1 and m.person_id = $2`, q,
-)).map((r) => entry(r, 'field', 'voted', 'Voted', r.voted ? 'Marked as voted' : 'Voted mark taken back', {
-  detail: VOTED_WHERE[r.source] || null, by: q.viewer.desk ? r.by_name || null : null,
-}));
+// While GOTV keeps a volunteer to their turfs and phone banks (ext/voted
+// decision 18), a person outside them has no voted entries at all
+// (viewer.votedHidden); a scrutineer's mark says "At a voting place", with
+// the place's name only for the desk; a practice mark (only for someone
+// practising, viewer.practice) says so.
+const VOTED_WHERE = { door: 'At the door', phone: 'On a call', desk: 'At the desk', file: 'From a voted list', scrutineer: 'At a voting place' };
+const voted = async (db, q) => {
+  if (q.viewer.votedHidden) return [];
+  const real = (await rowsOf(db, `
+  select ${ms('m.created_at')} as at, 'voted:' || m.id::text as key, m.voted, m.source, u.name as by_name, pl.name as place, false as practice
+    from voted_marks m left join users u on u.id = m.marked_by left join places pl on pl.id = m.place_id
+   where m.workspace_id = $1 and m.person_id = $2${q.viewer.practice ? `
+  union all
+  select ${ms('g.created_at')} as at, 'practice:' || g.id::text as key, g.voted, g.source, null as by_name, null as place, true as practice
+    from gotv_practice g where g.workspace_id = $1 and g.person_id = $2` : ''}`, q,
+  ));
+  return real.map((r) => entry(r, 'field', 'voted', 'Voted', r.practice
+    ? (r.voted ? 'Practice: marked as voted' : 'Practice: mark taken back')
+    : r.voted ? 'Marked as voted' : 'Voted mark taken back', {
+    detail: r.source === 'scrutineer' && q.viewer.desk && r.place ? `${VOTED_WHERE.scrutineer} · ${r.place}` : VOTED_WHERE[r.source] || null,
+    by: q.viewer.desk ? r.by_name || null : null,
+  }));
+};
 
 // ── Texts through the campaign's number (a volunteer: the threads they started) ──
 // One from them is "Received", not "Replied": some people text first.
