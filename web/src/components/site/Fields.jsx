@@ -116,7 +116,9 @@ function LinkField({ id, label, value, onChange, errors, path, pages }) {
 }
 
 // ── A picture: upload or pick one, the spot to keep in view, and what it shows ──
-export function ImageField({ id, label, value, onChange, error, altError, required, hint }) {
+// plain: a logo or a share picture — one file as it is, no spot to keep in
+// view, never decorative.
+export function ImageField({ id, label, value, onChange, error, altError, required, hint, plain = false }) {
   const v = value && typeof value === 'object' ? value : { url: '', alt: '' };
   const file = useRef(null);
   const [busy, setBusy] = useState(false);
@@ -134,9 +136,9 @@ export function ImageField({ id, label, value, onChange, error, altError, requir
     setBusy(true);
     setUpErr(null);
     try {
-      const media = await uploadSizedPicture(f);
+      const media = plain ? await uploadSitePicture(f) : await uploadSizedPicture(f);
       const now = latest.current;
-      now.onChange(pictureValue(media, now.v.alt || ''));
+      now.onChange(plain ? { url: media.url || `/media/${media.id}`, alt: now.v.alt || '' } : pictureValue(media, now.v.alt || ''));
     } catch (err) {
       setUpErr(err.message);
     } finally {
@@ -151,8 +153,10 @@ export function ImageField({ id, label, value, onChange, error, altError, requir
       <legend>{label}{required && <span className="wb-req"> (needed to publish)</span>}</legend>
       {hint && <p className="wb-field__hint">{hint}</p>}
       <div className="wb-image__row">
-        {v.url ? <FocusSpot id={id} v={v} onChange={onChange} /> : (
-          <div className="wb-image__thumb" data-empty=""><span aria-hidden="true">No picture</span></div>
+        {v.url && !plain ? <FocusSpot id={id} v={v} onChange={onChange} /> : (
+          <div className="wb-image__thumb" data-empty={v.url ? undefined : ''}>
+            {v.url ? <img src={at(v.url)} alt={v.alt ? `Chosen: ${v.alt}` : 'The chosen picture'} loading="lazy" /> : <span aria-hidden="true">No picture</span>}
+          </div>
         )}
         <div className="wb-image__tools">
           <input ref={file} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={pick} />
@@ -169,11 +173,11 @@ export function ImageField({ id, label, value, onChange, error, altError, requir
           error={altError} hint={noAlt ? 'Say it in a few words, like “Volunteers knocking on doors on a sunny afternoon”.' : null}
           onChange={(alt) => onChange({ ...v, alt })} />
       )}
-      {v.url && (
+      {v.url && !plain && (
         <ToggleField id={`${id}-deco`} label="Decorative (says nothing new)" value={v.decorative === true}
           onChange={(on) => { const { decorative, ...rest } = v; onChange(on ? { ...rest, decorative: true } : rest); }} />
       )}
-      {picking && <PicturePicker onClose={() => setPicking(false)} onPick={(p) => { setPicking(false); onChange(pictureValue(p, v.alt || '')); }} />}
+      {picking && <PicturePicker onClose={() => setPicking(false)} onPick={(p) => { setPicking(false); onChange(plain ? { url: p.url, alt: v.alt || '' } : pictureValue(p, v.alt || '')); }} />}
     </fieldset>
   );
 }

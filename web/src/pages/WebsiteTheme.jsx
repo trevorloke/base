@@ -373,7 +373,7 @@ export default function WebsiteTheme() {
 
               <section className="card" aria-labelledby="wb-th-logo">
                 <h2 id="wb-th-logo" className="wb-card-h">Logo</h2>
-                <ImageField id="wb-logo" label="The logo in the title bar" value={t.logo}
+                <ImageField plain id="wb-logo" label="The logo in the title bar" value={t.logo}
                   hint="A PNG with a see-through background works best on the brand colour."
                   onChange={(v) => setT((x) => ({ ...x, logo: v }))} />
               </section>

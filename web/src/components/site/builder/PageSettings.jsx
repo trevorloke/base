@@ -42,7 +42,7 @@ export function PageSettings({ open, onClose, draft, base, change, onSlug, langu
         </form>
         <TextField id="wb-desc" label="Description (for search engines and shares)" max={300} multiline value={draft.description}
           onChange={(v) => change((d) => ({ ...d, description: v }), 'description')} />
-        <ImageField id="wb-share" label="Share picture" value={draft.image}
+        <ImageField plain id="wb-share" label="Share picture" value={draft.image}
           hint="Shown when the page is shared. Without one, the site’s own (Settings → Search and sharing)."
           onChange={(v) => change((d) => ({ ...d, image: v }))} />
         <ToggleField id="wb-nav" label="Show this page in the site’s menu" value={draft.show_in_nav}
