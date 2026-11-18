@@ -24,6 +24,7 @@ import { mayEnterName, WORDS } from './actions.js';
 import { notOpenDays } from './posts.js';
 import { turfsOfPerson } from './turfindex.js';
 import { now } from '../../lib/clock.js';
+import { localHm } from '../../lib/tzrule.js';
 import { startOfDay } from '../../lib/tzsql.js';
 
 export const api = new Hono();
@@ -63,6 +64,8 @@ export const statusOf = async (db, ctx) => {
     send: g.s.send,
     send_open: g.practice || sendOpen(h, g.s, day, placeId, tz),
     closes_at: iso(close),
+    // The wall time, by the campaign's rule (a phone's own zone data may be older).
+    closes_hm: close ? localHm(close, tz) : null,
     ...(isDesk(ctx) ? { held_line: heldLine(g.s, g.on) } : {}),
     feed: Number(feed || 0),
     on_duty: dutyToday ? { role: g.post.role, place: g.post.place_id ? { id: g.post.place_id, name: g.post.place_name } : null } : null,
@@ -229,7 +232,7 @@ api.get('/gotv/places', async (c) => {
   const h = await hoursOf(db, ctx.workspaceId);
   const day = today(tz);
   const places = [...h.places.values()].filter((p) => !p.gone)
-    .map((p) => ({ id: p.id, name: p.name, open_today: p.listed && p.days.has(day) && p.closed_on !== day, closes_at: iso(closeAt(h, g.s, day, p.id, tz)) }))
+    .map((p) => { const c = closeAt(h, g.s, day, p.id, tz); return { id: p.id, name: p.name, open_today: p.listed && p.days.has(day) && p.closed_on !== day, closes_at: iso(c), closes_hm: c ? localHm(c, tz) : null }; })
     .sort((a, b) => Number(b.open_today) - Number(a.open_today) || a.name.localeCompare(b.name));
   return c.json({ places });
 });

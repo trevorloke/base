@@ -163,27 +163,30 @@ check('Today → Go to lists "Get out the vote"', !!rowOff && rowOffText === 'Ge
 await rowOff.click();
 await page.waitForURL(`${ADMIN}/voted`, { timeout: 8000 });
 await sleep(700);
-check('/admin/voted: "Get out the vote", Off, the switch off, what GOTV mode does', (await page.innerText('h1')) === 'Get out the vote'
-  && (await page.getAttribute('.vt-page .sv-switch', 'aria-checked')) === 'false'
-  && /Off\./.test(await page.innerText('.vt-now'))
-  && /everyone can mark people as voted/.test(await D.text()) && /GOTV scripts/.test(await D.text()));
-let m = await measure(page, '.vt-page .sv-switch, .vt-page .vt-date, .vt-page .btn, .vt-page .ops-back');
+check('/admin/voted: "Get out the vote", the switch Off, "Add your voting days in Settings."', (await page.innerText('h1')) === 'Get out the vote'
+  && (await page.getAttribute('.gv-switch [role=radio]:has-text("Off")', 'aria-checked')) === 'true'
+  && /Add your voting days in Settings\./.test(await D.text()));
+let m = await measure(page, '.gv-switch button, .gv-tabs button, .gv-desk .btn');
 // A desk with a mouse: 40px controls (app.css --ctl); the phone's 48 is checked at 390 below.
-check('Election day at 1360: one yellow (Save), targets ≥ 40px on a desk', m.yellow === 1 && m.minTap >= 40 && /Save/.test(await page.innerText('.btn-primary')), JSON.stringify(m));
-check('Save is off until something changes', await page.$eval('.vt-page .btn-primary', (b) => b.disabled));
+check('Get out the vote at 1360: no yellow button (the switch is the one control), targets ≥ 40px', m.yellow <= 1 && m.minTap >= 40, JSON.stringify(m));
 await D.shot('01-election-day-off');
-await page.click('.vt-page .sv-switch');
+await page.click('.gv-switch [role=radio]:has-text("On")');
+check('On asks first: "Turn GOTV on for every volunteer?"', /Turn GOTV on for every volunteer\?/.test(await page.innerText('.gv-ask')));
+await page.click('.gv-ask button:has-text("Yes")');
+await sleep(900);
+check('On: the switch reads so', (await page.getAttribute('.gv-switch [role=radio]:has-text("On")', 'aria-checked')) === 'true');
 const today = await page.evaluate(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
-check('On by hand: the switch reads so', (await page.getAttribute('.vt-page .sv-switch', 'aria-checked')) === 'true');
-// Election day is today; an advance-voting day goes on the list.
+// Election day is today; an advance-voting day goes on the list (Settings → Voting days).
+await page.click('.gv-tabs button:has-text("Settings")');
+await page.waitForSelector('#vt-date', { timeout: 8000 });
 await page.fill('#vt-date', today);
 await page.fill('#vt-newday', '2030-10-09');
 await page.click('.vt-addday button:has-text("Add day")');
 check('the advance-voting day shows as a chip', /Oct 9/.test(await page.innerText('.vt-days').catch(() => '')));
-await page.click('.vt-page .btn-primary');
+await page.click('.vt-save button:has-text("Save days")');
 await sleep(900);
 const status = (await D.api('/voted/status')).json;
-check('Save: "✓ Saved"; the server has it on, election day today, the advance day kept', /✓ Saved/.test(await D.text()) && status.on === true && status.election_day === today
+check('Save days: "✓ Saved"; the server has it on, election day today, the advance day kept', /✓ Saved/.test(await D.text()) && status.on === true && status.election_day === today
   && status.voting_day === 'election' && status.advance_days.join() === '2030-10-09', JSON.stringify(status));
 check('vote.settings is a manager’s: the volunteer is refused', (await V.api('/actions/vote.settings', { on: false })).status === 403);
 await D.shot('02-election-day-on');
@@ -332,13 +335,12 @@ check('the same client_id replayed answers the same, no second row', replay.json
 await D.go('/voted');
 let t = await D.text();
 const sum = (await D.api('/voted/summary')).json;
-check('"2 of 2 supporters voted" — by band: Support 2 · Undecided 1 · Unrated 1', /2 of 2 supporters voted/.test(t) && /Support · 2/.test(t) && /Undecided · 1/.test(t) && /Opposed · 0/.test(t) && /Unrated · 1/.test(t)
+check('"2 of 2 supporters voted" — by band: Support 2 · Undecided 1 · Unrated 1', /2\s+of 2\s+supporters voted/.test(t) && /Support · 2/.test(t) && /Undecided · 1/.test(t) && /Opposed · 0/.test(t) && /Unrated · 1/.test(t)
   && sum.supporters_voted === 2 && sum.by_band.support === 2 && sum.by_band.undecided === 1 && sum.by_band.unrated === 1, t.slice(0, 300));
-const turfRow = await page.$eval('.vt-table tbody tr', (tr) => [...tr.querySelectorAll('td')].map((td) => td.innerText.replace(/\s+/g, ' ').trim()));
-check('by turf: Newton block · 2 supporters · 2 voted · 4 people, with a Walk list link', turfRow[0].startsWith('Newton block') && turfRow.slice(1).join('|') === '2|2|4'
-  && (await page.getAttribute('.vt-table a.vt-walk', 'href')) === `/admin/turfs/${turf.id}`, turfRow.join(' | '));
-check(`"${sum.total} people voted in all · ${sum.today} today" (people, not marks: Harjit's take-back and second mark are one voter)`, sum.total === 4 && sum.today === 4
-  && new RegExp(`${sum.total} people voted in all · ${sum.today} today`).test(t), t.slice(0, 300));
+const turfRow = await page.$eval('.gv-table tbody tr', (tr) => [...tr.querySelectorAll('td')].map((td) => td.innerText.replace(/\s+/g, ' ').trim()));
+check('Turnout: Newton block · 2 supporters · 2 voted · 0 not marked yet · 100%, with a Walk list link', turfRow[0].startsWith('Newton block') && turfRow.slice(1, 5).join('|') === '2|2|0|100%'
+  && (await page.getAttribute('.gv-table a:has-text("Walk list")', 'href')) === `/admin/turfs/${turf.id}`, turfRow.join(' | '));
+check(`the summary counts people, not marks: ${sum.total} voted in all · ${sum.today} today (Harjit's take-back and second mark are one voter)`, sum.total === 4 && sum.today === 4, JSON.stringify(sum));
 check('the summary is the desk’s: a volunteer is refused', (await V.api('/voted/summary')).status === 403);
 await D.full('09-election-day-summary');
 const pm = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, timezoneId: 'America/Vancouver' });
@@ -346,8 +348,8 @@ await pm.addCookies((await dctx.cookies()).map((c) => ({ ...c })));
 const mpage = await pm.newPage();
 const MP = helpers(mpage, 'manager-phone');
 await MP.go('/voted');
-m = await measure(mpage, '.vt-page .sv-switch, .vt-page .vt-date, .vt-page .btn, .vt-page .vt-walk, .vt-page .ops-back');
-check('Election day at 390: ≤ 1 yellow, no sideways scroll, targets ≥ 48px', m.yellow <= 1 && m.overflow <= 0 && m.minTap >= 48, JSON.stringify(m));
+m = await measure(mpage, '.gv-switch button, .gv-tabs button, .gv-desk .btn');
+check('Get out the vote at 390: ≤ 1 yellow, no sideways scroll, targets ≥ 48px', m.yellow <= 1 && m.overflow <= 0 && m.minTap >= 48, JSON.stringify(m));
 await MP.full('10-election-day-phone');
 await pm.close();
 
@@ -381,9 +383,9 @@ await D.shot('11-import-voted');
 // ── 11. Off: the buttons go, the marks stay ──
 // Today is election day, so off by hand also needs "turn on by itself" off.
 await D.go('/voted');
-await page.click('.vt-page .sv-switch');
-await page.uncheck('.vt-auto input');
-await page.click('.vt-page .btn-primary');
+await page.click('.gv-switch [role=radio]:has-text("Off")');
+check('Off asks first, and says it stops turning on by itself', /Turn GOTV off\?.*stops turning on by itself/.test(await page.innerText('.gv-ask')));
+await page.click('.gv-ask button:has-text("Yes")');
 await sleep(900);
 check('switched off on the server', (await D.api('/voted/status')).json.on === false);
 await V.go(`/turfs/${turf.id}`);
@@ -409,7 +411,7 @@ await V.shot('12-walk-off');
   for (const section of ['days', 'places']) await D.api('/actions/site.guide.check', { section, checked: true });
   const pubd = await D.api('/actions/site.guide.publish', { gotv_days: false });
   check('a voter guide published with other days than GOTV’s', pubd.status === 200, JSON.stringify(pubd.json));
-  await D.go('/voted');
+  await D.go('/voted?tab=settings');
   await page.waitForSelector('.vt-guide', { timeout: 8000 }).catch(() => {});
   check('GOTV: “The voter guide has other days.” with “Use the guide’s days”', /The voter guide has other days\./.test(await D.text()) && !!(await page.$('.vt-guide button')));
   await D.shot('12b-guide-other-days');

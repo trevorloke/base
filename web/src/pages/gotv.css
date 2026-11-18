@@ -146,3 +146,7 @@
   .gv-table td.gv-hide-phone { display: none; }
   .gv-table .btn { min-height: 48px; }
 }
+.gv-phone-only { display: none; }
+@media (max-width: 720px) { .gv-phone-only { display: block; } }
+.gv-num .btn.gv-num__label { min-height: var(--ctl); padding: 0; border: 0; background: none; text-decoration: underline; }
+@media (max-width: 720px) { .gv-num .btn.gv-num__label { min-height: 48px; } }

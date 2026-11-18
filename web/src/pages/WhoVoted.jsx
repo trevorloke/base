@@ -33,6 +33,8 @@ const fold = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toL
 const words = (t) => fold(t).replace(/[,–—-]/g, ' ').split(/\s+/).filter((w) => w && !/^x+$/.test(w));
 const firstName = (n) => String(n || '').trim().split(/\s+/)[0] || '';
 const clock = (iso) => new Date(iso).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit' });
+// "8:00 p.m." from the campaign's wall time "20:00".
+const hmWord = (hm) => { const [h, m] = hm.split(':').map(Number); return `${((h + 11) % 12) + 1}:${String(m).padStart(2, '0')} ${h < 12 ? 'a.m.' : 'p.m.'}`; };
 const sameDay = (a, b) => new Date(a).toDateString() === new Date(b).toDateString();
 const num = (n) => Number(n || 0).toLocaleString('en-CA');
 const plural = (n, one, many = `${one}s`) => `${num(n)} ${n === 1 ? one : many}`;
@@ -82,6 +84,7 @@ export default function WhoVoted({ me: given }) {
   // Sending open for this place: the server's word for a scrutineer's own
   // place, or the place's own close (or a release) for a runner's pick.
   const closesAt = fixedPlace ? status?.closes_at : place?.closes_at ?? null;
+  const closesHm = fixedPlace ? status?.closes_hm : place?.closes_hm ?? null;
   const open = practice || status?.send === 'live' || (fixedPlace ? Boolean(status?.send_open)
     : Boolean(status?.send_open) || Boolean(closesAt && Date.now() >= Date.parse(closesAt)));
   const [heldByServer, setHeldByServer] = useState(false);
@@ -158,8 +161,8 @@ export default function WhoVoted({ me: given }) {
       try {
         const qs = new URLSearchParams({ q, place_id: placeId, ...(writtenAt ? { written_at: writtenAt } : {}), ...(practice ? { practice: '1' } : {}) });
         const r = await apiGet(`/gotv/find?${qs}`, { signal: c.signal });
-        cache.current.set(fold(q), { rows: r.rows || [], more: Boolean(r.more) });
-        setRows({ rows: r.rows || [], more: Boolean(r.more) });
+        cache.current.set(fold(q), { rows: r.people || [], more: Boolean(r.more) });
+        setRows({ rows: r.people || [], more: Boolean(r.more) });
         setSaid(null);
       } catch (e) {
         if (e?.name === 'AbortError' && !timedOut) return;
@@ -252,7 +255,7 @@ export default function WhoVoted({ me: given }) {
   }
 
   const heldLine = closesAt
-    ? `Names are sent after this voting place closes at ${clock(closesAt)}.`
+    ? `Names are sent after this voting place closes at ${closesHm ? hmWord(closesHm) : clock(closesAt)}.`
     : 'Names are sent when the office says polls are closed.';
   const placeholder = !online ? 'No signal — write the name, we’ll match it later' : noteMode ? 'Write a name' : 'Name, street or voter number';
   const q = text.trim();

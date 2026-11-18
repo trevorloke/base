@@ -490,7 +490,7 @@ function WalkList({ id }) {
         done: state === 'done',
         tries: Math.max(0, ...laid.map((p) => p.pass_tries || 0)),
       };
-    }).filter((d) => !votedOff.has(d.key) || d.key === openKey);
+    }).filter((d) => !votedOff.has(d.key) || d.key === openKey || !d.persons.every((p) => p.voted_at));
   }, [q.data, q.dataUpdatedAt, local, added, waitingSigns, pass, votes, practiced, waiting, held, movesWaiting, votedOff, openKey]);
 
   // The doors a GOTV pass no longer needs (everyone there voted — marked
