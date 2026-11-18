@@ -677,7 +677,7 @@ than a week after they came off is refused. Contacts are door, phone, text or
   offers *Needs a ride to vote*, a request for the drivers. Shift roles
   include Driver, Scrutineer (a voting place), Runner, Poll greeter and Zone
   house captain.
-- **Live GOTV** (the server; its screens come next): a manager posts
+- **Live GOTV**: a manager posts
   volunteers as **scrutineers** at the voter guide's voting places, or as
   **runners** for any place, and can make an election-day **sign-in code**
   (a link and QR, once, 15 minutes) whose sign-in works for *Who voted*
@@ -700,6 +700,25 @@ than a week after they came off is refused. Contacts are door, phone, text or
   people posted plus those a manager ticks, writes nothing to the real
   record, shows to nobody else, and is wiped when it ends. One server holds
   every stream: no deploys on voting days.
+  **The screens**: *Get out the vote* (`/voted`, the desk) has the switch
+  **Off · Practice · On** (managers; it asks first), the held line while
+  scrutineers' names wait for the Chief Election Officer's answer, four
+  numbers (supporters voted, marked in the last hour, scrutineers on duty,
+  To check) and five tabs: **Turnout** (by turf, most not marked yet
+  first, live), **Voting places** (the voter guide's, with *Enter a sheet*
+  and a flag for a place silent 45 minutes), **Scrutineers** (posts,
+  *Signed in*, *Appointed*, the sign-in code's QR), **To check** (names a
+  scrutineer couldn't match: *Find* or *Not ours*) and **Settings** (voting
+  days, closing times from the guide or typed, when names are sent, who
+  sees who voted, a voted file, and the nine-line **Ready** list).
+  **Who voted** (`/gotv`) is the scrutineer's and runner's screen: a few
+  letters, one tap, the next name; before close, or with no signal, or
+  when a look-up takes 4 s, the typed name is kept on the phone and
+  matched later. While someone is on duty, *Enter who voted* is their
+  Today's one button. The walk list, map, Calls and Today follow the live
+  feed (one stream per browser, polling when it drops: *Live* or *Updated
+  3 min ago*); in a GOTV pass a door whose supporters all voted fades and
+  leaves with *1 door left your list — they voted*.
 - **Scheduling by tap** (Shifts → **Week**, the desk's): each day is a
   list of its shifts in start order — *Early* (before 9), *Morning*,
   *Afternoon*, *Evening* — any number to a part, and a card shows the kind,

@@ -458,9 +458,26 @@ one tap away under **More**.
   worse (more waiters on the same lock, and the box was shared with
   another full test suite). Measure on the real Render plan before a
   voting day; see GOTV.md's owner items 8 and 9.
-- **GOTV** (Today → More → *GOTV & voting days*) — set *Election day* to
-  today (or add today as an advance-voting day) and **Save**: it reads *On*
-  by itself; or switch *On by hand*. Every volunteer's walk list, door card
+- **Live GOTV (screens)** — `server/test/gotv-screens.test.js` (the desk's
+  Settings and Ready list, closing times as the campaign's wall time, every
+  voting place listed, *Practice run done*, the stream only for someone
+  with a list, the code session's `scope`), and `e2e-gotv-live.mjs`
+  (`flock -o …/browser.lock node e2e-gotv-live.mjs`; its own server on
+  5500 with a file database, restarted with the clock moved): practice for
+  a ticked canvasser only, the scrutineer's one-primary Today, a sign-in
+  code (two GETs leave it usable; its session gets 403 on people), names
+  held until a release then matched, the CEO's yes and live sending, a
+  name saved offline and matched with its written time, a look-up delayed
+  10 s turned into a note at 4 s, Undo of a name written hours ago, To
+  check resolved with Find, turf B never seeing turf A, the stream cut and
+  polling catching up, 40 names at 180 ms a key (`GOTV_NAMES`; the spec's
+  300 take about 20 minutes) with no 429 and one look-up a name, the
+  guide's *Closed today* reaching an open phone, staff read-only, and Off.
+  A browser's own zone data may predate B.C.'s permanent UTC-7, so closing
+  times on screen come from the server as wall times.
+- **GOTV** (Today → Go to → *Get out the vote*) — set *Election day* to
+  today (or add today as an advance-voting day) under *Settings* and **Save
+  days**: it reads *On by itself today*; or switch *On*. Every volunteer's walk list, door card
   and Calls card now has a 48px *Voted ✓*; mark one person yourself from a
   door card. Today opens with the GOTV card (*1 of N supporters have voted ·
   … to go*, *Call who hasn't voted*, *Map: who hasn't voted*); write a GOTV
