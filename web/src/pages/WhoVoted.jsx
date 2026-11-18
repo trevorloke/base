@@ -13,9 +13,12 @@
 // look-up sends the name. When sending opens they become "names to match".
 // No signal, or a look-up that doesn't answer in 4 s: the typed name becomes
 // a note at once, with no retyping. Marks go through the outbox.
+// Each note is judged by the day it was written (GET /gotv/open), as the
+// server judges it: a name written at 19:58 is matched after midnight, and
+// advance day 1's names on a day between advance days.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useOutletContext, useSearchParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiGet, ApiError } from '../api.js';
 import { NS } from '../base.js';
 import { newClientId, onOutboxSent, practiceWasOver, queueAction, undoQueued, useOutbox } from '../offline.js';
@@ -74,12 +77,15 @@ export default function WhoVoted({ me: given }) {
   const outbox = useOutbox();
   const desk = Boolean(me?.admin_role || (me?.role && me.role !== 'volunteer'));
   const duty = status?.on_duty || null;
+  // The post whatever the day: yesterday's notes still belong to it.
+  const post = duty || status?.post || null;
+  const offDuty = !duty && !desk;
   const practice = Boolean(status?.practice && status?.active);
   // The place: a scrutineer's own; a runner or the desk picks.
-  const fixedPlace = duty?.role === 'scrutineer' ? duty.place : null;
+  const fixedPlace = post?.role === 'scrutineer' ? post.place : null;
   const [picked, setPicked] = useState(params.get('place') || '');
   const places = useQuery({
-    queryKey: ['gotv', 'places'], queryFn: () => apiGet('/gotv/places'), enabled: !fixedPlace && Boolean(duty || desk), staleTime: 60_000, meta: { side: true },
+    queryKey: ['gotv', 'places'], queryFn: () => apiGet('/gotv/places'), enabled: !fixedPlace && Boolean(post || desk), staleTime: 60_000, meta: { side: true },
   });
   const placeList = places.data?.places || [];
   const place = fixedPlace || placeList.find((p) => p.id === picked) || null;
@@ -93,8 +99,10 @@ export default function WhoVoted({ me: given }) {
     : Boolean(status?.send_open) || Boolean(closesAt && Date.now() >= Date.parse(closesAt)));
   // The server said "not now" (409) for this place, practice and sending rule
   // as the status read had them. A new place, practice, rule or status read
-  // means it no longer holds: look-ups run again.
-  const holdKey = `${placeId}|${practice}|${status?.send}|${Boolean(status?.send_open)}|${mode.updatedAt}`;
+  // means it no longer holds: look-ups run again. (Not every status read:
+  // a runner held at a closed place would flip out of "Write a name" each
+  // minute and spend a look-up each time.)
+  const holdKey = `${placeId}|${practice}|${status?.send}|${Boolean(status?.send_open)}|${place?.closes_at || ''}`;
   const [heldFor, setHeldFor] = useState(null);
   const heldByServer = heldFor === holdKey;
   useEffect(() => { if (heldFor && heldFor !== holdKey) { setHeldFor(null); setSaid(null); } }, [holdKey]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -105,18 +113,45 @@ export default function WhoVoted({ me: given }) {
     const t = setTimeout(() => { setNoteUntil(0); tick((n) => n + 1); }, Math.max(0, noteUntil - Date.now()));
     return () => clearTimeout(t);
   }, [noteUntil]);
-  const sending = open && !heldByServer;
-  const noteMode = !sending || !online || noteUntil > Date.now();
-
   const [text, setText] = useState('');
   const [writtenAt, setWrittenAt] = useState(null); // matching a note: when it was written
   const [matching, setMatching] = useState(null); // the note being matched
+  const [notes, setNotes] = useState(() => readNotes(me));
+
+  // Each kept note, judged by its own day and place (one read per place).
+  const qc = useQueryClient();
+  const byPlace = useMemo(() => {
+    const m = new Map();
+    for (const n of notes) {
+      const pid = n.place_id || placeId;
+      if (!pid) continue;
+      if (!m.has(pid)) m.set(pid, []);
+      m.get(pid).push(n.written_at);
+    }
+    return [...m].map(([pid, ats]) => [pid, [...new Set(ats)].sort()]);
+  }, [notes, placeId]);
+  const opens = useQueries({
+    queries: byPlace.map(([pid, ats]) => ({
+      // A release or a status read that opens sending asks again.
+      queryKey: ['gotv', 'open', pid, ats.join(','), status?.send, Boolean(status?.send_open)],
+      queryFn: () => apiGet(`/gotv/open?${new URLSearchParams({ place_id: pid, written_at: ats.join(',') })}`),
+      enabled: online, staleTime: 30_000, refetchInterval: () => (online ? 60_000 : false), meta: { side: true },
+    })),
+  });
+  const noteOpen = new Map();
+  byPlace.forEach(([pid], i) => { for (const r of opens[i]?.data?.notes || []) noteOpen.set(`${pid}|${r.written_at}`, r); });
+  const judged = (n) => noteOpen.get(`${n.place_id || placeId}|${n.written_at}`) || null;
+  // A note may be matched now: signal, no weak-signal pause, and its own
+  // day's sending open (practice is always live).
+  const matchable = (n) => online && noteUntil <= Date.now() && (practice || Boolean(judged(n)?.open));
+
+  const sending = matching ? matchable(matching) : !offDuty && open && !heldByServer;
+  const noteMode = !sending || !online || noteUntil > Date.now();
   const [rows, setRows] = useState(null); // { rows, more } | null
   const [looking, setLooking] = useState(false);
   const [said, setSaid] = useState(null); // a refusal or a note, in place
   const [toast, setToast] = useState(null); // { text, undo? }
   const [flash, setFlash] = useState(null);
-  const [notes, setNotes] = useState(() => readNotes(me));
   const [entered, setEntered] = useState(() => readEntered(me));
   const [showEntered, setShowEntered] = useState(false);
   const [deleting, setDeleting] = useState(null);
@@ -178,7 +213,13 @@ export default function WhoVoted({ me: given }) {
         setSaid(null);
       } catch (e) {
         if (e?.name === 'AbortError' && !timedOut) return;
-        if (e instanceof ApiError && e.status === 409) { setHeldFor(holdKey); setSaid(e.message); return; }
+        if (e instanceof ApiError && e.status === 409) {
+          // A note's own day said no: ask again about the notes; today's hold is not touched.
+          if (writtenAt) qc.invalidateQueries({ queryKey: ['gotv', 'open'] });
+          else setHeldFor(holdKey);
+          setSaid(e.message);
+          return;
+        }
         if (e instanceof ApiError && e.status === 429 && /limit/i.test(e.message)) { saveNote(q, e.message); return; }
         if (e instanceof ApiError && e.status < 500) { setSaid(e.message); return; }
         // No answer: keep the name, try look-ups again in a minute.
@@ -190,7 +231,7 @@ export default function WhoVoted({ me: given }) {
       }
     }, DEBOUNCE_MS);
     return () => clearTimeout(t);
-  }, [text, noteMode, placeId, practice, writtenAt, saveNote, holdKey]);
+  }, [text, noteMode, placeId, practice, writtenAt, saveNote, holdKey, qc]);
 
   const mark = async (row) => {
     const cid = newClientId();
@@ -208,8 +249,9 @@ export default function WhoVoted({ me: given }) {
         ...(writtenAt ? { client_at: writtenAt } : {}), ...(practice ? { practice: true } : {}),
       }, { who: row.name });
       const entry = { cid, name: row.name, at: writtenAt || at, entered_at: at, sent_at: r.queued ? null : new Date().toISOString(), undone: false };
-      const next = [entry, ...entered];
-      setEntered(next); writeEntered(me, next);
+      // From the list as it is now: a second name tapped while this one was
+      // on its way must not be overwritten.
+      setEntered((list) => { const next = [entry, ...list]; writeEntered(me, next); return next; });
       if (matching) dropNote(me, matching.id);
       say({ text: `Marked ${row.name}`, undo: cid });
     } catch (e) {
@@ -225,8 +267,7 @@ export default function WhoVoted({ me: given }) {
     try {
       const u = undoQueued(cid);
       if (u !== 'removed' && u !== 'queued') await queueAction('vote.undo', { client_id: cid });
-      const next = entered.map((e) => (e.cid === cid ? { ...e, undone: true } : e));
-      setEntered(next); writeEntered(me, next);
+      setEntered((list) => { const next = list.map((e) => (e.cid === cid ? { ...e, undone: true } : e)); writeEntered(me, next); return next; });
       say({ text: `Taken back · ${firstName(entry.name)}` });
     } catch (e) {
       say({ text: e.message });
@@ -258,13 +299,48 @@ export default function WhoVoted({ me: given }) {
   };
 
   const queuedIds = useMemo(() => new Set(outbox.items.filter((i) => i.name === 'vote.mark' && i.state === 'pending').map((i) => i.cid)), [outbox.items]);
-  const live = entered.filter((e) => !e.undone);
   const mayUndo = (e) => !e.undone && (queuedIds.has(e.cid) || !e.sent_at || Date.now() - Date.parse(e.sent_at) < UNDO_MS);
+  // Entered today: since the campaign's today began; an older one stays
+  // listed only while it can still be taken back.
+  const todayFrom = status?.today_from ? Date.parse(status.today_from) : Date.now() - 24 * 3600_000;
+  const isToday = (e) => Date.parse(e.entered_at || e.at) >= todayFrom;
+  const shown = entered.filter((e) => isToday(e) || mayUndo(e));
+  const live = entered.filter((e) => !e.undone && isToday(e));
   const clock = clockIn(zoneOf(me));
   const myNotes = notes.filter((n) => !placeId || !n.place_id || n.place_id === placeId || fixedPlace);
+  const toMatch = myNotes.filter(matchable);
+  const toSend = myNotes.filter((n) => !matchable(n));
+  // A list of kept names: tap to match when its day's sending is open.
+  const noteList = (id, title, list) => (
+    <section className="gv-notes" aria-labelledby={id}>
+      <h2 id={id} className="gv-h">{title}</h2>
+      <ul className="gv-notelist">
+        {list.map((n) => (
+          <li key={n.id} className="gv-note">
+            {matchable(n) ? (
+              <button type="button" className="gv-note__match" onClick={() => matchNote(n)}>
+                <span className="gv-note__typed">{n.typed}</span><span className="gv-note__at mono">{clock(n.written_at)}</span>
+              </button>
+            ) : (
+              <span className="gv-note__match gv-note__static"><span className="gv-note__typed">{n.typed}</span><span className="gv-note__at mono">{clock(n.written_at)}</span></span>
+            )}
+            {deleting === n.id ? (
+              <span className="gv-confirm" role="group" aria-label="Delete this name?">
+                <span>Delete this name?</span>
+                <button type="button" className="btn gv-small" onClick={() => { dropNote(me, n.id); setDeleting(null); if (matching?.id === n.id) { setMatching(null); setWrittenAt(null); setText(''); } }}>Yes</button>
+                <button type="button" className="btn btn-quiet gv-small" onClick={() => setDeleting(null)}>No</button>
+              </span>
+            ) : (
+              <button type="button" className="btn btn-quiet gv-x" aria-label={`Delete ${n.typed}`} onClick={() => setDeleting(n.id)}>✕</button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
 
   if (!mode.ready) return <div className="gv-page"><h1>Who voted</h1><p className="muted">Loading…</p></div>;
-  if (!duty && !desk) {
+  if (offDuty && !notes.length) {
     return (
       <div className="gv-page">
         <h1>Who voted</h1>
@@ -305,7 +381,7 @@ export default function WhoVoted({ me: given }) {
         {practice && <span className="chip gv-practice">Practice</span>}
       </div>
       <p className="gv-line gv-phones">Phones away inside the voting place. Enter names outside.</p>
-      {!sending && <p className="gv-line" role="status">{heldByServer && said ? said : heldLine}</p>}
+      {!sending && !offDuty && !matching && <p className="gv-line" role="status">{heldByServer && said ? said : heldLine}</p>}
       {overSaid && <p className="gv-line gv-warn" role="status">Practice is over — nothing was saved.</p>}
       {askLeftovers && (
         <div className="gv-ask" role="group" aria-label="Names not sent">
@@ -317,6 +393,7 @@ export default function WhoVoted({ me: given }) {
       {notes.length > 0 && <p className="gv-line">You have {plural(notes.length, 'name')} not sent</p>}
       {!placeId && !fixedPlace && <p className="gv-line">Pick the voting place on the sheet first.</p>}
 
+      {(!offDuty || matching) && (
       <form className="gv-form" onSubmit={(e) => { e.preventDefault(); if (noteMode) saveNote(text); }}>
         <label htmlFor="gv-q" className="gv-sr">{noteMode ? 'Write a name' : 'Name, street or voter number'}</label>
         <input id="gv-q" ref={inputRef} className="input gv-input" autoFocus autoComplete="off" inputMode="search" spellCheck={false}
@@ -324,6 +401,7 @@ export default function WhoVoted({ me: given }) {
           onChange={(e) => { setText(e.target.value); if (!e.target.value) { setWrittenAt(null); setMatching(null); } }} />
         {noteMode && <button type="submit" className="btn btn-primary gv-save" disabled={!placeId || q.length < 2}>Save name</button>}
       </form>
+      )}
       <p className="gv-said" role="status" aria-live="polite">{said && !(heldByServer && !sending) ? said : looking ? 'Looking…' : ''}</p>
 
       {!noteMode && q.length >= 3 && rows && (
@@ -347,44 +425,19 @@ export default function WhoVoted({ me: given }) {
         <button type="button" className="btn btn-quiet gv-office" onClick={toOffice}>Not sure? Send to the office</button>
       )}
 
-      {myNotes.length > 0 && (
-        <section className="gv-notes" aria-labelledby="gv-notes-h">
-          <h2 id="gv-notes-h" className="gv-h">{!noteMode ? `Polls closed — match your ${plural(myNotes.length, 'name')}` : `${plural(myNotes.length, 'name')} to send`}</h2>
-          <ul className="gv-notelist">
-            {myNotes.map((n) => (
-              <li key={n.id} className="gv-note">
-                {!noteMode ? (
-                  <button type="button" className="gv-note__match" onClick={() => matchNote(n)}>
-                    <span className="gv-note__typed">{n.typed}</span><span className="gv-note__at mono">{clock(n.written_at)}</span>
-                  </button>
-                ) : (
-                  <span className="gv-note__match gv-note__static"><span className="gv-note__typed">{n.typed}</span><span className="gv-note__at mono">{clock(n.written_at)}</span></span>
-                )}
-                {deleting === n.id ? (
-                  <span className="gv-confirm" role="group" aria-label="Delete this name?">
-                    <span>Delete this name?</span>
-                    <button type="button" className="btn gv-small" onClick={() => { dropNote(me, n.id); setDeleting(null); }}>Yes</button>
-                    <button type="button" className="btn btn-quiet gv-small" onClick={() => setDeleting(null)}>No</button>
-                  </span>
-                ) : (
-                  <button type="button" className="btn btn-quiet gv-x" aria-label={`Delete ${n.typed}`} onClick={() => setDeleting(n.id)}>✕</button>
-                )}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      {toMatch.length > 0 && noteList('gv-match-h', `Polls closed — match your ${plural(toMatch.length, 'name')}`, toMatch)}
+      {toSend.length > 0 && noteList('gv-notes-h', `${plural(toSend.length, 'name')} to send`, toSend)}
 
       <footer className="gv-foot">
         <p className="gv-count mono">{plural(live.length, 'name')} entered today</p>
-        {entered.length > 0 && (
+        {shown.length > 0 && (
           <>
             <button type="button" className="btn btn-quiet gv-disclose" aria-expanded={showEntered} onClick={() => setShowEntered((o) => !o)}>
               Entered today
             </button>
             {showEntered && (
               <ul className="gv-entered">
-                {entered.map((e) => (
+                {shown.map((e) => (
                   <li key={e.cid} className={e.undone ? 'is-undone' : ''}>
                     <span className="gv-entered__name">{e.name}</span>
                     <span className="mono gv-entered__at">{clock(e.at)}</span>

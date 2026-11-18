@@ -19,6 +19,8 @@
 //   5. offline name → matched with its written time; a look-up delayed 10 s
 //      becomes a note after 4 s; Undo of a name written hours ago; Not sure?
 //      Send to the office → To check → Find
+//  5b. two quick marks while the first answer is slow: both listed, each
+//      with Undo
 //   6. Ben (turf B) never gets turf A's marks; his Calls has no A people
 //   7. the stream cut: "Updated … ago", and polling catches up within 25 s
 //  7b. Calls skips a person marked live; the card already open says
@@ -30,6 +32,8 @@
 //      strikes it live; Sam's mark is refused; election day it's open again;
 //      Settings → Closing times reads the guide's 8 p.m.; a runner's look-up
 //      refused at the closed place runs again at an open one
+//  12. the day after election day, 01:58: a name written at 19:58 is on
+//      Today ("You have 1 name not sent") and matched on Who voted
 //   9. staff see the switch read-only and no Sign-in code
 //   8. Off: Ana's Voted ✓ goes and the stream closes
 //   Screens looked at 1440×900 and 390×844 (SHOTS).
@@ -167,6 +171,10 @@ try {
   await mk('pia', 'Piauna Example', '1', 14080, '72 Ave', la - 0.0002, lo + 0.0009);
   await mk('rae', 'Raeleen Example', '1', 14090, '72 Ave', la - 0.0004, lo);
   await mk('bea', 'Beatrix Example', '1', 15010, '80 Ave', 49.15, -122.83);
+  // Off any turf: for two quick marks (5b) and a late match (12).
+  for (const name of ['Alpha Example', 'Bravo Example', 'Quinn Example']) {
+    P[name.split(' ')[0].toLowerCase()] = (await act(mpage, 'person.create', { name, phone: '604-555-0198' })).json.person;
+  }
   for (let i = 0; i < NAMES; i += 1) {
     await act(mpage, 'person.create', { name: `Nina Zed${String(i).padStart(2, '0')}`, phone: '604-555-0199' });
   }
@@ -420,6 +428,22 @@ try {
   await go(mpage, `${DESK}/voted?tab=check`);
   check('5. To check: "Nothing to check."', /Nothing to check\./.test(await text(mpage)));
 
+  // ── 5b. Two quick marks while the first answer is slow: both kept ──
+  await sam.page.route('**/api/actions/vote.mark', async (route) => { await sleep(4000); await route.continue().catch(() => {}); });
+  await go(sam.page, `${FIELD}/gotv`);
+  await sam.page.type('#gv-q', 'alpha exa', { delay: 40 });
+  await sam.page.click('.gv-row:has-text("Alpha Example")', { timeout: 8000 });
+  await sam.page.type('#gv-q', 'bravo exa', { delay: 40 });
+  await sam.page.click('.gv-row:has-text("Bravo Example")', { timeout: 8000 });
+  await until(async () => Boolean((await api(mpage, `/voted/persons/${P.alpha.id}`)).json.voted_at) && Boolean((await api(mpage, `/voted/persons/${P.bravo.id}`)).json.voted_at), 20_000, 500);
+  await sleep(1500);
+  await sam.page.unroute('**/api/actions/vote.mark');
+  await sam.page.click('.gv-disclose');
+  const listed = await sam.page.$$eval('.gv-entered li', (li) => li.map((x) => x.textContent));
+  const undoable = (n) => listed.some((t) => t.includes(n) && /Undo/.test(t));
+  check('5b. two quick picks while the first answer is slow: both in Entered today, each with Undo', undoable('Alpha Example') && undoable('Bravo Example'), listed.join(' | '));
+  check('5b. …and the count has both', /\b\d+ names entered today/.test(await text(sam.page, '.gv-count')) && Number((await text(sam.page, '.gv-count')).match(/\d+/)?.[0]) >= 2, await text(sam.page, '.gv-count'));
+
   // ── 6. Scope ──
   const benChanges = (await api(ben.page, '/voted/changes?since=1')).json;
   const aIds = [P.harjit, P.maya, P.jo, P.lee, P.kim, P.ola, P.uma, P.pia, P.rae].map((p) => p.id);
@@ -567,6 +591,29 @@ try {
   check('11. election day: Place A is open again and Sam’s mark is accepted', openAgain.status === 200, openAgain.raw);
   await go(mpage, `${DESK}/voted?tab=settings`);
   check('11. Settings → Closing times: "From the voter guide: 8 p.m."', /From the voter guide: 8 p\.m\./.test(await text(mpage)));
+
+  // ── 12. After midnight: a name written at 19:58 is still matched ──
+  ok12: {
+    check('12. back to After polls close', (await act(mpage, 'vote.settings', { send: 'after_close' })).status === 200);
+    await moveTo(at(plus(G, 1), '01:58'));
+    const wq = new Date(at(G, '19:58')).toISOString();
+    const me = (await api(sam.page, '/auth/me')).json;
+    await sam.page.evaluate(([k, v]) => localStorage.setItem(k, v), [`starbase:gotv-notes:${me.workspace.id}:${me.user.id}`, JSON.stringify([{ id: 'note-quinn', typed: 'quinn exa', written_at: wq, place_id: placeA }])]);
+    await go(sam.page, `${FIELD}/`);
+    check('12. Today, the day after: "You have 1 name not sent"', await until(async () => /You have 1 name not sent/.test(await text(sam.page)), 8000), (await text(sam.page)).slice(0, 300));
+    await go(sam.page, `${FIELD}/gotv`);
+    const listedQ = await until(async () => /Polls closed — match your 1 name/.test(await text(sam.page)), 10_000, 300);
+    check('12. Who voted at 01:58: "Polls closed — match your 1 name"', listedQ, (await text(sam.page)).slice(0, 300));
+    await shot(sam.page, '27-who-voted-after-midnight-390');
+    if (!listedQ) break ok12;
+    await sam.page.click('.gv-note__match:has-text("quinn")');
+    await sam.page.click('.gv-row:has-text("Quinn Example")', { timeout: 8000 });
+    await until(async () => Boolean((await api(mpage, `/voted/persons/${P.quinn.id}`)).json.voted_at), 10_000);
+    const qm = (await api(mpage, `/voted/persons/${P.quinn.id}`)).json;
+    check('12. matched after midnight with its own time, 19:58', qm.marks?.[0] && Date.parse(qm.marks[0].created_at) === Date.parse(wq), JSON.stringify(qm.marks?.[0]));
+    check('12. the note is gone from the phone', await until(async () => !/not sent|to send|match your/.test(await text(sam.page)), 5000), (await text(sam.page)).slice(0, 300));
+  }
+  await moveTo(at(G, '10:00'));
 
   // ── 8. Off ──
   await go(ana.page, `${FIELD}/turfs/${turfA.id}`);

@@ -918,6 +918,9 @@ function VolunteerToday({ b, me }) {
           )}
         </section>
       )}
+      {/* Names written at a voting place, still on this phone after the
+          day's duty: judged by their own day on Who voted. */}
+      {!duty && unsentNames > 0 && <ul className="today-rows"><LinkRow to="/gotv" main={`You have ${unsentNames} ${unsentNames === 1 ? 'name' : 'names'} not sent`} /></ul>}
       {/* Their walk list on a map that folds away (only with doors left). */}
       {firstOpen && !done && <MapWindow me={me} turfId={firstOpen.id} />}
 

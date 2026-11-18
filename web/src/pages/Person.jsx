@@ -274,7 +274,9 @@ function Header({ person, donor, me, desk, onLog, onEmail, emailing = false, con
 function SheetLine() {
   const mode = useVotedMode();
   const st = mode.status;
-  if (!mode.on || mode.practice || !st?.held_line || st.send_open) return null;
+  // Held, as the rule has it: after polls close and not yet open today
+  // (a CEO's yes alone doesn't send them; only `live` does).
+  if (!mode.on || mode.practice || st?.send !== 'after_close' || st.send_open) return null;
   return (
     <p className="gv-sheetline">
       From a scrutineer’s or runner’s sheet? Use <Link to="/voted?tab=places">Enter a sheet</Link>: those wait until polls close.
