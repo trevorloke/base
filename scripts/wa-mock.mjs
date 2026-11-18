@@ -1,8 +1,9 @@
 // The website's before/after mock (WA decision 28): what stage 3a would do to
 // the public site, shown on the real pages before any of it is built.
 //
-// It starts base.win on PORT (5494) with the Imagine Surrey seed, signs up a
-// manager, adds the walk's sample page (a hero without a picture, a text
+// It starts base.win on PORT (5494) with the Imagine Surrey seed, then again
+// with the Base seed, signs up a manager, gives the site a made-up financial
+// agent (so the Authorized-by line shows), adds the walk's sample page (a hero without a picture, a text
 // block, two points, a newsletter and a band) and three sample news posts,
 // then screenshots the home page, the sample page and /news at 1440×900 and
 // 390×844 (whole pages), in three looks:
@@ -11,8 +12,8 @@
 //   2. is-modern       — Imagine Surrey with the modern heading sizes, the
 //                        shadow on the hero and bands only, and the picture
 //                        beside the headline (decisions 30–31) plus the fixes.
-//   3. civic-blue      — the proposed Civic blue look (its colours and the
-//                        DM Serif Display / DM Sans pairing), before with
+//   3. civic-blue      — on the Base seed: the proposed Civic blue look (its
+//                        colours and the DM Serif Display / DM Sans pairing), before with
 //                        today's code, after with the modern scale and fixes.
 // "Before" is the page as base.win draws it today. "After" is the same page
 // with this file's MOCK_CSS and a few DOM moves applied in the browser: a
@@ -49,12 +50,17 @@ const civicBlue = {
   fonts: { heading: 'dm-serif-display', body: 'dm-sans' },
   radius: 'soft',
   pop: false,
-  logo: isTheme.logo,
 };
 const LOOKS = [
   { key: 'imagine-surrey', name: 'Imagine Surrey as saved today', theme: isTheme, after: { modern: false, beside: false } },
   { key: 'is-modern', name: 'Imagine Surrey, modern sizes and the picture beside the headline', theme: isTheme, after: { modern: true, beside: true } },
   { key: 'civic-blue', name: 'Civic blue (DM Serif Display / DM Sans)', theme: civicBlue, after: { modern: true, beside: true } },
+];
+// Imagine Surrey's two looks on its own seed; Civic blue on the Base seed, so
+// no Imagine Surrey logo or words appear in a look that isn't theirs.
+const SEEDS = [
+  { brand: 'imagine-surrey', org: 'Imagine Surrey', looks: LOOKS.slice(0, 2) },
+  { brand: 'base', org: 'Example Campaign', looks: LOOKS.slice(2) },
 ];
 const PAGES = [
   { key: 'home', path: '/site/', name: 'Home page' },
@@ -207,12 +213,12 @@ function applyAfter({ modern, beside }) {
   }
 }
 
-// Today's Latin faces for Montserrat and Inter (one face, weights 100–900)
-// are shadowed by the Gurmukhi faces declared under the same names with
-// narrower weight ranges (site.css, TR), so the browser draws Latin text in
-// a fallback face. The mock adds the Latin file under the same two ranges in
-// both shots, so the pictures show the site in its own fonts; the fix itself
-// is reported separately.
+// On main the Latin faces for Montserrat and Inter (one face, weights
+// 100–900) are shadowed by the Gurmukhi faces declared under the same names
+// with narrower weight ranges (site.css, TR), so the browser draws Latin text
+// in a fallback face. This branch declares them under the same ranges; on a
+// checkout without that fix this adds the Latin files the same way, so the
+// pictures show the site in its own fonts. On this branch it adds nothing.
 function fixLatinFaces() {
   const out = [];
   for (const sheet of document.styleSheets) {
@@ -234,32 +240,57 @@ function fixLatinFaces() {
   return out.length;
 }
 
-// ── The server ──
-const server = spawn(process.execPath, ['server/index.js'], {
-  cwd: ROOT,
-  env: { ...process.env, PORT: String(PORT), STARBASE_OPEN_SIGNUP: '1', STARBASE_DATA: 'memory', STARBASE_BRAND: 'imagine-surrey' },
-  stdio: ['ignore', 'pipe', 'pipe'],
-});
-let serverLog = '';
-server.stdout.on('data', (d) => { serverLog += d; });
-server.stderr.on('data', (d) => { serverLog += d; });
-const stop = () => { try { server.kill('SIGTERM'); } catch { /* gone */ } };
-process.on('exit', stop);
+// Every picture loaded before a shot: the footer logo is lazy, and a whole-
+// page screenshot doesn't scroll to it.
+async function settle(pub) {
+  await pub.evaluate(async () => {
+    for (const i of document.images) i.loading = 'eager';
+    await Promise.all([...document.images].map((i) => (i.complete ? 0 : new Promise((r) => { i.onload = r; i.onerror = r; }))));
+    await document.fonts.ready;
+  });
+}
 
-let browser;
-let failed = false;
-try {
+// ── The server, once per seed ──
+let server;
+let serverLog = '';
+const stop = () => { try { server?.kill('SIGTERM'); } catch { /* gone */ } };
+process.on('exit', stop);
+// Stopped from outside (Ctrl-C, a timeout): the server goes too.
+for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { stop(); process.exit(130); });
+
+async function startServer(brand) {
+  serverLog = '';
+  server = spawn(process.execPath, ['server/index.js'], {
+    cwd: ROOT,
+    env: { ...process.env, PORT: String(PORT), STARBASE_OPEN_SIGNUP: '1', STARBASE_DATA: 'memory', STARBASE_BRAND: brand },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  server.stdout.on('data', (d) => { serverLog += d; });
+  server.stderr.on('data', (d) => { serverLog += d; });
   for (let i = 0; ; i += 1) {
-    try { if ((await fetch(`${BASE}/signup`)).ok) break; } catch { /* not up yet */ }
+    try { if ((await fetch(`${BASE}/signup`)).ok) return; } catch { /* not up yet */ }
     if (i > 120) throw new Error(`the server didn't start on ${PORT}\n${serverLog.slice(-2000)}`);
     await sleep(500);
   }
-  browser = await chromium.launch();
+}
+async function stopServer() {
+  if (!server || server.exitCode !== null) return;
+  const gone = new Promise((r) => server.once('exit', r));
+  stop();
+  await Promise.race([gone, sleep(5000)]);
+}
+
+let browser;
+let failed = false;
+const index = [];
+
+async function shootSeed(seed) {
+  await startServer(seed.brand);
   const desk = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1, timezoneId: 'America/Vancouver' });
   const page = await desk.newPage();
   await page.goto(`${BASE}/signup`, { waitUntil: 'domcontentloaded' });
   await page.fill('#su-name', 'Sam Example');
-  if (await page.locator('#su-org').count()) await page.fill('#su-org', 'Imagine Surrey');
+  if (await page.locator('#su-org').count()) await page.fill('#su-org', seed.org);
   await page.fill('#su-email', `mock.${Date.now()}@example.org`);
   await page.fill('#su-password', 'surrey-forward-2026');
   await page.click('button[type="submit"]');
@@ -272,6 +303,11 @@ try {
     if (r.status >= 300) throw new Error(`${name}: ${r.status} ${JSON.stringify(r.body).slice(0, 400)}`);
     return r.body;
   };
+  // A made-up financial agent, so the footer shows the Authorized-by line
+  // on its own line (owner item 5: the seed has none).
+  const site = await page.evaluate(async () => (await fetch('/api/site', { credentials: 'same-origin' })).json());
+  const org = site.settings?.org || {};
+  await act('site.settings.save', { org: { ...org, agentName: 'Sam Example', agentContact: '555-0100' } });
   // The walk's sample page (research d09/d13), as the builder makes it.
   const mod = (kind, id, props = {}) => { const m = newModule(kind, id); return { ...m, props: { ...m.props, ...props } }; };
   const sample = await act('site.page.create', {
@@ -297,8 +333,7 @@ try {
     await act('site.post.publish', { id: p.id || p.post?.id });
   }
 
-  const index = [];
-  for (const look of LOOKS) {
+  for (const look of seed.looks) {
     await act('site.settings.save', { theme: look.theme });
     for (const size of SIZES) {
       const ctx = await browser.newContext({ viewport: size.viewport, deviceScaleFactor: 1, timezoneId: 'America/Vancouver', reducedMotion: 'reduce' });
@@ -306,18 +341,20 @@ try {
       for (const pg of PAGES) {
         await pub.goto(`${BASE}${pg.path}`, { waitUntil: 'load' });
         await pub.evaluate(fixLatinFaces);
-        await pub.evaluate(() => document.fonts.ready);
+        await settle(pub);
         const face = await pub.evaluate(async () => {
           const fam = getComputedStyle(document.querySelector('.display') || document.body).fontFamily.split(',')[0].trim();
           return { fam, loaded: (await document.fonts.load(`700 40px ${fam}`, 'Abc')).length > 0 };
         });
         if (!face.loaded) { failed = true; log(`FAIL  ${look.key} ${pg.key}: the heading face ${face.fam} didn't load`); }
+        const auth = await pub.evaluate(() => /Authorized by Sam Example/.test(document.querySelector('.site-footer')?.textContent || ''));
+        if (!auth) { failed = true; log(`FAIL  ${look.key} ${pg.key}: no Authorized-by line in the footer`); }
         await sleep(400);
         const name = (when) => `${look.key}-${pg.key}-${size.key}-${when}.png`;
         await pub.screenshot({ path: join(OUT, name('before')), fullPage: true });
         await pub.addStyleTag({ content: MOCK_CSS });
         await pub.evaluate(applyAfter, look.after);
-        await pub.evaluate(() => document.fonts.ready);
+        await settle(pub);
         await sleep(300);
         const over = await pub.evaluate(() => document.documentElement.scrollWidth - innerWidth);
         if (over > 0) { failed = true; log(`FAIL  ${name('after')} scrolls sideways by ${over}px`); }
@@ -328,6 +365,13 @@ try {
       await ctx.close();
     }
   }
+  await desk.close();
+  await stopServer();
+}
+
+try {
+  browser = await chromium.launch();
+  for (const seed of SEEDS) await shootSeed(seed);
   const lines = [
     '# Website mock: before and after (WA decision 28)',
     '',
@@ -335,9 +379,13 @@ try {
     '',
     '- imagine-surrey: Imagine Surrey as saved today. After shows only the structural fixes: no blank band under a one-line headline, points filling the row, one heading on News, news as cards, larger legal lines in the footer and under forms.',
     '- is-modern: Imagine Surrey with the modern heading sizes, the shadow on the hero and bands only, and the picture beside the headline, plus the fixes. Before is the same as the first look’s.',
-    '- civic-blue: the proposed Civic blue look (DM Serif Display / DM Sans). Before is today’s code with its colours and fonts; after adds the modern sizes, the picture beside the headline and the fixes.',
+    '- civic-blue: the proposed Civic blue look (DM Serif Display / DM Sans), shown on the Base seed (a made-up campaign) so no Imagine Surrey logo or words appear in a look that isn’t theirs. Before is today’s code with its colours and fonts; after adds the modern sizes, the picture beside the headline and the fixes.',
     '',
-    'Both shots of every pair draw Latin text in the look’s own fonts. On the code today the Gurmukhi faces in site.css hide the Latin Montserrat and Inter files, so the live site falls back to another face; the mock adds the Latin files back for the pictures, and that bug is reported separately.',
+    'The Base look (the starting look for other campaigns) follows whatever is decided for the Imagine Surrey look: the structural fixes always, the modern sizes and picture beside the headline only if approved.',
+    '',
+    'Every site here has a made-up financial agent (“Authorized by Sam Example, 555-0100”), so the footer shows that line on its own line. Imagine Surrey’s real site has none set yet (owner item 5).',
+    '',
+    'Both shots of every pair draw Latin text in the look’s own fonts. On main today the Gurmukhi faces in site.css hide the Latin Montserrat and Inter files, so the live site draws its Latin text in a fallback face; this branch fixes that (each Latin file is declared under the Gurmukhi faces’ weight ranges), and that fix ships on its own, whatever is decided about the looks.',
     '',
     'The sample page has no hero picture, so the after shots show a plain box labelled “Your picture”. The news posts are made-up samples without pictures.',
     '',
