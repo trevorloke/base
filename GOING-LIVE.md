@@ -695,9 +695,10 @@ waiting for *Live* (2–3 minutes).
 - **Open a campaign's desk:** ops.base.win → the campaign → **Open desk**. A
   new tab opens on that campaign's own Render address, already signed in as
   *base.win support*, with a bar across the top. Sign out from the bar when
-  done; a visit also ends by itself after 2 hours. Each visit, and
-  everything done in it, is on that campaign's History and its managers'
-  Today.
+  done; a visit also ends by itself after 2 hours. Each visit shows on that
+  campaign's managers' Today (the last week), and every change it makes is
+  tagged on the campaign's log; on a person's History, the doors, calls,
+  sign steps, voted marks and merges it made say *(via base.win)*.
 - **A campaign's managers can stop it** any time: Settings → Members →
   **base.win may sign in here** off. That also ends a visit in progress.
 - **Stop all base.win sign-in on one campaign, at once:** empty

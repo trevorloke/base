@@ -18,7 +18,6 @@ import { staleTimeZoneData } from '../lib/tzcheck.js';
 import { startOfDay } from '../lib/tzsql.js';
 import { DEFAULT_TZ } from '../lib/org.js';
 import { crossSiteWrite } from '../lib/guard.js';
-import { demoEmail } from '../lib/demo.js';
 import dataRoutes from './data.js';
 import { pointInPolygon, groupDoors, walkOrder } from '../lib/geo.js';
 import { checkCap } from '../lib/cap.js';
@@ -55,7 +54,7 @@ import { guideLangs } from '../ext/voteguide/read.js';
 import { GOTV_LOCKED, gotvLockMs, gotvRead, rowLimit } from '../ext/voted/scope.js';
 import { votedCol, scopeOf } from '../ext/voted/state.js';
 // What a visit as base.win support may not do (ext/operator).
-import { deniedForEntry, NOT_AS_SUPPORT } from '../ext/operator/index.js';
+import { deniedForEntry, NOT_AS_SUPPORT, SUPPORT_SQL, emailShown } from '../ext/operator/index.js';
 
 // Gift rows flagged as maybe one donor (idsOf: the ids a row names, as
 // stored) get maybe_same_as: those records by name, as things stand.
@@ -847,7 +846,7 @@ app.get('/team', async (c) => {
   const members = (await db.query(
     `select u.id, u.name, u.email, m.role, m.created_at, c.office as candidate_office, c.id is not null as candidate,
             -- base.win support (ext/operator): the control centre's account here
-            exists(select 1 from operator_links l where l.user_id = u.id) as support
+            ${SUPPORT_SQL} as support
        from memberships m join users u on u.id = m.user_id
        -- a candidate's seat (ext/candidates): Team shows it in place of the role
        left join candidates c on c.workspace_id = m.workspace_id and c.user_id = m.user_id and c.removed_at is null
@@ -855,8 +854,7 @@ app.get('/team', async (c) => {
      where m.workspace_id = $1 order by m.created_at`,
     [ctx.workspaceId],
   )).rows;
-  // The demo's visitors are strangers: base.win support's email is its own.
-  if (demoEmail()) for (const m of members) if (m.support && m.id !== ctx.user.id) m.email = null;
+  for (const m of members) m.email = emailShown(m, ctx.user.id);
   const invites = (await db.query(
     // A candidate's invite says whose seat it is (Team sends its New link to Candidates).
     `select i.id, i.email, i.role, i.created_at, i.expires_at, c.id as candidate_id, c.name as candidate_name, c.office as candidate_office

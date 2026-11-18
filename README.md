@@ -212,7 +212,8 @@ The campaign always knows: a bar across the top while support is in
 (*You’re in as base.win support · until 4:10 pm* · Sign out), the member on
 Settings → Members with its chip, a line on managers' Today (*base.win
 support signed in · Tue 3:10 pm*, the last week), and every event the visit
-writes tagged, so a person's History says *(via base.win)*. A manager turns
+writes tagged: on a person's History, the doors, calls, sign steps, voted
+marks and merges it made say *(via base.win)*. A manager turns
 **base.win may sign in here** off under Settings → Members, which also ends
 a visit in progress; support can't change it, its own two-step or Google,
 or make password links. People support invited stay on the team. On the

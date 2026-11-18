@@ -11,17 +11,22 @@ export const api = new Hono();
 
 // What base.win support did during a visit (ext/operator: every event a
 // visit writes carries its nonce as payload.entry) says so after who did
-// it: "(via base.win)". The team's own rows — a knock or a call, a sign, a
-// voted mark, a merge — found by their events, through the entity index.
+// it: "(via base.win)". The team's own rows — a knock or a call, a step of
+// a sign, a voted mark, a merge — found by their events.
 const VIA = 'via base.win';
-const ENTITY_OF = { contact: 'contact', sign: 'sign', voted: 'voted_mark' };
+const ENTITY_OF = { contact: 'contact', voted: 'voted_mark' };
+// A merge's key is its event; a sign's is its sign and the event of that
+// step (sign:<id>:<seq>), so only the step support took says so.
+const seqOf = (kind, parts) => (kind === 'merge' ? parts[1] : kind === 'sign' ? parts[2] : null);
 const markVisits = async (db, ws, entries) => {
   const ids = [];
   const seqs = [];
   for (const e of entries) {
-    const [kind, id] = String(e.key).split(':');
+    const parts = String(e.key).split(':');
+    const [kind, id] = parts;
+    const seq = seqOf(kind, parts);
     if (ENTITY_OF[kind] && UUID_RE.test(id || '')) ids.push(id);
-    else if (kind === 'merge' && /^\d+$/.test(id || '')) seqs.push(id);
+    else if (/^[1-9]\d*$/.test(seq || '')) seqs.push(seq);
   }
   if (!ids.length && !seqs.length) return;
   const rows = (await db.query(
@@ -33,8 +38,10 @@ const markVisits = async (db, ws, entries) => {
   if (!rows.length) return;
   const hit = new Set(rows.flatMap((r) => [`${r.entity_type}:${r.id}`, `seq:${r.seq}`]));
   for (const e of entries) {
-    const [kind, id] = String(e.key).split(':');
-    const via = kind === 'merge' ? hit.has(`seq:${id}`) : ENTITY_OF[kind] && hit.has(`${ENTITY_OF[kind]}:${id}`);
+    const parts = String(e.key).split(':');
+    const [kind, id] = parts;
+    const seq = seqOf(kind, parts);
+    const via = seq != null ? hit.has(`seq:${seq}`) : ENTITY_OF[kind] && hit.has(`${ENTITY_OF[kind]}:${id}`);
     if (via) e.by = e.by ? `${e.by} (${VIA})` : `(${VIA})`;
   }
 };

@@ -464,7 +464,7 @@ function OperatorSwitch({ me, online }) {
         <span>base.win may sign in here</span>
       </label>
       <div id={hintId}>
-        <p className="muted op-hint">{me.operator ? 'Only the campaign’s own managers change this.' : 'Each visit shows in History and on Today. Turning it off ends a visit in progress.'}</p>
+        <p className="muted op-hint">{me.operator ? 'Only the campaign’s own managers change this.' : 'Each visit shows on Today. Turning it off ends a visit in progress.'}</p>
         <p className="muted op-hint">People base.win invited stay on the team.</p>
       </div>
       <p className="muted op-hint" aria-live="polite">{said}</p>

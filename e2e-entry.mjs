@@ -180,7 +180,7 @@ try {
   const mgrSw = mgr.getByLabel('base.win may sign in here');
   await mgrSw.waitFor();
   check('as the manager, the switch is on and can be changed', await mgrSw.isChecked() && !(await mgrSw.isDisabled()));
-  check('its helper lines', await mgr.getByText('Each visit shows in History and on Today. Turning it off ends a visit in progress.').isVisible()
+  check('its helper lines', await mgr.getByText('Each visit shows on Today. Turning it off ends a visit in progress.').isVisible()
     && await mgr.getByText('People base.win invited stay on the team.').isVisible());
   await mgrSw.uncheck();
   await mgr.locator('.op-sec').getByText('Saved').waitFor();

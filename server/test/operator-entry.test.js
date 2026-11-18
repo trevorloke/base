@@ -490,6 +490,17 @@ test('/api/team: support marked; on the demo its email is its own', async () => 
   assert.equal(team.json.members.find((m) => m.email === 'morgan@example.org').support, false);
   team = await support.get('/api/team');
   assert.equal(row(team).email, OP.email);
+  // Every read that lists the team, the same: Settings → Permissions too.
+  let perms = await mgr.get('/api/admin/permissions');
+  assert.equal(perms.status, 200);
+  assert.equal(perms.json.members.find((m) => m.id === r.json.user.id).email, null);
+  assert.equal(perms.json.members.find((m) => m.name === 'Morgan Example').email, 'morgan@example.org');
+  perms = await support.get('/api/admin/permissions');
+  assert.equal(perms.json.members.find((m) => m.id === r.json.user.id).email, OP.email);
+  for (const path of ['/api/team', '/api/teams', '/api/admin/permissions', '/api/operator', '/api/volunteers', '/api/followups/route']) {
+    const res = await mgr.get(path);
+    assert.ok(!JSON.stringify(res.json).includes(OP.email), `${path} shows support’s email on the demo`);
+  }
 });
 
 test('Today: a manager sees support’s visits of the last seven days', async () => {
@@ -522,6 +533,14 @@ test('History: what a visit did says “(via base.win)”; the team’s own line
   assert.equal(t.status, 200);
   const bys = t.json.entries.filter((e) => e.kind === 'door' || e.kind === 'phone').map((e) => [e.kind, e.by]);
   assert.deepEqual(bys.sort(), [['door', 'Morgan Example'], ['phone', 'base.win support (via base.win)']]);
+  // A sign the manager asked for, put up by support: only support's step says so.
+  const sign = await mgr.action('sign.place', { person_id: p.id, kind: 'lawn', address: '1 Example Street' });
+  assert.equal(sign.status, 200, JSON.stringify(sign.json));
+  const signId = sign.json.sign.id;
+  const up = await as(r.cookie).action('sign.update', { id: signId, status: 'installed' });
+  assert.equal(up.status, 200, JSON.stringify(up.json));
+  const steps = (await mgr.get(`/api/persons/${p.id}/timeline`)).json.entries.filter((e) => e.kind === 'sign').map((e) => [e.title, e.by]);
+  assert.deepEqual(steps.sort(), [['Asked for · Lawn sign', 'Morgan Example'], ['Put up · Lawn sign', 'base.win support (via base.win)']]);
 });
 
 test('structural: the test signer only in tests; no route logs the entry or reset bodies', () => {

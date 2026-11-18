@@ -12,6 +12,7 @@
 // The token is checked in lib/entry.js; the route is POST
 // /api/auth/operator (routes/auth.js).
 import { briefSupport } from './brief.js';
+import { demoEmail } from '../../lib/demo.js';
 
 export { sql } from './sql.js';
 export { actions } from './actions.js';
@@ -31,3 +32,9 @@ export const OPERATOR_DENIED = [
 export const NOT_AS_SUPPORT = 'Not while signed in as base.win support.';
 export const deniedForEntry = (ctx, method, path) =>
   Boolean(ctx?.entry) && OPERATOR_DENIED.some((re) => re.test(`${method} ${path}`));
+
+// Every read that lists the team selects SUPPORT_SQL as support and shows
+// each email through emailShown. The demo's visitors are strangers: base.win
+// support's email is shown only to support itself.
+export const SUPPORT_SQL = 'exists(select 1 from operator_links l where l.user_id = u.id)';
+export const emailShown = (m, viewerId) => (demoEmail() && m.support && m.id !== viewerId ? null : m.email);
