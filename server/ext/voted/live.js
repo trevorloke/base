@@ -108,7 +108,7 @@ const tellMode = async (ws) => {
   for (const sub of [...set]) {
     try {
       const status = await sub.statusOf(db);
-      sub.send({ event: 'mode', data: JSON.stringify(status) });
+      await sub.send({ event: 'mode', data: JSON.stringify(status) });
       sub.group = status.practice ? status.active : true;
       if (!status.active) sub.close();
     } catch (e) { console.error(`gotv live: ${e.message}`); }

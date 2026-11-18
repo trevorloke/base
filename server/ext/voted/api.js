@@ -112,14 +112,12 @@ api.get('/voted/live', async (c) => {
   const scope = await scopeFor(db, ctx, g);
   const since = Number(c.req.header('last-event-id')) || 0;
   const catchUp = since ? await changesSince(db, ctx, g, scope, since) : null;
-  c.header('Cache-Control', 'no-cache, no-transform');
-  c.header('X-Accel-Buffering', 'no');
-  return streamSSE(c, async (stream) => {
+  const res = streamSSE(c, async (stream) => {
     let done;
     const ended = new Promise((r) => { done = r; });
     const sub = {
       ctx, ...scope, group: g.group || g.on, last: since, queue: new Map(), timer: null, closed: false, at: Date.now(), scopeAt: Date.now(),
-      send: (m) => { if (!sub.closed) stream.writeSSE(m).catch(() => sub.close()); },
+      send: (m) => (sub.closed ? Promise.resolve() : stream.writeSSE(m).catch(() => sub.close())),
       statusOf: (d) => statusOf(d, ctx),
       close: () => { if (sub.closed) return; sub.closed = true; clearTimeout(sub.timer); done(); },
     };
@@ -137,6 +135,10 @@ api.get('/voted/live', async (c) => {
     clearInterval(ping);
     leave();
   });
+  // Never transformed or buffered on the way (a proxy, compress()).
+  res.headers.set('Cache-Control', 'no-cache, no-transform');
+  res.headers.set('X-Accel-Buffering', 'no');
+  return res;
 });
 
 // The changes after a feed id, one per person (their value now), in the
