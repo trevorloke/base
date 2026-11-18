@@ -432,6 +432,97 @@ test('a visit ends after two hours', async () => {
   assert.equal((await as(r.cookie).get('/api/auth/me')).status, 401);
 });
 
+test('the switch action: a manager turns it off (ends the visit) and on; never on the demo', async () => {
+  const mgr = await withCampaign();
+  let op = await mgr.get('/api/operator');
+  assert.equal(op.status, 200);
+  assert.deepEqual(op.json, { on: true, demo: false, support: [] });
+  const open = await entry(await mint());
+  const supportId = open.json.user.id;
+  op = await mgr.get('/api/operator');
+  assert.equal(op.json.support.length, 1);
+  assert.equal(op.json.support[0].user_id, supportId);
+  assert.equal(op.json.support[0].name, 'base.win support');
+  assert.ok(op.json.support[0].last_entry_at);
+  // Support itself may not change it.
+  assert.equal((await as(open.cookie).action('workspace.operatorEntry', { on: false })).status, 403);
+  const off = await mgr.action('workspace.operatorEntry', { on: false });
+  assert.equal(off.status, 200, JSON.stringify(off.json));
+  assert.equal(off.json.on, false);
+  assert.equal(off.json.ended, 1);
+  assert.equal(await sessions(), 0);
+  assert.equal((await as(open.cookie).get('/api/auth/me')).status, 401);
+  assert.equal((await entry(await mint())).json.code, 'off');
+  assert.equal((await mgr.get('/api/operator')).json.on, false);
+  const ev = (await db.query("select payload from events where action = 'workspace.operatorEntry'")).rows;
+  assert.deepEqual(ev.map((e) => e.payload), [{ operator_entry: false, ended: 1 }]);
+  assert.equal((await mgr.action('workspace.operatorEntry', { on: true })).status, 200);
+  assert.equal((await entry(await mint())).status, 200);
+  // Not for anyone but managers.
+  const vol = await mgr.action('member.invite', { email: 'vol@example.org', role: 'volunteer' });
+  const v = new Client();
+  await v.post('/api/auth/join', { token: vol.json.joinUrl.split('/join/')[1], name: 'Val Example', password: 'val-password-1' });
+  assert.equal((await v.action('workspace.operatorEntry', { on: false })).status, 403);
+  assert.equal((await v.get('/api/operator')).status, 403);
+  // The demo: refused, and the read says so.
+  process.env.STARBASE_ENV = 'staging';
+  process.env.STARBASE_DEMO_EMAIL = 'demo@example.org';
+  const demo = await mgr.action('workspace.operatorEntry', { on: false });
+  assert.equal(demo.status, 409);
+  assert.equal(demo.json.error, 'The demo can’t change this.');
+  assert.equal((await mgr.get('/api/operator')).json.demo, true);
+});
+
+test('/api/team: support marked; on the demo its email is its own', async () => {
+  const mgr = await withCampaign();
+  const r = await entry(await mint());
+  const support = as(r.cookie);
+  let team = await mgr.get('/api/team');
+  const row = (t) => t.json.members.find((m) => m.id === r.json.user.id);
+  assert.equal(row(team).support, true);
+  assert.equal(row(team).email, OP.email);
+  assert.equal(team.json.members.find((m) => m.email === 'morgan@example.org').support, false);
+  process.env.STARBASE_ENV = 'staging';
+  process.env.STARBASE_DEMO_EMAIL = 'demo@example.org';
+  team = await mgr.get('/api/team');
+  assert.equal(row(team).email, null);
+  assert.equal(team.json.members.find((m) => m.email === 'morgan@example.org').support, false);
+  team = await support.get('/api/team');
+  assert.equal(row(team).email, OP.email);
+});
+
+test('Today: a manager sees support’s visits of the last seven days', async () => {
+  const mgr = await withCampaign();
+  assert.equal((await mgr.get('/api/brief')).json.supportVisits, undefined);
+  await entry(await mint());
+  let brief = await mgr.get('/api/brief');
+  assert.equal(brief.status, 200);
+  assert.equal(brief.json.supportVisits.length, 1);
+  assert.ok(brief.json.supportVisits[0].at);
+  await db.query("update operator_entries set used_at = now() - interval '8 days'");
+  brief = await mgr.get('/api/brief');
+  assert.equal(brief.json.supportVisits, undefined);
+  // Not a volunteer's.
+  await entry(await mint());
+  const vol = await mgr.action('member.invite', { email: 'vol@example.org', role: 'volunteer' });
+  const v = new Client();
+  await v.post('/api/auth/join', { token: vol.json.joinUrl.split('/join/')[1], name: 'Val Example', password: 'val-password-1' });
+  assert.equal((await v.get('/api/brief')).json.supportVisits, undefined);
+});
+
+test('History: what a visit did says “(via base.win)”; the team’s own lines don’t', async () => {
+  const mgr = await withCampaign();
+  const p = await mgr.createPerson('Pat Example');
+  assert.equal((await mgr.action('contact.log', { person_id: p.id, channel: 'door', outcome: 'contacted', rating: '1' })).status, 200);
+  const r = await entry(await mint());
+  const knock = await as(r.cookie).action('contact.log', { person_id: p.id, channel: 'phone', outcome: 'contacted', rating: '2' });
+  assert.equal(knock.status, 200, JSON.stringify(knock.json));
+  const t = await mgr.get(`/api/persons/${p.id}/timeline`);
+  assert.equal(t.status, 200);
+  const bys = t.json.entries.filter((e) => e.kind === 'door' || e.kind === 'phone').map((e) => [e.kind, e.by]);
+  assert.deepEqual(bys.sort(), [['door', 'Morgan Example'], ['phone', 'base.win support (via base.win)']]);
+});
+
 test('structural: the test signer only in tests; no route logs the entry or reset bodies', () => {
   const root = new URL('../..', import.meta.url).pathname;
   const files = [];

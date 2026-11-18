@@ -5,10 +5,18 @@
 //                operator_links; users.support, sessions.entry)
 //   identity.js  this server's instance id, which every token must name
 //   enter.js     an entry: the switch, the account, a two-hour sign-in
+//   actions.js   workspace.operatorEntry: the switch (Settings → Members)
+//   api.js       GET /operator: the switch and the support accounts here
+//   brief.js     a manager's Today: support's visits this week
 //
 // The token is checked in lib/entry.js; the route is POST
-// /api/auth/operator (routes/auth.js). Nothing here is exported.
+// /api/auth/operator (routes/auth.js).
+import { briefSupport } from './brief.js';
+
 export { sql } from './sql.js';
+export { actions } from './actions.js';
+export { api } from './api.js';
+export const hooks = { brief: briefSupport };
 
 // What a visit as base.win support may not do (routes/api.js checks it
 // after scopeAllows): its own sign-in methods and the campaign's two-step

@@ -9,6 +9,36 @@ import { gotvFor, scopeOf } from '../voted/state.js';
 
 export const api = new Hono();
 
+// What base.win support did during a visit (ext/operator: every event a
+// visit writes carries its nonce as payload.entry) says so after who did
+// it: "(via base.win)". The team's own rows — a knock or a call, a sign, a
+// voted mark, a merge — found by their events, through the entity index.
+const VIA = 'via base.win';
+const ENTITY_OF = { contact: 'contact', sign: 'sign', voted: 'voted_mark' };
+const markVisits = async (db, ws, entries) => {
+  const ids = [];
+  const seqs = [];
+  for (const e of entries) {
+    const [kind, id] = String(e.key).split(':');
+    if (ENTITY_OF[kind] && UUID_RE.test(id || '')) ids.push(id);
+    else if (kind === 'merge' && /^\d+$/.test(id || '')) seqs.push(id);
+  }
+  if (!ids.length && !seqs.length) return;
+  const rows = (await db.query(
+    `select entity_type, entity_id::text as id, seq::text as seq from events
+      where workspace_id = $1 and payload ? 'entry'
+        and ((entity_type = any($2::text[]) and entity_id = any($3::uuid[])) or seq = any($4::bigint[]))`,
+    [ws, Object.values(ENTITY_OF), ids, seqs],
+  )).rows;
+  if (!rows.length) return;
+  const hit = new Set(rows.flatMap((r) => [`${r.entity_type}:${r.id}`, `seq:${r.seq}`]));
+  for (const e of entries) {
+    const [kind, id] = String(e.key).split(':');
+    const via = kind === 'merge' ? hit.has(`seq:${id}`) : ENTITY_OF[kind] && hit.has(`${ENTITY_OF[kind]}:${id}`);
+    if (via) e.by = e.by ? `${e.by} (${VIA})` : `(${VIA})`;
+  }
+};
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MONEY_ROLES = ['manager', 'treasurer', 'staff'];
 const PAGE = 50;
@@ -85,6 +115,7 @@ api.get('/persons/:id/timeline', async (c) => {
   }
   found.sort(newestFirst);
   const entries = found.slice(0, limit);
+  await markVisits(db, ctx.workspaceId, entries);
   return c.json({
     entries: entries.map(({ key, at, ...e }) => ({ id: key, at: at.toISOString(), ...e })),
     next: found.length > limit ? cursorOf(entries[entries.length - 1]) : null,

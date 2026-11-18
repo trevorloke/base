@@ -18,6 +18,7 @@ import { staleTimeZoneData } from '../lib/tzcheck.js';
 import { startOfDay } from '../lib/tzsql.js';
 import { DEFAULT_TZ } from '../lib/org.js';
 import { crossSiteWrite } from '../lib/guard.js';
+import { demoEmail } from '../lib/demo.js';
 import dataRoutes from './data.js';
 import { pointInPolygon, groupDoors, walkOrder } from '../lib/geo.js';
 import { checkCap } from '../lib/cap.js';
@@ -844,7 +845,9 @@ app.get('/team', async (c) => {
   if (ctx.role !== 'manager') return c.json({ error: 'managers only' }, 403);
   const db = c.get('db');
   const members = (await db.query(
-    `select u.id, u.name, u.email, m.role, m.created_at, c.office as candidate_office, c.id is not null as candidate
+    `select u.id, u.name, u.email, m.role, m.created_at, c.office as candidate_office, c.id is not null as candidate,
+            -- base.win support (ext/operator): the control centre's account here
+            exists(select 1 from operator_links l where l.user_id = u.id) as support
        from memberships m join users u on u.id = m.user_id
        -- a candidate's seat (ext/candidates): Team shows it in place of the role
        left join candidates c on c.workspace_id = m.workspace_id and c.user_id = m.user_id and c.removed_at is null
@@ -852,6 +855,8 @@ app.get('/team', async (c) => {
      where m.workspace_id = $1 order by m.created_at`,
     [ctx.workspaceId],
   )).rows;
+  // The demo's visitors are strangers: base.win support's email is its own.
+  if (demoEmail()) for (const m of members) if (m.support && m.id !== ctx.user.id) m.email = null;
   const invites = (await db.query(
     // A candidate's invite says whose seat it is (Team sends its New link to Candidates).
     `select i.id, i.email, i.role, i.created_at, i.expires_at, c.id as candidate_id, c.name as candidate_name, c.office as candidate_office

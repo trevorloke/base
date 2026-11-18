@@ -14,8 +14,8 @@ import {
   hashPassword, verifyPassword, dummyVerify,
   createSession, destroySession, loadContext, SESSION_COOKIE,
 } from '../lib/auth.js';
-import { JURISDICTIONS, orgName, jurisdiction, envName, openSignupForced, setupClosedMessage, orgOut } from '../lib/org.js';
-import { createWorkspace, recordCreated, SIGNUP_LOCK } from '../lib/setup.js';
+import { JURISDICTIONS, orgName, jurisdiction, envName, setupClosedMessage, orgOut } from '../lib/org.js';
+import { createWorkspace, recordCreated, noWorkspace, setupOpen, SIGNUP_LOCK } from '../lib/setup.js';
 import { clientIp, makeLimiter, crossSiteWrite } from '../lib/guard.js';
 import {
   checkCode, codeFails, countMiss, endPending, PENDING_COOKIE, PENDING_MINUTES, PENDING_TRIES,
@@ -79,8 +79,6 @@ const signupInput = z.object({
 // — except on a server that holds the control centre's key: that one is set
 // up from the control centre (its first entry makes the campaign), so a
 // stranger who finds it fresh can't claim it.
-const noWorkspace = async (db) => !(await db.query('select 1 from workspaces limit 1')).rows[0];
-const setupOpen = async (db) => openSignupForced() || (!parseKeys().length && (await noWorkspace(db)));
 const FROM_CONTROL_CENTRE = 'This campaign is set up from the base.win control centre.';
 // Why sign-up is closed, in the words for this server.
 const closedWords = async (db) => (parseKeys().length && (await noWorkspace(db))
