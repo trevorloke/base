@@ -110,7 +110,7 @@ export function Img({ rc, image, className, width, height, eager, alt, sizes }) 
   const w = Number(i.width) > 0 ? Number(i.width) : width;
   const h = Number(i.height) > 0 ? Number(i.height) : height;
   return html`<img className=${className} src=${a.src} srcSet=${a.srcSet} sizes=${a.sizes} style=${a.style} alt=${alt ?? a.alt} width=${w} height=${h}
-    loading=${eager ? undefined : 'lazy'} fetchpriority=${eager ? 'high' : undefined} decoding="async" />`;
+    loading=${eager ? undefined : 'lazy'} fetchPriority=${eager ? 'high' : undefined} decoding="async" />`;
 }
 
 // ── The forms' wording ──

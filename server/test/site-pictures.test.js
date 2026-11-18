@@ -152,20 +152,20 @@ test('Img: srcset and sizes from the copies, the first section’s picture first
   const [hero] = imgTags(html, 'hero-image');
   assert.match(hero, /srcset="\/media\/\S+1 480w, \/media\/\S+2 960w, \/media\/\S+3 1600w, \/media\/\S+0 2000w"/i);
   assert.match(hero, /sizes="\(min-width: 900px\) 50vw, 100vw"/);
-  assert.match(hero, /fetchpriority="high"/);
+  assert.match(hero, /fetchpriority="high"/i);
   assert.doesNotMatch(hero, /loading="lazy"/);
   assert.match(hero, /object-position:20% 80%/);
   assert.match(hero, /width="2000" height="1500"/);
   const [wide, plain] = imgTags(html, 'wide-image');
   assert.match(wide, /loading="lazy"/);
-  assert.doesNotMatch(wide, /fetchpriority/);
+  assert.doesNotMatch(wide, /fetchpriority/i);
   assert.match(wide, /srcset=/i);
   assert.doesNotMatch(plain, /srcset|object-position/i, 'no copies: drawn as before');
   assert.match(plain, /alt=""/, 'decorative: says nothing');
   const post = shown([], { id: 'p1', slug: 'rally', title: 'Rally', excerpt: '', body: 'Hi', image: pic, published_at: '2026-10-01T17:00:00Z' });
   const [big] = imgTags(post, 'news-image');
   assert.match(big, /sizes="min\(100vw, 760px\)"/);
-  assert.match(big, /fetchpriority="high"/);
+  assert.match(big, /fetchpriority="high"/i);
 });
 
 test('a post’s short summary is made from its words: plain, at most 160 characters', () => {

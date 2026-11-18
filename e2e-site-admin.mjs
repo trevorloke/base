@@ -19,7 +19,13 @@
 // picks a readable text colour and it saves. A page duplicated and deleted
 // comes back with Undo. Every kind of section opens with a box for every
 // field; the voter guide is offered once a page. A post is written and
-// published; a sample petition gets a signature from the site and "See
+// published. Pictures (2b): an upload stores three sizes (WebP; JPEG where
+// the browser won't make WebP, as Safari, and in WebKit itself — which must
+// be installed: the step fails, never skips); the spot to keep in view;
+// Publish refuses a new picture with no description and opens its box; an
+// older one doesn't block and the toast asks for it. A post's summary fills
+// itself, the post as it will look beside updates as you type, and it's a
+// card on /news; a sample petition gets a signature from the site and "See
 // who signed" lists them in People. A volunteer can't open Website. On a
 // phone (390px) every Website screen fits with no sideways scroll, tap
 // targets are 48px, and the full-screen preview opens a tapped section's
@@ -39,6 +45,8 @@ const check = (name, ok, extra = '') => {
   results.push(!!ok);
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${extra ? '  — ' + String(extra).slice(0, 240) : ''}`);
 };
+// Where two drawings first differ, for a failing comparison's message.
+const diffAt = (a, b) => { let i = 0; while (i < a.length && a[i] === b[i]) i += 1; return i >= a.length && i >= b.length ? '' : `at ${i}: “${a.slice(Math.max(0, i - 40), i + 60)}” vs “${b.slice(Math.max(0, i - 40), i + 60)}”`; };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const tag = Date.now().toString(36);
 
@@ -257,7 +265,7 @@ const petServer = (await (async () => {
   const html = await page.evaluate(async (u) => (await fetch(u)).text(), tok);
   return page.evaluate((h) => { const t = document.createElement('template'); t.innerHTML = h; return [...t.content.querySelectorAll('[data-module="petition"]')].map((s) => s.outerHTML).find((x) => x.includes('a bench at the bus stop')) || ''; }, html);
 })());
-check('a petition made in another tab: “Updating preview…”, then the section shows it, as the server draws it', updating && petIn && strip(petIn) === strip(petServer), `${updating} ${petIn.length} ${petServer.length}`);
+check('a petition made in another tab: “Updating preview…”, then the section shows it, as the server draws it', updating && petIn && strip(petIn) === strip(petServer), `${updating} ${petIn.length} ${petServer.length} ${diffAt(strip(petIn), strip(petServer))}`);
 // Columns: an icon from the grid; a point dragged; one removed and Undo.
 await page.getByRole('button', { name: '← All sections' }).click();
 await page.locator(`#wb-sec-${id.columns} .wb-card__open`).click();
@@ -429,7 +437,7 @@ await pic.locator('input[type="file"]').setInputFiles({ name: 'sample.png', mime
 await pic.locator('.wb-image__thumb img').waitFor({ timeout: 10000 }).catch(() => {});
 const src = await pic.locator('.wb-image__thumb img').getAttribute('src').catch(() => '');
 check('a picture: uploaded, shown, from the site’s own store (/media/…)', /\/media\/[0-9a-f-]{36}$/.test(src), src);
-await pic.getByRole('textbox', { name: /What the picture shows/ }).fill('A sample picture');
+await pic.getByRole('textbox', { name: /Describe the picture/ }).fill('A sample picture');
 // A switch, a number, a background swatch.
 const nl = await open('newsletter');
 await nl.getByLabel('Ask for a mobile number (texts)').check();
@@ -486,6 +494,117 @@ await page.locator('.wb-toast', { hasText: 'Published' }).waitFor({ timeout: 100
 const post = (await api('/site/posts')).json.posts.find((p) => p.title === 'Sample post: the town hall');
 check('a post, published', post?.status === 'published', JSON.stringify(post));
 check('…on the site at /news/<its address>', (await site(`/site/news/${post?.slug}`)).status === 200);
+
+// ── Pictures (2b): three sizes, the spot to keep in view, a description at Publish ──
+// A made-up photo, drawn in the page: 2,400 × 1,600, so every size is made.
+const photo = async (p = page) => Buffer.from(await p.evaluate(() => {
+  const c = document.createElement('canvas'); c.width = 2400; c.height = 1600;
+  const g = c.getContext('2d');
+  const gr = g.createLinearGradient(0, 0, 2400, 1600); gr.addColorStop(0, 'rgb(30,120,90)'); gr.addColorStop(1, 'rgb(250,200,60)');
+  g.fillStyle = gr; g.fillRect(0, 0, 2400, 1600);
+  for (let i = 0; i < 600; i += 1) { g.fillStyle = `hsl(${(i * 37) % 360}, 60%, 50%)`; g.fillRect((i * 97) % 2400, (i * 53) % 1600, 60, 60); }
+  return c.toDataURL('image/jpeg', 0.92).split(',')[1];
+}), 'base64');
+const mediaFacts = (p, urls) => p.evaluate(async (us) => Promise.all(us.map(async (u) => { const r = await fetch(u); const b = await r.blob(); return { type: b.type, bytes: b.size }; })), urls);
+const pictureModule = (props = {}) => ({ id: `pic${tag}`.slice(0, 20), kind: 'image', props: { image: { url: '', alt: '' }, caption: '', ...props } });
+const wordsModule = (body) => ({ id: `txt${tag}`.slice(0, 20), kind: 'text', props: { title: 'How the rally went', body } });
+const picPage = (await api('/actions/site.page.create', { title: `Sample rally ${tag}`, modules: [wordsModule('A made-up afternoon in the park.'), pictureModule()] })).json.page;
+await page.goto(`${BASE}/admin/website/pages/${picPage.id}`, { waitUntil: 'domcontentloaded' });
+await ready();
+await sections().nth(1).locator('.wb-card__open').click();
+await page.locator('.wb-image input[type=file]').setInputFiles({ name: 'rally.jpg', mimeType: 'image/jpeg', buffer: await photo() });
+await page.locator('.wb-focus').waitFor({ timeout: 20000 });
+await saved();
+let picDraft = (await api(`/site/pages/${picPage.id}`)).json.page.draft.modules[1].props.image;
+const sizeFacts = await mediaFacts(page, (picDraft.sizes || []).map((z) => z.url));
+check('a picture uploaded: three sizes stored (480, 960, 1,600 px), WebP in Chromium, each at most 600 KB', JSON.stringify((picDraft.sizes || []).map((z) => z.w)) === '[480,960,1600]'
+  && sizeFacts.every((f) => f.type === 'image/webp' && f.bytes <= 600 * 1024) && picDraft.width === 2000, JSON.stringify({ picDraft, sizeFacts }));
+// The spot to keep in view: a tap on the picture.
+const fb = await page.locator('.wb-focus').boundingBox();
+await page.mouse.click(fb.x + fb.width * 0.25, fb.y + fb.height * 0.75);
+await saved();
+picDraft = (await api(`/site/pages/${picPage.id}`)).json.page.draft.modules[1].props.image;
+check('the spot to keep in view: tapped on the picture, a dot marks it, kept with the picture', Math.abs(picDraft.focus?.x - 25) <= 2 && Math.abs(picDraft.focus?.y - 75) <= 2
+  && Math.abs(parseFloat(await page.locator('.wb-focus__dot').evaluate((d) => d.style.left)) - 25) <= 2, JSON.stringify(picDraft.focus));
+const pvPos = await page.waitForFunction(() => document.querySelector('.wb-side iframe')?.contentDocument?.querySelector('img.wide-image')?.style.objectPosition, null, { timeout: 8000 }).then((h) => h.jsonValue()).catch(() => '');
+check('…and the preview keeps that spot in view, with the sizes as a srcset', /2[4-6]% 7[4-6]%/.test(pvPos)
+  && await fr.locator('img.wide-image').first().evaluate((i) => i.srcset.split(',').length === 4), pvPos);
+await shot('13-picture-box', false);
+await page.getByRole('button', { name: /^Publish/ }).click();
+await page.waitForFunction(() => /-image-alt$/.test(document.activeElement?.id || ''), null, { timeout: 8000 }).catch(() => {});
+check('Publish with a new picture and no description: refused, the description box opened and focused', /-image-alt$/.test(await page.evaluate(() => document.activeElement?.id || ''))
+  && /describe the picture/i.test(await page.locator('.wb-alert').innerText().catch(() => '')) && (await api(`/site/pages/${picPage.id}`)).json.page.status === 'draft');
+await page.keyboard.type('Neighbours on the grass at a made-up rally');
+await page.getByRole('button', { name: /^Publish/ }).click();
+await page.locator('.wb-toast', { hasText: 'Published' }).waitFor({ timeout: 10000 });
+const picLive = await site(`/site/${(await api(`/site/pages/${picPage.id}`)).json.page.slug}`);
+check('described: published, drawn on the site with its sizes and the spot kept in view', /<img[^>]*class="wide-image"[^>]*srcset="[^"]+480w/i.test(picLive.html) && /object-position:2[4-6]% 7[4-6]%/.test(picLive.html));
+// An older page whose picture went out without a description: a one-word change still publishes, and asks for it.
+const oldPic = (await api('/actions/site.page.create', { title: `Sample older ${tag}`, modules: [wordsModule('An older made-up page.'), pictureModule({ image: { url: picDraft.url, alt: '', decorative: true } })] })).json.page;
+await api('/actions/site.page.publish', { id: oldPic.id });
+await api('/actions/site.page.save', { id: oldPic.id, modules: [wordsModule('An older made-up page.'), pictureModule({ image: { url: picDraft.url, alt: '' } })] });
+await page.goto(`${BASE}/admin/website/pages/${oldPic.id}`, { waitUntil: 'domcontentloaded' });
+await ready();
+await sections().nth(0).locator('.wb-card__open').click();
+await page.locator('textarea[id$="-body"]').first().fill('An older made-up page, changed.');
+await saved();
+await page.getByRole('button', { name: /^Publish/ }).click();
+const oldToast = page.locator('.wb-toast', { hasText: 'Published' });
+await oldToast.waitFor({ timeout: 10000 }).catch(() => {});
+check('an existing page with an older picture without a description: a word changed, Publish succeeds and says so', (await api(`/site/pages/${oldPic.id}`)).json.page.changed === false
+  && /1 older picture has no description/.test(await oldToast.innerText().catch(() => '')), await oldToast.innerText().catch(() => ''));
+await oldToast.getByRole('button', { name: 'Describe them' }).click();
+await page.waitForFunction(() => /-image-alt$/.test(document.activeElement?.id || ''), null, { timeout: 5000 }).catch(() => {});
+check('…“Describe them” opens that picture’s description box', /-image-alt$/.test(await page.evaluate(() => document.activeElement?.id || '')));
+
+// ── A post (2b): the summary fills itself, the post as it will look beside, Publish, on /news ──
+await page.setViewportSize({ width: 1440, height: 900 });
+await page.goto(`${BASE}/admin/website/news/new`, { waitUntil: 'domcontentloaded' });
+await page.fill('#wb-p-title', `Sample rally report ${tag}`);
+await page.locator('.wb-image input[type=file]').first().setInputFiles({ name: 'report.jpg', mimeType: 'image/jpeg', buffer: await photo() });
+await page.locator('.wb-focus').waitFor({ timeout: 20000 });
+await page.locator('#wb-p-body').click();
+await page.keyboard.type('A made-up crowd came out to talk about **buses**. ');
+check('the post’s short summary fills itself from the words', (await page.inputValue('#wb-p-excerpt')).startsWith('A made-up crowd came out to talk about buses.'), await page.inputValue('#wb-p-excerpt'));
+await page.keyboard.type('Then it rained.');
+check('the post as it will look, beside, updates as you type', /Then it rained\./.test(await page.locator('.wb-postpv__body').innerText()) && await page.locator('.wb-postpv__body strong').count() === 1
+  && (await page.inputValue('#wb-p-excerpt')).endsWith('Then it rained.'));
+await page.fill('#wb-p-excerpt', 'Typed by hand.');
+await page.locator('#wb-p-body').press('End');
+await page.keyboard.type(' The end.');
+check('…until someone types in the summary: then it stays theirs', (await page.inputValue('#wb-p-excerpt')) === 'Typed by hand.');
+await shot('14-post-editor', false);
+await page.getByRole('button', { name: 'Publish', exact: true }).click();
+await page.waitForFunction(() => document.activeElement?.id === 'wb-p-image-alt', null, { timeout: 8000 }).catch(() => {});
+check('a post’s Publish with an undescribed picture: refused, the description box focused', await page.evaluate(() => document.activeElement?.id) === 'wb-p-image-alt'
+  && /describe it/i.test(await page.locator('.wb-alert').innerText().catch(() => '')));
+await page.keyboard.type('Umbrellas at a made-up meeting');
+await page.getByRole('button', { name: 'Publish', exact: true }).click();
+await page.locator('.wb-toast', { hasText: 'Published' }).waitFor({ timeout: 10000 });
+const report = (await api('/site/posts')).json.posts.find((p) => p.title === `Sample rally report ${tag}`);
+const newsList = await site('/site/news');
+const reportPage = await site(`/site/news/${report?.slug}`);
+const card = /<article[^>]*class="card"[^>]*>((?:(?!<\/article>)[\s\S])*)<\/article>/g;
+const reportCard = [...newsList.html.matchAll(card)].map((x) => x[1]).find((x) => x.includes(`Sample rally report ${tag}`)) || '';
+check('published: on /news as a card with its picture, and its own page draws the sizes', report?.status === 'published' && /<img[^>]*news-card-image/.test(reportCard)
+  && /<img(?=[^>]*class="news-image")(?=[^>]*srcset=)/i.test(reportPage.html), report?.slug);
+// Safari hands back a PNG when asked for WebP: the copies are JPEG instead (the same code, its toBlob made to answer as Safari's does).
+const safari = await desk.newPage();
+await safari.addInitScript(() => {
+  const real = HTMLCanvasElement.prototype.toBlob;
+  HTMLCanvasElement.prototype.toBlob = function toBlob(cb, type, q) { return real.call(this, cb, type === 'image/webp' ? 'image/png' : type, q); };
+});
+await safari.goto(`${BASE}/admin/website/news/new`, { waitUntil: 'domcontentloaded' });
+await safari.fill('#wb-p-title', `Sample Safari ${tag}`);
+await safari.locator('.wb-image input[type=file]').first().setInputFiles({ name: 'safari.jpg', mimeType: 'image/jpeg', buffer: await photo(safari) });
+await safari.locator('.wb-focus').waitFor({ timeout: 20000 });
+await safari.getByRole('button', { name: 'Save draft' }).click();
+await safari.waitForFunction(() => /\/website\/news\/[0-9a-f-]{36}/.test(location.pathname), null, { timeout: 10000 }).catch(() => {});
+const sPost = (await api('/site/posts')).json.posts.find((p) => p.title === `Sample Safari ${tag}`);
+const sFacts = await mediaFacts(page, (sPost?.image?.sizes || []).map((z) => z.url));
+check('where the browser won’t make WebP (Safari): three JPEG sizes, each at most 600 KB', sFacts.length === 3 && sFacts.every((f) => f.type === 'image/jpeg' && f.bytes <= 600 * 1024), JSON.stringify(sFacts));
+await safari.close();
+await page.setViewportSize({ width: 1360, height: 900 });
 
 // ── Petitions: a signature from the site; "See who signed" ──
 await page.getByRole('link', { name: '← News' }).click();
@@ -624,7 +743,7 @@ await vctx.close();
 // ── a phone ──
 await page.setViewportSize({ width: 390, height: 844 });
 const phone = [];
-for (const [path, name] of [['/website', 'overview'], ['/website/pages', 'pages'], [`/website/pages/${pageId}`, 'builder'], ['/website/theme', 'theme'], ['/website/settings', 'settings'], ['/website/news', 'news'], ['/website/petitions', 'petitions'], ['/website/sites', 'other websites']]) {
+for (const [path, name] of [['/website', 'overview'], ['/website/pages', 'pages'], [`/website/pages/${pageId}`, 'builder'], ['/website/theme', 'theme'], ['/website/settings', 'settings'], ['/website/news', 'news'], ['/website/petitions', 'petitions'], ['/website/sites', 'other websites'], [`/website/news/${report?.id}`, 'post']]) {
   await page.goto(`${BASE}/admin${path}`, { waitUntil: 'domcontentloaded' });
   await page.locator('h1:visible, .wb-top__in').first().waitFor();
   await sleep(700);
@@ -676,6 +795,15 @@ await shot('11-overview-phone');
 await page.goto(`${BASE}/admin/website/theme`, { waitUntil: 'domcontentloaded' });
 await page.locator('.wb-sample').waitFor();
 await shot('12-theme-phone');
+// The post on a phone: Write · See it.
+await page.goto(`${BASE}/admin/website/news/${report?.id}`, { waitUntil: 'domcontentloaded' });
+await page.locator('#wb-p-title').waitFor();
+await shot('15-post-write-phone', false);
+await page.getByRole('button', { name: 'See it', exact: true }).click();
+check('on a phone: a post’s Write · See it — See it shows the post as it will look', await page.locator('.wb-postpv__title').innerText() === `Sample rally report ${tag}` && !(await page.locator('#wb-p-title').isVisible()) && (await overflow()) <= 0);
+await shot('15b-post-see-phone', false);
+await page.goto(`${BASE}/admin/website/theme`, { waitUntil: 'domcontentloaded' });
+await page.locator('.wb-sample').waitFor();
 
 // ── Theme: the website can follow the campaign's brand, and take its own look back ──
 // (This campaign's website has its own look, as Imagine Surrey's live one does.)
@@ -714,6 +842,29 @@ await shot('12-theme-phone');
   const own = (await api('/site')).json.settings.theme;
   check('“Start from the campaign’s brand”: it stops following and starts from what it wore — every colour is there to change again', own.follow === false && own.colors.brand === following.brand_theme.colors.brand
     && await page.locator('.wb-color').count() > 5 && await page.getByRole('button', { name: 'Use the campaign’s brand' }).count() === 1, JSON.stringify(own).slice(0, 200));
+}
+
+// ── WebKit (2b): the same upload in Safari's engine stores three sizes under the cap ──
+{
+  const { webkit } = await import('playwright-core');
+  let wk = null;
+  try { wk = await webkit.launch(); } catch { wk = null; }
+  if (!wk) check('WebKit: a picture uploaded in Safari’s engine stores three sizes, each at most 600 KB', false, 'Install Playwright webkit (npx playwright install webkit)');
+  else {
+    const wctx = await wk.newContext({ storageState: await desk.storageState(), viewport: { width: 1360, height: 900 } });
+    const wp = await wctx.newPage();
+    await wp.goto(`${BASE}/admin/website/news/new`, { waitUntil: 'domcontentloaded' });
+    await wp.fill('#wb-p-title', `Sample WebKit ${tag}`);
+    await wp.locator('.wb-image input[type=file]').first().setInputFiles({ name: 'webkit.jpg', mimeType: 'image/jpeg', buffer: await photo() });
+    await wp.locator('.wb-focus').waitFor({ timeout: 30000 });
+    await wp.getByRole('button', { name: 'Save draft' }).click();
+    await wp.waitForFunction(() => /\/website\/news\/[0-9a-f-]{36}/.test(location.pathname), null, { timeout: 15000 }).catch(() => {});
+    const wPost = (await api('/site/posts')).json.posts.find((p) => p.title === `Sample WebKit ${tag}`);
+    const wFacts = await mediaFacts(page, (wPost?.image?.sizes || []).map((z) => z.url));
+    check('WebKit: a picture uploaded in Safari’s engine stores three sizes, each at most 600 KB (JPEG when WebKit won’t make WebP)', wFacts.length === 3
+      && wFacts.every((f) => ['image/jpeg', 'image/webp'].includes(f.type) && f.bytes <= 600 * 1024), JSON.stringify(wFacts));
+    await wk.close();
+  }
 }
 
 check('no page errors', errors.length === 0, errors.join(' | '));
