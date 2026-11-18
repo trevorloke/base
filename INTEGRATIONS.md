@@ -874,6 +874,32 @@ translated: a manager approves them per language.
 - **Tests** use `server/test/fake-translate.js` through
   `GOOGLE_TRANSLATE_API_BASE`; no test calls Google.
 
+## Google Fonts (no key, no account)
+
+The website can use any of Google's fonts (Website → Theme → **Change
+fonts**; SITE.md "Fonts"). base.win keeps the list itself
+(`shared/site/google-fonts.json`, a snapshot of the public
+github.com/google/fonts repository, made by
+`scripts/google-fonts-catalogue.mjs`), and twelve ready-made pairings ship
+with their files. When a manager picks a font the site doesn't have yet,
+base.win's server fetches it from Google **once, at that moment**
+(fonts.googleapis.com's stylesheet, then the latin and latin-ext woff2 files
+from fonts.gstatic.com, outside any write) and keeps the files in the
+database. Visitors and the desk load fonts only from base.win's own address:
+no visitor's IP address goes to Google, the privacy policy needs no change,
+and the pages' CSP stays `font-src 'self'`. The previews in the font sheet
+(a few letters of a font not added yet) are fetched by the server too.
+
+- **Nothing to set.** Fonts are free under SIL OFL 1.1, Apache 2.0 or the
+  Ubuntu Font Licence; `{site}/site-assets/fonts/licences` lists the site's.
+- **If Google can't be reached** the sheet says "Google Fonts didn't answer.
+  Try again in a minute. Your site keeps its current fonts." Fonts already
+  added keep working. A backup brought back without the files fetches them
+  again by itself (a job, `site.font.refetch`).
+- **Tests** use `server/test/fake-google-fonts.js` through
+  `GOOGLE_FONTS_CSS_BASE` and `GOOGLE_FONTS_FILE_HOSTS` (both ignored in
+  production); no test calls Google.
+
 ## Online payments — Stripe
 
 [stripe.com](https://stripe.com). Gifts once or monthly and membership dues

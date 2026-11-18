@@ -709,6 +709,17 @@ comes back, or asks if words were typed meanwhile).
   stand-in Google on PORT+1 and Stripe on PORT+2; it needs a CJK font —
   `apt-get install -y fonts-noto-cjk` — and stops saying so without one).
 
+- **Google fonts** (Website → Theme → **Change fonts**, a manager): pick the
+  Fraunces / Inter pairing and **Save the look** — the site's headings are
+  Fraunces; under **Any Google font** search a family, **Get … and use it**,
+  save — the site loads it from its own address. Body text lists only fonts
+  checked for reading. Tests: `server/test/site-fonts.test.js` (with
+  `server/test/fake-google-fonts.js`; the font file under `/pa` and `/zh` in
+  `site-lang.test.js`); in a browser, `e2e-site-fonts.mjs` (its own server on
+  PORT, 5490; the stand-in Google Fonts on PORT+1 and Translation on PORT+2;
+  every pairing's real first visit on a phone ≤ 150 KB; no request leaves the
+  machine).
+
 - **Other websites** (Website → Other websites, a manager): **New website**
   "Doug Didn’t Example" at a domain; its overview is a draft with the
   checklist — Go live says what's missing; publish its home from the

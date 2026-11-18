@@ -610,6 +610,54 @@ answer the 404 under a prefix.
   `site.settings.save`, a manager's; a languages save changes only the
   keys it names.
 
+## Fonts (`shared/site/fonts.js`, `server/ext/site/fonts.js`)
+
+A theme's `fonts.heading` / `fonts.body` is a face base.win ships (`inter`,
+`montserrat`, `barlow-condensed`, `system`, `serif`, and the twelve
+pairings' faces: `space-grotesk`, `oswald`, `source-sans-3`,
+`archivo-black`, `archivo`, `dm-serif-display`, `dm-sans`, `fraunces`,
+`playfair-display`, `merriweather`, `lato`, `nunito`, `nunito-sans`) or a
+Google font the campaign added, `g:<slug>`.
+
+- **Adding one**: `site.font.add { family }` (managers, the `site` area)
+  fetches it first, outside the write (`before`; `server/lib/outside.js`
+  refuses any outside call inside a write), keeps latin and latin-ext only
+  (≤ 8 files, ≤ 300 KB each, ≤ 900 KB in all, woff2, from
+  fonts.gstatic.com only), then one write: `site_fonts` (the row, faces with
+  their SHA-256) and `site_font_files` (the bytes, as Google served them).
+  Six added fonts at most, counted again inside the write. Adding one twice
+  answers the same row.
+- **Removing**: `site.font.remove { slug }` is refused (409) while the main
+  site, another website or the campaign's brand uses it, naming where;
+  `site.font.restore` is its Undo. `GET /api/site/fonts` lists the added
+  fonts with `used`, `notUsed` and, for a font whose files are missing (an
+  export brought back), `refetch` (`waiting`, `failed`).
+- **The rules** (`checkTheme` with the campaign's `added` fonts): body text
+  only in a face checked for long reading (`scripts/google-fonts-body-safe.txt`,
+  65 families; the built-in heading faces Archivo Black, Oswald, DM Serif
+  Display, Playfair Display, Barlow Condensed and Fraunces are for headings
+  only); a first visit's fonts (the body's regular file and the heading's
+  file, the two the page preloads; on `/pa` the body's and Gurmukhi) over
+  150 KB are refused, over 100 KB saved with a note. Each pairing is at most
+  100 KB (unit test from the files).
+- **Drawing**: the head carries `@font-face` rules for added fonts at
+  `{site root}site-assets/fonts/g/<sha256>.woff2` (no language prefix; the
+  route answers under `/pa`, `/zh`, `/zh-hant` too, only for the site's own
+  campaign, `immutable`). Every stack carries `'Noto Sans Gurmukhi'` and
+  TR's `var(--cjk, …)`. Headings are drawn through `--heading-weight`,
+  `--heading-tracking`, `--heading-leading`, `--heading-case` (and the
+  wordmark's, a petition title's and the rail's), written from the heading
+  face's profile; the built-in faces keep exactly their old values.
+- **Licences**: `{site root}site-assets/fonts/licences` (linked from
+  nowhere) lists the site's fonts with their licence and repository link,
+  and the bundled licence texts (`shared/site/fonts/LICENCES/`).
+- **The desk** loads faces with the FontFace API from the site's files and
+  `GET /api/site/fonts/file/<sha>.woff2` (signed in); a font not added yet
+  is previewed through `GET /api/site/fonts/sample` (the server asks Google
+  for just those letters; 120 a minute per person). Settings → Brand's
+  heading face may be an added font (`brand.save` keeps its files' hashes,
+  `headingFace`).
+
 ## Settings (`site_settings`, `server/ext/site/shape.js`)
 
 What each section holds (the renderer gets them as `site.*`; every `href`

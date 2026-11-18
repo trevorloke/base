@@ -116,7 +116,8 @@ function Sample({ t, org, added }) {
 const heroWords = (page) => {
   const hero = (page?.published?.modules || page?.draft?.modules || []).find((m) => m.kind === 'hero' && !m.hidden);
   const text = String(hero?.props?.text || '').replace(/[*_#>`[\]]/g, '').trim();
-  return (/^.*?[.!?](\s|$)/.exec(text)?.[0] || text).trim().slice(0, 120);
+  const first = (/^.*?[.!?](\s|$)/.exec(text)?.[0] || text).trim();
+  return first.length <= 120 ? first : `${first.slice(0, 118).replace(/\s+\S*$/, '')}…`;
 };
 
 // The theme's two fonts, drawn in their own files; Change fonts opens the sheet.
