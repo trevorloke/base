@@ -1,11 +1,11 @@
 # Render Blueprint — one client's two environments, from one repo:
-#   starbase-staging    deploys every push to `main`     → test here first
-#   starbase            deploys the `production` branch  → promoted from main
+#   base-win-staging    deploys every push to `main`     → test here first
+#   base-win            deploys the `production` branch  → promoted from main
 #                       by the "Promote to production" workflow (GitHub → Actions)
 # Each has its own Postgres database; nothing is shared between them.
 #
 # Another client is another copy of this file's pair with its own names
-# (starbase-<client>, starbase-<client>-staging) and its own STARBASE_* values —
+# (base-win-<client>, base-win-<client>-staging) and its own STARBASE_* values —
 # see GOING-LIVE.md "A new client". Service names are unique per Render
 # account, so the copy must rename every service and database.
 #
@@ -43,7 +43,7 @@
 
 services:
   - type: web
-    name: starbase-staging
+    name: base-win-staging
     runtime: docker
     plan: starter
     region: oregon
@@ -59,27 +59,45 @@ services:
         value: staging
       - key: DATABASE_URL
         fromDatabase:
-          name: starbase-staging-db
+          name: base-win-staging-db
           property: connectionString
-      # Staging starts in base.win's own look with a made-up campaign name, so
-      # it can be shown to anyone (server/lib/brand.js; a brand a manager saves
+      # Staging is a sample campaign in Vancouver: base.win's own look, a
+      # made-up name and no client's brand, so it can be shown to anyone (server/lib/brand.js; a brand a manager saves
       # in Settings → Brand wins over it). The rules below — limits,
       # time zone, city, slates — are the client's, so staging tests what
       # production does.
       - key: STARBASE_BRAND
         value: base
       - key: STARBASE_ORG_NAME
-        value: Demo Campaign
+        value: Sample Campaign
       - key: STARBASE_JURISDICTION
         value: bc-municipal
       - key: STARBASE_TZ
         value: America/Vancouver
       - key: STARBASE_CITY
-        value: Surrey
+        value: Vancouver
+      - key: STARBASE_GEO_BOUNDS     # the City of Vancouver: where the map opens and addresses are looked for
+        value: "49.198,-123.225|49.317,-123.023"
       - key: STARBASE_SLATES
         value: "council:City council,school_board:School board"
       - key: STARBASE_PUBLIC_URL     # this environment's address, e.g. https://starbase-staging.onrender.com
         sync: false
+      # The public demo (server/lib/demo.js; staging only): the base.win
+      # website may frame this server, and /api/auth/demo signs a visitor in
+      # as the account named, with no password. Off until the email is set.
+      - key: STARBASE_FRAME_HOSTS
+        value: "https://base.win,https://www.base.win"
+      - key: STARBASE_DEMO_EMAIL     # the demo account, the sample campaign's manager (an address on a domain you hold)
+        value: demo@base.win
+      # The sample campaign (server/lib/samplecampaign.js; staging only): made once
+      # when the database holds no campaign. STARBASE_SAMPLE_RESET, set by
+      # hand to a new word, drops everything in staging's database first.
+      - key: STARBASE_SAMPLE
+        value: vancouver
+      - key: STARBASE_SAMPLE_RESET
+        sync: false
+      - key: STARBASE_CANDIDATES     # made-up opponents for the sample's rating scale
+        value: "4A:Hartwell:Opposed — Hartwell supporter;4B:Quist:Opposed — Quist supporter;4C:Delmar:Opposed — Delmar supporter"
       - key: RESEND_API_KEY          # email: newsletters, invites, shift alerts (staging: a test key, or unset)
         sync: false
       - key: MAIL_FROM
@@ -106,7 +124,7 @@ services:
         sync: false
 
   - type: web
-    name: starbase
+    name: base-win
     runtime: docker
     plan: starter              # always-on; volunteers canvass at all hours
     region: oregon
@@ -122,7 +140,7 @@ services:
         value: production
       - key: DATABASE_URL
         fromDatabase:
-          name: starbase-db
+          name: base-win-db
           property: connectionString
       # The client: it starts in Imagine Surrey's own look (Surrey Navy,
       # marigold, its wordmark); a brand a manager saves in Settings → Brand wins.
@@ -166,11 +184,11 @@ services:
         sync: false
 
 databases:
-  - name: starbase-staging-db
+  - name: base-win-staging-db
     plan: 0.5c-1g              # 0.5 CPU, 1 GB RAM ($19/month); upgraded Nov 2026 for speed
     region: oregon
     postgresMajorVersion: "16"
-  - name: starbase-db
+  - name: base-win-db
     plan: 0.5c-1g              # 0.5 CPU, 1 GB RAM ($19/month); upgraded Nov 2026 for speed
     region: oregon
     postgresMajorVersion: "16"

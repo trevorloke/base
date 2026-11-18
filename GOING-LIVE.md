@@ -32,7 +32,7 @@ also have `GOOGLE_MAPS_TILES=off` before the release is pushed (§5, Recipe B).
 ## 1 · Deploy
 
 1. Render → **New → Blueprint** → this repo, `main`. `render.yaml` creates
-   `starbase-staging` (from `main`) and `starbase` (from `production`), each
+   `base-win-staging` (from `main`) and `base-win` (from `production`), each
    with its own database.
 2. Wait for the first deploy, then open
    `https://<service>.onrender.com/api/health`. It answers
@@ -97,7 +97,7 @@ Every outside service, its settings and where each key comes from is in
 [INTEGRATIONS.md](INTEGRATIONS.md). The campaign's own values
 (`STARBASE_ORG_NAME`, `_JURISDICTION`, `_TZ`, `_CITY`, `_SLATES`) are in
 `render.yaml` already; change them there for another client. So is the
-brand: staging is `STARBASE_BRAND=base` with the name *Demo Campaign*, so it
+brand: staging is `STARBASE_BRAND=base` with the name *Sample Campaign* in Vancouver, so it
 can be shown to anyone; production is `imagine-surrey`. That is the look each
 starts from: once a manager saves the campaign's own in **Settings → Brand**,
 that one stays, whatever the setting says. A campaign already set up keeps
@@ -108,6 +108,7 @@ the candidates the code ships with (`shared/scale.js`).
 | Variable | Set it to | Needed for |
 |---|---|---|
 | `STARBASE_ENV` | `staging` on the staging service, `production` on production (set by `render.yaml`) | the *Staging* badge; `/api/health` |
+| `STARBASE_FRAME_HOSTS`, `STARBASE_DEMO_EMAIL`, `STARBASE_SAMPLE`, `STARBASE_SAMPLE_RESET` | staging only, and ignored on production: the sites that may frame the app; the account every demo visitor is signed in as at `/api/auth/demo`; `vancouver` to make the sample campaign once on an empty database; and a new word to drop everything in staging's database and make the sample again | the demo on the base.win website (`server/lib/demo.js`, `server/lib/samplecampaign.js`). Anyone who opens the demo can do whatever the demo account can, so that server holds the sample campaign and nobody real |
 | `STARBASE_ORG_NAME`, `STARBASE_JURISDICTION`, `STARBASE_TZ`, `STARBASE_CITY`, `STARBASE_SLATES`, `STARBASE_CANDIDATES` | the campaign (README → *One deployment per client*) | the name the first sign-up sets up, the contribution rules, the campaign's day, addresses, the slates a gift can go to, the rating scale's first candidates |
 | `STARBASE_PUBLIC_URL` | `https://starbase.imaginesurrey.ca` (staging: its own address) | every link in an email: invites, unsubscribe, receipts; calendar links and files |
 | `RESEND_API_KEY`, `MAIL_FROM` | from Resend; `Imagine Surrey <team@imaginesurrey.ca>` on the campaign's domain (Settings → Services → Email → *Sending domain* walks through its DNS records) | email; without it invites are shown to copy and sends wait as *queued* |

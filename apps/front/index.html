@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>base.win</title>
+<meta name="description" content="Campaigns win here. base.win is your campaign hub: people, map, field work, money, outreach, digital, and website in one synchronized product. Try it right on the page.">
+<style>
+  :root {
+    --paper: #f3f5f7;
+    --card: #ffffff;
+    --ink: #10233b;
+    --muted: #55667a;
+    --line: #c9d2dc;
+    --signal: #c7411f;
+    --on-signal: #ffffff;
+    --display: "Avenir Next", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --body: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #0d1a2b;
+      --card: #14253a;
+      --ink: #eef2f6;
+      --muted: #a3b2c3;
+      --line: #2a3c52;
+      --signal: #ff7a50;
+      --on-signal: #0d1a2b;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 17px;
+    line-height: 1.6;
+  }
+  .wrap { width: 100%; max-width: 1320px; margin: 0 auto; padding: 0 clamp(20px, 5vw, 56px); }
+  a { color: inherit; }
+  :focus-visible { outline: 3px solid var(--signal); outline-offset: 3px; }
+
+  header.wrap { max-width: 1320px; display: flex; justify-content: space-between; align-items: center; gap: 16px; padding-top: 24px; padding-bottom: 24px; }
+  .mark { font-family: var(--display); font-weight: 700; font-size: 22px; letter-spacing: -0.01em; text-decoration: none; }
+  .mark span { color: var(--signal); }
+
+  .btn {
+    display: inline-block; min-height: 48px; padding: 12px 22px; border-radius: 8px;
+    background: var(--signal); color: var(--on-signal); font-weight: 600; text-decoration: none;
+    border: 2px solid var(--signal);
+  }
+  .btn:hover { filter: brightness(1.08); }
+  .btn.quiet { background: transparent; color: var(--ink); border-color: var(--line); }
+
+  .hero.wrap {
+    max-width: 1320px; padding-top: clamp(32px, 6vw, 72px); padding-bottom: clamp(40px, 7vw, 88px); border-bottom: 1px solid var(--line);
+    display: grid; grid-template-columns: minmax(0, 1fr); gap: 40px; align-items: center;
+  }
+  @media (min-width: 980px) { .hero.wrap { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 48px; } }
+  h1 {
+    font-family: var(--display); font-weight: 700; letter-spacing: -0.03em; line-height: 1.04;
+    font-size: clamp(40px, 5.4vw, 72px); margin: 0 0 12px; max-width: 13ch; text-wrap: balance;
+  }
+  .sub { font-family: var(--display); font-weight: 600; font-size: clamp(22px, 3.2vw, 34px); letter-spacing: -0.01em; color: var(--signal); margin: 0 0 24px; }
+  .lede.built { color: var(--ink); font-weight: 600; margin-top: -16px; }
+  .lede { font-size: clamp(18px, 2.2vw, 22px); color: var(--muted); max-width: 56ch; margin: 0 0 32px; }
+  .actions { display: flex; flex-wrap: wrap; gap: 12px; }
+
+  section.wrap { padding-top: clamp(48px, 7vw, 88px); padding-bottom: clamp(48px, 7vw, 88px); }
+  section.wrap + section.wrap { border-top: 1px solid var(--line); }
+  .eyebrow { font-family: var(--mono); font-size: 13px; color: var(--signal); margin: 0 0 12px; }
+  h2 { font-family: var(--display); font-weight: 700; letter-spacing: -0.02em; line-height: 1.12; font-size: clamp(28px, 4vw, 42px); margin: 0 0 16px; max-width: 22ch; text-wrap: balance; }
+
+
+  .own { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 32px 56px; align-items: start; }
+  .address { font-family: var(--mono); font-size: clamp(16px, 2.4vw, 22px); background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 18px 20px; overflow-wrap: anywhere; }
+  .address b { color: var(--signal); font-weight: 500; }
+  .own p { color: var(--muted); margin: 0 0 14px; max-width: 52ch; }
+
+  .demo { background: var(--card); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; box-shadow: 0 18px 40px -24px rgba(16, 35, 59, 0.45); }
+  [hidden] { display: none !important; }
+  dialog { border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--ink); padding: 28px; width: min(460px, calc(100vw - 32px)); }
+  dialog::backdrop { background: rgba(8, 16, 28, 0.6); }
+  dialog h2 { font-size: 26px; margin-bottom: 8px; }
+  dialog p { color: var(--muted); margin: 0 0 20px; }
+  button.btn { font: inherit; font-weight: 600; cursor: pointer; }
+  .demo iframe { display: block; width: 100%; height: min(600px, 72vh); border: 0; }
+
+  footer.wrap { border-top: 1px solid var(--line); padding-top: 28px; padding-bottom: 40px; color: var(--muted); font-size: 14px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; }
+</style>
+</head>
+<body>
+
+<header class="wrap">
+  <a class="mark" href="/" aria-label="base.win home">base<span>.</span>win</a>
+</header>
+
+<main>
+  <div class="hero wrap">
+    <div class="pitch">
+      <h1>Campaigns win here</h1>
+      <p class="sub">Your campaign hub</p>
+      <p class="lede">base.win puts your people, map, field work, money, outreach, digital, and website into one synchronized product.</p>
+      <p class="lede built">Built by campaigners for campaigners.</p>
+    </div>
+    <div class="try" id="try">
+      <div class="demo" id="demo">
+        <iframe id="demo-frame" title="base.win, running with a sample campaign" src="https://staging.base.win/api/auth/demo"></iframe>
+      </div>
+    </div>
+  </div>
+
+  <section id="yours" class="wrap">
+    <p class="eyebrow">Your own address</p>
+    <h2>Your data sits on your own server</h2>
+    <div class="own">
+      <div>
+        <p>Every client gets its own server and its own database. Your list is never pooled with another campaign's.</p>
+        <p>You also get your own address on base.win, where your staff and volunteers sign in.</p>
+      </div>
+      <p class="address"><b>yourcampaign</b>.base.win</p>
+    </div>
+  </section>
+
+</main>
+
+<footer class="wrap">
+  <span>&copy; 2026 base.win</span>
+  <span>Already a client? Sign in at your own base.win address.</span>
+</footer>
+
+<dialog id="offer" aria-labelledby="offer-title">
+  <h2 id="offer-title">Want your own?</h2>
+  <p>Set up your own account and get started with your campaign.</p>
+  <div class="actions">
+    <a class="btn" id="offer-yes" href="#">Set up my account</a>
+    <button class="btn quiet" type="button" id="offer-no">Keep exploring</button>
+  </div>
+</dialog>
+
+<script>
+(() => {
+  // Where "Set up my account" goes: the address where a visitor makes an
+  // account of their own. Empty: the offer stays off.
+  const ACCOUNT_URL = '';
+  // The offer is made this long after the visitor first uses the demo, once
+  // a visit; only time with the page in front counts.
+  const SECONDS_BEFORE_OFFER = 20;
+  const DEMO_ORIGIN = 'https://staging.base.win';
+  if (!ACCOUNT_URL) return;
+
+  const offer = document.getElementById('offer');
+  const demo = document.getElementById('demo');
+  const frame = document.getElementById('demo-frame');
+  document.getElementById('offer-yes').href = ACCOUNT_URL;
+  const made = () => { try { return sessionStorage.getItem('offered') === '1'; } catch { return false; } };
+  const markMade = () => { try { sessionStorage.setItem('offered', '1'); } catch { /* private mode */ } };
+
+  let started = false, seconds = 0, timer = null;
+  const tick = () => {
+    if (document.hidden) return;
+    seconds += 1;
+    if (seconds < SECONDS_BEFORE_OFFER) return;
+    clearInterval(timer);
+    if (made() || offer.open) return;
+    markMade();
+    offer.showModal();
+  };
+  const start = () => {
+    if (started || made()) return;
+    started = true;
+    timer = setInterval(tick, 1000);
+  };
+  // Using the demo: the pointer over it, a touch, a click or key inside it
+  // (which takes focus from this page), or the app's own word that it was
+  // clicked (web/src/demoframe.js).
+  demo.addEventListener('pointerenter', start);
+  frame.addEventListener('mouseenter', start);
+  demo.addEventListener('touchstart', start, { passive: true });
+  window.addEventListener('blur', () => { if (document.activeElement === frame) start(); });
+  window.addEventListener('message', (e) => { if (e.origin === DEMO_ORIGIN && e.data?.source === 'base.win-demo') start(); });
+
+  document.getElementById('offer-no').addEventListener('click', () => offer.close());
+})();
+</script>
+
+</body>
+</html>

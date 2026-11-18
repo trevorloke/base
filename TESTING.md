@@ -40,15 +40,15 @@ time. Delete the folder to start over.
 ## 2 · Deploy for the team (Render)
 
 The repo's `render.yaml` is a Blueprint for one client's two environments
-(GOING-LIVE.md): **starbase-staging** from `main` and **starbase** from
+(GOING-LIVE.md): **base-win-staging** from `main` and **base-win** from
 `production`, each with its own managed Postgres database (backups
 included). Every setting below, and where its key comes from:
 INTEGRATIONS.md.
 
 1. Render → **New → Blueprint** → pick this repo (`main` branch)
-   → it creates `starbase-staging` + `starbase-staging-db` and `starbase` +
-   `starbase-db` (paid plans — check Render’s current pricing).
-2. In the `starbase` service → **Environment**, set:
+   → it creates `base-win-staging` + `base-win-staging-db` and `base-win` +
+   `base-win-db` (paid plans — check Render’s current pricing).
+2. In the `base-win` service → **Environment**, set:
 
 | Variable | What for | Needed to test? |
 |---|---|---|

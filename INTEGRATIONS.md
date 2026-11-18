@@ -1211,8 +1211,8 @@ importing.
 
 ## Hosting — Render
 
-`render.yaml` is a Render Blueprint: `starbase-staging` (deploys every push to
-`main`) and `starbase` (deploys the `production` branch), each with its own
+`render.yaml` is a Render Blueprint: `base-win-staging` (deploys every push to
+`main`) and `base-win` (deploys the `production` branch), each with its own
 Postgres. Settings marked `sync: false` are asked for when the Blueprint is
 created and are set per service afterwards. GOING-LIVE.md is the order to do
 it in.

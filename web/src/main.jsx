@@ -12,6 +12,10 @@ import { forgetPhoneCopies, keepOnlyMine } from './components/OfflineCache.js';
 import { closeOutbox } from './offline.js';
 import { at } from './base.js';
 import { reloadOnce } from './build.js';
+import { reportDemoClicks } from './demoframe.js';
+
+// Framed by the base.win website (the demo): its clicks are counted there.
+reportDemoClicks();
 
 // Once more after a second — except a 401 / 404, or no signal at all (the
 // browser says it's offline): then the screen says so straight away, and

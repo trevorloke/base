@@ -99,12 +99,38 @@ const rewriteResponse = async (res, base, rw) => {
 // which would send people off base.win, signed out.
 const sendOn = (location) => new Response(null, { status: 302, headers: { location, 'cache-control': 'no-store' } });
 
+// A short address on the public URL's own domain — imaginesurrey.base.win
+// when STARBASE_PUBLIC_URL is https://base.win/imaginesurrey — sends people
+// on to the public URL with the path and query kept (under the client's path
+// once), as the door does for the same address (apps/door). So it works
+// whichever service the short address is attached to, and signing in, phone
+// storage and offline copies stay at the one address. Only a subdomain of
+// the public URL's host: the server's own (onrender.com) address, the door's
+// requests (which reach it at that address) and a website's own domain are
+// never one. A form keeps its method and body (307).
+export const shortAddress = (url, base, pub = process.env.STARBASE_PUBLIC_URL) => {
+  let home;
+  try { home = new URL(String(pub || '').trim()); } catch { return null; }
+  if (!/^https?:$/.test(home.protocol)) return null;
+  const host = url.hostname.toLowerCase().replace(/\.$/, '');
+  const apex = home.hostname.toLowerCase();
+  if (host === apex || !host.endsWith(`.${apex}`)) return null;
+  const p = url.pathname;
+  const path = p === base || p.startsWith(`${base}/`) ? p : `${base}${p}`;
+  return `${home.origin}${path}${url.search}`;
+};
+
 // → fetch(req, env) for the server: the app at base (or as is, base '').
 export const mountAt = (app, base) => {
   if (!base) return (req, env) => app.fetch(req, env);
   const rw = rewriters(base);
   return async (req, env) => {
     const url = new URL(req.url);
+    const short = shortAddress(url, base);
+    if (short) {
+      const keep = req.method !== 'GET' && req.method !== 'HEAD';
+      return new Response(null, { status: keep ? 307 : 302, headers: { location: short, 'cache-control': 'no-store' } });
+    }
     const p = url.pathname;
     // Not under the client's path: the server's own address, as it always
     // was (a site's root) — so moving to base.win breaks no bookmark, no
