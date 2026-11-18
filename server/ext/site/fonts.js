@@ -179,12 +179,21 @@ export const themeProblem = (p) => (p.font ? p.words
 
 const countAdded = async (q, ws) => Number((await q.query('select count(*)::int as n from site_fonts where workspace_id = $1 and deleted_at is null', [ws])).rows[0].n);
 
+// Each file in 24 KB pieces: one statement per piece keeps every message
+// small (PGlite's wire server, which test:pg runs on, fails on a message of
+// about 100 KB; a hosted Postgres takes either).
+const PIECE = 24 * 1024;
 const writeFiles = async (tx, ws, files) => {
   for (const [hash, buf] of files) {
-    await tx.query(
-      'insert into site_font_files (workspace_id, sha256, bytes, data) values ($1, $2, $3, $4) on conflict (workspace_id, sha256) do nothing',
-      [ws, hash, buf.length, buf],
-    );
+    const made = (await tx.query(
+      `insert into site_font_files (workspace_id, sha256, bytes, data) values ($1, $2, $3, $4)
+       on conflict (workspace_id, sha256) do nothing returning sha256`,
+      [ws, hash, buf.length, buf.subarray(0, PIECE)],
+    )).rows[0];
+    if (!made) continue;
+    for (let at = PIECE; at < buf.length; at += PIECE) {
+      await tx.query('update site_font_files set data = data || $3 where workspace_id = $1 and sha256 = $2', [ws, hash, buf.subarray(at, at + PIECE)]);
+    }
   }
 };
 
