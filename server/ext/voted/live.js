@@ -120,18 +120,32 @@ const isSettings = (action, ev) => ev.entityType === 'workspace' && ev.op === 'u
   && (action === 'vote.settings' || action === 'gotv.practice.clear' || action.startsWith('site.guide.'));
 
 onCommitted(async ({ workspaceId: ws, action, events }) => {
-  const db = await getDb();
+  // First, before any await: what the very next request must not read
+  // stale (the write's answer goes out as soon as this returns).
   let settings = false;
-  let hours = false;
-  const feedOf = new Map(); // person → feed_id, from the marks in this write
-  for (const ev of events) if ((ev.entityType === 'voted_mark' || ev.entityType === 'gotv_practice') && ev.payload?.feed_id) feedOf.set(ev.payload.person_id, Number(ev.payload.feed_id));
+  let hours = action.startsWith('site.guide.');
+  let voted = false;
   for (const ev of events) {
     const p = ev.payload || {};
     if (isSettings(action, ev)) settings = true;
     if (ev.entityType === 'vote_place' || ev.entityType === 'vote_day' || ev.entityType === 'place') hours = true;
-    if (ev.entityType === 'gotv_post') { forgetPosts(ws); forgetScopes(ws); }
-    if (ev.entityType === 'turf_member' || ev.entityType === 'call_bank' || ev.entityType === 'call_bank_number' || action.startsWith('bank.') || action.startsWith('turf.')) forgetScopes(ws);
-    if (ev.entityType === 'turf' && hasIndex(ws)) { await updateTurf(db, ws, ev.entityId); forgetScopes(ws); }
+    if (ev.entityType === 'gotv_post') forgetPosts(ws);
+    if (ev.entityType === 'voted_mark' || ev.entityType === 'gotv_practice' || (ev.entityType === 'person' && 'voted_at' in p)) voted = true;
+  }
+  // Who is in whose turfs and phone banks: a turf, a bank, a post, or a
+  // person added, moved or merged.
+  if (action.startsWith('turf.') || action.startsWith('bank.') || events.some((e) => e.entityType === 'gotv_post' || e.entityType === 'turf'
+    || (e.entityType === 'person' && (e.op !== 'update' || PERSON_PLACE.some((k) => k in (e.payload || {})))))) forgetScopes(ws);
+  if (voted) { forgetCounts(ws); forgetSummary(ws, false); }
+  if (hours) forgetHours(ws);
+  if (settings) { forgetSettings(ws); forgetHours(ws); forgetSummary(ws, true); forgetScopes(ws); }
+
+  const db = await getDb();
+  const feedOf = new Map(); // person → feed_id, from the marks in this write
+  for (const ev of events) if ((ev.entityType === 'voted_mark' || ev.entityType === 'gotv_practice') && ev.payload?.feed_id) feedOf.set(ev.payload.person_id, Number(ev.payload.feed_id));
+  for (const ev of events) {
+    const p = ev.payload || {};
+    if (ev.entityType === 'turf' && hasIndex(ws)) await updateTurf(db, ws, ev.entityId);
     if (ev.entityType === 'person') {
       if (hasIndex(ws) && (ev.op === 'create' || ev.op === 'void' || ev.op === 'merge' || PERSON_PLACE.some((k) => k in p))) await updatePerson(db, ws, ev.entityId);
       if (ev.op === 'update' && 'voted_at' in p) publish(ws, { p: ev.entityId, v: p.voted_at ?? null, f: feedOf.get(ev.entityId) || 0, x: false });
@@ -145,13 +159,7 @@ onCommitted(async ({ workspaceId: ws, action, events }) => {
       publish(ws, { p: p.person_id, v: p.voted ? (p.at || new Date().toISOString()) : null, f: Number(p.feed_id) || 0, x: true });
     }
   }
-  if (feedOf.size || events.some((e) => e.entityType === 'person' && 'voted_at' in (e.payload || {}))) { forgetCounts(ws); forgetSummary(ws, false); }
-  if (hours || action.startsWith('site.guide.')) forgetHours(ws);
   if (settings) {
-    forgetSettings(ws);
-    forgetHours(ws);
-    forgetSummary(ws, true);
-    forgetScopes(ws);
     // GOTV or practice just turned on: the turf index is built now, behind.
     const s = await rowOf(db, ws);
     if (hasIndex(ws) || s.practice || onNow(s, DEFAULT_TZ)) rebuild(db, ws).catch((e) => console.error(`turf index: ${e.message}`));

@@ -113,6 +113,8 @@ const onDuty = (g, h, day, tz, practice) => {
 // whether it may reach the office yet. Throws the words; returns the place.
 export const mayEnterName = (ctx, g, h, { placeId, day, practice, tz }) => {
   const desk = isDesk(ctx);
+  // A practice name after practice ended: dropped quietly by the phone.
+  if (practice && !g.practice) throw httpError(409, WORDS.practiceOver);
   const place = votingPlace(h, placeId);
   if (!desk) {
     if (!onDuty(g, h, day, tz, practice)) throw httpError(403, WORDS.duty);
