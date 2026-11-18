@@ -662,6 +662,39 @@ test('another website: the switch, and /pa/ on its own domain and under /site/si
   assert.match(app.text, new RegExp(`action="/site/sites/${m.key}/pa/api/forms/`));
 });
 
+test('Google fonts (WA): one file for every language, served under each prefix; /pa preloads the body and Gurmukhi', async () => {
+  const { startFakeGoogleFonts } = await import('./fake-google-fonts.js');
+  const fonts = await startFakeGoogleFonts();
+  const was = { css: process.env.GOOGLE_FONTS_CSS_BASE, hosts: process.env.GOOGLE_FONTS_FILE_HOSTS };
+  Object.assign(process.env, { GOOGLE_FONTS_CSS_BASE: fonts.url, GOOGLE_FONTS_FILE_HOSTS: fonts.host });
+  try {
+    const added = await mgr.action('site.font.add', { family: 'Fake Display' });
+    assert.equal(added.status, 200, JSON.stringify(added.json));
+    const { font } = added.json;
+    const sha = font.faces.find((f) => f.subset === 'latin').sha256;
+    const s = await settingsNow();
+    const saved = await mgr.action('site.settings.save', { theme: { ...s.theme, fonts: { heading: 'g:fake-display', body: 'inter' } } });
+    assert.equal(saved.status, 200, JSON.stringify(saved.json));
+    const pa = await hit('/site/pa/about');
+    assert.equal(pa.status, 200);
+    assert.ok(pa.text.includes(`url(/site/site-assets/fonts/g/${sha}.woff2)`), 'no language in the face’s address');
+    assert.ok(!pa.text.includes('/pa/site-assets/fonts/g/'));
+    const preloads = [...pa.text.matchAll(/<link rel="preload" href="([^"]+)" as="font"/g)].map((m) => m[1].split('?')[0]);
+    assert.deepEqual(preloads, ['/site-assets/fonts/inter-latin.woff2', '/site-assets/fonts/noto-gurmukhi-400.woff2']);
+    assert.ok(pa.text.includes("--font-heading:'Fake Display', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, 'Noto Sans Gurmukhi', var(--cjk, system-ui)"));
+    for (const prefix of ['/site/pa', '/site/zh', '/site']) {
+      const f = await hit(`${prefix}/site-assets/fonts/g/${sha}.woff2`);
+      assert.equal(f.status, 200, prefix);
+      assert.equal(f.headers.get('content-type'), 'font/woff2');
+      assert.match(f.headers.get('cache-control'), /immutable/);
+      assert.equal((await hit(`${prefix}/site-assets/fonts/g/${'e'.repeat(64)}.woff2`)).status, 404, `${prefix}: not this campaign’s`);
+    }
+  } finally {
+    await fonts.close();
+    for (const [k, v] of [['GOOGLE_FONTS_CSS_BASE', was.css], ['GOOGLE_FONTS_FILE_HOSTS', was.hosts]]) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+  }
+});
+
 test('donate on /zh: the declaration as approved, Stripe in Chinese with the item named in it; Back lands on /zh', async () => {
   const { startFakeStripe } = await import('./fake-stripe.js');
   const { app } = await import('../index.js');

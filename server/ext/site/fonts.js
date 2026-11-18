@@ -32,9 +32,20 @@ import { ensureSiteTx, parseJ } from './store.js';
 import { cacheClear } from './cache.js';
 
 const CATALOGUE = JSON.parse(readFileSync(fileURLToPath(new URL('../../../shared/site/google-fonts.json', import.meta.url)), 'utf8'));
+// Three made-up families the stand-in serves, listed only while it is in use
+// (GOOGLE_FONTS_CSS_BASE set, never in production).
+export const TEST_FAMILIES = [
+  { f: 'Fake Sans', c: 'sans-serif', a: [100, 900], s: ['latin', 'latin-ext'], l: 'OFL', b: 1 },
+  { f: 'Fake Display', c: 'display', w: [400], s: ['latin', 'latin-ext'], l: 'OFL' },
+  { f: 'Fake Serif', c: 'serif', w: [400, 700], s: ['latin'], l: 'OFL' },
+];
+const testing = () => envName() !== 'production' && Boolean(String(process.env.GOOGLE_FONTS_CSS_BASE || '').trim());
+const families = () => (testing() ? [...TEST_FAMILIES, ...CATALOGUE.families] : CATALOGUE.families);
 const BY_FAMILY = new Map(CATALOGUE.families.map((r) => [r.f, r]));
-const BY_SLUG = new Map(CATALOGUE.families.map((r) => [slugFor(r.f), r]));
-export const catalogueRow = (family) => BY_FAMILY.get(String(family || '').trim()) || null;
+export const catalogueRow = (family) => {
+  const f = String(family || '').trim();
+  return BY_FAMILY.get(f) || (testing() ? TEST_FAMILIES.find((r) => r.f === f) : null) || null;
+};
 export const MAX_FONTS = 6;
 
 export const WORDS = {
@@ -250,7 +261,7 @@ export const fontActions = {
     const uses = await usesOf(tx, ws, r.family, `g:${r.slug}`);
     if (uses.length) throw fail(409, `${uses[0]}. Pick another font there first.`);
     await tx.query('update site_fonts set deleted_at = now(), updated_at = now() where id = $1', [r.id]);
-    emit('site_font', r.id, 'delete', { slug: r.slug, family: r.family });
+    emit('site_font', r.id, 'void', { slug: r.slug, family: r.family });
     return { removed: r.slug };
   }),
 
@@ -382,7 +393,7 @@ export function mountFontReads(api, opened) {
     const page = Math.max(0, Math.min(100, Number(c.req.query('page')) || 0));
     const added = await readAddedFonts(c.get('db'), ws);
     const addedBy = new Map(added.map((f) => [f.family, f]));
-    let rows = CATALOGUE.families.filter((r) => (!forBody || r.b) && (!kind || r.c === kind) && (!q || r.f.toLowerCase().includes(q)));
+    let rows = families().filter((r) => (!forBody || r.b) && (!kind || r.c === kind) && (!q || r.f.toLowerCase().includes(q)));
     if (!az) rows = [...rows.filter((r) => r.r), ...rows.filter((r) => !r.r)];
     const total = rows.length;
     const builtIn = new Map(FONTS.filter((f) => f.family).map((f) => [f.family, f]));
