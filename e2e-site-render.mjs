@@ -441,6 +441,17 @@ for (const key of ['is', 'base']) {
   check('IS: red Donate button in the header (#d81b1e)', look.donate === 'rgb(216, 27, 30)', look.donate);
   check('IS: yellow primary button on the hero', look.primary === 'rgb(255, 241, 0)', look.primary);
   check('IS: Montserrat 900 headings with the layered red shadow', /Montserrat/.test(look.font) && look.weight === '900' && /rgb\(216, 27, 30\)/.test(look.shadow) && look.fontsReady, `${look.font} ${look.weight} ${String(look.shadow).slice(0, 60)}`);
+  // The Latin files themselves draw the Latin words: TR's Gurmukhi faces
+  // share these family names, and a weight range only they cover once made
+  // the browser draw headings and body in a fallback face while
+  // document.fonts.check still said yes.
+  const latin = await page.evaluate(async () => {
+    const files = async (font) => (await document.fonts.load(font, 'Abc')).filter((f) => f.status === 'loaded').length;
+    const drawn = (sel) => getComputedStyle(document.querySelector(sel)).fontFamily.split(',')[0].replace(/["']/g, '').trim();
+    const bodyFace = drawn('body');
+    return { heading: await files('900 40px Montserrat'), body: await files(`400 17px "${bodyFace}"`), headingFace: drawn('.display'), bodyFace };
+  });
+  check('IS: the Latin Montserrat files load for Latin headings and body text', latin.heading > 0 && latin.body > 0 && latin.headingFace === 'Montserrat', JSON.stringify(latin));
   check('IS: yellow organize band, deep-navy footer', look.band === 'rgb(255, 241, 0)' && /rgb\(0, 4[01], 8[6-9]\)/.test(look.footer), `${look.band} ${look.footer}`);
 
   // Rotating words: they move, and stop when paused.

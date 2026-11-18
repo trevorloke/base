@@ -1,0 +1,16 @@
+/* The section drawings (thumbs.jsx): the desk's brand colours only. */
+.th { display: block; width: 100%; height: auto; }
+.th-bg { fill: var(--paper-0); stroke: var(--rule); }
+.th-t { fill: var(--rule-2); }
+.th-h { fill: var(--text-2); }
+.th-h2 { fill: var(--text-3); }
+.th-soft { fill: var(--mark-soft); }
+.th-mark { fill: var(--mark); }
+.th-ink { fill: var(--ink); }
+.th-ok { fill: var(--ok); }
+.th-paper { fill: var(--paper-0); }
+.th-line { fill: var(--paper-0); stroke: var(--rule-2); }
+.th-pic { fill: var(--mark-soft); }
+.th-picline { fill: var(--mark); opacity: 0.55; }
+.th-strokeline { fill: none; stroke: var(--text-3); stroke-width: 2; stroke-linecap: round; }
+.th-markt { fill: var(--mark); font-family: var(--font-sans); font-weight: 800; }

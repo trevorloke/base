@@ -223,6 +223,10 @@ export const readSettings = async (q, workspaceId) => {
   if (!r) return null;
   const out = { theme: parseJ(r.theme, {}), domains: parseJ(r.domains, []), updated_at: iso(r.updated_at) };
   for (const k of SECTION_KEYS) out[k] = sectionOf(k, parseJ(r[k], {}));
+  // The campaign's added Google fonts (WA, fonts.js), for its themes.
+  out.fonts = (await q.query(
+    'select slug, family, category, body_safe, faces from site_fonts where workspace_id = $1 and deleted_at is null order by created_at', [workspaceId],
+  )).rows.map((f) => ({ slug: f.slug, family: f.family, category: f.category, bodySafe: Boolean(f.body_safe), faces: parseJ(f.faces, []) }));
   return out;
 };
 
@@ -243,7 +247,7 @@ export const menuPages = async (q, workspaceId, siteId = null) => (await q.query
 // heading face and corners, and its logo (the site's own when the brand has
 // none). What a website that follows the brand wears, and what "Give the
 // website its own look" starts from.
-export const themeFromBrand = (brand, own, name = '') => {
+export const themeFromBrand = (brand, own, name = '', added = undefined) => {
   const l = deriveLook(brand, 'light');
   const { theme } = checkTheme({
     ...own,
@@ -257,7 +261,7 @@ export const themeFromBrand = (brand, own, name = '') => {
     logo: brand.publicLogo ? { url: brand.publicLogo, alt: name } : own?.logo,
     pop: false,
     follow: own?.follow === true,
-  }, brandKey());
+  }, brandKey(), { added });
   return theme;
 };
 
@@ -275,10 +279,11 @@ export const themeFromBrand = (brand, own, name = '') => {
 // main site's, so every website names the same sponsor.
 export const siteOf = (settings, pages = [], campaign = null, micro = null) => {
   if (micro) return microSiteOf(settings, pages, campaign, micro);
-  const own = checkTheme(settings.theme, brandKey()).theme;
+  const added = settings.fonts || [];
+  const own = checkTheme(settings.theme, brandKey(), { added }).theme;
   const brand = campaign ? brandFor(parseJ(campaign.settings, {})) : null;
   const following = Boolean(own.follow && brand);
-  const theme = following ? themeFromBrand(brand, own, campaign.name || '') : own;
+  const theme = following ? themeFromBrand(brand, own, campaign.name || '', added) : own;
   const footer = following && brand.publicLogoDark ? { ...settings.footer, logo: { url: brand.publicLogoDark, alt: campaign.name || '' } } : settings.footer;
   const listed = new Set(settings.nav.menu.map((l) => l.href));
   const extra = pages
@@ -286,6 +291,7 @@ export const siteOf = (settings, pages = [], campaign = null, micro = null) => {
     .filter((l) => !listed.has(l.href));
   return {
     theme,
+    fonts: added,
     nav: { items: [...settings.nav.menu, ...extra], bar: settings.nav.links, cta: settings.nav.cta },
     footer,
     icon: brand?.siteIcon || null,
@@ -300,12 +306,13 @@ export const siteOf = (settings, pages = [], campaign = null, micro = null) => {
 const absolutely = (href, base) => (typeof href === 'string' && /^\/(?!\/)/.test(href) && base ? `${base}${href}` : href);
 const microSiteOf = (settings, pages, campaign, { microsite, home, parentUrl }) => {
   const main = siteOf(settings, [], campaign);
-  const theme = checkTheme({ ...parseJ(microsite.theme, {}), follow: false }, brandKey()).theme;
+  const theme = checkTheme({ ...parseJ(microsite.theme, {}), follow: false }, brandKey(), { added: main.fonts }).theme;
   const hero = (home?.modules || []).find((m) => m?.kind === 'hero' && !m.hidden);
   const heroImage = hero?.props?.image?.url ? hero.props.image : null;
   const orgName = settings.org.name || campaign?.name || '';
   return {
     theme,
+    fonts: main.fonts,
     nav: { items: pages.map((p) => ({ label: p.title, href: p.slug === 'home' ? '/' : `/${p.slug}` })), bar: [], cta: null },
     footer: { acknowledgement: '', links: [], logo: main.footer.logo },
     icon: main.icon,

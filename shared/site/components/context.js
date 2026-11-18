@@ -3,6 +3,7 @@
 // site lives, and the helpers that turn a typed link into a safe one. See
 // SITE.md "Rendering" for the shapes accepted.
 import { checkTheme } from '../theme.js';
+import { MODULE_BY_KIND } from '../catalogue.js';
 import { authorizedBy, consentName, consentWords, LEGAL_ENGLISH, fillSlots } from '../wording.js';
 import { renderMarkdown, blocksOf, drawBlocks } from '../../markdown.js';
 import { LANG_BY_CODE, isOther } from '../languages.js';
@@ -51,6 +52,8 @@ export function normalizeSite(site) {
   const parentUrl = str(par.url).trim();
   return {
     theme,
+    // The campaign's added Google fonts the theme may use (WA).
+    fonts: arr(s.fonts).filter((f) => f && typeof f.slug === 'string' && Array.isArray(f.faces)),
     consent,
     site: str(own.name).trim() ? { name: str(own.name).trim(), key: str(own.key).trim() } : null,
     parent: /^https?:\/\/[^\s"'<>\\]+$/i.test(parentUrl) ? { name: str(par.name).trim() || name, url: parentUrl } : null,
@@ -335,4 +338,19 @@ export function campaignIn(rc, c) {
     statementLang: st ? st.lang : undefined,
     statementV: st ? st.v : undefined,
   };
+}
+
+// The builder's live preview (WA decision 20) draws a changed section in the
+// browser from the inputs the server drew the page with (`wa-rc`). Almost
+// everything a section can show is already in those inputs — loadData reads
+// the same lists for every page — except a petition or pledge made after
+// the preview opened: then the preview must be drawn again by the server,
+// once the draft is saved. True when any section points at a campaign the
+// data doesn't hold. A later field backed by a loader adds its rule here.
+export function needsReload(modules, data) {
+  const raw = obj(data).campaigns;
+  const have = Array.isArray(raw) ? raw : obj(raw);
+  const held = (id) => (Array.isArray(have) ? have.some((c) => obj(c).id === id) : Object.prototype.hasOwnProperty.call(have, id));
+  return arr(modules).some((m) => (MODULE_BY_KIND[obj(m).kind]?.fields || [])
+    .some((f) => f.type === 'campaign' && str(obj(obj(m).props)[f.key]).trim() && !held(str(obj(m).props[f.key]).trim())));
 }

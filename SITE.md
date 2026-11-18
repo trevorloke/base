@@ -610,6 +610,54 @@ answer the 404 under a prefix.
   `site.settings.save`, a manager's; a languages save changes only the
   keys it names.
 
+## Fonts (`shared/site/fonts.js`, `server/ext/site/fonts.js`)
+
+A theme's `fonts.heading` / `fonts.body` is a face base.win ships (`inter`,
+`montserrat`, `barlow-condensed`, `system`, `serif`, and the twelve
+pairings' faces: `space-grotesk`, `oswald`, `source-sans-3`,
+`archivo-black`, `archivo`, `dm-serif-display`, `dm-sans`, `fraunces`,
+`playfair-display`, `merriweather`, `lato`, `nunito`, `nunito-sans`) or a
+Google font the campaign added, `g:<slug>`.
+
+- **Adding one**: `site.font.add { family }` (managers, the `site` area)
+  fetches it first, outside the write (`before`; `server/lib/outside.js`
+  refuses any outside call inside a write), keeps latin and latin-ext only
+  (≤ 8 files, ≤ 300 KB each, ≤ 900 KB in all, woff2, from
+  fonts.gstatic.com only), then one write: `site_fonts` (the row, faces with
+  their SHA-256) and `site_font_files` (the bytes, as Google served them).
+  Six added fonts at most, counted again inside the write. Adding one twice
+  answers the same row.
+- **Removing**: `site.font.remove { slug }` is refused (409) while the main
+  site, another website or the campaign's brand uses it, naming where;
+  `site.font.restore` is its Undo. `GET /api/site/fonts` lists the added
+  fonts with `used`, `notUsed` and, for a font whose files are missing (an
+  export brought back), `refetch` (`waiting`, `failed`).
+- **The rules** (`checkTheme` with the campaign's `added` fonts): body text
+  only in a face checked for long reading (`scripts/google-fonts-body-safe.txt`,
+  65 families; the built-in heading faces Archivo Black, Oswald, DM Serif
+  Display, Playfair Display, Barlow Condensed and Fraunces are for headings
+  only); a first visit's fonts (the body's regular file and the heading's
+  file, the two the page preloads; on `/pa` the body's and Gurmukhi) over
+  150 KB are refused, over 100 KB saved with a note. Each pairing is at most
+  100 KB (unit test from the files).
+- **Drawing**: the head carries `@font-face` rules for added fonts at
+  `{site root}site-assets/fonts/g/<sha256>.woff2` (no language prefix; the
+  route answers under `/pa`, `/zh`, `/zh-hant` too, only for the site's own
+  campaign, `immutable`). Every stack carries `'Noto Sans Gurmukhi'` and
+  TR's `var(--cjk, …)`. Headings are drawn through `--heading-weight`,
+  `--heading-tracking`, `--heading-leading`, `--heading-case` (and the
+  wordmark's, a petition title's and the rail's), written from the heading
+  face's profile; the built-in faces keep exactly their old values.
+- **Licences**: `{site root}site-assets/fonts/licences` (linked from
+  nowhere) lists the site's fonts with their licence and repository link,
+  and the bundled licence texts (`shared/site/fonts/LICENCES/`).
+- **The desk** loads faces with the FontFace API from the site's files and
+  `GET /api/site/fonts/file/<sha>.woff2` (signed in); a font not added yet
+  is previewed through `GET /api/site/fonts/sample` (the server asks Google
+  for just those letters; 120 a minute per person). Settings → Brand's
+  heading face may be an added font (`brand.save` keeps its files' hashes,
+  `headingFace`).
+
 ## Settings (`site_settings`, `server/ext/site/shape.js`)
 
 What each section holds (the renderer gets them as `site.*`; every `href`
@@ -798,7 +846,7 @@ seed):
 | `GET /api/site/pages/:id` | `{ page: { id, slug, title, description, status, version, show_in_nav, nav_order, published_at, created_at, updated_at, changed, modules (count), draft, published } }` |
 | `GET /api/site/posts` · `/:id` | `{ posts: [{ id, slug, title, excerpt, image, status, published_at, … }] }` · `{ post: { …, body } }` |
 | `GET /api/site/campaigns` · `/:id` | `{ campaigns: [{ id, slug, kind, title, excerpt, statement, goal, status, signatures, … }] }` · `{ campaign: { …, body } }` |
-| `GET /api/site/pictures` | `{ pictures: [{ id, url, name, width, height, bytes, created_at }] }` (Outreach's store too; not the brand's pictures) |
+| `GET /api/site/pictures` | `{ pictures: [{ id, url, name, width, height, bytes, created_at, sizes? }] }` (Outreach's store too; not the brand's pictures, not a picture's copies) |
 | `POST /api/site/preview-token` | `{ pageId }` → `{ url, expires_at }`: the draft for 30 minutes, `noindex`, frameable by the app only |
 
 Writes are actions (`POST /api/actions/:name`):
@@ -813,7 +861,7 @@ Writes are actions (`POST /api/actions/:name`):
 | `site.page.reorder` | `{ ids }` — the menu order |
 | `site.post.save` · `publish` · `delete` | `{ id?, title, slug?, excerpt?, body?, image? }` → `{ post }` · `{ id, published? = true }` · `{ id }` |
 | `site.campaign.save` · `close` · `delete` | `{ id?, kind, title, slug?, excerpt?, body?, statement?, goal? }` → `{ campaign }` · `{ id, open? }` · `{ id }` |
-| `site.picture` | `{ data (base64 or data: URL), name?, width?, height? }` → `{ media: { id, url: '/media/:id' } }` (JPG/PNG/WebP, 2 MB) |
+| `site.picture` | `{ data (base64 or data: URL), name?, width?, height?, sizes?: [{ data, width, height }] }` → `{ media: { id, url: '/media/:id', sizes?: [{ url, w }] } }` (JPG/PNG/WebP, 2 MB; up to 3 smaller copies, JPG or WebP, 600 KB each) |
 | `shift.public` | `{ id, public }` — the desk (Shifts area): the shift on the site — with the events or the volunteer openings, by its kind |
 
 Slugs: lowercase a–z, 0–9 and dashes; never `news`, `act`, `r`,
@@ -872,17 +920,95 @@ theirs, and the server refuses its data anyway).
 
 | Address | Screen |
 |---|---|
-| `/website` | Overview: live or not, where it lives, "View site", this week's sign-ups by kind, pages, news, petitions, online giving |
-| `/website/pages` | Pages in the menu's order: New page, In the menu, ⋯ Move up/down · Duplicate · Delete (Undo); drag by the handle or tap it and "Move here" |
-| `/website/pages/:id` | The builder: sections (drag, tap or ⋯ to move; hide/show, duplicate, add below, delete with Undo), each a form made from its catalogue fields (`components/site/Fields.jsx`); page details (title, address, description, share picture, in the menu); the draft saves itself; Preview (a new tab, and beside the editor on a wide screen); Publish names the section and box that needs a look (`components/site/builder.js problemsOf`, the catalogue's own check) |
+| `/website` | Overview: live or not, where it lives, "View site", this week's sign-ups by kind, pages ("Edit the home page"), news, petitions, online giving |
+| `/website/pages` | Pages in the menu's order: New page ("What's this page for?": a starter, a name and its address), In the menu, ⋯ Move up/down · Duplicate · Delete (Undo); drag by the handle or tap it and "Move here" |
+| `/website/pages/:id` | The builder (below) |
 | `/website/theme` | A skin, the colours (every `PAIRS` pair's contrast as it changes; under 4.5:1 blocks saving; "Fix it" picks the nearest readable text colour), fonts, corners, logo, a live sample |
 | `/website/settings` | Menu and title bar, announcement bar, footer, organization, social accounts, search and sharing, your own domain |
-| `/website/news` · `/:id` | Posts: list, editor (picture, excerpt, Markdown), publish/unpublish, delete (Undo) |
+| `/website/news` · `/:id` | Posts: list, editor (picture, the words beside the post as it will look, short summary), publish/unpublish, delete (Undo) |
 | `/website/petitions` · `/:id` | Petitions and pledges: signatures and a bar to the goal, "See who signed" (People by `signers_tag`), editor, close/open again, delete (Undo) |
 | `/website/sites` | Other websites: each one's name, Live / Draft, domain and sign-ups this week; New website (a manager: a name and, optionally, the address — checked as it's typed in the save's words); deleted ones whose address still says it has closed |
 | `/website/sites/:siteId` | One of them: Go live (a draft; a manager) or View site; while a draft, the checklist (home published, Authorized by, privacy link, address), each a tick or a link to fix it; sign-ups for 7 or 30 days and where they came from (30 days), "See everyone from this site" (`/people?web=site:<id>`); Pages · Look · Domain; ⋯ (a manager) Rename, Take offline, Delete (Undo), Release old address |
 | `/website/sites/:siteId/pages` · `/look` | Today's Pages and Theme with the site passed in (its own pages; its own look, saved with `site.microsite.save`, "Start from the campaign's brand" copies the brand's once); the builder says "On <site>" and previews and views it at the site's address |
 | `/website/sites/:siteId/domain` | The address (the `www.` is added), then — only once it's saved — the three steps in the safe order (buy it; add it in Render; the registrar's DNS records, pointing `www` at `RENDER_EXTERNAL_HOSTNAME`), each with Copy, and "Open https://…" |
+
+### The builder (WA stage 2a, `web/src/components/site/builder/`)
+
+- **Starters** (`shared/site/starters.js`): An issue, An event, A
+  petition, About us, Contact (Follow along only when Settings has social
+  accounts), Get involved, Blank. Every word a starter adds beyond the
+  catalogue's defaults is in `PLACEHOLDERS` (`shared/site/placeholders.js`),
+  with the catalogue's own hero sample. A draft may hold them; the
+  catalogue's strict check (Publish) refuses a box still holding one —
+  "still has the sample words" — and the builder opens that box. A seed's
+  placeholders go live as made (`checkModules(…, { samples: false })`); its
+  next Publish asks for real words. A new page opens on its first sample box.
+- **The page itself**: a top bar (← Pages, the title edited in place — a
+  page never published takes its address from it — Draft · Published ·
+  Published, with changes, "Saved 2:14 pm", Undo, Redo, Phone / Computer,
+  Preview in a new tab, ⋯ Page settings · View on the site · Duplicate ·
+  Take it off the site · Delete, and Publish); a 440 px column with the
+  sections as cards (handle, drawing, name, first words, ⋯ Hide ·
+  Duplicate · Move up · Move down · Delete; a + between every two) or the
+  open section's form; the live preview filling the rest at 1,100 px and
+  wider (Show preview at 720–1,099 px; under 720 px Preview opens it full
+  screen). Add a section is a gallery of drawings (`thumbs.jsx`) with a
+  search box, Most used first; the voter guide shows "Already on this
+  page" once there is one.
+- **Undo and Redo** (`history.js`): this visit's changes, 100 steps,
+  typing in one box one step a second; Ctrl/Cmd+Z, Shift+Ctrl/Cmd+Z,
+  Ctrl+Y. An undo is a change: it autosaves.
+- **The live preview**: the builder frames `/__preview/:id?…&edit=1`. A
+  draft's English preview carries the renderer's inputs as
+  `<script type="application/json" id="wa-rc">` and loads
+  `site-assets/site-preview.js` (`web/src/site-preview.js`, built as its
+  own file like the islands). The builder posts `{ type: 'wa:modules' }`
+  at most every 100 ms; the script calls the same `renderContext` and
+  components (`shared/site/components/preview.js drawBody`) and swaps only
+  the sections whose markup changed — before the autosave. A section
+  pointing at a petition the frame's data doesn't hold (`needsReload`,
+  `context.js`) shows "Updating preview…" and the frame is drawn again once
+  the autosave lands. Messages go only between the builder and its frame,
+  on one origin.
+- **Tap to edit**: with `edit=1` each section carries
+  `data-wa-section="<id>"` (the server marks them) and the script marks
+  each headline, paragraph, button and picture with `data-wa-field`
+  (`items.2.title`) by matching the section's own words; a tap posts
+  `{ type: 'wa:pick', section, field }` and the builder opens that box with
+  the cursor in it (on a phone, in a sheet with Done). Links and forms in
+  the frame do nothing. Never on a public page or a translated preview.
+
+### Pictures and posts (WA stage 2b)
+
+- **Sizes.** The desk uploads a section's or a post's picture with copies
+  480, 960 and 1,600 px wide (never wider than the picture), made on a
+  canvas (`brand-pictures.js pictureCopies`): WebP at 0.82, or JPEG at 0.82
+  when the browser hands back something else (Safari gives a PNG). The
+  copies are `media` rows of their own (`size_of` names the picture; the
+  picture list leaves them out and lists them with their picture). The
+  image field's value is `{ url, alt, width?, height?, sizes?: [{ url, w }],
+  focus?: { x, y }, decorative? }`; `sizes` are only `/media/:id`, at most 3;
+  `focus` whole numbers 0–100 (the middle is left out).
+- **Drawing.** `Img` writes a `srcset` from the copies and the picture
+  itself, with each place's `sizes` (hero `(min-width: 900px) 50vw, 100vw`,
+  news card `(min-width: 720px) 33vw, 100vw`, post `min(100vw, 760px)`),
+  `object-position` from `focus`, `alt=""` when decorative. The first
+  section's picture (and a post's) is fetched first (`fetchpriority`); the
+  rest are lazy. A picture without copies draws as before.
+- **Descriptions** (`shared/site/pictures.js`). Publish refuses a picture
+  added or replaced since the last publish — its address is nowhere in
+  what was published — that has no description and isn't ticked
+  *Decorative*: image fields and Markdown `![words](url)` (empty words, or
+  the toolbar's own "picture", count as none) in pages and posts. The
+  builder finds it before sending and opens its box. One already on the
+  site without words doesn't block: `site.page.publish` answers
+  `undescribed: <n>` and the toast says "1 older picture has no
+  description. **Describe them**". A post is checked as it goes on the
+  site, and a published post as it's saved (a save changes it live).
+- **The post editor**: the words in the body font at 17 px beside the post
+  as it will look (≥ 1,100 px; *Write · See it* below that), drawn by
+  `shared/markdown.js`. The short summary follows the first 160 characters
+  of the words (`summaryFrom`) until someone types in it.
 
 Careful with "your own domain": on a host in `domains` only the site answers
 (no sign-in, no app). So `site.settings.save` refuses (400, in plain words)

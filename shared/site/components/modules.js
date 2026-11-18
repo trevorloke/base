@@ -82,13 +82,35 @@ export function Button({ rc, link, className, children }) {
   return html`<a className=${className} href=${href}>${label}${children}</a>`;
 }
 
-export function Img({ rc, image, className, width, height, eager, alt }) {
+// A picture (WA decision 26): its smaller copies as a srcset with the
+// place's `sizes`, the spot kept in view (focus) as object-position, and a
+// decorative picture says nothing to a screen reader. eager: the first
+// section's picture (or a post's): fetched first, never lazy.
+export function pictureAttrs(rc, image, sizes = '100vw') {
   const i = obj(image);
   const src = rc.img(i.url);
   if (!src) return null;
+  const copies = arr(i.sizes).map((z) => ({ url: rc.img(obj(z).url), w: Number(obj(z).w) })).filter((z) => z.url && z.w > 0);
+  const full = Number(i.width) > 0 ? Number(i.width) : 0;
+  const set = copies.length && full ? [...copies.filter((z) => z.w < full), { url: src, w: full }] : copies;
+  const f = obj(i.focus);
+  const focus = Number.isFinite(f.x) && Number.isFinite(f.y) ? { objectPosition: `${f.x}% ${f.y}%` } : null;
+  return {
+    src,
+    ...(set.length > 1 ? { srcSet: set.map((z) => `${z.url} ${z.w}w`).join(', '), sizes } : {}),
+    ...(focus ? { style: focus } : {}),
+    alt: i.decorative === true ? '' : str(i.alt),
+  };
+}
+
+export function Img({ rc, image, className, width, height, eager, alt, sizes }) {
+  const a = pictureAttrs(rc, image, sizes);
+  if (!a) return null;
+  const i = obj(image);
   const w = Number(i.width) > 0 ? Number(i.width) : width;
   const h = Number(i.height) > 0 ? Number(i.height) : height;
-  return html`<img className=${className} src=${src} alt=${alt ?? str(i.alt)} width=${w} height=${h} loading=${eager ? undefined : 'lazy'} decoding="async" />`;
+  return html`<img className=${className} src=${a.src} srcSet=${a.srcSet} sizes=${a.sizes} style=${a.style} alt=${alt ?? a.alt} width=${w} height=${h}
+    loading=${eager ? undefined : 'lazy'} fetchPriority=${eager ? 'high' : undefined} decoding="async" />`;
 }
 
 // ── The forms' wording ──
@@ -173,7 +195,7 @@ function heroWords(rc, p) {
   return { title: '', words: rows.map((r) => r.text.replace(/<\/?b>/g, '').replace(/\s+/g, ' ').trim()) };
 }
 
-function Hero({ m, p, rc, level }) {
+function Hero({ m, p, rc, level, first }) {
   const { title, words, lang } = heroWords(rc, p);
   const wl = rc.lang !== 'en' ? { ...(lang ? { lang } : {}), ...rc.islandWords('words') } : {};
   return html`<${Section} m=${m} tone="brand" className="hero" labelled=${false}>
@@ -188,7 +210,7 @@ function Hero({ m, p, rc, level }) {
           ${arr(p.secondaryCtas).map((c, i) => html`<${Button} key=${i} rc=${rc} link=${c} className="btn btn--ghost btn--lg" />`)}
         </div>
       </div>
-      <${Img} rc=${rc} image=${p.image} className="hero-image" width=${1600} height=${1200} eager />
+      <${Img} rc=${rc} image=${p.image} className="hero-image" width=${1600} height=${1200} sizes="(min-width: 900px) 50vw, 100vw" eager=${first} />
     </div>
   <//>`;
 }
@@ -206,13 +228,13 @@ function Text({ m, p, rc, level }) {
   <//>`;
 }
 
-function Picture({ m, p, rc }) {
+function Picture({ m, p, rc, first }) {
   const has = Boolean(rc.img(obj(p.image).url));
   if (!has && !rc.preview) return html`<${Section} m=${m} tone="paper" className="picture is-empty" labelled=${false} />`;
   return html`<${Section} m=${m} tone="paper" className="picture" labelled=${false}>
     <figure className="container picture-figure">
       ${has
-        ? html`<${Img} rc=${rc} image=${p.image} className="wide-image" width=${1600} height=${900} />`
+        ? html`<${Img} rc=${rc} image=${p.image} className="wide-image" width=${1600} height=${900} sizes="(min-width: 1200px) 1200px, 100vw" eager=${first} />`
         : html`<div className="picture-empty" role="img" aria-label=${rc.w('mod.noPicture')}></div>`}
       ${str(p.caption).trim() ? html`<figcaption>${p.caption}</figcaption>` : null}
     </figure>
@@ -327,7 +349,7 @@ function Quote({ m, p, rc }) {
     <figure className="container narrow quote">
       <blockquote><${Paras} text=${p.quote} /></blockquote>
       ${str(p.name).trim() || str(p.role).trim() ? html`<figcaption>
-        <${Img} rc=${rc} image=${p.photo} className="quote-photo" width=${96} height=${96} />
+        <${Img} rc=${rc} image=${p.photo} className="quote-photo" width=${96} height=${96} sizes="96px" />
         <span className="quote-who">
           ${str(p.name).trim() ? html`<span className="quote-name">${rc.names(p.name)}</span>` : null}
           ${str(p.role).trim() ? html`<span className="quote-role">${p.role}</span>` : null}
@@ -405,7 +427,7 @@ function Join({ m, p, rc, level }) {
     : html`<${NotReady} rc=${rc} what="membership" verb="join" />`;
   return html`<${Section} m=${m} tone="surface" className="join">
     <div className="container stack stack--xl">
-      <${Img} rc=${rc} image=${p.photo} className="join-photo" width=${1024} height=${458} />
+      <${Img} rc=${rc} image=${p.photo} className="join-photo" width=${1024} height=${458} sizes="(min-width: 900px) 50vw, 100vw" />
       <div className="split">
         <div className="stack join-copy">
           <div className="stack stack--sm">
@@ -744,7 +766,7 @@ function News({ m, p, rc, level }) {
       </div>
       ${posts.length ? html`<div className="card-grid">
         ${posts.map((post) => html`<article key=${post.slug} className="card">
-          <${Img} rc=${rc} image=${post.image} className="news-card-image" width=${1200} height=${675} alt="" />
+          <${Img} rc=${rc} image=${post.image} className="news-card-image" width=${1200} height=${675} sizes="(min-width: 720px) 33vw, 100vw" alt="" />
           <p className="eyebrow">${dateOnly(post.published_at, rc.timeZone, rc.locale)}</p>
           <h3 className="h3">${post.title}</h3>
           ${str(post.excerpt).trim() ? html`<p>${post.excerpt}</p>` : null}
@@ -828,7 +850,7 @@ function People({ m, p, rc, level }) {
           const photo = rc.img(obj(seat.photo).url);
           return html`<article key=${i} className="card card--white seat">
             ${photo
-              ? html`<img className="avatar avatar--photo" src=${photo} alt=${str(obj(seat.photo).alt)} width="112" height="112" loading="lazy" decoding="async" />`
+              ? html`<${Img} rc=${rc} image=${{ ...obj(seat.photo), width: undefined, height: undefined }} className="avatar avatar--photo" width=${112} height=${112} sizes="112px" />`
               : letters ? html`<div className="avatar" aria-hidden="true">${letters}</div>`
               : html`<div className="avatar avatar--open" aria-hidden="true"><${Icon} name="plus" size=${22} /></div>`}
             ${str(seat.role).trim() ? html`<p className="eyebrow">${seat.role}</p>` : null}
@@ -908,13 +930,13 @@ export const MODULE_COMPONENTS = {
 };
 
 // One module instance on a page. Unknown kinds draw nothing.
-export function Module({ m, rc, level = 2 }) {
+export function Module({ m, rc, level = 2, first = false }) {
   const Component = MODULE_COMPONENTS[m?.kind];
   if (!Component) return null;
   const id = str(String(m.id ?? '')).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64) || 'module';
   const mod = { ...m, id };
   const p = propsFor(mod);
-  return html`<${Component} m=${mod} p=${rc.lang === 'en' ? p : translateProps(mod.kind, p, rc)} rc=${rc} level=${level} />`;
+  return html`<${Component} m=${mod} p=${rc.lang === 'en' ? p : translateProps(mod.kind, p, rc)} rc=${rc} level=${level} first=${first} />`;
 }
 
 // A module's words in the page's language (decision 22), walked by the

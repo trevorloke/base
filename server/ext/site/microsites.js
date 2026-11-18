@@ -24,6 +24,7 @@
 import { z } from 'zod';
 import { newModule, checkModules } from '@starbase/shared/site/catalogue';
 import { checkTheme } from '@starbase/shared/site/theme';
+import { fontsForCheck, themeProblem } from './fonts.js';
 import { newId } from '../../lib/events.js';
 import { httpError } from '../../actions/util.js';
 import { brandKey } from '../../lib/brand.js';
@@ -152,11 +153,12 @@ const setDomains = async (tx, ctx, row, list, emit) => {
 };
 
 // Its first page: a hero with its name, then the newest open petition
-// (Website → Petitions) — else the newsletter. The catalogue's own words;
-// no buttons to pages it doesn't have.
+// (Website → Petitions) — else the newsletter. The catalogue's own words,
+// but never its sample paragraph (Publish refuses it); no buttons to pages
+// it doesn't have.
 const homeModules = async (tx, ws, name) => {
   const hero = newModule('hero', 'hero');
-  hero.props = { ...hero.props, titlePrefix: name.slice(0, 80), primaryCta: { label: '', href: '' }, secondaryCtas: [] };
+  hero.props = { ...hero.props, titlePrefix: name.slice(0, 80), text: '', primaryCta: { label: '', href: '' }, secondaryCtas: [] };
   const petition = (await tx.query(
     "select id from site_campaigns where workspace_id = $1 and deleted_at is null and status = 'open' and kind = 'petition' order by created_at desc, id limit 1", [ws],
   )).rows[0];
@@ -227,11 +229,9 @@ export const micrositeActions = (siteAction) => ({
       params.push(input.name); sets.push(`name = $${params.length}`); changed.name = input.name;
     }
     if (input.theme !== undefined) {
-      const { theme, problems } = checkTheme({ ...input.theme, follow: false, kept: false }, brandKey());
-      if (problems.length) {
-        const p = problems[0];
-        throw httpError(400, `${p.pair.label}: ${p.ratio.toFixed(1)}:1 is too hard to read — it needs 4.5:1. Pick a darker or lighter colour.`);
-      }
+      // The campaign's added fonts and the same speed budget as the main site (WA).
+      const { theme, problems } = checkTheme({ ...input.theme, follow: false, kept: false }, brandKey(), { ...await fontsForCheck(tx, ws), keepBody: parseJ(cur.theme, {})?.fonts?.body });
+      if (problems.length) throw httpError(400, themeProblem(problems[0]));
       params.push(JSON.stringify(theme)); sets.push(`theme = $${params.length}`); changed.theme = theme;
     }
     if (input.check_first !== undefined && input.check_first !== Boolean(cur.check_first)) {

@@ -12,7 +12,7 @@ const B = await import('../../web/src/components/site/builder.js');
 const C = await import('../../web/src/components/site/colors.js');
 
 const page = () => [
-  { id: 'hero1', kind: 'hero', hidden: false, props: { titlePrefix: 'Town hall' } },
+  { id: 'hero1', kind: 'hero', hidden: false, props: { titlePrefix: 'Town hall', text: 'Bring a friend.' } },
   { id: 'text1', kind: 'text', hidden: false, props: { title: 'Bring your questions' } },
   { id: 'news1', kind: 'newsletter', hidden: false, props: { title: 'Get the newsletter' } },
 ];

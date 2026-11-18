@@ -27,7 +27,7 @@
   --inverse: #1b1d22; --inverse-2: #36383d; --inverse-ink: #ffffff; --inverse-quiet: #c6c7c8;
   --brand-ink: #4f46e5; --brand-ink-2: #ffffff; --brand-spark: #4f46e5;
   --r-sm: 6px; --r-ctrl: 8px; --r-card: 12px; --r-sheet: 16px;
-  --font-display: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+  --font-display: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, 'Noto Sans Gurmukhi', var(--cjk, system-ui), sans-serif;
   /* end */
 }
 @media (prefers-color-scheme: dark) {

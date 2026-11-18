@@ -733,19 +733,34 @@ comes back, or asks if words were typed meanwhile).
 
 - **Website (the admin)** — **Website** in the desk's menu (managers, or
   whoever a manager grants the Website area). **Overview**: live or not,
-  where it is (**View site**), this week's sign-ups. **Pages → New page**:
-  in its builder **+ Add a section** (Hero, Text block, Newsletter…), type
-  in each one's boxes (it says *Saved* by itself), drag a section by its
-  handle (or tap the handle, then *Move here*; or ⋯ → *Move up*), ⋯ →
-  *Hide from the page*, ⋯ → *Delete* then **Undo**. **Preview** opens the
-  draft in a new tab (and beside the editor on a wide screen). Add a
-  *Petition or pledge* without picking one and **Publish**: it says which
-  section and which box; pick one and publish — the page is at
-  `/site/<its address>`. **Theme**: make the brand colour light (white text
+  where it is (**View site**), this week's sign-ups. **Pages → New page →
+  An issue**, a name, **Make the page**: the builder opens on the page with
+  the preview beside it and the headline's sample words selected; type —
+  the preview changes before *Saved*. Tap a paragraph or a point in the
+  preview: its box opens with the cursor in it. **Publish** with a sample
+  box left: it's refused and that box opens. **+ Add a section** (a gallery
+  with a search box): Events shows in the preview at once; **Undo** /
+  **Redo** (or Ctrl+Z / Shift+Ctrl+Z) take it away and back. Make a petition
+  in another tab, add a *Petition or pledge* and pick it: "Updating
+  preview…", then it shows. Drag a section by its handle (or tap the handle,
+  then *Move here*; or ⋯ → *Move up*), ⋯ → *Hide from the page*, ⋯ →
+  *Delete* then **Undo**. **Preview** opens the draft in a new tab. On a
+  phone, **Preview** is full screen and a tap opens that section in a sheet.
+  From **Website**, *Edit the home page* → tap the headline → type →
+  **Publish** (4 taps). The page is at `/site/<its address>`. **Pictures**:
+  add a *Picture* section and upload a photo — three sizes are stored; tap
+  the picture to choose the spot to keep in view (the preview follows);
+  **Publish** is refused until it's described (or ticked *Decorative*). A
+  page whose older picture has no words still publishes, and the toast asks
+  for it. **News** → *New post*: the short summary fills itself from the
+  words, the post as it will look sits beside (on a phone, *See it*). **Theme**: make the brand colour light (white text
   on it gets too hard to read) — *Save the look* is blocked until **Fix it**.
   **Petitions and pledges**: signatures against the goal, *See who signed*.
   A volunteer opening `/admin/website` is told it isn't theirs. Tests:
-  `server/test/site-builder.test.js`, `server/test/site-website.test.js`;
+  `server/test/site-builder.test.js`, `server/test/site-website.test.js`,
+  `server/test/site-editor.test.js` (starters, sample words, the preview's
+  browser path drawing every kind exactly as the server does),
+  `server/test/site-pictures.test.js` (sizes, focus, descriptions, srcset);
   in a browser: `e2e-site-admin.mjs`.
 
 - **Languages** (Website → Languages): with no key it says to add one;
@@ -760,6 +775,17 @@ comes back, or asks if words were typed meanwhile).
   browser, `e2e-site-translate.mjs` (it runs its own server on PORT, the
   stand-in Google on PORT+1 and Stripe on PORT+2; it needs a CJK font —
   `apt-get install -y fonts-noto-cjk` — and stops saying so without one).
+
+- **Google fonts** (Website → Theme → **Change fonts**, a manager): pick the
+  Fraunces / Inter pairing and **Save the look** — the site's headings are
+  Fraunces; under **Any Google font** search a family, **Get … and use it**,
+  save — the site loads it from its own address. Body text lists only fonts
+  checked for reading. Tests: `server/test/site-fonts.test.js` (with
+  `server/test/fake-google-fonts.js`; the font file under `/pa` and `/zh` in
+  `site-lang.test.js`); in a browser, `e2e-site-fonts.mjs` (its own server on
+  PORT, 5490; the stand-in Google Fonts on PORT+1 and Translation on PORT+2;
+  every pairing's real first visit on a phone ≤ 150 KB; no request leaves the
+  machine).
 
 - **Other websites** (Website → Other websites, a manager): **New website**
   "Doug Didn’t Example" at a domain; its overview is a draft with the

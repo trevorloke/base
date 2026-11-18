@@ -1,0 +1,73 @@
+# Google font families checked for long reading (WA decision 3). A family on
+# this list may be the website's body font; every other family is for
+# headings only. Each has true lowercase, a normal width and an x-height near
+# Inter's or larger, checked by eye at 17 px. Adding one is a reviewed change:
+# one family per line, exactly as Google Fonts names it.
+#
+# Sans serif (46)
+Inter
+Montserrat
+Source Sans 3
+Archivo
+DM Sans
+Lato
+Nunito
+Nunito Sans
+Roboto
+Open Sans
+Noto Sans
+Work Sans
+IBM Plex Sans
+Public Sans
+Figtree
+Manrope
+Plus Jakarta Sans
+Poppins
+Rubik
+Karla
+Mulish
+Libre Franklin
+Hanken Grotesk
+Schibsted Grotesk
+Instrument Sans
+Onest
+Atkinson Hyperlegible
+Lexend
+Fira Sans
+Barlow
+Heebo
+Assistant
+Cabin
+Overpass
+Red Hat Text
+Albert Sans
+Be Vietnam Pro
+Commissioner
+Ubuntu
+Titillium Web
+Asap
+Mukta
+PT Sans
+Raleway
+Outfit
+Space Grotesk
+# Serif (19)
+Merriweather
+Source Serif 4
+Literata
+Lora
+PT Serif
+Libre Baskerville
+Noto Serif
+IBM Plex Serif
+Newsreader
+Spectral
+Gelasio
+Bitter
+Roboto Slab
+Roboto Serif
+Zilla Slab
+Arvo
+Domine
+Alegreya
+Vollkorn

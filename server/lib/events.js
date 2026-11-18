@@ -3,7 +3,13 @@
 // and the hash chain advance commit together or not at all. The events table
 // IS the audit trail — there is no dual write to drift.
 import { createHash, randomUUID } from 'node:crypto';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { runHooks } from './hooks.js';
+
+// Whether this code runs inside a write's transaction (lib/outside.js
+// refuses a call to another service from there).
+const writing = new AsyncLocalStorage();
+export const inWrite = () => writing.getStore() === true;
 
 // Canonical JSON: object keys sorted recursively, so the same payload always
 // hashes the same regardless of construction order.
@@ -47,7 +53,7 @@ const BUSY = 'Busy — will try again';
 
 export const runAction = async (db, { workspaceId, actorId, action, clientTs, lockTimeoutMs }, handler) => {
   let told = null;
-  const out = await db.transaction(async (tx) => {
+  const out = await writing.run(true, () => db.transaction(async (tx) => {
     // A write that must never wait long for the campaign's lock (a mark on
     // a voting day) gives up after lockTimeoutMs instead of pinning a pool
     // connection while it queues.
@@ -110,7 +116,7 @@ export const runAction = async (db, { workspaceId, actorId, action, clientTs, lo
     );
     if (committed.length && pending.length) told = { workspaceId, action, actorId: actorId || null, events: pending.map((e, i) => ({ ...e, seq: seq - pending.length + 1 + i })) };
     return { result, lastSeq: seq };
-  });
+  }));
   if (told) tellCommitted(told);
   return out;
 };

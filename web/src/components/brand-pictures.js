@@ -159,3 +159,43 @@ export async function seenOn(url, grounds) {
   const { data } = g.getImageData(0, 0, w, h);
   return grounds.map((ground) => hiddenShare(data, ground));
 }
+
+// ── A website picture's smaller copies (WA decision 26) ──
+// 480, 960 and 1,600 px wide, never wider than the picture, each at most
+// 600 KB (the server's limit). WebP where the browser makes it; Safari
+// hands back a PNG when asked for WebP, so the blob's own type is checked
+// and JPEG used instead (on white: a JPEG has no see-through parts).
+export const COPY_WIDTHS = [480, 960, 1600];
+const COPY_MAX = 600 * 1024;
+const copyOf = async (im, w, h) => {
+  const canvas = canvasOf(w, h);
+  const g = canvas.getContext('2d');
+  g.imageSmoothingQuality = 'high';
+  g.drawImage(im, 0, 0, w, h);
+  for (const q of [0.82, 0.7, 0.6]) {
+    const webp = await blobOf(canvas, 'image/webp', q);
+    if (webp?.type === 'image/webp' && webp.size <= COPY_MAX) return webp;
+    if (webp?.type === 'image/webp') continue;
+    break; // no WebP here
+  }
+  g.fillStyle = '#fff';
+  g.fillRect(0, 0, w, h);
+  g.drawImage(im, 0, 0, w, h);
+  for (const q of [0.82, 0.7, 0.6, 0.5]) {
+    const jpg = await blobOf(canvas, 'image/jpeg', q);
+    if (jpg && jpg.size <= COPY_MAX) return jpg;
+  }
+  return null;
+};
+// file: the picture as chosen. → [{ blob, width, height }] smallest first.
+export async function pictureCopies(file) {
+  const p = await loadPicture(file);
+  const out = [];
+  for (const w of COPY_WIDTHS) {
+    if (w >= p.w) break;
+    const h = Math.max(1, Math.round((p.h / p.w) * w));
+    const blob = await copyOf(p.im, w, h);
+    if (blob) out.push({ blob, width: w, height: h });
+  }
+  return out;
+}

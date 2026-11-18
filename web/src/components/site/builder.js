@@ -5,7 +5,7 @@
 //   addModule · moveModule · duplicateModule · removeModule · putBack ·
 //   setHidden · setProps      a page's sections, changed without touching the
 //                             list it was given
-//   problemsOf(modules, { strict, campaigns, pages })
+//   problemsOf(modules, { strict, campaigns, pages, known })
 //                             what a save (loose) or a publish (strict)
 //                             would refuse, section by section, field by
 //                             field: [{ index, id, kind, label, path, field,
@@ -142,7 +142,9 @@ export const plainText = (text) => {
 // box filled in the sections that show; the petitions and pages they point
 // at must be there). campaigns: [{ id, kind, title, status }] · pages:
 // [{ slug, status }] (only read when strict).
-export const problemsOf = (modules, { strict = false, campaigns = null, pages = null } = {}) => {
+// known (a publish): the picture addresses already on the site — a picture
+// added since needs its description (shared/site/pictures.js).
+export const problemsOf = (modules, { strict = false, campaigns = null, pages = null, known = null } = {}) => {
   const out = [];
   const seen = new Set();
   (modules || []).forEach((m, index) => {
@@ -156,7 +158,7 @@ export const problemsOf = (modules, { strict = false, campaigns = null, pages = 
     seen.add(m.id);
     const showing = strict && !m.hidden;
     try {
-      checkProps(m.kind, m.props, { strict: showing });
+      checkProps(m.kind, m.props, { strict: showing, known: showing ? known : null });
     } catch (e) {
       const { path, text } = splitProblem(e.message);
       out.push({ ...base, path, field: fieldAt(m.kind, path).field, text: plainText(text) });
