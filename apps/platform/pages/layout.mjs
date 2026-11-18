@@ -10,6 +10,10 @@ export const page = ({ title, body, nav = false, here = '' }) => html`<!doctype 
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
+<!-- The header says no-referrer; a browser then sends "Origin: null" on this
+     page's own forms, which the Origin check refuses. same-origin still
+     sends no Referer to any other site. -->
+<meta name="referrer" content="same-origin">
 <title>${title} · base.win control centre</title>
 <link rel="stylesheet" href="/app.css">
 <link rel="stylesheet" href="/ops.css">

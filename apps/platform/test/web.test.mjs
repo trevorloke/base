@@ -33,7 +33,10 @@ test('every answer carries the CSP and the other headers; form-action allows 127
     assert.equal(res.headers.get('referrer-policy'), 'no-referrer');
     assert.equal(res.headers.get('cross-origin-opener-policy'), 'same-origin');
   }
-  assert.equal((await b.get('/nope')).headers.get('cache-control'), 'no-store');
+  for (const path of ['/nope', '/app.css', '/signin']) assert.equal((await b.get(path)).headers.get('cache-control'), 'no-store', path);
+  // With no-referrer a browser posts this page's own forms with "Origin: null";
+  // the page itself asks for same-origin, which still sends no Referer elsewhere.
+  assert.match(await (await b.get('/signin')).text(), /<meta name="referrer" content="same-origin">/);
   process.env.OPS_ALLOW_LOCAL = '1';
   assert.match((await b.get('/healthz')).headers.get('content-security-policy'), /form-action 'self' https: http:\/\/127\.0\.0\.1:\*$/);
   baseEnv();

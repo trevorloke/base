@@ -33,7 +33,7 @@ export const makeApp = ({ db, fetcher } = {}) => {
   });
   app.use('*', hostSplit);
   for (const [path, [type, body]] of Object.entries(STATIC)) {
-    app.get(path, (c) => c.body(body, 200, { 'Content-Type': type, 'Cache-Control': 'public, max-age=300' }));
+    app.get(path, (c) => c.body(body, 200, { 'Content-Type': type }));
   }
   app.use('*', sameOrigin);
   const ctx = { db, fetcher, limits: makeLimits() };
