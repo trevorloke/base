@@ -9,10 +9,10 @@ import { cfg } from './config.mjs';
 import { openDb, dbAnswers } from './db.mjs';
 import { headers, hostSplit, sameOrigin } from './web.mjs';
 import { authRoutes, requireSession, makeLimits } from './auth-routes.mjs';
-import { html } from './pages/html.mjs';
-import { page } from './pages/layout.mjs';
 import { verifyLog, listLog, PAGE } from './log.mjs';
 import { logPage } from './pages/log.mjs';
+import { campaignRoutes } from './campaign-routes.mjs';
+import { startPoller } from './poller.mjs';
 
 const file = (rel) => readFileSync(new URL(rel, import.meta.url), 'utf8');
 // The app's own look: its variables and shared classes, read once at start.
@@ -22,7 +22,8 @@ const STATIC = {
   '/ops.js': ['text/javascript; charset=utf-8', file('./ops.js')],
 };
 
-export const makeApp = ({ db }) => {
+// fetcher: tests hand in a fake for the health checks.
+export const makeApp = ({ db, fetcher } = {}) => {
   const app = new Hono();
   app.use('*', headers);
   // Any host: the platform's own health check (Render's), nothing else.
@@ -35,10 +36,10 @@ export const makeApp = ({ db }) => {
     app.get(path, (c) => c.body(body, 200, { 'Content-Type': type, 'Cache-Control': 'public, max-age=300' }));
   }
   app.use('*', sameOrigin);
-  const ctx = { db, limits: makeLimits() };
+  const ctx = { db, fetcher, limits: makeLimits() };
   authRoutes(app, ctx);
   app.use('*', requireSession(db));
-  app.get('/', (c) => c.html(String(page({ title: 'Campaigns', nav: true, here: 'campaigns', body: html`<h1>Campaigns</h1><p>No campaigns yet.</p>` }))));
+  campaignRoutes(app, ctx);
   app.get('/log', async (c) => {
     const before = /^\d{1,15}$/.test(c.req.query('before') || '') ? Number(c.req.query('before')) : null;
     const rows = await listLog(db, { before });
@@ -55,4 +56,5 @@ if (isMain) {
   const db = await openDb(cfg().databaseUrl);
   const app = makeApp({ db });
   serve({ fetch: app.fetch, port: cfg().port }, () => console.log(`base.win control centre on :${cfg().port} for ${cfg().host}`));
+  startPoller(db);
 }
