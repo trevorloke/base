@@ -18,7 +18,7 @@ calls it.
 | `OPS_HOST` | `ops.base.win`; every other host gets a 404 (except `/healthz`) | value |
 | `OPS_SETUP_CODE` | made by Render; copy it once to set up. Shorter than 24 characters keeps setup closed. Press **Generate** to set up again. | `generateValue` |
 | `OPS_SECRET` | made by Render; seals the authenticator key. Changing it means setting up again. | `generateValue` |
-| `PLATFORM_SIGNING_KEY` | made by Render; opens desks. Its public half is each campaign’s `BASE_PLATFORM_PUBKEY` (see **base.win’s key**). `new,old` while changing; the first signs. | `generateValue` |
+| `PLATFORM_SIGNING_KEY` | made by Render; opens desks. Its public half is each campaign’s `BASE_PLATFORM_PUBKEY` (see **base.win’s key**). `old,new` while changing; the first signs. | `generateValue` |
 | `OPS_DOOR_ORIGIN`, `OPS_INSECURE_COOKIES`, `OPS_ALLOW_LOCAL` | tests only | not listed |
 
 ## First time
@@ -61,10 +61,12 @@ Every Render change ends with **Save and deploy**, then wait for “Live”.
   password, app and codes; every console session ends.
 - **Stop base.win sign-in on one campaign at once:** empty its
   `BASE_PLATFORM_PUBKEY`, Save and deploy. Entry stops and open visits end.
-- **Changing the signing key:** set `PLATFORM_SIGNING_KEY` to `<new>,<old>`;
-  paste the two keys **base.win’s key** shows into each campaign; when that
-  page no longer lists anyone without the new key, set `PLATFORM_SIGNING_KEY`
-  to `<new>` alone; later remove the old key from each campaign.
+- **Changing the signing key:** set `PLATFORM_SIGNING_KEY` to `<old>,<new>`
+  (press Generate for a new value, then put the old one before it with a
+  comma); the old one still signs, so nothing stops. Paste the two keys
+  **base.win’s key** shows into each campaign. When that page no longer
+  lists anyone without the new key, set `PLATFORM_SIGNING_KEY` to `<new>`
+  alone; later remove the old key from each campaign.
 - **“Server changed: confirm it”:** the campaign’s database was rebuilt. Check
   it is the same campaign, then **Confirm it’s the same campaign**.
 - **“This server says it is somewhere else”:** the Render address saved here

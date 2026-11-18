@@ -8,7 +8,7 @@ import { form } from './web.mjs';
 import { appendLog } from './log.mjs';
 import { sha256 } from './ops-auth.mjs';
 import { mintFor } from './mint.mjs';
-import { platformKeys, currentKid } from './keys.mjs';
+import { platformKeys, newKid } from './keys.mjs';
 import { campaignView, getCampaign, envOf, latestChecks } from './campaigns.mjs';
 import { setItem, MANUAL } from './checklist.mjs';
 import { typeCodePage, keyPage } from './pages/desk.mjs';
@@ -34,7 +34,9 @@ export const deskRoutes = (app, ctx, { showCampaign }) => {
     const w = await codeWindow(c, ctx, f);
     if (w !== 'ok') {
       const keep = purpose === 'invite' ? { env, email } : { env };
-      return c.html(String(typeCodePage({ action: `/c/${name}/${purpose}`, keep, message: w === 'wrong' ? WRONG_CODE : '' })), 401);
+      // A stale code is an ordinary page asking for one (200: the new tab
+      // logs no error); only a wrong code is refused.
+      return c.html(String(typeCodePage({ action: `/c/${name}/${purpose}`, keep, message: w === 'wrong' ? WRONG_CODE : '' })), w === 'wrong' ? 401 : 200);
     }
     const v = await campaignView(db, name);
     if (v.block) return showCampaign(c, name, { message: BLOCK_WORDS[v.block], code: 409 });
@@ -86,7 +88,7 @@ export const deskRoutes = (app, ctx, { showCampaign }) => {
     const keys = platformKeys();
     let missing = [];
     if (keys.length > 1) {
-      const kid = currentKid();
+      const kid = newKid();
       const checks = await latestChecks(db);
       const envs = (await db.query(`select e.campaign, e.env, c.display from environments e join campaigns c on c.name = e.campaign
         where c.archived_at is null and e.server_url is not null order by c.display`)).rows;

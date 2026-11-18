@@ -1,5 +1,6 @@
 // base.win's signing key. PLATFORM_SIGNING_KEY is a value Render made (32+
-// characters); while changing keys it holds "new,old" and the first signs.
+// characters); while changing keys it holds "old,new": the first (old) one
+// still signs until every campaign has the new one's public half.
 // The Ed25519 seed is SHA-256 of a fixed prefix and the value, so nobody
 // runs a command to make a key. Clients hold only the public half
 // (BASE_PLATFORM_PUBKEY: 43 base64url characters), told apart by its kid
@@ -20,8 +21,17 @@ export const publicKeyOf = (value) => {
   return { publicKey: raw.toString('base64url'), kid: kidOfRaw(raw) };
 };
 
-// Every usable value in PLATFORM_SIGNING_KEY, the signing one first.
-export const signingValues = (value = cfg().signingKey) => String(value || '').split(',').map((v) => v.trim()).filter((v) => v.length >= SIGNING_KEY_MIN);
+// Every usable value in PLATFORM_SIGNING_KEY, the signing one first. A
+// too-short first value means no key at all: the next value never signs
+// in its place without anyone seeing it.
+export const signingValues = (value = cfg().signingKey) => {
+  const values = String(value || '').split(',').map((v) => v.trim());
+  return values[0].length >= SIGNING_KEY_MIN ? values.filter((v) => v.length >= SIGNING_KEY_MIN) : [];
+};
 export const platformKeys = () => signingValues().map((v) => ({ ...publicKeyOf(v), value: v }));
 // The kid that signs now, or null when there is no usable key.
 export const currentKid = () => platformKeys()[0]?.kid || null;
+// The key being changed to (the last value), or null with only one key.
+export const newKid = () => { const k = platformKeys(); return k.length > 1 ? k[k.length - 1].kid : null; };
+// What each campaign's BASE_PLATFORM_PUBKEY holds: the new key first.
+export const pubkeyValue = (keys = platformKeys()) => [...keys].reverse().map((k) => k.publicKey).join(',');

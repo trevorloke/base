@@ -68,6 +68,8 @@
 .oc-pre { margin: 8px 0; padding: 12px; background: var(--paper-1, var(--panel)); border: 1px solid var(--rule, var(--line)); border-radius: var(--radius-sm, 6px);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
 .oc-copy { margin: 16px 0; }
+/* A quiet Copy still reads as a button, not a label beside the box. */
+.btn-quiet.oc-copy-btn { border-color: var(--rule-2, var(--line)); color: var(--text-2, var(--text)); }
 .oc-steps { list-style: none; counter-reset: step; padding: 0; margin: 16px 0; display: grid; gap: 16px; }
 .oc-steps > li { counter-increment: step; margin: 0; }
 .oc-steps > li > h2::before { content: counter(step) '. '; color: var(--text-3, var(--quiet)); }

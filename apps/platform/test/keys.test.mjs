@@ -12,4 +12,5 @@ test('seed, public key and kid match the shared vector; the first of a list sign
   assert.deepEqual(publicKeyOf(V.otherSigningKey), { publicKey: V.otherPublicKey, kid: V.otherKid });
   assert.deepEqual(publicKeyOf(`${V.signingKey},${V.otherSigningKey}`), { publicKey: V.publicKey, kid: V.kid });
   assert.deepEqual(signingValues(` ${V.signingKey} , short, ${V.otherSigningKey}`), [V.signingKey, V.otherSigningKey]);
+  assert.deepEqual(signingValues(`short-new-value,${V.signingKey}`), [], 'a too-short first value is no key, not the next one');
 });

@@ -4,6 +4,7 @@
 import { html, raw } from './html.mjs';
 import { page, field, status, codeField } from './layout.mjs';
 import { ITEMS, MANUAL, wordsOf } from '../checklist.mjs';
+import { pubkeyValue } from '../keys.mjs';
 
 // A new tab, with nothing of this page passed on (no opener, no referrer).
 const NEW_TAB = raw(' target="_blank" rel="noopener noreferrer"');
@@ -44,11 +45,11 @@ export const keyPage = ({ keys, missing }) => page({
     <div class="oc-copy">
       <p class="oc-help">The setting</p>
       <pre class="oc-pre" id="key-name">BASE_PLATFORM_PUBKEY</pre>
-      <button class="btn btn-quiet" type="button" data-copy="key-name">Copy the name</button>
+      <button class="btn btn-quiet oc-copy-btn" type="button" data-copy="key-name">Copy the name</button>
     </div>
     <div class="oc-copy">
       <p class="oc-help">${keys.length > 1 ? 'Its value: the new key, then the old one' : 'Its value'}</p>
-      <pre class="oc-pre" id="key-value">${keys.map((k) => k.publicKey).join(',')}</pre>
+      <pre class="oc-pre" id="key-value">${pubkeyValue(keys)}</pre>
       <button class="btn btn-primary oc-wide" type="button" data-copy="key-value">Copy</button>
     </div>
     ${keys.length > 1 && missing.length ? status(`Don’t remove the old key yet: ${missing.join(', ')} don’t have the new one.`, 'warn') : status('')}`

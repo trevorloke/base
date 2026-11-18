@@ -4,7 +4,7 @@
 import { codeWindow } from './auth-routes.mjs';
 import { form } from './web.mjs';
 import { pollOnce } from './poller.mjs';
-import { platformKeys } from './keys.mjs';
+import { pubkeyValue } from './keys.mjs';
 import { NAME_RE, RESERVED, normalizeOrigin, getCampaign, campaignView, createCampaign, saveEnv } from './campaigns.mjs';
 import { doneFor, setItem } from './checklist.mjs';
 import { PROVINCES, TIME_ZONES, JURISDICTIONS, RACES, tzFor, pickValues, doorValue, renderSnippet } from './snippets.mjs';
@@ -69,7 +69,7 @@ export const wizardRoutes = (app, ctx) => {
       join environments e on e.campaign = c.name and e.env = 'production'`)).rows;
     const values = v.campaign.values || {};
     return c.html(String(setupPage({
-      v, values, publicKey: platformKeys()[0]?.publicKey || '', serverUrl: v.envRow.server_url, addressState: addressState(v),
+      v, values, publicKey: pubkeyValue(), serverUrl: v.envRow.server_url, addressState: addressState(v),
       door: doorValue(rows, name), invited: (await doneFor(db, name)).has('first-manager-invited'),
       snippet: renderSnippet({ name, display: v.campaign.display, values }), stale, typed, message,
     })), code);

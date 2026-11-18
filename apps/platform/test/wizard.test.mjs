@@ -80,6 +80,7 @@ test('the time zone follows the province; a race is needed; the rules are the se
   assert.match(await none.text(), /Tick at least one race\./);
   const body = await (await b.get('/new')).text();
   assert.match(body, /<option value="BC" selected data-tz="America\/Vancouver">British Columbia/);
+  assert.match(body, /<option value="America\/St_Johns">St\. John’s<\/option>/);
   assert.match(body, /name="races" value="council" checked[\s\S]*name="races" value="school_board" checked/);
   assert.equal([...body.matchAll(/btn-primary/g)].length, 1);
 });

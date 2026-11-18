@@ -47,7 +47,7 @@ const tokenOf = (location) => decodeURIComponent(location.split('#t=')[1]);
 test('a stale code: Open answers Type your code, posting back to Open; a right code then goes straight to the desk', async () => {
   await stale();
   const res = await b.post('/c/a/open', { env: 'production' });
-  assert.equal(res.status, 401);
+  assert.equal(res.status, 200, 'an ordinary page asking for input: the new tab logs no error');
   const body = await res.text();
   assert.match(body, /<h1>Type your code<\/h1>/);
   assert.match(body, /Opening a desk needs a fresh code\./);
@@ -56,6 +56,7 @@ test('a stale code: Open answers Type your code, posting back to Open; a right c
   assert.doesNotMatch(body, /target="_blank"/, 'it stays in this tab');
   assert.equal((await db.query("select count(*)::int n from ops_log where action = 'desk.open'")).rows[0].n, 0);
   const wrong = await b.post('/c/a/open', { env: 'production', code: '000000' });
+  assert.equal(wrong.status, 401);
   assert.match(await wrong.text(), /That code didn’t work/);
   const ok = await b.post('/c/a/open', { env: 'production', code: await codeNow(db, op.secret) });
   assert.equal(ok.status, 303);
@@ -97,7 +98,7 @@ test('Invite the first manager: the primary until done; a token with the invite;
   assert.equal([...page.matchAll(/btn-primary/g)].length, 1);
   await stale();
   const s = await b.post('/c/a/invite', { env: 'production', email: 'Sam@Example.org' });
-  assert.equal(s.status, 401);
+  assert.equal(s.status, 200);
   const sBody = await s.text();
   assert.match(sBody, /action="\/c\/a\/invite"/);
   assert.match(sBody, /name="email" value="sam@example.org"/);
@@ -208,10 +209,25 @@ test('base.win’s key: one Copy; both keys while changing, and who doesn’t ha
   assert.match(body, new RegExp(`id="key-value">${publicKeyOf(SIGNING).publicKey}</pre>`));
   assert.equal([...body.matchAll(/btn-primary/g)].length, 1);
   assert.doesNotMatch(body, /kid|cd935ce9/);
+  // While changing keys the setting holds "old,new": the old one still
+  // signs, so no campaign is shut out before it has the new one.
   const NEW = 'a-brand-new-signing-key-0123456789abcdefghijk';
-  process.env.PLATFORM_SIGNING_KEY = `${NEW},${SIGNING}`;
+  process.env.PLATFORM_SIGNING_KEY = `${SIGNING},${NEW}`;
   body = await (await b.get('/key')).text();
   assert.match(body, new RegExp(`id="key-value">${publicKeyOf(NEW).publicKey},${publicKeyOf(SIGNING).publicKey}</pre>`));
   assert.match(body, /Don’t remove the old key yet: Example A, Sample \(staging\) don’t have the new one\./);
+  const res = await b.post('/c/a/open', { env: 'production' });
+  assert.equal(res.status, 303, 'a campaign holding only the old key still opens');
+  assert.equal(verifyEntry(res.headers.get('location').split('#t=')[1], { keys: parseKeys(publicKeyOf(SIGNING).publicKey), aud: A, env: 'production', inst: INST }).ok, true);
+  baseEnv();
+});
+
+test('a too-short first signing value is no key at all: nothing is minted with the second', async () => {
+  process.env.PLATFORM_SIGNING_KEY = `short-new-value,${SIGNING}`;
+  const body = await (await b.get('/key')).text();
+  assert.match(body, /PLATFORM_SIGNING_KEY in Render is missing or too short/);
+  assert.doesNotMatch(body, /id="key-value"/);
+  const res = await b.post('/c/a/open', { env: 'production' });
+  assert.notEqual(res.status, 303);
   baseEnv();
 });

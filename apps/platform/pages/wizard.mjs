@@ -6,6 +6,8 @@ import { inviteForm } from './desk.mjs';
 import { PROVINCES, TIME_ZONES, RACES, JURISDICTIONS, RULE_WORDS, envLines } from '../snippets.mjs';
 
 const NAME_HELP = 'Use letters, numbers and dashes. It’s the address: base.win/<name>.';
+// "America/St_Johns" reads "St. John’s"; the rest lose "America/" and "_".
+const zoneWords = (z) => (z === 'America/St_Johns' ? 'St. John’s' : z.replace('America/', '').replace(/_/g, ' '));
 const select = ({ label, name, options, value, help = '' }) => html`<div class="field">
   <label for="${name}">${label}</label>
   <select class="input" id="${name}" name="${name}"${help ? html` aria-describedby="${name}-help"` : ''}>
@@ -23,7 +25,7 @@ export const newPage = ({ v = {}, stale = false, message = '' } = {}) => page({
     ${field({ label: 'City', name: 'city', value: v.city || '', required: true, autocomplete: 'off' })}
     ${select({ label: 'Province', name: 'province', value: v.province || 'BC', options: PROVINCES.map(([code, words, tz]) => [code, words, tz]) })}
     ${select({ label: 'Rules', name: 'rules', value: v.rules || 'bc-municipal', options: JURISDICTIONS.map((j) => [j, RULE_WORDS[j]]) })}
-    ${select({ label: 'Time zone', name: 'tz', value: v.tz || 'America/Vancouver', options: TIME_ZONES.map((z) => [z, z.replace('America/', '').replace('_', ' ')]) })}
+    ${select({ label: 'Time zone', name: 'tz', value: v.tz || 'America/Vancouver', options: TIME_ZONES.map((z) => [z, zoneWords(z)]) })}
     <fieldset class="oc-fieldset"><legend>Races</legend>
       ${RACES.map(([code, words]) => html`<label class="oc-check-label"><input type="checkbox" name="races" value="${code}"${(v.races || ['council', 'school_board']).includes(code) ? raw(' checked') : ''}> ${words}</label>`)}
     </fieldset>
@@ -58,7 +60,7 @@ export const setupPage = ({ v, values, publicKey, serverUrl, addressState, door,
           <li>Render → <b>New → Web Service</b> → this repository. Name <code>base-win-${name}</code>, language Docker, branch <code>production</code>, region Oregon, instance Starter. Under Advanced, health check path <code>/api/health</code>.</li>
           <li>On that page, <b>Environment → Add from .env</b> → paste this block:
             ${envBlock({ name, display: v.campaign.display, values, publicKey })}
-            <button class="btn btn-quiet" type="button" data-copy="env-block">Copy</button>
+            <button class="btn btn-quiet oc-copy-btn" type="button" data-copy="env-block">Copy</button>
             <p class="oc-help" data-when-empty>STARBASE_TWO_STEP_KEY and GOOGLE_TOKEN_KEY are empty: press Generate next to each of these two in Render.</p>
           </li>
           <li>Add <code>DATABASE_URL</code> = the database page’s <b>Internal Database URL</b> (copy it across).</li>
@@ -79,7 +81,7 @@ export const setupPage = ({ v, values, publicKey, serverUrl, addressState, door,
         <p>Replace BASE_CLIENTS with this (Render → the service with base.win under Custom Domains → Environment), then Save and deploy.</p>
         <p>${door.keeps.length ? `This keeps: ${door.keeps.join(', ')}. ` : ''}Adds: ${door.adds.join(', ')}.</p>
         <pre class="oc-pre" id="door-value">${door.value}</pre>
-        <button class="btn btn-quiet" type="button" data-copy="door-value">Copy</button>
+        <button class="btn btn-quiet oc-copy-btn" type="button" data-copy="door-value">Copy</button>
         <p class="oc-help">If the door has a name not listed here, add that campaign first (Add a campaign that’s already running).</p>
       </li>
       <li class="card"><h2>Invite the first manager</h2>
@@ -90,7 +92,7 @@ export const setupPage = ({ v, values, publicKey, serverUrl, addressState, door,
     <details class="oc-more"><summary class="btn btn-quiet">More</summary>
       <h2>Or ask us to add it to render.yaml</h2>
       <pre class="oc-pre" id="yaml-snippet">${snippet}</pre>
-      <button class="btn btn-quiet" type="button" data-copy="yaml-snippet">Copy</button>
+      <button class="btn btn-quiet oc-copy-btn" type="button" data-copy="yaml-snippet">Copy</button>
     </details>`,
   });
 };
