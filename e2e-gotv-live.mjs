@@ -33,7 +33,10 @@
 //      Settings → Closing times reads the guide's 8 p.m.; a runner's look-up
 //      refused at the closed place runs again at an open one
 //  12. the day after election day, 01:58: a name written at 19:58 is on
-//      Today ("You have 1 name not sent") and matched on Who voted
+//      Today ("You have 1 name not sent") and matched on Who voted; Undo
+//      puts it back to match again
+//  12b. an off-duty runner the day after: 201 election-day names all to
+//      match, today's to send; no place picker until a name is matched
 //   9. staff see the switch read-only and no Sign-in code
 //   8. Off: Ana's Voted ✓ goes and the stream closes
 //   Screens looked at 1440×900 and 390×844 (SHOTS).
@@ -612,6 +615,40 @@ try {
     const qm = (await api(mpage, `/voted/persons/${P.quinn.id}`)).json;
     check('12. matched after midnight with its own time, 19:58', qm.marks?.[0] && Date.parse(qm.marks[0].created_at) === Date.parse(wq), JSON.stringify(qm.marks?.[0]));
     check('12. the note is gone from the phone', await until(async () => !/not sent|to send|match your/.test(await text(sam.page)), 5000), (await text(sam.page)).slice(0, 300));
+    // A wrong pick, taken back: off duty there is no box to type it again, so the name comes back.
+    if (!(await sam.page.$('.gv-toast__act'))) await sam.page.click('.gv-disclose', { timeout: 5000 }).catch(() => {});
+    await sam.page.click('.gv-toast__act, .gv-entered button:has-text("Undo")', { timeout: 5000 }).catch(() => {});
+    await until(async () => !(await api(mpage, `/voted/persons/${P.quinn.id}`)).json.voted_at, 10_000);
+    check('12. Undo after midnight: the name is back under "Polls closed — match your 1 name"',
+      await until(async () => /Polls closed — match your 1 name/.test(await text(sam.page)) && (await sam.page.locator('.gv-note__match:has-text("quinn exa")').count()) === 1, 5000),
+      (await text(sam.page)).slice(0, 300));
+    await shot(sam.page, '27b-who-voted-undo-after-midnight-390');
+  }
+  // ── 12b. An off-duty runner the day after: 201 names from election day, one from today ──
+  ok12b: {
+    check('12b. Ben is a runner', (await act(mpage, 'gotv.post.set', { user_id: ben.id, role: 'runner', days: [], appointed: true })).status === 200);
+    const me = (await api(ben.page, '/auth/me')).json;
+    const many = Array.from({ length: 201 }, (_, i) => ({ id: `note-b${i}`, typed: `name ${i}`, written_at: new Date(at(G, '16:00') + i * 1000).toISOString(), place_id: placeA }));
+    many.push({ id: 'note-today', typed: 'today exa', written_at: new Date(at(plus(G, 1), '01:00')).toISOString(), place_id: placeB });
+    await ben.page.evaluate(([k, v]) => localStorage.setItem(k, v), [`starbase:gotv-notes:${me.workspace.id}:${me.user.id}`, JSON.stringify(many)]);
+    await go(ben.page, `${FIELD}/gotv`);
+    const all = await until(async () => /Polls closed — match your 201 names/.test(await text(ben.page)), 12_000, 400);
+    const t12 = await text(ben.page);
+    check('12b. all 201 election-day names may be matched; only today’s is "to send"', all && /1 name to send/.test(t12), t12.slice(0, 300));
+    check('12b. off duty, nothing to enter: no place picker and no "Pick the voting place"', !/Pick the voting place/.test(t12) && !(await ben.page.$('.gv-pick__sel')) && !(await ben.page.$('#gv-q')), t12.slice(0, 300));
+    await shot(ben.page, '27c-who-voted-runner-off-duty-390');
+    await ben.page.setViewportSize({ width: 1440, height: 900 });
+    await shot(ben.page, '27d-who-voted-runner-off-duty-1440');
+    await ben.page.setViewportSize({ width: 390, height: 844 });
+    if (!all) break ok12b;
+    // Matching one shows the place it was written at; the others stay listed when it is done.
+    await ben.page.click('.gv-note__match:has-text("name 7")');
+    check('12b. matching: the box and the note’s place show', await until(async () => Boolean(await ben.page.$('#gv-q')) && (await ben.page.$eval('.gv-pick__sel', (s) => s.value).catch(() => '')) === placeA, 5000));
+    await ben.page.click('.gv-x[aria-label="Delete name 7"]');
+    await ben.page.click('.gv-confirm button:has-text("Yes")');
+    const back = await until(async () => /Polls closed — match your 200 names/.test(await text(ben.page)) && /1 name to send/.test(await text(ben.page)) && !(await ben.page.$('#gv-q')), 5000);
+    check('12b. done matching: both lists, every place, no box', back, (await text(ben.page)).slice(0, 300));
+    await ben.page.evaluate(([k]) => localStorage.removeItem(k), [`starbase:gotv-notes:${me.workspace.id}:${me.user.id}`]);
   }
   await moveTo(at(G, '10:00'));
 

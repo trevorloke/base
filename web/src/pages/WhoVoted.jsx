@@ -33,6 +33,7 @@ const LOOKUP_MS = 4000;
 const NOTE_MODE_MS = 60_000;
 const UNDO_MS = 15 * 60_000;
 const TOAST_MS = 8000;
+const NOTES_PER_READ = 200; // GET /gotv/open's limit
 const fold = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const words = (t) => fold(t).replace(/[,–—-]/g, ' ').split(/\s+/).filter((w) => w && !/^x+$/.test(w));
 const firstName = (n) => String(n || '').trim().split(/\s+/)[0] || '';
@@ -128,7 +129,14 @@ export default function WhoVoted({ me: given }) {
       if (!m.has(pid)) m.set(pid, []);
       m.get(pid).push(n.written_at);
     }
-    return [...m].map(([pid, ats]) => [pid, [...new Set(ats)].sort()]);
+    // At most NOTES_PER_READ a read, as the server answers: a busy place's
+    // whole sheet is judged, not just its first names.
+    const out = [];
+    for (const [pid, ats] of m) {
+      const all = [...new Set(ats)].sort();
+      for (let i = 0; i < all.length; i += NOTES_PER_READ) out.push([pid, all.slice(i, i + NOTES_PER_READ)]);
+    }
+    return out;
   }, [notes, placeId]);
   const opens = useQueries({
     queries: byPlace.map(([pid, ats]) => ({
@@ -248,7 +256,8 @@ export default function WhoVoted({ me: given }) {
         person_id: row.id, voted: true, source: 'scrutineer', place_id: placeId, client_id: cid,
         ...(writtenAt ? { client_at: writtenAt } : {}), ...(practice ? { practice: true } : {}),
       }, { who: row.name });
-      const entry = { cid, name: row.name, at: writtenAt || at, entered_at: at, sent_at: r.queued ? null : new Date().toISOString(), undone: false };
+      // The note it matched rides along, so Undo can put it back.
+      const entry = { cid, name: row.name, at: writtenAt || at, entered_at: at, sent_at: r.queued ? null : new Date().toISOString(), undone: false, ...(was.matching ? { note: was.matching } : {}) };
       // From the list as it is now: a second name tapped while this one was
       // on its way must not be overwritten.
       setEntered((list) => { const next = [entry, ...list]; writeEntered(me, next); return next; });
@@ -268,6 +277,9 @@ export default function WhoVoted({ me: given }) {
       const u = undoQueued(cid);
       if (u !== 'removed' && u !== 'queued') await queueAction('vote.undo', { client_id: cid });
       setEntered((list) => { const next = list.map((e) => (e.cid === cid ? { ...e, undone: true } : e)); writeEntered(me, next); return next; });
+      // A kept name matched to the wrong person goes back to be matched again
+      // (off duty there is no box to type it in).
+      if (entry.note && !readNotes(me).some((n) => n.id === entry.note.id)) addNote(me, entry.note);
       say({ text: `Taken back · ${firstName(entry.name)}` });
     } catch (e) {
       say({ text: e.message });
@@ -307,7 +319,9 @@ export default function WhoVoted({ me: given }) {
   const shown = entered.filter((e) => isToday(e) || mayUndo(e));
   const live = entered.filter((e) => !e.undone && isToday(e));
   const clock = clockIn(zoneOf(me));
-  const myNotes = notes.filter((n) => !placeId || !n.place_id || n.place_id === placeId || fixedPlace);
+  // Off duty and not matching there is no place to enter at: every place's names.
+  const entering = !offDuty || Boolean(matching);
+  const myNotes = notes.filter((n) => !entering || !placeId || !n.place_id || n.place_id === placeId || fixedPlace);
   const toMatch = myNotes.filter(matchable);
   const toSend = myNotes.filter((n) => !matchable(n));
   // A list of kept names: tap to match when its day's sending is open.
@@ -340,7 +354,8 @@ export default function WhoVoted({ me: given }) {
   );
 
   if (!mode.ready) return <div className="gv-page"><h1>Who voted</h1><p className="muted">Loading…</p></div>;
-  if (offDuty && !notes.length) {
+  // Off duty with nothing kept and nothing to take back: nothing to do here.
+  if (offDuty && !notes.length && !shown.some(mayUndo)) {
     return (
       <div className="gv-page">
         <h1>Who voted</h1>
@@ -369,7 +384,7 @@ export default function WhoVoted({ me: given }) {
     <div className="gv-page">
       <div className="gv-head">
         <h1>Who voted</h1>
-        {fixedPlace ? <span className="chip gv-place">{fixedPlace.name}</span> : (
+        {fixedPlace ? <span className="chip gv-place">{fixedPlace.name}</span> : entering && (
           <label className="gv-pick">
             <span className="gv-sr">Which voting place?</span>
             <select className="input gv-pick__sel" value={picked} onChange={(e) => setPicked(e.target.value)} aria-label="Which voting place?">
@@ -391,9 +406,9 @@ export default function WhoVoted({ me: given }) {
         </div>
       )}
       {notes.length > 0 && <p className="gv-line">You have {plural(notes.length, 'name')} not sent</p>}
-      {!placeId && !fixedPlace && <p className="gv-line">Pick the voting place on the sheet first.</p>}
+      {entering && !placeId && !fixedPlace && <p className="gv-line">Pick the voting place on the sheet first.</p>}
 
-      {(!offDuty || matching) && (
+      {entering && (
       <form className="gv-form" onSubmit={(e) => { e.preventDefault(); if (noteMode) saveNote(text); }}>
         <label htmlFor="gv-q" className="gv-sr">{noteMode ? 'Write a name' : 'Name, street or voter number'}</label>
         <input id="gv-q" ref={inputRef} className="input gv-input" autoFocus autoComplete="off" inputMode="search" spellCheck={false}
