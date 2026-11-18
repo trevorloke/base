@@ -59,6 +59,12 @@ use up everyone's.
    }
    ```
 
+   Some names are kept for base.win itself and the door won’t start with
+   them in the list: `ops, hub, api, admin, platform, _ops, _hooks, www,
+   door, status, help, mail, app, desk, field, site, login, assets, sample`
+   (`RESERVED` in door.mjs; the control centre at ops.base.win refuses the
+   same names, and builds this whole value for you on New campaign).
+
    `server` is an origin (no path). A config from before may say `ground`
    for it, and may still have `web` or `air` entries: `ground` is read as
    the server, the others are ignored.
