@@ -93,7 +93,7 @@
   position: absolute; inset: 0; margin: 0; display: flex; align-items: center; justify-content: center;
   background: color-mix(in srgb, var(--paper-0) 80%, transparent); font-weight: 600; color: var(--text-2);
 }
-.wb-fullpv { position: fixed; inset: 0; z-index: 60; background: var(--paper); padding: var(--s-2); display: flex; }
+.wb-fullpv { position: fixed; inset: 0; z-index: 970; background: var(--paper); padding: var(--s-2); display: flex; }
 .wb-fullpv .wb-pv { flex: 1 1 auto; }
 .wb-fullpv .wb-pv__box { height: auto; flex: 1 1 auto; max-width: none; border-radius: var(--r-card); min-height: 0; }
 .wb-fullpv .wb-pv { height: 100%; }
