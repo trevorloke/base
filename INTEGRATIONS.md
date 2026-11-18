@@ -12,7 +12,7 @@ is written) and says exactly what is wrong if anything is.
 |---|---|---|---|
 | [Database](#database) | everything the campaign records | yes | `DATABASE_URL` |
 | [Public address](#public-address) | links in email, texting's callbacks | yes | `STARBASE_PUBLIC_URL` |
-| [Email — Resend or SendGrid](#email--resend-or-sendgrid) | invites, newsletters, press, ladders, shift alerts, receipts; bounces and spam complaints back | yes | `RESEND_API_KEY`, `MAIL_FROM` (+ `RESEND_WEBHOOK_SECRET`); or `MAIL_PROVIDER=sendgrid`, `SENDGRID_API_KEY`, `SENDGRID_WEBHOOK_PUBLIC_KEY` |
+| [Email — Resend or SendGrid](#email--resend-or-sendgrid) | invites, newsletters, press, ladders, shift alerts, receipts, password links; bounces and spam complaints back | yes | `RESEND_API_KEY`, `MAIL_FROM` (+ `RESEND_WEBHOOK_SECRET`); or `MAIL_PROVIDER=sendgrid`, `SENDGRID_API_KEY`, `SENDGRID_WEBHOOK_PUBLIC_KEY` |
 | [Mailchimp](#mailchimp) | a list sent to the campaign's Mailchimp audience as a tag; unsubscribes and dead addresses back, and base.win's own out | no (only if the campaign builds its emails in Mailchimp) | `MAILCHIMP_API_KEY` (+ `MAILCHIMP_AUDIENCE_ID`, `MAILCHIMP_WEBHOOK_SECRET`) |
 | [Texting and calls — Twilio](#texting-and-calls--twilio) | the campaign's number: texts, text blasts, ladder texts, calls, SMS shift alerts | no (phones' own apps until then) | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` |
 | [Address lookup](#address-lookup) | suggestions as you type, placing people on the map | yes (free default, no key) | `GEOCODER`, `GEOCODER_FALLBACK`, `BC_GEOCODER_KEY`, `GOOGLE_MAPS_SERVER_KEY` |
@@ -22,6 +22,7 @@ is written) and says exactly what is wrong if anything is.
 | [Google Drive and Sheets](#google-drive-and-sheets) | lists, reports and tables sent to a new Google Sheet; files attached from Drive (or linked when too big); a Sheet or file read for the importer | no (Download CSV always works) | `GOOGLE_PICKER_KEY`, `GOOGLE_CLOUD_PROJECT_NUMBER` (+ Google sign-in's three) |
 | [Two-step sign-in key](#two-step-sign-in-key) | seals everyone's authenticator key | before the public link goes out (works without, with a warning) | `STARBASE_TWO_STEP_KEY` |
 | [Hosting — Render](#hosting--render) | the two environments | yes | `render.yaml` |
+| The control centre (ops.base.win; no vendor: base.win's own, `apps/platform/README.md`) | every campaign on one page; **Open desk** signs base.win support in to a campaign | no (each campaign works without it) | `BASE_PLATFORM_PUBKEY` on each campaign (its public key, pasted; never a secret) |
 | [GitHub Actions](#github-actions) | tests, and promoting staging to production | yes | none |
 | [The campaign's website](#the-campaigns-website) | sign-ups, petitions, volunteers, newsletter opt-ins in | when the website is ready | a website key (Settings → Services) |
 | [Website translation — Google](#website-translation--google) | the campaign's website in ਪੰਜਾਬੀ, 简体 and 繁體, made ahead of time | no (the website stays English) | `GOOGLE_TRANSLATE_KEY` |
