@@ -273,6 +273,7 @@ try {
     await r.getByRole('button', { name: 'Remove' }).waitFor();
     await mgr.waitForLoadState('networkidle');
     check('no address: no Password link', (await r.getByRole('button', { name: 'Password link' }).count()) === 0);
+    check('no address: says why', await mgr.getByText('Password links need this campaign’s web address').isVisible().catch(() => false));
   } finally { await control('/set', { env: { STARBASE_PUBLIC_URL: `${ORIGIN}${P}` } }); }
   await mgrCtx.close();
 } catch (e) {

@@ -536,6 +536,9 @@ export default function Team({ embedded = false }) {
             google={googleOf.get(m.id) || null} onGoogle={googleChanged} pwLink={pwLinkFor(m)} />
         ))}
       </ul>
+      {pwLinks.data?.on && pwLinks.data?.address === false && (
+        <p className="muted">Password links need this campaign’s web address (STARBASE_PUBLIC_URL).</p>
+      )}
 
       {invites.length > 0 && (
         <>
