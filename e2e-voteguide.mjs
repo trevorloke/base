@@ -325,6 +325,8 @@ try {
   check('5. live', /Live/.test(await text(mpage, '.wg-head')) && /View guide/.test(await text(mpage, '.wg-head')));
   await shot(mpage, '07-desk-live-1440');
   await go(mpage, `${DESK}/voted`);
+  // Since the GOTV screen (batch 8 wave 5) the voting days are on its Settings tab.
+  await mpage.getByRole('tab', { name: 'Settings' }).click({ timeout: 10000 }).catch(() => {});
   await mpage.waitForSelector('#vt-date', { timeout: 10000 }).catch(() => {});
   const vdays = await text(mpage, '.vt-days');
   check('5. GOTV’s screen shows the guide’s days', (await mpage.inputValue('#vt-date')) === G && (await mpage.$$('.vt-day')).length === 2, `${await mpage.inputValue('#vt-date')} ${vdays}`);
