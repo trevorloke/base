@@ -336,7 +336,8 @@ app.post('/login/code', async (c) => {
 const asksFrom = makeLimiter({ windowMs: 60 * 60_000, max: 10 });
 const asksFor = makeLimiter({ windowMs: 60 * 60_000, max: 3 });
 app.post('/forgot', async (c) => {
-  const { email } = await c.req.json().catch(() => ({}));
+  // `null` is JSON too: the same answer, never a 500.
+  const { email } = (await c.req.json().catch(() => null)) || {};
   const e = String(email ?? '').trim().toLowerCase().slice(0, 320);
   const ip = clientIp(c);
   // Each limit counts this ask, in order; any one over stops it.
@@ -349,7 +350,7 @@ app.post('/forgot', async (c) => {
 // No route takes the token in its path (it would land in logs).
 app.post('/reset/check', async (c) => {
   if (triesFrom(clientIp(c))) return c.json({ error: TOO_MANY }, 429);
-  const { token } = await c.req.json().catch(() => ({}));
+  const { token } = (await c.req.json().catch(() => null)) || {};
   const row = await checkLink(await getDb(), token);
   if (!row) return c.json({ error: RUN_OUT }, 404);
   return c.json({ email: row.email });

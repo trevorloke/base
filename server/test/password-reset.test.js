@@ -369,6 +369,36 @@ test('member.passwordLink without a sender: the link to pass on, for 24 hours; w
   assert.equal((await verifyChain(db, wsId)).ok, true);
 });
 
+test('A JSON null body: /forgot gives the same answer, /reset/check says the link has run out (never a 500)', async () => {
+  const b = new Browser();
+  const raw = (path) => app.request(path, { method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': b.ip }, body: 'null' });
+  const f = await raw('/api/auth/forgot');
+  assert.deepEqual([f.status, await f.json()], [200, { ok: true }]);
+  const ch = await raw('/api/auth/reset/check');
+  assert.deepEqual([ch.status, (await ch.json()).error], [404, 'That link has run out or was already used.']);
+});
+
+test('member.passwordLink whose email fails: 502, the link ended (not one of the 3 live), and the log says it wasn’t sent', async () => {
+  const db = await getDb();
+  await db.query('delete from password_resets where user_id = $1', [people.ned.id]);
+  mail.fail(500);
+  try {
+    for (let i = 0; i < 4; i += 1) {
+      const r = await mgr.action('member.passwordLink', { user_id: people.ned.id });
+      assert.deepEqual([r.status, r.json.error], [502, 'The email to Ned Example didn’t go. Try again in a minute.']);
+    }
+  } finally { mail.fail(false); }
+  const live = (await db.query('select count(*)::int as n from password_resets where user_id = $1 and used_at is null and expires_at > now()', [people.ned.id])).rows[0].n;
+  assert.equal(live, 0, 'an unsent link still works');
+  const ev = (await userEvents(people.ned.id)).filter((e) => e.action.startsWith('member.passwordLink'));
+  assert.deepEqual(ev.slice(-2).map((e) => e.payload), [{ password_link: true }, { password_link: 'not sent' }]);
+  // Mail back: the next one goes.
+  const ok = await mgr.action('member.passwordLink', { user_id: people.ned.id });
+  assert.equal(ok.status, 200, JSON.stringify(ok.json));
+  assert.equal((await db.query('select count(*)::int as n from password_resets where user_id = $1 and used_at is null and expires_at > now()', [people.ned.id])).rows[0].n, 1);
+  assert.equal((await verifyChain(db, wsId)).ok, true);
+});
+
 test('Password links are never in the export', async () => {
   const r = await mgr.get('/api/export');
   assert.ok(!JSON.stringify(r.json || {}).includes('password_resets'));

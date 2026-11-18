@@ -66,6 +66,11 @@ export const makeLink = async (db, userId, { madeBy = null, minutes = EMAIL_MINU
   return { token, hash };
 };
 
+// A link ended before anyone could use it (its email didn't go).
+export const endLink = (db, hash) => db.query(
+  'update password_resets set expires_at = now() where token_hash = $1 and used_at is null', [hash],
+);
+
 // The campaign the account belongs to first (its name goes in the email).
 const firstCampaign = async (db, userId) => (await db.query(
   `select w.id, w.name from memberships m join workspaces w on w.id = m.workspace_id

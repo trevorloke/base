@@ -12,7 +12,8 @@ import { z } from 'zod';
 import { httpError } from '../../actions/util.js';
 import { demoEmail } from '../../lib/demo.js';
 import { emailConfigured } from '../../lib/notify.js';
-import { LIVE_MAX, MANAGER_HOURS, makeLink, managerEmail, publicBase, resetLink, sendLink } from './reset.js';
+import { runAction } from '../../lib/events.js';
+import { LIVE_MAX, MANAGER_HOURS, endLink, makeLink, managerEmail, publicBase, resetLink, sendLink } from './reset.js';
 
 export const actions = {
   'member.passwordLink': {
@@ -36,7 +37,7 @@ export const actions = {
       if (!made) throw httpError(409, `${m.name} already has ${LIVE_MAX} links that still work. Use one, or wait for one to run out.`);
       // That a link was made, by whom (the event's actor) — never the link.
       emit('user', input.user_id, 'update', { password_link: true });
-      return { made, to: m.email, name: m.name };
+      return { made: { ...made, user_id: input.user_id }, to: m.email, name: m.name };
     },
     // Committed: the email, outside the campaign's lock. The link itself
     // goes back only when there is no sender.
@@ -45,7 +46,15 @@ export const actions = {
       if (!emailConfigured()) return { result: { link, name, hours: MANAGER_HOURS } };
       const words = managerEmail({ campaign: ctx.workspace.name, manager: ctx.user.name, link });
       const r = await sendLink({ to, ...made, words });
-      if (!r.sent) throw httpError(502, `The email to ${name} didn’t go. Try again in a minute.`);
+      if (!r.sent) {
+        // Not sent: that link ends, so retries never fill the 3 live (and
+        // shut out Forgot password), and the log says so.
+        await runAction(db, { workspaceId: ctx.workspaceId, actorId: ctx.user.id, action: 'member.passwordLink' }, async (tx, emit) => {
+          await endLink(tx, made.hash);
+          emit('user', made.user_id, 'update', { password_link: 'not sent' });
+        });
+        throw httpError(502, `The email to ${name} didn’t go. Try again in a minute.`);
+      }
       return { result: { emailed: true, name, hours: MANAGER_HOURS } };
     },
   },
