@@ -214,8 +214,9 @@ test('three streams a person: a fourth closes the first; open streams hold no po
   const used = () => db.pool.totalCount - db.pool.idleCount;
   const before = used();
   const many = [];
-  const viewers = [k.volA, k.volB, k.mgr, k.staff, k.admin];
-  for (let i = 0; i < 50; i += 1) many.push(await open(viewers[i % 5].client));
+  const viewers = [k.volB.client, k.mgr, k.staff.client, k.admin.client];
+  for (let i = 0; i < 50; i += 1) many.push(await open(viewers[i % 4]));
+  assert.ok(many.every((r) => r.status === 200));
   await new Promise((r) => setTimeout(r, 200));
   assert.equal(used(), before, 'no connection held by an open stream');
   for (const r of many) await r.body.cancel().catch(() => {});

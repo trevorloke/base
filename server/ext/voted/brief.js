@@ -33,22 +33,32 @@ export const settingsOf = async (db, ctx) => {
   return { on: manual || (auto && Boolean(voting_day)), manual, auto, election_day, advance_days, voting_day };
 };
 
+// Who voted is read through persons_ws_voted_idx (only the people marked),
+// never the whole list; the supporters' count changes with a rating, not a
+// mark, so it is kept a minute per campaign and no mark drops it.
+const SUPPORTERS_MS = 60_000;
+const supportersKept = new Map(); // ws → { at, n }
+const supportersOf = async (db, ws) => {
+  const hit = supportersKept.get(ws);
+  if (hit && Date.now() - hit.at < SUPPORTERS_MS) return hit.n;
+  const n = (await db.query(
+    `select count(*)::int as n from persons where workspace_id = $1 and deleted_at is null and rating in ('1', '2')`, [ws],
+  )).rows[0].n;
+  supportersKept.set(ws, { at: Date.now(), n });
+  return n;
+};
 export const countsOf = async (db, ctx) => {
   const ws = ctx.workspaceId;
   const tz = ctx.workspace?.settings?.tz || DEFAULT_TZ;
   const r = (await db.query(
-    `select (count(*) filter (where p.voted_at is not null))::int as total,
-            (count(*) filter (where p.rating in ('1', '2')))::int as supporters,
-            (count(*) filter (where p.rating in ('1', '2') and p.voted_at is not null))::int as supporters_voted
-     from persons p where p.workspace_id = $1 and p.deleted_at is null`,
-    [ws],
-  )).rows[0];
-  // People who voted today (a person marked twice is one), not marks.
-  const today = (await db.query(
-    `select count(*)::int as n from persons where workspace_id = $1 and deleted_at is null and voted_at >= ${START_OF_TODAY}`,
+    `select count(*)::int as total,
+            (count(*) filter (where p.rating in ('1', '2')))::int as supporters_voted,
+            (count(*) filter (where p.voted_at >= ${START_OF_TODAY}))::int as today
+     from persons p where p.workspace_id = $1 and p.voted_at is not null and p.deleted_at is null`,
     [ws, tz],
-  )).rows[0].n;
-  return { total: r.total, today, supporters: r.supporters, supporters_voted: r.supporters_voted };
+  )).rows[0];
+  // today: people who voted today (a person marked twice is one), not marks.
+  return { total: r.total, today: r.today, supporters: await supportersOf(db, ws), supporters_voted: r.supporters_voted };
 };
 
 // The GOTV card's numbers as volunteers see them: on a voting day every
