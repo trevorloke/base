@@ -77,8 +77,8 @@ export const BUILT_FILES = [
   ...V('dm-sans', 'DM Sans', '@fontsource-variable/dm-sans', '100 1000', true),
   ...V('fraunces', 'Fraunces', '@fontsource-variable/fraunces', '100 900', false),
   ...V('playfair-display', 'Playfair Display', '@fontsource-variable/playfair-display', '400 900', false),
-  ...S('merriweather', 'Merriweather', '@fontsource/merriweather', [400, 700, 900], true),
-  ...S('lato', 'Lato', '@fontsource/lato', [400, 700, 900], true),
+  ...S('merriweather', 'Merriweather', '@fontsource/merriweather', [400, 700], true),
+  ...S('lato', 'Lato', '@fontsource/lato', [400, 700], true),
   ...V('nunito', 'Nunito', '@fontsource-variable/nunito', '200 1000', true),
   ...V('nunito-sans', 'Nunito Sans', '@fontsource-variable/nunito-sans', '200 1000', true),
 ];
@@ -89,8 +89,10 @@ const SERIF = "Georgia, 'Times New Roman'";
 const FALLBACK = { 'sans-serif': SANS, serif: SERIF, display: SANS, handwriting: SANS, monospace: "ui-monospace, Menlo, Consolas, 'Courier New'" };
 
 // One built-in face. regular: the file body text loads first; heading: the
-// file its heading weight loads (preloaded).
-const F = (value, label, family, kind, body, regular, heading, extra = {}) => ({ value, label, family, kind, body, files: { regular, heading }, ...extra });
+// file its heading weight loads (preloaded). A static face ships 400 and 700
+// only (and 400 italic for body text): a third weight is a third file a first
+// visit downloads, which took Merriweather / Lato past 150 KB on a phone.
+const F =(value, label, family, kind, body, regular, heading, extra = {}) => ({ value, label, family, kind, body, files: { regular, heading }, ...extra });
 const BUILTIN = [
   F('inter', 'Inter', 'Inter', 'sans-serif', true, 'fonts/inter-latin.woff2', 'fonts/inter-latin.woff2', { desk: true }),
   F('montserrat', 'Montserrat', 'Montserrat', 'sans-serif', true, 'fonts/montserrat-latin.woff2', 'fonts/montserrat-latin.woff2', { fallback: "'Inter', system-ui, Arial" }),
@@ -106,8 +108,8 @@ const BUILTIN = [
   F('dm-sans', 'DM Sans', 'DM Sans', 'sans-serif', true, 'fonts/dm-sans-latin.woff2', 'fonts/dm-sans-latin.woff2', { axis: [100, 1000] }),
   F('fraunces', 'Fraunces', 'Fraunces', 'serif', false, 'fonts/fraunces-latin.woff2', 'fonts/fraunces-latin.woff2', { axis: [100, 900] }),
   F('playfair-display', 'Playfair Display', 'Playfair Display', 'serif', false, 'fonts/playfair-display-latin.woff2', 'fonts/playfair-display-latin.woff2', { axis: [400, 900] }),
-  F('merriweather', 'Merriweather', 'Merriweather', 'serif', true, 'fonts/merriweather-400-latin.woff2', 'fonts/merriweather-700-latin.woff2', { weights: [400, 700, 900] }),
-  F('lato', 'Lato', 'Lato', 'sans-serif', true, 'fonts/lato-400-latin.woff2', 'fonts/lato-700-latin.woff2', { weights: [400, 700, 900] }),
+  F('merriweather', 'Merriweather', 'Merriweather', 'serif', true, 'fonts/merriweather-400-latin.woff2', 'fonts/merriweather-700-latin.woff2', { weights: [400, 700] }),
+  F('lato', 'Lato', 'Lato', 'sans-serif', true, 'fonts/lato-400-latin.woff2', 'fonts/lato-700-latin.woff2', { weights: [400, 700] }),
   F('nunito', 'Nunito', 'Nunito', 'sans-serif', true, 'fonts/nunito-latin.woff2', 'fonts/nunito-latin.woff2', { axis: [200, 1000] }),
   F('nunito-sans', 'Nunito Sans', 'Nunito Sans', 'sans-serif', true, 'fonts/nunito-sans-latin.woff2', 'fonts/nunito-sans-latin.woff2', { axis: [200, 1000] }),
 ];
