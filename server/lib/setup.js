@@ -33,8 +33,9 @@ export const createWorkspace = async (tx, { userId, name, jurisdiction, candidat
 
 // The campaign's first entries: who created it and who holds access, and
 // what every campaign starts with (ext/fields: the standard fields).
-export const recordCreated = (db, { workspaceId, userId, email, name, jurisdiction, extra = {} }) =>
-  runAction(db, { workspaceId, actorId: userId, action: 'workspace.create' }, async (tx, emit) => {
+// entry: base.win support's visit that made it (ext/operator), on each event.
+export const recordCreated = (db, { workspaceId, userId, email, name, jurisdiction, extra = {}, entry }) =>
+  runAction(db, { workspaceId, actorId: userId, action: 'workspace.create', entry }, async (tx, emit) => {
     emit('workspace', workspaceId, 'create', { name, jurisdiction });
     emit('membership', userId, 'create', { email, role: 'manager', ...extra });
     await runHooks('workspaceCreated', tx, { workspaceId, user: { id: userId } }, { emit });

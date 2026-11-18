@@ -59,7 +59,8 @@ export const enter = async (db, p) => {
     });
     // Someone else made it a moment ago: as for any campaign.
     if (!wsId) return enter(db, p);
-    await recordCreated(db, { workspaceId: wsId, userId: id, email, name, jurisdiction: jurisdiction(), extra: { via: SUPPORT_NAME } });
+    // Never the operator's email on the log (the account has it).
+    await recordCreated(db, { workspaceId: wsId, userId: id, email: undefined, name, jurisdiction: jurisdiction(), extra: { via: SUPPORT_NAME }, entry: p.nonce });
     userId = id;
     made = true;
     ws = await firstWorkspace(db);

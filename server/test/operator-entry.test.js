@@ -12,6 +12,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { freshDb, Client } from './helpers.js';
 import { app } from '../index.js';
 import { verifyChain } from '../lib/events.js';
+import { bootstrap } from '../db/schema.js';
 import { signEntry } from './entry-sign.js';
 
 const V = JSON.parse(readFileSync(new URL('./entry-vector.json', import.meta.url), 'utf8'));
@@ -55,9 +56,21 @@ const setSettings = async (patch) => db.query(
   `update workspaces set settings = settings || $2::jsonb where id = $1`, [await wsId(), JSON.stringify(patch)],
 );
 
+// A database with nothing in it, as on a new server. Over the Postgres wire
+// (npm run test:pg) a file has one database: it is emptied and made again.
+const fresh = async () => {
+  db = await freshDb();
+  if (db.kind === 'postgres') {
+    await db.query('drop schema public cascade');
+    await db.query('create schema public');
+    await bootstrap(db);
+  }
+  return db;
+};
+
 // A campaign set up by its own manager (the usual case).
 const withCampaign = async () => {
-  db = await freshDb();
+  await fresh();
   process.env.STARBASE_OPEN_SIGNUP = '1';
   const mgr = new Client();
   const r = await mgr.signup({ name: 'Morgan Example', email: 'morgan@example.org' });
@@ -173,17 +186,17 @@ test('two servers alike (same own address, each its own database): a token for o
 });
 
 test('the instance is made once and kept', async () => {
-  db = await freshDb();
+  await fresh();
   const a = await inst();
   assert.match(a, /^[A-Za-z0-9_-]{22}$/);
   await db.exec((await import('../ext/operator/sql.js')).sql);
   assert.equal(await inst(), a);
-  db = await freshDb();
+  await fresh();
   assert.notEqual(await inst(), a);
 });
 
 test('a fresh server with the key: sign-up closed; the first entry makes the campaign', async () => {
-  db = await freshDb();
+  await fresh();
   delete process.env.STARBASE_OPEN_SIGNUP;
   process.env.STARBASE_ORG_NAME = 'Example Civic Team';
   try {
@@ -205,6 +218,10 @@ test('a fresh server with the key: sign-up closed; the first entry makes the cam
     const m = (await db.query('select m.role, u.support from memberships m join users u on u.id = m.user_id')).rows;
     assert.deepEqual(m, [{ role: 'manager', support: true }]);
     assert.equal((await verifyChain(db, ws[0].id)).ok, true);
+    const all = (await db.query('select payload from events where workspace_id = $1', [ws[0].id])).rows;
+    assert.ok(all.length >= 3);
+    for (const e of all) assert.ok(e.payload.entry, 'every event of the visit is tagged');
+    assert.ok(!JSON.stringify(all).includes(OP.email), 'the operator’s email is not on the log');
     // Set up now: the usual closed words.
     assert.equal((await new Client().signup({ email: 'later@example.org' })).status, 403);
     // STARBASE_OPEN_SIGNUP=1 still opens it.
