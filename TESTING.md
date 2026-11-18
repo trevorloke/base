@@ -443,7 +443,21 @@ one tap away under **More**.
   503 *Busy — will try again* after `STARBASE_GOTV_LOCK_MS`, 5 s by
   default). The load test, `DATABASE_URL=postgres://… PORT=5507 node
   scripts/load-gotv.mjs` (`LOAD_PEOPLE`, `LOAD_MINUTES`), seeds 300,000
-  people and prints its numbers against the pass lines.
+  people and prints its numbers against the pass lines. Measured on a
+  4-core builder box with Postgres 16, the server and the load generator
+  on the same machine (PG_POOL_MAX 10, 300,000 people, 5 minutes, 600
+  streams, 14,582 marks): mark to stream p95 991 ms, max 1.7 s, no change
+  lost of 1.49 million expected deliveries; event-loop delay p99 18 ms;
+  the guide correction reached all 600 streams within 5 s. Not met there:
+  vote.mark p95 790 ms, /voted/changes 1.9 s, walk list 1.9 s, /brief
+  4.3 s, summary 392 ms, guide refetch 566 ms, server RSS growth 1 GB,
+  and the pool had a waiter for up to 40 s at a time. The campaign's one
+  write lock is the limit: about 68 writes a second (marks and knocks)
+  each wait 25 ms on average for it, holding a pool connection while they
+  wait, so reads queue behind them. A second run with PG_POOL_MAX 30 was
+  worse (more waiters on the same lock, and the box was shared with
+  another full test suite). Measure on the real Render plan before a
+  voting day; see GOTV.md's owner items 8 and 9.
 - **GOTV** (Today → More → *GOTV & voting days*) — set *Election day* to
   today (or add today as an advance-voting day) and **Save**: it reads *On*
   by itself; or switch *On by hand*. Every volunteer's walk list, door card
