@@ -1,0 +1,22 @@
+name: Base control centre
+
+# base.win's control centre (apps/platform): its tests, run when it or the
+# server code it borrows (server/lib, shared/qr.js) changes.
+on:
+  push:
+    branches: [main]
+    paths: ['apps/platform/**', 'server/lib/**', 'shared/qr.js', '.github/workflows/base-platform.yml']
+  pull_request:
+    paths: ['apps/platform/**', 'server/lib/**', 'shared/qr.js', '.github/workflows/base-platform.yml']
+
+jobs:
+  platform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: node --test apps/platform/test/*.test.mjs

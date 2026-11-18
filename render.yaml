@@ -39,6 +39,10 @@
 #   CALLHUB_API_KEY, CALLHUB_API_BASE                   the phone dialer (CallHub): call lists out, results back
 #   STARBASE_CANDIDATES, STARBASE_PROVINCE, STARBASE_GEO_BOUNDS   the campaign
 #   APP_HOSTS                                           the app's other addresses, never the website's
+#   BASE_PLATFORM_PUBKEY (listed below, sync: false)    the control centre's public key (ops.base.win → base.win’s key):
+#                                                       lets it open this desk; pasted, never committed
+#   STARBASE_OWN_URL                                    this server's own address, only when RENDER_EXTERNAL_URL is
+#                                                       missing or wrong (https://<service>.onrender.com)
 # Once set: Settings → Services in the admin checks each one.
 
 services:
@@ -122,6 +126,8 @@ services:
         sync: false
       - key: GOOGLE_CLOUD_PROJECT_NUMBER  # the project number (digits) of the project holding the OAuth client
         sync: false
+      - key: BASE_PLATFORM_PUBKEY    # the control centre's public key (ops.base.win → base.win’s key); paste it, never commit it
+        sync: false
 
   - type: web
     name: base-win
@@ -182,6 +188,37 @@ services:
         sync: false
       - key: GOOGLE_CLOUD_PROJECT_NUMBER
         sync: false
+      - key: BASE_PLATFORM_PUBKEY    # the control centre's public key (ops.base.win → base.win’s key); paste it, never commit it
+        sync: false
+
+  # base.win's control centre (apps/platform): one sign-in for every campaign.
+  # Its own address (ops.base.win), never behind the door; its own database.
+  # It never holds a campaign's database address, the door key or a Render key.
+  - type: web
+    name: base-platform
+    runtime: node
+    plan: starter
+    region: oregon
+    branch: main                  # moves to production once it is used daily
+    buildCommand: npm ci --omit=dev
+    startCommand: node apps/platform/server.mjs
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: base-platform-db
+          property: connectionString
+      - key: OPS_HOST
+        value: ops.base.win
+      - key: OPS_SETUP_CODE          # copy once to set up; press Generate to reopen setup (apps/platform/README)
+        generateValue: true
+      - key: OPS_SECRET              # seals the authenticator key; changing it means setting up again
+        generateValue: true
+      - key: PLATFORM_SIGNING_KEY    # opens campaign desks; its public half is each campaign's BASE_PLATFORM_PUBKEY
+        generateValue: true
 
 databases:
   - name: base-win-staging-db
@@ -190,5 +227,9 @@ databases:
     postgresMajorVersion: "16"
   - name: base-win-db
     plan: 0.5c-1g              # 0.5 CPU, 1 GB RAM ($19/month); upgraded Nov 2026 for speed
+    region: oregon
+    postgresMajorVersion: "16"
+  - name: base-platform-db
+    plan: basic-256mb           # the smallest; it holds no people
     region: oregon
     postgresMajorVersion: "16"
