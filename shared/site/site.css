@@ -16,14 +16,21 @@
 @font-face {
   font-family: "Montserrat";
   font-style: normal;
-  font-weight: 100 900;
+  font-weight: 100 599;
+  font-display: swap;
+  src: url("fonts/montserrat-latin.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Montserrat";
+  font-style: normal;
+  font-weight: 600 900;
   font-display: swap;
   src: url("fonts/montserrat-latin.woff2") format("woff2");
 }
 @font-face {
   font-family: "Inter";
   font-style: normal;
-  font-weight: 100 900;
+  font-weight: 100 599;
   font-display: swap;
   src: url("fonts/inter-latin-ext.woff2") format("woff2");
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
@@ -31,7 +38,23 @@
 @font-face {
   font-family: "Inter";
   font-style: normal;
-  font-weight: 100 900;
+  font-weight: 600 900;
+  font-display: swap;
+  src: url("fonts/inter-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 599;
+  font-display: swap;
+  src: url("fonts/inter-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 600 900;
   font-display: swap;
   src: url("fonts/inter-latin.woff2") format("woff2");
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -2833,14 +2856,18 @@ select.input {
 /* ── Languages (TR): Gurmukhi type, Chinese type, the switch ──────────────
    Noto Sans Gurmukhi (SIL OFL, fonts/noto-gurmukhi-OFL.txt) joins every
    theme face by name: it downloads only where Gurmukhi appears. System and
-   Serif use no web font, so a Punjabi page puts it ahead of them. Chinese
+   Serif use no web font, so a Punjabi page puts it ahead of them. Each
+   family's Gurmukhi faces use exactly the weight ranges of its Latin faces
+   (above): the browser picks one face per weight range, so a range only the
+   Gurmukhi file covers would draw Latin text in a fallback face. Chinese
    uses the reader's own CJK faces (--cjk), Latin words keep the theme's. */
 @font-face { font-family: "Inter"; font-style: normal; font-weight: 100 599; font-display: swap; src: url("fonts/noto-gurmukhi-400.woff2") format("woff2"); unicode-range: U+0A00-0A7F, U+200C-200D, U+25CC; }
 @font-face { font-family: "Inter"; font-style: normal; font-weight: 600 900; font-display: swap; src: url("fonts/noto-gurmukhi-700.woff2") format("woff2"); unicode-range: U+0A00-0A7F, U+200C-200D, U+25CC; }
 @font-face { font-family: "Montserrat"; font-style: normal; font-weight: 100 599; font-display: swap; src: url("fonts/noto-gurmukhi-400.woff2") format("woff2"); unicode-range: U+0A00-0A7F, U+200C-200D, U+25CC; }
 @font-face { font-family: "Montserrat"; font-style: normal; font-weight: 600 900; font-display: swap; src: url("fonts/noto-gurmukhi-700.woff2") format("woff2"); unicode-range: U+0A00-0A7F, U+200C-200D, U+25CC; }
-@font-face { font-family: "Barlow Condensed"; font-style: normal; font-weight: 100 599; font-display: swap; src: url("fonts/noto-gurmukhi-400.woff2") format("woff2"); unicode-range: U+0A00-0A7F, U+200C-200D, U+25CC; }
-@font-face { font-family: "Barlow Condensed"; font-style: normal; font-weight: 600 900; font-display: swap; src: url("fonts/noto-gurmukhi-700.woff2") format("woff2"); unicode-range: U+0A00-0A7F, U+200C-200D, U+25CC; }
+@font-face { font-family: "Barlow Condensed"; font-style: normal; font-weight: 600; font-display: swap; src: url("fonts/noto-gurmukhi-700.woff2") format("woff2"); unicode-range: U+0A00-0A7F, U+200C-200D, U+25CC; }
+@font-face { font-family: "Barlow Condensed"; font-style: normal; font-weight: 700; font-display: swap; src: url("fonts/noto-gurmukhi-700.woff2") format("woff2"); unicode-range: U+0A00-0A7F, U+200C-200D, U+25CC; }
+@font-face { font-family: "Barlow Condensed"; font-style: normal; font-weight: 800 900; font-display: swap; src: url("fonts/noto-gurmukhi-700.woff2") format("woff2"); unicode-range: U+0A00-0A7F, U+200C-200D, U+25CC; }
 @font-face { font-family: "Noto Sans Gurmukhi"; font-style: normal; font-weight: 100 599; font-display: swap; src: url("fonts/noto-gurmukhi-400.woff2") format("woff2"); unicode-range: U+0A00-0A7F, U+200C-200D, U+25CC; }
 @font-face { font-family: "Noto Sans Gurmukhi"; font-style: normal; font-weight: 600 900; font-display: swap; src: url("fonts/noto-gurmukhi-700.woff2") format("woff2"); unicode-range: U+0A00-0A7F, U+200C-200D, U+25CC; }
 html[data-heading="system"]:lang(pa), html[data-heading="serif"]:lang(pa) { --font-heading: "Noto Sans Gurmukhi", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
