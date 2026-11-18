@@ -11,6 +11,8 @@ import { headers, hostSplit, sameOrigin } from './web.mjs';
 import { authRoutes, requireSession, makeLimits } from './auth-routes.mjs';
 import { html } from './pages/html.mjs';
 import { page } from './pages/layout.mjs';
+import { verifyLog, listLog, PAGE } from './log.mjs';
+import { logPage } from './pages/log.mjs';
 
 const file = (rel) => readFileSync(new URL(rel, import.meta.url), 'utf8');
 // The app's own look: its variables and shared classes, read once at start.
@@ -37,6 +39,13 @@ export const makeApp = ({ db }) => {
   authRoutes(app, ctx);
   app.use('*', requireSession(db));
   app.get('/', (c) => c.html(String(page({ title: 'Campaigns', nav: true, here: 'campaigns', body: html`<h1>Campaigns</h1><p>No campaigns yet.</p>` }))));
+  app.get('/log', async (c) => {
+    const before = /^\d{1,15}$/.test(c.req.query('before') || '') ? Number(c.req.query('before')) : null;
+    const rows = await listLog(db, { before });
+    const names = new Map((await db.query('select name, display from campaigns')).rows.map((r) => [r.name, r.display]));
+    const older = rows.length === PAGE ? rows[rows.length - 1].seq : null;
+    return c.html(String(logPage({ check: await verifyLog(db), rows, names, older })));
+  });
   return app;
 };
 

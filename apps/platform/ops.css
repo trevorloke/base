@@ -36,3 +36,6 @@
   .oc-body .btn, .oc-body .input { min-height: var(--ctl); }
   .oc-nav a, .oc-brand { min-height: 40px; }
 }
+.oc-log { list-style: none; padding: 0; margin: 16px 0; }
+.oc-logline { padding: 10px 0; border-bottom: 1px solid var(--rule, var(--line)); font-size: 14px; overflow-wrap: anywhere; }
+.oc-when { color: var(--text-3, var(--quiet)); font-variant-numeric: tabular-nums; }
