@@ -693,7 +693,8 @@ than a week after they came off is refused. Contacts are door, phone, text or
   Officer's yes and switches to *As soon as entered*. Names kept on a
   phone are judged by the day they were written (`GET /api/gotv/open`), so
   a name written at 19:58 is still matched after midnight, within the
-  day's work window. Door, phone and desk
+  day's work window; one matched to the wrong person and taken back goes
+  back to be matched again. Door, phone and desk
   marks are never held. Marks reach canvassers within seconds on a live
   feed (`GET /api/voted/live`, server-sent events, plus
   `/api/voted/changes?since=` to catch up), only for the people in their

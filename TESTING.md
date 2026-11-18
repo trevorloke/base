@@ -476,7 +476,9 @@ one tap away under **More**.
   minutes; `GOTV_NAMES=40` for a quicker run) with no 429 and one look-up a
   name, the guide's *Closed today* reaching an open phone, a runner's
   look-up refused at a closed place running again at an open one, the held
-  line under a person's Voted, staff read-only, and Off.
+  line under a person's Voted, a 19:58 name matched after midnight and
+  back to match after Undo, an off-duty runner's 201 names all matchable
+  with no place picker until one is matched, staff read-only, and Off.
   A browser's own zone data may predate B.C.'s permanent UTC-7, so closing
   times on screen come from the server as wall times.
 - **GOTV** (Today → Go to → *Get out the vote*) — set *Election day* to
