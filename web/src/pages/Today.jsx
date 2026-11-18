@@ -63,7 +63,9 @@ import { useLettersCount } from '../components/LettersCount.js';
 import { hasArea } from '../Shell.jsx';
 import { MineAllTime } from '../components/FieldReportBits.jsx';
 import { turfNames } from '../components/ShiftTurfs.jsx';
-import { whenText, zoneOf } from '../components/shiftTime.js';
+import { clockText, whenText, zoneOf } from '../components/shiftTime.js';
+import { fmtIn } from '@starbase/shared/dayparts';
+import '../components/operator.css';
 import { daysLeft, filingDay, filingSoon } from '../components/FilingWords.js';
 import './today.css';
 import './candidate.css';
@@ -589,6 +591,14 @@ function NeedsYou({ b, me }) {
             <LinkRow to="/people?moved=open" main={<><strong className="mono">{num(moved)}</strong> moved — {moved === 1 ? 'needs' : 'need'} an address</>} />
           )}
           {connectEmail && <LinkRow to="/settings/services" main="Connect email" />}
+        </ul>
+      )}
+      {/* base.win support's visits this week (ext/operator brief.js), managers only. */}
+      {(b.supportVisits ?? []).length > 0 && (
+        <ul className="op-visits" aria-label="base.win support visits">
+          {b.supportVisits.map((v) => (
+            <li key={v.at}>base.win support signed in · {fmtIn(v.at, tz, { weekday: 'short' })} {clockText(v.at, tz)}</li>
+          ))}
         </ul>
       )}
     </section>

@@ -53,6 +53,8 @@ import { guideLangs } from '../ext/voteguide/read.js';
 // Live GOTV (ext/voted): who may see who voted, and the voting-day lock wait.
 import { GOTV_LOCKED, gotvLockMs, gotvRead, rowLimit } from '../ext/voted/scope.js';
 import { votedCol, scopeOf } from '../ext/voted/state.js';
+// What a visit as base.win support may not do (ext/operator).
+import { deniedForEntry, NOT_AS_SUPPORT, SUPPORT_SQL, emailShown } from '../ext/operator/index.js';
 
 // Gift rows flagged as maybe one donor (idsOf: the ids a row names, as
 // stored) get maybe_same_as: those records by name, as things stand.
@@ -82,6 +84,9 @@ app.use('*', async (c, next) => {
   if (!ctx) return c.json({ error: 'not signed in' }, 401);
   // An election-day code's sign-in works for Who voted only (lib/auth.js).
   if (!scopeAllows(ctx, c.req.method, c.req.path)) return c.json({ error: GOTV_ONLY }, 403);
+  // In as base.win support (ext/operator): not its own sign-in methods, the
+  // campaign's consent, or password links.
+  if (deniedForEntry(ctx, c.req.method, c.req.path)) return c.json({ error: NOT_AS_SUPPORT }, 403);
   // Two-step sign-in the campaign requires for this role and not set up yet
   // (lib/twostep.js): the set-up answers, nothing else does. 401, so the
   // phone keeps anything still to send until it's done.
@@ -172,7 +177,7 @@ app.post('/actions/:name', async (c) => {
     const lockTimeoutMs = GOTV_LOCKED.has(name) ? await gotvLockMs(c.get('db'), ctx) : undefined;
     const { result, lastSeq } = await runAction(
       c.get('db'),
-      { workspaceId: ctx.workspaceId, actorId: ctx.user.id, action: name, lockTimeoutMs },
+      { workspaceId: ctx.workspaceId, actorId: ctx.user.id, action: name, lockTimeoutMs, entry: ctx.entry?.nonce },
       (tx, emit) => action.handler(tx, ctx, parsed.data, emit, ready),
     );
     // What this person may read of what was saved (person.update: lib/viewer.js).
@@ -839,7 +844,9 @@ app.get('/team', async (c) => {
   if (ctx.role !== 'manager') return c.json({ error: 'managers only' }, 403);
   const db = c.get('db');
   const members = (await db.query(
-    `select u.id, u.name, u.email, m.role, m.created_at, c.office as candidate_office, c.id is not null as candidate
+    `select u.id, u.name, u.email, m.role, m.created_at, c.office as candidate_office, c.id is not null as candidate,
+            -- base.win support (ext/operator): the control centre's account here
+            ${SUPPORT_SQL} as support
        from memberships m join users u on u.id = m.user_id
        -- a candidate's seat (ext/candidates): Team shows it in place of the role
        left join candidates c on c.workspace_id = m.workspace_id and c.user_id = m.user_id and c.removed_at is null
@@ -847,6 +854,7 @@ app.get('/team', async (c) => {
      where m.workspace_id = $1 order by m.created_at`,
     [ctx.workspaceId],
   )).rows;
+  for (const m of members) m.email = emailShown(m, ctx.user.id);
   const invites = (await db.query(
     // A candidate's invite says whose seat it is (Team sends its New link to Candidates).
     `select i.id, i.email, i.role, i.created_at, i.expires_at, c.id as candidate_id, c.name as candidate_name, c.office as candidate_office

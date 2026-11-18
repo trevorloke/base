@@ -76,7 +76,9 @@ export default function Signup({ mode = 'field' }) {
     return (
       <AuthPage {...whose}>
         <h1>Already set up</h1>
-        <p className="muted">base.win is set up{org ? ` for ${org}` : ''}. Ask a manager for an invite.</p>
+        <p className="muted">{setup.data.fromControlCentre
+          ? 'This campaign is set up from the base.win control centre.'
+          : `base.win is set up${org ? ` for ${org}` : ''}. Ask a manager for an invite.`}</p>
         <hr className="hairline" />
         <p className="muted"><Link to="/login">Sign in</Link></p>
       </AuthPage>

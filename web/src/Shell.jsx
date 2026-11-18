@@ -42,6 +42,7 @@ import NewVersion from './components/NewVersion.jsx';
 import ScreenBoundary from './components/ScreenBoundary.jsx';
 import { usePageClass } from './layout.js';
 import { at } from './base.js';
+import OperatorBanner from './components/OperatorBanner.jsx';
 import BrandMark, { HAS_LOGO } from './components/BrandMark.jsx';
 import { BRAND } from './brand.js';
 
@@ -529,6 +530,7 @@ function SignedInShell({ who, mode }) {
 
   return (
     <>
+      <OperatorBanner me={who} signingOut={signingOut} onSignOut={() => signOut()} />
       <header className="nav" ref={headerRef}>
         <div className="nav-inner">
           <NavLink to="/" className={`brand${HAS_LOGO ? ' has-logo' : ''}`} aria-label={`${me.workspace.name} — base.win`}>

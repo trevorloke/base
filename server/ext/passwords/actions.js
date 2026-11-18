@@ -5,7 +5,7 @@
 // manager gets it to pass on.
 //
 // Not for: yourself, another manager (they use Forgot password), base.win
-// support (no password), anyone in another campaign on this server too
+// support (no password) or the account it comes in as, anyone in another campaign on this server too
 // (another campaign's manager doesn't set their password), the public demo,
 // or a campaign with no address (STARBASE_PUBLIC_URL) to build it from.
 import { z } from 'zod';
@@ -24,12 +24,16 @@ export const actions = {
       if (!publicBase()) throw httpError(409, 'Set the campaign’s address first (STARBASE_PUBLIC_URL).');
       if (input.user_id === ctx.user.id) throw httpError(409, 'For your own, use Forgot your password? on the sign-in screen.');
       const m = (await tx.query(
-        `select m.role, u.name, u.email, u.support from memberships m join users u on u.id = m.user_id
+        `select m.role, u.name, u.email, u.support,
+                exists(select 1 from operator_links l where l.user_id = u.id) as linked
+           from memberships m join users u on u.id = m.user_id
           where m.user_id = $1 and m.workspace_id = $2`,
         [input.user_id, ctx.workspaceId],
       )).rows[0];
       if (!m) throw httpError(404, 'member not found');
       if (m.support) throw httpError(409, 'base.win support has no password here.');
+      // The account the control centre comes in as (ext/operator): its own.
+      if (m.linked) throw httpError(409, 'This is the account base.win support comes in as: its owner uses Forgot your password?');
       if (m.role === 'manager') throw httpError(409, 'A manager resets their own: Forgot your password?');
       const elsewhere = (await tx.query('select 1 from memberships where user_id = $1 and workspace_id <> $2 limit 1', [input.user_id, ctx.workspaceId])).rows[0];
       if (elsewhere) throw httpError(409, `${m.name} is in another campaign on this server too: they use Forgot your password?`);

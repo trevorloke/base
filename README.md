@@ -193,6 +193,37 @@ go is ended at once. It needs `STARBASE_PUBLIC_URL` too (without it the
 button isn't shown). Both are on the event log, never the link
 (`server/ext/passwords`).
 
+### base.win support: opening a campaign from the control centre
+
+base.win's control centre (ops.base.win, `apps/platform/README.md`) lists
+every campaign and opens any campaign's desk with one tap, already signed
+in. The visit lands on the campaign's own Render address
+(`…onrender.com/admin`), never base.win/<name>, so it can't reach another
+campaign. It comes in as the member **base.win support** (a manager, with no
+password: only the control centre opens it), or as the operator's own
+account when that is already on the team — whose role never changes (a
+volunteer stays a volunteer; Enter says so). The control centre signs a
+one-minute token (Ed25519); the campaign checks it against
+`BASE_PLATFORM_PUBKEY`, its own address, its environment and its instance,
+uses it once and signs in for two hours (`POST /api/auth/operator`,
+`server/lib/entry.js`, `server/ext/operator`).
+
+The campaign always knows: a bar across the top while support is in
+(*You’re in as base.win support · until 4:10 pm* · Sign out), the member on
+Settings → Members with its chip, a line on managers' Today (*base.win
+support signed in · Tue 3:10 pm*, the last week), and every event the visit
+writes tagged: on a person's History, the doors, calls, sign steps, voted
+marks and merges it made say *(via base.win)*. A manager turns
+**base.win may sign in here** off under Settings → Members, which also ends
+a visit in progress; support can't change it, its own two-step or Google,
+or make password links. People support invited stay on the team. On the
+public demo the switch is hidden and support's email is shown only to it.
+While `BASE_PLATFORM_PUBKEY` is set and no campaign exists yet, first-run
+sign-up is closed: the control centre's first visit makes the campaign.
+`/api/health` shows what the control centre needs and nothing about people:
+`ownOrigin`, `instance`, `address`, `entry` (`ready`, `no-key`, `bad-key`,
+`no-origin`), `platformKids`, `setupOpen` and `doorKey`.
+
 ### Email from a person's page
 
 The person read tells the desk whether someone may be written to one to one
@@ -1667,6 +1698,8 @@ environment (`server/lib/org.js`); the code names no client.
 | `STARBASE_BRAND` | `imagine-surrey` or `base` — the brand a campaign starts from, until a manager saves its own in Settings → Brand (*The look and the brand*, above) | `base` on staging or for another campaign; else Imagine Surrey's |
 | `SITE_HOSTS` | the campaign's own domains (`imaginesurrey.ca,www.imaginesurrey.ca`): the website at `/` there, nothing of the app — written with a final dot too (`imaginesurrey.ca.`), it's the same domain (SITE.md) | blank: the website is at `/site/` only |
 | `APP_HOSTS` | the app's other addresses on this server (`starbase.imaginesurrey.ca` once base.win is the public one): never made a website domain, so the app keeps answering there (SITE.md) | blank |
+| `BASE_PLATFORM_PUBKEY` | the control centre's public key (ops.base.win → base.win’s key; 43 characters; two, comma-separated, while it changes its key): lets base.win support open this desk, and closes first-run sign-up until the first visit makes the campaign. Pasted in Render, never in git (`sync: false`); emptied, all entry stops and open visits end | blank: no entry (`/api/health` says `no-key`) |
+| `STARBASE_OWN_URL` | this server's own origin (`https://<service>.onrender.com`), the address an entry token must name — only when Render's `RENDER_EXTERNAL_URL` is missing or wrong | `RENDER_EXTERNAL_URL` |
 | `SITE_SECRET` | signs the website's preview and email-preference links (16+ characters); each campaign's signing secret for a ladder's *Send to a web address* step is made from it, so changing it changes that secret and breaks those links in every email already sent — to change only the signing secret, the step's *Make a new secret* (INTEGRATIONS.md) | blank: one is made and kept in the database |
 
 Two environments per client: **staging** deploys every push to `main`,

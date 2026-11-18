@@ -320,6 +320,22 @@ one tap away under **More**.
   end, the log); `node e2e-reset.mjs` (PORT, SHOTS; the stand-in sender
   on PORT+1, its controls on PORT+4) walks it in a browser under a client's
   path.
+- **base.win support from the control centre** — on ops.base.win, **Open
+  desk** on a campaign: a new tab on its own Render address, Today with
+  *You’re in as base.win support · until …* across the top; the address has
+  no `#t=`. Settings → Members shows the *base.win support* chip and the
+  switch greyed out for support. A manager turning **base.win may sign in
+  here** off signs support out on its next tap, and the next Open says it's
+  turned off. Managers' Today says *base.win support signed in*; a person's
+  History says *(via base.win)* after what support did.
+  `server/test/entry.test.js` (the token, against the vector shared with the
+  control centre, `entry-vector.json`), `operator-entry.test.js` (entry,
+  the switch, what a visit may not do, the tags, Today, `/api/team`) and
+  `health.test.js` (the health fields) cover the server; `node
+  e2e-entry.mjs` (PORT, SHOTS; a second server at PORT+2 with
+  `BASE_PATH=/x`, A's controls on PORT+1) walks it in a browser with tokens
+  signed by `server/test/entry-sign.js`. The control centre's own tests:
+  `npm run test:platform` and `e2e-ops.mjs` (`apps/platform/README.md`).
 - **Sign in with Google** (once the Google client is set; INTEGRATIONS.md) —
   *Sign in with Google* sits under *Sign in*. Pressed before linking, it
   says the Google account isn’t linked. Sign in with your password, then
