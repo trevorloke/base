@@ -34,7 +34,7 @@ before(async () => {
   ok(await mgr.action('site.settings.save', { org: { ...s.org, name: 'Riverside Example League', shortName: '', agentName: 'Ada Example', agentContact: '604-555-0100' } }));
   const r = ok(await mgr.action('site.page.create', { title: 'About us', slug: 'about', modules: [
     { id: 'band01', kind: 'band', hidden: false, props: { title: 'When we organize,', highlight: 'we win', tone: 'accent' } },
-    { id: 'text01', kind: 'text', hidden: false, props: { title: 'Our story', body: `${STORY}\n\nRead [the plan](https://example.org/plan) with Pat Example.`, tone: 'paper' } },
+    { id: 'text01', kind: 'text', hidden: false, props: { title: 'How we started', body: `${STORY}\n\nRead [the plan](https://example.org/plan) with Pat Example.`, tone: 'paper' } },
   ] }));
   ok(await mgr.action('site.page.publish', { id: r.page.id }));
   about = r.page;
@@ -158,21 +158,21 @@ test('a volunteer with only Website translations suggests; the page waits for so
 });
 
 test('someone with the Website: an edit is live at once, unchecked; nobody checks their own; Undo goes back', async () => {
-  const h = segHash('Our story');
-  const was = (await row('pa', 'Our story')).text;
+  const h = segHash('How we started');
+  const was = (await row('pa', 'How we started')).text;
   const s = ok(await staff.client.action('site.translation.save', { lang: 'pa', src_hash: h, text: 'ਸਾਡੀ ਕਹਾਣੀ' }));
   assert.equal(s.state, 'live');
   cacheClear(ws);
   assert.ok((await hit('/site/pa/about')).text.includes('ਸਾਡੀ ਕਹਾਣੀ'));
-  assert.equal((await row('pa', 'Our story')).checked_at, null);
+  assert.equal((await row('pa', 'How we started')).checked_at, null);
   const own = await staff.client.action('site.translation.check', { lang: 'pa', src_hashes: [h] });
   assert.equal(own.status, 403);
   ok(await vol.client.action('site.translation.check', { lang: 'pa', src_hashes: [h] }));
-  assert.ok((await row('pa', 'Our story')).checked_at);
+  assert.ok((await row('pa', 'How we started')).checked_at);
   // Undo: the Website's.
   assert.equal((await vol.client.action('site.translation.undo', { lang: 'pa', version_id: s.version_id })).status, 403);
   ok(await mgr.action('site.translation.undo', { lang: 'pa', version_id: s.version_id }));
-  const back = await row('pa', 'Our story');
+  const back = await row('pa', 'How we started');
   assert.equal(back.text, was);
   assert.equal(back.origin, 'machine');
   assert.equal(back.checked_at, null);
@@ -180,9 +180,9 @@ test('someone with the Website: an edit is live at once, unchecked; nobody check
 });
 
 test('Simplified corrected: Traditional follows, converted', async () => {
-  const h = segHash('Our story');
+  const h = segHash('How we started');
   ok(await mgr.action('site.translation.save', { lang: 'zh-Hans', src_hash: h, text: '我们的故事' }));
-  const t = await row('zh-Hant', 'Our story');
+  const t = await row('zh-Hant', 'How we started');
   assert.equal(t.text, '我們的故事');
   assert.equal(t.origin, 'converted');
 });
