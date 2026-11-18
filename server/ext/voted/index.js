@@ -43,4 +43,4 @@ export { publicRoutes } from './signin.js';
 
 // The numbers by band and by turf are the desk's; the switch's state and a
 // person's own marks are anyone's.
-export const deskOnlyReads = ['/voted/summary', '/gotv/posts', '/gotv/checks'];
+export const deskOnlyReads = ['/voted/summary', '/gotv/posts', '/gotv/checks', '/gotv/setup'];

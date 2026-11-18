@@ -99,6 +99,8 @@ const meOut = (ctx) => ({
   two_step: twoStepOut(ctx),
   // A volunteer with a candidate's seat (ext/candidates), else null.
   candidate: candidateOut(ctx.candidate),
+  // A sign-in limited to Who voted (an election-day code, ext/voted): 'gotv'.
+  scope: ctx.scope || null,
 });
 // …and their Google sign-in link (ext/google): whether Google sign-in is on
 // here for their campaign, linked, and to which Google address — their

@@ -9,7 +9,7 @@ import { DEFAULT_TZ } from '../../lib/org.js';
 import { startOfDay } from '../../lib/tzsql.js';
 import { now } from '../../lib/clock.js';
 import { localDay } from '../../lib/tzrule.js';
-import { rowOf } from './state.js';
+import { rowOf, gotvFor } from './state.js';
 
 export const SUPPORT_CODES = ['1', '2'];
 const START_OF_TODAY = startOfDay('$2::text');
@@ -97,6 +97,8 @@ const sharedCounts = async (db, ctx) => {
 // (ext/todaycounts), so the desk never waits half a minute for its own.
 export const briefVoted = async (db, ctx, body) => {
   const settings = await settingsOf(db, ctx);
-  const counts = ctx.role !== 'volunteer' || settings.on ? await sharedCounts(db, ctx) : {};
+  // A volunteer practising gets them too (GOTV is active for them).
+  const active = settings.on || (ctx.role === 'volunteer' && (await gotvFor(db, ctx)).active);
+  const counts = ctx.role !== 'volunteer' || active ? await sharedCounts(db, ctx) : {};
   body.voted = { ...settings, ...counts };
 };

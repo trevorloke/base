@@ -71,6 +71,9 @@ import { at } from '../base.js';
 import { NS } from '../base.js';
 import { BRAND } from '../brand.js';
 import MapWindow from '../components/MapWindow.jsx';
+import { useVotedMode } from '../components/Voted.jsx';
+import { gotvNoteCount } from '../components/gotvNotes.js';
+import './gotv.css';
 import { quickFor } from '../components/commands.js';
 import { guideNow, guideSoon, useGuide } from '../components/guide.js';
 import { guideState } from '@starbase/shared/voteguide';
@@ -470,12 +473,17 @@ function GotvVoteLink() {
 // haven't voted yet — call them, or find their doors.
 const GOTV_CALLS = '/calls?rating=1,2&voted=no';
 function GotvCard({ v }) {
+  const mode = useVotedMode();
   const left = Math.max(0, (Number(v.supporters) || 0) - (Number(v.supporters_voted) || 0));
   const pct = v.supporters ? Math.min(100, Math.round((v.supporters_voted / v.supporters) * 100)) : 0;
   const day = v.voting_day === 'election' ? 'Election day' : v.voting_day === 'advance' ? 'Advance voting' : 'GOTV';
+  // Kept to their own turfs and phone bank, with neither (ext/voted scope).
+  const noList = mode?.status?.has_list === false;
   return (
     <section className="today-gotv" aria-label="Get out the vote">
       <span className="eyebrow">Get out the vote · {day}</span>
+      {mode?.practice && <span className="chip gv-practice">Practice</span>}
+      {noList && <p className="today-gotv__n">No one on your list yet — ask the office for a turf or calls.</p>}
       <p className="today-gotv__n">
         <strong className="mono">{num(v.supporters_voted)}</strong> of {num(v.supporters)} supporters have voted
         {left > 0 && <> · <strong className="mono">{num(left)}</strong> to go</>}
@@ -851,17 +859,36 @@ function VolunteerToday({ b, me }) {
   const mine = f.mine ?? {};
   const signs = Number(b.signs?.requested) || 0;
   const replies = Number(useTextingStatus(me).data?.unread) || 0; // replies to their texts
+  // GOTV active for them (On, or Practice and they practise), and on duty at a voting place.
+  const vm = useVotedMode();
+  const duty = vm.on ? vm.status?.on_duty : null;
+  const unsentNames = gotvNoteCount(me);
 
   return (
     <div className="today today--field">
       <span className="eyebrow">{greeting()}</span>
       <h1>{me.workspace.name}</h1>
       {b.sampleLoaded && <SampleLine />}
-      {b.voted?.on && <GotvCard v={b.voted} />}
+      {vm.on && b.voted && <GotvCard v={b.voted} />}
       {/* The people they're to reach within the day (speed to lead). */}
       <FollowupsToday me={me} />
 
-      {done ? (
+      {duty ? (
+        <>
+          {/* On duty: entering names is the day's one job (the one primary);
+              their canvass stays one quiet tap under it. */}
+          <section className="today-go" aria-label="Who voted">
+            <Link to="/gotv" className="btn btn-primary today-start">Enter who voted <span aria-hidden="true">→</span></Link>
+            <p className="today-go__meta"><span className="today-go__turf">{duty.place?.name || 'Pick the voting place on each sheet'}</span></p>
+          </section>
+          {unsentNames > 0 && <ul className="today-rows"><LinkRow to="/gotv" main={`You have ${unsentNames} ${unsentNames === 1 ? 'name' : 'names'} not sent`} /></ul>}
+          {firstOpen && (
+            <ul className="today-rows">
+              <LinkRow to={`/turfs/${firstOpen.id}`} main={`Your turf: ${firstOpen.name}${d ? ` · ${d.doors} ${d.doors === 1 ? 'door' : 'doors'}` : ''}`} />
+            </ul>
+          )}
+        </>
+      ) : done ? (
         <section className="today-go" aria-label="Calls">
           <Link to="/calls" className="btn btn-primary today-start">
             Make calls <span aria-hidden="true">→</span>

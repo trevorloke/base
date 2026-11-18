@@ -67,6 +67,10 @@ export const statusOf = async (db, ctx) => {
     feed: Number(feed || 0),
     on_duty: dutyToday ? { role: g.post.role, place: g.post.place_id ? { id: g.post.place_id, name: g.post.place_name } : null } : null,
     scope: g.s.scope,
+    // A volunteer kept to their turfs and phone bank with neither: Today says so.
+    ...(g.limited ? { has_list: await (async () => { const sc = await scopeOf(db, ctx); return sc.turfs.size > 0 || sc.bank.size > 0; })() } : {}),
+    // A scrutineer with no turf and no calls has nothing to receive live.
+    ...(g.post && g.active ? { stream: !(await scrutineerOnly(db, ctx, g)) } : {}),
   };
 };
 
@@ -270,4 +274,67 @@ api.get('/gotv/checks', async (c) => {
       order by k.written_at desc limit 500`, [ctx.workspaceId, g.s.practice],
   )).rows;
   return c.json({ checks: rows.map((r) => ({ ...r, written_at: iso(r.written_at), resolved_at: iso(r.resolved_at) })) });
+});
+
+// GET /gotv/setup (desk): what the Get out the vote screen's Settings and
+// Ready list need — the sending rule, the CEO's answer, who sees who voted,
+// each voting day's closing time from the voter guide (and the manager's
+// own), who is practising, and the Ready list's lines (ticks and checks).
+const READY = [
+  ['ceo', 'Chief Election Officer asked: when may scrutineers view the voting book and write names, and may those names leave the voting place before it closes?'],
+  ['days', 'Voting days entered'],
+  ['hours', 'Voting hours entered (voter guide or override)'],
+  ['places', 'Voting places added in the voter guide'],
+  ['appointed', 'Every scrutineer appointed in writing'],
+  ['signed_in', 'Every scrutineer signed in before the day'],
+  ['practice_run', 'Practice run done'],
+  ['briefed', 'Runners and scrutineers briefed: sheets leave the voting place only after it closes, until the Chief Election Officer says otherwise; phones away inside; no campaigning within 100 m (verify)'],
+  ['no_deploys', 'No deploys on voting days: told whoever deploys'],
+];
+const PRACTICE_RUN_DAYS = 60;
+api.get('/gotv/setup', async (c) => {
+  const ctx = c.get('ctx');
+  const db = c.get('db');
+  const ws = ctx.workspaceId;
+  const tz = tzOf(ctx);
+  const g = await gotvFor(db, ctx);
+  const s = g.s;
+  const h = await hoursOf(db, ws);
+  const day = today(tz);
+  const vdays = votingDays(s);
+  const days = vdays.map((d) => {
+    const guide = h.days.get(d)?.closes || null;
+    const dayClose = s.close_override?.[d] || guide;
+    const own = [...h.places.values()].filter((p) => !p.gone && p.listed && p.days.get(d)?.closes && p.days.get(d).closes !== dayClose).length;
+    return { day: d, kind: d === s.election_day ? 'general' : 'advance', guide_close: guide, override: s.close_override?.[d] || null, places_differ: own };
+  });
+  const posts = (await db.query(
+    `select g.user_id, g.appointed,
+            exists (select 1 from sessions x where x.user_id = g.user_id and x.workspace_id = g.workspace_id
+                      and (x.created_at >= g.created_at or x.created_at > now() - interval '7 days')) as signed_in
+       from gotv_posts g where g.workspace_id = $1 and g.ended_at is null`, [ws],
+  )).rows;
+  const listed = [...h.places.values()].filter((p) => !p.gone && p.listed).length;
+  const ran = s.ready?.practice_run?.at && Date.parse(s.ready.practice_run.at) > now() - PRACTICE_RUN_DAYS * 86_400_000;
+  const auto = {
+    ceo: Boolean(s.ceo_answer),
+    days: Boolean(s.election_day),
+    hours: vdays.length > 0 && vdays.every((d) => h.days.has(d) || s.close_override?.[d]),
+    places: listed > 0,
+    appointed: posts.length > 0 && posts.every((p) => p.appointed),
+    signed_in: posts.length > 0 && posts.every((p) => p.signed_in),
+    practice_run: Boolean(ran),
+  };
+  const ready = READY.map(([key, label]) => ({
+    key, label, done: key in auto ? auto[key] : Boolean(s.ready?.[key]), tick: !(key in auto),
+    ...(key === 'ceo' && s.ceo_answer ? { answer: { allows_live: Boolean(s.ceo_answer.allows_live), note: s.ceo_answer.note || '', at: s.ceo_answer.at || null } } : {}),
+  }));
+  const ids = [...new Set(s.practice_users)];
+  const named = ids.length ? (await db.query('select id, name from users where id = any($1::uuid[])', [ids])).rows : [];
+  const held = votingDays(s).includes(day) && !sendOpen(h, s, day, null, tz);
+  return c.json({
+    send: s.send, ceo_answer: s.ceo_answer, scope: s.scope, released: s.released, practice: s.practice,
+    practice_users: named, posts: posts.length, days, ready, voting_day: vdays.includes(day), held_today: held,
+    places: listed,
+  });
 });

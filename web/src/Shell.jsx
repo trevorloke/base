@@ -29,6 +29,9 @@ import OfflineSheet from './components/OfflineSheet.jsx';
 import { useThisDevice } from './components/queued.js';
 import { forgetPhoneCopies, keepOnlyMine } from './components/OfflineCache.js';
 import { letterDraftCount, setLetterScope } from './components/letterDrafts.js';
+import { useGotvLive } from './components/GotvLive.js';
+import { useVotedMode } from './components/Voted.jsx';
+import { gotvNoteCount, clearGotvNotes } from './components/gotvNotes.js';
 import { useKeptTime } from './components/KeptCopies.js';
 import { useTextingStatus } from './components/TextingStatus.js';
 import { useShareLocation } from './components/ShareLocation.js';
@@ -141,7 +144,7 @@ function MoreTab({ items, badge }) {
 
 // Everything sent field work can change (ratings, doors left, new people,
 // pins, signs, shift spots, the brief).
-const FLUSHED_KEYS = [['doors'], ['brief'], ['turfs'], ['turf'], ['person'], ['persons'], ['contacts'], ['signs'], ['shifts'], ['shift']];
+const FLUSHED_KEYS = [['doors'], ['brief'], ['turfs'], ['turf'], ['person'], ['persons'], ['contacts'], ['signs'], ['shifts'], ['shift'], ['voted'], ['gotv']];
 
 function useOnline() {
   const [online, setOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine !== false));
@@ -357,6 +360,9 @@ function SignedInShell({ who, mode }) {
   const unread = Number(useTextingStatus(me).data?.unread) || 0;
   // "Share my location while I'm out" (the map's switch): pings while it's on.
   useShareLocation(me);
+  // GOTV's live list (components/GotvLive.js): one stream per browser while
+  // GOTV is active for this person.
+  useGotvLive(useVotedMode().status, me);
   const badge = (n) => (n.to === '/calls' && unread > 0
     ? <span className="tab-badge mono"><span aria-hidden="true">{unread}</span><span className="tab-sr">{` · ${unread} new ${unread === 1 ? 'reply' : 'replies'}`}</span></span>
     : null);
@@ -481,6 +487,7 @@ function SignedInShell({ who, mode }) {
       const lines = [
         { count: left, words: `${left} not sent yet` },
         { count: letterDraftCount(), words: `${letterDraftCount()} ${letterDraftCount() === 1 ? 'letter' : 'letters'} not sent` },
+        { count: gotvNoteCount(me), words: `${gotvNoteCount(me)} ${gotvNoteCount(me) === 1 ? 'name' : 'names'} not sent` },
       ].filter((l) => l.count > 0);
       if (lines.length && !force) {
         setConfirmLeft(lines);
@@ -492,6 +499,7 @@ function SignedInShell({ who, mode }) {
       // What this phone kept for them (doors, calls, shifts, walk lists) goes too.
       forgetPhoneCopies();
       if (left > 0) clearOutbox(); // the next person on this phone must not send them as theirs
+      clearGotvNotes(me); // Who voted's names kept on this phone go with them
       setConfirmLeft(null);
       navigate('/login');
     } catch {

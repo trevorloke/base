@@ -456,6 +456,13 @@ export const actions = {
             + (await tx.query('delete from gotv_checks where workspace_id = $1 and practice', [ws])).affectedRows;
           change.practice = false;
           change.practice_cleared = n;
+          // The Ready list's "Practice run done": a practice that marked someone.
+          if (n > 0) {
+            const ready = (typeof s.ready === 'string' ? JSON.parse(s.ready) : s.ready) || {};
+            ready.practice_run = { by: ctx.user.id, at: new Date(now()).toISOString() };
+            await set('ready', jsonb(ready), '::jsonb');
+            s.ready = ready;
+          }
         } else if (mode === 'practice') change.practice = true;
         out.mode = mode;
       }
