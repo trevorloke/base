@@ -6,13 +6,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { RESERVED } from '../campaigns.mjs';
 import { RESERVED as DOOR_RESERVED } from '../../door/door.mjs';
 import { pickValues, VALUE_KEYS } from '../snippets.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
+const REPO = fileURLToPath(new URL('../../..', import.meta.url));
 const sources = (dir = ROOT) => readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
   if (e.isDirectory()) return e.name === 'test' || e.name === 'node_modules' ? [] : sources(join(dir, e.name));
   return /\.(mjs|js|sql)$/.test(e.name) ? [join(dir, e.name)] : [];
@@ -25,8 +26,7 @@ test('only the server’s small shared helpers: never its database, extensions, 
     for (const m of f.text.matchAll(/(?:\bfrom\s+|\bimport\s*\(\s*)'([^']+)'/g)) {
       const spec = m[1];
       if (!spec.startsWith('.')) { assert.ok(/^(node:|hono|@hono\/|pg$|@electric-sql\/pglite$)/.test(spec), `${f.path}: ${spec}`); continue; }
-      const resolved = join(ROOT, f.path, '..', spec).replace(/\\/g, '/');
-      const fromRepo = resolved.split('/starbase/').pop().replace(/^\.claude\/worktrees\/[^/]+\//, '');
+      const fromRepo = relative(REPO, join(ROOT, f.path, '..', spec)).replace(/\\/g, '/');
       if (fromRepo.startsWith('apps/platform/')) continue;
       assert.ok(allowed.has(fromRepo), `${f.path} imports ${fromRepo}`);
       assert.doesNotMatch(fromRepo, /^server\/(db|ext|routes|index)/);
