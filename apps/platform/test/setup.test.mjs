@@ -8,6 +8,28 @@ import { totp, base32Decode } from '../../../server/lib/twostep.js';
 
 const fresh = async () => { baseEnv(); return freshApp(); };
 
+test('only a code Render could have made opens setup: 32+ characters of the base64 alphabets, not a phrase', async () => {
+  const { app } = await fresh();
+  // Past the caps a guess still gets right or wrong, so the code's length is the bound.
+  for (const code of [
+    'abcdefghijklmnopqrstuvwxyz0123',             // 30: long enough before, not now
+    'correct horse battery staple, my own code',  // a phrase
+    'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',   // long, but nothing like random
+    'abab-abab-abab-abab-abab-abab-abab-abab',
+  ]) {
+    process.env.OPS_SETUP_CODE = code;
+    const res = await browser(app).get('/setup');
+    assert.equal(res.status, 503, code);
+    assert.match(await res.text(), /isn’t one Render made/);
+    assert.equal((await browser(app).post('/setup', { code })).status, 503, code);
+  }
+  for (const code of ['kV3x9Qp2Lr7Tz0Ws5Yb8Nc1Md4Fh6Gj+aE/uI2oP3k=', 'Zq8-Rt3_Xw7Lm2Np9Ks4Vb6Hd1Jf5Gc0Ty']) {
+    process.env.OPS_SETUP_CODE = code;
+    assert.equal((await browser(app).get('/setup')).status, 200, code);
+  }
+  baseEnv();
+});
+
 test('open with no operator; closed with a short code, with the line', async () => {
   const { app } = await fresh();
   const b = browser(app);
@@ -19,7 +41,7 @@ test('open with no operator; closed with a short code, with the line', async () 
   assert.match(await (await b.get('/signin')).text(), /href="\/setup"/, 'sign-in offers Set up while it is open');
   process.env.OPS_SETUP_CODE = 'short-code-0123456789';
   const closed = await b.get('/setup');
-  assert.match(await closed.text(), /The setup code in Render is too short\. Press Generate next to OPS_SETUP_CODE, then Save and deploy\./);
+  assert.match(await closed.text(), /The setup code in Render is too short, or isn’t one Render made\. Press Generate next to OPS_SETUP_CODE, then Save and deploy\./);
   assert.doesNotMatch(await (await b.get('/signin')).text(), /href="\/setup"/);
   assert.equal((await b.post('/setup', { code: 'short-code-0123456789' })).status, 503);
   baseEnv();
@@ -67,7 +89,11 @@ test('the right code through to the recovery codes: one operator, 10 recovery ha
   assert.match(cookie, /HttpOnly/);
   assert.match(cookie, /SameSite=Strict/);
   assert.equal(first.headers.get('location'), '/setup/you');
-  assert.match(await (await b.get('/setup/you')).text(), /such as you\+support@…/);
+  const you = await (await b.get('/setup/you')).text();
+  // Never the email the owner signs in with on a campaign: that account has
+  // its own password there, so entry refuses it (409 email-in-use).
+  assert.match(you, /Use an address only base\.win support uses on campaigns, such as you\+support@…; not the one you sign in with on a campaign\./);
+  assert.doesNotMatch(you, /Use the email you sign in with/);
   await b.post('/setup/you', { name: 'Olive Example', email: 'Owner@Example.org', password: 'a long test password 1' });
   const appPage = await (await b.get('/setup/app')).text();
   assert.match(appPage, /href="otpauth:\/\/totp\/[^"]+"/, 'the link for an app on this phone');
@@ -152,5 +178,27 @@ test('changing OPS_SETUP_CODE reopens setup: the same id, every session ended, l
   assert.equal((await first.b.get('/')).headers.get('location'), '/signin', 'the old session ended');
   const last = (await db.query('select action, payload from ops_log order by seq desc limit 1')).rows[0];
   assert.deepEqual(last, { action: 'setup', payload: { reopened: true } });
+  baseEnv();
+});
+
+test('setting up again forgets every browser, even when the setup code goes back to an earlier one', async () => {
+  const { app, db } = await fresh();
+  const codeA = SETUP_CODE;
+  const a = await setUp(app, db);
+  const markA = a.b.jar.get('ops-device');
+  assert.match(markA, /^v2\./);
+  const { knownDevice } = await import('../ops-auth.mjs');
+  assert.equal(await knownDevice(db, markA), true);
+  // Break-glass with code B (a lost laptop).
+  process.env.OPS_SETUP_CODE = `${codeA}-B`;
+  const b = await setUp(app, db);
+  assert.equal(await knownDevice(db, markA), false, 'markA is dead under B');
+  const markB = b.b.jar.get('ops-device');
+  // OPS_SETUP_CODE goes back to A (a rollback) and setup runs again.
+  process.env.OPS_SETUP_CODE = codeA;
+  const again = await setUp(app, db);
+  assert.equal(await knownDevice(db, markA), false, 'markA stays dead under A again');
+  assert.equal(await knownDevice(db, markB), false);
+  assert.equal(await knownDevice(db, again.b.jar.get('ops-device')), true);
   baseEnv();
 });

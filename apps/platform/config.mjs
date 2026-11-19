@@ -2,7 +2,7 @@
 // keeps process.env reads to this list). Read on each call, so a test can
 // change one between requests.
 //   OPS_HOST              the console's own host (ops.base.win); every other host gets a 404
-//   OPS_SETUP_CODE        Render makes it; typed once to set up (24+ characters)
+//   OPS_SETUP_CODE        Render makes it; typed once to set up (32+ base64 characters)
 //   OPS_SECRET            Render makes it; seals the authenticator key, keys the setup code's HMAC
 //   PLATFORM_SIGNING_KEY  Render makes it; the Ed25519 seed source (old,new while changing; the first signs)
 //   OPS_DOOR_ORIGIN       tests only: the door's origin for "the door knows it" (https://base.win)

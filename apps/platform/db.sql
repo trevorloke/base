@@ -20,6 +20,11 @@ create table if not exists operators (
   updated_at timestamptz not null default now()
 );
 create unique index if not exists operators_one on operators ((true));
+-- Every setup makes a new device epoch (as do a recovery-code sign-in and the
+-- wrong-code lock): the known-browser marks are signed over it, so each of
+-- those forgets every browser, whatever setup code comes back later.
+alter table operators add column if not exists device_epoch text;
+update operators set device_epoch = md5(random()::text || clock_timestamp()::text) where device_epoch is null;
 
 -- Setup in progress: a ticket per browser, ten minutes, its hash in a cookie.
 create table if not exists operator_setup (

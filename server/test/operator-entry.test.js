@@ -308,6 +308,38 @@ test('existing accounts: a support member keeps role and name; a non-member is n
   assert.equal(ev[1].payload.via, 'base.win support');
 });
 
+test('support a manager removed comes back under a new operator id (the control centre made again): /join can’t invite it', async () => {
+  const mgr = await withCampaign();
+  const first = await entry(await mint());
+  assert.equal(first.status, 200);
+  const supportId = first.json.user.id;
+  const rm = await mgr.action('member.remove', { user_id: supportId });
+  assert.equal(rm.status, 200);
+  const newOp = randomUUID();
+  const back = await entry(await mint({}, { id: newOp }));
+  assert.equal(back.status, 200, JSON.stringify(back.json));
+  assert.equal(back.json.user.id, supportId);
+  assert.equal(back.json.role, 'manager');
+  assert.equal((await db.query('select user_id from operator_links where operator_id = $1', [newOp])).rows[0].user_id, supportId);
+  assert.equal((await db.query("select count(*)::int as n from events where action = 'operator.enter' and payload ? 'operator_refused'")).rows[0].n, 0);
+});
+
+test('a refused token is spent: replayed, it is refused as used and the refusal is on the log once', async () => {
+  const mgr = await withCampaign();
+  const inv = await mgr.action('member.invite', { email: OP.email, role: 'manager' });
+  const token = inv.json.joinUrl.split('/join/')[1];
+  assert.equal((await new Client().post('/api/auth/join', { token, name: 'Someone Example', password: 'manager-knows-this-1' })).status, 200);
+  const t = await mint();
+  const r1 = await entry(t);
+  assert.equal(r1.status, 409);
+  assert.equal(r1.json.code, 'email-in-use');
+  for (let i = 0; i < 3; i++) assert.equal((await entry(t)).status, 401, 'spent');
+  const refused = (await db.query("select payload from events where action = 'operator.enter'")).rows;
+  assert.deepEqual(refused.map((e) => e.payload), [{ operator_refused: 'email-in-use' }]);
+  // Nothing on Today: a refused entry is no visit.
+  assert.equal((await db.query('select count(*)::int as n from operator_entries where user_id is not null')).rows[0].n, 0);
+});
+
 test('the switch: off refuses entry and ends a visit in progress; on the demo it never stops entry', async () => {
   await withCampaign();
   const open = await entry(await mint());

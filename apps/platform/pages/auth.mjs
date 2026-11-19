@@ -8,7 +8,7 @@ export const setupProblemPage = (problem) => page({
   title: 'Set up the control centre',
   body: card(html`<h1>Set up the control centre</h1>
   ${status(problem === 'short'
-    ? 'The setup code in Render is too short. Press Generate next to OPS_SETUP_CODE, then Save and deploy.'
+    ? 'The setup code in Render is too short, or isn’t one Render made. Press Generate next to OPS_SETUP_CODE, then Save and deploy.'
     : 'OPS_SECRET in Render is missing or too short. Press Generate next to it, then Save and deploy.', 'warn')}`),
 });
 
@@ -28,7 +28,7 @@ export const setupYouPage = ({ name = '', email = '', message = '' } = {}) => pa
   <form method="post" action="/setup/you" class="oc-form">
     ${field({ label: 'Your name', name: 'name', value: name, autocomplete: 'name', required: true })}
     ${field({ label: 'Email', name: 'email', type: 'email', value: email, autocomplete: 'email', required: true,
-    help: 'Use the email you sign in with on Imagine Surrey if you’re a manager there. Otherwise use another address, such as you+support@…' })}
+    help: 'Use an address only base.win support uses on campaigns, such as you+support@…; not the one you sign in with on a campaign.' })}
     ${field({ label: 'Password', name: 'password', type: 'password', autocomplete: 'new-password', required: true, help: '12 or more characters.' })}
     ${status(message, message ? 'warn' : '')}
     <button class="btn btn-primary oc-wide" type="submit">Next</button>

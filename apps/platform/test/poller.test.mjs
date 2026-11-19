@@ -154,3 +154,24 @@ test('Campaign made ticks only once the server says a workspace exists, not on s
   await pollOnce(d, { fetcher });
   assert.equal(await made(), 'auto');
 });
+
+test('Campaign made on a server from before campaignMade: setupOpen false with none of the control centre’s keys still ticks', async () => {
+  const { db: d } = await freshApp();
+  const answers = new Map();
+  const fetcher = async (url) => ({ status: 200, body: JSON.stringify(answers.get(url) || {}), ms: 3 });
+  const U = 'https://base-win-older.onrender.com';
+  await d.transaction((tx) => createCampaign(tx, { name: 'older', display: 'Example Older', serverUrl: U }));
+  const made = async () => (await d.query("select done_by from checklist where campaign = 'older' and item = 'campaign-made' and done_at is not null")).rows[0]?.done_by;
+  // Older and holding the key: setupOpen false says nothing.
+  answers.set(`${U}/api/health`, health({ ownOrigin: U, setupOpen: false, campaignMade: undefined }));
+  await pollOnce(d, { fetcher });
+  assert.equal(await made(), undefined);
+  // Older and open: not made.
+  answers.set(`${U}/api/health`, health({ ownOrigin: U, setupOpen: true, campaignMade: undefined, platformKids: [] }));
+  await pollOnce(d, { fetcher });
+  assert.equal(await made(), undefined);
+  // Older, no key, setup closed: a workspace exists.
+  answers.set(`${U}/api/health`, health({ ownOrigin: U, setupOpen: false, campaignMade: undefined, platformKids: [] }));
+  await pollOnce(d, { fetcher });
+  assert.equal(await made(), 'auto');
+});

@@ -157,7 +157,7 @@ try {
   process.env.OPS_SETUP_CODE = 'short';
   const shortTab = await ctx.newPage();
   await shortTab.goto(`${B}/setup`);
-  ok(/The setup code in Render is too short\./.test(await text(shortTab)), 'a short setup code: the one line');
+  ok(/The setup code in Render is too short, or isn’t one Render made\./.test(await text(shortTab)), 'a short setup code: the one line');
   await look(shortTab, '02b-setup-code-too-short', { primaries: 0 });
   await shortTab.close();
   // That page answers 503 on purpose (setup can't open); the browser notes it.

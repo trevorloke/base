@@ -16,7 +16,7 @@ calls it.
 |---|---|---|
 | `DATABASE_URL` | its own database | from `base-platform-db` |
 | `OPS_HOST` | `ops.base.win`; every other host gets a 404 (except `/healthz`) | value |
-| `OPS_SETUP_CODE` | made by Render; copy it once to set up. Shorter than 24 characters keeps setup closed. Press **Generate** to set up again. | `generateValue` |
+| `OPS_SETUP_CODE` | made by Render; copy it once to set up. Setup stays closed unless it looks like one Render made (32+ characters of the base64 alphabets): past the guessing limits a guess still gets right or wrong, so its length is what stops guessing. Press **Generate** to set up again. | `generateValue` |
 | `OPS_SECRET` | made by Render; seals the authenticator key. Changing it means setting up again. | `generateValue` |
 | `PLATFORM_SIGNING_KEY` | made by Render; opens desks. Its public half is each campaign’s `BASE_PLATFORM_PUBKEY` (see **base.win’s key**). `old,new` while changing; the first signs. | `generateValue` |
 | `OPS_DOOR_ORIGIN`, `OPS_INSECURE_COOKIES`, `OPS_ALLOW_LOCAL` | tests only | not listed |
@@ -25,7 +25,7 @@ calls it.
 
 1. Render → Blueprints → Manual Sync: `base-platform` and `base-platform-db` appear.
 2. `base-platform` → Settings → Custom Domains → add `ops.base.win`, and a CNAME `ops` at the registrar.
-3. Copy `OPS_SETUP_CODE`, open https://ops.base.win → **Set up**: the code, your name, email and password (12+), your authenticator app, then save the ten recovery codes.
+3. Copy `OPS_SETUP_CODE`, open https://ops.base.win → **Set up**: the code, your name, email and password (12+), your authenticator app, then save the ten recovery codes. The email must be one only base.win support uses (you+support@…), never the one you sign in with on a campaign: that account has its own password there, so **Open desk** would be refused.
 4. **base.win’s key → Copy**, and paste it as `BASE_PLATFORM_PUBKEY` on each campaign’s service, then **Save and deploy**.
 5. **Add a campaign that’s already running** for each running campaign; set the **Sample (staging)** address on Campaigns.
 
@@ -58,7 +58,16 @@ Every Render change ends with **Save and deploy**, then wait for “Live”.
 - **Lost your phone:** sign in with a recovery code. Codes gone too: Render →
   base-platform → Environment → `OPS_SETUP_CODE` → **Generate**, Save and
   deploy, then open ops.base.win/setup with the new code. Same operator, new
-  password, app and codes; every console session ends.
+  password, app and codes; every console session ends and every browser is
+  forgotten.
+- **Known browsers:** a browser that has signed in keeps a mark for 90 days
+  (a bearer cookie, nothing on the server to revoke one by one). From it,
+  sign-in skips the per-email limit. A new browser doesn't: a stranger who
+  knows your email can hold it at “Too many tries” (15 minutes at a time);
+  use a browser you signed in with before, or set up again with a new
+  `OPS_SETUP_CODE`. Setting up again, signing in with a recovery code, and
+  20 wrong codes after a right password each forget every browser — the way
+  to drop a lost or shared one. Signing out keeps the mark.
 - **Stop base.win sign-in on one campaign at once:** empty its
   `BASE_PLATFORM_PUBKEY`, Save and deploy. Entry stops and open visits end.
 - **Changing the signing key:** first copy the current `PLATFORM_SIGNING_KEY`

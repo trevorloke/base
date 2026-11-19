@@ -47,6 +47,11 @@ export const authRoutes = (app, { db, limits }) => {
     return { state };
   };
   const ticketOf = async (c) => getSetupTicket(db, readCookie(c, SETUP));
+  // After a setup or sign-in: this browser's mark (none while OPS_SECRET is unusable).
+  const rememberDevice = async (c) => {
+    const mark = deviceToken(await getOperator(db));
+    if (mark) writeCookie(c, DEVICE, mark, DEVICE_SECONDS);
+  };
 
   app.get('/setup', async (c) => {
     const g = await gate(c);
@@ -58,9 +63,11 @@ export const authRoutes = (app, { db, limits }) => {
     const f = await form(c);
     // The per-address limit holds for every try. Past it, the right code
     // goes through even when this code's 30 tries or the hourly limit
-    // across addresses are spent: those stop guessing, and a stranger
-    // spending them must not keep the owner out (the code is 24+ random
-    // characters, compared in constant time).
+    // across addresses are spent, so a stranger spending them can't keep
+    // the owner out. Those caps only slow guessing: from many addresses a
+    // guess still gets right or wrong. The bound is the code itself — the
+    // gate takes only one Render generated (32+ characters of the base64
+    // alphabets, about 190 bits), compared in constant time.
     const byIp = limits.setupIp(clientIp(c));
     const byAll = limits.setupAll('all');
     if (byIp) return c.html(String(setupCodePage({ message: TOO_MANY })), 429);
@@ -131,8 +138,7 @@ export const authRoutes = (app, { db, limits }) => {
     }
     clearCookie(c, SETUP);
     writeCookie(c, SESSION, done.token, SESSION_SECONDS);
-    const op = await getOperator(db);
-    if (op) writeCookie(c, DEVICE, deviceToken(op), DEVICE_SECONDS);
+    await rememberDevice(c);
     keepCodes(sha256(done.token), done.codes);
     return c.redirect('/setup/codes', 303);
   });
@@ -164,8 +170,7 @@ export const authRoutes = (app, { db, limits }) => {
     const done = await signIn(db, { email, password: f.password, code: f.code });
     if (!done) return again(NO_MATCH, 401);
     writeCookie(c, SESSION, done.token, SESSION_SECONDS);
-    const op = await getOperator(db);
-    if (op) writeCookie(c, DEVICE, deviceToken(op), DEVICE_SECONDS);
+    await rememberDevice(c);
     return c.redirect('/', 303);
   });
   app.post('/signout', async (c) => {

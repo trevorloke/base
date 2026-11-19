@@ -699,6 +699,15 @@ waiting for *Live* (2–3 minutes).
   campaign's managers' Today (the last week), and every change it makes is
   tagged on the campaign's log; on a person's History, the doors, calls,
   sign steps, voted marks and merges it made say *(via base.win)*.
+- **The control centre's email** must be one only base.win support uses
+  (you+support@…), never the one you sign in with on a campaign: an
+  account the campaign made with its own password is never taken over, so
+  **Open desk** there is refused (*email-in-use*).
+- **Kept out of ops.base.win on a new browser** ("Too many tries" while a
+  stranger spends the per-email limit): sign in from a browser you used
+  before, or press **Generate** on `OPS_SETUP_CODE` (base-platform), Save and
+  deploy, and set up again. Setting up again, a recovery code and the
+  wrong-code lock each forget every browser.
 - **A campaign's managers can stop it** any time: Settings → Members →
   **base.win may sign in here** off. That also ends a visit in progress.
 - **Stop all base.win sign-in on one campaign, at once:** empty

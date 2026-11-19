@@ -2,11 +2,11 @@
 // token (lib/entry.js): the campaign's switch, the account, the replay
 // check, and a two-hour sign-in — all on the campaign's own log.
 //
-// The account: the one linked to this operator before; else a member here
+// The account: the one linked to this operator before; else an account
 // with the operator's email that is already base.win support's (support, or
-// linked to an earlier operator id); else a new "base.win support" account
-// with no password. An account with that email that isn't on the team is
-// never taken over (409 email-taken); nor is a member account of the
+// linked to an earlier operator id), member or not; else a new "base.win
+// support" account with no password. Any other account with that email that
+// isn't on the team is never taken over (409 email-taken); nor is a member account of the
 // campaign's own making (its own password, maybe two-step): a manager could
 // invite the operator's email and join it with a password they chose, then
 // share or speak as base.win support (409 email-in-use). An existing member's role and name never change; a
@@ -42,18 +42,31 @@ export const enter = async (db, p) => {
     if (u) {
       const member = ws && (await db.query('select 1 from memberships where user_id = $1 and workspace_id = $2', [u.id, ws.id])).rows[0];
       const refuse = async (why) => {
-        // Never linked. On the log, as the system.
-        if (ws) {
-          await runAction(db, { workspaceId: ws.id, actorId: null, action: 'operator.enter' }, async (tx, emit) => {
-            emit('workspace', ws.id, 'update', { operator_refused: why });
-          });
-        }
-        return { refused: why };
+        // Never linked. The token is spent here too (a refused token can't
+        // be replayed to write the refusal again), and the refusal is on the
+        // log once, as the system.
+        const spend = (q) => q.query(
+          `insert into operator_entries (nonce, operator_id, kid, workspace_id, iat, exp)
+           values ($1, $2, $3, $4, to_timestamp($5), to_timestamp($6))
+           on conflict (nonce) do nothing returning nonce`,
+          [p.nonce, p.op.id, p.kid, ws?.id || null, p.iat, p.exp],
+        );
+        if (!ws) return (await spend(db)).rows[0] ? { refused: why } : { refused: 'entry' };
+        const { result } = await runAction(db, { workspaceId: ws.id, actorId: null, action: 'operator.enter' }, async (tx, emit) => {
+          if (!(await spend(tx)).rows[0]) return 'entry';
+          emit('workspace', ws.id, 'update', { operator_refused: why });
+          return why;
+        });
+        return { refused: result };
       };
+      // base.win support's own account (support, or linked to an earlier
+      // operator id) comes back even if a manager removed it: the switch is
+      // the consent, and /join won't invite a support address again.
+      if (u.support || u.linked) userId = u.id;
       // Someone else's account, maybe.
-      if (!member) return refuse('email-taken');
-      if (!u.support && !u.linked) return refuse('email-in-use');
-      userId = u.id;
+      else if (!member) return refuse('email-taken');
+      // A member account of the campaign's own making.
+      else return refuse('email-in-use');
     }
   }
 

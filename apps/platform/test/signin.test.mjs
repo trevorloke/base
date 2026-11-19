@@ -6,6 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { freshApp, browser, setUp, codeNow, baseEnv, EMAIL, PASSWORD } from './helpers.mjs';
 import { makeApp } from '../server.mjs';
+import { knownDevice, deviceToken, getOperator } from '../ops-auth.mjs';
 
 baseEnv();
 const { app, db } = await freshApp();
@@ -44,7 +45,7 @@ test('the 6th try for one email is limited, from any address', async () => {
 test('a browser that has signed in here is not kept out by a stranger spending the email limit; a new or forged one is', async () => {
   const a = again();
   const mark = op.b.jar.get('ops-device');
-  assert.match(mark, /^v1\./, 'setup leaves the device mark');
+  assert.match(mark, /^v2\./, 'setup leaves the device mark');
   for (let i = 0; i < 6; i++) await browser(a, { ip: `198.51.100.${60 + i}` }).post('/signin', { email: ` ${EMAIL.toUpperCase()}`, password: 'x', code: '1' });
   const stranger = await browser(a, { ip: '198.51.100.90' }).post('/signin', { email: EMAIL, password: PASSWORD, code: await codeNow(db, op.secret) });
   assert.equal(stranger.status, 429, 'a browser never signed in here: the email limit holds');
@@ -59,6 +60,31 @@ test('a browser that has signed in here is not kept out by a stranger spending t
   for (const part of ['Max-Age=7776000', 'Path=/', 'HttpOnly', 'SameSite=Strict']) assert.ok(line.includes(part), part);
   // Still all three: a known browser with a wrong code is refused as ever.
   assert.equal((await known.post('/signin', { email: EMAIL, password: 'wrong password here', code: '000000' })).status, 401);
+});
+
+test('a device mark has one form: no leading zero, no extra field', async () => {
+  const mark = op.b.jar.get('ops-device');
+  assert.equal(await knownDevice(db, mark), true);
+  const [v, id, issued, mac] = mark.split('.');
+  assert.equal(await knownDevice(db, [v, id, `0${issued}`, mac].join('.')), false, 'a leading zero');
+  assert.equal(await knownDevice(db, `${mark}.anything`), false, 'a fifth field');
+  assert.equal(await knownDevice(db, `${mark}.`), false);
+});
+
+test('with OPS_SECRET unusable no mark is made or taken (its key would be public)', async () => {
+  const mark = op.b.jar.get('ops-device');
+  const saved = process.env.OPS_SECRET;
+  try {
+    for (const secret of ['', 'short-secret']) {
+      process.env.OPS_SECRET = secret;
+      assert.equal(deviceToken(await getOperator(db)), null, `no mark with OPS_SECRET ${JSON.stringify(secret)}`);
+      assert.equal(await knownDevice(db, mark), false);
+      // A mark forged from a copy of the operators row under the empty key: no mark.
+      const forged = deviceToken({ ...(await getOperator(db)) });
+      assert.equal(forged, null);
+    }
+  } finally { process.env.OPS_SECRET = saved; }
+  assert.equal(await knownDevice(db, mark), true);
 });
 
 test('the address limit keys on the rightmost forwarded entry: a forged leftmost one doesn’t escape it', async () => {
@@ -85,7 +111,13 @@ test('a code from the app works once', async () => {
 test('a recovery code works once and is logged with how many are left', async () => {
   const a = again();
   const [code] = op.codes;
-  assert.equal((await browser(a, { ip: '192.0.2.10' }).post('/signin', { email: EMAIL, password: PASSWORD, code: code.toUpperCase() })).status, 303);
+  const mark = op.b.jar.get('ops-device');
+  assert.equal(await knownDevice(db, mark), true);
+  const rb = browser(a, { ip: '192.0.2.10' });
+  assert.equal((await rb.post('/signin', { email: EMAIL, password: PASSWORD, code: code.toUpperCase() })).status, 303);
+  // A recovery code means a lost phone, maybe a lost laptop: every other browser is forgotten.
+  assert.equal(await knownDevice(db, mark), false, 'the earlier mark is forgotten');
+  assert.equal(await knownDevice(db, rb.jar.get('ops-device')), true, 'this browser gets a new one');
   assert.equal((await browser(a, { ip: '192.0.2.11' }).post('/signin', { email: EMAIL, password: PASSWORD, code })).status, 401);
   const used = (await db.query("select payload from ops_log where action = 'recovery.used'")).rows;
   assert.deepEqual(used.map((r) => r.payload), [{ left: 9 }]);
@@ -93,6 +125,9 @@ test('a recovery code works once and is logged with how many are left', async ()
 
 test('20 wrong passwords leave the count alone; 20 wrong codes after a right password lock app codes until a recovery code', async () => {
   await db.query('update operators set fails = 0');
+  const before = browser(again());
+  assert.equal((await before.post('/signin', { email: EMAIL, password: PASSWORD, code: await codeNow(db, op.secret) })).status, 303);
+  const mark = before.jar.get('ops-device');
   for (let i = 0; i < 20; i++) {
     await browser(again(), { ip: `192.0.2.${100 + i}` }).post('/signin', { email: EMAIL, password: 'not the password', code: '123456' });
   }
@@ -103,6 +138,7 @@ test('20 wrong passwords leave the count alone; 20 wrong codes after a right pas
   }
   assert.equal((await db.query('select fails from operators')).rows[0].fails, 20);
   assert.equal((await db.query("select count(*)::int n from ops_log where action = 'signin.locked'")).rows[0].n, 1);
+  assert.equal(await knownDevice(db, mark), false, 'the lock forgets every browser');
   const right = await browser(again()).post('/signin', { email: EMAIL, password: PASSWORD, code: await codeNow(db, op.secret) });
   assert.equal(right.status, 401, 'a right app code is refused while locked');
   assert.equal((await browser(again()).post('/signin', { email: EMAIL, password: PASSWORD, code: op.codes[1] })).status, 303);

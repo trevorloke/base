@@ -14,6 +14,15 @@ import { appendLog } from './log.mjs';
 export { hashPassword, verifyPassword, dummyVerify };
 
 export const SETUP_CODE_MIN = 24;
+// The setup code must look like one Render generated: 32+ characters of the
+// base64 alphabets, not a phrase. Its length is the bound on guessing: past
+// the per-code and hourly caps (kept so a stranger can't lock the owner
+// out) a guess still gets right/wrong, so the code must be unguessable.
+export const SETUP_CODE_LEN = 32;
+export const setupCodeLooksGenerated = (code) => {
+  const s = String(code ?? '');
+  return s.length >= SETUP_CODE_LEN && /^[A-Za-z0-9+/_=-]+$/.test(s) && new Set(s).size >= 16;
+};
 export const SETUP_TRIES_MAX = 30;
 export const CODE_WINDOW_S = 600;
 export const LOCK_AFTER = 20;
@@ -52,7 +61,7 @@ export const getOperator = async (db) => (await db.query('select * from operator
 // → { open, problem: null | 'short' | 'secret', operator }
 export const setupState = async (db) => {
   const operator = await getOperator(db);
-  if (cfg().setupCode.length < SETUP_CODE_MIN) return { open: false, problem: 'short', operator };
+  if (!setupCodeLooksGenerated(cfg().setupCode)) return { open: false, problem: 'short', operator };
   if (!secretUsable()) return { open: false, problem: 'secret', operator };
   return { open: !operator || operator.setup_code_hash !== setupCodeHash(), problem: null, operator };
 };
@@ -89,18 +98,21 @@ export const finishSetup = async (db, ticket, { step = null } = {}) => {
     await tx.query("select pg_advisory_xact_lock(hashtext('ops-setup'))");
     const current = setupCodeHash();
     const existing = (await tx.query('select * from operators limit 1 for update')).rows[0] || null;
-    const stillOpen = cfg().setupCode.length >= SETUP_CODE_MIN && secretUsable() && (!existing || existing.setup_code_hash !== current);
+    const stillOpen = setupCodeLooksGenerated(cfg().setupCode) && secretUsable() && (!existing || existing.setup_code_hash !== current);
     const live = (await tx.query('select 1 from operator_setup where token_hash = $1 and expires_at > now()', [ticket.token_hash])).rows.length;
     if (!stillOpen || !live || ticket.setup_code_hash !== current) return { ok: false };
     const id = existing?.id || randomUUID();
+    // A new device epoch every setup: every earlier mark is dead, even if the
+    // setup code later goes back to an earlier value.
+    const epoch = newDeviceEpoch();
     if (existing) {
       await tx.query(`update operators set email = $2, name = $3, password_hash = $4, totp_sealed = $5, totp_last_step = $9,
-        recovery = $6, recovery_salt = $7, setup_code_hash = $8, fails = 0, updated_at = now() where id = $1`,
-      [id, ticket.email, ticket.name, ticket.password_hash, ticket.totp_sealed, JSON.stringify(hashes), salt, current, step]);
+        recovery = $6, recovery_salt = $7, setup_code_hash = $8, device_epoch = $10, fails = 0, updated_at = now() where id = $1`,
+      [id, ticket.email, ticket.name, ticket.password_hash, ticket.totp_sealed, JSON.stringify(hashes), salt, current, step, epoch]);
     } else {
-      await tx.query(`insert into operators (id, email, name, password_hash, totp_sealed, recovery, recovery_salt, setup_code_hash, totp_last_step)
-        values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-      [id, ticket.email, ticket.name, ticket.password_hash, ticket.totp_sealed, JSON.stringify(hashes), salt, current, step]);
+      await tx.query(`insert into operators (id, email, name, password_hash, totp_sealed, recovery, recovery_salt, setup_code_hash, totp_last_step, device_epoch)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      [id, ticket.email, ticket.name, ticket.password_hash, ticket.totp_sealed, JSON.stringify(hashes), salt, current, step, epoch]);
     }
     await tx.query('delete from ops_sessions');
     await tx.query('delete from operator_setup');
@@ -123,26 +135,36 @@ export const SESSION_SECONDS = SESSION_HOURS * 3600;
 // ── Known devices ──
 // A browser that has signed in (or finished setup) keeps a signed mark for
 // 90 days. Sign-in from it skips the per-email limit, so a stranger who
-// knows the operator's email can't keep the operator out by spending that
-// limit (the per-address limit and LOCK_AFTER still hold). The mark names
-// the operator and the setup it was made under: setting up again (break-
-// glass) forgets every device. `v1.<operator id>.<issued s>.<mac>`.
+// knows the operator's email can't keep the operator out of a browser used
+// before by spending that limit (the per-address limit and LOCK_AFTER still
+// hold; a new browser can still be held at the email limit). The mark is a
+// bearer token, kept 90 days: it names the operator and the device epoch,
+// which every setup makes new, and which a recovery-code sign-in and the
+// wrong-code lock make new too — each forgets every device. With OPS_SECRET
+// unusable no mark is made or taken. `v2.<operator id>.<issued s>.<mac>`.
 export const DEVICE_DAYS = 90;
 export const DEVICE_SECONDS = DEVICE_DAYS * 86400;
-const deviceMac = (op, issued) => createHmac('sha256', derive('base.win/ops-device/v1'))
-  .update(`v1.${op.id}.${op.setup_code_hash}.${issued}`).digest('base64url');
+const newDeviceEpoch = () => randomBytes(16).toString('base64url');
+export const forgetDevices = (q, operatorId) =>
+  q.query('update operators set device_epoch = $2 where id = $1', [operatorId, newDeviceEpoch()]);
+const deviceMac = (op, issued) => createHmac('sha256', derive('base.win/ops-device/v2'))
+  .update(`v2.${op.id}.${op.device_epoch || ''}.${op.setup_code_hash}.${issued}`).digest('base64url');
 export const deviceToken = (op, now = Date.now()) => {
+  if (!secretUsable() || !op?.device_epoch) return null;
   const issued = Math.floor(now / 1000);
-  return `v1.${op.id}.${issued}.${deviceMac(op, issued)}`;
+  return `v2.${op.id}.${issued}.${deviceMac(op, issued)}`;
 };
 export const knownDevice = async (db, token, now = Date.now()) => {
+  if (!secretUsable()) return false;
   if (!token || typeof token !== 'string' || token.length > 200) return false;
-  const [v, id, issued, mac] = token.split('.');
-  if (v !== 'v1' || !id || !/^\d{1,12}$/.test(issued || '') || !mac) return false;
+  const parts = token.split('.');
+  if (parts.length !== 4) return false;
+  const [v, id, issued, mac] = parts;
+  if (v !== 'v2' || !id || !/^[1-9]\d{0,11}$/.test(issued) || !mac) return false;
   const age = now / 1000 - Number(issued);
   if (age < -300 || age > DEVICE_SECONDS) return false;
   const op = await getOperator(db);
-  if (!op || op.id !== id) return false;
+  if (!op || op.id !== id || !op.device_epoch) return false;
   const want = Buffer.from(deviceMac(op, Number(issued)));
   const got = Buffer.from(mac);
   return want.length === got.length && timingSafeEqual(want, got);
@@ -182,6 +204,8 @@ export const checkCode = async (tx, operatorId, code) => {
     if (at >= 0) {
       const left = list.filter((_, i) => i !== at);
       await tx.query('update operators set recovery = $2, fails = 0, updated_at = now() where id = $1', [op.id, JSON.stringify(left)]);
+      // A recovery code means a lost phone, maybe a lost laptop: forget every browser.
+      await forgetDevices(tx, op.id);
       await appendLog(tx, { operatorId: op.id, action: 'recovery.used', payload: { left: left.length } });
       return { ok: true, via: 'recovery' };
     }
@@ -195,7 +219,11 @@ export const checkCode = async (tx, operatorId, code) => {
   }
   const fails = op.fails + 1;
   await tx.query('update operators set fails = $2 where id = $1', [op.id, fails]);
-  if (fails === LOCK_AFTER) await appendLog(tx, { operatorId: op.id, action: 'signin.locked', payload: {} });
+  if (fails === LOCK_AFTER) {
+    // Someone has the password: forget every browser too.
+    await forgetDevices(tx, op.id);
+    await appendLog(tx, { operatorId: op.id, action: 'signin.locked', payload: {} });
+  }
   return { ok: false, locked: fails >= LOCK_AFTER };
 };
 
