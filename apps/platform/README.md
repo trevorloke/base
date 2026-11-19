@@ -65,9 +65,14 @@ Every Render change ends with **Save and deploy**, then wait for “Live”.
   sign-in skips the per-email limit. A new browser doesn't: a stranger who
   knows your email can hold it at “Too many tries” (15 minutes at a time);
   use a browser you signed in with before, or set up again with a new
-  `OPS_SETUP_CODE`. Setting up again, signing in with a recovery code, and
-  20 wrong codes after a right password each forget every browser — the way
-  to drop a lost or shared one. Signing out keeps the mark.
+  `OPS_SETUP_CODE`. Setting up again and using a recovery code (at sign-in
+  or at a code prompt) each forget every browser but the one that used it —
+  the way to drop a lost or shared one. The wrong-code lock (20 wrong codes
+  after a right password) forgets none: someone with your password could
+  otherwise hold every browser at the email limit, recovery code and all.
+  A copied mark lifts only the email limit for whoever holds it (password and
+  code still needed, 20 tries per address in 15 minutes); drop it with a
+  recovery code. Signing out keeps the mark.
 - **Stop base.win sign-in on one campaign at once:** empty its
   `BASE_PLATFORM_PUBKEY`, Save and deploy. Entry stops and open visits end.
 - **Changing the signing key:** first copy the current `PLATFORM_SIGNING_KEY`

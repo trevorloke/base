@@ -138,12 +138,41 @@ test('20 wrong passwords leave the count alone; 20 wrong codes after a right pas
   }
   assert.equal((await db.query('select fails from operators')).rows[0].fails, 20);
   assert.equal((await db.query("select count(*)::int n from ops_log where action = 'signin.locked'")).rows[0].n, 1);
-  assert.equal(await knownDevice(db, mark), false, 'the lock forgets every browser');
+  // The lock leaves known browsers alone: with only the password, someone
+  // could otherwise hold the operator's own browser at the email limit,
+  // where even a recovery code can't get through.
+  assert.equal(await knownDevice(db, mark), true, 'the lock forgets no browser');
   const right = await browser(again()).post('/signin', { email: EMAIL, password: PASSWORD, code: await codeNow(db, op.secret) });
   assert.equal(right.status, 401, 'a right app code is refused while locked');
-  assert.equal((await browser(again()).post('/signin', { email: EMAIL, password: PASSWORD, code: op.codes[1] })).status, 303);
+  const a = again();
+  for (let i = 0; i < 6; i++) await browser(a, { ip: `198.51.100.${120 + i}` }).post('/signin', { email: EMAIL, password: 'x', code: '1' });
+  const stranger = await browser(a, { ip: '198.51.100.140' }).post('/signin', { email: EMAIL, password: PASSWORD, code: op.codes[1] });
+  assert.equal(stranger.status, 429, 'the email limit is spent');
+  const other = before.jar.get('ops-device');
+  const own = browser(a, { ip: '198.51.100.141' });
+  own.jar.set('ops-device', mark);
+  assert.equal((await own.post('/signin', { email: EMAIL, password: PASSWORD, code: op.codes[1] })).status, 303, 'the operator’s own browser gets in with a recovery code');
   assert.equal((await db.query('select fails from operators')).rows[0].fails, 0);
+  assert.equal(await knownDevice(db, other), false, 'the recovery-code sign-in forgets the other browsers');
+  assert.equal(await knownDevice(db, own.jar.get('ops-device')), true, 'and marks this one');
   assert.equal((await browser(again()).post('/signin', { email: EMAIL, password: PASSWORD, code: await codeNow(db, op.secret) })).status, 303);
+});
+
+test('a recovery code at step-up forgets the other browsers and marks this one again', async () => {
+  await db.query('update operators set fails = 0');
+  const b = browser(again(), { ip: '192.0.2.200' });
+  assert.equal((await b.post('/signin', { email: EMAIL, password: PASSWORD, code: await codeNow(db, op.secret) })).status, 303);
+  const other = browser(again(), { ip: '192.0.2.201' });
+  assert.equal((await other.post('/signin', { email: EMAIL, password: PASSWORD, code: await codeNow(db, op.secret) })).status, 303);
+  const before = b.jar.get('ops-device');
+  assert.equal(await knownDevice(db, before), true);
+  await db.query("update ops_sessions set code_at = now() - interval '11 minutes'");
+  // Any form behind the code window: the code is checked before the address.
+  const res = await b.post('/sample', { server_url: 'not an address', code: op.codes[2] });
+  assert.equal(res.status, 400, 'the code worked; the address didn’t');
+  assert.equal((await db.query("select payload from ops_log where action = 'stepup' order by seq desc limit 1")).rows[0].payload.via, 'recovery');
+  assert.equal(await knownDevice(db, other.jar.get('ops-device')), false, 'other browsers are forgotten');
+  assert.equal(await knownDevice(db, b.jar.get('ops-device')), true, 'this browser is known again');
 });
 
 test('the session cookie: __Host-, Secure, HttpOnly, SameSite=Strict, Path=/, 12 hours; insecure mode for tests only drops the first two', async () => {

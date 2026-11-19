@@ -66,8 +66,9 @@ export const authRoutes = (app, { db, limits }) => {
     // across addresses are spent, so a stranger spending them can't keep
     // the owner out. Those caps only slow guessing: from many addresses a
     // guess still gets right or wrong. The bound is the code itself — the
-    // gate takes only one Render generated (32+ characters of the base64
-    // alphabets, about 190 bits), compared in constant time.
+    // gate turns away short or typed codes (32+ characters of the base64
+    // alphabets) and Render's generated value is 256 random bits, compared
+    // in constant time.
     const byIp = limits.setupIp(clientIp(c));
     const byAll = limits.setupAll('all');
     if (byIp) return c.html(String(setupCodePage({ message: TOO_MANY })), 429);
@@ -197,5 +198,12 @@ export const codeWindow = async (c, { db, limits }, f) => {
   const typed = String(f.code || '').trim();
   if (!typed) return 'stale';
   if (limits.stepUp(session.tokenHash)) return 'wrong';
-  return (await stepUp(db, session, typed)) ? 'ok' : 'wrong';
+  const via = await stepUp(db, session, typed);
+  if (!via) return 'wrong';
+  // A recovery code forgot every browser: this one, which used it, is known again.
+  if (via === 'recovery') {
+    const mark = deviceToken(await getOperator(db));
+    if (mark) writeCookie(c, DEVICE, mark, DEVICE_SECONDS);
+  }
+  return 'ok';
 };

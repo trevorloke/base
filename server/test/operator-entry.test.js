@@ -322,6 +322,10 @@ test('support a manager removed comes back under a new operator id (the control 
   assert.equal(back.json.role, 'manager');
   assert.equal((await db.query('select user_id from operator_links where operator_id = $1', [newOp])).rows[0].user_id, supportId);
   assert.equal((await db.query("select count(*)::int as n from events where action = 'operator.enter' and payload ? 'operator_refused'")).rows[0].n, 0);
+  // One link per account: Members lists base.win support once.
+  assert.equal((await db.query('select count(*)::int as n from operator_links where user_id = $1', [supportId])).rows[0].n, 1);
+  const listed = (await mgr.get('/api/operator')).json.support;
+  assert.deepEqual(listed.map((s) => s.user_id), [supportId]);
 });
 
 test('a refused token is spent: replayed, it is refused as used and the refusal is on the log once', async () => {

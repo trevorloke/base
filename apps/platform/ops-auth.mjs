@@ -15,9 +15,11 @@ export { hashPassword, verifyPassword, dummyVerify };
 
 export const SETUP_CODE_MIN = 24;
 // The setup code must look like one Render generated: 32+ characters of the
-// base64 alphabets, not a phrase. Its length is the bound on guessing: past
-// the per-code and hourly caps (kept so a stranger can't lock the owner
-// out) a guess still gets right/wrong, so the code must be unguessable.
+// base64 alphabets with 16+ distinct. That is a shape check: it turns away
+// short codes and typed phrases, not every weak value (a hand-typed run of
+// the alphabet passes). Past the per-code and hourly caps (kept so a
+// stranger can't lock the owner out) a guess still gets right/wrong, so the
+// bound is the code itself: use Render's generated value (256 random bits).
 export const SETUP_CODE_LEN = 32;
 export const setupCodeLooksGenerated = (code) => {
   const s = String(code ?? '');
@@ -139,9 +141,13 @@ export const SESSION_SECONDS = SESSION_HOURS * 3600;
 // before by spending that limit (the per-address limit and LOCK_AFTER still
 // hold; a new browser can still be held at the email limit). The mark is a
 // bearer token, kept 90 days: it names the operator and the device epoch,
-// which every setup makes new, and which a recovery-code sign-in and the
-// wrong-code lock make new too — each forgets every device. With OPS_SECRET
-// unusable no mark is made or taken. `v2.<operator id>.<issued s>.<mac>`.
+// which every setup makes new, and which a recovery code (at sign-in or
+// step-up) makes new too — each forgets every device, and the browser that
+// used the code gets a new mark. The wrong-code lock does not: it would hand
+// someone with the password a way to hold every browser at the email limit.
+// A stolen mark lifts only the email limit (password and code still needed;
+// the per-address limit still holds). With OPS_SECRET unusable no mark is
+// made or taken. `v2.<operator id>.<issued s>.<mac>`.
 export const DEVICE_DAYS = 90;
 export const DEVICE_SECONDS = DEVICE_DAYS * 86400;
 const newDeviceEpoch = () => randomBytes(16).toString('base64url');
@@ -219,21 +225,24 @@ export const checkCode = async (tx, operatorId, code) => {
   }
   const fails = op.fails + 1;
   await tx.query('update operators set fails = $2 where id = $1', [op.id, fails]);
-  if (fails === LOCK_AFTER) {
-    // Someone has the password: forget every browser too.
-    await forgetDevices(tx, op.id);
-    await appendLog(tx, { operatorId: op.id, action: 'signin.locked', payload: {} });
-  }
+  // The lock leaves known browsers alone: a mark lowers no factor, and
+  // forgetting them here would let someone with only the password hold the
+  // operator's own browser at the email limit, where even a recovery code
+  // can't get through (break-glass only). The recovery-code sign-in that
+  // ends the lock forgets them instead and marks the browser that used it.
+  if (fails === LOCK_AFTER) await appendLog(tx, { operatorId: op.id, action: 'signin.locked', payload: {} });
   return { ok: false, locked: fails >= LOCK_AFTER };
 };
 
 // A right code on a stale window: the window starts again, logged.
+// → false, or how the code was checked ('app' | 'recovery'). A recovery code
+// forgets every browser, so the caller marks this one again.
 export const stepUp = async (db, session, code) => db.transaction(async (tx) => {
   const r = await checkCode(tx, session.operator.id, code);
   if (!r.ok) return false;
   await tx.query('update ops_sessions set code_at = now() where token_hash = $1', [session.tokenHash]);
   await appendLog(tx, { operatorId: session.operator.id, action: 'stepup', payload: { via: r.via } });
-  return true;
+  return r.via;
 });
 
 // Sign in: email, password and code, all three right. Every failure is the

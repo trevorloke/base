@@ -706,8 +706,9 @@ waiting for *Live* (2–3 minutes).
 - **Kept out of ops.base.win on a new browser** ("Too many tries" while a
   stranger spends the per-email limit): sign in from a browser you used
   before, or press **Generate** on `OPS_SETUP_CODE` (base-platform), Save and
-  deploy, and set up again. Setting up again, a recovery code and the
-  wrong-code lock each forget every browser.
+  deploy, and set up again. Setting up again and a recovery code each forget
+  every browser but the one that used it; the wrong-code lock forgets none,
+  so a browser you used before still gets in with a recovery code.
 - **A campaign's managers can stop it** any time: Settings → Members →
   **base.win may sign in here** off. That also ends a visit in progress.
 - **Stop all base.win sign-in on one campaign, at once:** empty

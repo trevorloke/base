@@ -108,6 +108,9 @@ export const enter = async (db, p) => {
         await tx.query('insert into memberships (user_id, workspace_id, role) values ($1, $2, $3)', [id, ws.id, 'manager']);
         emit('membership', id, 'create', { role: 'manager', via: SUPPORT_NAME, user_id: id });
       }
+      // One link per account: under a new operator id (the control centre
+      // made again) the old link goes, so the account isn't listed twice.
+      await tx.query('delete from operator_links where user_id = $2 and operator_id <> $1', [p.op.id, id]);
       await tx.query(
         `insert into operator_links (operator_id, user_id) values ($1, $2)
          on conflict (operator_id) do update set user_id = excluded.user_id`,
