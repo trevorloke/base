@@ -19,7 +19,9 @@
 //   7. Today: "base.win support signed in"; History: "(via base.win)".
 //   8. B at its root works; the same kind of token under /x is refused.
 //   9. A token for A is refused by B (another address).
-//  10. The operator's email a volunteer here: the volunteer line.
+//  10. The operator's email on a member account the campaign made (its own
+//      password): refused, nothing opens. base.win support made a
+//      volunteer by a manager: the volunteer line.
 // Screens at 1440×900 and 390×844: no sideways scroll at 390 px, and the
 // banner's, Enter's and the switch's controls 48 px or more.
 //
@@ -139,8 +141,9 @@ try {
   await control({ STARBASE_OPEN_SIGNUP: null });
   check('the first manager signs up while it is opened', su.status === 201, JSON.stringify(su.json));
   check('closed again after', (await health(A)).setupOpen === false);
-  // A volunteer whose email is another operator's (step 10), and someone to knock on (step 7).
+  // A volunteer, joined with their own password, whose email is another operator's (step 10), and someone to knock on (step 7).
   const OP2 = { id: '7b1f3c2e-0000-4000-8000-000000000002', email: 'vol-owner@example.org' };
+  const OP3 = { id: '7b1f3c2e-0000-4000-8000-000000000003', email: 'support-three@example.org' };
   const inv = await api(mgr, A, '/actions/member.invite', { email: OP2.email, role: 'volunteer' });
   const joined = await api(mgr, A, '/auth/join', { token: inv.json.joinUrl.split('/join/')[1], name: 'Val Example', password: PASSWORD });
   check('a volunteer joins', joined.status === 200, JSON.stringify(joined.json));
@@ -238,9 +241,18 @@ try {
   check('a token for A is refused by B', (await api(b2, B, '/auth/me')).status === 401);
   await b2Ctx.close();
 
-  // ── 10. The operator a volunteer here ──
+  // ── 10. The operator's email on the campaign's own account; support made a volunteer ──
   const { ctx: vCtx, page: vp } = await newPage(DESKTOP, 'volunteer');
   await enter(vp, A, await mint(A, { op: OP2 }));
+  await vp.getByText('An account with your email is on this team with its own password', { exact: false }).waitFor();
+  check('a member account the campaign made with the operator’s email: refused, nothing opens', (await api(vp, A, '/auth/me')).status === 401);
+  await enter(vp, A, await mint(A, { op: OP3 }));
+  await vp.getByText('You’re in as base.win support').first().waitFor();
+  const op3Id = (await api(vp, A, '/auth/me')).json?.user?.id;
+  await api(mgr, A, '/auth/login', { email: 'morgan@example.org', password: PASSWORD });
+  const demoted = await api(mgr, A, '/actions/member.setRole', { user_id: op3Id, role: 'volunteer' });
+  check('a manager makes base.win support a volunteer', demoted.status === 200, JSON.stringify(demoted.json));
+  await enter(vp, A, await mint(A, { op: OP3 }));
   await vp.getByText('You’re in as a volunteer here. A manager can change your role in Settings → Members.').waitFor();
   check('a volunteer here: the volunteer line, the role unchanged', (await api(vp, A, '/auth/me')).json?.role === 'volunteer');
   await shot(vp, 'enter-volunteer-desktop');
@@ -285,7 +297,7 @@ try {
   }
   {
     const { ctx, page } = await newPage(PHONE, 'volunteer-phone');
-    await enter(page, A, await mint(A, { op: OP2 }));
+    await enter(page, A, await mint(A, { op: OP3 }));
     await page.getByText('You’re in as a volunteer here.', { exact: false }).waitFor();
     await shot(page, 'enter-volunteer-phone');
     await phoneOk(page, 'Enter, a volunteer');

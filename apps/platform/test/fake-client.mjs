@@ -30,12 +30,12 @@ const page = (title, body) => `<!doctype html><html lang="en"><head><meta charse
 
 export const startFakeClient = ({ port, env = 'production', publicKey, basePath = '', ownOrigin = `http://127.0.0.1:${port}`, instance = randomBytes(16).toString('base64url') }) => {
   const keys = parseKeys(publicKey);
-  const state = { nonces: new Set(), sessions: new Map(), invites: [], refused: [] };
+  const state = { nonces: new Set(), sessions: new Map(), invites: [], refused: [], made: false };
   const own = `http://127.0.0.1:${port}`;
   const health = () => ({
     ok: true, database: 'ok', service: 'starbase', env, organization: 'Example Campaign', commit: 'f00dfee', build: 'index-test.js', tzdataCurrent: true,
     ownOrigin, instance, address: basePath ? `http://127.0.0.1:5603${basePath}` : own, entry: keys.length ? 'ready' : 'no-key',
-    platformKids: keys.map((k) => k.kid), setupOpen: false, doorKey: true,
+    platformKids: keys.map((k) => k.kid), setupOpen: false, campaignMade: state.made, doorKey: true,
   });
   const sessionOf = (req) => {
     const sid = /(?:^|;\s*)sid=([^;]+)/.exec(req.headers.cookie || '')?.[1];
@@ -60,6 +60,7 @@ export const startFakeClient = ({ port, env = 'production', publicKey, basePath 
         if (!r.ok) return no(r.why);
         if (state.nonces.has(r.payload.nonce)) return no('replay');
         state.nonces.add(r.payload.nonce);
+        state.made = true; // the first entry makes the workspace
         const sid = randomBytes(16).toString('hex');
         state.sessions.set(sid, { until: Date.now() + 2 * 3600_000, op: r.payload.op.id });
         if (r.payload.invite) state.invites.push(r.payload.invite.email);
@@ -80,7 +81,7 @@ export const startFakeClient = ({ port, env = 'production', publicKey, basePath 
   server.listen(port, '127.0.0.1');
   return {
     state, instance, own,
-    reset: () => { state.sessions.clear(); state.invites.length = 0; },
+    reset: () => { state.sessions.clear(); state.invites.length = 0; state.made = false; },
     close: () => new Promise((r) => { server.closeAllConnections?.(); server.close(() => r()); }),
   };
 };

@@ -88,3 +88,28 @@ test('no line of the log is ever changed or removed', () => {
 test('the same kept names as the door', () => {
   assert.deepEqual(RESERVED, DOOR_RESERVED);
 });
+
+// How it ships: ops.base.win deploys from main whatever changed, so its
+// tests run in CI on every change (and over Postgres, as on Render), its
+// Node is pinned, and the notes around it say what is true now.
+test('it ships tested and pinned: CI runs its tests on every change and over Postgres; Render pins Node 22', () => {
+  const REPO = join(ROOT, '..', '..');
+  const read = (p) => readFileSync(join(REPO, p), 'utf8');
+  const ci = read('.github/workflows/ci.yml');
+  assert.match(ci, /run: npm run test:platform\s*$/m, 'ci.yml runs the control centre’s tests on every change');
+  const wf = read('.github/workflows/base-platform.yml');
+  assert.match(wf, /run: npm run test:platform:pg\s*$/m, 'base-platform.yml runs them over Postgres');
+  for (const path of ['shared/**', 'web/src/app.css', 'package.json', 'package-lock.json', 'server/lib/**', 'server/test/entry-vector.json']) {
+    for (const on of ['push', 'pull_request']) {
+      const block = new RegExp(`${on}:[\\s\\S]*?paths: \\[([^\\]]*)\\]`).exec(wf)?.[1] || '';
+      assert.ok(block.includes(`'${path}'`), `base-platform.yml ${on} paths include ${path}`);
+    }
+  }
+  const render = read('render.yaml');
+  const platform = /name: base-platform\n[\s\S]*?\n {2}- |name: base-platform\n[\s\S]*?\ndatabases:/.exec(render)?.[0] || '';
+  assert.match(platform, /- key: NODE_VERSION[^\n]*\n\s+value: "22"/, 'base-platform pins Node 22 for Render’s native runtime');
+  const header = render.split('\n').filter((l) => l.startsWith('#')).slice(0, 15).join('\n');
+  assert.doesNotMatch(header, /-staging\)|copy of this file's pair/, 'render.yaml’s header no longer says to copy the pair');
+  assert.match(header, /New campaign/);
+  assert.doesNotMatch(read('apps/platform/README.md'), /Until the campaign server.s own entry is merged/);
+});

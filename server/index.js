@@ -23,7 +23,7 @@ import { brandPages } from './lib/brand.js';
 import { siteGate } from './ext/site/public.js';
 import { currentBuild } from './lib/build.js';
 import { entryReadiness, ownOrigin, parseKeys } from './lib/entry.js';
-import { setupOpen } from './lib/setup.js';
+import { setupOpen, noWorkspace } from './lib/setup.js';
 import { configuredUrl } from './lib/calendar.js';
 import { instanceOf } from './ext/operator/identity.js';
 import { start as startUsage, flush as flushUsage } from './lib/gusage.js';
@@ -88,7 +88,8 @@ const COMMIT = String(process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT ||
 // For the base.win control centre (ext/operator), nothing secret and nothing
 // about people: this server's own address and instance (what an entry token
 // must name), the campaign's public address, whether entry is set up and the
-// keys it holds (by kid), whether first-run sign-up is open, and whether the
+// keys it holds (by kid), whether first-run sign-up is open, whether the
+// campaign has been made (a workspace exists: campaignMade), and whether the
 // door's key is set (never the key). Never the campaign's switch.
 const publicAddress = () => {
   const raw = configuredUrl();
@@ -99,10 +100,11 @@ app.get('/api/health', async (c) => {
   const db = database ? await getDb().catch(() => null) : null;
   const instance = db ? await instanceOf(db).catch(() => null) : null;
   const open = db ? await setupOpen(db).catch(() => null) : null;
+  const made = db ? await noWorkspace(db).then((none) => !none, () => null) : null;
   return c.json({
     ok: database, database: database ? 'ok' : 'not reachable', service: 'starbase', env: envName(), organization: orgName(), commit: COMMIT, build: currentBuild(), tzdataCurrent: !staleTimeZoneData(),
     ownOrigin: ownOrigin(), instance, address: publicAddress(), entry: entryReadiness(),
-    platformKids: parseKeys().map((k) => k.kid), setupOpen: open, doorKey: doorKeySet(),
+    platformKids: parseKeys().map((k) => k.kid), setupOpen: open, campaignMade: made, doorKey: doorKeySet(),
   }, database ? 200 : 503);
 });
 app.route('/api/auth', authRoutes);

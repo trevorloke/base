@@ -1,10 +1,12 @@
 // The key from PLATFORM_SIGNING_KEY: the shared vector's seed, public key and kid.
+// The vector is the campaign server's own (server/test/entry-vector.json):
+// one copy, so the two sides can't drift apart.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { seedOf, publicKeyOf, signingValues } from '../keys.mjs';
 
-const V = JSON.parse(readFileSync(new URL('./entry-vector.json', import.meta.url), 'utf8'));
+const V = JSON.parse(readFileSync(new URL('../../../server/test/entry-vector.json', import.meta.url), 'utf8'));
 
 test('seed, public key and kid match the shared vector; the first of a list signs', () => {
   assert.equal(seedOf(V.signingKey).toString('hex'), V.seedHex);

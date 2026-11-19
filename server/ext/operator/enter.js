@@ -3,9 +3,13 @@
 // check, and a two-hour sign-in — all on the campaign's own log.
 //
 // The account: the one linked to this operator before; else a member here
-// with the operator's email; else a new "base.win support" account with no
-// password. An account with that email that isn't on the team is never
-// taken over (409). An existing member's role and name never change; a
+// with the operator's email that is already base.win support's (support, or
+// linked to an earlier operator id); else a new "base.win support" account
+// with no password. An account with that email that isn't on the team is
+// never taken over (409 email-taken); nor is a member account of the
+// campaign's own making (its own password, maybe two-step): a manager could
+// invite the operator's email and join it with a password they chose, then
+// share or speak as base.win support (409 email-in-use). An existing member's role and name never change; a
 // linked account a manager removed is put back as a manager — the switch
 // (Settings → Members) is the campaign's consent, the member row its face.
 import { newId, runAction } from '../../lib/events.js';
@@ -22,7 +26,7 @@ const settingsOf = (s) => (typeof s === 'string' ? JSON.parse(s) : s || {});
 const firstWorkspace = async (db) =>
   (await db.query('select id, settings from workspaces order by created_at limit 1')).rows[0] || null;
 
-// → { token, userId, workspaceId } or { refused: 'off' | 'email-taken' | 'entry' }
+// → { token, userId, workspaceId } or { refused: 'off' | 'email-taken' | 'email-in-use' | 'entry' }
 export const enter = async (db, p) => {
   const email = p.op.email.toLowerCase();
   // Read only, first: the switch and the account.
@@ -30,18 +34,25 @@ export const enter = async (db, p) => {
   if (ws && settingsOf(ws.settings).operatorEntry === false && !demoEmail()) return { refused: 'off' };
   let userId = (await db.query('select user_id from operator_links where operator_id = $1', [p.op.id])).rows[0]?.user_id || null;
   if (!userId) {
-    const u = (await db.query('select id from users where email = $1', [email])).rows[0];
+    const u = (await db.query(
+      `select id, support, exists (select 1 from operator_links l where l.user_id = users.id) as linked
+       from users where email = $1`,
+      [email],
+    )).rows[0];
     if (u) {
       const member = ws && (await db.query('select 1 from memberships where user_id = $1 and workspace_id = $2', [u.id, ws.id])).rows[0];
-      if (!member) {
-        // Someone else's account, maybe: never linked. On the log, as the system.
+      const refuse = async (why) => {
+        // Never linked. On the log, as the system.
         if (ws) {
           await runAction(db, { workspaceId: ws.id, actorId: null, action: 'operator.enter' }, async (tx, emit) => {
-            emit('workspace', ws.id, 'update', { operator_refused: 'email-taken' });
+            emit('workspace', ws.id, 'update', { operator_refused: why });
           });
         }
-        return { refused: 'email-taken' };
-      }
+        return { refused: why };
+      };
+      // Someone else's account, maybe.
+      if (!member) return refuse('email-taken');
+      if (!u.support && !u.linked) return refuse('email-in-use');
       userId = u.id;
     }
   }

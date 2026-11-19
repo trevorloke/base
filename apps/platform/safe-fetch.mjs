@@ -14,7 +14,12 @@ import { cfg } from './config.mjs';
 const BLOCKED = new net.BlockList();
 for (const [a, p] of [['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0', 10], ['127.0.0.0', 8], ['169.254.0.0', 16], ['172.16.0.0', 12],
   ['192.0.0.0', 24], ['192.0.2.0', 24], ['192.168.0.0', 16], ['198.18.0.0', 15], ['198.51.100.0', 24], ['203.0.113.0', 24], ['224.0.0.0', 3]]) BLOCKED.addSubnet(a, p, 'ipv4');
-for (const [a, p] of [['::', 128], ['::1', 128], ['fc00::', 7], ['fe80::', 10], ['ff00::', 8], ['64:ff9b::', 96], ['2001:db8::', 32]]) BLOCKED.addSubnet(a, p, 'ipv6');
+// IPv6: unspecified, loopback and IPv4-compatible (::/96, so ::7f00:1 is
+// 127.0.0.1), unique-local, link-local, the old site-local (fec0::/10),
+// multicast, NAT64 (well-known and local-use) and 6to4 / Teredo (which
+// embed an IPv4 address that may be private), and documentation.
+for (const [a, p] of [['::', 96], ['::1', 128], ['fc00::', 7], ['fe80::', 10], ['fec0::', 10], ['ff00::', 8], ['64:ff9b::', 96], ['64:ff9b:1::', 48],
+  ['2002::', 16], ['2001::', 32], ['2001:db8::', 32]]) BLOCKED.addSubnet(a, p, 'ipv6');
 
 class Refused extends Error { constructor(name) { super(name); this.name = name; } }
 

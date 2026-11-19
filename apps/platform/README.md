@@ -78,5 +78,8 @@ Every Render change ends with **Save and deploy**, then wait for “Live”.
 - `npm run test:platform` (and `npm run test:platform:pg` over Postgres):
   `apps/platform/test/*.test.mjs`.
 - `e2e-ops.mjs` at the repo root (ports 5600–5609; system node, under the
-  browser lock). Until the campaign server’s own entry is merged it runs
-  against `test/fake-client.mjs`.
+  browser lock; `npm run build` first). Campaign “b” is a real campaign
+  server (`node server/index.js`, in memory, holding base.win’s key): New
+  campaign, Check now, then Invite and open the desk on it. The others are
+  `test/fake-client.mjs`, which checks each token by the campaign side’s
+  rules.

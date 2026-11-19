@@ -38,12 +38,19 @@ test('a wrong code is refused; 11 tries from one address are limited', async () 
   assert.equal((await browser(app, { ip: '198.51.100.8' }).post('/setup', { code: SETUP_CODE })).status, 303, 'another address still can');
 });
 
-test('30 tries in all for one code: a new code is needed, even from new addresses', async () => {
+test('30 wrong tries in all for one code: no more guesses, even from new addresses — but the right code still goes through', async () => {
   const { app } = await fresh();
   for (let i = 0; i < 30; i++) await browser(app, { ip: `192.0.2.${i + 1}` }).post('/setup', { code: 'wrong' });
-  const res = await browser(app, { ip: '192.0.2.200' }).post('/setup', { code: SETUP_CODE });
+  const res = await browser(app, { ip: '192.0.2.200' }).post('/setup', { code: 'still wrong' });
   assert.equal(res.status, 429);
   assert.match(await res.text(), /Too many tries with this code\. Press Generate next to OPS_SETUP_CODE in Render for a new one\./);
+  // A stranger spending the code's tries and the hourly limit can't keep the owner out.
+  const ob = browser(app, { ip: '192.0.2.201' });
+  const owner = await ob.post('/setup', { code: SETUP_CODE });
+  assert.equal(owner.status, 303);
+  assert.equal(owner.headers.get('location'), '/setup/you');
+  const next = await ob.post('/setup/you', { name: 'Olive Example', email: 'owner@example.org', password: 'a long test password 1' });
+  assert.equal(next.headers.get('location'), '/setup/app', 'and on through the next step');
   process.env.OPS_SETUP_CODE = `${SETUP_CODE}-new`;
   // The global limit (30 an hour) still holds this hour; the per-code count is new.
   const { db } = await fresh();

@@ -27,6 +27,7 @@ export const fieldsOf = (h) => ({
   entry: str(h.entry),
   platform_kids: Array.isArray(h.platformKids) ? h.platformKids.filter((k) => typeof k === 'string').slice(0, 8).map((k) => k.slice(0, 200)) : null,
   setup_open: bool(h.setupOpen),
+  campaign_made: bool(h.campaignMade),
   door_key: bool(h.doorKey),
 });
 
@@ -48,7 +49,7 @@ export const checkUrl = async (url, { fetcher = safeGet } = {}) => {
   }
 };
 
-const COLS = ['answering', 'status', 'ms', 'database', 'commit', 'build', 'tz_current', 'env_reported', 'own_origin', 'instance', 'address', 'entry', 'platform_kids', 'setup_open', 'door_key', 'problem'];
+const COLS = ['answering', 'status', 'ms', 'database', 'commit', 'build', 'tz_current', 'env_reported', 'own_origin', 'instance', 'address', 'entry', 'platform_kids', 'setup_open', 'campaign_made', 'door_key', 'problem'];
 const record = (db, campaign, env, via, r) => db.query(
   `insert into checks (campaign, env, via, ${COLS.join(', ')}) values ($1, $2, $3, ${COLS.map((_, i) => `$${i + 4}`).join(', ')})`,
   [campaign, env, via, ...COLS.map((k) => (k === 'platform_kids' ? (r[k] == null ? null : JSON.stringify(r[k])) : r[k] ?? null))],

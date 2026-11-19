@@ -573,8 +573,8 @@ theirs without it.
 
 ## 6 · A new client
 
-Each client is its own pair of services and its own databases; nothing is
-shared, and the code names no client.
+Each client is its own production service and its own database; nothing
+is shared, and the code names no client.
 
 1. Use the control centre's **New campaign** (ops.base.win): it walks every
    step in the Render dashboard — the campaign's values, one block to paste

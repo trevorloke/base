@@ -49,7 +49,9 @@ export const autoDone = ({ envRow, server, door, kid = currentKid() }) => {
   if (server.entry === 'ready' && kid && (server.platform_kids || []).includes(kid) && envRow.instance && server.instance === envRow.instance) out.push('entry');
   if (server.door_key === true) out.push('door-key');
   if (door?.answering && envRow.instance && door.instance === envRow.instance) out.push('door');
-  if (server.setup_open === false) out.push('campaign-made');
+  // A workspace exists (the first entry or sign-up made it). setup_open is
+  // no sign of it: it is false on any server holding the control centre's key.
+  if (server.campaign_made === true) out.push('campaign-made');
   return out;
 };
 

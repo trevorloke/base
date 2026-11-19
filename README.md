@@ -222,7 +222,8 @@ While `BASE_PLATFORM_PUBKEY` is set and no campaign exists yet, first-run
 sign-up is closed: the control centre's first visit makes the campaign.
 `/api/health` shows what the control centre needs and nothing about people:
 `ownOrigin`, `instance`, `address`, `entry` (`ready`, `no-key`, `bad-key`,
-`no-origin`), `platformKids`, `setupOpen` and `doorKey`.
+`no-origin`), `platformKids`, `setupOpen`, `campaignMade` (a workspace
+exists) and `doorKey`.
 
 ### Email from a person's page
 

@@ -91,6 +91,9 @@ create table if not exists checks (
   problem text                           -- error name only, never a body
 );
 create index if not exists checks_recent on checks (campaign, env, via, at desc);
+-- Whether the campaign's workspace exists (health campaignMade). setup_open
+-- is false on any server holding the control centre's key, made or not.
+alter table checks add column if not exists campaign_made boolean;
 
 create table if not exists checklist (
   campaign text not null references campaigns(name),

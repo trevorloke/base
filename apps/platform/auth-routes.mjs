@@ -5,9 +5,9 @@ import { newTotpSecret, setupFor, verifyTotp, base32Decode } from '../../server/
 import {
   setupState, setupCodeMatches, setupTries, countSetupTry, newSetupTicket, getSetupTicket, SETUP_TICKET_SECONDS,
   SETUP_TRIES_MAX, finishSetup, hashPassword, seal, unseal, signIn, loadSession, endSession, SESSION_SECONDS,
-  codeFresh, stepUp, sha256,
+  codeFresh, stepUp, sha256, getOperator, deviceToken, knownDevice, DEVICE_SECONDS,
 } from './ops-auth.mjs';
-import { form, readCookie, writeCookie, clearCookie, SESSION, SETUP } from './web.mjs';
+import { form, readCookie, writeCookie, clearCookie, SESSION, SETUP, DEVICE } from './web.mjs';
 import {
   setupProblemPage, setupCodePage, setupYouPage, setupAppPage, setupCodesPage, signinPage,
 } from './pages/auth.mjs';
@@ -35,12 +35,10 @@ const keepCodes = (tokenHash, codes) => {
 };
 
 export const authRoutes = (app, { db, limits }) => {
-  const setupLimited = (c) => {
-    const ip = clientIp(c);
-    const a = limits.setupIp(ip);
-    const b = limits.setupAll('all');
-    return a || b;
-  };
+  // The steps after the code hold a setup ticket (only the right code makes
+  // one): limited per address only, so a stranger spending the hourly limit
+  // across addresses can't stop the owner half-way.
+  const setupLimited = (c) => limits.setupIp(clientIp(c));
   // Every setup page: open, or the line saying why not, or off to sign in.
   const gate = async (c) => {
     const state = await setupState(db);
@@ -58,12 +56,19 @@ export const authRoutes = (app, { db, limits }) => {
     const g = await gate(c);
     if (g.stop) return g.stop;
     const f = await form(c);
-    const limited = setupLimited(c);
-    if (await setupTries(db) >= SETUP_TRIES_MAX) {
-      return c.html(String(setupCodePage({ message: 'Too many tries with this code. Press Generate next to OPS_SETUP_CODE in Render for a new one.' })), 429);
-    }
-    if (limited) return c.html(String(setupCodePage({ message: TOO_MANY })), 429);
+    // The per-address limit holds for every try. Past it, the right code
+    // goes through even when this code's 30 tries or the hourly limit
+    // across addresses are spent: those stop guessing, and a stranger
+    // spending them must not keep the owner out (the code is 24+ random
+    // characters, compared in constant time).
+    const byIp = limits.setupIp(clientIp(c));
+    const byAll = limits.setupAll('all');
+    if (byIp) return c.html(String(setupCodePage({ message: TOO_MANY })), 429);
     if (!setupCodeMatches(f.code)) {
+      if (await setupTries(db) >= SETUP_TRIES_MAX) {
+        return c.html(String(setupCodePage({ message: 'Too many tries with this code. Press Generate next to OPS_SETUP_CODE in Render for a new one.' })), 429);
+      }
+      if (byAll) return c.html(String(setupCodePage({ message: TOO_MANY })), 429);
       await countSetupTry(db);
       return c.html(String(setupCodePage({ message: 'That isn’t the setup code.' })), 401);
     }
@@ -126,6 +131,8 @@ export const authRoutes = (app, { db, limits }) => {
     }
     clearCookie(c, SETUP);
     writeCookie(c, SESSION, done.token, SESSION_SECONDS);
+    const op = await getOperator(db);
+    if (op) writeCookie(c, DEVICE, deviceToken(op), DEVICE_SECONDS);
     keepCodes(sha256(done.token), done.codes);
     return c.redirect('/setup/codes', 303);
   });
@@ -148,11 +155,17 @@ export const authRoutes = (app, { db, limits }) => {
     const state = await setupState(db);
     const again = (message, code) => c.html(String(signinPage({ email, message, setupOpen: state.open })), code);
     const byIp = limits.signinIp(clientIp(c));
-    const byEmail = limits.signinEmail(email);
+    // A browser that has signed in here before skips the per-email limit
+    // (anyone who knows the email could spend it); the address limit and
+    // the wrong-code lock still hold.
+    const known = await knownDevice(db, readCookie(c, DEVICE));
+    const byEmail = known ? false : limits.signinEmail(email);
     if (byIp || byEmail) return again(TOO_MANY, 429);
     const done = await signIn(db, { email, password: f.password, code: f.code });
     if (!done) return again(NO_MATCH, 401);
     writeCookie(c, SESSION, done.token, SESSION_SECONDS);
+    const op = await getOperator(db);
+    if (op) writeCookie(c, DEVICE, deviceToken(op), DEVICE_SECONDS);
     return c.redirect('/', 303);
   });
   app.post('/signout', async (c) => {

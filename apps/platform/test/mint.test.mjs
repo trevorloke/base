@@ -3,11 +3,14 @@
 // and no audience but https (127.0.0.1 only when local is allowed).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { mint, mintFor } from '../mint.mjs';
 import { verifyEntry, parseKeys } from './verify-entry.mjs';
+// Tests only: the campaign server's own check, so a change on one side
+// alone fails here (the console's sources never import it).
+import { verifyEntry as serverVerify, parseKeys as serverKeys } from '../../../server/lib/entry.js';
 
-const V = JSON.parse(readFileSync(new URL('./entry-vector.json', import.meta.url), 'utf8'));
+const V = JSON.parse(readFileSync(new URL('../../../server/test/entry-vector.json', import.meta.url), 'utf8'));
 const decode = (token) => Buffer.from(token.split('.')[2], 'base64url').toString('utf8');
 
 test('the shared vector: both tokens exactly, with one key and with two', () => {
@@ -56,4 +59,18 @@ test('an audience that isn’t https is refused, unless local is allowed (and th
   assert.ok(mint(V.signingKey, { ...p, aud: 'http://127.0.0.1:5601' }, { allowLocal: true }));
   assert.throws(() => mint(V.signingKey, { ...p, aud: 'http://localhost:5601' }, { allowLocal: true }), /audience/);
   assert.throws(() => mintFor({ aud: V.audience, env: 'production', inst: V.instance, op: p.op, signingKey: 'short' }), /PLATFORM_SIGNING_KEY/);
+});
+
+test('one shared vector, the campaign server’s: no copy here; the server’s own check passes the console’s tokens', () => {
+  assert.equal(existsSync(new URL('./entry-vector.json', import.meta.url)), false, 'no second copy to drift');
+  const keys = serverKeys(`${V.publicKey},${V.otherPublicKey}`);
+  for (const c of V.cases) {
+    const token = mint(V.signingKey, JSON.parse(c.payloadJson));
+    assert.deepEqual(serverVerify(token, { keys, aud: V.audience, env: V.env, inst: V.instance, nowMs: V.nowMs }), { ok: true, payload: JSON.parse(c.payloadJson) }, c.name);
+  }
+  // A fresh token from mintFor, too.
+  const nowMs = Date.now();
+  const op = { id: '7b1f3c2e-0000-4000-8000-000000000001', email: 'owner@example.org', stepUpAt: nowMs / 1000 - 30 };
+  const { token } = mintFor({ aud: V.audience, env: 'production', inst: V.instance, op, nowMs, signingKey: V.signingKey });
+  assert.equal(serverVerify(token, { keys, aud: V.audience, env: 'production', inst: V.instance, nowMs }).ok, true);
 });

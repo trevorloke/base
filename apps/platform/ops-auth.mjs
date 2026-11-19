@@ -120,6 +120,34 @@ export const createSession = async (q, operatorId) => {
 };
 export const SESSION_SECONDS = SESSION_HOURS * 3600;
 
+// ── Known devices ──
+// A browser that has signed in (or finished setup) keeps a signed mark for
+// 90 days. Sign-in from it skips the per-email limit, so a stranger who
+// knows the operator's email can't keep the operator out by spending that
+// limit (the per-address limit and LOCK_AFTER still hold). The mark names
+// the operator and the setup it was made under: setting up again (break-
+// glass) forgets every device. `v1.<operator id>.<issued s>.<mac>`.
+export const DEVICE_DAYS = 90;
+export const DEVICE_SECONDS = DEVICE_DAYS * 86400;
+const deviceMac = (op, issued) => createHmac('sha256', derive('base.win/ops-device/v1'))
+  .update(`v1.${op.id}.${op.setup_code_hash}.${issued}`).digest('base64url');
+export const deviceToken = (op, now = Date.now()) => {
+  const issued = Math.floor(now / 1000);
+  return `v1.${op.id}.${issued}.${deviceMac(op, issued)}`;
+};
+export const knownDevice = async (db, token, now = Date.now()) => {
+  if (!token || typeof token !== 'string' || token.length > 200) return false;
+  const [v, id, issued, mac] = token.split('.');
+  if (v !== 'v1' || !id || !/^\d{1,12}$/.test(issued || '') || !mac) return false;
+  const age = now / 1000 - Number(issued);
+  if (age < -300 || age > DEVICE_SECONDS) return false;
+  const op = await getOperator(db);
+  if (!op || op.id !== id) return false;
+  const want = Buffer.from(deviceMac(op, Number(issued)));
+  const got = Buffer.from(mac);
+  return want.length === got.length && timingSafeEqual(want, got);
+};
+
 // → { tokenHash, operator, codeAge (seconds) } or null. Ends at 12 hours,
 // or after 30 minutes without a request; seen at most once a minute.
 export const loadSession = async (db, token) => {

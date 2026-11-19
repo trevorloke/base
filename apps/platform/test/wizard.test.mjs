@@ -24,7 +24,7 @@ const fetcher = async (url) => {
 };
 const health = (origin, over = {}) => ({
   ok: true, database: 'ok', service: 'starbase', env: 'production', commit: 'd9130ae', tzdataCurrent: true, ownOrigin: origin, instance: INST,
-  address: 'https://base.win/x', entry: 'ready', platformKids: [currentKid()], setupOpen: false, doorKey: true, ...over,
+  address: 'https://base.win/x', entry: 'ready', platformKids: [currentKid()], setupOpen: false, campaignMade: true, doorKey: true, ...over,
 });
 const { db } = await freshApp();
 const app = makeApp({ db, fetcher });

@@ -11,7 +11,10 @@
 // the desk in that same tab (no third tab); invites the first manager (the
 // invite shows on Members, the checklist says "Done by itself", the door
 // knows it); a server reporting another address shows "This server says it
-// is somewhere else" and no Open; the log is intact with every kind of
+// is somewhere else" and no Open; on a real campaign server
+// (node server/index.js, fresh, holding base.win's key) Campaign made stays
+// unticked until Invite and open the desk makes the campaign, and the desk
+// opens with the invite on Members; the log is intact with every kind of
 // line; and a recovery code signs in. Screens at 1440x900 and 390x844: one
 // primary button at most (exactly one where the screen has a main action),
 // controls at least 48 px on the phone, no sideways scroll.
@@ -19,15 +22,17 @@
 // Ports 5600–5609: 5600 the console (in this process, so the test can age
 // the code in its database), 5601 campaign "a" (production, BASE_PATH=/a),
 // 5602 the sample (staging), 5603 the door, 5605 a server that says it is
-// 5601. Until the campaign server's own entry (builder A) is merged, 5601,
-// 5602 and 5605 are apps/platform/test/fake-client.mjs, which checks each
-// token with the campaign side's rules; after the merge, real servers.
+// 5601, 5606 campaign "b" — a real campaign server (node server/index.js,
+// in memory; needs npm run build). 5601, 5602 and 5605 are
+// apps/platform/test/fake-client.mjs, which checks each token with the
+// campaign side's rules; "b" checks them with its own.
 //
 // Run (system node, under the browser lock):
 //   flock -o SP/batch6/locks/browser.lock node e2e-ops.mjs
 //   SHOTS=<dir> to keep the screenshots elsewhere.
 import { createRequire } from 'node:module';
 import { createServer } from 'node:http';
+import { spawn } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 
 const ROOT = new URL('.', import.meta.url).pathname;
@@ -60,6 +65,19 @@ const a = startFakeClient({ port: 5601, env: 'production', publicKey: KEY, baseP
 const sample = startFakeClient({ port: 5602, env: 'staging', publicKey: KEY });
 const liar = startFakeClient({ port: 5605, env: 'staging', publicKey: KEY, ownOrigin: 'http://127.0.0.1:5601' });
 const door = createServer(handler(readClients('{"a":{"server":"http://127.0.0.1:5601"}}'), { doorKey: '' })).listen(5603, '127.0.0.1');
+// Campaign "b": a real, fresh campaign server holding base.win's key, as New campaign sets one up.
+const REAL = 'http://127.0.0.1:5606';
+const realEnv = { ...process.env, PORT: '5606', STARBASE_DATA: 'memory', STARBASE_JOBS: 'off', STARBASE_ENV: 'production', BASE_PLATFORM_PUBKEY: KEY, STARBASE_OWN_URL: REAL };
+for (const k of ['STARBASE_OPEN_SIGNUP', 'STARBASE_DEMO_EMAIL', 'RENDER_EXTERNAL_URL', 'STARBASE_PUBLIC_URL', 'BASE_PATH', 'DATABASE_URL', 'MAIL_PROVIDER', 'RESEND_API_KEY', 'SENDGRID_API_KEY']) delete realEnv[k];
+let realLog = '';
+const real = spawn(process.execPath, ['server/index.js'], { cwd: ROOT, env: realEnv, stdio: ['ignore', 'pipe', 'pipe'] });
+real.stdout.on('data', (d) => { realLog += d; });
+real.stderr.on('data', (d) => { realLog += d; });
+process.on('exit', () => { try { real.kill('SIGTERM'); } catch { /* gone */ } });
+for (let i = 0; i < 120; i += 1) {
+  if ((await fetch(`${REAL}/api/health`).then((r) => r.json()).catch(() => null))?.ok) break;
+  await new Promise((r) => setTimeout(r, 250));
+}
 
 const browser = await chromium.launch();
 const ctx = await browser.newContext({ deviceScaleFactor: 1, viewport: { width: 1440, height: 900 } });
@@ -236,7 +254,43 @@ try {
   await page.goto(`${B}/`);
   await look(page, '16-campaigns-with-chip');
 
-  // Add a running campaign (the form) and base.win's key.
+  // 7b. A real campaign server, fresh: Campaign made waits for the first entry.
+  await page.goto(`${B}/new`);
+  await page.fill('#name', 'b');
+  await page.fill('#display', 'Example B');
+  await page.fill('#city', 'Exampleton');
+  await page.selectOption('#province', 'BC');
+  await page.click('.btn-primary');
+  await page.waitForURL(/\/c\/b\/setup$/);
+  await page.fill('#server_url', REAL);
+  await page.click('button:has-text("Save address")');
+  await page.waitForURL(/\/c\/b\/setup$/);
+  ok(/Answering/.test(await text(page)), 'the real server answers');
+  const freshHealth = await fetch(`${REAL}/api/health`).then((r) => r.json());
+  ok(freshHealth.setupOpen === false && freshHealth.campaignMade === false, 'the fresh real server: sign-up closed, no campaign yet');
+  await page.goto(`${B}/c/b`);
+  await page.click('form[action="/c/b/check-now"] button');
+  await page.waitForURL(/\/c\/b$/);
+  ok(!/Campaign made Done by itself/.test((await text(page)).replace(/\s+/g, ' ')), 'the checklist: Campaign made not ticked before any entry');
+  await page.fill('#invite-b', 'kim@example.org');
+  const tabB = await newTab(() => page.click('button:has-text("Invite and open the desk")'));
+  try { await tabB.waitForURL(`${REAL}/admin/settings/members`, { timeout: 15_000 }); } catch (e) {
+    console.log(`  at ${tabB.url()}: ${(await tabB.textContent('body').catch(() => '')).trim().slice(0, 300)}\n${realLog.slice(-1500)}`);
+    throw e;
+  }
+  await tabB.waitForSelector('text=You’re in as base.win support', { timeout: 10_000 });
+  ok(true, 'Invite and open the desk on the real server: the banner');
+  await tabB.waitForSelector('text=kim@example.org', { timeout: 10_000 }).then(() => ok(true, 'the real desk shows the invite'), () => fail('the real desk shows the invite'));
+  await tabB.close();
+  ok((await fetch(`${REAL}/api/health`).then((r) => r.json())).campaignMade === true, 'the first entry made the campaign');
+  await page.goto(`${B}/c/b`);
+  await page.click('form[action="/c/b/check-now"] button');
+  await page.waitForURL(/\/c\/b$/);
+  const bText = (await text(page)).replace(/\s+/g, ' ');
+  ok(/Campaign made Done by itself/.test(bText), 'the checklist: Campaign made, once the server says so');
+  ok(/First manager invited Done by itself/.test(bText), 'the checklist: First manager invited (real server)');
+  await look(page, '16b-one-campaign-real-server');
+
   await page.goto(`${B}/existing`);
   await look(page, '17-add-running');
   await page.goto(`${B}/key`);
@@ -273,6 +327,7 @@ try {
   platform.close();
   door.close();
   await Promise.all([a.close(), sample.close(), liar.close()]);
+  try { real.kill('SIGTERM'); } catch { /* gone */ }
   await db.close();
 }
 console.log(failures ? `${failures} failed` : 'e2e-ops: all passed');

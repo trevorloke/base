@@ -4,10 +4,12 @@
 #                       by the "Promote to production" workflow (GitHub → Actions)
 # Each has its own Postgres database; nothing is shared between them.
 #
-# Another client is another copy of this file's pair with its own names
-# (base-win-<client>, base-win-<client>-staging) and its own STARBASE_* values —
-# see GOING-LIVE.md "A new client". Service names are unique per Render
-# account, so the copy must rename every service and database.
+# Another client is made with the control centre: ops.base.win → New campaign
+# walks Render through one production service and its database
+# (base-win-<client>, base-win-<client>-db) — see GOING-LIVE.md §6 "A new
+# client". The fallback: copy the production block (base-win and its
+# database) under those names with its own STARBASE_* values. Service names
+# are unique per Render account, so the copy must rename both.
 #
 # Docs: https://render.com/docs/blueprint-spec
 #
@@ -205,6 +207,8 @@ services:
     healthCheckPath: /healthz
     autoDeploy: true
     envVars:
+      - key: NODE_VERSION            # Render's native Node: the same 22 as CI and the Dockerfile
+        value: "22"
       - key: NODE_ENV
         value: production
       - key: DATABASE_URL

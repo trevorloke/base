@@ -26,7 +26,7 @@ const health = async () => (await app.request('/api/health')).json();
 test('the exact fields', async () => {
   const h = await health();
   assert.deepEqual(Object.keys(h).sort(), [
-    'address', 'build', 'commit', 'database', 'doorKey', 'entry', 'env', 'instance', 'ok', 'organization',
+    'address', 'build', 'campaignMade', 'commit', 'database', 'doorKey', 'entry', 'env', 'instance', 'ok', 'organization',
     'ownOrigin', 'platformKids', 'service', 'setupOpen', 'tzdataCurrent',
   ]);
   assert.match(h.instance, /^[A-Za-z0-9_-]{22}$/);
@@ -34,6 +34,7 @@ test('the exact fields', async () => {
   assert.equal(h.address, null);
   assert.deepEqual(h.platformKids, []);
   assert.equal(h.setupOpen, true);
+  assert.equal(h.campaignMade, false);
   assert.equal(h.doorKey, false);
 });
 
@@ -55,8 +56,10 @@ test('entry: no-key, bad-key, no-origin, ready; the kids held', async () => {
   assert.equal((await health()).ownOrigin, 'http://127.0.0.1:5630');
   process.env.BASE_PLATFORM_PUBKEY = `${V.otherPublicKey},${V.publicKey}`;
   assert.deepEqual((await health()).platformKids, [V.otherKid, 'cd935ce9']);
-  // The key closes first-run sign-up on a server with no campaign.
+  // The key closes first-run sign-up on a server with no campaign — and
+  // that is not a campaign made: campaignMade says whether a workspace exists.
   assert.equal((await health()).setupOpen, false);
+  assert.equal((await health()).campaignMade, false);
   process.env.STARBASE_OPEN_SIGNUP = '1';
   assert.equal((await health()).setupOpen, true);
   delete process.env.STARBASE_OPEN_SIGNUP;
@@ -86,6 +89,7 @@ test('the instance is kept across a restart on the same database; the switch cha
   assert.equal((await mgr.signup({ name: 'Morgan Example', email: 'morgan@example.org' })).status, 201);
   delete process.env.STARBASE_OPEN_SIGNUP;
   const before = await health();
+  assert.equal(before.campaignMade, true);
   assert.equal((await mgr.action('workspace.operatorEntry', { on: false })).status, 200);
   const afterOff = await health();
   delete before.build; delete afterOff.build;

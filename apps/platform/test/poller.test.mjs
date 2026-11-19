@@ -16,7 +16,7 @@ const INST = 'EBESExQVFhcYGRobHB0eHw';
 const health = (over = {}) => ({
   ok: true, database: 'ok', service: 'starbase', env: 'production', organization: 'Example Campaign', commit: 'd9130ae', build: 'index-abc.js',
   tzdataCurrent: true, ownOrigin: fake.ORIGIN, instance: INST, address: 'https://base.win/a', entry: 'ready', platformKids: [currentKid()],
-  setupOpen: false, doorKey: true, ...over,
+  setupOpen: false, campaignMade: true, doorKey: true, ...over,
 });
 const { db } = await freshApp();
 await db.transaction((tx) => createCampaign(tx, { name: 'a', display: 'Example A', serverUrl: fake.ORIGIN }));
@@ -91,6 +91,17 @@ test('the guard: a name that resolves to a private or metadata address is refuse
   assert.equal(addressAllowed('127.0.0.1', { allowLocal: false }), false);
 });
 
+test('IPv6 forms that embed or route to private space are refused; global ones are not', async () => {
+  for (const ip of ['::7f00:1', '::a9fe:a9fe', '::', '::1', 'fec0::1', 'fd00::1', 'fe80::1', 'ff02::1', '64:ff9b::a9fe:a9fe', '64:ff9b:1::a9fe:a9fe',
+    '2002:a9fe:a9fe::1', '2002:7f00:1::1', '2001:0:a9fe:a9fe::1', '2001:db8::1', '::ffff:169.254.169.254']) {
+    assert.equal(addressAllowed(ip, { allowLocal: false }), false, ip);
+  }
+  for (const ip of ['2606:4700:4700::1111', '2a00:1450:4001:80b::200e', '2001:4860:4860::8888']) assert.equal(addressAllowed(ip, { allowLocal: false }), true, ip);
+  // An AAAA answer in one of them is refused when the connection is made.
+  const lookup = (h, o, cb) => (o?.all ? cb(null, [{ address: '::a9fe:a9fe', family: 6 }]) : cb(null, '::a9fe:a9fe', 6));
+  await assert.rejects(safeGet('https://health.example.org/api/health', { lookup, allowLocal: false }), { name: 'blocked-address' });
+});
+
 test('the first matching answer pins the instance; a later different one never re-pins', async () => {
   const { db: d } = await freshApp();
   const answers = new Map();
@@ -120,4 +131,26 @@ test('checks older than 7 days are swept after each run', async () => {
   await pollOnce(db);
   assert.equal((await db.query("select count(*)::int n from checks where at < now() - interval '7 days'")).rows[0].n, 0);
   assert.equal((await db.query("select count(*)::int n from checks where at < now() - interval '5 days'")).rows[0].n, 1);
+});
+
+test('Campaign made ticks only once the server says a workspace exists, not on setupOpen false (a fresh server holding the key)', async () => {
+  const { db: d } = await freshApp();
+  const answers = new Map();
+  const fetcher = async (url) => ({ status: 200, body: JSON.stringify(answers.get(url) || {}), ms: 3 });
+  const U = 'https://base-win-fresh.onrender.com';
+  await d.transaction((tx) => createCampaign(tx, { name: 'fresh', display: 'Example Fresh', serverUrl: U }));
+  const made = async () => (await d.query("select done_by from checklist where campaign = 'fresh' and item = 'campaign-made' and done_at is not null")).rows[0]?.done_by;
+  // A fresh campaign server with BASE_PLATFORM_PUBKEY set, before the first entry.
+  answers.set(`${U}/api/health`, health({ ownOrigin: U, setupOpen: false, campaignMade: false }));
+  await pollOnce(d, { fetcher });
+  assert.equal((await d.query("select campaign_made, setup_open from checks where campaign = 'fresh' and via = 'server' order by id desc limit 1")).rows[0].campaign_made, false);
+  assert.equal(await made(), undefined, 'no workspace yet: not made');
+  // An older server that doesn't say: not made either.
+  answers.set(`${U}/api/health`, health({ ownOrigin: U, setupOpen: false, campaignMade: undefined }));
+  await pollOnce(d, { fetcher });
+  assert.equal(await made(), undefined);
+  // The first entry made the workspace.
+  answers.set(`${U}/api/health`, health({ ownOrigin: U, setupOpen: false, campaignMade: true }));
+  await pollOnce(d, { fetcher });
+  assert.equal(await made(), 'auto');
 });

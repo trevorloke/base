@@ -41,6 +41,26 @@ test('the 6th try for one email is limited, from any address', async () => {
   assert.match(await sixth.text(), /Too many tries — wait 15 minutes\./);
 });
 
+test('a browser that has signed in here is not kept out by a stranger spending the email limit; a new or forged one is', async () => {
+  const a = again();
+  const mark = op.b.jar.get('ops-device');
+  assert.match(mark, /^v1\./, 'setup leaves the device mark');
+  for (let i = 0; i < 6; i++) await browser(a, { ip: `198.51.100.${60 + i}` }).post('/signin', { email: ` ${EMAIL.toUpperCase()}`, password: 'x', code: '1' });
+  const stranger = await browser(a, { ip: '198.51.100.90' }).post('/signin', { email: EMAIL, password: PASSWORD, code: await codeNow(db, op.secret) });
+  assert.equal(stranger.status, 429, 'a browser never signed in here: the email limit holds');
+  const forged = browser(a, { ip: '198.51.100.91' });
+  forged.jar.set('ops-device', `${mark.slice(0, -4)}AAAA`);
+  assert.equal((await forged.post('/signin', { email: EMAIL, password: PASSWORD, code: await codeNow(db, op.secret) })).status, 429, 'a forged mark is no mark');
+  const known = browser(a, { ip: '198.51.100.92' });
+  known.jar.set('ops-device', mark);
+  const res = await known.post('/signin', { email: EMAIL, password: PASSWORD, code: await codeNow(db, op.secret) });
+  assert.equal(res.status, 303, 'the owner, from a browser signed in before, still gets in');
+  const line = res.headers.getSetCookie().find((l) => l.startsWith('ops-device='));
+  for (const part of ['Max-Age=7776000', 'Path=/', 'HttpOnly', 'SameSite=Strict']) assert.ok(line.includes(part), part);
+  // Still all three: a known browser with a wrong code is refused as ever.
+  assert.equal((await known.post('/signin', { email: EMAIL, password: 'wrong password here', code: '000000' })).status, 401);
+});
+
 test('the address limit keys on the rightmost forwarded entry: a forged leftmost one doesn’t escape it', async () => {
   const a = again();
   for (let i = 0; i < 20; i++) {

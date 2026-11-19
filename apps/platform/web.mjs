@@ -63,6 +63,7 @@ export const form = async (c) => {
 const name = (base) => (cfg().insecureCookies ? base : `__Host-${base}`);
 export const SESSION = 'ops';
 export const SETUP = 'ops-setup';
+export const DEVICE = 'ops-device'; // a known device (ops-auth.mjs knownDevice)
 export const readCookie = (c, base) => getCookie(c, name(base));
 export const writeCookie = (c, base, value, maxAge) => setCookie(c, name(base), value, {
   path: '/', httpOnly: true, sameSite: 'Strict', secure: !cfg().insecureCookies, maxAge,

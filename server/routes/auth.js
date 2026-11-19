@@ -406,6 +406,7 @@ const ENTRY_RUN_OUT = 'That link has run out. Open the desk again from the contr
 const ENTRY_WORDS = {
   off: [403, 'This campaign has turned off base.win sign-in. A manager can turn it on in Settings → Members.'],
   'email-taken': [409, 'An account with your email is here but isn’t on the team. A manager can invite it again.'],
+  'email-in-use': [409, 'An account with your email is on this team with its own password, so base.win support can’t come in as it. Use another email in the control centre, such as you+support@….'],
   entry: [401, ENTRY_RUN_OUT],
 };
 app.post('/operator', async (c) => {

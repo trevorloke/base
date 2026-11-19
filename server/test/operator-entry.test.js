@@ -234,19 +234,38 @@ test('a fresh server with the key: sign-up closed; the first entry makes the cam
   }
 });
 
-test('existing accounts: a member keeps role and name; a non-member is never taken; a new operator id relinks; removed support comes back', async () => {
+test('a member account of the campaign’s making with the operator’s email is never linked: the campaign would know its password', async () => {
   const mgr = await withCampaign();
-  // A volunteer with the operator's email.
-  const inv = await mgr.action('member.invite', { email: OP.email, role: 'volunteer' });
+  // A manager invites the operator's email and joins it with a password they choose.
+  const inv = await mgr.action('member.invite', { email: OP.email, role: 'manager' });
   assert.equal(inv.status, 200);
   const token = inv.json.joinUrl.split('/join/')[1];
-  const joined = await new Client().post('/api/auth/join', { token, name: 'Owner Example', password: 'owner-password-1' });
+  const joined = await new Client().post('/api/auth/join', { token, name: 'base.win support', password: 'manager-knows-this-1' });
   assert.equal(joined.status, 200);
+  const r = await entry(await mint());
+  assert.equal(r.status, 409);
+  assert.equal(r.json.code, 'email-in-use');
+  assert.match(r.json.error, /its own password/);
+  assert.equal((await db.query('select count(*)::int as n from operator_links')).rows[0].n, 0);
+  assert.equal(await sessions(), 0);
+  const refused = (await db.query("select payload from events where action = 'operator.enter'")).rows;
+  assert.deepEqual(refused.map((e) => e.payload), [{ operator_refused: 'email-in-use' }]);
+});
+
+test('existing accounts: a support member keeps role and name; a non-member is never taken; a new operator id relinks; removed support comes back', async () => {
+  const mgr = await withCampaign();
+  // base.win support, made by the first entry; a manager makes it a volunteer and renames it.
+  const r0 = await entry(await mint());
+  assert.equal(r0.status, 200);
+  const uid = r0.json.user.id;
+  await db.query("update memberships set role = 'volunteer' where user_id = $1", [uid]);
+  await db.query("update users set name = 'Owner Example' where id = $1", [uid]);
+  await db.query('delete from operator_links');
   const r = await entry(await mint());
   assert.equal(r.status, 200);
   assert.equal(r.json.role, 'volunteer');
   assert.equal(r.json.user.name, 'Owner Example');
-  const uid = r.json.user.id;
+  assert.equal(r.json.user.id, uid);
   assert.equal((await db.query('select user_id from operator_links where operator_id = $1', [OP.id])).rows[0].user_id, uid);
   // The control centre made again (a new operator id), the same email: the same member, relinked.
   const newOp = randomUUID();
@@ -259,7 +278,7 @@ test('existing accounts: a member keeps role and name; a non-member is never tak
   try {
     const link = await mgr.action('member.passwordLink', { user_id: uid });
     assert.equal(link.status, 409);
-    assert.match(link.json.error, /base\.win support comes in as/);
+    assert.match(link.json.error, /base\.win support has no password here\./);
   } finally { delete process.env.STARBASE_PUBLIC_URL; }
 
   // An account with that email that isn't on the team: 409, nothing linked, on the log.
