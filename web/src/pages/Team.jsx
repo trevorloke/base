@@ -16,6 +16,7 @@ import './outreach.css';
 import '../components/two-step.css';
 import '../components/google.css';
 import './candidates.css';
+import './reset.css';
 
 const ROLES = [
   { code: 'volunteer', label: 'Volunteer', hint: 'Map, doors, calls, texts, signs' },
@@ -42,6 +43,43 @@ const Email = ({ value }) => {
   if (at < 0) return value;
   return <>{value.slice(0, at + 1)}<wbr />{value.slice(at + 1)}</>;
 };
+
+// Copy a link; with no clipboard (not https), select it so a long-press copies it.
+function useCopy(text) {
+  const [copied, setCopied] = useState(false);
+  const timer = useRef(null);
+  const ref = useRef(null);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      clearTimeout(timer.current);
+      timer.current = setTimeout(() => setCopied(false), 2400);
+    } catch {
+      setCopied(false);
+      const sel = window.getSelection?.();
+      if (sel && ref.current) { const r = document.createRange(); r.selectNodeContents(ref.current); sel.removeAllRanges(); sel.addRange(r); }
+    }
+  };
+  return { copied, copy, ref };
+}
+
+// A manager's password link (ext/passwords), once made: emailed (never
+// shown), or the link to pass on with Copy.
+function PasswordLinkSaid({ made }) {
+  const { copied, copy, ref } = useCopy(made.link || '');
+  if (made.emailed) return <p className="muted" role="status">Emailed a password link to {made.name} · it works for {made.hours} hours</p>;
+  return (
+    <div role="status">
+      <p className="muted pw-line">Password link for {made.name} · works for {made.hours} hours</p>
+      <div className="pw-link">
+        <code ref={ref} data-testid="password-link">{made.link}</code>
+        <button type="button" className="btn ot-btn-tap" onClick={copy}>{copied ? 'Copied' : 'Copy link'}</button>
+      </div>
+    </div>
+  );
+}
 
 // The join link, once: who it's for, Copy link, and the link itself.
 export function JoinLink({ sent, testId }) {
@@ -175,10 +213,13 @@ function InvitedRow({ inv, ids, canCancel, onChanged, onLinkGone, online = true 
 
 // A member: role picker, and Remove (never for yourself). Removing someone
 // signs them out everywhere at once; a new invite lets them back in.
-function MemberRow({ m, isMe, online, onRole, onChanged, twoStep = null, onTwoStep, google = null, onGoogle }) {
+function MemberRow({ m, isMe, online, onRole, onChanged, twoStep = null, onTwoStep, google = null, onGoogle, pwLink = false }) {
   const [confirming, setConfirming] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [unlinking, setUnlinking] = useState(false);
+  // A password link (ext/passwords): asking, then what was made.
+  const [linking, setLinking] = useState(false);
+  const [made, setMade] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [said, setSaid] = useState(null);
@@ -206,6 +247,18 @@ function MemberRow({ m, isMe, online, onRole, onChanged, twoStep = null, onTwoSt
       setUnlinking(false);
       setSaid(`Google unlinked — ${m.name} is signed out.`);
       onGoogle?.();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const makeLink = async () => {
+    setBusy(true); setError(null);
+    try {
+      const r = await action('member.passwordLink', { user_id: m.id });
+      setLinking(false);
+      setMade({ ...r, name: m.name });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -255,12 +308,31 @@ function MemberRow({ m, isMe, online, onRole, onChanged, twoStep = null, onTwoSt
             <button type="button" className="btn btn-quiet ot-btn-tap tm-unlink-google" disabled={busy || !online}
               onClick={() => { setUnlinking(true); setSaid(null); setError(null); }}>Unlink Google</button>
           )}
-          {!isMe && !confirming && !resetting && !unlinking && (
+          {/* Not for yourself or a manager (they use Forgot password); Team says when. */}
+          {pwLink && !confirming && !resetting && !unlinking && !linking && (
+            <button type="button" className="btn btn-quiet ot-btn-tap tm-pw-link" disabled={busy || !online}
+              onClick={() => { setLinking(true); setMade(null); setSaid(null); setError(null); }}>Password link</button>
+          )}
+          {!isMe && !confirming && !resetting && !unlinking && !linking && (
             <button type="button" className="btn btn-quiet ot-btn-tap" disabled={busy || !online}
               onClick={() => setConfirming(true)}>Remove</button>
           )}
         </span>
       </div>
+      {(linking || made) && (
+        <div className="ot-body">
+          {linking && (
+            <div className="ot-confirm" role="group" aria-label={`Make a password link for ${m.name}`}>
+              <span>Make a password link for {m.name}?</span>
+              <button type="button" className="btn ot-btn-tap" disabled={busy} onClick={makeLink}>
+                {busy ? 'Making…' : 'Yes'}
+              </button>
+              <button type="button" className="btn btn-quiet ot-btn-tap" disabled={busy} onClick={() => { setLinking(false); setError(null); }}>No</button>
+            </div>
+          )}
+          {made && <PasswordLinkSaid made={made} />}
+        </div>
+      )}
       {(resetting || unlinking || said) && (
         <div className="ot-body">
           {unlinking && (
@@ -365,6 +437,12 @@ export default function Team({ embedded = false }) {
   const googleTeam = useQuery({ queryKey: ['google-members'], queryFn: () => apiGet('/google/members'), enabled: isManager });
   const googleOf = new Map((Array.isArray(googleTeam.data) ? googleTeam.data : []).map((x) => [x.user_id, x]));
   const googleChanged = () => queryClient.invalidateQueries({ queryKey: ['google-members'] });
+  // Password links (ext/passwords): offered unless this is the public demo
+  // or the campaign has no address to build one from (STARBASE_PUBLIC_URL);
+  // not for someone in another campaign here too.
+  const pwLinks = useQuery({ queryKey: ['password-links'], queryFn: () => apiGet('/password-links'), enabled: isManager });
+  const pwElsewhere = new Set(pwLinks.data?.elsewhere || []);
+  const pwLinkFor = (m) => Boolean(pwLinks.data?.on && pwLinks.data?.address) && m.id !== me.user.id && m.role !== 'manager' && !pwElsewhere.has(m.id);
   // Is email connected? (Same read Today and Shifts use; only that, so the
   // strip never says this screen is from Today's kept copy.)
   const brief = useQuery({ queryKey: ['brief'], queryFn: () => apiGet('/brief'), enabled: isManager, staleTime: Infinity, meta: { side: true } });
@@ -455,9 +533,12 @@ export default function Team({ embedded = false }) {
         {members.map((m) => (
           <MemberRow key={m.id} m={m} isMe={m.id === me.user.id} online={online} onRole={setMemberRole} onChanged={refresh}
             twoStep={twoStepOf.get(m.id) || null} onTwoStep={twoStepChanged}
-            google={googleOf.get(m.id) || null} onGoogle={googleChanged} />
+            google={googleOf.get(m.id) || null} onGoogle={googleChanged} pwLink={pwLinkFor(m)} />
         ))}
       </ul>
+      {pwLinks.data?.on && pwLinks.data?.address === false && (
+        <p className="muted">Password links need this campaign’s web address (STARBASE_PUBLIC_URL).</p>
+      )}
 
       {invites.length > 0 && (
         <>

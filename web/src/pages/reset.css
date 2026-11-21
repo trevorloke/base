@@ -1,0 +1,11 @@
+/* Forgot password and Choose a new password (pages/Forgot.jsx, Reset.jsx),
+   the quiet link under Sign in (Login.jsx), and a manager's password link on
+   Settings → Members (Team.jsx). */
+.pw-quiet { display: inline-flex; align-items: center; min-height: var(--ctl); font-size: 14px; color: var(--text-2); }
+.pw-forgot, .pw-back { margin: var(--s-3) 0 0; }
+.pw-line { margin: 0 0 var(--s-2); font-size: 15px; color: var(--text-1); }
+.pw-done { font-weight: 600; }
+.pw-for { margin: 0 0 var(--s-3); font-size: 14px; color: var(--text-2); overflow-wrap: anywhere; }
+.pw-link { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); margin-top: var(--s-2); }
+.pw-link code { flex: 1 1 220px; min-width: 0; overflow-wrap: anywhere; font-size: 12px; padding: var(--s-1) var(--s-2); background: var(--paper-1); border: 1px solid var(--rule); border-radius: var(--r-sm); }
+@media (pointer: coarse), (max-width: 600px) { .pw-quiet { min-height: 48px; } }

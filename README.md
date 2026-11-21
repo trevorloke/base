@@ -174,6 +174,25 @@ a lock, a reset and the requirement are on the event log (nothing secret in it).
 Keys are sealed with `STARBASE_TWO_STEP_KEY` (INTEGRATIONS.md); the tables
 (`server/ext/twostep`) are never in the export. The how: `server/lib/twostep.js`.
 
+### Forgot password
+
+**Forgot your password?** under Sign in asks for the email and says, whatever
+the address, that a link is on its way. The link works once, for 30 minutes;
+it opens **Choose a new password**, which signs that person out everywhere
+else and still asks the two-step code when it's on. It is built only from
+`STARBASE_PUBLIC_URL` (never the address a request came to) and carries its
+token after `#`, so it never reaches a server log; only the token's hash is
+kept. Three asks an hour per email and ten per address, at most three live
+links, and a new ask never ends an earlier one. Without a sender or
+`STARBASE_PUBLIC_URL`, and on the public demo, the screen says to ask a
+manager instead: **Settings → Members → Password link** on someone's row
+(not yourself, not another manager, not anyone in another campaign on the
+same server) makes a 24-hour link — emailed to them and never shown when
+email is set up, shown with Copy when it isn't; a link whose email doesn't
+go is ended at once. It needs `STARBASE_PUBLIC_URL` too (without it the
+button isn't shown). Both are on the event log, never the link
+(`server/ext/passwords`).
+
 ### Email from a person's page
 
 The person read tells the desk whether someone may be written to one to one
@@ -1160,7 +1179,9 @@ MAIL_FROM.
 
 Set `STARBASE_PUBLIC_URL` (e.g. `https://starbase.imaginesurrey.ca`) so links
 in outbound mail — newsletter unsubscribe footers, invite links, the
-pictures in a message, calendar links — point at the public host. Every newsletter and ladder email ends with "Sent by <campaign>"
+pictures in a message, calendar links — point at the public host. Password
+links are built from it alone: without it Forgot password says to ask a
+manager. Every newsletter and ladder email ends with "Sent by <campaign>"
 and the reader's own unsubscribe link, and carries `List-Unsubscribe` /
 `List-Unsubscribe-Post` headers so mail apps show their own Unsubscribe
 button. Someone who unsubscribed can only rejoin by signing up again — the

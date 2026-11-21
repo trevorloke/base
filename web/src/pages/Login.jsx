@@ -17,10 +17,11 @@ import { useOnline } from '../components/NoSignal.jsx';
 import { appName, awayWords, googleHere, googleStart, googleWords, markSignin, takeSignin } from '../components/google.js';
 import gLogo from '../components/google-g.svg';
 import '../components/google.css';
+import './reset.css';
 
 // Big, thumb-sized controls (auth pages load before any page stylesheet).
-const AUTH_INPUT = { minHeight: 48, fontSize: 16 };
-const AUTH_BUTTON = { width: '100%', minHeight: 48, fontSize: 15, marginTop: 'var(--s-2)' };
+export const AUTH_INPUT = { minHeight: 48, fontSize: 16 };
+export const AUTH_BUTTON = { width: '100%', minHeight: 48, fontSize: 15, marginTop: 'var(--s-2)' };
 
 // What went wrong, in words that say what to do: a wrong password, a pause
 // after too many tries, or a server that isn't answering (restarting, or its
@@ -145,6 +146,8 @@ export default function Login({ mode = 'field' }) {
           {busy ? 'Signing in…' : 'Sign in'}
         </button>
       </form>
+      {/* Forgot password (pages/Forgot.jsx): a link by email, or who to ask. */}
+      <p className="pw-forgot"><Link className="pw-quiet" to="/forgot">Forgot your password?</Link></p>
       {googleOn && <GoogleSignIn mode={mode} online={online} />}
       {setup.data?.open && (
         <>
