@@ -1,0 +1,93 @@
+// Tests only: a stand-in for a campaign's server, for e2e-ops.mjs until the
+// real one (builder A's /api/auth/operator and the Enter page) is merged.
+// It answers /api/health with every field the control centre reads, and
+// serves /admin/enter: a page that drops the #t= fragment, posts the token
+// to /api/auth/operator (checked with the campaign side's rules, written
+// again in verify-entry.mjs), and lands on /admin/ (or Settings → Members
+// for an invite) with "You’re in as base.win support".
+//   startFakeClient({ port, env, publicKey, basePath?, ownOrigin?, instance? }) → { close, reset, state }
+import { createServer } from 'node:http';
+import { randomBytes } from 'node:crypto';
+import { verifyEntry, parseKeys } from './verify-entry.mjs';
+
+const ENTER_JS = `(() => {
+  const say = (t) => { document.getElementById('say').textContent = t; };
+  const m = /^#t=(.+)$/.exec(location.hash);
+  history.replaceState(null, '', location.pathname);
+  if (!m) return say('Nothing to open here.');
+  say('Opening the desk…');
+  fetch('/api/auth/operator', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: decodeURIComponent(m[1]) }) })
+    .then(async (r) => {
+      const body = await r.json();
+      if (!r.ok) return say(body.error || 'That link has run out. Open the desk again from the control centre.');
+      location.replace(body.go === '/desk/settings/members' ? '/admin/settings/members' : '/admin/');
+    })
+    .catch(() => say('Not answering.'));
+})();`;
+
+const page = (title, body) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${title}</title>
+<style>body{font-family:system-ui,sans-serif;margin:0;padding:0}.bar{background:#eef;border-bottom:2px solid #c80;padding:12px 16px}main{padding:16px}</style></head><body>${body}</body></html>`;
+
+export const startFakeClient = ({ port, env = 'production', publicKey, basePath = '', ownOrigin = `http://127.0.0.1:${port}`, instance = randomBytes(16).toString('base64url') }) => {
+  const keys = parseKeys(publicKey);
+  const state = { nonces: new Set(), sessions: new Map(), invites: [], refused: [], made: false };
+  const own = `http://127.0.0.1:${port}`;
+  const health = () => ({
+    ok: true, database: 'ok', service: 'starbase', env, organization: 'Example Campaign', commit: 'f00dfee', build: 'index-test.js', tzdataCurrent: true,
+    ownOrigin, instance, address: basePath ? `http://127.0.0.1:5603${basePath}` : own, entry: keys.length ? 'ready' : 'no-key',
+    platformKids: keys.map((k) => k.kid), setupOpen: false, campaignMade: state.made, doorKey: true,
+  });
+  const sessionOf = (req) => {
+    const sid = /(?:^|;\s*)sid=([^;]+)/.exec(req.headers.cookie || '')?.[1];
+    return sid && state.sessions.get(sid);
+  };
+  const server = createServer((req, res) => {
+    const url = new URL(req.url, own);
+    const send = (status, type, body, headers = {}) => { res.writeHead(status, { 'content-type': type, 'cache-control': 'no-store', ...headers }); res.end(body); };
+    const json = (status, body, headers) => send(status, 'application/json', JSON.stringify(body), headers);
+    if (url.pathname === '/api/health' || (basePath && url.pathname === `${basePath}/api/health`)) return json(200, health());
+    if (url.pathname === '/admin/enter') return send(200, 'text/html; charset=utf-8', page('Opening the desk', '<main><p id="say" role="status" aria-live="polite"></p></main><script src="/admin/enter.js"></script>'));
+    if (url.pathname === '/admin/enter.js') return send(200, 'text/javascript', ENTER_JS);
+    if (url.pathname === '/api/auth/operator' && req.method === 'POST') {
+      let raw = '';
+      req.on('data', (d) => { raw += d; });
+      req.on('end', () => {
+        const no = (why) => { state.refused.push(why); return json(401, { error: 'That link has run out. Open the desk again from the control centre.', code: 'entry' }); };
+        if (req.headers.origin !== own) return no('origin');
+        let token;
+        try { token = JSON.parse(raw).token; } catch { return no('body'); }
+        const r = verifyEntry(token, { keys, aud: own, env, inst: instance });
+        if (!r.ok) return no(r.why);
+        if (state.nonces.has(r.payload.nonce)) return no('replay');
+        state.nonces.add(r.payload.nonce);
+        state.made = true; // the first entry makes the workspace
+        const sid = randomBytes(16).toString('hex');
+        state.sessions.set(sid, { until: Date.now() + 2 * 3600_000, op: r.payload.op.id });
+        if (r.payload.invite) state.invites.push(r.payload.invite.email);
+        return json(200, { go: r.payload.go, invite: r.payload.invite }, { 'set-cookie': `sid=${sid}; Path=/; HttpOnly; SameSite=Lax` });
+      });
+      return undefined;
+    }
+    if (url.pathname === '/admin/' || url.pathname === '/admin/settings/members') {
+      const s = sessionOf(req);
+      if (!s) return send(200, 'text/html; charset=utf-8', page('Sign in', '<main><h1>Sign in</h1></main>'));
+      const until = new Date(s.until).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit' });
+      const members = url.pathname.endsWith('/members')
+        ? `<h2>Members</h2><ul>${state.invites.map((e) => `<li>Invited ${e}</li>`).join('')}</ul>` : '<h1>Today</h1>';
+      return send(200, 'text/html; charset=utf-8', page('Desk', `<div class="bar" role="status">You’re in as base.win support · until ${until}</div><main><p>Signed in</p>${members}</main>`));
+    }
+    return json(404, { error: 'Not found' });
+  });
+  server.listen(port, '127.0.0.1');
+  return {
+    state, instance, own,
+    reset: () => { state.sessions.clear(); state.invites.length = 0; state.made = false; },
+    close: () => new Promise((r) => { server.closeAllConnections?.(); server.close(() => r()); }),
+  };
+};
+
+// node apps/platform/test/fake-client.mjs  (PORT, STARBASE_ENV, BASE_PLATFORM_PUBKEY, BASE_PATH)
+if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop())) {
+  const c = startFakeClient({ port: Number(process.env.PORT) || 5601, env: process.env.STARBASE_ENV || 'production', publicKey: process.env.BASE_PLATFORM_PUBKEY, basePath: process.env.BASE_PATH || '' });
+  console.log(`fake campaign server on ${c.own}`);
+}

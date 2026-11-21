@@ -1,0 +1,91 @@
+/* The control centre's own pieces, on the app's variables and shared
+   classes (app.css). The system font: the console loads no web font. */
+.oc-body {
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-display: var(--font-sans);
+  background: var(--paper, var(--page));
+  min-height: 100vh;
+}
+.oc-top {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px;
+  padding: 8px 16px; border-bottom: 1px solid var(--rule, var(--line));
+  background: var(--paper-0, var(--card));
+}
+.oc-brand { font-weight: 600; font-size: 16px; text-decoration: none; min-height: 48px; display: inline-flex; align-items: center; }
+.oc-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-left: auto; }
+.oc-nav a { min-height: 48px; display: inline-flex; align-items: center; padding: 0 6px; font-size: 14px; color: var(--text-2); text-decoration: none; }
+.oc-nav a[aria-current='page'] { color: var(--text-1, var(--text)); font-weight: 600; text-decoration: underline; text-underline-offset: 6px; }
+.oc-inline { display: inline; margin: 0; }
+.oc-main { max-width: 1040px; margin: 0 auto; padding: 24px 16px 64px; }
+.oc-narrow { max-width: 440px; margin: 24px auto; }
+.oc-form { margin-top: 16px; }
+.oc-wide { width: 100%; }
+.oc-help { margin: 2px 0 0; font-size: 13px; color: var(--text-3, var(--quiet)); }
+.oc-status { min-height: 1.5em; margin: 8px 0; font-size: 14px; }
+.oc-status:empty { min-height: 0; margin: 0; }
+.oc-warn { color: var(--warn); }
+.oc-ok { color: var(--ok); }
+.oc-danger { color: var(--danger); }
+.oc-qr { display: block; width: 200px; height: 200px; margin: 8px auto 12px; }
+.oc-key { font-size: 15px; font-variant-numeric: tabular-nums; letter-spacing: 0.04em; word-break: break-all; color: var(--text-2); }
+.oc-codes { columns: 2; font-size: 16px; font-variant-numeric: tabular-nums; padding-left: 24px; }
+.oc-codes li { margin: 4px 0; }
+.oc-body .btn { min-height: 48px; }
+.oc-body .input { min-height: 48px; }
+@media (min-width: 900px) and (pointer: fine) {
+  .oc-body .btn, .oc-body .input { min-height: var(--ctl); }
+  .oc-nav a, .oc-brand { min-height: 40px; }
+}
+.oc-log { list-style: none; padding: 0; margin: 16px 0; }
+.oc-logline { padding: 10px 0; border-bottom: 1px solid var(--rule, var(--line)); font-size: 14px; overflow-wrap: anywhere; }
+.oc-when { color: var(--text-3, var(--quiet)); font-variant-numeric: tabular-nums; }
+.oc-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin-bottom: 16px; }
+.oc-head h1 { margin: 0; }
+.oc-cards { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+@media (min-width: 900px) { .oc-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.oc-card, .oc-sample { display: flex; flex-direction: column; gap: 6px; margin-bottom: 0; }
+.oc-sample { margin-bottom: 16px; }
+.oc-name { font-size: 18px; font-weight: 600; text-decoration: none; min-height: 48px; display: inline-flex; align-items: center; }
+.oc-line { font-size: 14px; color: var(--text-2); overflow-wrap: anywhere; }
+.oc-chips { list-style: none; padding: 0; margin: 4px 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.oc-chips .chip { white-space: normal; }
+.oc-block { padding: 12px 14px; border-left: 3px solid var(--warn); background: var(--paper-1, var(--panel)); font-size: 15px; }
+.oc-dl { display: grid; gap: 4px 16px; margin: 0 0 12px; }
+.oc-dl > div { display: grid; grid-template-columns: minmax(120px, 40%) 1fr; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--rule, var(--line)); }
+.oc-dl dt { color: var(--text-3, var(--quiet)); font-size: 14px; }
+.oc-dl dd { margin: 0; font-size: 15px; overflow-wrap: anywhere; }
+.oc-strip { display: grid; grid-template-columns: repeat(24, 1fr); gap: 2px; margin: 12px 0 4px; }
+.oc-hour { height: 20px; border-radius: 2px; background: var(--paper-2, var(--panel)); }
+.oc-hour-ok { background: var(--ok); }
+.oc-hour-some { background: var(--warn); }
+.oc-hour-down { background: var(--danger); }
+.oc-more { margin-top: 16px; }
+.oc-more > summary { list-style: none; }
+.oc-more > summary::-webkit-details-marker { display: none; }
+.oc-sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.oc-inline-form { display: inline-block; margin: 0; }
+.oc-card .oc-inline-form, .oc-sample .oc-inline-form { margin-top: 4px; }
+.oc-pre { margin: 8px 0; padding: 12px; background: var(--paper-1, var(--panel)); border: 1px solid var(--rule, var(--line)); border-radius: var(--radius-sm, 6px);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.oc-copy { margin: 16px 0; }
+/* A quiet Copy still reads as a button, not a label beside the box. */
+.btn-quiet.oc-copy-btn { border-color: var(--rule-2, var(--line)); color: var(--text-2, var(--text)); }
+.oc-steps { list-style: none; counter-reset: step; padding: 0; margin: 16px 0; display: grid; gap: 16px; }
+.oc-steps > li { counter-increment: step; margin: 0; }
+.oc-steps > li > h2::before { content: counter(step) '. '; color: var(--text-3, var(--quiet)); }
+.oc-howto { padding-left: 22px; font-size: 15px; line-height: 1.5; }
+.oc-howto > li { margin: 8px 0; overflow-wrap: anywhere; }
+.oc-howto code, .card code { font-size: 13px; overflow-wrap: anywhere; }
+.oc-check { list-style: none; padding: 0; margin: 0; }
+.oc-check-item { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 8px 0; border-bottom: 1px solid var(--rule, var(--line)); }
+.oc-check-words { flex: 1 1 220px; font-size: 15px; overflow-wrap: anywhere; }
+.oc-check-state { font-size: 14px; color: var(--text-3, var(--quiet)); }
+.oc-done .oc-check-state { color: var(--ok); }
+.oc-check-item .oc-inline-form .field { margin: 4px 0; }
+.oc-fieldset { border: 0; padding: 0; margin: 12px 0; }
+.oc-fieldset legend { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+.oc-check-label { display: flex; align-items: center; gap: 10px; min-height: 48px; font-size: 15px; }
+.oc-check-label input { width: 20px; height: 20px; }
+.oc-invite { max-width: 440px; }
+@media (min-width: 900px) and (pointer: fine) { .oc-check-label { min-height: 40px; } }
+.oc-main > .oc-inline-form { margin-bottom: 16px; }

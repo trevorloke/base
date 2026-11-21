@@ -1,0 +1,12 @@
+{
+  "name": "base-platform",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "base.win's control centre at ops.base.win: one sign-in for every campaign, their health, and new campaigns.",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test test/*.test.mjs"
+  }
+}

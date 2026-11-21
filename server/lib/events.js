@@ -51,7 +51,9 @@ const tellCommitted = (info) => {
 // phone's outbox keeps the write and tries again.
 const BUSY = 'Busy — will try again';
 
-export const runAction = async (db, { workspaceId, actorId, action, clientTs, lockTimeoutMs }, handler) => {
+// entry: the nonce of base.win support's visit this write is made in
+// (ext/operator): added to every event's payload, so History can say so.
+export const runAction = async (db, { workspaceId, actorId, action, clientTs, lockTimeoutMs, entry }, handler) => {
   let told = null;
   const out = await writing.run(true, () => db.transaction(async (tx) => {
     // A write that must never wait long for the campaign's lock (a mark on
@@ -89,7 +91,7 @@ export const runAction = async (db, { workspaceId, actorId, action, clientTs, lo
       seq += 1;
       // Normalize exactly as it will be stored (drops undefined, etc.) so the
       // hash we compute is the hash a verifier recomputes from the row.
-      const payload = JSON.parse(JSON.stringify(ev.payload ?? {}));
+      const payload = JSON.parse(JSON.stringify(entry ? { ...(ev.payload ?? {}), entry } : (ev.payload ?? {})));
       const payloadHash = sha256(canonical(payload));
       const hash = chainHash(prev, seq, action, ev.entityType, ev.entityId, ev.op, actorId, payloadHash);
       rows.push([seq, ev.entityType, ev.entityId, ev.op, JSON.stringify(payload), payloadHash, hash]);

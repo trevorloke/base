@@ -97,6 +97,13 @@ export const resetIfAsked = async (db, log = console.log) => {
   return true;
 };
 
+// The sample's own sign-up, made in this process: open on an empty
+// database even where the control centre's key closes sign-up to everyone
+// else (routes/auth.js). A secret that never leaves this process.
+const SAMPLE_HEADER = 'x-sample-signup';
+const SAMPLE_KEY = randomBytes(32).toString('base64url');
+export const sampleSignup = (c) => c.req.header(SAMPLE_HEADER) === SAMPLE_KEY;
+
 // ── Making it ──
 // Through the app's own doors (sign-up, then its actions), so everything the
 // app keeps in step — names, the event log, the lists — is in step.
@@ -112,7 +119,7 @@ export const seedSample = async (app, log = console.log, n = 320) => {
   const call = async (path, body) => {
     const res = await app.request(path, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', ...(cookie ? { cookie } : {}) },
+      headers: { 'content-type': 'application/json', [SAMPLE_HEADER]: SAMPLE_KEY, ...(cookie ? { cookie } : {}) },
       body: JSON.stringify(body),
     });
     const set = res.headers.get('set-cookie');

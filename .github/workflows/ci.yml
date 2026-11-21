@@ -19,5 +19,10 @@ jobs:
         run: npm test
       - name: Test over the Postgres wire protocol (DATABASE_URL adapter)
         run: npm run test:pg
+      # The control centre (ops.base.win) deploys from main whatever changed:
+      # it borrows server/lib, shared/ and web/src/app.css and the root
+      # dependencies, so its tests run on every change, not only on its paths.
+      - name: Test the control centre (apps/platform)
+        run: npm run test:platform
       - name: Build (web)
         run: npm run build

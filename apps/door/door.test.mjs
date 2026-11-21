@@ -8,7 +8,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { request } from 'node:http';
-import { handler, readClients, route, subdomainRedirect } from './door.mjs';
+import { handler, readClients, route, subdomainRedirect, RESERVED } from './door.mjs';
 
 const seen = [];
 const upstream = (name) => createServer((req, res) => {
@@ -210,4 +210,17 @@ test('only the door\'s own domain and a client it knows: anything else is as bef
   assert.equal(subdomainRedirect(c, 'x.door.example', '/desk', '', 'door.example'), 'https://door.example/x/desk');
   assert.equal(subdomainRedirect(c, 'x.base.win', '/desk', '', 'door.example'), null);
   assert.equal(subdomainRedirect(c, '', '/desk', ''), null);
+});
+
+test('names kept for base.win can’t be a client; ops.base.win is never sent anywhere', async () => {
+  for (const name of RESERVED) {
+    assert.throws(() => readClients(JSON.stringify({ [name]: { server: 'https://g.example' } })), /kept for base\.win/, name);
+    assert.throws(() => readClients(JSON.stringify({ [name.toUpperCase()]: { server: 'https://g.example' } })), /kept for base\.win/, name);
+  }
+  // Even a list made some other way: the control centre's address gets no redirect.
+  const forced = new Map([['ops', { name: 'x', origin: 'https://g.example' }]]);
+  assert.equal(subdomainRedirect(forced, 'ops.base.win', '/', ''), null);
+  const r = await withHost('ops.base.win', '/');
+  assert.notEqual(r.status, 302);
+  assert.notEqual(r.status, 307);
 });

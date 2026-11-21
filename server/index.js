@@ -22,6 +22,10 @@ import { doorKeySet } from './lib/guard.js';
 import { brandPages } from './lib/brand.js';
 import { siteGate } from './ext/site/public.js';
 import { currentBuild } from './lib/build.js';
+import { entryReadiness, ownOrigin, parseKeys } from './lib/entry.js';
+import { setupOpen, noWorkspace } from './lib/setup.js';
+import { configuredUrl } from './lib/calendar.js';
+import { instanceOf } from './ext/operator/identity.js';
 import { start as startUsage, flush as flushUsage } from './lib/gusage.js';
 
 export const app = new Hono();
@@ -47,6 +51,10 @@ for (const e of EXTENSIONS) Object.assign(BODY_MAX, e.bodyMax || {});
 app.use('*', async (c, next) => {
   await next();
   const h = c.res.headers;
+  // A page whose route set no policy of its own (the app's page): no
+  // plugins, and no <base> pointing its links elsewhere. A site page or a
+  // file that set one keeps exactly its own.
+  const pagePolicy = !h.has('Content-Security-Policy') && /^text\/html/i.test(h.get('Content-Type') || '');
   // The voter guide's embed names the sites that may frame it in its CSP
   // (frame-ancestors) and so carries no X-Frame-Options (ext/site public.js).
   const framedBy = /frame-ancestors (?!'none')/.test(h.get('Content-Security-Policy') || '');
@@ -57,6 +65,10 @@ app.use('*', async (c, next) => {
     const csp = h.get('Content-Security-Policy') || '';
     if (!frames.length) h.set('X-Frame-Options', 'DENY');
     else if (!/frame-ancestors/i.test(csp)) h.set('Content-Security-Policy', `${csp ? `${csp}; ` : ''}frame-ancestors 'self' ${frames.join(' ')}`);
+  }
+  if (pagePolicy) {
+    const csp = h.get('Content-Security-Policy');
+    h.set('Content-Security-Policy', `${csp ? `${csp}; ` : ''}object-src 'none'; base-uri 'self'`);
   }
   if (!h.has('X-Content-Type-Options')) h.set('X-Content-Type-Options', 'nosniff');
   if (!h.has('Referrer-Policy')) h.set('Referrer-Policy', 'strict-origin-when-cross-origin');
@@ -73,9 +85,27 @@ const COMMIT = String(process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT ||
 // It asks the database too: a server up with its database down can't sign
 // anyone in, so it says so (503, "database": "not reachable") and the host
 // keeps the old version or restarts it.
+// For the base.win control centre (ext/operator), nothing secret and nothing
+// about people: this server's own address and instance (what an entry token
+// must name), the campaign's public address, whether entry is set up and the
+// keys it holds (by kid), whether first-run sign-up is open, whether the
+// campaign has been made (a workspace exists: campaignMade), and whether the
+// door's key is set (never the key). Never the campaign's switch.
+const publicAddress = () => {
+  const raw = configuredUrl();
+  try { return raw && /^https?:$/.test(new URL(raw).protocol) ? raw : null; } catch { return null; }
+};
 app.get('/api/health', async (c) => {
   const database = await dbReachable();
-  return c.json({ ok: database, database: database ? 'ok' : 'not reachable', service: 'starbase', env: envName(), organization: orgName(), commit: COMMIT, build: currentBuild(), tzdataCurrent: !staleTimeZoneData() }, database ? 200 : 503);
+  const db = database ? await getDb().catch(() => null) : null;
+  const instance = db ? await instanceOf(db).catch(() => null) : null;
+  const open = db ? await setupOpen(db).catch(() => null) : null;
+  const made = db ? await noWorkspace(db).then((none) => !none, () => null) : null;
+  return c.json({
+    ok: database, database: database ? 'ok' : 'not reachable', service: 'starbase', env: envName(), organization: orgName(), commit: COMMIT, build: currentBuild(), tzdataCurrent: !staleTimeZoneData(),
+    ownOrigin: ownOrigin(), instance, address: publicAddress(), entry: entryReadiness(),
+    platformKids: parseKeys().map((k) => k.kid), setupOpen: open, campaignMade: made, doorKey: doorKeySet(),
+  }, database ? 200 : 503);
 });
 app.route('/api/auth', authRoutes);
 app.route('/', publicRoutes); // /u, /bu — no auth

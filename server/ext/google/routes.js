@@ -112,6 +112,8 @@ publicRoutes.get('/api/auth/google/start', async (c) => {
   if (kind !== 'signin') {
     ctx = await loadContext(db, getCookie(c, SESSION_COOKIE));
     if (!ctx) return fail('expired');
+    // Never the operator's own Google, linked or connected as base.win support.
+    if (ctx.entry) return fail('not-allowed');
     if (ctx.twoStep?.mustSetUp) return fail('two-step-first');
   }
   let hd = null;

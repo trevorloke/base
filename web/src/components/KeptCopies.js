@@ -229,7 +229,9 @@ function answered(query) {
 
 export async function keptPersister(queryFn, context, query) {
   const me = meNow();
-  const plan = planFor(query.queryKey, me);
+  // In as base.win support (ext/operator): the control centre's browser
+  // keeps no campaign's people for later — every read is asked fresh.
+  const plan = me?.operator ? null : planFor(query.queryKey, me);
   if (!plan) {
     const data = await queryFn(context);
     answered(query);
