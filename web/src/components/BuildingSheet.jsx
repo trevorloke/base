@@ -27,6 +27,7 @@ import {
 } from '@starbase/shared/buildings';
 import { overlayPass, waitingTries } from './PassBits.jsx';
 import { pendingVoted } from './Voted.jsx';
+import { usePracticeOverlay } from './GotvLive.js';
 import { Directions } from './DoorCard.jsx';
 import { More } from './RatingButtons.jsx';
 import { cachedWalkLists, keptWalkList } from '../pages/Turfs.jsx';
@@ -70,6 +71,9 @@ const fromKeptWalkLists = (me, anchorId) => {
 export function useBuilding({ anchorId, me, online, mapDoors, showsDoor, filterOn, sent }) {
   const queryClient = useQueryClient();
   const outbox = useOutbox();
+  // GOTV practice marks live only in this overlay, never in the query copy
+  // (GotvLive): laid over voted_at as the walk list and the map do.
+  const practiced = usePracticeOverlay();
   const q = useQuery({
     queryKey: buildingKey(anchorId),
     // The pin the sheet showed rides along: a person who has moved away
@@ -135,7 +139,7 @@ export function useBuilding({ anchorId, me, online, mapDoors, showsDoor, filterO
     const doors = source.doors.map((d) => {
       const persons = d.persons.map((p) => (votes[p.id]
         ? { ...p, voted_at: votes[p.id].voted ? votes[p.id].at || p.voted_at || new Date().toISOString() : null }
-        : p));
+        : practiced.has(p.id) ? { ...p, voted_at: practiced.get(p.id) || null } : p));
       const laid = pass ? overlayPass({ ...d, persons }, local, pass, at, waiting) : persons;
       const state = !counted ? 'open'
         : pass ? (inPass({ persons: laid }, pass) ? doorState({ ...d, persons: laid }, pass) : 'done')
@@ -167,7 +171,7 @@ export function useBuilding({ anchorId, me, online, mapDoors, showsDoor, filterO
       pass,
       refetch: q.refetch,
     };
-  }, [anchorId, q.data, q.dataUpdatedAt, q.isError, q.error, q.refetch, refusal, online, me, mapDoors, showsDoor, filterOn, sent, outbox.items]);
+  }, [anchorId, q.data, q.dataUpdatedAt, q.isError, q.error, q.refetch, refusal, online, me, mapDoors, showsDoor, filterOn, sent, outbox.items, practiced]);
 }
 
 // The next door to knock, after the door `doorKeyNow` (or from the top):

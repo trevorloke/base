@@ -141,7 +141,7 @@ app.use('*', async (c, next) => {
 // GOTV state once (kept 5 s per campaign): practice marks over voted_at for
 // someone practising, and a volunteer's people kept to their own turfs and
 // phone banks while GOTV is on.
-const GOTV_READS = /^\/api\/(map|persons|turfs|passes)(\/|$)/;
+const GOTV_READS = /^\/api\/(map|persons|turfs|passes|buildings)(\/|$)/;
 app.use('*', async (c, next) => {
   const ctx = c.get('ctx');
   if (c.req.method === 'GET' && GOTV_READS.test(c.req.path)) ctx.gotv = await gotvRead(c.get('db'), ctx);

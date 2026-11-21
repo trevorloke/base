@@ -27,6 +27,7 @@ import { openPass, listedWhere } from '../passes/rule.js';
 import { inPass } from '@starbase/shared/passes';
 import { groupDoors } from '../../lib/geo.js';
 import { inMyTurf } from '../core/index.js';
+import { scopeOf } from '../voted/state.js';
 import {
   buildingOf, unitRows, unitOf, floorOf, unitCompare, floorsShown, REACH,
 } from '@starbase/shared/buildings';
@@ -79,6 +80,13 @@ const readBuilding = async (db, ctx, anchor) => {
     const unit = unitOf(d);
     return { ...d, unit_label: unit, floor: floorOf(unit), in_round: inPass(b.doors[i], pass) };
   }).sort((x, y) => unitCompare(x.unit_label, y.unit_label));
+  // A building can reach past a turf's edge: while GOTV keeps a volunteer
+  // to their turfs and phone banks, its people outside them carry no voted
+  // state at all (as GET /persons/:id), never a false "not voted".
+  if (ctx.gotv?.limited) {
+    const { ids } = await scopeOf(db, ctx);
+    for (const d of shaped) d.persons = d.persons.map((p) => (ids.has(p.id) ? p : (({ voted_at, ...r }) => ({ ...r, voted_hidden: true }))(p)));
+  }
   const rows = unitRows({ doors: shaped }).filter((r) => r.in_round);
   const n = (state) => rows.filter((r) => r.state === state).length;
   return {
