@@ -1,4 +1,5 @@
 // Geometry for turfs and walk lists. Polygons are [[lat, lng], ...] rings.
+import { splitUnit, normAddr, civicOf, unitOf, unitCompare } from '@starbase/shared/buildings';
 
 // Ray-casting point-in-polygon on lat/lng (fine at neighbourhood scale).
 export const pointInPolygon = (lat, lng, ring) => {
@@ -14,12 +15,19 @@ export const pointInPolygon = (lat, lng, ring) => {
 };
 
 // Split "12345 72 Ave" → { number: 12345, street: '72 ave' }. Anything that
-// doesn't start with a house number sorts after numbered addresses.
+// doesn't start with a house number sorts after numbered addresses. A unit
+// written inside the address ("1203-13450 104 Ave") is not the house number,
+// and the street is spelled one way (shared/buildings.js normAddr), so a
+// tower written "104 Ave", "104 Avenue" and "104 Ave." is one street.
 export const parseAddress = (address = '') => {
-  const m = String(address).trim().match(/^(\d+)[A-Za-z]?\s+(.*)$/);
+  const m = String(splitUnit(address)?.civic ?? address).trim().match(/^(\d+)[A-Za-z]?\s+(.*)$/);
   if (!m) return { number: Infinity, street: String(address).trim().toLowerCase() };
-  return { number: Number(m[1]), street: m[2].trim().toLowerCase() };
+  return { number: Number(m[1]), street: normAddr(m[2]) };
 };
+
+// The doors of one house number: by civic address, then floor by floor
+// (shared/buildings.js unitCompare), never in the order the database gave.
+const sameNumber = (a, b) => a._c.localeCompare(b._c) || unitCompare(a._u, b._u);
 
 // Walk order: street by street; along each street, one side up (odd) then the
 // other side back (even) — how canvassers actually work a block.
@@ -28,17 +36,17 @@ export const walkOrder = (doors) => {
   for (const d of doors) {
     const { number, street } = parseAddress(d.address);
     if (!byStreet.has(street)) byStreet.set(street, []);
-    byStreet.get(street).push({ ...d, _n: number });
+    byStreet.get(street).push({ ...d, _n: number, _c: civicOf(d), _u: unitOf(d) });
   }
   const streets = [...byStreet.keys()].sort((a, b) => a.localeCompare(b, 'en', { numeric: true }));
   const out = [];
   for (const st of streets) {
     const list = byStreet.get(st);
-    const odd = list.filter((d) => Number.isFinite(d._n) && d._n % 2 === 1).sort((a, b) => a._n - b._n);
-    const even = list.filter((d) => Number.isFinite(d._n) && d._n % 2 === 0).sort((a, b) => b._n - a._n);
+    const odd = list.filter((d) => Number.isFinite(d._n) && d._n % 2 === 1).sort((a, b) => a._n - b._n || sameNumber(a, b));
+    const even = list.filter((d) => Number.isFinite(d._n) && d._n % 2 === 0).sort((a, b) => b._n - a._n || sameNumber(a, b));
     const other = list.filter((d) => !Number.isFinite(d._n));
     for (const d of [...odd, ...even, ...other]) {
-      const { _n, ...rest } = d;
+      const { _n, _c, _u, ...rest } = d;
       out.push(rest);
     }
   }

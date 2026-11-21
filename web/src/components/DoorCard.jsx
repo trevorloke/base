@@ -61,6 +61,7 @@ import { useOnline } from './NoSignal.jsx';
 import { callsCard, noTexts, textingOn, useTextingStatus } from './TextingCard.jsx';
 import '../pages/map.css';
 import ScriptLine from './ScriptLine.jsx';
+import { BuildingBar } from './BuildingSheet.jsx';
 
 // "Wants a sign?" — one tap files a request (Undo is on the toast). A kind
 // this door already has (requested or up) isn't offered again.
@@ -424,7 +425,11 @@ export function Directions({ to, words, mode, className = 'btn btn-quiet door-ac
 // canAddHere: "+ Person at this door" (desk: anywhere; a volunteer: a door in a turf they walk).
 // allowGoogle: the map under the card is Google's (Google's address rows
 // only over Google's map, as AddDoorForm).
-export default function DoorCard({ door, selectedId, onSelect, onClose, toast, me, canCreate = true, canAddHere = canCreate, allowGoogle = false }) {
+// building: the card opened from a building's sheet (BuildingSheet.jsx):
+// { label, onBack, onNext, nextLabel, onLogged } — a bar back to the sheet
+// above the card and, once a knock is logged here, "Next unit" as the one
+// primary (never an automatic jump: a note may still follow).
+export default function DoorCard({ door, selectedId, onSelect, onClose, toast, me, canCreate = true, canAddHere = canCreate, allowGoogle = false, building = null }) {
   const queryClient = useQueryClient();
   const location = useLocation();
   // The profile's back link reads this: "← Map", back to this door (the URL
@@ -439,6 +444,9 @@ export default function DoorCard({ door, selectedId, onSelect, onClose, toast, m
   const [busy, setBusy] = useState(false);
   const [adding, setAdding] = useState(false);
   const [more, setMore] = useState(false);
+  // A knock logged at this door since the card opened (Nobody home too):
+  // inside a building, Next unit becomes the card's one primary.
+  const [knocked, setKnocked] = useState(false);
   const gotv = useVotedMode().on;
   // A Moved tap's "Where did … go?" ({ person, cid, queued }): the card keeps
   // them until it closes, then loads again.
@@ -543,6 +551,7 @@ export default function DoorCard({ door, selectedId, onSelect, onClose, toast, m
         visit_of: visitOf,
       }, { who: person.name });
       if (person.id === sel?.id) survey.logged(r, { channel: via, outcome, rating, answers, visitOf });
+      if (building) { setKnocked(true); building.onLogged?.(person, via, outcome, r); }
       if (pending) backToDoor(); // the call/text is logged — the next tap is back at the door
       // Append-only: "Change" brings the rating row back; the next tap logs the fix.
       const change = { label: 'Change', onClick: () => focusRating(rateRef.current) };
@@ -658,6 +667,7 @@ export default function DoorCard({ door, selectedId, onSelect, onClose, toast, m
 
   return (
     <aside className="door-card" aria-label={`Door: ${doorTitle(door)}`}>
+      {building && <BuildingBar label={building.label} onBack={building.onBack} />}
       <header className="mapsheet-head">
         <div className="door-head">
           <h2 className="mapsheet-title door-head__name">
@@ -804,6 +814,14 @@ export default function DoorCard({ door, selectedId, onSelect, onClose, toast, m
             {sel.rated_at && <span className="muted mono door-more__when">Rated {localDate(sel.rated_at)}</span>}
           </div>
         </More>
+      )}
+
+      {building && knocked && (
+        <div className="bldg-dock">
+          {building.nextLabel ? (
+            <button type="button" className="btn btn-primary bldg-next" onClick={building.onNext}>{building.nextLabel}</button>
+          ) : <p className="bldg-line" role="status">Every unit is done</p>}
+        </div>
       )}
     </aside>
   );

@@ -314,6 +314,21 @@ test('scope: a turf-A canvasser sees only A’s and their bank’s people; B is 
   ok(await k.mgr.action('vote.settings', { auto: true }));
 });
 
+test('scope: the building read keeps a turf-A canvasser to A while GOTV keeps them to their turfs', async () => {
+  at(k.G, '12:00');
+  ok(await k.mgr.action('vote.settings', { mode: 'on', scope: 'turfs' }));
+  // Outside their turfs: no building, by person or by place.
+  no(await k.volA.client.get(`/api/buildings/of/${k.inB.id}`), 404, 'Not on your turfs');
+  no(await k.volA.client.get(`/api/buildings/at?lat=${k.inB.lat ?? 49.24}&lng=${k.inB.lng ?? -122.74}`), 404, 'Not on your turfs');
+  // Inside: it opens; the desk opens either.
+  ok(await k.volA.client.get(`/api/buildings/of/${k.inA.id}`));
+  ok(await k.mgr.get(`/api/buildings/of/${k.inB.id}`));
+  // GOTV off (doors: every door, the campaign's default): B opens again.
+  ok(await k.mgr.action('vote.settings', { mode: 'off', auto: false }));
+  ok(await k.volA.client.get(`/api/buildings/of/${k.inB.id}`));
+  ok(await k.mgr.action('vote.settings', { auto: true }));
+});
+
 test('the sign-in code: GETs leave it unused; one POST signs in to Who voted only; ends with the post', async () => {
   at(k.G, '21:00');
   const code = ok(await k.mgr.action('gotv.signin.code', { user_id: k.scrut.id }));

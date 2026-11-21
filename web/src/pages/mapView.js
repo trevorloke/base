@@ -62,7 +62,8 @@ export const drawnFor = ({ doors, view, density }) => {
 // (band: 0 not asked yet · 1 undecided · 2 support · 3 opposed — the
 // household's, as a pin's colour is).
 const BAND_NAME = ['unrated', 'undecided', 'support', 'opposed'];
-export const dotsFrom = (rows) => (rows || []).map(([lat, lng, band, n]) => ({ lat, lng, band: BAND_NAME[band] || 'unrated', n }));
+// u: the most units at one address at the spot (a building from BUILDING_MIN).
+export const dotsFrom = (rows) => (rows || []).map(([lat, lng, band, n, u]) => ({ lat, lng, band: BAND_NAME[band] || 'unrated', n, u: u || 0 }));
 
 // ── Turfs ──
 // New turfs cycle through hues that never read as a rating band (no green,

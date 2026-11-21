@@ -1376,6 +1376,54 @@ comes back, or asks if words were typed meanwhile).
 
   The Donors CSV of 20,000 rows streamed in 1.5 s, and the heap grew by
   22 MB while it ran (budget 50).
+- **Buildings (server)** — `server/test/buildings-shared.test.js`
+  (`shared/buildings.js`: every way a unit is written inside an address and
+  the ambiguous ones never split; one spelling of a street; floors and unit
+  order; 3 units stay plain doors, 4 make a building; the same address 1 km
+  away is another, a 0.0003° re-geocode is not; one unit written two ways is
+  one row, done only when both doors are; *Next unit* is the walk list's
+  *Next door* rule, order for order). `server/test/geo.test.js`: a tower's
+  units walk floor by floor, written four ways, and plain addresses parse as
+  before. `server/test/buildings.test.js`: a 120-unit tower from a person and
+  from a dot, the house next door left out; a pass that leaves out half the
+  tower keeps all 120 units (off this round, not counted); a volunteer kept
+  to their turfs gets it only inside one (404 *Not on your turfs*); deleted
+  or moved away is 404 *gone*; over 3,000 people around one point is *too
+  big to list*; the walk list's door shaping byte for byte as it was; and
+  the busy map's dots count units per address (a tower half written
+  "1203-13450 …" counts whole, five houses on one rough geocode don't make a
+  building). The speed check is `node scripts/bench-buildings.mjs <base
+  tree> [people]`: it runs PGlite's Postgres server on port 5522, fills
+  300,000 made-up people (110 towers of 200–700, 900 walk-ups and townhouse
+  complexes, houses), and times the tree before buildings (a `git archive`
+  of it, with `node_modules/@starbase` pointing at its own folders) and this
+  one by turns, 30 reads each, warm:
+
+  | Read | Before (median / p95 ms) | Now (median / p95 ms) | Budget |
+  |---|---:|---:|---|
+  | The building read, biggest tower (465 units, 698 people) | — | 35 / 58 | p95 ≤ 300 |
+  | Busy-map dots over City Centre (895 spots, 118 buildings) | 224 / 309 | 211 / 292 | ≤ 10% slower |
+  | Walk list, a turf with three towers (484 doors) | 36 / 59 | 37 / 85 | ≤ 10% slower |
+- **Buildings (screens)** — `e2e-highrise.mjs`: three servers, `PORT=5520`,
+  `PORT=5523 STARBASE_MAP_ALL=100 STARBASE_MAP_VIEW=100` (the busy view) and
+  `BASE_PATH=/imaginesurrey PORT=5521` (`BP=/imaginesurrey ONLY=1,3,4`).
+  A 210-unit tower (half its rows written "1203-13450 104 Ave", unit 1203
+  both ways), another 60 m away, 60 townhouses, a house with a suite and a
+  4-unit conversion: at z17–z19, light and dark, desk and phone, each tower
+  is one square and the house keeps its two pins; the busy view's square dot
+  opens the sheet and a plain spot still opens its door; the sheet ("210
+  units · 210 left", only Floor 2 open, 1203 one row, ?building= and no
+  address, a reload); Next unit · 201 → No answer → Next unit · 202 → ‹ "209
+  left"; unit 1203's two doors one after the other (Next unit · 1203, then
+  1204), Done only after both; the phone's Back from a unit to the sheet to
+  the map, Escape from a unit's card to its sheet, a square opened with
+  Enter; townhouses in one list; the GOTV filter's "Showing: … · 10 of 210";
+  the walk list floor by floor and a GOTV pass's "Not on this round" (a
+  floor with nobody on the round says so, not "done");
+  offline from the kept walk list and the knock synced after; a volunteer
+  without the turf gets no square and a 404; the anchor merged away says
+  "This building isn't here any more". `RED=1` runs steps 1, 3 and 7 against
+  a tree without buildings, where they fail.
 - **Quick reports (screens)** — `PORT=5460 SHOTS=/tmp/qr node
   e2e-quickreports.mjs`, and again with `BASE_PATH=/imaginesurrey PORT=5461`.
   Reports opens on Quick reports (counts from *Loading…* to numbers;

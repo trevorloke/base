@@ -94,6 +94,8 @@ test('a door answered as a dot: where it is, its band, how many people', () => {
   assert.deepEqual(d.map((x) => [x.band, x.n]), [['unrated', 1], ['undecided', 2], ['support', 3], ['opposed', 4]]);
   assert.deepEqual([d[0].lat, d[0].lng], [49.13351, -122.84801]);
   assert.deepEqual(dotsFrom(undefined), []);
+  // A spot's units (the server's fifth value; an old server sends four): 0 when not said.
+  assert.deepEqual(dotsFrom([[49.1, -122.8, 0, 300, 210], [49.1, -122.8, 0, 2]]).map((x) => x.u), [210, 0]);
   // Counted from what is on screen.
   const screen = [49.1335, -122.8482, 49.13365, -122.848];
   assert.deepEqual(d.filter((x) => inBox(screen, x)).map((x) => x.n), [1, 2]);

@@ -170,14 +170,16 @@ test('?dots=1: one lean row per door — [lat, lng, band, people] — with the h
   assert.equal(d.dots.length, 60, 'one per door');
   assert.equal(d.count, 63, 'the people in the box');
   assert.equal(d.dots.reduce((n, x) => n + x[3], 0), 63, 'people add up');
+  // u, the most units at one address there (HR): one each, a house.
+  assert.ok(d.dots.every((x) => x[4] === 1), 'no building here');
   // band: 0 not asked yet · 1 undecided · 2 support · 3 opposed (any opposed
   // beats support beats undecided, as a pin's colour does).
-  assert.deepEqual(near(d.dots, spot(1)).slice(2), [3, 3], 'opposed, 3 people');
-  assert.deepEqual(near(d.dots, spot(2)).slice(2), [1, 2], 'undecided, 2 people');
-  assert.deepEqual(near(d.dots, spot(0)).slice(2), [2, 1], 'rated 1: support');
-  assert.deepEqual(near(d.dots, spot(5)).slice(2), [3, 1], 'rated 4: opposed');
-  assert.deepEqual(near(d.dots, spot(7)).slice(2), [0, 1], 'not asked yet');
-  assert.ok(d.dots.every((x) => x.length === 4 && String(x[0]).length <= 8 && String(x[1]).length <= 10), 'short numbers: a metre is enough');
+  assert.deepEqual(near(d.dots, spot(1)).slice(2, 4), [3, 3], 'opposed, 3 people');
+  assert.deepEqual(near(d.dots, spot(2)).slice(2, 4), [1, 2], 'undecided, 2 people');
+  assert.deepEqual(near(d.dots, spot(0)).slice(2, 4), [2, 1], 'rated 1: support');
+  assert.deepEqual(near(d.dots, spot(5)).slice(2, 4), [3, 1], 'rated 4: opposed');
+  assert.deepEqual(near(d.dots, spot(7)).slice(2, 4), [0, 1], 'not asked yet');
+  assert.ok(d.dots.every((x) => x.length === 5 && String(x[0]).length <= 8 && String(x[1]).length <= 10), 'short numbers: a metre is enough');
   // Only the doors where someone has one rating (the map's "Strong yes (1)").
   const ones = ok(await mgr.get(`/api/map/doors?bbox=${BOX}&dots=1&rating=1`));
   assert.deepEqual([ones.dots.length, ones.dots.every((x) => x[2] === 2 && x[3] === 1)], [20, true]);

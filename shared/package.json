@@ -25,6 +25,7 @@
     "./site/*": "./site/*.js",
     "./fillwords": "./fillwords.js",
     "./letters": "./letters.js",
+    "./buildings": "./buildings.js",
     "./voteguide": "./voteguide.js",
     "./qr": "./qr.js",
     "./email/*": "./email/*.js",
