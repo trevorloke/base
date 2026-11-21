@@ -366,7 +366,8 @@ test('the log holds no letter’s words; the export no sign-off; a merge moves t
   ok(await mgr.action('letter.suggest', { id: l.id, body: `${words} Suggested.`, note: 'Office note text' }));
   ok(await vic.action('myletter.revise', { id: l.id, body: words, client_id: cid() }));
   ok(await ready(vic, l.id));
-  const events = (await db.query(`select entity_type, payload::text as p from events where workspace_id = $1 and entity_type like 'letter%'`, [ws])).rows;
+  // In the log's order: the last agreement is this letter's (without it the rows come in whatever order the table hands them).
+  const events = (await db.query(`select entity_type, payload::text as p from events where workspace_id = $1 and entity_type like 'letter%' order by seq`, [ws])).rows;
   assert.ok(events.length >= 6);
   for (const e of events) {
     for (const secret of ['Sidewalks', 'particular sentence', 'only the desk', 'Office note', 'Cloverdale', '300 Example', '555-0177', 'Vic E.', 'campaign_share']) {

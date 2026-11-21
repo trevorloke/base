@@ -43,16 +43,15 @@ before(async () => {
 test('a volunteer marks a voter; a replay is a duplicate; voted:false takes it back', async () => {
   const p = await mgr.createPerson('Gill Example', { phone: '604-555-0141', email: 'gill@example.org', address: '13225 72 Ave', lat: 49.1327, lng: -122.8547 });
   const client_id = randomUUID();
+  // A volunteer's answer is the same bytes whatever was there before (GOTV
+  // decision 13): nothing in it says whether this person had voted.
   const first = ok(await vol.action('vote.mark', { person_id: p.id, client_id }));
-  assert.equal(first.voted, true);
-  assert.ok(first.voted_at, 'the fact is set');
-  assert.equal(first.duplicate, undefined);
+  assert.deepEqual(first, { ok: true, client_id });
   const view = ok(await vol.get(`/api/persons/${p.id}`));
   assert.ok(view.person.voted_at, 'the volunteer reads voted_at on the profile');
   assert.equal(view.person.email, null, 'and still never the email');
   const replay = ok(await vol.action('vote.mark', { person_id: p.id, client_id }));
-  assert.equal(replay.duplicate, true);
-  assert.equal(replay.voted, true);
+  assert.deepEqual(replay, first, 'a replay answers the same');
   const db = await getDb();
   const rows = (await db.query('select count(*)::int as n from voted_marks where workspace_id = $1 and person_id = $2', [ws, p.id])).rows[0].n;
   assert.equal(rows, 1, 'one mark for one tap');
@@ -60,8 +59,7 @@ test('a volunteer marks a voter; a replay is a duplicate; voted:false takes it b
   assert.equal(evs, 1, 'one event for one mark');
 
   // Change: a take-back is a new mark, and the fact clears.
-  const back = ok(await vol.action('vote.mark', { person_id: p.id, voted: false, source: 'door' }));
-  assert.equal(back.voted_at, null);
+  ok(await vol.action('vote.mark', { person_id: p.id, voted: false, source: 'door' }));
   assert.equal((await mgr.get(`/api/persons/${p.id}`)).json.person.voted_at, null);
   const mine = await marksOf(vol, p.id);
   assert.equal(mine.voted_at, null);
@@ -117,6 +115,9 @@ test('the walk list, /map/doors and /persons carry voted_at', async () => {
 });
 
 test('the import’s Voted column marks from a file and never un-marks', async () => {
+  // GOTV is on from here: volunteers may mark anyone, as before GOTV kept
+  // them to their own turfs (scope 'campaign', gotv-scrutineer.test.js).
+  ok(await mgr.action('vote.settings', { scope: 'campaign' }));
   const rows = [
     { name: 'One Example', phone: '604-555-0151', voted: '1' },
     { name: 'Yes Example', phone: '604-555-0152', voted: 'yes' },
@@ -238,24 +239,25 @@ test('a mark keeps its person when the sample clears; the export carries the mar
 test('marked twice: one voter, the first time kept; a mark that waited on a phone keeps its tap and never undoes a later change', async () => {
   const p = await mgr.createPerson(`Twice Example ${tag}`, { phone: '604-555-0166' });
   const before = ok(await mgr.get('/api/brief')).voted.today;
-  const first = ok(await vol.action('vote.mark', { person_id: p.id, voted: true, source: 'door', client_id: randomUUID() }));
+  ok(await vol.action('vote.mark', { person_id: p.id, voted: true, source: 'door', client_id: randomUUID() }));
+  const firstAt = (await mgr.get(`/api/persons/${p.id}`)).json.person.voted_at;
   await new Promise((r) => setTimeout(r, 30));
   const second = ok(await staff.action('vote.mark', { person_id: p.id, voted: true, source: 'phone' }));
-  assert.equal(second.voted_at, first.voted_at, 'a caller marking them again doesn’t move the time');
+  assert.equal(second.voted_at, firstAt, 'a caller marking them again doesn’t move the time');
   assert.equal(ok(await mgr.get('/api/brief')).voted.today, before + 1, 'one person, two marks: Today counts one');
 
   // Ana tapped "Not voted" in a dead zone, then the desk marked them voted;
   // her tap arrives last but happened first.
   const tapped = new Date(Date.now() - 60_000).toISOString();
   ok(await mgr.action('vote.mark', { person_id: p.id, voted: true, source: 'desk' }));
-  const late = ok(await vol.action('vote.mark', { person_id: p.id, voted: false, source: 'door', client_id: randomUUID(), client_at: tapped }));
-  assert.ok(late.voted_at, 'the older tap changes nothing');
+  ok(await vol.action('vote.mark', { person_id: p.id, voted: false, source: 'door', client_id: randomUUID(), client_at: tapped }));
+  assert.ok((await mgr.get(`/api/persons/${p.id}`)).json.person.voted_at, 'the older tap changes nothing');
   const hist = await marksOf(mgr, p.id);
   assert.equal(hist.marks.length, 4, 'every mark is in the history');
   assert.ok(hist.marks.some((m) => m.voted === false && new Date(m.created_at).getTime() === Date.parse(tapped)), 'with its own time');
   // A tap from the future (a phone clock running fast) counts as now.
-  const fast = ok(await vol.action('vote.mark', { person_id: p.id, voted: false, source: 'door', client_id: randomUUID(), client_at: new Date(Date.now() + 3_600_000).toISOString() }));
-  assert.equal(fast.voted_at, null, 'the newest tap wins');
+  ok(await vol.action('vote.mark', { person_id: p.id, voted: false, source: 'door', client_id: randomUUID(), client_at: new Date(Date.now() + 3_600_000).toISOString() }));
+  assert.equal((await mgr.get(`/api/persons/${p.id}`)).json.person.voted_at, null, 'the newest tap wins');
 });
 
 test('GOTV mode turns itself on for an advance-voting day and election day, in the campaign’s day; off by hand stays off', async () => {

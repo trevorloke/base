@@ -164,3 +164,23 @@ test('a desk reloading Today counts nothing over the list; a write shows at once
   assert.equal(after.people.total, 21);
   assert.equal(after.ratings['2'], 1);
 });
+
+// Today never shows what its taps would refuse: staff denied Donations,
+// Shifts and Signs get no total, no donor, no short shift and no sign count.
+test('staff denied Donations, Shifts and Signs: none of those in the brief', async () => {
+  const dataOnly = await joinAs('staff', 'Dora');
+  ok(await mgr.action('permission.member.set', { user_id: dataOnly.id, grant: [], deny: ['money', 'shifts', 'signs'] }));
+  const p = ok(await mgr.action('person.create', { name: 'Gift Example' })).person;
+  ok(await mgr.action('gift.log', { person_id: p.id, amount_cents: 2500, date: '2026-10-01', method: 'cash' }));
+  ok(await mgr.action('sign.place', { kind: 'lawn', person_id: p.id, address: '10355 King George Blvd' }));
+  const full = await brief(staff);
+  assert.ok(full.money && full.money.totalCents > 0, 'staff with Donations still see the total');
+  const b = await brief(dataOnly);
+  assert.equal(b.money, null);
+  assert.deepEqual(b.flagged, []);
+  assert.deepEqual(b.shifts, []);
+  assert.deepEqual(b.shortShifts, []);
+  assert.deepEqual(b.signs, {});
+  assert.equal('filing' in b, false);
+  assert.equal(typeof b.field.doors, 'number', 'the doors count stays');
+});

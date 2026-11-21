@@ -72,7 +72,7 @@ export const SOCIAL_PLATFORMS = ['facebook', 'instagram', 'x', 'tiktok', 'reddit
 // sent to the dialer — texts, email and the door are untouched.
 export const SUGGESTED_TAGS = [
   'media', 'VIP', 'endorser', 'host', 'donor-prospect', 'lapsed',
-  'newsletter', 'petition', 'youth', 'senior', 'business', 'faith',
+  'newsletter', 'petition', 'youth', 'senior', 'business',
   'union', 'do-not-call', 'do-not-contact', 'influencer',
 ];
 // Asked not to be phoned — do-not-call, or do-not-contact (no calls, no

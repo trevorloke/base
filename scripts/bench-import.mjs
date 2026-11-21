@@ -38,7 +38,7 @@ const row = (i) => ({
   city: 'Surrey', postal: 'V3T 1V8',
   lat: 49.1 + (i % 1000) / 10000, lng: -122.8 + (i % 1000) / 10000,
   tags: i % 4 ? 'Zone 1;Vol: Door Knocker' : 'Zone 2',
-  fields: { [fid('Province')]: 'BC', [fid('Email opt-in')]: 't', [fid('SMS opt-in')]: 'f', [fid('Support')]: String(1 + (i % 5)), [fid('Dwelling type')]: i % 2 ? 'House' : 'Apartment' },
+  fields: { [fid('Province')]: 'BC', [fid('Email opt-in')]: 't', [fid('SMS opt-in')]: 'f', [fid('Support')]: String(1 + (i % 5)), [fid('Dwelling type')]: i % 2 ? 'House' : 'Low-rise apartment (1–4 floors)' },
 });
 const rows = Array.from({ length: N }, (_, i) => row(i));
 const t0 = performance.now();

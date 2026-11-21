@@ -74,7 +74,9 @@ function Row({ s, online }) {
         {res?.todo && <p className="sv2-detail sv2-todo" role="status">{res.todo}</p>}
         {s.todo && !res?.todo && <p className="sv2-detail sv2-todo">{s.todo}</p>}
       </div>
-      {s.checkable && (
+      {/* Translation's own Check translation already proves the key answers:
+          one check button on that row, not two. */}
+      {s.checkable && !(s.panel === 'translate' && s.state !== 'missing') && (
         <button type="button" className="btn ops-tap sv2-check" disabled={busy || !online} onClick={check}>{busy ? 'Checking…' : 'Check'}</button>
       )}
     </li>

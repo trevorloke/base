@@ -25,8 +25,11 @@ import { newId } from '../../lib/events.js';
 import { httpError } from '../../actions/util.js';
 import {
   KINDS, HAS_CHOICES, NAME_MAX, CHOICE_MAX, CHOICES_MAX, FIELDS_MAX,
-  choicesOf, cleanName, nameKey, parseValue, valueError, showValue, sameValue,
+  choicesOf, choiceKey, cleanName, nameKey, parseJ, parseValue, valueError, showValue, sameValue,
 } from './kinds.js';
+import { splits } from '@starbase/shared/fieldlists';
+import { addStandardFields, convertingRefusal } from './people.js';
+import { convertActions } from './convert.js';
 
 const MANAGERS = ['manager'];
 const DESK = ['manager', 'treasurer', 'staff'];
@@ -37,12 +40,34 @@ const choicesIn = () => z.array(z.string().trim().min(1).max(CHOICE_MAX)).max(CH
 // number, yes/no, a list (Pick several), or null to clear.
 const valueIn = () => z.union([z.string().max(8000), z.number(), z.boolean(), z.null(), z.array(z.string().max(200)).max(CHOICES_MAX)]);
 
-export const fieldOut = (f) => ({
-  id: f.id, name: f.name, kind: f.kind, choices: choicesOf(f), volunteers: !!f.volunteers,
-  position: f.position, retired: !!f.retired_at,
-});
+// sensitive: "Private". display: how a Pick one draws ('buttons' | 'list').
+// as_written_of: the list whose leftover words this Text field keeps.
+// converting: { done, total } while a Text field is being turned into a
+// list (convert.js), else null.
+export const fieldOut = (f) => {
+  const plan = parseJ(f.converting, null);
+  return {
+    id: f.id, name: f.name, kind: f.kind, choices: choicesOf(f), volunteers: !!f.volunteers,
+    position: f.position, retired: !!f.retired_at,
+    sensitive: !!f.sensitive, display: f.display || 'buttons', as_written_of: f.as_written_of || null,
+    converting: plan ? { done: Number(plan.done) || 0, total: Number(plan.total) || 0 } : null,
+  };
+};
 
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+const LIST_ONLY_PICK_ONE = 'Only a Pick one field can be a scroll-down list';
+const PRIVATE_NOT_VOLUNTEERS = 'A private field can’t be shown to volunteers';
+const splitWords = (c) => `“${c}” has a comma or slash in it, which Pick several reads as two choices — change its words first`;
+// The settings a kind allows: a scroll-down list is a Pick one's; a Private
+// field is never the volunteers'; a Pick several choice never splits.
+const checkSettings = ({ kind, display, sensitive, volunteers, choices, was = [] }) => {
+  if (display === 'list' && kind !== 'choice') throw httpError(400, LIST_ONLY_PICK_ONE);
+  if (sensitive && volunteers) throw httpError(400, PRIVATE_NOT_VOLUNTEERS);
+  if (kind === 'choices') {
+    const bad = choices.find((c) => splits(c) && !was.includes(c));
+    if (bad) throw httpError(400, splitWords(bad));
+  }
+};
 
 const loadField = async (tx, ctx, id) => {
   const f = (await tx.query(
@@ -76,7 +101,7 @@ const cleanChoices = (kind, list) => {
   }
   const out = (list || []).map(cleanName).filter(Boolean);
   if (out.length < 2) throw httpError(400, 'add at least two choices');
-  if (new Set(out.map(nameKey)).size !== out.length) throw httpError(400, 'two choices are the same');
+  if (new Set(out.map(choiceKey)).size !== out.length) throw httpError(400, 'two choices are the same');
   return out;
 };
 
@@ -87,7 +112,6 @@ const valuesOf = async (tx, ctx, fieldId) => (await tx.query(
   [ctx.workspaceId, fieldId],
 )).rows.map((r) => ({ ...r, value: r.value ?? null }));
 
-import { addStandardFields } from './people.js';
 
 export const actions = {
   'field.create': {
@@ -97,11 +121,14 @@ export const actions = {
       kind: z.enum(KINDS),
       choices: choicesIn().optional(),
       volunteers: z.boolean().default(false),
+      sensitive: z.boolean().default(false),
+      display: z.enum(['buttons', 'list']).default('buttons'),
     }),
     handler: async (tx, ctx, input, emit) => {
       const name = cleanName(input.name);
       await checkName(tx, ctx, name);
       const choices = cleanChoices(input.kind, input.choices);
+      checkSettings({ ...input, choices });
       const { n, top } = (await tx.query(
         `select count(*)::int as n, coalesce(max(position), -1)::int as top from person_fields
          where workspace_id = $1 and retired_at is null`, [ctx.workspaceId],
@@ -109,11 +136,13 @@ export const actions = {
       if (n >= FIELDS_MAX) throw httpError(400, `a campaign can have up to ${FIELDS_MAX} fields`);
       const id = newId();
       await tx.query(
-        `insert into person_fields (id, workspace_id, name, kind, choices, volunteers, position, created_by)
-         values ($1, $2, $3, $4, $5, $6, $7, $8)`,
-        [id, ctx.workspaceId, name, input.kind, JSON.stringify(choices), input.volunteers, top + 1, ctx.user?.id || null],
+        `insert into person_fields (id, workspace_id, name, kind, choices, volunteers, position, created_by, sensitive, display)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        [id, ctx.workspaceId, name, input.kind, JSON.stringify(choices), input.volunteers, top + 1, ctx.user?.id || null, input.sensitive, input.display],
       );
-      const field = { id, name, kind: input.kind, choices, volunteers: input.volunteers, position: top + 1, retired: false };
+      const field = fieldOut({
+        id, name, kind: input.kind, choices, volunteers: input.volunteers, position: top + 1, sensitive: input.sensitive, display: input.display,
+      });
       emit('person_field', id, 'create', field);
       return { field };
     },
@@ -127,9 +156,12 @@ export const actions = {
       kind: z.enum(KINDS).optional(),
       choices: choicesIn().optional(),
       volunteers: z.boolean().optional(),
+      sensitive: z.boolean().optional(),
+      display: z.enum(['buttons', 'list']).optional(),
     }),
     handler: async (tx, ctx, input, emit) => {
       const cur = await liveField(tx, ctx, input.id);
+      if (cur.converting) throw httpError(409, convertingRefusal(cur.name));
       const name = input.name !== undefined ? cleanName(input.name) : cur.name;
       if (nameKey(name) !== nameKey(cur.name)) await checkName(tx, ctx, name, cur.id);
       const kind = input.kind ?? cur.kind;
@@ -144,6 +176,16 @@ export const actions = {
         throw httpError(409, `“${cur.name}” is filled in for ${plural(people, 'person', 'people')} — it can only become Text or Long text now. Add a new field instead.`);
       }
       const choices = cleanChoices(kind, HAS_CHOICES.has(kind) ? input.choices ?? (HAS_CHOICES.has(cur.kind) ? was : []) : input.choices);
+      // Pick one → Pick several: no choice may read as two.
+      if (cur.kind === 'choice' && kind === 'choices') {
+        const bad = choices.find(splits);
+        if (bad) throw httpError(409, splitWords(bad));
+      }
+      const volunteers = input.volunteers ?? !!cur.volunteers;
+      const sensitive = input.sensitive ?? !!cur.sensitive;
+      if (input.display === 'list' && kind !== 'choice') throw httpError(400, LIST_ONLY_PICK_ONE);
+      const display = kind === 'choice' ? (input.display ?? (cur.kind === 'choice' ? cur.display || 'buttons' : 'buttons')) : 'buttons';
+      checkSettings({ kind, display, sensitive, volunteers, choices, was: cur.kind === 'choices' ? was : choices });
       // A choice someone has stays on the list.
       if (HAS_CHOICES.has(kind) && HAS_CHOICES.has(cur.kind)) {
         const used = new Map();
@@ -171,18 +213,25 @@ export const actions = {
           converted += 1;
         }
       }
-      const volunteers = input.volunteers ?? !!cur.volunteers;
       await tx.query(
-        `update person_fields set name = $3, kind = $4, choices = $5, volunteers = $6, updated_at = now()
+        `update person_fields set name = $3, kind = $4, choices = $5, volunteers = $6, sensitive = $7, display = $8, updated_at = now()
          where id = $1 and workspace_id = $2`,
-        [cur.id, ctx.workspaceId, name, kind, JSON.stringify(choices), volunteers],
+        [cur.id, ctx.workspaceId, name, kind, JSON.stringify(choices), volunteers, sensitive, display],
       );
       const patch = { ...input };
       delete patch.id;
       if (kind !== cur.kind) Object.assign(patch, { was: cur.kind, converted });
       if (!HAS_CHOICES.has(kind) && HAS_CHOICES.has(cur.kind)) patch.choices = [];
+      if (display !== (cur.display || 'buttons')) patch.display = display;
       emit('person_field', cur.id, 'update', patch);
-      return { field: fieldOut({ ...cur, name, kind, choices, volunteers }), converted };
+      // Its "as written" words are as private as it is.
+      if (sensitive !== !!cur.sensitive) {
+        for (const r of (await tx.query(
+          `update person_fields set sensitive = $3, volunteers = volunteers and not $3, updated_at = now()
+            where workspace_id = $1 and as_written_of = $2 returning id`, [ctx.workspaceId, cur.id, sensitive],
+        )).rows) emit('person_field', r.id, 'update', { sensitive, ...(sensitive ? { volunteers: false } : {}), as_written_of: cur.id });
+      }
+      return { field: fieldOut({ ...cur, name, kind, choices, volunteers, sensitive, display }), converted };
     },
   },
 
@@ -211,6 +260,7 @@ export const actions = {
     input: z.object({ id: z.uuid() }),
     handler: async (tx, ctx, input, emit) => {
       const f = await liveField(tx, ctx, input.id);
+      if (f.converting) throw httpError(409, convertingRefusal(f.name));
       await tx.query('update person_fields set retired_at = now(), updated_at = now() where id = $1 and workspace_id = $2',
         [f.id, ctx.workspaceId]);
       const kept = (await tx.query(
@@ -249,6 +299,7 @@ export const actions = {
     input: z.object({}),
     handler: async (tx, ctx, input, emit) => ({ added: await addStandardFields(tx, ctx, emit) }),
   },
+  ...convertActions,
 
   'field.values.set': {
     roles: DESK,
@@ -272,6 +323,12 @@ export const actions = {
         const f = fields.get(fid);
         if (!f) throw httpError(400, 'that field is not in this campaign');
         if (f.retired_at) throw httpError(409, `“${f.name}” is taken off`);
+        // A Private field is the office's to record, whatever areas a
+        // volunteer has been granted. A form the person filled in (the
+        // website's, their own consent link, a paper membership form) writes
+        // what they gave: ctx.form, set by those callers only.
+        if (f.sensitive && !ctx.form && !DESK.includes(ctx.role)) throw httpError(403, `Only the office records ${f.name}`);
+        if (f.converting) throw httpError(409, convertingRefusal(f.name));
         const p = parseValue(f, value);
         if (p.error) throw httpError(400, valueError(f, p.error));
         return { f, value: p.empty ? null : p.value };

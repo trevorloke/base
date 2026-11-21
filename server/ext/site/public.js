@@ -41,18 +41,26 @@ import { siteHost, siteWorkspace, ensureSite, readSettings, menuPages, siteOf, p
 import { authorizedBy } from '../../../shared/site/wording.js';
 import { loadData } from './loaders.js';
 import { calendarHeaders, eventsCalendar } from './calendar.js';
-import { cacheKey, cacheGet, cachePut } from './cache.js';
+import { cacheKey, cacheGet, cachePut, cacheGen, remember } from './cache.js';
+import { now as clockNow } from '../../lib/clock.js';
+import { guideState } from '../../../shared/voteguide.js';
+import { guideFor } from '../voteguide/read.js';
+import { clockRoute, findRoute } from '../voteguide/public.js';
 import { verify, sign, PERSON_TTL } from './tokens.js';
 import { refCodeFor, CODE_RE } from './people.js';
 import { choicesOf, emailOff, emailOn, smsOff, smsOn } from './consent.js';
 import { formRoute } from './forms.js';
+import { publicFontFile, licencesText } from './fonts.js';
 import { KIT_CODE_RE, goodPath } from '../socials/share.js';
 import { withSource } from '../../../shared/site/components/util.js';
 import { KINDS, consentWording } from './shape.js';
-import { LANG_BY_CODE, LANG_BY_PREFIX, isOther } from '../../../shared/site/languages.js';
+import { LANG_BY_CODE, LANG_BY_PREFIX, isOther, labelFor } from '../../../shared/site/languages.js';
 import { UI_WORDS, fillWords } from '../../../shared/site/ui-words.js';
 import { languagesFor, translatorFor } from './translate.js';
 import { LEGAL_ENGLISH_HASH, keyCurrent, legalSlots, legalWords, legalRow } from './legal.js';
+// The campaign's website settings, read once until the next Website action
+// (cache.js remember): a page already kept costs the database nothing.
+const settingsOf = (site) => remember(site.db, `settings|${site.ws.id}`, () => readSettings(site.db, site.ws.id));
 const legalRowOf = (site, id) => legalRow(site.db, site.ws.id, String(id).toLowerCase());
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -93,6 +101,8 @@ const TYPES = {
 };
 const serveAsset = async (c) => {
   const rel = decodeURIComponent(c.req.path.replace(/^.*?\/site-assets\//, ''));
+  // The voter guide's embed script (VG): the snippet's second line.
+  if (rel === 'embed.js') return c.body(await readFile(fromHere('../../../shared/site/embed.js')), 200, { 'Content-Type': TYPES['.js'], 'Cache-Control': 'public, max-age=3600', 'X-Content-Type-Options': 'nosniff' });
   if (rel === 'lang-rules.json') return c.body(LANG_RULES, 200, { 'Content-Type': 'application/speculationrules+json', 'Cache-Control': 'public, max-age=3600', 'X-Content-Type-Options': 'nosniff' });
   if (!rel || rel.includes('\0') || rel.split('/').some((p) => p === '..' || p.startsWith('.'))) return c.text('not found', 404);
   const ext = extname(rel).toLowerCase();
@@ -141,7 +151,9 @@ const scriptHashes = (html) => {
   }
   return [...new Set(out)];
 };
-export const cspFor = (html, { preview = false } = {}) => [
+// frameAncestors: the addresses allowed to frame this page (the voter
+// guide's embed, VG decision 21); otherwise nobody (a preview: the app).
+export const cspFor = (html, { preview = false, frameAncestors = [] } = {}) => [
   "default-src 'self'",
   `script-src 'self'${scriptHashes(html).map((h) => ` ${h}`).join('')}`,
   "style-src 'self' 'unsafe-inline'",
@@ -151,23 +163,27 @@ export const cspFor = (html, { preview = false } = {}) => [
   "media-src 'self'",
   `frame-src ${FRAMES}`,
   "form-action 'self' https://checkout.stripe.com",
-  `frame-ancestors ${preview ? "'self'" : "'none'"}`,
+  `frame-ancestors ${preview ? "'self'" : frameAncestors.length ? frameAncestors.join(' ') : "'none'"}`,
   "base-uri 'self'",
   "object-src 'none'",
 ].join('; ');
 
 const staging = () => envName() === 'staging';
-const pageHeaders = (c, site, { csp, preview = false, store = false }) => {
+// geo: the page holds the voter guide, whose "Use my location" asks the
+// browser (never the server) where the visitor is. frame: the voter guide's
+// embed with its saved addresses — framed by them, so no X-Frame-Options
+// (with none saved it is DENY like every page).
+const pageHeaders = (c, site, { csp, preview = false, store = false, geo = false, frame = null }) => {
   c.header('Content-Security-Policy', csp);
-  c.header('X-Frame-Options', preview ? 'SAMEORIGIN' : 'DENY');
+  if (!(frame && frame.length)) c.header('X-Frame-Options', preview ? 'SAMEORIGIN' : 'DENY');
   c.header('X-Content-Type-Options', 'nosniff');
   c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
-  c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+  c.header('Permissions-Policy', `camera=(), microphone=(), geolocation=${geo ? '(self)' : '()'}, payment=()`);
   c.header('Cross-Origin-Opener-Policy', 'same-origin');
   c.header('Cache-Control', store ? 'no-store' : 'no-cache');
   // Not indexed: a draft, staging, or the app's own copy of a site that has
   // its own domain (search engines should find that one).
-  if (preview || staging() || site.mirror) c.header('X-Robots-Tag', 'noindex, nofollow');
+  if (preview || frame || staging() || site.mirror) c.header('X-Robots-Tag', 'noindex, nofollow');
   if (site.https) c.header('Strict-Transport-Security', 'max-age=31536000');
 };
 
@@ -193,7 +209,10 @@ const publicOrigin = (base, origin) => {
 // public one (publicOrigin) — neither repeats the client's path.
 const siteFor = async (c, at) => {
   const db = await getDb();
-  const ws = await siteWorkspace(db, at.workspaceId || null);
+  // Read once until the next Website action; no campaign yet is asked again
+  // (one may be signed up a moment later).
+  const ws = await remember(db, `ws|${at.workspaceId || ''}|${process.env.SITE_WORKSPACE || ''}`, () => siteWorkspace(db, at.workspaceId || null))
+    || await siteWorkspace(db, at.workspaceId || null);
   if (!ws) return null;
   const base = c.env?.base || '';
   const url = new URL(c.req.url);
@@ -223,9 +242,13 @@ const ctxOf = (c, site, extra = {}) => {
   return {
     root: site.root,
     assets: site.assets,
+    // Added fonts: under the site's root without a language (fonts.js).
+    fontAssets: `${site.home}/site-assets`,
     media: `${site.base}/media`,
     origin: site.address,
-    islands: islandsBuilt() ? `${site.assets}/site-islands.js` : null,
+    // true: the renderer names it under ctx.assets with its build's ?v=,
+    // so a deploy's script is a new address (it is kept for an hour).
+    islands: islandsBuilt() ? true : null,
     preview: false,
     path: c.req.path.slice(site.inner.length) || '/',
     sent, error, cancelled,
@@ -269,25 +292,63 @@ const languageCtx = async (site, settings, { lang = site.lang, preview = false, 
   };
 };
 
-const draw = async (c, site, { kind, page = null, post = null, campaign = null, key, status, ctx: extra = {} }) => {
-  const settings = await readSettings(site.db, site.ws.id);
-  const ctx = ctxOf(c, site, extra);
+// The voter guide's filters from the address (VG decision 19a): ?area= and
+// ?day= only when they are this guide's own (then part of the page's key,
+// so the pages kept are bounded); ?q= is drawn and never kept; ?near= is
+// the island's alone. null when the page holds no guide.
+const guideFilter = async (c, site, page) => {
+  if (!(page?.modules || []).some((m) => m && !m.hidden && m.kind === 'voterguide')) return null;
+  const g = await guideFor(site.db, site.ws);
+  const q = (k) => String(c.req.query(k) ?? '').trim();
+  const area = g.areas.includes(q('area')) ? q('area') : '';
+  const day = g.days.some((d) => d.day === q('day')) || ['today', 'advance', 'general', 'all'].includes(q('day')) ? q('day') : '';
+  return { area, day, q: q('q').slice(0, 80) };
+};
+
+// Pages being drawn now, by cache key and cacheGen: visitors who ask for
+// the same page while it is drawn wait for that one draw (a crowd on a
+// page not yet in the cache — the voter guide on voting day — asks the
+// database once). A Website action during a draw (a "Closed today"
+// correction) starts a new generation: later visitors get a draw of their
+// own, and the older draw is never kept.
+const DRAWING = new Map();
+const draw = async (c, site, { kind, page = null, post = null, campaign = null, key, status, frame = null, ctx: extra = {} }) => {
+  const gen = cacheGen();
+  const settings = await settingsOf(site);
+  const vg = kind === 'page' ? await guideFilter(c, site, page) : null;
+  const ctx = ctxOf(c, site, { ...(vg ? { vgFilter: vg } : {}), ...extra });
   const langsOn = (settings.languages?.on || []).length > 0;
   if (langsOn) Object.assign(ctx, await languageCtx(site, settings, { lang: ctx.preview ? extra.lang || 'en' : site.lang, preview: ctx.preview, checkFirst: page?.checkFirst === true }));
-  const keep = key && !ctx.sent && !ctx.error && !ctx.cancelled && !ctx.preview;
+  const keep = key && !ctx.sent && !ctx.error && !ctx.cancelled && !ctx.preview && !vg?.q;
   // Per website too: '/' on two hosts is never the same page.
   const micro = site.micro ? [site.micro.id, new Date(site.micro.updated_at).getTime()] : ['', ''];
-  const fullKey = keep ? cacheKey(site.ws.id, [site.address, site.root, ...micro, kind, ...key, settings.updated_at, ctx.referral || '']) : null;
+  const fullKey = keep ? cacheKey(site.ws.id, [site.address, site.root, ...micro, kind, ...key, settings.updated_at, ctx.referral || '', ...(vg ? ['vg', vg.area, vg.day] : [])]) : null;
   let hit = fullKey ? cacheGet(fullKey) : null;
+  const drawKey = fullKey && `${fullKey}|${gen}`;
+  if (!hit && fullKey && DRAWING.has(drawKey)) hit = await DRAWING.get(drawKey).catch(() => null);
   if (!hit) {
-    const data = await loadData(site.db, site.ws, { posts: kind === 'page' && page?.slug === 'news' ? 200 : 24 });
-    const out = renderSite({ kind, site: await rendererSite(site, settings), page, post, campaign, data, ctx });
-    hit = { status: status || out.status || 200, html: out.html, csp: cspFor(out.html, { preview: ctx.preview }) };
-    if (fullKey && hit.status === 200) cachePut(fullKey, hit);
+    const drawing = (async () => {
+      const now = clockNow();
+      const data = await loadData(site.db, site.ws, { posts: kind === 'page' && page?.slug === 'news' ? 200 : 24, now, draft: ctx.preview, siteId: site.micro?.id || null });
+      const out = renderSite({ kind, site: await rendererSite(site, settings), page, post, campaign, data, ctx });
+      // Kept as bytes: a kept page is sent as it is, not encoded again for
+      // each visitor (most of a cache hit's cost under a crowd).
+      const drawn = { status: status || out.status || 200, html: Buffer.from(out.html), csp: cspFor(out.html, { preview: ctx.preview, frameAncestors: frame || [] }), geo: / data-module="voterguide"/.test(out.html) };
+      // While the guide is published, never served past its next change.
+      const g = data.guide;
+      const until = g && g.status === 'published' ? guideState(g.times, now, g.places).boundary : null;
+      if (fullKey && drawn.status === 200 && cacheGen() === gen) cachePut(fullKey, drawn, { until: until ?? undefined });
+      return drawn;
+    })();
+    if (fullKey) {
+      DRAWING.set(drawKey, drawing);
+      drawing.catch(() => {}).finally(() => { if (DRAWING.get(drawKey) === drawing) DRAWING.delete(drawKey); });
+    }
+    hit = await drawing;
   }
-  pageHeaders(c, site, { csp: hit.csp, preview: ctx.preview, store: ctx.preview || Boolean(ctx.sent || ctx.error) });
+  pageHeaders(c, site, { csp: hit.csp, preview: ctx.preview, store: ctx.preview || frame !== null || Boolean(ctx.sent || ctx.error), geo: hit.geo, frame });
   if (langsOn && !ctx.preview) langHeaders(c, site, hit.status);
-  return c.html(hit.html, hit.status);
+  return c.body(hit.html, hit.status, { 'Content-Type': 'text/html; charset=UTF-8' });
 };
 
 const notFound = (c, site) => draw(c, site, { kind: 'notFound', key: ['404'], status: 404 });
@@ -308,11 +369,12 @@ const langHeaders = (c, site, status) => {
 };
 
 // A published page of this website (another website's pages are its own).
-const livePage = async (site, slug) => (await site.db.query(
+// Read once until the next Website action (cache.js remember).
+const livePage = (site, slug) => remember(site.db, `page|${site.ws.id}|${site.micro?.id || ''}|${slug}`, async () => (await site.db.query(
   `select id, slug, version, published from site_pages where workspace_id = $1 and slug = $2 and deleted_at is null and status = 'published'
      and site_id is not distinct from $3::uuid`,
   [site.ws.id, slug, site.micro?.id || null],
-)).rows[0] || null;
+)).rows[0] || null);
 // A page's share picture ({ url, alt }), or null: the renderer's og:image
 // for the page, before the site's own (seo.shareImage) and the hero's.
 const shareOf = (content) => (content?.image?.url ? { url: String(content.image.url), alt: String(content.image.alt || '') } : null);
@@ -334,7 +396,7 @@ const NEWS_PAGE = { id: null, slug: 'news', title: 'News', description: '', modu
 // the main site.
 // pl: the page's language, for a supporter's own pages (TR decision 40):
 // { lang, w, auth } — its words, and "Authorized by" in it as approved.
-const plainPage = (site, settings, { title, body, status = 200, closed = false, back = true, pl = null }) => {
+const plainPage = (site, settings, { title, body, status = 200, closed = false, back = true, pl = null, langs = '' }) => {
   const parentUrl = site.micro || closed ? parentUrlOf(site, settings) : null;
   const s = siteOf(settings, [], site.ws, site.micro && !closed ? { microsite: site.micro, home: null, parentUrl } : null);
   const mainName = settings.org.name || site.ws.name;
@@ -367,10 +429,14 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid var(-
 a{color:var(--link)}
 .more{margin-top:16px}
 .more a,footer a{display:inline-flex;align-items:center;min-height:48px}
+.langs{display:flex;justify-content:flex-end;gap:2px;padding:6px 16px;background:var(--paper);border-bottom:1px solid var(--line)}
+.langs a{display:inline-flex;align-items:center;justify-content:center;min-height:48px;min-width:64px;padding:0 12px;border-radius:999px;color:var(--ink);font:600 16px/1.2 var(--font-body);text-decoration:none}
+.langs a[aria-current="true"]{background:var(--brand);color:var(--brand-ink)}
+@media (max-width:640px){.langs a{flex:1 1 0;min-width:0;padding:0 4px}}
 footer{margin-top:28px;font-size:15px}
 footer p{margin:8px 0 0}
 </style></head><body>
-<header class="top"><a href="${esc(home)}">${esc(org)}</a></header>
+${langs}<header class="top"><a href="${esc(home)}">${esc(org)}</a></header>
 <main id="main">${body}
 <footer>${closed || !back ? '' : `<a href="${esc(home)}">${pl ? esc(pl.w('plain.back', { org })) : `Back to ${esc(org)}`}</a>`}${parentUrl ? `<p class="by">${pl ? esc(pl.w('plain.websiteBy')) : 'A website by'} <a href="${esc(parentUrl)}">${esc(mainName)}</a></p>` : ''}${auth ? `<p class="auth"${pl ? ' lang="en"' : ''}>${esc(auth)}</p>` : ''}${pl?.auth ? `<p class="auth" lang="${esc(pl.lang)}">${esc(pl.auth)}</p>` : ''}</footer></main></body></html>`;
   return { html, status };
@@ -380,6 +446,16 @@ const sendPlain = (c, site, settings, page, { preview = false } = {}) => {
   pageHeaders(c, site, { csp: cspFor(html, { preview }), preview, store: true });
   c.header('X-Robots-Tag', 'noindex, nofollow');
   return c.html(html, status);
+};
+
+// The language switch on a supporter's own page (preferences, unsubscribe):
+// the same page, the token kept, in each language the site offers.
+const plainSwitch = async (site, settings, path, t, current) => {
+  if (!(settings.languages?.on || []).length) return '';
+  const offered = (await languagesFor(site.db, site.ws, settings)).offered;
+  if (!offered.length) return '';
+  const link = (code) => `${site.root}${path}?t=${encodeURIComponent(t)}&lang=${code}`;
+  return `<nav class="langs" aria-label="Language · ਭਾਸ਼ਾ · 语言 · 語言">${['en', ...offered].map((code) => `<a href="${esc(link(code))}" hreflang="${esc(code)}" lang="${esc(code)}"${code === current ? ' aria-current="true"' : ''}>${esc(labelFor(code, offered))}</a>`).join('')}</nav>`;
 };
 
 const personOfToken = async (site, t) => {
@@ -476,7 +552,7 @@ const sitemapXml = (rows, alt = null) => {
 };
 // The languages a sitemap lists: English and each offered one search may list.
 const sitemapLanguages = async (site) => {
-  const settings = await readSettings(site.db, site.ws.id);
+  const settings = await settingsOf(site);
   if (!(settings.languages?.on || []).length) return null;
   const { offered } = await languagesFor(site.db, site.ws, settings);
   const codes = ['en', ...offered.filter((code) => settings.languages.index?.[code])];
@@ -485,7 +561,7 @@ const sitemapLanguages = async (site) => {
   return { at, codes, roots: Object.fromEntries(codes.map((code) => [code, `${at}${LANG_BY_CODE[code].path}`])) };
 };
 const langDisallows = async (site) => {
-  const settings = await readSettings(site.db, site.ws.id);
+  const settings = await settingsOf(site);
   if (!(settings.languages?.on || []).length) return '';
   const { offered } = await languagesFor(site.db, site.ws, settings);
   return offered.map((code) => `Disallow: ${site.root}${LANG_BY_CODE[code].path}/api/\nDisallow: ${site.root}${LANG_BY_CODE[code].path}/r/\n`).join('');
@@ -495,7 +571,7 @@ const langDisallows = async (site) => {
 // it says so, with who it was by and the main site — never the app, so a
 // sign-in page never answers on a domain that once was a website.
 const closedPage = async (c, site) => {
-  const settings = await readSettings(site.db, site.ws.id);
+  const settings = await settingsOf(site);
   return sendPlain(c, site, settings, {
     title: 'This website has closed',
     body: '<h1>This website has closed</h1><p>It isn’t taking sign-ups any more.</p>',
@@ -505,6 +581,8 @@ const closedPage = async (c, site) => {
 };
 
 // ── The site's routes, at a root ('' on its own domain, '/site' elsewhere) ──
+// The campaigns whose website is set up (ensureSite): asked once a process.
+const SEEDED = new WeakMap(); // db → Set of workspace ids
 export const makeSiteApp = (at) => {
   const app = new Hono();
   const R = at.root;
@@ -513,7 +591,8 @@ export const makeSiteApp = (at) => {
   app.use('*', async (c, next) => {
     const site = await siteFor(c, at);
     if (!site) return c.text('This site isn’t set up yet.', 503);
-    await ensureSite(site.db, site.ws);
+    const seeded = SEEDED.get(site.db) || SEEDED.set(site.db, new Set()).get(site.db);
+    if (!seeded.has(site.ws.id)) { await ensureSite(site.db, site.ws); seeded.add(site.ws.id); }
     // One address per page: /donate/ → /donate. Always on this site: the
     // slashes in front collapse to one, so '//other.host/' is a path here
     // and never a link to another site; and the path goes back as it came,
@@ -547,7 +626,7 @@ export const makeSiteApp = (at) => {
       // Not live yet (or taken offline): "Coming soon" on every route but
       // its files and the admin's preview of a draft.
       if (m.status !== 'live' && !/^\/(site-assets|__preview)\//.test(rel)) {
-        const settings = await readSettings(site.db, site.ws.id);
+        const settings = await settingsOf(site);
         return sendPlain(c, site, settings, {
           title: 'Coming soon',
           body: `<h1>Coming soon</h1><p>${esc(m.name)} isn’t open yet. Please come back soon.</p>`,
@@ -567,13 +646,19 @@ export const makeSiteApp = (at) => {
     // supporter's choices, a preview) aren't under a language.
     if (site.lang !== 'en') {
       const rel = p.slice(R.length) || '/';
-      const settings = await readSettings(site.db, site.ws.id);
+      const settings = await settingsOf(site);
       site.langs = await languagesFor(site.db, site.ws, settings);
       if (!site.langs.offered.includes(site.lang)) {
         if (c.req.method === 'GET' || c.req.method === 'HEAD') {
+          // Always on this site, as the trailing-slash redirect above: on
+          // the campaign's own domain home is '', so '/pa//other.host' must
+          // not become '//other.host'. A tab, a line break or a backslash
+          // is no page.
+          // eslint-disable-next-line no-control-regex
+          if (/[\u0000-\u001f\u007f\\]/.test(rel)) return notFound(c, site);
           const url = new URL(c.req.url);
           c.header('Cache-Control', 'no-store');
-          return c.redirect(`${site.home}${rel === '/' ? '/' : rel}${url.search}`, 302);
+          return c.redirect(`${site.home}${rel.replace(/^\/+/, '/')}${url.search}`, 302);
         }
         return c.json({ error: 'This page changed — please reload it and send again' }, 400);
       }
@@ -583,15 +668,26 @@ export const makeSiteApp = (at) => {
       }
     }
     // The app's own copy of a site that has a domain of its own isn't indexed.
-    if (R && site.micro) site.mirror = site.micro.domains.length > 0;
-    else if (R) {
-      const domains = parseJ((await site.db.query('select domains from site_settings where workspace_id = $1', [site.ws.id])).rows[0]?.domains, []);
+    // Its root without the language says which: '' on a domain (/pa there
+    // is the real site in Punjabi), '/site…' on the app's address.
+    const appCopy = Boolean(at.home ?? R);
+    if (appCopy && site.micro) site.mirror = site.micro.domains.length > 0;
+    else if (appCopy) {
+      const domains = (await settingsOf(site))?.domains;
       site.mirror = Boolean(String(process.env.SITE_HOSTS || '').trim()) || (Array.isArray(domains) && domains.length > 0);
     }
     c.set('site', site);
     await next();
   });
 
+  // A campaign's added Google fonts and the fonts' licences (fonts.js):
+  // this site's own, before the repository's files.
+  app.get(route('/site-assets/fonts/g/:file'), publicFontFile);
+  app.get(route('/site-assets/fonts/licences'), async (c) => {
+    const site = c.get('site');
+    const s = await rendererSite(site, await settingsOf(site));
+    return c.text(licencesText(s.theme, s.fonts), 200, { 'Cache-Control': 'public, max-age=300', 'X-Content-Type-Options': 'nosniff' });
+  });
   app.get(route('/site-assets/*'), serveAsset);
 
   app.get(route('/robots.txt'), async (c) => {
@@ -660,7 +756,7 @@ export const makeSiteApp = (at) => {
   // ── Their own email and text choices (a signed link from an email) ──
   const preferences = async (c, saved = null) => {
     const site = c.get('site');
-    const settings = await readSettings(site.db, site.ws.id);
+    const settings = await settingsOf(site);
     const pl = await plainLanguage(c, site, settings);
     const t = c.req.query('t') || '';
     const person = await personOfToken(site, t);
@@ -671,6 +767,7 @@ export const makeSiteApp = (at) => {
       title: pl ? pl.w('plain.choicesTitle') : 'Your email and texts',
       body: choicesBody(site, person, choices, { t, saved, code, wording: consentWording(settings.org, settings.seo), pl }),
       pl,
+      langs: await plainSwitch(site, settings, '/preferences', t, pl?.lang || 'en'),
     });
   };
   app.get(route('/preferences'), (c) => preferences(c));
@@ -678,7 +775,7 @@ export const makeSiteApp = (at) => {
     const site = c.get('site');
     const form = await c.req.parseBody().catch(() => ({}));
     const t = String(form.t || c.req.query('t') || '');
-    const settings = await readSettings(site.db, site.ws.id);
+    const settings = await settingsOf(site);
     const pl = await plainLanguage(c, site, settings);
     const person = await personOfToken(site, t);
     if (!person) return badLink(c, site, settings, pl);
@@ -736,13 +833,14 @@ export const makeSiteApp = (at) => {
   // unsubscribe (List-Unsubscribe-Post) — does it.
   app.get(route('/unsubscribe'), async (c) => {
     const site = c.get('site');
-    const settings = await readSettings(site.db, site.ws.id);
+    const settings = await settingsOf(site);
     const pl = await plainLanguage(c, site, settings);
     const t = c.req.query('t') || '';
     const person = await personOfToken(site, t);
     if (!person || !person.email) return badLink(c, site, settings, pl);
     const org = settings.org.name || site.ws.name;
     const q = `t=${esc(encodeURIComponent(t))}${pl ? `&amp;lang=${esc(pl.lang)}` : ''}`;
+    const langs = await plainSwitch(site, settings, '/unsubscribe', t, pl?.lang || 'en');
     if (pl) {
       return sendPlain(c, site, settings, {
         title: pl.w('plain.unsubTitle'),
@@ -750,6 +848,7 @@ export const makeSiteApp = (at) => {
 <form method="post" action="${esc(site.root)}/unsubscribe?${q}"><input type="hidden" name="t" value="${esc(t)}"><button type="submit">${esc(pl.w('plain.unsubButton'))}</button></form>
 <p class="more"><a href="${esc(site.root)}/preferences?${q}">${esc(pl.w('plain.chooseInstead'))}</a></p>`,
         pl,
+        langs,
       });
     }
     return sendPlain(c, site, settings, {
@@ -757,13 +856,14 @@ export const makeSiteApp = (at) => {
       body: `<h1>Stop emails from ${esc(org)}?</h1><p>${esc(person.email)} won’t get our newsletters or other emails.</p>
 <form method="post" action="${esc(site.root)}/unsubscribe?t=${esc(encodeURIComponent(t))}"><input type="hidden" name="t" value="${esc(t)}"><button type="submit">Unsubscribe</button></form>
 <p class="more"><a href="${esc(site.root)}/preferences?t=${esc(encodeURIComponent(t))}">Choose what you get instead</a></p>`,
+      langs,
     });
   });
   app.post(route('/unsubscribe'), async (c) => {
     const site = c.get('site');
     const form = await c.req.parseBody().catch(() => ({}));
     const t = String(form.t || c.req.query('t') || '');
-    const settings = await readSettings(site.db, site.ws.id);
+    const settings = await settingsOf(site);
     const pl = await plainLanguage(c, site, settings);
     const person = await personOfToken(site, t);
     if (!person || !person.email) return badLink(c, site, settings, pl);
@@ -797,25 +897,30 @@ export const makeSiteApp = (at) => {
     const claims = UUID.test(id) ? await verify('preview', c.req.query('t')) : null;
     const row = claims && claims.w === site.ws.id && claims.p === id
       ? (await site.db.query(
-        'select id, slug, title, description, draft from site_pages where id = $1 and workspace_id = $2 and deleted_at is null and site_id is not distinct from $3::uuid',
+        'select id, slug, title, description, draft, published from site_pages where id = $1 and workspace_id = $2 and deleted_at is null and site_id is not distinct from $3::uuid',
         [id, site.ws.id, site.micro?.id || null],
       )).rows[0]
       : null;
-    if (!row) {
-      const settings = await readSettings(site.db, site.ws.id);
+    // A link made for someone with only Website translations draws the
+    // published page, never the draft.
+    if (!row || (claims.live && !row.published)) {
+      const settings = await settingsOf(site);
       return sendPlain(c, site, settings, {
         title: 'Preview expired',
         body: '<h1>This preview has expired</h1><p>Open the preview again from Website in base.win.</p>',
         status: 403,
       }, { preview: true });
     }
-    const d = parseJ(row.draft, {}) || {};
+    const d = parseJ(claims.live ? row.published : row.draft, {}) || {};
     const page = { id: row.id, slug: row.slug, title: d.title || row.title, description: d.description || '', image: shareOf(d), modules: Array.isArray(d.modules) ? d.modules : [], ...(d.checkFirst === true ? { checkFirst: true } : {}) };
     // ?lang=pa: the draft with that language's words so far (one that is on).
-    const settings = await readSettings(site.db, site.ws.id);
+    const settings = await settingsOf(site);
     const want = String(c.req.query('lang') || '');
     const lang = isOther(want) && (settings.languages?.on || []).includes(want) ? want : 'en';
-    return draw(c, site, { kind: 'page', page, key: null, ctx: { preview: true, lang } });
+    // ?edit=1: the builder's own frame, its sections marked for tap to edit
+    // (English only; a translated preview is looked at, not edited).
+    const edit = lang === 'en' && c.req.query('edit') === '1';
+    return draw(c, site, { kind: 'page', page, key: null, ctx: { preview: true, lang, ...(edit ? { edit: true } : {}) } });
   });
 
   // ── Pages ──
@@ -826,7 +931,7 @@ export const makeSiteApp = (at) => {
     // nothing reads Accept-Language, so a crawler always gets English).
     const remembered = getCookie(c, LANG_COOKIE);
     if (site.lang === 'en' && isOther(remembered) && !new URL(c.req.url).search && c.req.method === 'GET') {
-      const settings = await readSettings(site.db, site.ws.id);
+      const settings = await settingsOf(site);
       if ((settings.languages?.on || []).includes(remembered)) {
         site.langs = site.langs || await languagesFor(site.db, site.ws, settings);
         if (site.langs.offered.includes(remembered)) {
@@ -898,7 +1003,7 @@ export const makeSiteApp = (at) => {
     const site = c.get('site');
     const id = idOf(c);
     if (id === false) return notFound(c, site);
-    const org = siteOf(await readSettings(site.db, site.ws.id), [], site.ws).org;
+    const org = siteOf(await settingsOf(site), [], site.ws).org;
     const out = await eventsCalendar(site, { name: org.name || site.ws.name, authorization: org.authorization }, { id });
     if (!out) return notFound(c, site);
     return c.body(out.body, 200, calendarHeaders(out.filename, staging() || site.mirror));
@@ -908,6 +1013,32 @@ export const makeSiteApp = (at) => {
     const id = c.req.param('file').slice(0, -4);
     return UUID.test(id) ? id : false;
   }));
+
+  // The voter guide (VG): the server's clock, an address looked up and
+  // forgotten, and the guide alone for another website's frame.
+  app.get(route('/api/guide/clock'), clockRoute);
+  app.post(route('/api/guide/find'), async (c) => {
+    const site = c.get('site');
+    const tr = site.lang !== 'en' ? await translatorFor(site.db, site.ws.id, site.lang) : null;
+    const w = (k) => { const en = UI_WORDS[k]; const r = tr ? tr.look(en) : null; return r && r.lang !== 'en' ? r.text : en; };
+    return findRoute(c, site, w);
+  });
+  app.get(route('/embed/voter-guide'), async (c) => {
+    const site = c.get('site');
+    const g = await guideFor(site.db, site.ws);
+    const at = g.pages.find((p) => (p.site_id || null) === (site.micro?.id || null)) || null;
+    const module = at?.module || { id: 'voter-guide', kind: 'voterguide', hidden: false, props: {} };
+    const page = { id: at?.id || null, slug: at?.slug || 'voter-guide', title: '', description: '', modules: [module] };
+    // Kept like any page (on voting day the crowd may come through a
+    // WordPress page that frames it). The saved addresses are in the key,
+    // so a change of them is in the next answer: its kept frame-ancestors
+    // can never be another list's.
+    const frame = g.embed_origins || [];
+    return draw(c, site, {
+      kind: 'page', page, key: ['embed', at?.id || '', JSON.stringify(frame)], frame,
+      ctx: { embed: true, ...(at ? { path: at.slug === 'home' ? '/' : `/${at.slug}` } : {}) },
+    });
+  });
 
   app.get(route('/:slug'), async (c) => {
     const site = c.get('site');

@@ -467,3 +467,28 @@ test('two records made one: the referrals follow the one that stays', async () =
   const [friend] = await personBy(db, ws, "lower(email) = 'late.friend@example.org'");
   assert.equal((await actionsOf(friend.id, 'contact'))[0].referrer_id, twin.id);
 });
+
+// A field marked Private is the office's to record by hand; the website's
+// own forms still write the answers a visitor gives (a join's birth date and
+// citizenship, a newsletter's opt-in), and a public write is never refused.
+test('Birth date, Citizenship and Email opt-in marked Private: a join and a newsletter sign-up still go through', async () => {
+  const F = Object.fromEntries(ok(await mgr.get('/api/fields')).fields.filter((f) => !f.retired).map((f) => [f.name, f]));
+  const marked = ['Birth date', 'Citizenship', 'Email opt-in'].filter((n) => F[n]);
+  assert.equal(marked.length, 3);
+  for (const n of marked) ok(await mgr.action('field.update', { id: F[n].id, sensitive: true }));
+  try {
+    _setPaymentsForTest(fakePayments());
+    const birth = new Date(Date.now() - 30 * 365.25 * 864e5).toISOString().slice(0, 10);
+    ok(await send('join', { first_name: 'Pia', last_name: 'Example', email: 'pia.private@example.org', birth_date: birth, citizenship: 'pr', term: 1, declaration: true }));
+    const [pia] = await personBy(db, ws, "lower(email) = 'pia.private@example.org'");
+    assert.ok(pia, 'the person is saved');
+    const fields = Object.fromEntries(ok(await mgr.get(`/api/persons/${pia.id}/fields`)).fields.map((f) => [f.name, f.value]));
+    assert.deepEqual([fields['Birth date'], fields.Citizenship], [birth, 'Permanent resident']);
+    ok(await send('newsletter', { first_name: 'Quin', email: 'quin.private@example.org', consent_email: true }));
+    const [quin] = await personBy(db, ws, "lower(email) = 'quin.private@example.org'");
+    assert.equal(Object.fromEntries(ok(await mgr.get(`/api/persons/${quin.id}/fields`)).fields.map((f) => [f.name, f.value]))['Email opt-in'], true);
+  } finally {
+    _setPaymentsForTest(null);
+    for (const n of marked) ok(await mgr.action('field.update', { id: F[n].id, sensitive: false }));
+  }
+});

@@ -29,6 +29,9 @@ import OfflineSheet from './components/OfflineSheet.jsx';
 import { useThisDevice } from './components/queued.js';
 import { forgetPhoneCopies, keepOnlyMine } from './components/OfflineCache.js';
 import { letterDraftCount, setLetterScope } from './components/letterDrafts.js';
+import { useGotvLive } from './components/GotvLive.js';
+import { useVotedMode } from './components/Voted.jsx';
+import { gotvNoteCount, clearGotvNotes } from './components/gotvNotes.js';
 import { useKeptTime } from './components/KeptCopies.js';
 import { useTextingStatus } from './components/TextingStatus.js';
 import { useShareLocation } from './components/ShareLocation.js';
@@ -39,6 +42,7 @@ import NewVersion from './components/NewVersion.jsx';
 import ScreenBoundary from './components/ScreenBoundary.jsx';
 import { usePageClass } from './layout.js';
 import { at } from './base.js';
+import OperatorBanner from './components/OperatorBanner.jsx';
 import BrandMark, { HAS_LOGO } from './components/BrandMark.jsx';
 import { BRAND } from './brand.js';
 
@@ -141,7 +145,7 @@ function MoreTab({ items, badge }) {
 
 // Everything sent field work can change (ratings, doors left, new people,
 // pins, signs, shift spots, the brief).
-const FLUSHED_KEYS = [['doors'], ['brief'], ['turfs'], ['turf'], ['person'], ['persons'], ['contacts'], ['signs'], ['shifts'], ['shift']];
+const FLUSHED_KEYS = [['doors'], ['brief'], ['turfs'], ['turf'], ['person'], ['persons'], ['contacts'], ['signs'], ['shifts'], ['shift'], ['voted'], ['gotv']];
 
 function useOnline() {
   const [online, setOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine !== false));
@@ -347,13 +351,19 @@ function SignedInShell({ who, mode }) {
 
   const desk = isDesk(me);
   // The admin: the tabs of the areas they have. The field app: a volunteer's five.
+  // A volunteer given an area (Website translations, say) keeps Today, where
+  // they land, beside its tabs: never a nav without the screen they're on.
+  const granted = desk ? [] : NAV_DESK.filter((t) => t.area && areasOf(me).includes(t.area) && !(t.unless && areasOf(me).includes(t.unless)));
   const nav = mode === 'admin'
-    ? (desk ? NAV_DESK.filter((t) => hasArea(me, t.area) && !(t.unless && hasArea(me, t.unless))) : NAV_DESK.filter((t) => t.area && areasOf(me).includes(t.area) && !(t.unless && areasOf(me).includes(t.unless))))
+    ? (desk ? NAV_DESK.filter((t) => hasArea(me, t.area) && !(t.unless && hasArea(me, t.unless))) : granted.length ? [NAV_DESK[0], ...granted] : granted)
     : NAV_VOLUNTEER;
   // New replies to your texts: a small count on Calls.
   const unread = Number(useTextingStatus(me).data?.unread) || 0;
   // "Share my location while I'm out" (the map's switch): pings while it's on.
   useShareLocation(me);
+  // GOTV's live list (components/GotvLive.js): one stream per browser while
+  // GOTV is active for this person.
+  useGotvLive(useVotedMode().status, me);
   const badge = (n) => (n.to === '/calls' && unread > 0
     ? <span className="tab-badge mono"><span aria-hidden="true">{unread}</span><span className="tab-sr">{` · ${unread} new ${unread === 1 ? 'reply' : 'replies'}`}</span></span>
     : null);
@@ -478,6 +488,7 @@ function SignedInShell({ who, mode }) {
       const lines = [
         { count: left, words: `${left} not sent yet` },
         { count: letterDraftCount(), words: `${letterDraftCount()} ${letterDraftCount() === 1 ? 'letter' : 'letters'} not sent` },
+        { count: gotvNoteCount(me), words: `${gotvNoteCount(me)} ${gotvNoteCount(me) === 1 ? 'name' : 'names'} not sent` },
       ].filter((l) => l.count > 0);
       if (lines.length && !force) {
         setConfirmLeft(lines);
@@ -489,6 +500,7 @@ function SignedInShell({ who, mode }) {
       // What this phone kept for them (doors, calls, shifts, walk lists) goes too.
       forgetPhoneCopies();
       if (left > 0) clearOutbox(); // the next person on this phone must not send them as theirs
+      clearGotvNotes(me); // Who voted's names kept on this phone go with them
       setConfirmLeft(null);
       navigate('/login');
     } catch {
@@ -518,6 +530,7 @@ function SignedInShell({ who, mode }) {
 
   return (
     <>
+      <OperatorBanner me={who} signingOut={signingOut} onSignOut={() => signOut()} />
       <header className="nav" ref={headerRef}>
         <div className="nav-inner">
           <NavLink to="/" className={`brand${HAS_LOGO ? ' has-logo' : ''}`} aria-label={`${me.workspace.name} — base.win`}>

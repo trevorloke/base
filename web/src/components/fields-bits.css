@@ -6,6 +6,7 @@
 .fd-q__label { font-size: 15px; }
 /* Choices: two across on a phone, more on a desk. */
 .fd-form .sv-q__opts { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+.fd-form .sv-q__opts.fd-opts--long { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
 .fd-q input[type='date'].sv-q__input { max-width: 260px; }
 .fd-foot { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
 .btn.fd-save {
@@ -24,3 +25,27 @@
 .fd-note { min-height: 6em; resize: vertical; font: inherit; line-height: 1.45; }
 .fd-note-read { white-space: pre-line; }
 .fd-q__hint { margin: -4px 0 6px; font-size: 13px; }
+
+/* Pick lists (Faith, Dwelling type, Campus). "Private" after the label. */
+.chip.fd-private { margin-left: var(--s-2); font-size: 12px; vertical-align: middle; }
+/* A group's own row (Christian → its churches), under the group's button. */
+.fd-grp.is-open { border-color: var(--ink); }
+.fd-sub {
+  display: flex; flex-direction: column; gap: var(--s-2);
+  margin-top: var(--s-2); padding: var(--s-3); border-left: 3px solid var(--rule-2);
+  background: var(--paper-1); border-radius: var(--r-ctrl);
+}
+.fd-sub__label { margin: 0; font-size: 14px; color: var(--text-2); }
+.btn.fd-clear { align-self: flex-start; min-height: var(--ctl); }
+/* Scroll-down list: the browser's own picker, full width on a phone. */
+.fd-select { width: 100%; max-width: 420px; min-height: var(--ctl); }
+@media (pointer: coarse) { .fd-select { min-height: 48px; } }
+/* "… as written": words from before the list, read-only. */
+.fd-written__v { margin: 0; font-size: 15px; color: var(--text-1); overflow-wrap: anywhere; }
+.fd-written__v.is-cleared { text-decoration: line-through; color: var(--text-3); }
+.fd-listable { margin-top: var(--s-2); }
+.fd-tagline { margin: 0; font-size: 14px; }
+/* People filter: a group's own chips under a quiet More. */
+.fd-fmore { margin-top: var(--s-2); }
+.btn.fd-fmore__btn { min-height: var(--ctl); padding: 0 var(--s-3); }
+.fd-fmore .pp-group__opts { margin-top: var(--s-2); }

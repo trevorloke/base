@@ -16,6 +16,9 @@ import './outreach.css';
 import '../components/two-step.css';
 import '../components/google.css';
 import './candidates.css';
+import './reset.css';
+import '../components/operator.css';
+import { OPS_INVITE } from './Enter.jsx';
 
 const ROLES = [
   { code: 'volunteer', label: 'Volunteer', hint: 'Map, doors, calls, texts, signs' },
@@ -42,6 +45,43 @@ const Email = ({ value }) => {
   if (at < 0) return value;
   return <>{value.slice(0, at + 1)}<wbr />{value.slice(at + 1)}</>;
 };
+
+// Copy a link; with no clipboard (not https), select it so a long-press copies it.
+function useCopy(text) {
+  const [copied, setCopied] = useState(false);
+  const timer = useRef(null);
+  const ref = useRef(null);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      clearTimeout(timer.current);
+      timer.current = setTimeout(() => setCopied(false), 2400);
+    } catch {
+      setCopied(false);
+      const sel = window.getSelection?.();
+      if (sel && ref.current) { const r = document.createRange(); r.selectNodeContents(ref.current); sel.removeAllRanges(); sel.addRange(r); }
+    }
+  };
+  return { copied, copy, ref };
+}
+
+// A manager's password link (ext/passwords), once made: emailed (never
+// shown), or the link to pass on with Copy.
+function PasswordLinkSaid({ made }) {
+  const { copied, copy, ref } = useCopy(made.link || '');
+  if (made.emailed) return <p className="muted" role="status">Emailed a password link to {made.name} · it works for {made.hours} hours</p>;
+  return (
+    <div role="status">
+      <p className="muted pw-line">Password link for {made.name} · works for {made.hours} hours</p>
+      <div className="pw-link">
+        <code ref={ref} data-testid="password-link">{made.link}</code>
+        <button type="button" className="btn ot-btn-tap" onClick={copy}>{copied ? 'Copied' : 'Copy link'}</button>
+      </div>
+    </div>
+  );
+}
 
 // The join link, once: who it's for, Copy link, and the link itself.
 export function JoinLink({ sent, testId }) {
@@ -175,10 +215,13 @@ function InvitedRow({ inv, ids, canCancel, onChanged, onLinkGone, online = true 
 
 // A member: role picker, and Remove (never for yourself). Removing someone
 // signs them out everywhere at once; a new invite lets them back in.
-function MemberRow({ m, isMe, online, onRole, onChanged, twoStep = null, onTwoStep, google = null, onGoogle }) {
+function MemberRow({ m, isMe, online, onRole, onChanged, twoStep = null, onTwoStep, google = null, onGoogle, pwLink = false }) {
   const [confirming, setConfirming] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [unlinking, setUnlinking] = useState(false);
+  // A password link (ext/passwords): asking, then what was made.
+  const [linking, setLinking] = useState(false);
+  const [made, setMade] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [said, setSaid] = useState(null);
@@ -212,6 +255,18 @@ function MemberRow({ m, isMe, online, onRole, onChanged, twoStep = null, onTwoSt
       setBusy(false);
     }
   };
+  const makeLink = async () => {
+    setBusy(true); setError(null);
+    try {
+      const r = await action('member.passwordLink', { user_id: m.id });
+      setLinking(false);
+      setMade({ ...r, name: m.name });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
   const remove = async () => {
     setBusy(true); setError(null);
     try {
@@ -228,11 +283,13 @@ function MemberRow({ m, isMe, online, onRole, onChanged, twoStep = null, onTwoSt
         <span className="ot-row__main">
           <span className="ot-row__name">{m.name}{isMe ? <span className="muted"> (you)</span> : null}</span>
           <span className="ot-row__sub ot-row__sub--stack">
-            <span className="ot-email"><Email value={m.email} /></span>
+            <span className="ot-email">{m.email ? <Email value={m.email} /> : '—'}</span>
             <span>since {fmtDay(m.created_at)}{twoStep?.on && (twoStep.locked
               ? <span className="chip chip-warn tm-2step" title="Too many wrong codes in a row: codes from their app are locked until they use a recovery code or you reset it">Two-step locked</span>
               : <span className="chip chip-ok tm-2step">Two-step on</span>)}
-            {google && <span className="chip tm-google">Google</span>}</span>
+            {google && <span className="chip tm-google">Google</span>}
+            {m.support && <span className="chip op-chip">base.win support</span>}</span>
+            {m.support && <span className="op-row-note">Removing doesn’t stop base.win: turn off ‘base.win may sign in here’ below.</span>}
           </span>
         </span>
         <span className="ot-actions ot-row__acts">
@@ -255,12 +312,31 @@ function MemberRow({ m, isMe, online, onRole, onChanged, twoStep = null, onTwoSt
             <button type="button" className="btn btn-quiet ot-btn-tap tm-unlink-google" disabled={busy || !online}
               onClick={() => { setUnlinking(true); setSaid(null); setError(null); }}>Unlink Google</button>
           )}
-          {!isMe && !confirming && !resetting && !unlinking && (
+          {/* Not for yourself or a manager (they use Forgot password); Team says when. */}
+          {pwLink && !confirming && !resetting && !unlinking && !linking && (
+            <button type="button" className="btn btn-quiet ot-btn-tap tm-pw-link" disabled={busy || !online}
+              onClick={() => { setLinking(true); setMade(null); setSaid(null); setError(null); }}>Password link</button>
+          )}
+          {!isMe && !confirming && !resetting && !unlinking && !linking && (
             <button type="button" className="btn btn-quiet ot-btn-tap" disabled={busy || !online}
               onClick={() => setConfirming(true)}>Remove</button>
           )}
         </span>
       </div>
+      {(linking || made) && (
+        <div className="ot-body">
+          {linking && (
+            <div className="ot-confirm" role="group" aria-label={`Make a password link for ${m.name}`}>
+              <span>Make a password link for {m.name}?</span>
+              <button type="button" className="btn ot-btn-tap" disabled={busy} onClick={makeLink}>
+                {busy ? 'Making…' : 'Yes'}
+              </button>
+              <button type="button" className="btn btn-quiet ot-btn-tap" disabled={busy} onClick={() => { setLinking(false); setError(null); }}>No</button>
+            </div>
+          )}
+          {made && <PasswordLinkSaid made={made} />}
+        </div>
+      )}
       {(resetting || unlinking || said) && (
         <div className="ot-body">
           {unlinking && (
@@ -335,6 +411,68 @@ function TwoStepRequirement({ data, online, onChanged }) {
   );
 }
 
+// The first manager's invite made by base.win support on its way in
+// (pages/Enter.jsx): read on the first render, forgotten once the screen
+// is up (a render thrown away while a screen loads must not lose it).
+const readOpsInvite = () => {
+  try { return JSON.parse(sessionStorage.getItem(OPS_INVITE) || 'null'); } catch { return null; }
+};
+const forgetOpsInvite = () => { try { sessionStorage.removeItem(OPS_INVITE); } catch { /* private mode */ } };
+
+// Settings → Members: "base.win may sign in here" (ext/operator) — the
+// campaign's consent to the control centre opening its desk. Off also ends
+// a visit in progress. Hidden on the public demo; never changed by support.
+function OperatorSwitch({ me, online }) {
+  const queryClient = useQueryClient();
+  const op = useQuery({ queryKey: ['operator'], queryFn: () => apiGet('/operator') });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [said, setSaid] = useState(null);
+  const [want, setWant] = useState(null);
+  const hintId = useId();
+  if (op.data?.demo) return null;
+  const heading = <h2 className="ot-sec-h" id="op-sec-h">base.win support</h2>;
+  if (!op.data) {
+    return (
+      <section className="op-sec" aria-labelledby="op-sec-h">
+        {heading}
+        {op.isError
+          ? <p className="error">Unavailable — <button type="button" className="btn-link" onClick={() => op.refetch()}>Try again</button></p>
+          : <p className="muted">Loading…</p>}
+      </section>
+    );
+  }
+  const on = want ?? op.data.on;
+  const toggle = async (next) => {
+    setBusy(true); setError(null); setSaid(null); setWant(next);
+    try {
+      await action('workspace.operatorEntry', { on: next });
+      await queryClient.invalidateQueries({ queryKey: ['operator'] });
+      setSaid('Saved');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setWant(null); setBusy(false);
+    }
+  };
+  return (
+    <section className="op-sec" aria-labelledby="op-sec-h">
+      {heading}
+      <label className="ot-check">
+        <input type="checkbox" checked={on} disabled={busy || !online || Boolean(me.operator)}
+          aria-describedby={hintId} onChange={(e) => toggle(e.target.checked)} />
+        <span>base.win may sign in here</span>
+      </label>
+      <div id={hintId}>
+        <p className="muted op-hint">{me.operator ? 'Only the campaign’s own managers change this.' : 'Each visit shows on Today. Turning it off ends a visit in progress.'}</p>
+        <p className="muted op-hint">People base.win invited stay on the team.</p>
+      </div>
+      <p className="muted op-hint" aria-live="polite">{said}</p>
+      {error && <p className="error" role="alert">{error}</p>}
+    </section>
+  );
+}
+
 function RolesHelp() {
   const [open, setOpen] = useState(false);
   const id = useId();
@@ -365,6 +503,14 @@ export default function Team({ embedded = false }) {
   const googleTeam = useQuery({ queryKey: ['google-members'], queryFn: () => apiGet('/google/members'), enabled: isManager });
   const googleOf = new Map((Array.isArray(googleTeam.data) ? googleTeam.data : []).map((x) => [x.user_id, x]));
   const googleChanged = () => queryClient.invalidateQueries({ queryKey: ['google-members'] });
+  // Password links (ext/passwords): offered unless this is the public demo
+  // or the campaign has no address to build one from (STARBASE_PUBLIC_URL);
+  // not for someone in another campaign here too.
+  const pwLinks = useQuery({ queryKey: ['password-links'], queryFn: () => apiGet('/password-links'), enabled: isManager });
+  const pwElsewhere = new Set(pwLinks.data?.elsewhere || []);
+  // Never for base.win support, and never while in as it (ext/operator).
+  const pwLinkFor = (m) => Boolean(pwLinks.data?.on && pwLinks.data?.address) && m.id !== me.user.id && m.role !== 'manager'
+    && !pwElsewhere.has(m.id) && !m.support && !me.operator;
   // Is email connected? (Same read Today and Shifts use; only that, so the
   // strip never says this screen is from Today's kept copy.)
   const brief = useQuery({ queryKey: ['brief'], queryFn: () => apiGet('/brief'), enabled: isManager, staleTime: Infinity, meta: { side: true } });
@@ -374,7 +520,10 @@ export default function Team({ embedded = false }) {
   const [role, setRole] = useState('volunteer');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
-  const [sent, setSent] = useState(null); // { email, joinUrl, emailStatus }
+  // { email, joinUrl, emailStatus } — or the first manager's invite base.win
+  // support just made from the control centre (pages/Enter.jsx), once.
+  const [sent, setSent] = useState(readOpsInvite);
+  useEffect(() => { forgetOpsInvite(); }, []);
   const online = useOnline();
 
   if (!isManager) return <Navigate to="/" replace />;
@@ -443,7 +592,9 @@ export default function Team({ embedded = false }) {
       </form>
       {!online && <NeedsSignalLine>Inviting, changing roles and removing need signal</NeedsSignalLine>}
       {error && <p className="error">{error}</p>}
-      {sent && <JoinLink sent={sent} testId="join-url" />}
+      {sent?.joinUrl && <JoinLink sent={sent} testId="join-url" />}
+      {sent?.done && <p className="muted" role="status">{sent.email} is already on the team.</p>}
+      {sent?.error && <p className="error" role="alert">Couldn’t invite {sent.email}: {sent.error}</p>}
 
       {/* Not loaded (no signal): say so, never "Members 0". */}
       {!team.data ? (
@@ -455,9 +606,12 @@ export default function Team({ embedded = false }) {
         {members.map((m) => (
           <MemberRow key={m.id} m={m} isMe={m.id === me.user.id} online={online} onRole={setMemberRole} onChanged={refresh}
             twoStep={twoStepOf.get(m.id) || null} onTwoStep={twoStepChanged}
-            google={googleOf.get(m.id) || null} onGoogle={googleChanged} />
+            google={googleOf.get(m.id) || null} onGoogle={googleChanged} pwLink={pwLinkFor(m)} />
         ))}
       </ul>
+      {pwLinks.data?.on && pwLinks.data?.address === false && (
+        <p className="muted">Password links need this campaign’s web address (STARBASE_PUBLIC_URL).</p>
+      )}
 
       {invites.length > 0 && (
         <>
@@ -474,6 +628,7 @@ export default function Team({ embedded = false }) {
       )}
 
       <TwoStepRequirement data={twoStep.data} online={online} onChanged={twoStepChanged} />
+      <OperatorSwitch me={me} online={online} />
       <RolesHelp />
     </div>
   );

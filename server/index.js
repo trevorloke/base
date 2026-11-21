@@ -5,6 +5,8 @@ import { relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
+import { frameHosts } from './lib/demo.js';
+import { seedSample } from './lib/samplecampaign.js';
 import authRoutes from './routes/auth.js';
 import apiRoutes from './routes/api.js';
 import publicRoutes from './routes/public.js';
@@ -12,6 +14,7 @@ import { getDb, dbReachable } from './db/client.js';
 import { EXTENSIONS } from './ext.js';
 import { startJobRunner, stopJobRunner } from './lib/jobs.js';
 import { staleTimeZoneData } from './lib/tzcheck.js';
+import { clockNote } from './lib/clock.js';
 import { envName, orgName } from './lib/org.js';
 import { bodyLimit } from 'hono/body-limit';
 import { appRedirect, basePath, mountAt } from './lib/mount.js';
@@ -19,6 +22,10 @@ import { doorKeySet } from './lib/guard.js';
 import { brandPages } from './lib/brand.js';
 import { siteGate } from './ext/site/public.js';
 import { currentBuild } from './lib/build.js';
+import { entryReadiness, ownOrigin, parseKeys } from './lib/entry.js';
+import { setupOpen, noWorkspace } from './lib/setup.js';
+import { configuredUrl } from './lib/calendar.js';
+import { instanceOf } from './ext/operator/identity.js';
 import { start as startUsage, flush as flushUsage } from './lib/gusage.js';
 
 export const app = new Hono();
@@ -27,7 +34,7 @@ export const app = new Hono();
 // uploads (a CSV import's 2,000 rows; a picture, as base64). Hono buffers a
 // body before parsing, so without this a few big requests could take all
 // the memory — no sign-in needed.
-const BODY_MAX = { '/api/data/import': 16 * 1024 * 1024, '/api/actions/learn.asset.upload': 17 * 1024 * 1024, '/api/actions/blast.attach': 7 * 1024 * 1024, '/api/actions/blast.picture': 4 * 1024 * 1024, '/api/actions/site.picture': 4 * 1024 * 1024 };
+const BODY_MAX = { '/api/data/import': 16 * 1024 * 1024, '/api/actions/learn.asset.upload': 17 * 1024 * 1024, '/api/actions/blast.attach': 7 * 1024 * 1024, '/api/actions/blast.picture': 4 * 1024 * 1024, '/api/actions/site.picture': 7 * 1024 * 1024 };
 BODY_MAX['/api/actions/brand.picture'] = 4 * 1024 * 1024; // the campaign's logo, mark or an app icon (ext/brand)
 app.use('*', (c, next) => bodyLimit({
   maxSize: BODY_MAX[c.req.path] || 256 * 1024,
@@ -37,14 +44,32 @@ app.use('*', (c, next) => bodyLimit({
 // the email sender's delivery events come in batches (ext/mail).
 for (const e of EXTENSIONS) Object.assign(BODY_MAX, e.bodyMax || {});
 // Headers every answer carries: not framed by another site (voter data on
-// screen), no sniffing a type, no full URLs leaking off-site. A route that
+// screen; the demo's frame on staging is the one exception, below), no sniffing a type, no full URLs leaking off-site. A route that
 // set its own keeps it. The API's answers also name the web build this
 // server hands out (lib/build.js): a page from before a deploy sees that it
 // is older than the server, and says so.
 app.use('*', async (c, next) => {
   await next();
   const h = c.res.headers;
-  if (!h.has('X-Frame-Options')) h.set('X-Frame-Options', 'DENY');
+  // A page whose route set no policy of its own (the app's page): no
+  // plugins, and no <base> pointing its links elsewhere. A site page or a
+  // file that set one keeps exactly its own.
+  const pagePolicy = !h.has('Content-Security-Policy') && /^text\/html/i.test(h.get('Content-Type') || '');
+  // The voter guide's embed names the sites that may frame it in its CSP
+  // (frame-ancestors) and so carries no X-Frame-Options (ext/site public.js).
+  const framedBy = /frame-ancestors (?!'none')/.test(h.get('Content-Security-Policy') || '');
+  if (!h.has('X-Frame-Options') && !framedBy) {
+    // The demo's frame (lib/demo.js; never on production): the sites named
+    // may frame the app, and no other. Everywhere else, nobody may.
+    const frames = frameHosts();
+    const csp = h.get('Content-Security-Policy') || '';
+    if (!frames.length) h.set('X-Frame-Options', 'DENY');
+    else if (!/frame-ancestors/i.test(csp)) h.set('Content-Security-Policy', `${csp ? `${csp}; ` : ''}frame-ancestors 'self' ${frames.join(' ')}`);
+  }
+  if (pagePolicy) {
+    const csp = h.get('Content-Security-Policy');
+    h.set('Content-Security-Policy', `${csp ? `${csp}; ` : ''}object-src 'none'; base-uri 'self'`);
+  }
   if (!h.has('X-Content-Type-Options')) h.set('X-Content-Type-Options', 'nosniff');
   if (!h.has('Referrer-Policy')) h.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   const build = c.req.path.startsWith('/api/') ? currentBuild() : null;
@@ -60,9 +85,27 @@ const COMMIT = String(process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT ||
 // It asks the database too: a server up with its database down can't sign
 // anyone in, so it says so (503, "database": "not reachable") and the host
 // keeps the old version or restarts it.
+// For the base.win control centre (ext/operator), nothing secret and nothing
+// about people: this server's own address and instance (what an entry token
+// must name), the campaign's public address, whether entry is set up and the
+// keys it holds (by kid), whether first-run sign-up is open, whether the
+// campaign has been made (a workspace exists: campaignMade), and whether the
+// door's key is set (never the key). Never the campaign's switch.
+const publicAddress = () => {
+  const raw = configuredUrl();
+  try { return raw && /^https?:$/.test(new URL(raw).protocol) ? raw : null; } catch { return null; }
+};
 app.get('/api/health', async (c) => {
   const database = await dbReachable();
-  return c.json({ ok: database, database: database ? 'ok' : 'not reachable', service: 'starbase', env: envName(), organization: orgName(), commit: COMMIT, build: currentBuild(), tzdataCurrent: !staleTimeZoneData() }, database ? 200 : 503);
+  const db = database ? await getDb().catch(() => null) : null;
+  const instance = db ? await instanceOf(db).catch(() => null) : null;
+  const open = db ? await setupOpen(db).catch(() => null) : null;
+  const made = db ? await noWorkspace(db).then((none) => !none, () => null) : null;
+  return c.json({
+    ok: database, database: database ? 'ok' : 'not reachable', service: 'starbase', env: envName(), organization: orgName(), commit: COMMIT, build: currentBuild(), tzdataCurrent: !staleTimeZoneData(),
+    ownOrigin: ownOrigin(), instance, address: publicAddress(), entry: entryReadiness(),
+    platformKids: parseKeys().map((k) => k.kid), setupOpen: open, campaignMade: made, doorKey: doorKeySet(),
+  }, database ? 200 : 503);
 });
 app.route('/api/auth', authRoutes);
 app.route('/', publicRoutes); // /u, /bu — no auth
@@ -92,8 +135,12 @@ if (isMain) {
   const server = serve({ fetch: mountAt(app, base), port }, () => {
     console.log(`starbase on :${port}${base ? ` at ${base}` : ''}`);
   });
+  // Staging's sample campaign, made once on an empty database (lib/samplecampaign.js).
+  seedSample(app).catch((e) => console.error('sample:', e));
   const tz = staleTimeZoneData();
   if (tz) console.warn(`starbase: ${tz}`);
+  const moved = clockNote();
+  if (moved) console.warn(`starbase: ${moved}`);
   // Behind the base.win door without its key, everyone who comes through
   // the door is the door's one address to the limits per address.
   if (base && !doorKeySet()) {

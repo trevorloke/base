@@ -30,7 +30,7 @@ import { LANG_SLUGS, OTHER_CODES } from '../../../shared/site/languages.js';
 export const KINDS = ['newsletter', 'petition', 'pledge', 'volunteer', 'rsvp', 'contact', 'join', 'donate'];
 
 // Addresses the site itself answers (routes) or the app keeps: never a page's.
-export const RESERVED_SLUGS = ['news', 'act', 'r', 'preferences', 'unsubscribe', 'api', 'site-assets', '__preview', 'sitemap.xml', 'robots.txt', 'media', 'stripe', 'site', 'sites', ...LANG_SLUGS];
+export const RESERVED_SLUGS = ['news', 'act', 'r', 'preferences', 'unsubscribe', 'api', 'site-assets', '__preview', 'sitemap.xml', 'robots.txt', 'media', 'stripe', 'site', 'sites', 'embed', ...LANG_SLUGS];
 // Pages the site has whatever an admin does: home is /, news is /news.
 export const SYSTEM_SLUGS = ['home', 'news'];
 export const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$/;

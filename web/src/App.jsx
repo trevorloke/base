@@ -19,6 +19,9 @@ import Shell, { isDesk, hasArea } from './Shell.jsx';
 import { ADMIN_BASE, fieldView, landing, mayAdmin } from './mode.js';
 import { takeSignin } from './components/google.js';
 import Login from './pages/Login.jsx';
+import Forgot from './pages/Forgot.jsx';
+import Enter from './pages/Enter.jsx';
+import Reset from './pages/Reset.jsx';
 import Signup from './pages/Signup.jsx';
 import Today from './pages/Today.jsx';
 const MapPage = lazy(() => import('./pages/Map.jsx'));
@@ -84,6 +87,12 @@ const WebsiteLanguages = lazy(() => import('./pages/WebsiteLanguages.jsx'));
 const WebsiteLanguage = lazy(() => import('./pages/WebsiteLanguages.jsx').then((m) => ({ default: m.WebsiteLanguage })));
 const WebsiteLanguageLegal = lazy(() => import('./pages/WebsiteLanguageLegal.jsx'));
 const PathToWin = lazy(() => import('./pages/PathToWin.jsx'));
+// The voter guide (VG): "Where to vote" for every role, and its desk screen.
+const VoteInfo = lazy(() => import('./pages/VoteInfo.jsx'));
+// Live GOTV: Who voted, a scrutineer's or runner's screen (and the desk's Enter a sheet).
+const WhoVoted = lazy(() => import('./pages/WhoVoted.jsx'));
+import GotvOnly from './components/GotvOnly.jsx';
+const WebsiteGuide = lazy(() => import('./pages/WebsiteGuide.jsx'));
 // The managers' dashboard, its own screen (reached from Today and the search).
 const Activity = lazy(() => import('./pages/Dashboard.jsx'));
 import Join from './pages/Join.jsx';
@@ -118,6 +127,8 @@ function RequireAuth({ mode }) {
   // The campaign requires two-step sign-in for this role and it isn't on
   // yet: its set-up stands before everything else (components/TwoStep.jsx).
   if (me.data?.two_step?.must_set_up || twoStepHeld) return <TwoStepRequired me={me.data} onHold={setTwoStepHeld} />;
+  // An election-day sign-in code works for Who voted only (ext/voted).
+  if (me.data?.scope === 'gotv') return <GotvOnly me={me.data} screen={WhoVoted} />;
   if (mode === 'admin' && me.data?.user && !mayAdmin(me.data)) return <NotForYou me={me.data} />;
   return <Shell me={me.data} mode={mode} />;
 }
@@ -183,6 +194,8 @@ export default function App({ mode = 'field' }) {
         <Route path="/login" element={<Login mode={mode} />} />
         <Route path="/signup" element={<Signup mode={mode} />} />
         <Route path="/join/:token" element={<Join mode={mode} />} />
+        <Route path="/forgot" element={<Forgot />} />
+        <Route path="/reset" element={<Reset mode={mode} />} />
         <Route element={<RequireAuth mode={mode} />}>
           <Route path="/" element={<Today />} />
           <Route path="/map" element={<MapPage />} />
@@ -220,6 +233,8 @@ export default function App({ mode = 'field' }) {
           <Route path="/imagineu/:id" element={<ImagineU />} />
           <Route path="/banks" element={<Banks />} />
           <Route path="/banks/:id" element={<Banks />} />
+          <Route path="/vote-info" element={<VoteInfo />} />
+          <Route path="/gotv" element={<WhoVoted />} />
           <Route path="*" element={<FieldFallback />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
@@ -231,6 +246,10 @@ export default function App({ mode = 'field' }) {
       <Route path="/login" element={<Login mode={mode} />} />
       <Route path="/signup" element={<Signup mode={mode} />} />
       <Route path="/join/:token" element={<Join mode={mode} />} />
+      <Route path="/forgot" element={<Forgot />} />
+      <Route path="/reset" element={<Reset mode={mode} />} />
+      {/* base.win support, from the control centre (desk only). */}
+      <Route path="/enter" element={<Enter />} />
       <Route element={<RequireAuth mode={mode} />}>
         <Route path="/" element={<Today />} />
         <Route path="/map" element={<MapPage />} />
@@ -257,6 +276,7 @@ export default function App({ mode = 'field' }) {
         <Route path="/imagineu/:id" element={<ImagineU />} />
         <Route path="/banks" element={<Banks />} />
         <Route path="/banks/:id" element={<Banks />} />
+        <Route path="/vote-info" element={<VoteInfo />} />
         <Route element={<DeskOnly />}>
           <Route path="/shifts/volunteers" element={<Volunteers />} />
           <Route path="/people/import" element={<ImportPeople />} />
@@ -304,6 +324,7 @@ export default function App({ mode = 'field' }) {
           <Route path="/rating-scale" element={<RatingScale />} />
           <Route path="/passes" element={<Passes />} />
           <Route path="/voted" element={<Voted />} />
+          <Route path="/gotv" element={<WhoVoted />} />
           <Route path="/requests" element={<Requests />} />
           <Route path="/field-report" element={<FieldReport />} />
           {/* Website (the 'site' area): the campaign's public site. */}
@@ -315,6 +336,7 @@ export default function App({ mode = 'field' }) {
           <Route path="/website/languages" element={<WebsiteLanguages />} />
           <Route path="/website/languages/:code" element={<WebsiteLanguage />} />
           <Route path="/website/languages/:code/legal" element={<WebsiteLanguageLegal />} />
+          <Route path="/website/guide" element={<WebsiteGuide />} />
           <Route path="/website/settings" element={<WebsiteSettings />} />
           <Route path="/website/news" element={<WebsitePosts />} />
           <Route path="/website/news/:id" element={<WebsitePosts />} />

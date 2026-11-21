@@ -20,6 +20,7 @@ import { LANG_BY_CODE, OTHER_CODES } from '../../../shared/site/languages.js';
 import { MODULE_BY_KIND } from '../../../shared/site/catalogue.js';
 import { prepare, translateKey } from '../../lib/translate.js';
 import { here } from '../../lib/mount.js';
+import { areasFor } from '../../lib/perms.js';
 import { sign, PREVIEW_TTL } from './tokens.js';
 import { readSettings, parseJ } from './store.js';
 import { latestLegal, staleKeys, legalSlots } from './legal.js';
@@ -35,6 +36,14 @@ export const LEGAL_LABELS = {
   privacy: 'Privacy line', donate: 'Donation declaration', join: 'Membership declaration',
   donateSmall: 'Donation small print', donateSmallNoLimit: 'Donation small print (no limit)', payPageNote: 'Payment page note',
   translatedNote: 'Translated note', readInEnglish: 'Read it in English link', policyInEnglish: 'Privacy policy in English',
+};
+
+// How soon a sentence comes in the list (lower first).
+const weightOf = (g) => {
+  const kind = String(g.place || '').split(':')[0];
+  if (kind === 'ui') return 3;
+  if (kind === 'settings' || kind === 'shift') return 2;
+  return g.cls === 'check-first' ? 0 : 1;
 };
 
 // The segments a person can see and correct (the legal drafts have their
@@ -203,9 +212,13 @@ export const mountLanguageReads = (api, opened) => {
     const wsId = await opened(c);
     const db = c.get('db');
     if (!(await readSettings(db, wsId)).languages.on.includes(code)) return c.json({ error: 'Turn it on first' }, 409);
-    const home = (await db.query("select id from site_pages where workspace_id = $1 and site_id is null and slug = 'home' and deleted_at is null", [wsId])).rows[0];
+    const home = (await db.query("select id, published from site_pages where workspace_id = $1 and site_id is null and slug = 'home' and deleted_at is null", [wsId])).rows[0];
     if (!home) return c.json({ error: 'The website has no home page yet' }, 404);
-    const t = await sign('preview', { w: wsId, p: home.id }, PREVIEW_TTL);
+    // A draft is the Website's: someone with only translations sees the
+    // published page (claim 'live'), never words not yet made public.
+    const live = !areasFor(c.get('ctx')).includes('site');
+    if (live && !home.published) return c.json({ error: 'The home page isn’t published yet' }, 409);
+    const t = await sign('preview', { w: wsId, p: home.id, ...(live ? { live: true } : {}) }, PREVIEW_TTL);
     return c.json({ url: here(c, `/site/__preview/${home.id}?t=${encodeURIComponent(t)}&lang=${encodeURIComponent(code)}`) });
   });
 
@@ -244,7 +257,10 @@ export const mountLanguageReads = (api, opened) => {
       if (filter === 'failed') return !r && fails.has(g.hash);
       return true;
     };
-    const list = segs.filter(keep);
+    // The site's own words first (pages, news, petitions), then menus,
+    // footer and shifts, then the fixed words every site shares: a checker
+    // starts with what readers read most. Stable, so each group keeps its order.
+    const list = segs.filter(keep).sort((a, b) => weightOf(a) - weightOf(b));
     const pageOf = list.slice(after, after + PAGE);
     const who = await namesOf(db, pageOf.flatMap((g) => [rows.get(g.hash)?.checked_by, suggestions.get(g.hash)?.made_by]));
     // "Earlier wording": a person's words for the English that was at the
@@ -290,8 +306,9 @@ export const mountLanguageReads = (api, opened) => {
     const after = Math.max(0, Number.parseInt(c.req.query('after') || '0', 10) || 0);
     const rows = (await db.query(
       `select v.id, v.src_hash, v.text, v.made_by, v.made_at, v.state, t.src, t.version_id as live_id,
-              (select b.text from site_translation_versions b where b.workspace_id = v.workspace_id and b.lang = v.lang and b.src_hash = v.src_hash
-                  and b.made_at < v.made_at and b.state in ('live', 'replaced') order by b.made_at desc limit 1) as before
+              coalesce((select b.text from site_translation_versions b where b.id = v.replaced_id),
+                (select b.text from site_translation_versions b where b.workspace_id = v.workspace_id and b.lang = v.lang and b.src_hash = v.src_hash
+                  and b.made_at < v.made_at and b.state in ('live', 'replaced') order by b.made_at desc limit 1)) as before
          from site_translation_versions v left join site_translations t on t.workspace_id = v.workspace_id and t.lang = v.lang and t.src_hash = v.src_hash
         where v.workspace_id = $1 and v.lang = $2 and v.made_by is not null
         order by v.made_at desc, v.id limit $3 offset $4`, [wsId, code, PAGE + 1, after],
@@ -320,7 +337,7 @@ export const mountLanguageReads = (api, opened) => {
     // the approved Simplified converted for Traditional.
     let draft = {}; let from = null;
     if (code === 'zh-Hant' && legal['zh-Hans']) {
-      draft = Object.fromEntries(LEGAL_KEYS.map((k) => [k, convertToTraditional(legal['zh-Hans'].words[k] || '')]));
+      draft = Object.fromEntries(await Promise.all(LEGAL_KEYS.map(async (k) => [k, await convertToTraditional(legal['zh-Hans'].words[k] || '')])));
       from = 'converted';
     } else {
       const byHash = new Map((await db.query(

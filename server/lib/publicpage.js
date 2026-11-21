@@ -6,8 +6,7 @@
 // One column, one big button, and a link back to the campaign's website
 // (workspace settings.website) when it has one. The campaign's website
 // itself lives elsewhere.
-import { deriveLook } from '@starbase/shared/brand-look';
-import { FONT_BY_VALUE } from '@starbase/shared/site/theme';
+import { deriveLook, headingStack } from '@starbase/shared/brand-look';
 import { brandFor } from './brand.js';
 
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
@@ -28,7 +27,7 @@ export const publicLook = (brand) => {
   const light = deriveLook(brand, 'light');
   const [, ctrl, card] = light.radii;
   // In dark mode a logo with no version for dark grounds sits on the light card colour.
-  const css = `:root{${vars('light')};--r-ctrl:${ctrl}px;--r-card:${card}px;--heading:${FONT_BY_VALUE[light.heading].stack};--chip:${light.card}}`
+  const css = `:root{${vars('light')};--r-ctrl:${ctrl}px;--r-card:${card}px;--heading:${headingStack(brand)};--chip:${light.card}}`
     + `@media(prefers-color-scheme:dark){:root{${vars('dark')}}}`;
   looks.set(brand, css);
   return css;

@@ -3,9 +3,9 @@
 // everyone else joins by invite (/join). Login binds the session to the
 // user's workspace membership.
 import { areasFor } from '../lib/perms.js';
-import { runHooks } from '../lib/hooks.js';
 import { Hono } from 'hono';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
+import { demoEmail } from '../lib/demo.js';
 import { z } from 'zod';
 import { createHash } from 'node:crypto';
 import { getDb } from '../db/client.js';
@@ -14,7 +14,8 @@ import {
   hashPassword, verifyPassword, dummyVerify,
   createSession, destroySession, loadContext, SESSION_COOKIE,
 } from '../lib/auth.js';
-import { JURISDICTIONS, orgName, jurisdiction, timeZone, openSignupForced, setupClosedMessage, orgOut } from '../lib/org.js';
+import { JURISDICTIONS, orgName, jurisdiction, envName, setupClosedMessage, orgOut } from '../lib/org.js';
+import { createWorkspace, recordCreated, noWorkspace, setupOpen, SIGNUP_LOCK } from '../lib/setup.js';
 import { clientIp, makeLimiter, crossSiteWrite } from '../lib/guard.js';
 import {
   checkCode, codeFails, countMiss, endPending, PENDING_COOKIE, PENDING_MINUTES, PENDING_TRIES,
@@ -27,6 +28,16 @@ import { candidateOut, linkOnJoin } from '../ext/candidates/invite.js';
 // person's own link.
 import { googleSetup, signinRules } from '../lib/google/config.js';
 import { loginOf } from '../lib/google/flow.js';
+// Election-day sign-in codes (ext/voted).
+import { usableCode, EXPIRED } from '../ext/voted/signin.js';
+import { codeSessionEnds } from '../ext/voted/clock.js';
+// Forgot password (ext/passwords).
+import { RUN_OUT, TOKEN_RE, checkLink, queueReset, resetByEmail, resetEvent, useLink } from '../ext/passwords/reset.js';
+// base.win support's way in from the control centre (lib/entry.js, ext/operator).
+import { ownOrigin, parseKeys, verifyEntry } from '../lib/entry.js';
+import { instanceOf } from '../ext/operator/identity.js';
+import { enter, ENTRY_HOURS } from '../ext/operator/enter.js';
+import { sampleSignup } from '../lib/samplecampaign.js';
 
 const app = new Hono();
 
@@ -64,9 +75,14 @@ const signupInput = z.object({
   jurisdiction: z.enum(JURISDICTIONS).optional(),
 });
 
-// Setup is open until the first workspace exists (or STARBASE_OPEN_SIGNUP=1).
-const setupOpen = async (db) => openSignupForced()
-  || !(await db.query('select 1 from workspaces limit 1')).rows[0];
+// Setup is open until the first workspace exists (or STARBASE_OPEN_SIGNUP=1)
+// — except on a server that holds the control centre's key: that one is set
+// up from the control centre (its first entry makes the campaign), so a
+// stranger who finds it fresh can't claim it.
+const FROM_CONTROL_CENTRE = 'This campaign is set up from the base.win control centre.';
+// Why sign-up is closed, in the words for this server.
+const closedWords = async (db) => (parseKeys().length && (await noWorkspace(db))
+  ? FROM_CONTROL_CENTRE : setupClosedMessage(await campaignName(db)));
 
 // The campaign's own name once it is set up: its workspace's, as a manager
 // last named it (Settings → Campaign) — not STARBASE_ORG_NAME, which only
@@ -95,6 +111,10 @@ const meOut = (ctx) => ({
   two_step: twoStepOut(ctx),
   // A volunteer with a candidate's seat (ext/candidates), else null.
   candidate: candidateOut(ctx.candidate),
+  // A sign-in limited to Who voted (an election-day code, ext/voted): 'gotv'.
+  scope: ctx.scope || null,
+  // In as base.win support from the control centre (ext/operator): until when.
+  operator: ctx.entry ? { until: ctx.entry.until } : null,
 });
 // …and their Google sign-in link (ext/google): whether Google sign-in is on
 // here for their campaign, linked, and to which Google address — their
@@ -131,17 +151,6 @@ const signInCode = async (db, { userId, workspaceId }, code) => {
   return result;
 };
 
-// URL slug for the workspace's public pages (/p/:slug/…, /n/:slug, /v/:slug).
-const slugify = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'campaign';
-const uniqueSlug = async (tx, base) => {
-  for (let i = 0; i < 50; i++) {
-    const candidate = i === 0 ? base : `${base}-${i + 1}`;
-    const taken = (await tx.query('select 1 from workspaces where slug = $1', [candidate])).rows[0];
-    if (!taken) return candidate;
-  }
-  return `${base}-${Math.random().toString(36).slice(2, 6)}`;
-};
-
 // What the sign-in screens need before anyone is signed in. The name they
 // show: while setup is open, the deployment's (what the first sign-up will
 // set up); once it's done, the campaign's own, renames included.
@@ -156,12 +165,18 @@ app.get('/setup', async (c) => {
   return c.json({
     open, organization: open ? orgName() : await campaignName(db), org: orgOut(),
     google: googleSetup().signin && rules.signin, googleDomain: rules.domain,
+    // Forgot password can email a link (ext/passwords); else it says to ask a manager.
+    resetByEmail: resetByEmail(),
+    // Closed because the control centre sets this campaign up (its key, no campaign yet).
+    fromControlCentre: !open && (await closedWords(db)) === FROM_CONTROL_CENTRE,
   });
 });
 
 app.post('/signup', async (c) => {
   const db = await getDb();
-  if (!(await setupOpen(db))) return c.json({ error: setupClosedMessage(await campaignName(db)) }, 403);
+  // Staging's sample campaign is made through this door at boot (lib/samplecampaign.js).
+  const sample = sampleSignup(c);
+  if (!sample && !(await setupOpen(db))) return c.json({ error: await closedWords(db) }, 403);
   const parsed = signupInput.safeParse(await c.req.json().catch(() => ({})));
   if (!parsed.success) return c.json({ error: parsed.error.issues[0].message }, 400);
   const input = { ...parsed.data, workspaceName: parsed.data.workspaceName || orgName(), jurisdiction: parsed.data.jurisdiction || jurisdiction() };
@@ -170,45 +185,53 @@ app.post('/signup', async (c) => {
   const email = input.email.toLowerCase();
   const passwordHash = await hashPassword(input.password);
   const userId = newId();
-  const workspaceId = newId();
+  let workspaceId;
   try {
-    await db.transaction(async (tx) => {
+    workspaceId = await db.transaction(async (tx) => {
       // Checked again inside the write, under a lock held to commit, so two
       // first-run sign-ups at the same moment can't both land.
-      await tx.query('select pg_advisory_xact_lock(7240526)');
-      if (!(await setupOpen(tx))) throw new SetupClosed();
+      await tx.query(`select pg_advisory_xact_lock(${SIGNUP_LOCK})`);
+      if (sample ? !(await noWorkspace(tx)) : !(await setupOpen(tx))) throw new SetupClosed();
       await tx.query(
         'insert into users (id, email, name, password_hash) values ($1, $2, $3, $4)',
         [userId, email, input.name, passwordHash],
       );
-      await tx.query(
-        'insert into workspaces (id, name, slug, candidate, jurisdiction, settings) values ($1, $2, $3, $4, $5, $6)',
-        [workspaceId, input.workspaceName, await uniqueSlug(tx, slugify(input.workspaceName)),
-         input.candidate || null, input.jurisdiction, JSON.stringify({ tz: timeZone() })],
-      );
-      await tx.query(
-        'insert into memberships (user_id, workspace_id, role) values ($1, $2, $3)',
-        [userId, workspaceId, 'manager'],
-      );
+      return createWorkspace(tx, { userId, name: input.workspaceName, jurisdiction: input.jurisdiction, candidate: input.candidate });
     });
   } catch (e) {
-    if (e instanceof SetupClosed) return c.json({ error: setupClosedMessage(await campaignName(db)) }, 403);
+    if (e instanceof SetupClosed) return c.json({ error: await closedWords(db) }, 403);
     if (String(e.message).includes('users_email_key')) {
       return c.json({ error: 'an account with that email already exists' }, 409);
     }
     throw e;
   }
-  // The campaign's first entries: who created it and who holds access.
-  await runAction(db, { workspaceId, actorId: userId, action: 'workspace.create' }, async (tx, emit) => {
-    emit('workspace', workspaceId, 'create', { name: input.workspaceName, jurisdiction: input.jurisdiction });
-    emit('membership', userId, 'create', { email, role: 'manager' });
-    // What every campaign starts with (ext/fields: the standard fields).
-    await runHooks('workspaceCreated', tx, { workspaceId, user: { id: userId } }, { emit });
-  });
+  await recordCreated(db, { workspaceId, userId, email, name: input.workspaceName, jurisdiction: input.jurisdiction });
   const token = await createSession(db, userId, workspaceId);
   setCookie(c, SESSION_COOKIE, token, cookieOpts);
   const ctx = await loadContext(db, token);
   return c.json(await meFor(db, ctx), 201);
+});
+
+// The public demo (lib/demo.js; never on production): no password — every
+// visitor is signed in as the one demo account and sent to the app. Off
+// unless STARBASE_DEMO_EMAIL names an account in the campaign. The visitor
+// can do whatever that account can — a manager's is everything — so the
+// campaign on this server is the sample one (lib/samplecampaign.js), with nobody
+// real in it. The same limit from one address as sign-in.
+app.get('/demo', async (c) => {
+  const email = demoEmail();
+  if (!email) return c.json({ error: 'not found' }, 404);
+  if (triesFrom(clientIp(c))) return c.json({ error: TOO_MANY }, 429);
+  const db = await getDb();
+  const row = (await db.query(
+    `select u.id, m.workspace_id from users u
+       join memberships m on m.user_id = u.id
+      where u.email = $1 order by m.created_at limit 1`,
+    [email],
+  )).rows[0];
+  if (!row) return c.json({ error: 'the demo is not set up' }, 503);
+  setCookie(c, SESSION_COOKIE, await createSession(db, row.id, row.workspace_id), cookieOpts);
+  return c.redirect(`${c.env?.base || ''}/`, 302);
 });
 
 app.post('/login', async (c) => {
@@ -228,6 +251,8 @@ app.post('/login', async (c) => {
     failsFor(key);
     return c.json({ error: 'invalid credentials' }, 401);
   }
+  // base.win support has no password ('none'): the same wait as a wrong one.
+  if (!String(user.password_hash).startsWith('scrypt:')) await dummyVerify();
   if (!(await verifyPassword(password, user.password_hash))) {
     failsFor(key);
     return c.json({ error: 'invalid credentials' }, 401);
@@ -296,6 +321,114 @@ app.post('/login/code', async (c) => {
   return c.json({ ...(await meFor(db, ctx)), ...(r.used === 'recovery' ? { recovery_left: r.left } : {}) });
 });
 
+// ── Forgot password (ext/passwords/reset.js) ──
+// Asking for a link: the same answer, at once, whatever the address — the
+// work runs after it. Ten asks an hour from one address and three for one
+// email (Sam@… and sam@… are one), on top of sign-in's own limit; past a
+// limit the answer is the same and nothing is sent.
+const asksFrom = makeLimiter({ windowMs: 60 * 60_000, max: 10 });
+const asksFor = makeLimiter({ windowMs: 60 * 60_000, max: 3 });
+app.post('/forgot', async (c) => {
+  // `null` is JSON too: the same answer, never a 500.
+  const { email } = (await c.req.json().catch(() => null)) || {};
+  const e = String(email ?? '').trim().toLowerCase().slice(0, 320);
+  const ip = clientIp(c);
+  // Each limit counts this ask, in order; any one over stops it.
+  const over = triesFrom(ip) || asksFrom(ip) || (e && asksFor(e));
+  if (e && !over) queueReset(await getDb(), e);
+  return c.json({ ok: true });
+});
+
+// The Reset screen, with the token from the link's #t=: whose link it is.
+// No route takes the token in its path (it would land in logs).
+app.post('/reset/check', async (c) => {
+  if (triesFrom(clientIp(c))) return c.json({ error: TOO_MANY }, 429);
+  const { token } = (await c.req.json().catch(() => null)) || {};
+  const row = await checkLink(await getDb(), token);
+  if (!row) return c.json({ error: RUN_OUT }, 404);
+  return c.json({ email: row.email });
+});
+
+class RunOut extends Error {}
+const resetInput = z.object({ token: z.string().regex(TOKEN_RE), password: z.string().min(8).max(200) });
+// A new password: the link used, every sign-in of the account ended, and on
+// the log of each campaign it's in. Two-step sign-in still asks its code.
+app.post('/reset', async (c) => {
+  const db = await getDb();
+  if (triesFrom(clientIp(c))) return c.json({ error: TOO_MANY }, 429);
+  const body = await c.req.json().catch(() => ({}));
+  if (!TOKEN_RE.test(String(body?.token ?? ''))) return c.json({ error: RUN_OUT }, 404);
+  const parsed = resetInput.safeParse(body);
+  if (!parsed.success) return c.json({ error: 'Choose a password of 8 or more characters.' }, 400);
+  const { token, password } = parsed.data;
+  const link = await checkLink(db, token);
+  if (!link) return c.json({ error: RUN_OUT }, 404);
+  const campaigns = (await db.query(
+    'select workspace_id from memberships where user_id = $1 order by created_at', [link.user_id],
+  )).rows.map((r) => r.workspace_id);
+  if (!campaigns.length) return c.json({ error: RUN_OUT }, 404);
+  // The slow hash first, outside any lock.
+  const passwordHash = await hashPassword(password);
+  let used;
+  try {
+    ({ result: used } = await runAction(db, { workspaceId: campaigns[0], actorId: link.user_id, action: 'auth.password.reset' }, async (tx, emit) => {
+      const row = await useLink(tx, token, passwordHash);
+      if (!row) throw new RunOut();
+      emit('user', row.user_id, 'update', resetEvent(row));
+      return row;
+    }));
+  } catch (e) {
+    if (e instanceof RunOut) return c.json({ error: RUN_OUT }, 404);
+    throw e;
+  }
+  // Their other campaigns here keep the same line on their own logs.
+  for (const ws of campaigns.slice(1)) {
+    await runAction(db, { workspaceId: ws, actorId: used.user_id, action: 'auth.password.reset' }, async (tx, emit) => {
+      emit('user', used.user_id, 'update', resetEvent(used));
+    });
+  }
+  failsFor.clear(`email:${link.email}`);
+  if ((await twoStepRow(db, used.user_id))?.on_since) {
+    setCookie(c, PENDING_COOKIE, await startPending(db, used.user_id, campaigns[0]), pendingCookie);
+    return c.json({ two_step: 'code' });
+  }
+  const sessionToken = await createSession(db, used.user_id, campaigns[0]);
+  setCookie(c, SESSION_COOKIE, sessionToken, cookieOpts);
+  return c.json(await meFor(db, await loadContext(db, sessionToken)));
+});
+
+// ── base.win support: in from the control centre (lib/entry.js, ext/operator) ──
+// The Enter page (/admin/enter#t=…) posts the token it was handed. Only at
+// this server's own address (its Render one), never under a client's path,
+// so the operator's sign-in lives on this campaign's own origin. Every
+// failure of the token gets the same answer; the token is never logged.
+const ENTRY_RUN_OUT = 'That link has run out. Open the desk again from the control centre.';
+const ENTRY_WORDS = {
+  off: [403, 'This campaign has turned off base.win sign-in. A manager can turn it on in Settings → Members.'],
+  'email-taken': [409, 'An account with your email is here but isn’t on the team. A manager can invite it again.'],
+  'email-in-use': [409, 'An account with your email is on this team with its own password, so base.win support can’t come in as it. Use another email in the control centre, such as you+support@….'],
+  entry: [401, ENTRY_RUN_OUT],
+};
+app.post('/operator', async (c) => {
+  if (triesFrom(clientIp(c))) return c.json({ error: TOO_MANY }, 429);
+  const keys = parseKeys();
+  const aud = ownOrigin();
+  if (!keys.length || !aud) return c.json({ error: 'base.win sign-in isn’t set up on this server yet.', code: 'not-ready' }, 503);
+  const refuse = (code) => c.json({ error: ENTRY_WORDS[code][1], code }, ENTRY_WORDS[code][0]);
+  if (c.env?.base) return refuse('entry');
+  if (c.req.header('origin') !== aud) return refuse('entry');
+  const { token } = (await c.req.json().catch(() => null)) || {};
+  const db = await getDb();
+  const checked = verifyEntry(token, { keys, aud, env: envName(), inst: await instanceOf(db), nowMs: Date.now() });
+  if (!checked.ok) return refuse('entry');
+  const r = await enter(db, checked.payload);
+  if (r.refused) return refuse(r.refused);
+  setCookie(c, SESSION_COOKIE, r.token, { ...cookieOpts, maxAge: ENTRY_HOURS * 3600 });
+  const ctx = await loadContext(db, r.token);
+  if (!ctx) return refuse('entry');
+  return c.json({ ...(await meFor(db, ctx)), go: checked.payload.go, invite: checked.payload.invite });
+});
+
 // ── Invites: look up, then join (new account, or an existing one by password) ──
 export const findInvite = async (db, token) => (await db.query(
   `select i.id, i.email, i.role, i.workspace_id, i.candidate_id, w.name as workspace_name
@@ -329,7 +462,8 @@ app.post('/join', async (c) => {
   const inv = await findInvite(db, token);
   if (!inv) return c.json({ error: 'this invite link is invalid or has expired' }, 404);
 
-  let user = (await db.query('select id, password_hash from users where email = $1', [inv.email])).rows[0];
+  let user = (await db.query('select id, password_hash, support from users where email = $1', [inv.email])).rows[0];
+  if (user?.support) return c.json({ error: 'This address is base.win support’s here; invite another address.' }, 409);
   if (user && !(await verifyPassword(password, user.password_hash))) {
     return c.json({ error: 'that password does not match your existing base.win account' }, 401);
   }
@@ -386,6 +520,32 @@ app.post('/join', async (c) => {
   setCookie(c, SESSION_COOKIE, sessionToken, cookieOpts);
   const ctx = await loadContext(db, sessionToken);
   return c.json(await meFor(db, ctx));
+});
+
+// An election-day sign-in code (ext/voted decision 17): once, within its 15
+// minutes, for someone still in the campaign with an open post. The
+// session it makes works for Who voted only (lib/auth.js scopeAllows) and
+// ends with the post's last voting day's work, at most 30 days. The page
+// that asks (GET /go/:token) never uses the code.
+app.post('/go', async (c) => {
+  const db = await getDb();
+  if (triesFrom(clientIp(c))) return c.json({ error: TOO_MANY }, 429);
+  const { token } = await c.req.json().catch(() => ({}));
+  const row = await usableCode(db, token);
+  if (!row) return c.json({ error: EXPIRED }, 410);
+  // Used now, under the campaign's lock: two taps make one session.
+  const ctx = { workspaceId: row.workspace_id, workspace: { settings: typeof row.settings === 'string' ? JSON.parse(row.settings) : row.settings || {} } };
+  const ends = await codeSessionEnds(db, ctx, row.user_id);
+  const { result } = await runAction(db, { workspaceId: row.workspace_id, actorId: row.user_id, action: 'gotv.signin.use' }, async (tx, emit) => {
+    const used = (await tx.query('update gotv_signin set used_at = now() where id = $1 and used_at is null and expires_at > now() returning id', [row.id])).rows[0];
+    if (!used) return null;
+    emit('session', row.id, 'create', { via: row.id, user_id: row.user_id, scope: 'gotv' });
+    return createSession(tx, row.user_id, row.workspace_id, { scope: 'gotv', via: row.id, expiresAt: ends });
+  });
+  if (!result) return c.json({ error: EXPIRED }, 410);
+  setCookie(c, SESSION_COOKIE, result, cookieOpts);
+  const base = c.env?.base || '';
+  return c.json({ ok: true, to: base ? `${base}/field/gotv` : '/gotv' });
 });
 
 app.post('/logout', async (c) => {

@@ -15,7 +15,7 @@ import { KIND_CODES, WHO_CODES, TRIES_MAX } from '@starbase/shared/passes';
 import { httpError } from '../../actions/util.js';
 import { newId } from '../../lib/events.js';
 import { openPass } from './rule.js';
-import { loadList } from '../lists/audience.js';
+import { handOn, loadList, whereFor } from '../lists/audience.js';
 
 const DESK = ['manager', 'treasurer', 'staff'];
 const COLS = 'id, name, kind, who, list_id, tries, started_at, ended_at, created_by, created_at';
@@ -27,6 +27,8 @@ const listFor = async (tx, ctx, id) => {
   if (ctx.role === 'volunteer') throw httpError(403, 'only the desk can point a pass at a list');
   const list = await loadList(tx, ctx.workspaceId, id);
   if (!list) throw httpError(404, 'list not found');
+  // Walked by volunteers: never a list picked by a Private field.
+  await whereFor(tx, handOn(ctx), { list });
   return list;
 };
 const name = () => z.string().trim().min(1).max(120);

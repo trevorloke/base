@@ -16,7 +16,7 @@
 //                    filter, Download CSV, Save these people as they are now
 // Every number is the number, "Loading…" or "Unavailable — Try again".
 import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useOutletContext, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSettled } from '../components/useSettled.js';
 import { usePersonSearch } from '../components/usePersonSearch.js';
@@ -26,6 +26,7 @@ import { ApiError, apiGet } from '../api.js';
 import { NoSignal, noSignal } from '../components/NoSignal.jsx';
 import SendToMailchimp from '../components/SendToMailchimp.jsx';
 import { TakeItOut } from '../components/SendToSheet.jsx';
+import { useFieldsList } from '../components/FieldsBits.jsx';
 import { useScale } from '../components/RatingButtons.jsx';
 import { useAction, ratingBands } from './People.jsx';
 import { CUT_KEYS, CutFields, useTurfs } from '../components/FieldCuts.jsx';
@@ -70,11 +71,13 @@ const WAYS = [
   { key: 'walk', label: 'Walk', to: (id) => `/passes?new=1&list=${id}`, n: null },
 ];
 const REACH_WORD = { email: 'can be emailed', text: 'can be texted', call: 'can be called' };
-function Ways({ id, name, counts = null, page = false }) {
+function Ways({ id, name, counts = null, page = false, off = false }) {
   return (
     <div className={`au-go${page ? ' au-go--page' : ''}`} role="group" aria-label={`Reach ${name}`}>
       {WAYS.map((w) => {
         const n = w.n && counts ? counts[w.n] : null;
+        // A list picked by a Private field stays in the office: the ways out are off.
+        if (off) return <button key={w.key} type="button" className="btn ops-tap" disabled>{page ? `${w.label} this list` : w.label}</button>;
         return (
           <Link key={w.key} className="btn ops-tap" to={w.to(id)}
             aria-label={page ? undefined : `${w.label} ${name}${n != null ? ` — ${fmt(n)} ${REACH_WORD[w.key]}` : ''}`}>
@@ -229,6 +232,7 @@ function Figures({ counts }) {
 
 function OneList({ id }) {
   const navigate = useNavigate();
+  const manager = (useOutletContext() ?? {}).me?.role === 'manager';
   const queryClient = useQueryClient();
   const [typed, setQ] = useState('');
   const q = useSettled(typed.trim());
@@ -245,6 +249,7 @@ function OneList({ id }) {
   const l = list.data?.list;
   useEffect(() => { if (l && filter == null) setFilter(l.filter || {}); }, [l, filter]);
   const preview = usePreview(filter || {}, !!(editing && l?.kind === 'filter'));
+  const privFields = useFieldsList(true);
   if (noSignal(list)) return <NoSignal />;
   if (list.isError && !list.data) {
     return (
@@ -259,6 +264,11 @@ function OneList({ id }) {
   if (!l) return <div className="ops-page ls-page"><Link className="ops-back" to="/lists">← Lists</Link><p className="muted">Loading…</p></div>;
   const people = list.data.people;
   const stale = list.isPlaceholderData;
+  // Picked by a Private field (Faith): it can't be walked, called, sent or copied (the server refuses too).
+  const privIds = (privFields.data?.fields || []).filter((f) => f.sensitive).map((f) => f.id);
+  const byPrivate = l.kind === 'filter' && [].concat(l.filter?.field || []).map((v) => String(v).split(':')[0]).filter((fid) => privIds.includes(fid));
+  const office = byPrivate && byPrivate.length > 0
+    ? (privFields.data.fields.find((f) => f.id === byPrivate[0])?.name || 'a private field') : null;
   const saveFilter = async () => { if (await act.run('list.update', { id, filter: cleanFilter(filter) })) setEditing(false); };
   const del = async () => { if (await act.run('list.delete', { id })) navigate('/lists'); };
   return (
@@ -269,20 +279,27 @@ function OneList({ id }) {
       </div>
       <p className="ops-meta">{l.kind !== 'filter' ? 'Hand-picked: the people put on it.' : l.by_volunteer ? 'A volunteer’s saved filter: whoever matches it today, by what a volunteer may see.' : 'A saved filter: whoever matches it today.'}</p>
       <Figures counts={list.data.counts} />
-      <Ways id={id} name={l.name} page />
+      {office && (
+        <p className="muted ls-office">Stays in the office: it picks people by {office}, so it can’t be walked, called, sent to CallHub, emailed, texted{manager ? ' or copied' : ', copied or downloaded'}.</p>
+      )}
+      <Ways id={id} name={l.name} page off={Boolean(office)} />
       <div className="ops-actions ls-tools">
-        <TakeItOut csvHref={at(`/api/lists/${id}/export.csv`)} source="list" of={id} name={l.name} count={list.data.counts.total} head={LIST_HEAD} />
-        <SendToMailchimp listId={id} />
+        {/* Picked by a Private field: only a manager takes it out (the server refuses too). */}
+        {office && !manager
+          ? <button type="button" className="btn btn-quiet ops-tap" disabled>Download CSV</button>
+          : <TakeItOut csvHref={at(`/api/lists/${id}/export.csv`)} source="list" of={id} name={l.name} count={list.data.counts.total} head={LIST_HEAD}
+              offWhy={office ? 'Google Sheets never gets private fields' : null} />}
+        <fieldset className="ls-offwrap" disabled={Boolean(office)}><SendToMailchimp listId={id} /></fieldset>
         {l.kind === 'filter' && <button type="button" className="btn btn-quiet ops-tap" onClick={() => setEditing((v) => !v)}>{editing ? 'Close' : 'Edit the filter'}</button>}
         {asking ? (
           <span className="ops-confirm"><span>Delete this list?</span>
             <button type="button" className="btn ops-danger ops-tap" disabled={act.busy} onClick={del}>Yes</button>
             <button type="button" className="btn btn-quiet ops-tap" onClick={() => setAsking(false)}>No</button></span>
         ) : <button type="button" className="btn btn-quiet ops-tap" onClick={() => setAsking(true)}>Delete</button>}
-        <SnapshotForm input={{ list_id: id }} count={list.data.counts.total} defaultName={l.name} />
+        <fieldset className="ls-offwrap" disabled={Boolean(office)}><SnapshotForm input={{ list_id: id }} count={list.data.counts.total} defaultName={l.name} /></fieldset>
       </div>
       {act.error && <p className="error" role="alert">{act.error}</p>}
-      <SendToCallHub kind="list" id={id} />
+      <fieldset className="ls-offwrap" disabled={Boolean(office)}><SendToCallHub kind="list" id={id} /></fieldset>
       {editing && l.kind === 'filter' && filter && (
         <div className="card ls-edit">
           <FilterFields value={filter} onChange={setFilter} exclude={id} />

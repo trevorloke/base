@@ -52,6 +52,8 @@ import { runHooks } from '../../lib/hooks.js';
 import { DEFAULT_SLATE } from '@starbase/shared/canvass';
 import { sameText, samePhone, samePostal, sharesOf, sharedWords } from './same.js';
 
+import { touchVotedFeed } from '../voted/live.js';
+
 export const sql = `
 create table if not exists person_not_dupes (
   workspace_id uuid not null references workspaces(id) on delete cascade,
@@ -357,6 +359,8 @@ export const actions = {
         }
       }
 
+      // Who voted reaches the canvassers on keep's turf (ext/voted live feed).
+      if (moved.voted_marks?.moved || 'voted_at' in filled) await touchVotedFeed(tx, ws, keep.id);
       emit('person', keep.id, 'update', { merged: drop.id, ...filled, tags });
       emit('person', drop.id, 'void', { merged_into: keep.id });
       return { keep: keep.id, drop: drop.id, filled: Object.keys(filled), moved, flagged, cleared };

@@ -28,6 +28,7 @@ import { SIDEBARS, CORNERS, HEADINGS, deriveLook } from '@starbase/shared/brand-
 import { APP_NAME, BRANDS } from '@starbase/shared/brand';
 import { brandKey, forgetBrand, plainWords } from '../../lib/brand.js';
 import { cacheClear } from '../site/cache.js';
+import { fontFor, profileFor } from '@starbase/shared/site/fonts';
 import { BRAND_PICTURES, BRAND_PICTURE_KINDS, EXT, imageSize, pictureProblem } from './pictures.js';
 
 const MANAGER = ['manager'];
@@ -38,6 +39,21 @@ const words = (max) => z.string().max(max * 4).transform((s) => plainWords(s, ma
 const picture = () => z.object({ id: z.uuid() }).nullish();
 
 // The campaign's settings, locked for this write.
+// A Google font the campaign added, as the brand's heading face (WA): its
+// name and the files the desk loads (lib/brand.js brandHead).
+const headingFaceFor = async (tx, ws, heading) => {
+  if (!/^g:/.test(heading)) return {};
+  const r = (await tx.query('select slug, family, category, body_safe, faces from site_fonts where workspace_id = $1 and slug = $2 and deleted_at is null', [ws, heading.slice(2)])).rows[0];
+  if (!r) throw httpError(400, 'That font isn’t on your website. Add it under Website → Theme → Change fonts first.');
+  const font = fontFor(heading, [{ slug: r.slug, family: r.family, category: r.category, bodySafe: r.body_safe, faces: parseJ(r.faces, []) }]);
+  const w = profileFor(font).weight;
+  const covers = (f) => { const [lo, hi = lo] = String(f.weight).split(' ').map(Number); return lo <= w && hi >= w; };
+  const files = font.faces.filter((f) => f.style !== 'italic' && covers(f) && ['latin', 'latin-ext'].includes(f.subset))
+    .sort((a, b) => (a.subset === 'latin' ? -1 : 1) - (b.subset === 'latin' ? -1 : 1))
+    .map((f) => ({ sha: f.sha256, weight: f.weight, range: f.unicode_range }));
+  return { headingFace: { family: r.family, kind: r.category, files } };
+};
+
 const settingsFor = async (tx, ws) => parseJ((await tx.query('select settings from workspaces where id = $1 for update', [ws])).rows[0]?.settings, {});
 
 // A picture this campaign uploaded, fit to be this kind of brand picture —
@@ -93,7 +109,8 @@ export const actions = {
       second: hex.nullish(),
       sidebar: z.enum(SIDEBARS).default('light'),
       corners: z.enum(Object.keys(CORNERS)).default('soft'),
-      heading: z.enum(HEADINGS).default('inter'),
+      // A face base.win ships, or a Google font the campaign added (WA).
+      heading: z.string().refine((h) => HEADINGS.includes(h) || /^g:[a-z0-9-]{1,80}$/.test(h), 'Pick a heading font').default('inter'),
       learn: words(40).optional(),
       short_name: words(30).optional(),
       email_header: z.boolean().default(false),
@@ -119,6 +136,7 @@ export const actions = {
         sidebar: input.sidebar,
         corners: input.corners,
         heading: input.heading,
+        ...(await headingFaceFor(tx, ws, input.heading)),
         // Unsaid: what the campaign's look called it until now.
         learn: input.learn || BRANDS[brandKey()].learn,
         shortName: input.short_name || APP_NAME,

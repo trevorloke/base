@@ -41,6 +41,8 @@ import {
 import { IKnowThem, KnowMeChip, KnowsNudge, PersonKnows, ProfileKeyTies, usePersonKnows } from '../components/RelationshipsBits.jsx';
 import NameFields from '../components/NameFields.jsx';
 import VoterNumber from '../components/VoterNumber.jsx';
+import { VotedRow, useVotedMode } from '../components/Voted.jsx';
+import './gotv.css';
 import SocialsBlock, { SocialsTyped } from '../components/SocialsBlock.jsx';
 import { PersonTimeline, timelineCount, usePersonTimeline } from '../components/PersonTimeline.jsx';
 import EmailSheet, { gmailNotReadyLine, gmailReady, notReadySaid, takeDraft, useGmail, useToast } from '../components/EmailSheet.jsx';
@@ -266,6 +268,22 @@ function Header({ person, donor, me, desk, onLog, onEmail, emailing = false, con
 // onMoving(open) tells the page a panel is open (the desk's own move lines
 // step aside); elsewhere: the desk's "Where to?" panel is open already, so a
 // Moved tap is logged without a second panel.
+// Names held until polls close (decision 9): a sheet typed into the plain
+// Voted control above would go live at once, so the desk is pointed to
+// Enter a sheet, whose names wait.
+function SheetLine() {
+  const mode = useVotedMode();
+  const st = mode.status;
+  // Held, as the rule has it: after polls close and not yet open today
+  // (a CEO's yes alone doesn't send them; only `live` does).
+  if (!mode.on || mode.practice || st?.send !== 'after_close' || st.send_open) return null;
+  return (
+    <p className="gv-sheetline">
+      From a scrutineer’s or runner’s sheet? Use <Link to="/voted?tab=places">Enter a sheet</Link>: those wait until polls close.
+    </p>
+  );
+}
+
 function RatingCard({ person, refresh, channel, setChannel, cardRef, canMove = false, desk = false, household = [], onMoving = () => {}, elsewhere = false }) {
   const [moving, setMovingState] = useState(null); // the Moved tap's client id, while its panel is open
   const movingRef = useRef(null);
@@ -349,6 +367,10 @@ function RatingCard({ person, refresh, channel, setChannel, cardRef, canMove = f
     <section className="card pf-rate" ref={cardRef} aria-label="Rate">
       <RatingButtons value={person.rating} onPick={(code) => log('contacted', code)} disabled={act.busy} />
       <OutcomeButtons items={channel === 'email' ? EMAIL_OUTCOMES : OUTCOMES} onPick={(o) => log(o)} disabled={act.busy} />
+      {/* GOTV on: Voted ✓ (the desk's own mark, never held: it has no voting place). */}
+      <VotedRow person={person} source={desk ? 'desk' : channel === 'phone' ? 'phone' : 'door'}
+        toast={(text) => setSaid({ text, what: text, queued: false })} onMarked={refresh} />
+      {desk && <SheetLine />}
       {channel === 'email' && emailWarn && <p className="gm-warn"><span className="chip chip-danger">{emailWarn}</span></p>}
       {moving && (
         <MovePanel key={moving} person={person} desk={desk} contactClientId={moving === 'tap' ? null : moving} where="profile"
@@ -1014,7 +1036,7 @@ export default function Person() {
           <Section title="More details" count={filledCount(fields) || ''} open={!!open.more} onToggle={toggle('more')}>
             {desk && <VoterNumber key={`voter-${person.id}`} personId={person.id} />}
             {desk && <SocialsTyped person={person} />}
-            {(!desk || fields.data?.fields?.length !== 0) && <PersonFields key={person.id} query={fields} personId={person.id} />}
+            {(!desk || fields.data?.fields?.length !== 0) && <PersonFields key={person.id} query={fields} personId={person.id} manager={me?.role === 'manager'} tags={desk ? tags : []} />}
           </Section>
         )}
         {desk && (

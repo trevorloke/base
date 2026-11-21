@@ -501,7 +501,7 @@ function Teams({ d, period }) {
         <h3 className="dash-sec__h" id={headId}>By team <span className="muted">· {PERIOD_WORD[period]}</span></h3>
         <Link className="dash-sec__link" to="/settings/teams">Teams ›</Link>
       </header>
-      <div className="dash-tablewrap">
+      <div className="dash-tablewrap dash-teamtable">
         <table className="dash-table">
           <thead>
             <tr><th scope="col">Team</th><th scope="col">Members</th><th scope="col">Out now</th><th scope="col">Contacts</th>{OUTCOME_SERIES.map((o) => <th scope="col" key={o.key}>{o.label}</th>)}</tr>
@@ -519,6 +519,25 @@ function Teams({ d, period }) {
           </tbody>
         </table>
       </div>
+      {/* A phone: each team as a short card, every number in view — a wide
+          table there hides its outcomes off to the side. */}
+      <ul className="dash-teamcards">
+        {d.teams.map((t) => {
+          const outs = OUTCOME_SERIES.filter((o) => Number(t[o.key]) > 0);
+          return (
+            <li key={t.id || 'none'} className="dash-teamcard">
+              <span className="dash-teamcard__name">{t.name}</span>
+              <span className="dash-teamcard__line mono">
+                {num(t.members)} {Number(t.members) === 1 ? 'member' : 'members'} · {num(t.contacts)} {Number(t.contacts) === 1 ? 'contact' : 'contacts'}
+                {Number(t.out) > 0 && <> · <span className="chip chip-ok">{num(t.out)} out now</span></>}
+              </span>
+              <span className="dash-teamcard__line muted">
+                {outs.length ? outs.map((o) => `${o.label} ${num(t[o.key])}`).join(' · ') : 'No contacts yet'}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
     </section>
   );
 }
@@ -534,12 +553,15 @@ function Latest({ d }) {
         <ul className="dash-recent">
           {d.recent.map((r) => (
             <li key={r.id} className="dash-recent__i">
-              <span className="dash-swatch" style={{ background: COLOR[r.outcome] || '#5b6472' }} aria-hidden="true" />
-              <span className="dash-recent__main">
-                <Link to={`/people/${r.person_id}`}>{r.person}</Link>
-                <span className="muted"> · {OUTCOME_LABEL[r.outcome] || r.outcome}{r.channel !== 'door' && ` by ${r.channel}`} · {r.who || 'someone'}</span>
-              </span>
-              <span className="dash-recent__when mono">{timeAgo(r.at, now)}</span>
+              {/* The whole row is the tap to the person (48 px on a phone). */}
+              <Link to={`/people/${r.person_id}`} className="dash-recent__row">
+                <span className="dash-swatch" style={{ background: COLOR[r.outcome] || '#5b6472' }} aria-hidden="true" />
+                <span className="dash-recent__main">
+                  <span className="dash-recent__name">{r.person}</span>
+                  <span className="muted"> · {OUTCOME_LABEL[r.outcome] || r.outcome}{r.channel !== 'door' && ` by ${r.channel}`} · {r.who || 'someone'}</span>
+                </span>
+                <span className="dash-recent__when mono">{timeAgo(r.at, now)}</span>
+              </Link>
             </li>
           ))}
         </ul>

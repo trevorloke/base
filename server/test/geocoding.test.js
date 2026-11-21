@@ -286,10 +286,21 @@ test('an import that leaves addresses without a pin starts the run by itself; no
   assert.deepEqual(actors.map((r) => r.actor_id), [null]);
 
   // An import while the run is already going leaves it alone (it finds the newcomers by itself).
-  answer = () => new Promise((r) => setTimeout(() => r(null), 20));
+  // The run is held after its first round (120 people) until the third file is in, so it is
+  // still going when that file arrives however slow the machine: otherwise it could finish
+  // first, and the third file would rightly start a run of its own.
+  let lookups = 0;
+  let release;
+  const held = new Promise((r) => { release = r; });
+  answer = () => {
+    lookups += 1;
+    return lookups <= 120 ? new Promise((r) => setTimeout(() => r(null), 20)) : held.then(() => null);
+  };
   await mgr.post('/api/data/import', { rows: Array.from({ length: 130 }, (_, i) => ({ name: `Second ${i} Example`, address: `${72000 + i} 80 Ave` })) });
   await waitFor((x) => x.state === 'running' && x.located > 0);
   await mgr.post('/api/data/import', { rows: [{ name: 'Third Example', address: '73000 80 Ave' }] });
+  assert.equal((await stateNow()).state, 'running', 'the run was still going when the third file came in');
+  release();
   const both = await waitFor((x) => x.state === 'done');
   assert.deepEqual([both.located, both.remaining], [131, 0], 'one run placed both files');
   answer = () => null;

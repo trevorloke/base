@@ -34,7 +34,7 @@ before(async () => {
   ok(await mgr.action('site.settings.save', { org: { ...s.org, name: 'Riverside Example League', shortName: '', agentName: 'Ada Example', agentContact: '604-555-0100' } }));
   const r = ok(await mgr.action('site.page.create', { title: 'About us', slug: 'about', modules: [
     { id: 'band01', kind: 'band', hidden: false, props: { title: 'When we organize,', highlight: 'we win', tone: 'accent' } },
-    { id: 'text01', kind: 'text', hidden: false, props: { title: 'Our story', body: `${STORY}\n\nRead [the plan](https://example.org/plan) with Pat Example.`, tone: 'paper' } },
+    { id: 'text01', kind: 'text', hidden: false, props: { title: 'How we started', body: `${STORY}\n\nRead [the plan](https://example.org/plan) with Pat Example.`, tone: 'paper' } },
   ] }));
   ok(await mgr.action('site.page.publish', { id: r.page.id }));
   about = r.page;
@@ -107,6 +107,10 @@ test('the sentence list: to check, with where each is; a search', async () => {
   const r = ok(await vol.client.get('/api/site/languages/pa/sentences?filter=check'));
   assert.equal(r.sentences.length, 50);
   assert.ok(r.next === 50 && r.total > 50);
+  // The site's own pages first; the fixed words every site shares last.
+  assert.notEqual(r.sentences[0].place_label, 'Fixed words', 'a page comes before the fixed words');
+  const firstFixed = r.sentences.findIndex((x) => x.place_label === 'Fixed words');
+  if (firstFixed >= 0) assert.ok(r.sentences.slice(firstFixed).every((x) => x.place_label === 'Fixed words'), 'nothing of the site’s own after the fixed words begin');
   const story = ok(await vol.client.get(`/api/site/languages/pa/sentences?filter=all&q=${encodeURIComponent('library')}`));
   assert.equal(story.sentences.length, 1);
   assert.equal(story.sentences[0].src, STORY);
@@ -154,21 +158,21 @@ test('a volunteer with only Website translations suggests; the page waits for so
 });
 
 test('someone with the Website: an edit is live at once, unchecked; nobody checks their own; Undo goes back', async () => {
-  const h = segHash('Our story');
-  const was = (await row('pa', 'Our story')).text;
+  const h = segHash('How we started');
+  const was = (await row('pa', 'How we started')).text;
   const s = ok(await staff.client.action('site.translation.save', { lang: 'pa', src_hash: h, text: 'ਸਾਡੀ ਕਹਾਣੀ' }));
   assert.equal(s.state, 'live');
   cacheClear(ws);
   assert.ok((await hit('/site/pa/about')).text.includes('ਸਾਡੀ ਕਹਾਣੀ'));
-  assert.equal((await row('pa', 'Our story')).checked_at, null);
+  assert.equal((await row('pa', 'How we started')).checked_at, null);
   const own = await staff.client.action('site.translation.check', { lang: 'pa', src_hashes: [h] });
   assert.equal(own.status, 403);
   ok(await vol.client.action('site.translation.check', { lang: 'pa', src_hashes: [h] }));
-  assert.ok((await row('pa', 'Our story')).checked_at);
+  assert.ok((await row('pa', 'How we started')).checked_at);
   // Undo: the Website's.
   assert.equal((await vol.client.action('site.translation.undo', { lang: 'pa', version_id: s.version_id })).status, 403);
   ok(await mgr.action('site.translation.undo', { lang: 'pa', version_id: s.version_id }));
-  const back = await row('pa', 'Our story');
+  const back = await row('pa', 'How we started');
   assert.equal(back.text, was);
   assert.equal(back.origin, 'machine');
   assert.equal(back.checked_at, null);
@@ -176,9 +180,9 @@ test('someone with the Website: an edit is live at once, unchecked; nobody check
 });
 
 test('Simplified corrected: Traditional follows, converted', async () => {
-  const h = segHash('Our story');
+  const h = segHash('How we started');
   ok(await mgr.action('site.translation.save', { lang: 'zh-Hans', src_hash: h, text: '我们的故事' }));
-  const t = await row('zh-Hant', 'Our story');
+  const t = await row('zh-Hant', 'How we started');
   assert.equal(t.text, '我們的故事');
   assert.equal(t.origin, 'converted');
 });
@@ -217,6 +221,16 @@ test('names: kept as written from the screen; one taken off', async () => {
   assert.ok(!r.names.possible.includes('Pat Example'));
   ok(await vol.client.action('site.names.keep', { name: 'Pat Example', keep: false }));
   assert.ok(!ok(await mgr.get('/api/site/languages')).names.typed.includes('Pat Example'));
+  // A manager's switch saves only what it changes: a name a translator kept
+  // meanwhile stays kept.
+  ok(await vol.client.action('site.names.keep', { name: 'Jas Example', keep: true }));
+  ok(await mgr.action('site.settings.save', { languages: { oldPosts: true } }));
+  const after = ok(await mgr.get('/api/site/languages'));
+  assert.ok(after.names.typed.includes('Jas Example'), 'kept');
+  assert.deepEqual(after.settings.on, ['pa', 'zh-Hans', 'zh-Hant'], 'the languages on stay on');
+  assert.equal(after.settings.oldPosts, true);
+  ok(await mgr.action('site.settings.save', { languages: { oldPosts: false } }));
+  ok(await vol.client.action('site.names.keep', { name: 'Jas Example', keep: false }));
 });
 
 test('a petition’s statement: a manager checks the machine’s words; anyone else may not', async () => {
@@ -230,6 +244,31 @@ test('a petition’s statement: a manager checks the machine’s words; anyone e
   ok(await mgr.action('site.translation.approve', { lang: 'pa', version_id: s.version_id }));
   cacheClear(ws);
   assert.ok((await hit(`/site/pa/act/${petition.slug}`)).text.includes('ਅਸੀਂ ਸ਼ਹਿਰ ਨੂੰ ਕਹਿੰਦੇ ਹਾਂ।'));
+});
+
+test('a statement quoted word for word on a page still needs a manager', async () => {
+  const statement = 'We ask the council to light the river path.';
+  const quote = ok(await mgr.action('site.page.create', { title: 'Our ask', slug: 'our-ask', modules: [
+    { id: 'text01', kind: 'text', hidden: false, props: { title: 'Sign our petition', body: statement, tone: 'paper' } },
+  ] }));
+  ok(await mgr.action('site.page.publish', { id: quote.page.id }));
+  const p = ok(await mgr.action('site.campaign.save', { kind: 'petition', title: 'Light the path', statement, excerpt: 'Safer at night.' })).campaign;
+  await sweep(db, ws);
+  const h = segHash(statement);
+  const machine = (await row('pa', statement)).text;
+  for (const who of [vol, staff]) {
+    const r = await who.client.action('site.translation.check', { lang: 'pa', src_hashes: [h] });
+    assert.equal(r.status, 403, `${who.email} may not check a statement`);
+    assert.match(r.json.error, /A manager needs to check/);
+  }
+  const s = ok(await vol.client.action('site.translation.save', { lang: 'pa', src_hash: h, text: 'ਅਸੀਂ ਕੌਂਸਲ ਨੂੰ ਰਾਹ ਰੌਸ਼ਨ ਕਰਨ ਲਈ ਕਹਿੰਦੇ ਹਾਂ।' }));
+  assert.equal((await staff.client.action('site.translation.approve', { lang: 'pa', version_id: s.version_id })).status, 403);
+  ok(await mgr.action('site.translation.decline', { lang: 'pa', version_id: s.version_id }));
+  cacheClear(ws);
+  assert.ok(!(await hit(`/site/pa/act/${p.slug}`)).text.includes(machine), 'unchecked, the statement stays in English');
+  const list = ok(await mgr.get(`/api/site/languages/pa/sentences?filter=all&q=${encodeURIComponent('river path')}`)).sentences;
+  assert.equal(list.length, 1);
+  assert.equal(list[0].check_first, true);
 });
 
 test('couldn’t translate: listed with the reason; typing its words clears it', async () => {
@@ -258,7 +297,7 @@ test('the legal words: the machine’s draft, and Traditional from the approved 
   const hant = ok(await mgr.get('/api/site/languages/zh-Hant/legal'));
   assert.equal(hant.draft_from, 'converted');
   const { convertToTraditional } = await import('../ext/site/translate.js');
-  assert.equal(hant.draft.authorizedBy, convertToTraditional(approvedWords('zh-Hans').authorizedBy));
+  assert.equal(hant.draft.authorizedBy, await convertToTraditional(approvedWords('zh-Hans').authorizedBy));
 });
 
 test('Settings → Services: the Translation row, its Check, and Check translation', async () => {
@@ -344,8 +383,62 @@ test('Preview: the home page in a language that is on, before visitors see it', 
   assert.equal(page.status, 200);
   assert.match(page.text, /<html[^>]* lang="pa"/);
   assert.match(page.text, /noindex/);
+  // A draft of the home page is the Website's: someone with only
+  // translations previews the published page; the Website sees the draft.
+  const home = (await db.query("select id, draft from site_pages where workspace_id = $1 and site_id is null and slug = 'home'", [ws])).rows[0];
+  const d = typeof home.draft === 'string' ? JSON.parse(home.draft) : home.draft;
+  ok(await mgr.action('site.page.save', { id: home.id, modules: [...(d.modules || []), { id: 'draft9', kind: 'text', hidden: false, props: { title: 'Not yet', body: 'UNPUBLISHED-DRAFT-WORDS', tone: 'paper' } }] }));
+  const volView = await hit(new URL(ok(await vol.client.get('/api/site/languages/pa/preview')).url, 'http://localhost').href.replace('http://localhost', ''));
+  assert.equal(volView.status, 200);
+  assert.ok(!volView.text.includes('UNPUBLISHED-DRAFT-WORDS'), 'no unpublished draft for translations alone');
+  const mgrView = await hit(new URL(ok(await mgr.get('/api/site/languages/pa/preview')).url, 'http://localhost').href.replace('http://localhost', ''));
+  assert.ok(mgrView.text.includes('UNPUBLISHED-DRAFT-WORDS'), 'the Website previews its draft');
   ok(await saveLanguages({ on: ['pa', 'zh-Hans'] }));
   const off = await vol.client.get('/api/site/languages/zh-Hant/preview');
   assert.equal(off.status, 409);
   ok(await saveLanguages({ on: ['pa', 'zh-Hans', 'zh-Hant'] }));
+});
+
+test('Undo puts back exactly the words that were live before, whoever made them and in whatever order', async () => {
+  const one = 'Doors open at noon on Saturday.';
+  const two = 'Bring a friend along to the meeting.';
+  const three = 'Coffee is on the house for everyone.';
+  const r = ok(await mgr.action('site.page.create', { title: 'Open house', slug: 'open-house', modules: [
+    { id: 'text01', kind: 'text', hidden: false, props: { title: 'Saturday', body: `${one}\n\n${two}\n\n${three}`, tone: 'paper' } },
+  ] }));
+  ok(await mgr.action('site.page.publish', { id: r.page.id }));
+  await sweep(db, ws);
+  const save = async (who, lang, src, text) => ok(await who.action('site.translation.save', { lang, src_hash: segHash(src), text }));
+  const undo = async (who, lang, id) => ok(await who.action('site.translation.undo', { lang, version_id: id }));
+
+  // An edit undone, then a later edit undone: the words live before that one.
+  const b = await save(staff.client, 'pa', one, 'ਬੀ ਸ਼ਬਦ');
+  const c = await save(mgr, 'pa', one, 'ਸੀ ਗਲਤ');
+  await undo(mgr, 'pa', c.version_id);
+  assert.equal((await row('pa', one)).text, 'ਬੀ ਸ਼ਬਦ');
+  const d = await save(staff.client, 'pa', one, 'ਡੀ ਸ਼ਬਦ');
+  await undo(mgr, 'pa', d.version_id);
+  const back = await row('pa', one);
+  assert.equal(back.text, 'ਬੀ ਸ਼ਬਦ', 'the words live before D, not the ones undone');
+  assert.equal(back.version_id, b.version_id);
+  assert.equal(back.checked_at, null, 'nobody approved B: still to check');
+
+  // A suggestion approved after a later edit: Undo goes to that edit.
+  const s = await save(vol.client, 'pa', two, 'ਸੁਝਾਅ ਸ਼ਬਦ');
+  await save(staff.client, 'pa', two, 'ਬੀ ਸਿੱਧਾ');
+  ok(await mgr.action('site.translation.approve', { lang: 'pa', version_id: s.version_id }));
+  await undo(mgr, 'pa', s.version_id);
+  assert.equal((await row('pa', two)).text, 'ਬੀ ਸਿੱਧਾ', 'the staff correction comes back');
+
+  // Traditional edited, Simplified then changed, the edit undone: converted
+  // from the Simplified as it is now.
+  await save(mgr, 'zh-Hant', three, '人工的繁體字');
+  await save(staff.client, 'zh-Hans', three, '咖啡对所有人免费');
+  const e = await row('zh-Hant', three);
+  assert.equal(e.text, '人工的繁體字');
+  await undo(mgr, 'zh-Hant', e.version_id);
+  const t = await row('zh-Hant', three);
+  assert.equal(t.origin, 'converted');
+  assert.equal(t.text, '咖啡對所有人免費', 'from the Simplified as it is now');
+  assert.equal(t.needs_check, false);
 });

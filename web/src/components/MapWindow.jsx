@@ -40,11 +40,17 @@ class ChunkBoundary extends Component {
 
 function BandMeta({ me }) {
   const q = useBandTurfs(me);
-  if (q.data) {
-    const n = (q.data.turfs ?? []).length;
-    return n ? `${num(n)} ${n === 1 ? 'walk list' : 'walk lists'}` : 'No walk lists yet';
+  const n = (q.data?.turfs ?? []).length;
+  const count = `${num(n)} ${n === 1 ? 'walk list' : 'walk lists'}`;
+  // The live read failed: an older copy kept on this device is said to be
+  // one ("as of" its time), and an empty copy never reads as "none yet".
+  if (q.isError) {
+    if (!n) return 'Unavailable';
+    const at = q.dataUpdatedAt ? new Date(q.dataUpdatedAt).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit' }) : null;
+    return at ? `${count} · as of ${at}` : `${count} · an older copy`;
   }
-  return q.isError ? 'Unavailable' : 'Loading…';
+  if (q.data) return n ? count : 'No walk lists yet';
+  return 'Loading…';
 }
 
 export default function MapWindow({ me, shape = 'window', turfId = null }) {

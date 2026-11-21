@@ -38,6 +38,9 @@ const createPg = async (url) => {
   });
   return {
     kind: 'postgres',
+    // The pool itself, for a test that counts connections in use (an open
+    // live GOTV stream must hold none).
+    pool,
     ...wrap(pool),
     exec: async (sql) => { await pool.query(sql); },
     transaction: async (fn) => {

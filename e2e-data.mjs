@@ -141,6 +141,8 @@ const L1 = ['Riya', 'Sample', '', '16045550188', `riya.${tag}@example.org`, '1',
 L1[20] = 'Not Home'; L1[21] = '10/04/2026'; L1[26] = 'Yes';
 const L2 = [...L1]; L2[0] = 'Omar'; L2[1] = 'Listed'; L2[2] = '604-555-0177'; L2[3] = ''; L2[4] = ''; L2[8] = ''; L2[9] = '9001'; L2[16] = ''; L2[25] = '';
 L2[20] = 'Spoke - supporter';
+// Dwelling type is a pick list: "Townhouse" is guessed; "Apartment" (how tall?) is kept as written.
+L1[19] = 'Townhouse'; L2[19] = 'Apartment';
 const L3 = [...L1]; L3[0] = 'Lee Ann'; L3[1] = 'Listed'; L3[3] = '1.6045E+10'; L3[4] = `lee.${tag}@example.org`; L3[9] = '9002'; L3[25] = ''; L3[20] = ''; L3[21] = ''; L3[26] = '';
 await page.goto(`${ADMIN}/people/import`, { waitUntil: 'domcontentloaded' });
 await page.click('button:has-text("Paste text")');
@@ -164,6 +166,8 @@ check('Past conversations: Not Home → Not home; Spoke - supporter → Talked',
 const signs0 = await readRows('imp-sign-h');
 check('Signs: Yes is a profile field only until you say', signs0.Yes === 'A profile field only', JSON.stringify(signs0));
 await page.selectOption('select[aria-label="What a sign “Yes” means"]', 'requested');
+const dwell = Object.fromEntries(await page.$$eval('section.imp-rmap:has(h3:text-is("Dwelling type")) .imp-rmap__row', (rows) => rows.map((r) => [r.querySelector('.imp-rmap__word').innerText.trim(), (() => { const x = r.querySelector('select'); return x.options[x.selectedIndex].text; })()])).catch(() => []));
+check('Dwelling type: what the list’s words mean — Townhouse guessed, Apartment kept as written', dwell.Townhouse === 'Townhouse or row house' && dwell.Apartment === 'Keep as written', JSON.stringify(dwell));
 await page.screenshot({ path: `${SHOTS}/03-list-format.png`, fullPage: true });
 await page.click('button:has-text("Check 3 rows")');
 await sleep(1500);
@@ -176,6 +180,9 @@ check('Riya: unit 204 at 16068 83 Ave, her mobile, the pin, tags split, voluntee
   && ['Team: North', 'Vol: Door Knocker', 'Zone 1', 'volunteer', 'donor'].every((x) => riya.tags.includes(x)) && !riya.voted_at, JSON.stringify(riya));
 const rf = (await api(`/persons/${riya.id}/fields`)).json.fields;
 const fv = (n) => rf.find((f) => f.name === n)?.value;
+const omarF = Object.fromEntries((await api(`/persons/${(await lp('Omar Listed')).id}/fields`)).json.fields.map((f) => [f.name, f.value]));
+check('Dwelling type: Riya’s is the list’s choice; Omar’s “Apartment” is kept in “Dwelling type as written”',
+  fv('Dwelling type') === 'Townhouse or row house' && omarF['Dwelling type'] == null && omarF['Dwelling type as written'] === 'Apartment', JSON.stringify([fv('Dwelling type'), omarF['Dwelling type'], omarF['Dwelling type as written']]));
 check('Riya’s profile fields: Province BC, House notes, Email opt-in yes, SMS opt-in no, Support 5',
   fv('Province') === 'BC' && /old supporter list/.test(fv('House notes') || '') && fv('Email opt-in') === true && fv('SMS opt-in') === false && fv('Support') === 5, JSON.stringify(rf.filter((f) => f.value != null).map((f) => [f.name, f.value])));
 const riyaRoles = (await api(`/persons/${riya.id}`)).json.roles.map((r) => r.role).sort().join(',');

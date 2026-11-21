@@ -15,12 +15,19 @@
 //   campaigns  { [id]: { id, slug, kind, title, excerpt, statement, goal, count, status } }
 //   payments   { ready, limit_cents, monthly_max_cents }  this year's limit (lib/cap.js)
 //   roles      [string]  the volunteer roles base.win offers
+//   guide      the voter guide as the public may see it (ext/voteguide
+//              publicGuide: not_out until published; a draft in a
+//              preview), with the server's clock at drawing (now) and the
+//              campaign's city and province for Directions
 //
 // A few small indexed reads; the page cache (cache.js) keeps the drawn page.
 import { VOLUNTEER_ROLES } from '@starbase/shared/canvass';
 import { SHIFT_KIND_CODES, SITE_KINDS, pinPoint } from '@starbase/shared/shiftkinds';
 import { capFor } from '../../lib/cap.js';
 import { paymentsReady } from './payments.js';
+import { city, province } from '../../lib/org.js';
+import { now as clockNow } from '../../lib/clock.js';
+import { guideFor, publicGuide } from '../voteguide/read.js';
 
 const iso = (d) => (d instanceof Date ? d.toISOString() : d ? new Date(d).toISOString() : null);
 const parseJ = (v, d) => (typeof v === 'string' ? JSON.parse(v) : (v ?? d));
@@ -67,7 +74,13 @@ export const loadEvents = async (q, ws, limit = 24, list = 'event') => (await q.
   };
 });
 
-export const loadData = async (q, ws, { posts = 24 } = {}) => {
+// The voter guide from its memo (one read of rev at most every 5 s).
+export const loadGuide = async (q, ws, { now = clockNow(), draft = false, siteId = null } = {}) => ({
+  ...publicGuide(await guideFor(q, ws), now, { draft, siteId }),
+  where: { city: city(), province: province() },
+});
+
+export const loadData = async (q, ws, { posts = 24, now, draft = false, siteId = null } = {}) => {
   const [postRows, events, shifts, members, sigs, campaigns, limits, ready] = [
     await loadPosts(q, ws, posts),
     await loadEvents(q, ws, 24, 'event'),
@@ -99,5 +112,6 @@ export const loadData = async (q, ws, { posts = 24 } = {}) => {
     }])),
     payments: { ready, ...limits },
     roles: VOLUNTEER_ROLES.map((r) => r.label),
+    guide: await loadGuide(q, ws, { now, draft, siteId }),
   };
 };

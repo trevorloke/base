@@ -39,7 +39,7 @@ test('the data: events hold the Event kind, openings every other kind; a shift w
   ok(await mgr.action('shift.createMany', { kind: 'canvass', location: 'Somewhere quiet', days: [ahead(2)], start: '10:00', end: '13:00' }));
 
   const data = await loadData(db, await siteWorkspace(db, ws));
-  assert.deepEqual(Object.keys(data).sort(), ['campaigns', 'counts', 'events', 'payments', 'posts', 'roles', 'shifts']);
+  assert.deepEqual(Object.keys(data).sort(), ['campaigns', 'counts', 'events', 'guide', 'payments', 'posts', 'roles', 'shifts']);
   assert.deepEqual(data.events.map((e) => e.title), ['Family picnic', 'Town hall'], 'the Event, and the one made before kinds');
   assert.deepEqual(data.shifts.map((e) => e.title), ['Burma Shave — King George Blvd at 88 Ave', 'Town hall', 'Phone bank — Campaign office'],
     'every other kind, and the one made before kinds — soonest first');

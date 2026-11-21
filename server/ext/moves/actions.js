@@ -21,7 +21,9 @@ import { httpError } from '../../actions/util.js';
 import { settleAddress } from '../../lib/address.js';
 import { forViewer } from '../../lib/viewer.js';
 import { NAME_ADDR } from '../../lib/matchkeys.js';
-import { DOOR_FIELDS } from '../fields/people.js';
+import { DOOR_FIELDS, doorFieldSql } from '../fields/people.js';
+import { choiceKey, choicesOf } from '../fields/kinds.js';
+import { makeAsWritten } from '../fields/convert.js';
 import { inMyTurf } from '../core/index.js';
 import { doorLists, mayMoveAnyone } from './lists.js';
 import { movedOpenWhere } from './open.js';
@@ -97,12 +99,13 @@ const pinOnFile = async (tx, ctx, moverId, to, lat, lng) => !!(await tx.query(
 )).rows[0];
 
 // The door's own fields (House notes, Building notes, Access type,
-// Dwelling type) come off, each voided as field.values.set voids one;
-// what they said is kept on the move for Undo. Home phone stays.
+// Dwelling type, and "Dwelling type as written" once it is a list) come
+// off, each voided as field.values.set voids one; what they said is kept
+// on the move for Undo. Home phone stays.
 const takeDoorFields = async (tx, ctx, personId, emit) => {
   const rows = (await tx.query(
     `select v.id, v.field_id, v.value from person_field_values v join person_fields f on f.id = v.field_id
-      where v.workspace_id = $1 and v.person_id = $2 and lower(f.name) = any($3::text[])
+      where v.workspace_id = $1 and v.person_id = $2 and ${doorFieldSql('f', '$3')}
       for update of v`,
     [ctx.workspaceId, personId, DOOR_FIELDS],
   )).rows;
@@ -254,21 +257,52 @@ export const actions = {
          m.from_lat, m.from_lng, m.from_status],
       );
       // The door's fields come back where nothing has been written since,
-      // and only to a field still in use.
+      // and only to a field still in use. A field that has become a list
+      // since (ext/fields convert.js) never gets a word it would refuse:
+      // that goes to "<name> as written", or, with no room for one, is left
+      // out and said.
       const restored = [];
+      const keptOut = [];
+      const fieldsNow = new Map((await tx.query(
+        'select * from person_fields where workspace_id = $1 and id = any($2::uuid[])',
+        [ctx.workspaceId, parseJ(m.from_door, []).map((d) => d.field_id)],
+      )).rows.map((f) => [f.id, f]));
       for (const d of parseJ(m.from_door, [])) {
+        let fieldId = d.field_id;
+        let value = d.value;
+        const f = fieldsNow.get(d.field_id);
+        if (f && !f.retired_at && (f.kind === 'choice' || f.kind === 'choices') && typeof value === 'string') {
+          const hit = choicesOf(f).find((c) => choiceKey(c) === choiceKey(value));
+          if (hit) value = f.kind === 'choices' ? [hit] : hit;
+          else {
+            try {
+              fieldId = (await makeAsWritten(tx, ctx, f, emit)).id;
+            } catch (e) {
+              if (!e.status) throw e;
+              keptOut.push(f.name);
+              continue;
+            }
+          }
+        }
         const vid = newId();
+        // Into "as written": joined to any words already there, never lost.
+        const join = fieldId !== d.field_id || f?.as_written_of
+          ? "do update set value = to_jsonb(left((person_field_values.value #>> '{}') || '; ' || (excluded.value #>> '{}'), 500)), updated_at = now()"
+          : 'do nothing';
         const row = (await tx.query(
           `insert into person_field_values (id, workspace_id, field_id, person_id, value, updated_by)
            select $1, $2, f.id, $3, $5::jsonb, $6 from person_fields f
             where f.id = $4 and f.workspace_id = $2 and f.retired_at is null
-           on conflict (field_id, person_id) do nothing
-           returning id`,
-          [vid, ctx.workspaceId, cur.id, d.field_id, JSON.stringify(d.value), ctx.user?.id || null],
+           on conflict (field_id, person_id) ${join}
+           returning id, value`,
+          [vid, ctx.workspaceId, cur.id, fieldId, JSON.stringify(value), ctx.user?.id || null],
         )).rows[0];
-        if (row) {
-          restored.push(d.field_id);
-          emit('person_field_value', vid, 'create', { id: vid, field_id: d.field_id, person_id: cur.id, value: d.value, source: 'move' });
+        if (row && row.id !== vid) {
+          restored.push(fieldId);
+          emit('person_field_value', row.id, 'update', { field_id: fieldId, person_id: cur.id, value: row.value, source: 'move' });
+        } else if (row) {
+          restored.push(fieldId);
+          emit('person_field_value', vid, 'create', { id: vid, field_id: fieldId, person_id: cur.id, value, source: 'move' });
         }
       }
       const undone = (await tx.query(
@@ -282,7 +316,10 @@ export const actions = {
         lat: m.from_lat, lng: m.from_lng, address_status: m.from_status, source: 'move', move_id: m.id, undone: true,
       });
       const p = (await tx.query('select * from persons where id = $1', [cur.id])).rows[0];
-      return { move: { ...moveOut(m), undone_at: undone.undone_at }, person: personOut(ctx, p), restored };
+      return {
+        move: { ...moveOut(m), undone_at: undone.undone_at }, person: personOut(ctx, p), restored,
+        ...(keptOut.length ? { door_words_kept_out: keptOut } : {}),
+      };
     },
   },
 };

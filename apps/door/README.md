@@ -11,6 +11,7 @@ database.
 | `base.win/imaginesurrey/desk` | the office — every area, the Website among them | managers, staff, treasurers (and anyone given an area); a volunteer is turned away |
 | `base.win/imaginesurrey/web…` | → `/imaginesurrey/desk/website` (the old back-office address) | |
 | `base.win/imaginesurrey/admin…` | → `/imaginesurrey/desk…` (the office's old address: the server sends it on as a path, so the browser stays on base.win) | |
+| `imaginesurrey.base.win/…` | → `base.win/imaginesurrey/…` — a short address that only sends people on (path and query kept; a form's POST keeps its body). Signing in, phone storage and offline copies stay at `base.win/imaginesurrey`, so there is one of each | anyone |
 
 The door passes requests through to the client's server with the path as it
 came. It checks no one: signing in, and who may open the desk, are the
@@ -58,6 +59,12 @@ use up everyone's.
    }
    ```
 
+   Some names are kept for base.win itself and the door won’t start with
+   them in the list: `ops, hub, api, admin, platform, _ops, _hooks, www,
+   door, status, help, mail, app, desk, field, site, login, assets, sample`
+   (`RESERVED` in door.mjs; the control centre at ops.base.win refuses the
+   same names, and builds this whole value for you on New campaign).
+
    `server` is an origin (no path). A config from before may say `ground`
    for it, and may still have `web` or `air` entries: `ground` is read as
    the server, the others are ignored.
@@ -70,7 +77,11 @@ use up everyone's.
    `X-Forwarded-For`; default 1).
 3. **The domain.** Point `base.win` at the door service (Render: Settings →
    Custom Domains → add `base.win`, then the DNS records it shows at your
-   registrar). Render issues the HTTPS certificate.
+   registrar). Render issues the HTTPS certificate. For a client's short
+   address, add `<client>.base.win` to the same door service the same way;
+   the door sends it on to `base.win/<client>` for any name in
+   `BASE_CLIENTS` (and for nothing else). A door on another domain sets
+   `BASE_APEX` to it (default `base.win`).
 4. **A new client** is a new server (its own service and database, with its
    own `BASE_PATH`) and one more entry in `BASE_CLIENTS`.
 

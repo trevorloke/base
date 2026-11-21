@@ -16,14 +16,21 @@
 @font-face {
   font-family: "Montserrat";
   font-style: normal;
-  font-weight: 100 900;
+  font-weight: 100 599;
+  font-display: swap;
+  src: url("fonts/montserrat-latin.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Montserrat";
+  font-style: normal;
+  font-weight: 600 900;
   font-display: swap;
   src: url("fonts/montserrat-latin.woff2") format("woff2");
 }
 @font-face {
   font-family: "Inter";
   font-style: normal;
-  font-weight: 100 900;
+  font-weight: 100 599;
   font-display: swap;
   src: url("fonts/inter-latin-ext.woff2") format("woff2");
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
@@ -31,7 +38,23 @@
 @font-face {
   font-family: "Inter";
   font-style: normal;
-  font-weight: 100 900;
+  font-weight: 600 900;
+  font-display: swap;
+  src: url("fonts/inter-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 599;
+  font-display: swap;
+  src: url("fonts/inter-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 600 900;
   font-display: swap;
   src: url("fonts/inter-latin.woff2") format("woff2");
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -85,6 +108,53 @@
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 
+/* The ready-made pairings' faces (WA decision 4; SIL Open Font License,
+   fonts/LICENCES/), each in latin and latin-ext. */
+@font-face { font-family: "Space Grotesk"; font-style: normal; font-weight: 300 700; font-display: swap; src: url("fonts/space-grotesk-latin.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Space Grotesk"; font-style: normal; font-weight: 300 700; font-display: swap; src: url("fonts/space-grotesk-latin-ext.woff2") format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Oswald"; font-style: normal; font-weight: 200 700; font-display: swap; src: url("fonts/oswald-latin.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Oswald"; font-style: normal; font-weight: 200 700; font-display: swap; src: url("fonts/oswald-latin-ext.woff2") format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Source Sans 3"; font-style: normal; font-weight: 200 900; font-display: swap; src: url("fonts/source-sans-3-latin.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Source Sans 3"; font-style: italic; font-weight: 200 900; font-display: swap; src: url("fonts/source-sans-3-italic-latin.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Source Sans 3"; font-style: normal; font-weight: 200 900; font-display: swap; src: url("fonts/source-sans-3-latin-ext.woff2") format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Source Sans 3"; font-style: italic; font-weight: 200 900; font-display: swap; src: url("fonts/source-sans-3-italic-latin-ext.woff2") format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Archivo Black"; font-style: normal; font-weight: 400; font-display: swap; src: url("fonts/archivo-black-400-latin.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Archivo Black"; font-style: normal; font-weight: 400; font-display: swap; src: url("fonts/archivo-black-400-latin-ext.woff2") format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Archivo"; font-style: normal; font-weight: 100 900; font-display: swap; src: url("fonts/archivo-latin.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Archivo"; font-style: italic; font-weight: 100 900; font-display: swap; src: url("fonts/archivo-italic-latin.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Archivo"; font-style: normal; font-weight: 100 900; font-display: swap; src: url("fonts/archivo-latin-ext.woff2") format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Archivo"; font-style: italic; font-weight: 100 900; font-display: swap; src: url("fonts/archivo-italic-latin-ext.woff2") format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "DM Serif Display"; font-style: normal; font-weight: 400; font-display: swap; src: url("fonts/dm-serif-display-400-latin.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "DM Serif Display"; font-style: normal; font-weight: 400; font-display: swap; src: url("fonts/dm-serif-display-400-latin-ext.woff2") format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "DM Sans"; font-style: normal; font-weight: 100 1000; font-display: swap; src: url("fonts/dm-sans-latin.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "DM Sans"; font-style: italic; font-weight: 100 1000; font-display: swap; src: url("fonts/dm-sans-italic-latin.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "DM Sans"; font-style: normal; font-weight: 100 1000; font-display: swap; src: url("fonts/dm-sans-latin-ext.woff2") format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "DM Sans"; font-style: italic; font-weight: 100 1000; font-display: swap; src: url("fonts/dm-sans-italic-latin-ext.woff2") format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Fraunces"; font-style: normal; font-weight: 100 900; font-display: swap; src: url("fonts/fraunces-latin.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Fraunces"; font-style: normal; font-weight: 100 900; font-display: swap; src: url("fonts/fraunces-latin-ext.woff2") format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Playfair Display"; font-style: normal; font-weight: 400 900; font-display: swap; src: url("fonts/playfair-display-latin.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Playfair Display"; font-style: normal; font-weight: 400 900; font-display: swap; src: url("fonts/playfair-display-latin-ext.woff2") format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Merriweather"; font-style: normal; font-weight: 400; font-display: swap; src: url("fonts/merriweather-400-latin.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Merriweather"; font-style: normal; font-weight: 700; font-display: swap; src: url("fonts/merriweather-700-latin.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Merriweather"; font-style: italic; font-weight: 400; font-display: swap; src: url("fonts/merriweather-400-italic-latin.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Merriweather"; font-style: normal; font-weight: 400; font-display: swap; src: url("fonts/merriweather-400-latin-ext.woff2") format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Merriweather"; font-style: normal; font-weight: 700; font-display: swap; src: url("fonts/merriweather-700-latin-ext.woff2") format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Merriweather"; font-style: italic; font-weight: 400; font-display: swap; src: url("fonts/merriweather-400-italic-latin-ext.woff2") format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Lato"; font-style: normal; font-weight: 400; font-display: swap; src: url("fonts/lato-400-latin.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Lato"; font-style: normal; font-weight: 700; font-display: swap; src: url("fonts/lato-700-latin.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Lato"; font-style: italic; font-weight: 400; font-display: swap; src: url("fonts/lato-400-italic-latin.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Lato"; font-style: normal; font-weight: 400; font-display: swap; src: url("fonts/lato-400-latin-ext.woff2") format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Lato"; font-style: normal; font-weight: 700; font-display: swap; src: url("fonts/lato-700-latin-ext.woff2") format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Lato"; font-style: italic; font-weight: 400; font-display: swap; src: url("fonts/lato-400-italic-latin-ext.woff2") format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Nunito"; font-style: normal; font-weight: 200 1000; font-display: swap; src: url("fonts/nunito-latin.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Nunito"; font-style: italic; font-weight: 200 1000; font-display: swap; src: url("fonts/nunito-italic-latin.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Nunito"; font-style: normal; font-weight: 200 1000; font-display: swap; src: url("fonts/nunito-latin-ext.woff2") format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Nunito"; font-style: italic; font-weight: 200 1000; font-display: swap; src: url("fonts/nunito-italic-latin-ext.woff2") format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Nunito Sans"; font-style: normal; font-weight: 200 1000; font-display: swap; src: url("fonts/nunito-sans-latin.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Nunito Sans"; font-style: italic; font-weight: 200 1000; font-display: swap; src: url("fonts/nunito-sans-italic-latin.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Nunito Sans"; font-style: normal; font-weight: 200 1000; font-display: swap; src: url("fonts/nunito-sans-latin-ext.woff2") format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Nunito Sans"; font-style: italic; font-weight: 200 1000; font-display: swap; src: url("fonts/nunito-sans-italic-latin-ext.woff2") format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+
 /* ── Defaults (so a page without its theme block still reads) ─────────── */
 :root {
   --brand: #3b3fd8;
@@ -113,6 +183,21 @@
   --action-row: #2a2d9c;
   --pop: transparent;
   --pop-alt: transparent;
+  /* How the heading face is drawn (theme: shared/site/fonts.js profileFor,
+     written by themeCss); these defaults are the plain ones. */
+  --heading-weight: 900;
+  --heading-tracking: 0.025em;
+  --heading-leading: 1.05;
+  --heading-case: none;
+  --heading-synthesis: weight style;
+  --wordmark-weight: 800;
+  --wordmark-tracking: -0.01em;
+  --wordmark-case: none;
+  --wordmark-size: 24px;
+  --title-weight: 900;
+  --title-tracking: normal;
+  --rail-weight: 900;
+  --rail-tracking: 0.025em;
   --btn-radius: calc(var(--radius) * 0.6);
   --wrap: 1120px;
   --gutter: 24px;
@@ -380,10 +465,12 @@ html.js .no-js-only {
 .display {
   margin: 0;
   font-family: var(--font-heading);
-  font-weight: 900;
+  font-weight: var(--heading-weight);
   font-size: clamp(36px, 6vw, 76px);
-  line-height: 1.05;
-  letter-spacing: 0.025em;
+  line-height: var(--heading-leading);
+  letter-spacing: var(--heading-tracking);
+  text-transform: var(--heading-case);
+  font-synthesis: var(--heading-synthesis);
   color: var(--heading);
   overflow-wrap: break-word;
   hyphens: auto;
@@ -396,22 +483,6 @@ html.js .no-js-only {
     0.1em 0.1em 0 var(--pop-c),
     0.12em 0.12em 0 var(--pop-c),
     0.14em 0.14em 0 var(--pop-c);
-}
-html[data-heading="inter"] .display,
-html[data-heading="system"] .display {
-  font-weight: 800;
-  letter-spacing: -0.025em;
-  line-height: 1.04;
-}
-html[data-heading="barlow-condensed"] .display {
-  font-weight: 800;
-  letter-spacing: 0.005em;
-  text-transform: uppercase;
-  line-height: 0.98;
-}
-html[data-heading="serif"] .display {
-  font-weight: 700;
-  letter-spacing: -0.01em;
 }
 .lede {
   margin: 0;
@@ -426,10 +497,9 @@ html[data-heading="serif"] .display {
 }
 .eyebrow {
   margin: 0;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0;
   color: var(--soft);
 }
 .on-dark .eyebrow,
@@ -577,6 +647,13 @@ html[data-heading="serif"] .display {
   background: var(--cta);
   color: var(--cta-ink);
 }
+/* On a brand or accent band the call to action carries an edge in the
+   band's text colour: a theme whose accent is its brand colour would
+   otherwise draw the button the colour of the band, as loose text. */
+.tone-brand .btn--primary,
+.tone-accent .btn--primary {
+  border-color: var(--text);
+}
 .btn--action {
   background: var(--action);
   color: var(--action-ink);
@@ -682,19 +759,12 @@ html[data-heading="serif"] .display {
 }
 .wordmark {
   font-family: var(--font-heading);
-  font-size: 24px;
-  font-weight: 800;
+  font-size: var(--wordmark-size);
+  font-weight: var(--wordmark-weight);
   line-height: 1.1;
-  letter-spacing: -0.01em;
+  letter-spacing: var(--wordmark-tracking);
+  text-transform: var(--wordmark-case);
   color: var(--link);
-}
-html[data-heading="montserrat"] .wordmark {
-  font-weight: 900;
-  letter-spacing: 0.02em;
-}
-html[data-heading="barlow-condensed"] .wordmark {
-  text-transform: uppercase;
-  font-size: 28px;
 }
 .nav-bar {
   display: flex;
@@ -1593,15 +1663,11 @@ select.input {
   color: var(--hl);
 }
 .campaign-title {
-  font-weight: 900;
+  font-weight: var(--title-weight);
+  letter-spacing: var(--title-tracking);
   font-size: clamp(28px, 3.2vw, 40px);
   line-height: 1.1;
   color: var(--heading);
-}
-html[data-heading="inter"] .campaign-title,
-html[data-heading="system"] .campaign-title {
-  font-weight: 800;
-  letter-spacing: -0.02em;
 }
 .campaign-form {
   flex: 1 1 380px;
@@ -2032,15 +2098,11 @@ html[data-heading="system"] .campaign-title {
 }
 .rail-title {
   margin: 0;
-  font-weight: 900;
+  font-weight: var(--rail-weight);
   font-size: clamp(30px, 4vw, 44px);
   line-height: 1.05;
-  letter-spacing: 0.025em;
+  letter-spacing: var(--rail-tracking);
   color: var(--heading);
-}
-html[data-heading="inter"] .rail-title {
-  font-weight: 800;
-  letter-spacing: -0.02em;
 }
 .rail-grid {
   display: grid;
@@ -2050,9 +2112,8 @@ html[data-heading="inter"] .rail-title {
 .rail-subtitle {
   margin: 0;
   font-size: 15px;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0;
   color: var(--muted);
 }
 .next-list {
@@ -2518,9 +2579,8 @@ html[data-heading="inter"] .rail-title {
 .share-sheet__label {
   margin: 0;
   font-size: 15px;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0;
   color: var(--muted);
 }
 .share-sheet__list {
@@ -2641,10 +2701,9 @@ html[data-heading="inter"] .rail-title {
 .footer-heading {
   margin: 0 0 12px;
   font-family: var(--font-body);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0;
   color: var(--hl);
 }
 .socials {
@@ -2702,6 +2761,18 @@ html[data-heading="inter"] .rail-title {
 .footer-authorization {
   display: block;
   margin-top: 4px;
+}
+/* The legal lines (©, Authorized by, the privacy link, the consent and
+   privacy line under a form) are always in the body font, as written: no
+   heading face, capitals or spacing a theme picks reaches them (WA). */
+.footer-bottom,
+.footer-bottom p,
+.footer-authorization,
+.footer-legal,
+.form-small {
+  font-family: var(--font-body);
+  text-transform: none;
+  letter-spacing: 0;
 }
 .footer-legal a,
 .footer-parent a {
@@ -2785,14 +2856,18 @@ html[data-heading="inter"] .rail-title {
 /* ── Languages (TR): Gurmukhi type, Chinese type, the switch ──────────────
    Noto Sans Gurmukhi (SIL OFL, fonts/noto-gurmukhi-OFL.txt) joins every
    theme face by name: it downloads only where Gurmukhi appears. System and
-   Serif use no web font, so a Punjabi page puts it ahead of them. Chinese
+   Serif use no web font, so a Punjabi page puts it ahead of them. Each
+   family's Gurmukhi faces use exactly the weight ranges of its Latin faces
+   (above): the browser picks one face per weight range, so a range only the
+   Gurmukhi file covers would draw Latin text in a fallback face. Chinese
    uses the reader's own CJK faces (--cjk), Latin words keep the theme's. */
 @font-face { font-family: "Inter"; font-style: normal; font-weight: 100 599; font-display: swap; src: url("fonts/noto-gurmukhi-400.woff2") format("woff2"); unicode-range: U+0A00-0A7F, U+200C-200D, U+25CC; }
 @font-face { font-family: "Inter"; font-style: normal; font-weight: 600 900; font-display: swap; src: url("fonts/noto-gurmukhi-700.woff2") format("woff2"); unicode-range: U+0A00-0A7F, U+200C-200D, U+25CC; }
 @font-face { font-family: "Montserrat"; font-style: normal; font-weight: 100 599; font-display: swap; src: url("fonts/noto-gurmukhi-400.woff2") format("woff2"); unicode-range: U+0A00-0A7F, U+200C-200D, U+25CC; }
 @font-face { font-family: "Montserrat"; font-style: normal; font-weight: 600 900; font-display: swap; src: url("fonts/noto-gurmukhi-700.woff2") format("woff2"); unicode-range: U+0A00-0A7F, U+200C-200D, U+25CC; }
-@font-face { font-family: "Barlow Condensed"; font-style: normal; font-weight: 100 599; font-display: swap; src: url("fonts/noto-gurmukhi-400.woff2") format("woff2"); unicode-range: U+0A00-0A7F, U+200C-200D, U+25CC; }
-@font-face { font-family: "Barlow Condensed"; font-style: normal; font-weight: 600 900; font-display: swap; src: url("fonts/noto-gurmukhi-700.woff2") format("woff2"); unicode-range: U+0A00-0A7F, U+200C-200D, U+25CC; }
+@font-face { font-family: "Barlow Condensed"; font-style: normal; font-weight: 600; font-display: swap; src: url("fonts/noto-gurmukhi-700.woff2") format("woff2"); unicode-range: U+0A00-0A7F, U+200C-200D, U+25CC; }
+@font-face { font-family: "Barlow Condensed"; font-style: normal; font-weight: 700; font-display: swap; src: url("fonts/noto-gurmukhi-700.woff2") format("woff2"); unicode-range: U+0A00-0A7F, U+200C-200D, U+25CC; }
+@font-face { font-family: "Barlow Condensed"; font-style: normal; font-weight: 800 900; font-display: swap; src: url("fonts/noto-gurmukhi-700.woff2") format("woff2"); unicode-range: U+0A00-0A7F, U+200C-200D, U+25CC; }
 @font-face { font-family: "Noto Sans Gurmukhi"; font-style: normal; font-weight: 100 599; font-display: swap; src: url("fonts/noto-gurmukhi-400.woff2") format("woff2"); unicode-range: U+0A00-0A7F, U+200C-200D, U+25CC; }
 @font-face { font-family: "Noto Sans Gurmukhi"; font-style: normal; font-weight: 600 900; font-display: swap; src: url("fonts/noto-gurmukhi-700.woff2") format("woff2"); unicode-range: U+0A00-0A7F, U+200C-200D, U+25CC; }
 html[data-heading="system"]:lang(pa), html[data-heading="serif"]:lang(pa) { --font-heading: "Noto Sans Gurmukhi", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
@@ -2818,8 +2893,10 @@ html:lang(zh) .campaign-title, html:lang(zh) .rail-title { font-family: var(--fo
 :lang(pa) .success-card__title, :lang(pa) .event-feature h3, :lang(pa) .footer-name, :lang(pa) .hero-title { line-height: 1.35; overflow: visible; }
 :lang(zh) .display, :lang(zh) .wordmark, :lang(zh) .campaign-title, :lang(zh) .rail-title, :lang(zh) .form-title,
 :lang(zh) .success-card__title, :lang(zh) .event-feature h3, :lang(zh) .footer-name, :lang(zh) .hero-title { line-height: 1.3; overflow: visible; }
-html[data-heading="barlow-condensed"]:lang(pa) .display { line-height: 1.35; }
-html[data-heading="barlow-condensed"]:lang(zh) .display { line-height: 1.3; }
+/* The heading face's own spacing, case and line height give way (WA
+   decision 12): one rule on its variables, whatever the face. */
+html:lang(pa) { --heading-tracking: normal; --heading-case: none; --heading-leading: 1.35; --wordmark-tracking: normal; --wordmark-case: none; --title-tracking: normal; --rail-tracking: normal; }
+html:lang(zh) { --heading-tracking: normal; --heading-case: none; --heading-leading: 1.3; --wordmark-tracking: normal; --wordmark-case: none; --title-tracking: normal; --rail-tracking: normal; }
 :lang(pa) .hero-word-wrap, :lang(zh) .hero-word-wrap { overflow: visible; }
 :lang(pa) .hero-title { min-height: 2.8em; }
 /* Back in English inside a translated page (a sentence not translated yet). */
@@ -2895,4 +2972,6 @@ html[data-heading="barlow-condensed"]:lang(zh) .display { line-height: 1.3; }
   .lang-switch { display: flex; width: 100%; }
   .lang-switch a { flex: 1 1 0; min-width: 0; min-height: 48px; padding: 0 6px; }
   .lang-note { padding: 0 16px 8px; text-align: left; }
+  /* "Read it in English" on its own line, one 48 px target. */
+  .lang-note a { display: flex; align-items: center; width: fit-content; min-height: 48px; }
 }

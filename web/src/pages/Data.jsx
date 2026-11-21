@@ -16,7 +16,7 @@ import { useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
 import { apiGet } from '../api.js';
 import { NeedsSignal, useOnline } from '../components/NoSignal.jsx';
-import { EXPORTS, ExportItem } from './Reports.jsx';
+import { BackupLeftOut, EXPORTS, ExportItem } from './Reports.jsx';
 import DriveSent from '../components/DriveSent.jsx';
 import './shifts.css';
 import './data.css';
@@ -83,6 +83,7 @@ export default function DataPage() {
           </div>
           <a className="btn ops-tap" href={at('/api/export')} download>Download everything</a>
         </div>
+        <BackupLeftOut me={me} />
       </section>
 
       <DriveSent tz={me?.workspace?.settings?.tz || me?.org?.tz || null} />

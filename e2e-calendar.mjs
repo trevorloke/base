@@ -310,6 +310,9 @@ try {
   const eday = ymd(new Date(Date.now() + 10 * 864e5));
   check('voting days set', (await api('/actions/vote.settings', { on: false, election_day: eday, advance_days: [adv1, adv2], auto: true })).status === 200);
   await page.goto(`${ADMIN}/voted`, { waitUntil: 'domcontentloaded' });
+  // Since the GOTV screen (batch 8), the voting days and their calendar
+  // button live on its Settings tab.
+  await page.getByRole('tab', { name: 'Settings' }).click();
   const gotv = page.getByRole('button', { name: 'Add to calendar' });
   await gotv.waitFor({ timeout: 10000 });
   await gotv.click();

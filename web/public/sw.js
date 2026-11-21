@@ -42,8 +42,10 @@
  *               (/p /n /v /u /e /d), feature pages served to people
  *               outside the app (/r receipts, /lu ladder unsubscribe,
  *               /o and /c email open and click tracking), /join links, and
- *               pictures in messages (/media),
- *               or any non-GET.
+ *               pictures in messages (/media), the campaign’s website
+ *               (/site/…, its languages and a draft’s preview), or any
+ *               non-GET. Only the app's own page (#root) is ever kept as
+ *               the page to open with no signal.
  *
  * Bump VERSION to throw every cache away on the next activate.
  *
@@ -81,7 +83,9 @@ const OLD_KEEP_MS = 24 * 3600 * 1000;
 // The server's own pages (unsubscribe, receipts, public lessons, tracking,
 // pictures, calendar files and links): straight to the network, never the
 // app shell.
-const NEVER = /^\/(?:api|u|bu|r|lu|o|c|join|media|learn|learn-files|cal)(?:\/|$)/;
+// The campaign's website (/site/…, its languages and a page's draft preview)
+// is a page of its own, never the app.
+const NEVER = /^\/(?:api|u|bu|r|lu|o|c|join|media|learn|learn-files|cal|site)(?:\/|$)/;
 // OpenStreetMap's tiles and CARTO's (the map's Clean look, the one it opens
 // on): kept from the first tile, without waiting for the map to say which it
 // draws — a worker just installed hears that a moment after its first tiles.
@@ -205,8 +209,10 @@ self.addEventListener('fetch', (event) => {
   }
   const path = inside(url.pathname);
   // The fonts include a heading face the app takes from the website's own
-  // folder (Montserrat, when the campaign's brand asks for it).
-  if (path.startsWith('/assets/') || path.startsWith('/fonts/') || path.startsWith('/site-assets/fonts/')) {
+  // folder (Montserrat, or any face base.win ships, when the campaign's brand
+  // asks for it), and a Google font the campaign added (WA): each file's
+  // address is its content's hash, so a kept copy is always right.
+  if (path.startsWith('/assets/') || path.startsWith('/fonts/') || path.startsWith('/site-assets/fonts/') || path.startsWith('/api/site/fonts/file/')) {
     event.respondWith(asset(req));
     return;
   }
@@ -275,6 +281,9 @@ async function staleWhileRevalidate(event, cacheName, key) {
 // build it points at — everything it loads, plus the lazy chunks those load.
 async function adoptIndex(res, previous) {
   const html = await res.clone().text();
+  // Only the app's own page (it mounts on #root): any other page the
+  // server answers in this scope never becomes the app kept for no signal.
+  if (!/<div id="root"/.test(html)) return;
   if (previous) {
     const old = await previous.clone().text().catch(() => '');
     // Same build: nothing to fetch — only files whose extra day is up go.
@@ -289,8 +298,9 @@ async function adoptIndex(res, previous) {
 // Vite's preload map) and "./Map-x1.js" (a chunk importing its neighbour).
 // The page also names the fonts' stylesheet, which names the font files
 // ("/fonts/…", the client's path in front when there is one), and the
-// campaign's own pictures: the links the server marks data-brand.
-const ASSET_REF = /\/?assets\/[A-Za-z0-9._-]+\.(?:js|css|svg|png|jpe?g|webp|gif|woff2?|ttf)\b/g;
+// campaign's own pictures: the links the server marks data-brand. Never the
+// website's "site-assets/…" (the voter guide's embed code names one).
+const ASSET_REF = /(?<![\w-])\/?assets\/[A-Za-z0-9._-]+\.(?:js|css|svg|png|jpe?g|webp|gif|woff2?|ttf)\b/g;
 const SIBLING_REF = /["'`]\.\/([A-Za-z0-9._-]+\.(?:js|css))["'`]/g;
 const FONT_REF = new RegExp(`["'(](${BASE}/fonts/[A-Za-z0-9._-]+\\.(?:css|woff2?))["')]`, 'g');
 const BRAND_LINK = /<link\b[^>]*\sdata-brand\b[^>]*>/gi;

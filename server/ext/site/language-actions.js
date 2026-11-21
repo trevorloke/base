@@ -29,18 +29,21 @@ import { OTHER_CODES } from '../../../shared/site/languages.js';
 import { newId } from '../../lib/events.js';
 import { httpError } from '../../actions/util.js';
 import { areasFor } from '../../lib/perms.js';
-import { keptNames, queueSweep, bumpRev, liveStrings, convertRow, markRetranslate } from './translate.js';
+import { keptNames, queueSweep, bumpRev, liveStrings, convertRow, markRetranslate, statementHashes } from './translate.js';
 import { parseJ } from './store.js';
 import { sectionOf } from './shape.js';
+import { LEGAL_LABELS } from './language-reads.js';
 
 export const legalProblem = (words, kept) => {
+  // Each line by the name its card carries on the screen, never its key.
   for (const k of LEGAL_KEYS) {
     const v = String(words?.[k] ?? '').trim();
-    if (!v) return `Fill in every line (${k} is empty)`;
-    if (v.length > 1000) return `${k} is too long — 1,000 characters at most`;
+    const name = LEGAL_LABELS[k] || k;
+    if (!v) return `Fill in ${name}`;
+    if (v.length > 1000) return `${name} is too long — 1,000 characters at most`;
     const want = slotsOf(LEGAL_ENGLISH[k]);
     const got = slotsOf(v);
-    if (want.join() !== got.join()) return `Keep ${want.map((x) => `{${x}}`).join(' and ') || 'no slots'} in the line (${k})`;
+    if (want.join() !== got.join()) return `Keep ${want.map((x) => `{${x}}`).join(' and ') || 'no slots'} in ${name}`;
   }
   const names = words?.names;
   if (names !== undefined && names !== null) {
@@ -79,7 +82,6 @@ export const editProblem = (src, text, kept = []) => {
   return null;
 };
 
-const STATEMENT = /^campaign:[^:]+:statement$/;
 const OWN = 'Someone else needs to check your own wording';
 const sentenceOf = async (tx, ws, hash) => (await liveStrings(tx, ws)).find((g) => g.hash === hash && g.cls !== 'legal') || null;
 const roleOf = async (tx, wsId, userId) => (userId
@@ -91,7 +93,12 @@ const roleOf = async (tx, wsId, userId) => (userId
 // failure forgotten, the language's rev bumped.
 const putLive = async (tx, wsId, { lang, hash, src, place, versionId, text, checkedBy = null }) => {
   const cur = (await tx.query('select version_id from site_translations where workspace_id = $1 and lang = $2 and src_hash = $3', [wsId, lang, hash])).rows[0];
-  if (cur && cur.version_id !== versionId) await tx.query("update site_translation_versions set state = 'replaced', decided_at = coalesce(decided_at, now()) where id = $1", [cur.version_id]);
+  if (cur && cur.version_id !== versionId) {
+    await tx.query("update site_translation_versions set state = 'replaced', decided_at = coalesce(decided_at, now()) where id = $1", [cur.version_id]);
+    // What Undo puts back: the words live until now (a suggestion goes live
+    // later than it was made, so its time says nothing).
+    await tx.query('update site_translation_versions set replaced_id = $2 where id = $1', [versionId, cur.version_id]);
+  }
   await tx.query(
     `insert into site_translations (id, workspace_id, lang, src_hash, src, text, origin, version_id, checked_by, checked_at, place)
      values ($1, $2, $3, $4, $5, $6, 'edited', $7, $8, case when $8::uuid is null then null else now() end, $9)
@@ -141,7 +148,8 @@ export const languageActions = (siteAction) => {
     const ws = { ...(ctx.workspace || {}), id: ctx.workspaceId };
     const g = await sentenceOf(tx, ws, v.src_hash);
     if (!g) throw httpError(404, 'That sentence isn’t on the website any more — reload the list');
-    if (STATEMENT.test(g.place) && ctx.role !== 'manager' && await roleOf(tx, ctx.workspaceId, v.made_by) !== 'manager') {
+    // A statement by its words, not by where they were first seen.
+    if ((await statementHashes(tx, ctx.workspaceId)).has(g.hash) && ctx.role !== 'manager' && await roleOf(tx, ctx.workspaceId, v.made_by) !== 'manager') {
       throw httpError(403, 'A manager needs to check a statement people sign');
     }
     const { names } = await keptNames(tx, ws);
@@ -167,9 +175,10 @@ export const languageActions = (siteAction) => {
         where t.workspace_id = $1 and t.lang = $2 and t.src_hash = any($3::text[]) for update of t`, [ctx.workspaceId, input.lang, input.src_hashes],
     )).rows;
     if (rows.length !== new Set(input.src_hashes).size) throw httpError(404, 'Some of those sentences have no words yet — reload the list');
+    const statements = await statementHashes(tx, ctx.workspaceId);
     for (const r of rows) {
       if (r.made_by === ctx.user.id) throw httpError(403, OWN);
-      if (STATEMENT.test(r.place || '') && ctx.role !== 'manager' && await roleOf(tx, ctx.workspaceId, r.made_by) !== 'manager') {
+      if (statements.has(r.src_hash) && ctx.role !== 'manager' && await roleOf(tx, ctx.workspaceId, r.made_by) !== 'manager') {
         throw httpError(403, 'A manager needs to check a statement people sign');
       }
     }
@@ -183,12 +192,16 @@ export const languageActions = (siteAction) => {
     const v = await version(tx, ctx, input.lang, input.version_id);
     const row = (await tx.query('select src, place, version_id from site_translations where workspace_id = $1 and lang = $2 and src_hash = $3 for update', [ctx.workspaceId, input.lang, v.src_hash])).rows[0];
     if (!row || row.version_id !== v.id || !v.made_by) throw httpError(409, 'These aren’t the live words any more — reload the list');
-    const prior = (await tx.query(
-      `select * from site_translation_versions where workspace_id = $1 and lang = $2 and src_hash = $3 and made_at <= $4 and id <> $5 and state = 'replaced'
-        order by made_at desc limit 1`, [ctx.workspaceId, input.lang, v.src_hash, v.made_at, v.id],
-    )).rows[0];
+    // Exactly the words this version took the place of: never one undone
+    // before (it is never anyone's replaced_id again), never by time.
+    const prior = v.replaced_id ? (await tx.query(
+      "select * from site_translation_versions where workspace_id = $1 and lang = $2 and src_hash = $3 and id = $4 and state = 'replaced'",
+      [ctx.workspaceId, input.lang, v.src_hash, v.replaced_id],
+    )).rows[0] : null;
     if (!prior) throw httpError(400, 'There are no earlier words to go back to');
-    await tx.query("update site_translation_versions set state = 'replaced', decided_by = $2, decided_at = now() where id = $1", [v.id, ctx.user.id]);
+    // Who undid it is on the event; decided_by stays what it was (an
+    // approval), so an undone version never reads as checked.
+    await tx.query("update site_translation_versions set state = 'replaced', decided_at = now() where id = $1", [v.id]);
     await tx.query("update site_translation_versions set state = 'live' where id = $1", [prior.id]);
     // Checked again only when someone other than the one undoing had approved them.
     const checkedBy = prior.origin === 'edited' && prior.decided_by && prior.decided_by !== ctx.user.id ? prior.decided_by : null;
@@ -197,6 +210,12 @@ export const languageActions = (siteAction) => {
         where workspace_id = $1 and lang = $2 and src_hash = $3`, [ctx.workspaceId, input.lang, v.src_hash, prior.text, prior.origin, prior.id, checkedBy],
     );
     if (input.lang === 'zh-Hans') { await convertRow(tx, ctx.workspaceId, v.src_hash, row.src, prior.text, row.place); await bumpRev(tx, ctx.workspaceId, 'zh-Hant'); }
+    // Traditional back to a conversion: made from the Simplified as it is
+    // now, which may have changed while the edit stood.
+    if (input.lang === 'zh-Hant' && prior.origin === 'converted') {
+      const hans = (await tx.query("select text from site_translations where workspace_id = $1 and lang = 'zh-Hans' and src_hash = $2", [ctx.workspaceId, v.src_hash])).rows[0];
+      if (hans) await convertRow(tx, ctx.workspaceId, v.src_hash, row.src, hans.text, row.place);
+    }
     await bumpRev(tx, ctx.workspaceId, input.lang);
     emit('site_translation', v.id, 'update', { lang: input.lang, src_hash: v.src_hash, state: 'replaced', undone: true, before: v.text, text: prior.text });
     return { version_id: prior.id };
@@ -233,8 +252,10 @@ export const languageActions = (siteAction) => {
     emit('site_legal_words', id, 'create', { lang: input.lang, words, english: LEGAL_ENGLISH, approved_by: ctx.user.id });
     return { id, lang: input.lang };
   }),
-  'site.translate.now': wordsAction(z.object({}), async (tx, ctx) => {
+  'site.translate.now': wordsAction(z.object({}), async (tx, ctx, input, emit) => {
     await queueSweep(tx, ctx.workspaceId);
+    // On the log: who asked for a sweep (it may spend the month's characters).
+    emit('site_translate_sweep', newId(), 'create', { at: new Date().toISOString() });
     return { queued: true };
   }),
   };

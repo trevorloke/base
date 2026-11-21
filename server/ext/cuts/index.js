@@ -14,6 +14,7 @@
 import { OUTCOMES } from '@starbase/shared/canvass';
 import { pointInPolygon } from '../../lib/geo.js';
 import { isMoneyTag } from '../../lib/viewer.js';
+import { gotvFor, scopeOf, votedCol } from '../voted/state.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DAYS = new Set(['7', '14', '30', '60']);
@@ -70,10 +71,16 @@ const personsWhere = async (db, ctx, query, w) => {
     for (const t of tags) w.where += ` and not (p.tags @> ${next(JSON.stringify(t))}::jsonb)`;
   }
 
+  // Voted, as this person may read it (ext/voted): with practice marks over
+  // it for someone practising, and only their own turfs' and phone bank's
+  // people while GOTV keeps a volunteer to them. The desk reads the column.
   const voted = str(query?.voted, 5);
-  if (voted === 'no') w.where += ' and p.voted_at is null';
-  else if (voted === 'yes') w.where += ' and p.voted_at is not null';
-  else if (voted) none();
+  if (voted === 'no' || voted === 'yes') {
+    const field = ctx.role === 'volunteer';
+    const g = field ? await gotvFor(db, ctx) : null;
+    w.where += ` and ${votedCol(g, 'p')} is ${voted === 'no' ? '' : 'not '}null`;
+    if (g?.limited) w.where += ` and p.id = any(${next([...(await scopeOf(db, ctx)).ids])}::uuid[])`;
+  } else if (voted) none();
 };
 
 export const hooks = { personsWhere };

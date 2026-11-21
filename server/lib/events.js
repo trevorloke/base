@@ -3,7 +3,13 @@
 // and the hash chain advance commit together or not at all. The events table
 // IS the audit trail — there is no dual write to drift.
 import { createHash, randomUUID } from 'node:crypto';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { runHooks } from './hooks.js';
+
+// Whether this code runs inside a write's transaction (lib/outside.js
+// refuses a call to another service from there).
+const writing = new AsyncLocalStorage();
+export const inWrite = () => writing.getStore() === true;
 
 // Canonical JSON: object keys sorted recursively, so the same payload always
 // hashes the same regardless of construction order.
@@ -26,12 +32,47 @@ export const chainHash = (prevHash, seq, action, entityType, entityId, op, actor
 // lock on the workspace so the per-workspace sequence is gapless and ordered.
 const EVENT_BATCH = 100;
 
-export const runAction = async (db, { workspaceId, actorId, action, clientTs }, handler) => {
-  return db.transaction(async (tx) => {
-    const ws = (await tx.query(
-      'select event_seq, last_event_hash from workspaces where id = $1 for update',
-      [workspaceId],
-    )).rows[0];
+// After commit: features that tell others what changed (the live GOTV feed,
+// ext/voted/live.js) register here. Each fn gets { workspaceId, action,
+// actorId, events } once the transaction has committed, outside it; its
+// errors are logged and never reach the write that already succeeded.
+const committed = [];
+export const onCommitted = (fn) => { committed.push(fn); };
+const tellCommitted = (info) => {
+  for (const fn of committed) {
+    try {
+      const r = fn(info);
+      if (r && typeof r.catch === 'function') r.catch((e) => console.error(`after commit (${info.action}): ${e.message}`));
+    } catch (e) { console.error(`after commit (${info.action}): ${e.message}`); }
+  }
+};
+
+// The campaign lock could not be had in time (lockTimeoutMs): 503, so a
+// phone's outbox keeps the write and tries again.
+const BUSY = 'Busy — will try again';
+
+// entry: the nonce of base.win support's visit this write is made in
+// (ext/operator): added to every event's payload, so History can say so.
+export const runAction = async (db, { workspaceId, actorId, action, clientTs, lockTimeoutMs, entry }, handler) => {
+  let told = null;
+  const out = await writing.run(true, () => db.transaction(async (tx) => {
+    // A write that must never wait long for the campaign's lock (a mark on
+    // a voting day) gives up after lockTimeoutMs instead of pinning a pool
+    // connection while it queues.
+    if (lockTimeoutMs) await tx.query(`set local lock_timeout = ${Math.max(1, Math.trunc(Number(lockTimeoutMs)))}`);
+    let row;
+    try {
+      row = (await tx.query(
+        'select event_seq, last_event_hash from workspaces where id = $1 for update',
+        [workspaceId],
+      )).rows[0];
+    } catch (e) {
+      if (lockTimeoutMs && (e.code === '55P03' || /lock timeout/i.test(e.message))) {
+        const busy = new Error(BUSY); busy.status = 503; throw busy;
+      }
+      throw e;
+    }
+    const ws = row;
     if (!ws) throw new Error('workspace not found');
 
     const pending = [];
@@ -50,7 +91,7 @@ export const runAction = async (db, { workspaceId, actorId, action, clientTs }, 
       seq += 1;
       // Normalize exactly as it will be stored (drops undefined, etc.) so the
       // hash we compute is the hash a verifier recomputes from the row.
-      const payload = JSON.parse(JSON.stringify(ev.payload ?? {}));
+      const payload = JSON.parse(JSON.stringify(entry ? { ...(ev.payload ?? {}), entry } : (ev.payload ?? {})));
       const payloadHash = sha256(canonical(payload));
       const hash = chainHash(prev, seq, action, ev.entityType, ev.entityId, ev.op, actorId, payloadHash);
       rows.push([seq, ev.entityType, ev.entityId, ev.op, JSON.stringify(payload), payloadHash, hash]);
@@ -75,8 +116,11 @@ export const runAction = async (db, { workspaceId, actorId, action, clientTs }, 
       'update workspaces set event_seq = $2, last_event_hash = $3 where id = $1',
       [workspaceId, seq, prev],
     );
+    if (committed.length && pending.length) told = { workspaceId, action, actorId: actorId || null, events: pending.map((e, i) => ({ ...e, seq: seq - pending.length + 1 + i })) };
     return { result, lastSeq: seq };
-  });
+  }));
+  if (told) tellCommitted(told);
+  return out;
 };
 
 // Replay the chain and verify every link. Streams by cursor batches so a

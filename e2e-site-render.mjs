@@ -33,6 +33,7 @@ import { renderSite, readSiteAsset, islandsBuilt } from './server/ext/site/rende
 import { rewriters } from './server/lib/mount.js';
 import { imagineSurrey, baseSample, samplePost, sampleData } from './server/test/site-samples.js';
 import { checkTheme, contrast, mix, PAIRS, SKINS } from './shared/site/theme.js';
+import { buildGuide, publicGuide } from './server/ext/voteguide/read.js';
 
 const PORT = Number(process.env.PORT) || 5150;
 const SHOTS = process.env.SHOTS || '/tmp/site-render';
@@ -133,6 +134,40 @@ for (let n = 0; THEMES.length < 16 && n < 400; n += 1) {
 const TONE_NAMES = ['paper', 'surface', 'brand', 'accent', 'ink'];
 const CLOSED = { ...baseSample.campaign, id: 'c-closed', slug: 'closed-one', title: 'A closed sample pledge', status: 'closed' };
 const SWEEP_DATA = sampleData({ [baseSample.campaign.id]: baseSample.campaign, [CLOSED.id]: CLOSED });
+// ── The voter guide's states (VG): two advance days and election day, ten days on ──
+const bcToday = new Date(Date.now() - 7 * 3600e3).toISOString().slice(0, 10);
+const dayPlus = (n) => new Date(Date.parse(`${bcToday}T00:00:00Z`) + n * 86400e3).toISOString().slice(0, 10);
+const bcAt = (day, hm) => Date.parse(`${day}T${hm}:00Z`) + 7 * 3600e3;
+const [VG1, VG2, VG3] = [dayPlus(10), dayPlus(11), dayPlus(13)];
+const VG_SHIFT = Object.fromEntries(Object.entries({
+  not_out: Date.now(), before: bcAt(dayPlus(9), '12:00'), open: bcAt(VG1, '10:00'), between: bcAt(VG1, '21:00'), over: bcAt(VG3, '21:00'),
+}).map(([k, t]) => [k, t - Date.now()]));
+const VG_WORDS = {
+  not_out: /Voting information isn’t out yet\./, before: /Voting starts/, open: /Voting is open now · until 8 p\.m\./,
+  between: /Next day to vote:/, over: /Voting is over\. Thank you for voting\./,
+};
+const VG_MODULE = { id: 'vg-1', kind: 'voterguide', props: { title: 'How to vote', intro: '', showBallot: true, cta: { label: '', href: '' } } };
+const VG_PAGE = { id: 'page-vg', slug: 'voter-guide', title: 'Voter guide', description: '', modules: [VG_MODULE] };
+const vgRows = (status) => ({
+  guide: {
+    status, title: '', official_url: 'https://elections.example.org/vote', official_label: 'Example City elections', vote_anywhere: true, ballot_note: '',
+    rules: { bring_listed: 'The official wording goes here.', who: 'The official wording goes here.' }, mail: {}, ride_phone: '604-555-0142', wait_url: '',
+    banner: true, embed_origins: [], checked: { days: { on: bcToday }, places: { on: bcToday }, ballot: { on: bcToday } }, rev: 1, updated_at: null,
+  },
+  days: [[VG1, 'advance'], [VG2, 'advance'], [VG3, 'general']].map(([day, kind]) => ({ day, kind, opens: '08:00', closes: '20:00' })),
+  places: [
+    ['p-1', 'Example Community Hall', '100 Example Ave', 49.11, 'Newton', [VG1, VG2, VG3]],
+    ['p-2', 'Sample Secondary School', '200 Sample St', 49.12, 'Fleetwood', [VG1, VG2, VG3]],
+    ['p-3', 'Example Library', '300 Example Rd', 49.13, 'Newton', [VG1, VG2]],
+  ].map(([id, name, address, lat, area, days], position) => ({
+    id, name, address, lat, lng: -122.8, city: '', pin: 'lookup', area, days: days.map((day) => ({ day })), accessible: position === 0 ? true : null, curbside: null,
+    note: '', closed_on: null, closed_note: '', external_id: null, position, changed_at: null, updated_at: null,
+  })),
+  contests: [{ id: 'c-1', office: 'Mayor', vote_for: 1, names: [{ name: 'Ann Example', ours: true }, { name: 'Bo Sample', ours: false }], position: 0 }],
+  gotvOnly: 0,
+  pages: [{ id: 'page-vg', slug: 'voter-guide', site_id: null, module: VG_MODULE }],
+});
+
 const SWEEP_PAGE = {
   id: 'page-sweep', slug: 'home', title: 'Every module', description: '',
   modules: [
@@ -176,6 +211,22 @@ const server = createServer(async (req, res) => {
   if (media && IMAGES[media[1]]) {
     const file = new URL(`./apps/web/public/images/${IMAGES[media[1]]}`, import.meta.url);
     return send(200, media[1] === 'is-logo' ? 'image/webp' : 'image/jpeg', readFileSync(file), { 'cache-control': 'max-age=3600' });
+  }
+  // The voter guide module (VG) in each of its states: /vg/<state>/, the
+  // guide drawn at a moment that puts it there (the island's clock answers
+  // the same moment).
+  const vg = /^\/vg\/([a-z_]+)(\/.*)?$/.exec(url.pathname);
+  if (vg && VG_SHIFT[vg[1]] !== undefined) {
+    const rest = vg[2] || '/';
+    const now = Date.now() + VG_SHIFT[vg[1]];
+    if (rest.startsWith('/site-assets/')) {
+      const a = readSiteAsset(rest.slice('/site-assets/'.length) + url.search);
+      return a ? send(200, a.type, a.body, { 'cache-control': a.cache }) : send(404, 'text/plain', 'no such file');
+    }
+    if (rest === '/api/guide/clock') return send(200, 'application/json', JSON.stringify({ now }));
+    const guide = { ...publicGuide(buildGuide(vgRows(vg[1] === 'not_out' ? 'draft' : 'published'), 'America/Vancouver'), now, {}), where: { city: 'Surrey', province: 'BC' } };
+    const r = renderSite({ kind: 'page', site: baseSample.site, page: VG_PAGE, data: { ...sampleData(), guide }, ctx: { root: `/vg/${vg[1]}/`, path: '/', origin: ORIGIN, islands: true } });
+    return send(r.status, 'text/html; charset=utf-8', r.html);
   }
   // The sweep: /sweep/<n>/ (every module) and /sweep/<n>/act (the campaign page) in THEMES[n].
   const sw = /^\/sweep\/(\d+)(\/.*)?$/.exec(url.pathname);
@@ -390,6 +441,17 @@ for (const key of ['is', 'base']) {
   check('IS: red Donate button in the header (#d81b1e)', look.donate === 'rgb(216, 27, 30)', look.donate);
   check('IS: yellow primary button on the hero', look.primary === 'rgb(255, 241, 0)', look.primary);
   check('IS: Montserrat 900 headings with the layered red shadow', /Montserrat/.test(look.font) && look.weight === '900' && /rgb\(216, 27, 30\)/.test(look.shadow) && look.fontsReady, `${look.font} ${look.weight} ${String(look.shadow).slice(0, 60)}`);
+  // The Latin files themselves draw the Latin words: TR's Gurmukhi faces
+  // share these family names, and a weight range only they cover once made
+  // the browser draw headings and body in a fallback face while
+  // document.fonts.check still said yes.
+  const latin = await page.evaluate(async () => {
+    const files = async (font) => (await document.fonts.load(font, 'Abc')).filter((f) => f.status === 'loaded').length;
+    const drawn = (sel) => getComputedStyle(document.querySelector(sel)).fontFamily.split(',')[0].replace(/["']/g, '').trim();
+    const bodyFace = drawn('body');
+    return { heading: await files('900 40px Montserrat'), body: await files(`400 17px "${bodyFace}"`), headingFace: drawn('.display'), bodyFace };
+  });
+  check('IS: the Latin Montserrat files load for Latin headings and body text', latin.heading > 0 && latin.body > 0 && latin.headingFace === 'Montserrat', JSON.stringify(latin));
   check('IS: yellow organize band, deep-navy footer', look.band === 'rgb(255, 241, 0)' && /rgb\(0, 4[01], 8[6-9]\)/.test(look.footer), `${look.band} ${look.footer}`);
 
   // Rotating words: they move, and stop when paused.
@@ -703,6 +765,23 @@ for (const key of ['is', 'base']) {
   await page.keyboard.press('Enter');
   check('keyboard: skipping lands on the main content', await page.evaluate(() => location.hash === '#main'));
   await page.context().close();
+}
+
+// ── The voter guide module in every state (VG), desktop and phone ──
+for (const state of Object.keys(VG_SHIFT)) {
+  for (const [width, height, mobile] of [[1360, 900, false], [390, 844, true]]) {
+    const page = await newPage({ width, height, mobile });
+    await page.goto(`${ORIGIN}/vg/${state}/`, { waitUntil: 'domcontentloaded' });
+    await hydrated(page).catch(() => {});
+    await sleep(300);
+    const a = await audit(page);
+    const words = ((await page.innerText('.vg').catch(() => '')) || '').replace(/\s+/g, ' ');
+    check(`voter guide ${state} at ${width}: its words, no sideways scroll, ids once, fields labelled`, VG_WORDS[state].test(words) && a.overflow <= 0 && !a.dupes.length && !a.unlabelled.length,
+      `${words.slice(0, 120)} ${JSON.stringify({ overflow: a.overflow, dupes: a.dupes, unlabelled: a.unlabelled })}`);
+    if (state === 'over' || state === 'not_out') check(`voter guide ${state} at ${width}: no place or name`, !/Example Community Hall|Ann Example/.test(words));
+    if (width === 390) await shot(page, `vg-${state}-390`);
+    await page.context().close();
+  }
 }
 
 // ── The theme sweep (THEMES, above): whatever an admin can save reads ──

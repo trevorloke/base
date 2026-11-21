@@ -235,6 +235,8 @@ create table if not exists site_translation_versions (
   decided_at timestamptz
 );
 create index if not exists site_translation_versions_hash_idx on site_translation_versions (workspace_id, lang, src_hash, made_at);
+-- The version a live one took the place of: Undo puts back exactly that one.
+alter table site_translation_versions add column if not exists replaced_id uuid;
 create table if not exists site_translation_failures (
   workspace_id uuid not null references workspaces(id) on delete cascade,
   lang text not null,
@@ -275,4 +277,35 @@ create table if not exists site_legal_words (
   approved_at timestamptz not null default now()
 );
 create index if not exists site_legal_words_lang_idx on site_legal_words (workspace_id, lang, approved_at);
+
+-- Google fonts a campaign added (WA, fonts.js): fetched from Google once and
+-- kept here, served from the site's own address. The files are stored
+-- exactly as Google served them, keyed by their SHA-256.
+create table if not exists site_fonts (
+  id uuid primary key,
+  workspace_id uuid not null references workspaces(id) on delete cascade,
+  slug text not null,
+  family text not null,
+  category text not null check (category in ('sans-serif','serif','display','handwriting','monospace')),
+  body_safe boolean not null default false,
+  licence text not null,
+  version text not null default '',
+  faces jsonb not null,
+  added_by uuid references users(id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz
+);
+create unique index if not exists site_fonts_slug_idx on site_fonts (workspace_id, slug) where deleted_at is null;
+create table if not exists site_font_files (
+  workspace_id uuid not null references workspaces(id) on delete cascade,
+  sha256 text not null,
+  bytes int not null,
+  data bytea not null,
+  created_at timestamptz not null default now(),
+  primary key (workspace_id, sha256)
+);
+-- A website picture's smaller copies (WA decision 26) are media rows of
+-- their own, pointing at the picture; the picture list leaves them out.
+alter table media add column if not exists size_of uuid;
 `;

@@ -67,7 +67,9 @@ export const seedSite = async (tx, ws, emit, brand) => {
   let order = 0;
   for (const p of seed.pages || []) {
     const id = newId();
-    const modules = checkModules(resolveRefs(p.modules || [], ids), { strict: true });
+    // Complete, though a generic seed's hero holds sample words (its first
+    // Publish asks for real ones).
+    const modules = checkModules(resolveRefs(p.modules || [], ids), { strict: true, samples: false });
     const content = { title: p.title, description: p.description || '', modules };
     await tx.query(
       `insert into site_pages (id, workspace_id, slug, title, description, draft, published, version, status, show_in_nav, nav_order, published_at)

@@ -42,7 +42,8 @@ test('the first look makes the site: settings, pages, petitions, counts and wher
 test('a volunteer gets 403 on every Website read and write; staff too, until a manager grants the area', async () => {
   const { id: pageId } = await page('home');
   const camp = ok(await mgr.get('/api/site/campaigns')).campaigns[0];
-  const reads = ['/api/site', `/api/site/pages/${pageId}`, '/api/site/posts', `/api/site/posts/${pageId}`, '/api/site/campaigns', `/api/site/campaigns/${camp.id}`, '/api/site/pictures', '/api/site/languages', '/api/site/languages/pa/sentences'];
+  const reads = ['/api/site', `/api/site/pages/${pageId}`, '/api/site/posts', `/api/site/posts/${pageId}`, '/api/site/campaigns', `/api/site/campaigns/${camp.id}`, '/api/site/pictures', '/api/site/languages', '/api/site/languages/pa/sentences', '/api/site/guide',
+    '/api/site/fonts', '/api/site/fonts/catalogue', '/api/site/fonts/sample?family=Lato', `/api/site/fonts/file/${'a'.repeat(64)}.woff2`];
   const writes = [
     ['site.settings.save', { org: { name: 'x' } }], ['site.page.create', { title: 'x' }], ['site.page.save', { id: pageId, title: 'x' }],
     ['site.page.publish', { id: pageId }], ['site.page.unpublish', { id: pageId }], ['site.page.duplicate', { id: pageId }],
@@ -50,6 +51,7 @@ test('a volunteer gets 403 on every Website read and write; staff too, until a m
     ['site.post.publish', { id: pageId }], ['site.post.delete', { id: pageId }], ['site.campaign.save', { kind: 'petition', title: 'x' }],
     ['site.campaign.close', { id: camp.id }], ['site.campaign.delete', { id: camp.id }], ['site.picture', { data: 'aGk=' }],
     ['site.page.restore', { id: pageId }], ['site.post.restore', { id: pageId }], ['site.campaign.restore', { id: camp.id }],
+    ['site.font.add', { family: 'Lato' }], ['site.font.remove', { slug: 'lato' }], ['site.font.restore', { slug: 'lato' }],
     ['site.microsite.create', { name: 'x' }], ['site.microsite.save', { id: pageId, name: 'x' }], ['site.microsite.domains', { id: pageId, domains: [] }],
     ['site.microsite.live', { id: pageId, live: true }], ['site.microsite.delete', { id: pageId }], ['site.microsite.restore', { id: pageId }],
     ['site.microsite.release', { id: pageId }],
@@ -57,6 +59,10 @@ test('a volunteer gets 403 on every Website read and write; staff too, until a m
     ['site.translation.save', { lang: 'pa', src_hash: 'a'.repeat(64), text: 'x' }], ['site.translation.approve', { lang: 'pa', version_id: pageId }],
     ['site.translation.decline', { lang: 'pa', version_id: pageId }], ['site.translation.check', { lang: 'pa', src_hashes: ['a'.repeat(64)] }],
     ['site.translation.undo', { lang: 'pa', version_id: pageId }], ['site.names.keep', { name: 'x', keep: true }],
+    ['site.guide.save', {}], ['site.guide.days', { days: [] }], ['site.guide.place.save', { name: 'x', address: 'y' }],
+    ['site.guide.place.delete', { id: pageId }], ['site.guide.place.restore', { id: pageId }], ['site.guide.places.order', { ids: [] }],
+    ['site.guide.places.import', { rows: [], token: 'x' }], ['site.guide.ballot', { contests: [] }], ['site.guide.check', { section: 'days', checked: true }],
+    ['site.guide.publish', {}], ['site.guide.unpublish', {}], ['site.guide.clear', {}], ['site.guide.embed', { origins: [] }], ['site.guide.page', {}],
     ['shift.public', { id: pageId, public: true }],
   ];
   for (const who of [vol.client, staff.client]) {

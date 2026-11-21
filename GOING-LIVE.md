@@ -32,7 +32,7 @@ also have `GOOGLE_MAPS_TILES=off` before the release is pushed (§5, Recipe B).
 ## 1 · Deploy
 
 1. Render → **New → Blueprint** → this repo, `main`. `render.yaml` creates
-   `starbase-staging` (from `main`) and `starbase` (from `production`), each
+   `base-win-staging` (from `main`) and `base-win` (from `production`), each
    with its own database.
 2. Wait for the first deploy, then open
    `https://<service>.onrender.com/api/health`. It answers
@@ -97,7 +97,7 @@ Every outside service, its settings and where each key comes from is in
 [INTEGRATIONS.md](INTEGRATIONS.md). The campaign's own values
 (`STARBASE_ORG_NAME`, `_JURISDICTION`, `_TZ`, `_CITY`, `_SLATES`) are in
 `render.yaml` already; change them there for another client. So is the
-brand: staging is `STARBASE_BRAND=base` with the name *Demo Campaign*, so it
+brand: staging is `STARBASE_BRAND=base` with the name *Sample Campaign* in Vancouver, so it
 can be shown to anyone; production is `imagine-surrey`. That is the look each
 starts from: once a manager saves the campaign's own in **Settings → Brand**,
 that one stays, whatever the setting says. A campaign already set up keeps
@@ -108,8 +108,9 @@ the candidates the code ships with (`shared/scale.js`).
 | Variable | Set it to | Needed for |
 |---|---|---|
 | `STARBASE_ENV` | `staging` on the staging service, `production` on production (set by `render.yaml`) | the *Staging* badge; `/api/health` |
+| `STARBASE_FRAME_HOSTS`, `STARBASE_DEMO_EMAIL`, `STARBASE_SAMPLE`, `STARBASE_SAMPLE_RESET` | staging only, and ignored on production: the sites that may frame the app; the account every demo visitor is signed in as at `/api/auth/demo`; `vancouver` to make the sample campaign once on an empty database; and a new word to drop everything in staging's database and make the sample again | the demo on the base.win website (`server/lib/demo.js`, `server/lib/samplecampaign.js`). Anyone who opens the demo can do whatever the demo account can, so that server holds the sample campaign and nobody real |
 | `STARBASE_ORG_NAME`, `STARBASE_JURISDICTION`, `STARBASE_TZ`, `STARBASE_CITY`, `STARBASE_SLATES`, `STARBASE_CANDIDATES` | the campaign (README → *One deployment per client*) | the name the first sign-up sets up, the contribution rules, the campaign's day, addresses, the slates a gift can go to, the rating scale's first candidates |
-| `STARBASE_PUBLIC_URL` | `https://starbase.imaginesurrey.ca` (staging: its own address) | every link in an email: invites, unsubscribe, receipts; calendar links and files |
+| `STARBASE_PUBLIC_URL` | `https://starbase.imaginesurrey.ca` (staging: its own address) | every link in an email: invites, unsubscribe, receipts, password links (Forgot password is off without it); calendar links and files |
 | `RESEND_API_KEY`, `MAIL_FROM` | from Resend; `Imagine Surrey <team@imaginesurrey.ca>` on the campaign's domain (Settings → Services → Email → *Sending domain* walks through its DNS records) | email; without it invites are shown to copy and sends wait as *queued* |
 | `STARBASE_TWO_STEP_KEY` | 32 or more random characters (`openssl rand -base64 32`), a different one per environment | two-step sign-in's keys sealed with a key the database doesn't hold (INTEGRATIONS.md) |
 
@@ -138,6 +139,8 @@ Then, as each one is ready:
 | `STARBASE_TILE_CLEAN` | `off` | never offer CARTO, key or not (the free map behind Google stays) |
 | `STARBASE_TILE_URL`, `STARBASE_TILE_ATTRIBUTION`, `STARBASE_TILE_MAX_ZOOM` | a tile provider the campaign has an agreement with: its `https://…/{z}/{x}/{y}.png` address, its credit line, its deepest zoom (§5, *The street map*) | the map's background, instead of the free tiles |
 | `STARBASE_TRUSTED_PROXIES` | leave unset on Render (one proxy). Set to the number of proxies in front if there is a CDN before Render | rate limits reading the right address |
+| `BASE_PLATFORM_PUBKEY` | the control centre's key: **ops.base.win → base.win’s key → Copy**, pasted here (never in `render.yaml` or git), then **Save and deploy** | **Open desk** from the control centre (section 8); while it's set and the campaign isn't made yet, sign-up here is closed — the control centre's first visit makes it |
+| `STARBASE_OWN_URL` | only if Render's own address is missing: `https://<service>.onrender.com` | the address the control centre's sign-in must name (Render sets `RENDER_EXTERNAL_URL` itself) |
 | `BASE_DOOR_KEY` | behind the base.win door only: the same 32 or more random characters (`openssl rand -base64 32`) as the door's `BASE_DOOR_KEY` (apps/door/README.md) | each visitor through base.win keeping their own address for the sign-in and form limits — without it, everyone who comes through the door counts as one |
 | `SITE_HOSTS` | the campaign's own domains, once the website moves onto base.win (`imaginesurrey.ca,www.imaginesurrey.ca`; §2) | the website at `/` there, nothing of the app (SITE.md) |
 | `APP_HOSTS` | the app's other addresses on this server, comma-separated: once `STARBASE_PUBLIC_URL` is base.win, the one people used before (`starbase.imaginesurrey.ca`); never the website's own domain | the app keeps answering there: none of them can be made the website's domain |
@@ -265,6 +268,10 @@ what volunteers get, and what you see under *Field app ↗* in your account menu
    may use.
 4. **Outreach → Connections**: the campaign's website address, which the
    public pages (unsubscribe, public lessons) link back to.
+
+With `BASE_PLATFORM_PUBKEY` set (section 3), skip step 1: open the campaign
+from the control centre instead (**Open desk**, or **Invite the first
+manager**), which makes the campaign and signs you in as *base.win support*.
 
 ## 5 · The lists and the map
 
@@ -550,30 +557,50 @@ on — so test it on staging, on a phone, before the week it matters.
 No test of ours has drawn the real street map: the browser tests run where
 the tile hosts can't be reached, on stand-in tiles. Look at it on staging.
 
+### Faith, Dwelling type and Campus
+
+Every campaign gets **Faith** (Private) once, and an empty Dwelling type or
+Campus becomes a pick list by itself, at the first boot (a background job).
+A Dwelling type or Campus with words on file stays Text until a manager
+turns it into a list: People → More → Profile fields → *Turn into a list*,
+go through *Needs you* (a bare "Apartment" or "Kwantlen" can't be
+guessed), then **Turn into a list** — do it when nobody is importing;
+nothing is lost (what doesn't fit stays in "… as written"). If the
+campaign keeps Faith, its privacy notice should say so, why, and how to
+have it removed, and that the change history keeps old values. Only a
+manager's backup and download carry Faith; staff and treasurers get
+theirs without it.
+
 ## 6 · A new client
 
-Each client is its own pair of services and its own databases; nothing is
-shared, and the code names no client.
+Each client is its own production service and its own database; nothing
+is shared, and the code names no client.
 
-1. Copy the two services and two databases in `render.yaml` under new
-   names (`starbase-<client>-staging`, `starbase-<client>`, and their
-   databases — names are unique per Render account), and set their
-   `STARBASE_*` values: the campaign's name, jurisdiction, time zone, city,
-   slates and first candidates, and `STARBASE_BRAND=base` on both (base.win's
-   own brand: `imagine-surrey` is Imagine Surrey's alone). Commit that
-   on `main`.
-2. Render → **New → Blueprint** → this repo: Render makes the new pair.
-   Put the secrets in (section 3), the domains (section 2), and run the
-   first sign-in on staging, then production (section 4).
+1. Use the control centre's **New campaign** (ops.base.win): it walks every
+   step in the Render dashboard — the campaign's values, one block to paste
+   into Render's Environment, the database and the service
+   (`base-win-<client>`, `base-win-<client>-db`), the address to paste back,
+   then the door's new value — and ticks a checklist as each part answers.
+   No git and nothing to hash (`apps/platform/README.md`).
+2. **Invite the first manager** there opens the new desk and invites them.
 3. One `main` serves every client: a change lands on every client's
    staging at once, and *Promote to production* moves it to every
    production at once. A client that must stay on an older version is a
    second `production-<client>` branch for its production service — avoid
    it unless they ask.
 
+The fallback, for us: copy the production block in `render.yaml` under new
+names (`base-win-<client>`, `base-win-<client>-db`) with its `STARBASE_*`
+values and `STARBASE_BRAND=base`, commit on `main`, and Render → **New →
+Blueprint** makes it.
+
 ## 7 · Before the public link goes out
 
 - `https://starbase.imaginesurrey.ca/` loads over https and signs in.
+- Forgot password, once, on production with your own account: **Forgot your
+  password?** → your email → the link in the email → a new password → you're
+  in. *This campaign can’t send email yet* means production has no email key
+  or no `STARBASE_PUBLIC_URL`.
 - A test newsletter reaches a real inbox with a working unsubscribe link.
 - Set the campaign’s mailing address, an email or phone, and the financial
   agent in **Website → Settings**: they go at the bottom of every email. Until
@@ -659,6 +686,49 @@ your counsel first whether voter data may go to Google Drive.
    then under More **Try opening Google Drive** (it works while Drive is
    still off, for managers only); turn Drive on; pick the shared-drive folder; leave *Who can send to Google
    Sheets* on **No one** until counsel has answered.
+
+## 8 · base.win support (the control centre)
+
+Every Render step ends with **Save and deploy** (not *Save only*), then
+waiting for *Live* (2–3 minutes).
+
+- **Open a campaign's desk:** ops.base.win → the campaign → **Open desk**. A
+  new tab opens on that campaign's own Render address, already signed in as
+  *base.win support*, with a bar across the top. Sign out from the bar when
+  done; a visit also ends by itself after 2 hours. Each visit shows on that
+  campaign's managers' Today (the last week), and every change it makes is
+  tagged on the campaign's log; on a person's History, the doors, calls,
+  sign steps, voted marks and merges it made say *(via base.win)*.
+- **The control centre's email** must be one only base.win support uses
+  (you+support@…), never the one you sign in with on a campaign: an
+  account the campaign made with its own password is never taken over, so
+  **Open desk** there is refused (*email-in-use*).
+- **Kept out of ops.base.win on a new browser** ("Too many tries" while a
+  stranger spends the per-email limit): sign in from a browser you used
+  before, or press **Generate** on `OPS_SETUP_CODE` (base-platform), Save and
+  deploy, and set up again. Setting up again and a recovery code each forget
+  every browser but the one that used it; the wrong-code lock forgets none,
+  so a browser you used before still gets in with a recovery code.
+- **A campaign's managers can stop it** any time: Settings → Members →
+  **base.win may sign in here** off. That also ends a visit in progress.
+- **Stop all base.win sign-in on one campaign, at once:** empty
+  `BASE_PLATFORM_PUBKEY` on its service, then Save and deploy. Entry stops,
+  and open visits end.
+- **Changing the control centre's signing key:**
+  1. Copy the current `PLATFORM_SIGNING_KEY` (base-platform → Environment)
+     somewhere safe first.
+  2. Press **Generate** on it, then set it to `<old>,<new>`: the old value,
+     a comma, the new one. The first value still signs.
+  3. On each campaign's service, set `BASE_PLATFORM_PUBKEY` to what
+     **base.win’s key** now shows — both public keys, the new one first
+     (`<new>,<old>`) — then Save and deploy. A campaign accepts either.
+  4. When **base.win’s key** no longer lists a campaign without the new key,
+     set `PLATFORM_SIGNING_KEY` to `<new>` alone.
+  5. Later, remove the old public key from each campaign. That also ends any
+     visit the old key opened.
+- **"base.win sign-in not set up"** on a campaign: `BASE_PLATFORM_PUBKEY` is
+  missing there, or its deploy hasn't finished (press **Check now** once it
+  says *Live*). **"Key in Render is wrong"**: copy base.win’s key again.
 
 ## What base.win does on its own
 

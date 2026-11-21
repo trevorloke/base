@@ -44,7 +44,10 @@ export function locFrom(ctx = {}) {
   if (root !== '/' && (path === root.slice(0, -1) || path.startsWith(root))) path = `/${path.slice(root.length)}`;
   if (!path.startsWith('/')) path = `/${path}`;
   if (!/^\/[A-Za-z0-9/_.~%-]*$/.test(path)) path = '/';
-  return { root, assets, media, origin, path };
+  // A campaign's added fonts (WA): under the site's own root, never a
+  // language's (one cached file for every language).
+  const fontAssets = cleanBase(ctx.fontAssets, assets);
+  return { root, assets, media, origin, path, fontAssets };
 }
 
 // A site link as the visitor's browser needs it: site paths under the site's

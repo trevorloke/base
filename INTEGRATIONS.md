@@ -12,7 +12,7 @@ is written) and says exactly what is wrong if anything is.
 |---|---|---|---|
 | [Database](#database) | everything the campaign records | yes | `DATABASE_URL` |
 | [Public address](#public-address) | links in email, texting's callbacks | yes | `STARBASE_PUBLIC_URL` |
-| [Email — Resend or SendGrid](#email--resend-or-sendgrid) | invites, newsletters, press, ladders, shift alerts, receipts; bounces and spam complaints back | yes | `RESEND_API_KEY`, `MAIL_FROM` (+ `RESEND_WEBHOOK_SECRET`); or `MAIL_PROVIDER=sendgrid`, `SENDGRID_API_KEY`, `SENDGRID_WEBHOOK_PUBLIC_KEY` |
+| [Email — Resend or SendGrid](#email--resend-or-sendgrid) | invites, newsletters, press, ladders, shift alerts, receipts, password links; bounces and spam complaints back | yes | `RESEND_API_KEY`, `MAIL_FROM` (+ `RESEND_WEBHOOK_SECRET`); or `MAIL_PROVIDER=sendgrid`, `SENDGRID_API_KEY`, `SENDGRID_WEBHOOK_PUBLIC_KEY` |
 | [Mailchimp](#mailchimp) | a list sent to the campaign's Mailchimp audience as a tag; unsubscribes and dead addresses back, and base.win's own out | no (only if the campaign builds its emails in Mailchimp) | `MAILCHIMP_API_KEY` (+ `MAILCHIMP_AUDIENCE_ID`, `MAILCHIMP_WEBHOOK_SECRET`) |
 | [Texting and calls — Twilio](#texting-and-calls--twilio) | the campaign's number: texts, text blasts, ladder texts, calls, SMS shift alerts | no (phones' own apps until then) | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` |
 | [Address lookup](#address-lookup) | suggestions as you type, placing people on the map | yes (free default, no key) | `GEOCODER`, `GEOCODER_FALLBACK`, `BC_GEOCODER_KEY`, `GOOGLE_MAPS_SERVER_KEY` |
@@ -22,6 +22,7 @@ is written) and says exactly what is wrong if anything is.
 | [Google Drive and Sheets](#google-drive-and-sheets) | lists, reports and tables sent to a new Google Sheet; files attached from Drive (or linked when too big); a Sheet or file read for the importer | no (Download CSV always works) | `GOOGLE_PICKER_KEY`, `GOOGLE_CLOUD_PROJECT_NUMBER` (+ Google sign-in's three) |
 | [Two-step sign-in key](#two-step-sign-in-key) | seals everyone's authenticator key | before the public link goes out (works without, with a warning) | `STARBASE_TWO_STEP_KEY` |
 | [Hosting — Render](#hosting--render) | the two environments | yes | `render.yaml` |
+| The control centre (ops.base.win; no vendor: base.win's own, `apps/platform/README.md`) | every campaign on one page; **Open desk** signs base.win support in to a campaign | no (each campaign works without it) | `BASE_PLATFORM_PUBKEY` on each campaign (its public key, pasted; never a secret) |
 | [GitHub Actions](#github-actions) | tests, and promoting staging to production | yes | none |
 | [The campaign's website](#the-campaigns-website) | sign-ups, petitions, volunteers, newsletter opt-ins in | when the website is ready | a website key (Settings → Services) |
 | [Website translation — Google](#website-translation--google) | the campaign's website in ਪੰਜਾਬੀ, 简体 and 繁體, made ahead of time | no (the website stays English) | `GOOGLE_TRANSLATE_KEY` |
@@ -52,10 +53,12 @@ built-in database on the server's disk (`STARBASE_DATA`, default
 
 `STARBASE_PUBLIC_URL` — this environment's own `https://` address
 (`https://starbase.imaginesurrey.ca`; staging its own). Every link in an
-email (invites, unsubscribe, receipts, pictures) is built from it, and so are
+email (invites, unsubscribe, receipts, pictures, password links) is built from it, and so are
 the addresses Twilio is told to call back (delivery reports, calls). Without
 it, links use whatever address the page was opened at, background sends
-(receipts) carry no link, and calls through the campaign's number are off.
+(receipts) carry no link, calls through the campaign's number are off, and
+Forgot password says to ask a manager (a password link is never built from
+the address a request came to).
 
 **Check:** Services → Public address fetches `<address>/api/health` and
 makes sure it's this base.win.
@@ -101,8 +104,10 @@ each address, so nothing more is set up at the sender; an address at any
 other domain is refused before it is saved (a secondary site's domain is a
 later step). The tracked links, the open pixel and every unsubscribe link
 stay on the main site's address (`STARBASE_PUBLIC_URL`). System mail —
-invites, shift notices, receipts, two-step, ladders — always goes from
-MAIL_FROM.
+invites, shift notices, receipts, two-step, password links, ladders — always
+goes from MAIL_FROM. Password links (Forgot password, a manager's Password
+link) need a sender: without one Forgot says to ask a manager, and a
+manager's link is shown to copy.
 
 **Resend**
 
@@ -874,6 +879,32 @@ translated: a manager approves them per language.
 - **Tests** use `server/test/fake-translate.js` through
   `GOOGLE_TRANSLATE_API_BASE`; no test calls Google.
 
+## Google Fonts (no key, no account)
+
+The website can use any of Google's fonts (Website → Theme → **Change
+fonts**; SITE.md "Fonts"). base.win keeps the list itself
+(`shared/site/google-fonts.json`, a snapshot of the public
+github.com/google/fonts repository, made by
+`scripts/google-fonts-catalogue.mjs`), and twelve ready-made pairings ship
+with their files. When a manager picks a font the site doesn't have yet,
+base.win's server fetches it from Google **once, at that moment**
+(fonts.googleapis.com's stylesheet, then the latin and latin-ext woff2 files
+from fonts.gstatic.com, outside any write) and keeps the files in the
+database. Visitors and the desk load fonts only from base.win's own address:
+no visitor's IP address goes to Google, the privacy policy needs no change,
+and the pages' CSP stays `font-src 'self'`. The previews in the font sheet
+(a few letters of a font not added yet) are fetched by the server too.
+
+- **Nothing to set.** Fonts are free under SIL OFL 1.1, Apache 2.0 or the
+  Ubuntu Font Licence; `{site}/site-assets/fonts/licences` lists the site's.
+- **If Google can't be reached** the sheet says "Google Fonts didn't answer.
+  Try again in a minute. Your site keeps its current fonts." Fonts already
+  added keep working. A backup brought back without the files fetches them
+  again by itself (a job, `site.font.refetch`).
+- **Tests** use `server/test/fake-google-fonts.js` through
+  `GOOGLE_FONTS_CSS_BASE` and `GOOGLE_FONTS_FILE_HOSTS` (both ignored in
+  production); no test calls Google.
+
 ## Online payments — Stripe
 
 [stripe.com](https://stripe.com). Gifts once or monthly and membership dues
@@ -1211,8 +1242,8 @@ importing.
 
 ## Hosting — Render
 
-`render.yaml` is a Render Blueprint: `starbase-staging` (deploys every push to
-`main`) and `starbase` (deploys the `production` branch), each with its own
+`render.yaml` is a Render Blueprint: `base-win-staging` (deploys every push to
+`main`) and `base-win` (deploys the `production` branch), each with its own
 Postgres. Settings marked `sync: false` are asked for when the Blueprint is
 created and are set per service afterwards. GOING-LIVE.md is the order to do
 it in.

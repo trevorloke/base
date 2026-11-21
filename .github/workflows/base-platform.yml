@@ -1,0 +1,26 @@
+name: Base control centre
+
+# base.win's control centre (apps/platform): its tests in memory and over
+# the Postgres wire protocol (node-postgres, as on Render), run when it or
+# what it borrows changes (server/lib, shared/, web/src/app.css, the root
+# dependencies). ci.yml also runs the in-memory tests on every change.
+on:
+  push:
+    branches: [main]
+    paths: ['apps/platform/**', 'apps/door/door.mjs', 'render.yaml', 'server/lib/**', 'server/test/entry-vector.json', 'shared/**', 'web/src/app.css', 'package.json', 'package-lock.json', 'scripts/test-pg.mjs', '.github/workflows/base-platform.yml']
+  pull_request:
+    paths: ['apps/platform/**', 'apps/door/door.mjs', 'render.yaml', 'server/lib/**', 'server/test/entry-vector.json', 'shared/**', 'web/src/app.css', 'package.json', 'package-lock.json', 'scripts/test-pg.mjs', '.github/workflows/base-platform.yml']
+
+jobs:
+  platform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run test:platform
+      - name: Over the Postgres wire protocol (node-postgres, as on Render)
+        run: npm run test:platform:pg

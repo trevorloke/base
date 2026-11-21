@@ -68,7 +68,7 @@ export const setOptIn = async (tx, ws, personId, channel, value, emit) => {
   )).rows[0];
   const alive = (await tx.query('select 1 from persons where id = $1 and workspace_id = $2 and deleted_at is null', [personId, ws])).rows[0];
   if (!f || !alive) return;
-  await fieldActions['field.values.set'].handler(tx, { workspaceId: ws, user: null }, { person_id: personId, values: [{ field_id: f.id, value }] }, emit);
+  await fieldActions['field.values.set'].handler(tx, { workspaceId: ws, user: null, form: true }, { person_id: personId, values: [{ field_id: f.id, value }] }, emit);
 };
 
 const personTags = async (tx, ws, personId) => (personId

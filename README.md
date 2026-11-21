@@ -174,6 +174,57 @@ a lock, a reset and the requirement are on the event log (nothing secret in it).
 Keys are sealed with `STARBASE_TWO_STEP_KEY` (INTEGRATIONS.md); the tables
 (`server/ext/twostep`) are never in the export. The how: `server/lib/twostep.js`.
 
+### Forgot password
+
+**Forgot your password?** under Sign in asks for the email and says, whatever
+the address, that a link is on its way. The link works once, for 30 minutes;
+it opens **Choose a new password**, which signs that person out everywhere
+else and still asks the two-step code when it's on. It is built only from
+`STARBASE_PUBLIC_URL` (never the address a request came to) and carries its
+token after `#`, so it never reaches a server log; only the token's hash is
+kept. Three asks an hour per email and ten per address, at most three live
+links, and a new ask never ends an earlier one. Without a sender or
+`STARBASE_PUBLIC_URL`, and on the public demo, the screen says to ask a
+manager instead: **Settings → Members → Password link** on someone's row
+(not yourself, not another manager, not anyone in another campaign on the
+same server) makes a 24-hour link — emailed to them and never shown when
+email is set up, shown with Copy when it isn't; a link whose email doesn't
+go is ended at once. It needs `STARBASE_PUBLIC_URL` too (without it the
+button isn't shown). Both are on the event log, never the link
+(`server/ext/passwords`).
+
+### base.win support: opening a campaign from the control centre
+
+base.win's control centre (ops.base.win, `apps/platform/README.md`) lists
+every campaign and opens any campaign's desk with one tap, already signed
+in. The visit lands on the campaign's own Render address
+(`…onrender.com/admin`), never base.win/<name>, so it can't reach another
+campaign. It comes in as the member **base.win support** (a manager, with no
+password: only the control centre opens it), or as the operator's own
+account when that is already on the team — whose role never changes (a
+volunteer stays a volunteer; Enter says so). The control centre signs a
+one-minute token (Ed25519); the campaign checks it against
+`BASE_PLATFORM_PUBKEY`, its own address, its environment and its instance,
+uses it once and signs in for two hours (`POST /api/auth/operator`,
+`server/lib/entry.js`, `server/ext/operator`).
+
+The campaign always knows: a bar across the top while support is in
+(*You’re in as base.win support · until 4:10 pm* · Sign out), the member on
+Settings → Members with its chip, a line on managers' Today (*base.win
+support signed in · Tue 3:10 pm*, the last week), and every event the visit
+writes tagged: on a person's History, the doors, calls, sign steps, voted
+marks and merges it made say *(via base.win)*. A manager turns
+**base.win may sign in here** off under Settings → Members, which also ends
+a visit in progress; support can't change it, its own two-step or Google,
+or make password links. People support invited stay on the team. On the
+public demo the switch is hidden and support's email is shown only to it.
+While `BASE_PLATFORM_PUBKEY` is set and no campaign exists yet, first-run
+sign-up is closed: the control centre's first visit makes the campaign.
+`/api/health` shows what the control centre needs and nothing about people:
+`ownOrigin`, `instance`, `address`, `entry` (`ready`, `no-key`, `bad-key`,
+`no-origin`), `platformKids`, `setupOpen`, `campaignMade` (a workspace
+exists) and `doorKey`.
+
 ### Email from a person's page
 
 The person read tells the desk whether someone may be written to one to one
@@ -485,7 +536,35 @@ than a week after they came off is refused. Contacts are door, phone, text or
   last three were added to every campaign once, by themselves; one renamed
   or taken off is never put back). The People export has a column for each
   profile field, named as the field (Pick several as *Punjabi; Hindi*), so
-  it imports straight back. Every person has a
+  it imports straight back. **Dwelling type** is a pick list (House ·
+  Townhouse or row house · Suite in a house · Low-rise apartment (1–4
+  floors) · High-rise apartment (5+ floors) · … — plain words for any
+  city), shown as a scroll-down list; **Campus** is one pick naming school
+  and campus (KPU Surrey, KPU Cloverdale, SFU Surrey; a paper form's other
+  words go to the person's Notes, never refusing the form); **Faith** is one
+  pick (Surrey's faiths, the Christian churches named one by one, Prefer not
+  to say) and **Private**. A Pick one field can *Show as* buttons or a
+  scroll-down list. **Private** (any field a manager marks; Faith from the
+  start): set by the office only, never shown to volunteers, never a tag,
+  left out of the People CSV unless a manager asks for it (`?private=1`),
+  left out of a non-manager's full backup and event log (blanked there,
+  with a `left_out` note), and never picks people for a list that is
+  walked, called, sent to CallHub or Mailchimp, emailed, texted or copied
+  (*This list picks people by Faith, which is private …*); such a list's
+  CSV is a manager's only, and Google Sheets never gets it. A Text field
+  with words on file whose words suit a list (at most 500 different, or the
+  40 most common cover 80 % of people) can be **turned into a list**: the
+  manager says where each word goes; what doesn't fit is kept as written
+  in "<name> as written", right after it — no word is lost. It runs in the
+  background, 1,000 values at a time (Stop keeps what's done). Choice words
+  match in any case, with ' for ’ and " - " for " – ". On a profile Faith
+  shows its top choices with Christian opening the churches; "… as written"
+  words show read-only with a Clear; the desk's offline copy never keeps a
+  Private value ("Needs signal"). The import asks what each word in a Pick
+  one column means (a choice, Keep as written or Leave blank) and never
+  refuses a row for a word not on the list. A manager's People download has
+  an "Include private fields" tick (Google Sheets never gets them). A renamed or taken-off
+  standard field is never put back by the membership form. Every person has a
   **House number** of its own, apart from the street (the door card, the
   profile and *Add a person* ask for both; the address line reads 13450 104
   Ave, and a number typed into the street is split out). The import takes a
@@ -649,6 +728,52 @@ than a week after they came off is refused. Contacts are door, phone, text or
   offers *Needs a ride to vote*, a request for the drivers. Shift roles
   include Driver, Scrutineer (a voting place), Runner, Poll greeter and Zone
   house captain.
+- **Live GOTV**: a manager posts
+  volunteers as **scrutineers** at the voter guide's voting places, or as
+  **runners** for any place, and can make an election-day **sign-in code**
+  (a link and QR, once, 15 minutes) whose sign-in works for *Who voted*
+  only. Scrutineers find one person by name, street or voter number
+  (`GET /api/gotv/find`: at most 8, nothing about who voted; 120 a minute,
+  5,000 a day) and mark them; their answer never says whether that person
+  had voted already, and they can undo their own mark for 15 minutes.
+  **Names from a voting place reach the office only after that place
+  closes** (its own hours from the voter guide, else a manager's closing
+  time for the day, else the guide's day; nothing assumed), by every route
+  (a scrutineer, a runner, the desk's sheet, a file), until a manager
+  presses *Polls are closed — send names now* or records the Chief Election
+  Officer's yes and switches to *As soon as entered*. Names kept on a
+  phone are judged by the day they were written (`GET /api/gotv/open`), so
+  a name written at 19:58 is still matched after midnight, within the
+  day's work window; one matched to the wrong person and taken back goes
+  back to be matched again. Door, phone and desk
+  marks are never held. Marks reach canvassers within seconds on a live
+  feed (`GET /api/voted/live`, server-sent events, plus
+  `/api/voted/changes?since=` to catch up), only for the people in their
+  own turfs and phone banks — while GOTV is on a volunteer's People, Calls,
+  map and History of who voted are kept to those (a manager may choose
+  *Anywhere in the city*). **Off · Practice · On**: practice runs with the
+  people posted plus those a manager ticks, writes nothing to the real
+  record, shows to nobody else, and is wiped when it ends. One server holds
+  every stream: no deploys on voting days.
+  **The screens**: *Get out the vote* (`/voted`, the desk) has the switch
+  **Off · Practice · On** (managers; it asks first), the held line while
+  scrutineers' names wait for the Chief Election Officer's answer, four
+  numbers (supporters voted, marked in the last hour, scrutineers on duty,
+  To check) and five tabs: **Turnout** (by turf, most not marked yet
+  first, live), **Voting places** (the voter guide's, with *Enter a sheet*
+  and a flag for a place silent 45 minutes), **Scrutineers** (posts,
+  *Signed in*, *Appointed*, the sign-in code's QR), **To check** (names a
+  scrutineer couldn't match: *Find* or *Not ours*) and **Settings** (voting
+  days, closing times from the guide or typed, when names are sent, who
+  sees who voted, a voted file, and the nine-line **Ready** list).
+  **Who voted** (`/gotv`) is the scrutineer's and runner's screen: a few
+  letters, one tap, the next name; before close, or with no signal, or
+  when a look-up takes 4 s, the typed name is kept on the phone and
+  matched later. While someone is on duty, *Enter who voted* is their
+  Today's one button. The walk list, map, Calls and Today follow the live
+  feed (one stream per browser, polling when it drops: *Live* or *Updated
+  3 min ago*); in a GOTV pass a door whose supporters all voted fades and
+  leaves with *1 door left your list — they voted*.
 - **Scheduling by tap** (Shifts → **Week**, the desk's): each day is a
   list of its shifts in start order — *Early* (before 9), *Morning*,
   *Afternoon*, *Evening* — any number to a part, and a card shows the kind,
@@ -842,6 +967,9 @@ with its receipt; a monthly gift is a pledge, each month its own gift.
 
 Addresses are looked up with the BC Address Geocoder (`server/lib/geocode.js`;
 `GEOCODER=bc|nominatim|off`, `BC_GEOCODER_KEY`, `GEOCODE_MIN_SCORE`).
+The voter guide's address lookups and place import share the B.C.
+service's rate with everything else: set `BC_GEOCODER_KEY` before a guide
+goes live (SITE.md "The voter guide").
 Google no longer places pins (its terms let a Google pin be kept 30 days
 only and not on another map): `GEOCODER=google` places with B.C. and
 `GEOCODER_FALLBACK=google` is ignored, each said once and on Settings →
@@ -1083,7 +1211,9 @@ MAIL_FROM.
 
 Set `STARBASE_PUBLIC_URL` (e.g. `https://starbase.imaginesurrey.ca`) so links
 in outbound mail — newsletter unsubscribe footers, invite links, the
-pictures in a message, calendar links — point at the public host. Every newsletter and ladder email ends with "Sent by <campaign>"
+pictures in a message, calendar links — point at the public host. Password
+links are built from it alone: without it Forgot password says to ask a
+manager. Every newsletter and ladder email ends with "Sent by <campaign>"
 and the reader's own unsubscribe link, and carries `List-Unsubscribe` /
 `List-Unsubscribe-Post` headers so mail apps show their own Unsubscribe
 button. Someone who unsubscribed can only rejoin by signing up again — the
@@ -1586,6 +1716,8 @@ environment (`server/lib/org.js`); the code names no client.
 | `STARBASE_BRAND` | `imagine-surrey` or `base` — the brand a campaign starts from, until a manager saves its own in Settings → Brand (*The look and the brand*, above) | `base` on staging or for another campaign; else Imagine Surrey's |
 | `SITE_HOSTS` | the campaign's own domains (`imaginesurrey.ca,www.imaginesurrey.ca`): the website at `/` there, nothing of the app — written with a final dot too (`imaginesurrey.ca.`), it's the same domain (SITE.md) | blank: the website is at `/site/` only |
 | `APP_HOSTS` | the app's other addresses on this server (`starbase.imaginesurrey.ca` once base.win is the public one): never made a website domain, so the app keeps answering there (SITE.md) | blank |
+| `BASE_PLATFORM_PUBKEY` | the control centre's public key (ops.base.win → base.win’s key; 43 characters; two, comma-separated, while it changes its key): lets base.win support open this desk, and closes first-run sign-up until the first visit makes the campaign. Pasted in Render, never in git (`sync: false`); emptied, all entry stops and open visits end | blank: no entry (`/api/health` says `no-key`) |
+| `STARBASE_OWN_URL` | this server's own origin (`https://<service>.onrender.com`), the address an entry token must name — only when Render's `RENDER_EXTERNAL_URL` is missing or wrong | `RENDER_EXTERNAL_URL` |
 | `SITE_SECRET` | signs the website's preview and email-preference links (16+ characters); each campaign's signing secret for a ladder's *Send to a web address* step is made from it, so changing it changes that secret and breaks those links in every email already sent — to change only the signing secret, the step's *Make a new secret* (INTEGRATIONS.md) | blank: one is made and kept in the database |
 
 Two environments per client: **staging** deploys every push to `main`,

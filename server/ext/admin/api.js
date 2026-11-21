@@ -4,6 +4,7 @@
 import { Hono } from 'hono';
 import { AREAS, BASE, permsOf, decideArea, AREA_KEYS } from '../../lib/perms.js';
 import { learnName } from '../../lib/brand.js';
+import { SUPPORT_SQL, emailShown } from '../operator/index.js';
 
 export const api = new Hono();
 const parseJ = (v, d) => (typeof v === 'string' ? JSON.parse(v) : (v ?? d));
@@ -38,7 +39,8 @@ api.get('/admin/permissions', async (c) => {
     roles[role] = { grant: r.grant || [], deny: r.deny || [], base: BASE[role] };
   }
   const members = (await db.query(
-    `select u.id, u.name, u.email, m.role, m.permissions, c.office as candidate_office, c.id as candidate_id
+    `select u.id, u.name, u.email, m.role, m.permissions, c.office as candidate_office, c.id as candidate_id,
+            ${SUPPORT_SQL} as support
        from memberships m join users u on u.id = m.user_id
        left join candidates c on c.workspace_id = m.workspace_id and c.user_id = m.user_id and c.removed_at is null
          and m.role = 'volunteer'
@@ -49,7 +51,7 @@ api.get('/admin/permissions', async (c) => {
     // The same rule as /auth/me's areasFor: Website translations comes with the Website.
     const areas = AREA_KEYS.filter((k) => { const d = decideArea(perms, k); return d === null ? BASE[m.role].includes(k) : d; });
     const candidate = m.candidate_id ? { office: m.candidate_office || null } : null;
-    return { id: m.id, name: m.name, email: m.email, role: m.role, candidate, grant: own.grant || [], deny: own.deny || [], areas };
+    return { id: m.id, name: m.name, email: emailShown(m, ctx.user.id), role: m.role, candidate, grant: own.grant || [], deny: own.deny || [], areas };
   });
   // Training is called what the campaign calls it (Settings → Brand, lib/brand.js).
   const areas = AREAS.map((a) => (a.key === 'learn' ? { ...a, label: learnName(settings) } : a));

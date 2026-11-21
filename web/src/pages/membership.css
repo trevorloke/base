@@ -37,3 +37,9 @@
 .mf-warn { margin: var(--s-3) 0; padding: var(--s-2) var(--s-3); border-left: 3px solid var(--danger); background: var(--paper-1); }
 .mf-warn ul { margin: var(--s-1) 0 0; }
 .mf-office { font-size: 14px; color: var(--text-2); }
+
+/* Campus: school and campus together — long words, one to a row on a phone. */
+@media (max-width: 600px) {
+  .mf-campus .mf-check { flex: 1 1 100%; min-height: 48px; white-space: normal; }
+  .mf-campus .mf-check input { flex: none; }
+}

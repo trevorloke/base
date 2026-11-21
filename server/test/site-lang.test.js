@@ -49,7 +49,7 @@ before(async () => {
   ok(await mgr.action('site.settings.save', { org: { ...s.org, name: 'Harbour City Together', shortName: '', agentName: AGENT, agentContact: CONTACT } }));
   about = await page('about', 'About us', [
     { id: 'band01', kind: 'band', hidden: false, props: { title: 'When we organize,', highlight: 'we win', cta: { label: 'Join us', href: '/join' }, tone: 'accent' } },
-    { id: 'text01', kind: 'text', hidden: false, props: { title: 'Our story', body: 'First paragraph about the work.\n\n- One list item\n- Another list item with Q&A <3\n\nSecond line\nkeeps its break.', tone: 'paper' } },
+    { id: 'text01', kind: 'text', hidden: false, props: { title: 'How we started', body: 'First paragraph about the work.\n\n- One list item\n- Another list item with Q&A <3\n\nSecond line\nkeeps its break.', tone: 'paper' } },
     { id: 'news01', kind: 'newsletter', hidden: false, props: { title: 'Get the newsletter', intro: 'News and events.', askPhone: true, buttonLabel: 'Sign up', tone: 'surface' } },
   ]);
   const c = ok(await mgr.action('site.campaign.save', { kind: 'petition', title: 'Fix the crossing', statement: 'We ask the city to fix the crossing at Main Street.', excerpt: 'A safer walk to school.' }));
@@ -213,6 +213,14 @@ test('remembered: a /pa page sets site_lang, a prefetch doesn’t; / redirects, 
   assert.equal(back.location, '/site/pa/');
   assert.equal(back.headers.get('cache-control'), 'no-store');
   assert.equal((await hit('/site/about', { headers: { cookie: 'site_lang=pa' } })).status, 200, 'only the home page redirects');
+  // The translated home page's "Read it in English" reaches the English
+  // home page, and keeps the language remembered.
+  const paHome = await hit('/site/pa/');
+  const read = paHome.text.match(/<p class="lang-note">[\s\S]*?<a href="([^"]+)"/)[1].replace(/&amp;/g, '&');
+  const official = await hit(read, { headers: { cookie: 'site_lang=pa' } });
+  assert.equal(official.status, 200, `${read} → ${official.status} ${official.location}`);
+  assert.match(official.text, /<html lang="en"/);
+  assert.equal(official.headers.get('set-cookie'), null, 'the language stays remembered');
   assert.equal((await hit('/site/', { headers: { 'accept-language': 'pa-IN,pa;q=0.9' } })).status, 200, 'never by browser language');
   const en = await hit('/site/about?lang=en', { headers: { cookie: 'site_lang=pa' } });
   assert.equal(en.status, 200);
@@ -370,6 +378,15 @@ test('preferences in the visitor’s language: approved words, kept with the lan
   // The cookie does the same when there is no ?lang.
   const viaCookie = await hit(`/site/unsubscribe?t=${encodeURIComponent(t)}`, { headers: { cookie: 'site_lang=pa' } });
   assert.match(viaCookie.text, /<html lang="pa"/);
+  // An English page from an email link with no language: the switch at the
+  // top, each link the same page with the token kept.
+  const en = await hit(`/site/preferences?t=${encodeURIComponent(t)}`);
+  assert.match(en.text, /<html lang="en"/);
+  const sw = /<nav class="langs"[^>]*>(.*?)<\/nav>/.exec(en.text)?.[1] || '';
+  assert.match(sw, /<a href="[^"]*\/site\/preferences\?t=[^"]+&amp;lang=pa" hreflang="pa" lang="pa">ਪੰਜਾਬੀ<\/a>/);
+  assert.match(sw, /lang="en" aria-current="true">English<\/a>/);
+  const un = await hit(`/site/unsubscribe?t=${encodeURIComponent(t)}`);
+  assert.match(un.text, /<nav class="langs"[^>]*>.*\/site\/unsubscribe\?t=[^"]+&amp;lang=pa/);
 });
 
 test('<head> and the sitemap: alternates only for languages search may list', async () => {
@@ -425,12 +442,59 @@ test('a language turned off answers 302 to English and its form post 400 with no
   assert.equal(post.status, 400);
   assert.equal(post.json.error, 'This page changed — please reload it and send again');
   assert.equal((await db.query('select count(*)::int as n from persons where workspace_id = $1 and email = $2', [ws, email])).rows[0].n, 0);
+  // On the campaign's own domain (root ''), the way to English stays on
+  // the site: '//other.host' after the prefix is a path, a backslash no page.
+  ok(await mgr.action('site.settings.save', { domains: ['vote.example.net'] }));
+  const { forgetDomains } = await import('../ext/site/store.js');
+  forgetDomains();
+  try {
+    const own = await hit('/zh-hant/about', { host: 'vote.example.net' });
+    assert.equal(own.status, 302);
+    assert.equal(own.location, '/about');
+    const two = await hit('/zh-hant//evil.example/x', { host: 'vote.example.net' });
+    assert.ok(two.status === 404 || (two.status === 302 && /^\/[^/\\]/.test(two.location)), `${two.status} ${two.location}`);
+    const three = await hit('/pa/..//zh-hant//evil.example', { host: 'vote.example.net' });
+    assert.ok(!/^\/\/|^\/\\/.test(three.location || ''), three.location);
+    const back = await hit('/zh-hant/%5Cevil.example', { host: 'vote.example.net' });
+    assert.ok(back.status === 404 || !/^\/[/\\]/.test(back.location || ''), `${back.status} ${back.location}`);
+    const tab = await hit('/zh-hant/%09/evil.example', { host: 'vote.example.net' });
+    assert.ok(tab.status === 404 || !/^\/\s*[/\\]/.test(decodeURIComponent(tab.location || '')), `${tab.status} ${tab.location}`);
+  } finally {
+    ok(await mgr.action('site.settings.save', { domains: [] }));
+    forgetDomains();
+  }
   ok(await saveLanguages({ on: ['pa', 'zh-Hans', 'zh-Hant'] }));
+});
+
+test('on the campaign’s own domain a language listed in search is indexed; the app’s copy is not', async () => {
+  ok(await saveLanguages({ index: { pa: true, 'zh-Hans': false, 'zh-Hant': false } }));
+  ok(await mgr.action('site.settings.save', { domains: ['vote.example.net'] }));
+  const { forgetDomains } = await import('../ext/site/store.js');
+  forgetDomains();
+  cacheClear(ws);
+  try {
+    const en = await hit('/about', { host: 'vote.example.net' });
+    assert.equal(en.status, 200);
+    assert.equal(en.headers.get('x-robots-tag'), null);
+    const pa = await hit('/pa/about', { host: 'vote.example.net' });
+    assert.equal(pa.status, 200);
+    assert.equal(pa.headers.get('x-robots-tag'), null, 'Punjabi on the real domain is indexed');
+    const copy = await hit('/site/pa/about');
+    assert.equal(copy.status, 200);
+    assert.equal(copy.headers.get('x-robots-tag'), 'noindex, nofollow', 'the app’s own copy is not');
+  } finally {
+    ok(await mgr.action('site.settings.save', { domains: [] }));
+    forgetDomains();
+    cacheClear(ws);
+  }
 });
 
 test('the job runner runs a queued sweep, and a draft save queues none', async () => {
   await db.query("delete from jobs where workspace_id = $1 and kind = 'site.translate'", [ws]);
+  const logged = async () => (await db.query("select count(*)::int as n from events where workspace_id = $1 and entity_type = 'site_translate_sweep'", [ws])).rows[0].n;
+  const was = await logged();
   ok(await mgr.action('site.translate.now', {}));
+  assert.equal(await logged(), was + 1, 'who asked for a sweep is on the log');
   await db.query("update jobs set run_at = now() where workspace_id = $1 and kind = 'site.translate'", [ws]);
   const out = await runDueJobs(db, { workspaceId: ws });
   assert.equal(out.ran, 1);
@@ -596,6 +660,39 @@ test('another website: the switch, and /pa/ on its own domain and under /site/si
   const app = await hit(`/site/sites/${m.key}/pa/`);
   assert.equal(app.status, 200);
   assert.match(app.text, new RegExp(`action="/site/sites/${m.key}/pa/api/forms/`));
+});
+
+test('Google fonts (WA): one file for every language, served under each prefix; /pa preloads the body and Gurmukhi', async () => {
+  const { startFakeGoogleFonts } = await import('./fake-google-fonts.js');
+  const fonts = await startFakeGoogleFonts();
+  const was = { css: process.env.GOOGLE_FONTS_CSS_BASE, hosts: process.env.GOOGLE_FONTS_FILE_HOSTS };
+  Object.assign(process.env, { GOOGLE_FONTS_CSS_BASE: fonts.url, GOOGLE_FONTS_FILE_HOSTS: fonts.host });
+  try {
+    const added = await mgr.action('site.font.add', { family: 'Fake Display' });
+    assert.equal(added.status, 200, JSON.stringify(added.json));
+    const { font } = added.json;
+    const sha = font.faces.find((f) => f.subset === 'latin').sha256;
+    const s = await settingsNow();
+    const saved = await mgr.action('site.settings.save', { theme: { ...s.theme, fonts: { heading: 'g:fake-display', body: 'inter' } } });
+    assert.equal(saved.status, 200, JSON.stringify(saved.json));
+    const pa = await hit('/site/pa/about');
+    assert.equal(pa.status, 200);
+    assert.ok(pa.text.includes(`url(/site/site-assets/fonts/g/${sha}.woff2)`), 'no language in the face’s address');
+    assert.ok(!pa.text.includes('/pa/site-assets/fonts/g/'));
+    const preloads = [...pa.text.matchAll(/<link rel="preload" href="([^"]+)" as="font"/g)].map((m) => m[1].split('?')[0]);
+    assert.deepEqual(preloads, ['/site-assets/fonts/inter-latin.woff2', '/site-assets/fonts/noto-gurmukhi-400.woff2']);
+    assert.ok(pa.text.includes("--font-heading:'Fake Display', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, 'Noto Sans Gurmukhi', var(--cjk, system-ui)"));
+    for (const prefix of ['/site/pa', '/site/zh', '/site']) {
+      const f = await hit(`${prefix}/site-assets/fonts/g/${sha}.woff2`);
+      assert.equal(f.status, 200, prefix);
+      assert.equal(f.headers.get('content-type'), 'font/woff2');
+      assert.match(f.headers.get('cache-control'), /immutable/);
+      assert.equal((await hit(`${prefix}/site-assets/fonts/g/${'e'.repeat(64)}.woff2`)).status, 404, `${prefix}: not this campaign’s`);
+    }
+  } finally {
+    await fonts.close();
+    for (const [k, v] of [['GOOGLE_FONTS_CSS_BASE', was.css], ['GOOGLE_FONTS_FILE_HOSTS', was.hosts]]) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+  }
 });
 
 test('donate on /zh: the declaration as approved, Stripe in Chinese with the item named in it; Back lands on /zh', async () => {

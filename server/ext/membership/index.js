@@ -34,6 +34,7 @@ import { capFor } from '../../lib/cap.js';
 import { SLATES, SLATE_CODES, SIGN_KIND_CODES } from '@starbase/shared/canvass';
 import { addStandardFields } from '../fields/people.js';
 import { actions as fieldActions } from '../fields/actions.js';
+import { NOTE_MAX, choiceKey } from '../fields/kinds.js';
 import { actions as requestActions } from '../requests/actions.js';
 
 export const sql = `
@@ -219,22 +220,49 @@ export const actions = {
       }
 
       // ── Profile fields (made if a campaign doesn't have them yet) ──
-      await addStandardFields(tx, ctx, emit);
+      // Only ones it never had: a field renamed or taken off stays so.
+      await addStandardFields(tx, ctx, emit, { auto: true });
       const fields = new Map((await tx.query(
-        'select id, name, kind, choices from person_fields where workspace_id = $1 and retired_at is null', [ws],
+        'select id, name, kind, choices, converting from person_fields where workspace_id = $1 and retired_at is null', [ws],
       )).rows.map((f) => [f.name.toLowerCase(), f]));
       const choicesOf = (f) => (Array.isArray(f?.choices) ? f.choices : JSON.parse(f?.choices || '[]'));
       const values = [];
+      const filled = (value) => value !== undefined && value !== null && value !== '' && !(Array.isArray(value) && !value.length);
       const set = (name, value) => {
         const f = fields.get(name.toLowerCase());
-        if (f && value !== undefined && value !== null && value !== '' && !(Array.isArray(value) && !value.length)) values.push({ field_id: f.id, value });
+        if (!f || !filled(value)) return;
+        // Being turned into a list (ext/fields convert.js): never a refusal of a money form.
+        if (f.converting) { warnings.push(`${f.name} is being turned into a list — add it on their profile later.`); return; }
+        values.push({ field_id: f.id, value });
+      };
+      // Campus: one of the field's choices. Other words (an older screen's
+      // "Kwantlen", or "Another campus") go in their Notes, never refusing the form.
+      const campusIn = async (words) => {
+        const w = String(words ?? '').trim();
+        if (!w) return;
+        const f = fields.get('campus');
+        if (!f) { warnings.push(`There’s no Campus field — “${w}” wasn’t saved.`); return; }
+        if (f.kind !== 'choice' && f.kind !== 'choices') { set('Campus', w); return; }
+        if (f.converting) { set('Campus', w); return; }
+        const hit = choicesOf(f).find((x) => choiceKey(x) === choiceKey(w));
+        if (hit) { set('Campus', f.kind === 'choices' ? [hit] : hit); return; }
+        const notes = fields.get('notes');
+        if (!notes || notes.kind !== 'note' || notes.converting) { warnings.push(`Campus “${w}” isn’t one of the choices — it wasn’t saved.`); return; }
+        const had = (await tx.query(
+          'select value from person_field_values where workspace_id = $1 and field_id = $2 and person_id = $3', [ws, notes.id, person.id],
+        )).rows[0]?.value;
+        const line = `Campus on the form: ${w}`;
+        const joined = had ? `${String(had)}\n${line}` : line;
+        if (joined.length > NOTE_MAX) { warnings.push(`Campus “${w}” isn’t one of the choices — it wasn’t saved (their Notes are full).`); return; }
+        set('Notes', joined);
+        warnings.push(`Campus “${w}” isn’t one of the choices — it’s in their Notes.`);
       };
       set('Gender', input.gender);
       set('Birth date', input.birth_date);
       set('Citizenship', input.citizenship === 'citizen' ? 'Canadian citizen' : input.citizenship === 'pr' ? 'Permanent resident' : null);
       if (input.union_member || input.union_local) set('Union member', true);
       set('Union local', input.union_local);
-      set('Campus', input.campus);
+      await campusIn(input.campus);
       // Languages the field offers; any other goes in Other language.
       const lang = fields.get('language');
       const offered = new Map(choicesOf(lang).map((c) => [c.toLowerCase(), c]));
@@ -255,7 +283,7 @@ export const actions = {
       const optIn = input.opt_in && input.signed && joins;
       if (optIn && (input.email || person.email)) set('Email opt-in', true);
       if (optIn && (input.phone || person.phone)) set('SMS opt-in', true);
-      if (values.length) await fieldActions['field.values.set'].handler(tx, ctx, { person_id: person.id, values }, emit);
+      if (values.length) await fieldActions['field.values.set'].handler(tx, { ...ctx, form: true }, { person_id: person.id, values }, emit);
 
       // ── Tags, volunteer, sign ──
       const had = (await tx.query('select tags from persons where id = $1', [person.id])).rows[0];

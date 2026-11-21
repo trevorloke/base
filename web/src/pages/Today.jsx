@@ -63,7 +63,9 @@ import { useLettersCount } from '../components/LettersCount.js';
 import { hasArea } from '../Shell.jsx';
 import { MineAllTime } from '../components/FieldReportBits.jsx';
 import { turfNames } from '../components/ShiftTurfs.jsx';
-import { whenText, zoneOf } from '../components/shiftTime.js';
+import { clockText, whenText, zoneOf } from '../components/shiftTime.js';
+import { fmtIn } from '@starbase/shared/dayparts';
+import '../components/operator.css';
 import { daysLeft, filingDay, filingSoon } from '../components/FilingWords.js';
 import './today.css';
 import './candidate.css';
@@ -71,7 +73,12 @@ import { at } from '../base.js';
 import { NS } from '../base.js';
 import { BRAND } from '../brand.js';
 import MapWindow from '../components/MapWindow.jsx';
+import { useVotedMode } from '../components/Voted.jsx';
+import { gotvNoteCount } from '../components/gotvNotes.js';
+import './gotv.css';
 import { quickFor } from '../components/commands.js';
+import { guideNow, guideSoon, useGuide } from '../components/guide.js';
+import { guideState } from '@starbase/shared/voteguide';
 import './home.css';
 
 const greeting = () => {
@@ -311,7 +318,7 @@ function GoalLines({ goal }) {
   );
 }
 
-function SupportDetail({ pic, id, goal }) {
+function SupportDetail({ pic, id, goal, map }) {
   const { counts, variants, total, pct } = pic;
   const showVariants = variants.some((v) => v.code !== '4');
   return (
@@ -343,7 +350,7 @@ function SupportDetail({ pic, id, goal }) {
       <div className="today-support-foot">
         <span className="mono muted">{num(total)} rated</span>
         <span className="today-support-links">
-          <Link to="/map" className="today-more-link">Open the map <Chevron /></Link>
+          {map && <Link to="/map" className="today-more-link">Open the map <Chevron /></Link>}
           {goal && <Link to="/path-to-win" className="today-more-link">Path to win <Chevron /></Link>}
         </span>
       </div>
@@ -352,7 +359,7 @@ function SupportDetail({ pic, id, goal }) {
 }
 
 // ── Desk: the three big numbers ──
-function Numbers({ b, pic }) {
+function Numbers({ b, pic, me }) {
   const [params, setParams] = useSearchParams();
   const open = params.get('support') === '1';
   const detailId = useId();
@@ -373,10 +380,18 @@ function Numbers({ b, pic }) {
     <>
       {/* Same shape as the rows: › goes to a screen, + opens here. */}
       <div className="today-nums">
-        <Link to="/map" className="today-num">
-          <span className="today-num__n">{num(doors)}</span>
-          <span className="today-num__label">Doors this week<span className="today-num__go" aria-hidden="true">›</span></span>
-        </Link>
+        {/* A tile goes to its screen only for someone who may open it. */}
+        {hasArea(me, 'map') ? (
+          <Link to="/map" className="today-num">
+            <span className="today-num__n">{num(doors)}</span>
+            <span className="today-num__label">Doors this week<span className="today-num__go" aria-hidden="true">›</span></span>
+          </Link>
+        ) : (
+          <div className="today-num today-num--plain">
+            <span className="today-num__n">{num(doors)}</span>
+            <span className="today-num__label">Doors this week</span>
+          </div>
+        )}
         <button type="button" className="today-num" aria-expanded={open} aria-controls={detailId} onClick={toggle} aria-label={label}>
           <span className="today-num__n">{big}</span>
           {goal && (
@@ -387,14 +402,14 @@ function Numbers({ b, pic }) {
           )}
           <span className="today-num__label">Supporters<span className="today-num__plus" aria-hidden="true" /></span>
         </button>
-        {b.money && (
+        {b.money && hasArea(me, 'money') && (
           <Link to="/money" className="today-num" aria-label={`Total raised ${fmtMoney(b.money.totalCents)}`}>
             <span className="today-num__n">{fmtBigMoney(b.money.totalCents)}</span>
             <span className="today-num__label">Total raised<span className="today-num__go" aria-hidden="true">›</span></span>
           </Link>
         )}
       </div>
-      {open && <SupportDetail pic={pic} id={detailId} goal={b.goal} />}
+      {open && <SupportDetail pic={pic} id={detailId} goal={b.goal} map={hasArea(me, 'map')} />}
     </>
   );
 }
@@ -433,17 +448,44 @@ function LettersRow({ b }) {
   return <LinkRow to="/letters" main={n > 0 ? <>Your letters · <strong className="mono">{n}</strong> {n === 1 ? 'reply' : 'replies'}</> : 'Letters to the editor'} />;
 }
 
+// "Where to vote" (VG): the first row while the voter guide is published
+// and not over, on a GOTV day or with the first voting day two weeks off.
+// Reading it here also keeps the guide on the phone for when signal drops.
+function useGuideOut() {
+  const g = useGuide({ side: true }).data;
+  if (!g || g.status === 'not_out' || !g.times) return null;
+  const now = guideNow(g);
+  const st = guideState(g.times, now, g.places);
+  if (st.state === 'not_out' || st.state === 'over') return null;
+  return { g, now };
+}
+function VoteInfoRow({ b }) {
+  const out = useGuideOut();
+  if (!out) return null;
+  if (!b.voted?.on && !guideSoon(out.g, out.now)) return null;
+  return <LinkRow to="/vote-info" state={FROM_TODAY} main="Where to vote" />;
+}
+// On a voting day the same tap sits in the GOTV card, above the map.
+function GotvVoteLink() {
+  return useGuideOut() ? <Link to="/vote-info" state={FROM_TODAY} className="btn today-gotv__btn">Where to vote</Link> : null;
+}
+
 // ── GOTV mode (ext/voted): on by hand, or by itself on an advance-voting day
 // and election day. The day's one job, for everyone: the supporters who
 // haven't voted yet — call them, or find their doors.
 const GOTV_CALLS = '/calls?rating=1,2&voted=no';
 function GotvCard({ v }) {
+  const mode = useVotedMode();
   const left = Math.max(0, (Number(v.supporters) || 0) - (Number(v.supporters_voted) || 0));
   const pct = v.supporters ? Math.min(100, Math.round((v.supporters_voted / v.supporters) * 100)) : 0;
   const day = v.voting_day === 'election' ? 'Election day' : v.voting_day === 'advance' ? 'Advance voting' : 'GOTV';
+  // Kept to their own turfs and phone bank, with neither (ext/voted scope).
+  const noList = mode?.status?.has_list === false;
   return (
     <section className="today-gotv" aria-label="Get out the vote">
       <span className="eyebrow">Get out the vote · {day}</span>
+      {mode?.practice && <span className="chip gv-practice">Practice</span>}
+      {noList && <p className="today-gotv__n">No one on your list yet — ask the office for a turf or calls.</p>}
       <p className="today-gotv__n">
         <strong className="mono">{num(v.supporters_voted)}</strong> of {num(v.supporters)} supporters have voted
         {left > 0 && <> · <strong className="mono">{num(left)}</strong> to go</>}
@@ -452,6 +494,7 @@ function GotvCard({ v }) {
       <div className="today-gotv__acts">
         <Link to={GOTV_CALLS} className="btn today-gotv__btn">Call who hasn’t voted <span aria-hidden="true">→</span></Link>
         <Link to="/map?show=gotv" className="btn today-gotv__btn">Map: who hasn’t voted</Link>
+        <GotvVoteLink />
       </div>
     </section>
   );
@@ -474,7 +517,9 @@ function NeedsYou({ b, me }) {
   const letters = useLettersCount(hasArea(me, 'media'));
   // Texts waiting to be read: replies to yours, and numbers that wrote in.
   const newTexts = Number(useTextingStatus(me).data?.unread) || 0;
-  const flagged = b.flagged ?? [];
+  // Each row only for someone who may open its screen (the server sends
+  // none of these without the area; this keeps an older brief honest too).
+  const flagged = hasArea(me, 'money') ? (b.flagged ?? []) : [];
   // Shifts in the next week short of the people they want: by their target
   // (which never turns anyone away), or by their limit on an older shift —
   // the server's list (brief.shortShifts). An older server sends none: then
@@ -482,9 +527,10 @@ function NeedsYou({ b, me }) {
   const shortShifts = (b.shortShifts ?? (b.shifts ?? [])
     .filter((s) => s.capacity && (Number(s.filled) || 0) < s.capacity && withinDays(s.starts_at, 7))
     .map((s) => ({ ...s, short: s.capacity - (Number(s.filled) || 0) })))
-    .slice(0, 2);
+    .slice(0, 2)
+    .filter(() => hasArea(me, 'shifts'));
   const tz = zoneOf(me);
-  const signs = Number(b.signs?.requested) || 0;
+  const signs = hasArea(me, 'signs') ? Number(b.signs?.requested) || 0 : 0;
   const shownFlags = flagged.length > 3 ? flagged.slice(0, 2) : flagged;
   const moreFlags = flagged.length - shownFlags.length;
   // Email not set up: the managers' to-do (Settings → Services). Texting is
@@ -545,6 +591,14 @@ function NeedsYou({ b, me }) {
             <LinkRow to="/people?moved=open" main={<><strong className="mono">{num(moved)}</strong> moved — {moved === 1 ? 'needs' : 'need'} an address</>} />
           )}
           {connectEmail && <LinkRow to="/settings/services" main="Connect email" />}
+        </ul>
+      )}
+      {/* base.win support's visits this week (ext/operator brief.js), managers only. */}
+      {(b.supportVisits ?? []).length > 0 && (
+        <ul className="op-visits" aria-label="base.win support visits">
+          {b.supportVisits.map((v) => (
+            <li key={v.at}>base.win support signed in · {fmtIn(v.at, tz, { weekday: 'short' })} {clockText(v.at, tz)}</li>
+          ))}
         </ul>
       )}
     </section>
@@ -815,24 +869,43 @@ function VolunteerToday({ b, me }) {
   const mine = f.mine ?? {};
   const signs = Number(b.signs?.requested) || 0;
   const replies = Number(useTextingStatus(me).data?.unread) || 0; // replies to their texts
+  // GOTV active for them (On, or Practice and they practise), and on duty at a voting place.
+  const vm = useVotedMode();
+  const duty = vm.on ? vm.status?.on_duty : null;
+  const unsentNames = gotvNoteCount(me);
 
   return (
     <div className="today today--field">
       <span className="eyebrow">{greeting()}</span>
       <h1>{me.workspace.name}</h1>
       {b.sampleLoaded && <SampleLine />}
-      {b.voted?.on && <GotvCard v={b.voted} />}
+      {vm.on && b.voted && <GotvCard v={b.voted} />}
       {/* The people they're to reach within the day (speed to lead). */}
       <FollowupsToday me={me} />
 
-      {done ? (
+      {duty ? (
+        <>
+          {/* On duty: entering names is the day's one job (the one primary);
+              their canvass stays one quiet tap under it. */}
+          <section className="today-go" aria-label="Who voted">
+            <Link to="/gotv" className="btn btn-primary today-start">Enter who voted <span aria-hidden="true">→</span></Link>
+            <p className="today-go__meta"><span className="today-go__turf">{duty.place?.name || 'Pick the voting place on each sheet'}</span></p>
+          </section>
+          {unsentNames > 0 && <ul className="today-rows"><LinkRow to="/gotv" main={`You have ${unsentNames} ${unsentNames === 1 ? 'name' : 'names'} not sent`} /></ul>}
+          {firstOpen && (
+            <ul className="today-rows">
+              <LinkRow to={`/turfs/${firstOpen.id}`} main={`Your turf: ${firstOpen.name}${d ? ` · ${d.doors} ${d.doors === 1 ? 'door' : 'doors'}` : ''}`} />
+            </ul>
+          )}
+        </>
+      ) : done ? (
         <section className="today-go" aria-label="Calls">
           <Link to="/calls" className="btn btn-primary today-start">
             Make calls <span aria-hidden="true">→</span>
           </Link>
           {/* Still the way back to the walk list: re-check a door, open a profile. */}
           <Link to={myTurfs.length === 1 ? `/turfs/${myTurfs[0].id}` : '/turfs'} className="today-go__meta today-go__link">
-            <span className="today-go__turf">{myTurfs.length === 1 ? myTurfs[0].name : `${myTurfs.length} turfs`}</span>
+            <span className="today-go__turf">{myTurfs.length === 1 ? myTurfs[0].name : `${myTurfs.length} walk lists`}</span>
             <span className="today-go__done">— All done <span aria-hidden="true">✓</span></span>
             <Chevron />
           </Link>
@@ -840,7 +913,8 @@ function VolunteerToday({ b, me }) {
       ) : (
         <section className="today-go" aria-label="Canvass">
           <Link to={firstOpen ? `/turfs/${firstOpen.id}` : '/map'} className="btn btn-primary today-start">
-            {b.pass?.kind === 'gotv' ? 'Get out the vote' : 'Start canvassing'} <span aria-hidden="true">→</span>
+            {/* GOTV mode on (b.voted) is the day's job too, pass or not. */}
+            {b.pass?.kind === 'gotv' || b.voted?.on ? 'Get out the vote' : 'Start canvassing'} <span aria-hidden="true">→</span>
           </Link>
           {firstOpen ? (
             <div className="today-go__meta">
@@ -854,10 +928,14 @@ function VolunteerToday({ b, me }) {
           )}
         </section>
       )}
+      {/* Names written at a voting place, still on this phone after the
+          day's duty: judged by their own day on Who voted. */}
+      {!duty && unsentNames > 0 && <ul className="today-rows"><LinkRow to="/gotv" main={`You have ${unsentNames} ${unsentNames === 1 ? 'name' : 'names'} not sent`} /></ul>}
       {/* Their walk list on a map that folds away (only with doors left). */}
       {firstOpen && !done && <MapWindow me={me} turfId={firstOpen.id} />}
 
       <ul className="today-rows today-next">
+        <VoteInfoRow b={b} />
         <VolunteerShiftRow shifts={b.shifts ?? []} me={me} turfs={b.shiftTurfs} />
         {signs > 0 && (
           <LinkRow to="/signs" main={<><strong className="mono">{signs}</strong> {plural(signs, 'sign')} to put up</>} />
@@ -891,7 +969,7 @@ function VolunteerToday({ b, me }) {
         </ul>
         {others.length > 0 && (
           <>
-            <h3 className="today-subh">{done ? 'Your turfs' : 'Your other turfs'}</h3>
+            <h3 className="today-subh">{done ? 'Your walk lists' : 'Your other walk lists'}</h3>
             <TurfRows turfs={others} statsById={statsById} />
           </>
         )}
@@ -1013,6 +1091,7 @@ function CandidateToday({ b, me }) {
       {candTurf && <MapWindow me={me} turfId={candTurf.id} />}
 
       <ul className="today-rows today-next">
+        <VoteInfoRow b={b} />
         {calling && <LinkRow to="/mainstreet" main="Met someone" />}
         {!ready && <li className="today-need today-row--wait muted" role="status">Loading…</li>}
         {ready && next && (
@@ -1080,7 +1159,7 @@ function DeskToday({ b, me, nav, toast }) {
       {/* Their own people to reach within the day, before the numbers. */}
       <FollowupsToday me={me} />
 
-      <Numbers b={b} pic={pic} />
+      <Numbers b={b} pic={pic} me={me} />
 
       {/* MAP's band: the walk lists' outlines, across the page, folding away.
           The rest of the old dashboard (who is out, the chart, the teams) is
@@ -1094,10 +1173,12 @@ function DeskToday({ b, me, nav, toast }) {
 
       <NeedsYou b={b} me={me} />
 
+      {/* Nothing of theirs to come (no Shifts, no filing dates): no heading over an empty list. */}
+      {(hasArea(me, 'shifts') || (b.filing ?? []).length > 0) && (
       <section className="today-section" aria-labelledby="today-next-h">
         <h2 className="today-h" id="today-next-h">Coming up</h2>
         <ul className="today-rows">
-          <ShiftRow shift={(b.shifts ?? [])[0]} tz={zoneOf(me)} />
+          {hasArea(me, 'shifts') && <ShiftRow shift={(b.shifts ?? [])[0]} tz={zoneOf(me)} />}
           {/* The financial agent's filing dates within 30 days (ext/filingdates; money roles):
               what is due, its day under it (as a shift's time is), so a phone shows both whole. */}
           {(b.filing ?? []).map((d) => (
@@ -1107,6 +1188,7 @@ function DeskToday({ b, me, nav, toast }) {
           ))}
         </ul>
       </section>
+      )}
 
       <GoTo me={me} nav={nav} b={b} />
 

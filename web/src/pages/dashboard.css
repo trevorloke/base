@@ -101,7 +101,11 @@
 
 /* Latest */
 .dash-recent { list-style: none; margin: 0; padding: 0; border: var(--border); border-radius: var(--r-card); background: var(--paper-0); }
-.dash-recent__i { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 12px; font-size: 14px; }
+.dash-recent__i { font-size: 14px; }
+.dash-recent__row { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 12px; color: inherit; text-decoration: none; }
+.dash-recent__name { color: var(--text-1); text-decoration: underline; text-underline-offset: 2px; }
+.dash-recent__row:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: -2px; }
+@media (hover: hover) { .dash-recent__row:hover { background: var(--paper-1); } }
 .dash-recent__i + .dash-recent__i { border-top: 1px solid var(--rule); }
 .dash-recent__main { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dash-recent__when { font-size: 12px; color: var(--text-3); white-space: nowrap; }
@@ -118,3 +122,22 @@
 .dash-pop__btn { margin-top: 6px; font: inherit; font-size: 13px; min-height: 32px; padding: 0 10px; border: 1px solid #bfc8d6; border-radius: 8px; background: #fff; color: #141a26; cursor: pointer; }
 .dash-map .leaflet-popup-content-wrapper { border-radius: 12px; }
 .dash-unavail { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
+
+/* Teams on a phone: short cards instead of the wide table. */
+.dash-teamcards { display: none; list-style: none; margin: 0; padding: 0; border: var(--border); border-radius: var(--r-card); background: var(--paper-0); }
+.dash-teamcard { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; font-size: 14px; }
+.dash-teamcard + .dash-teamcard { border-top: 1px solid var(--rule); }
+.dash-teamcard__name { font-weight: 600; color: var(--text-1); }
+.dash-teamcard__line { font-size: 13px; }
+@media (max-width: 720px) {
+  .dash-teamtable { display: none; }
+  .dash-teamcards { display: block; }
+}
+
+/* Phone targets: 48 px links, rows and map buttons. */
+@media (pointer: coarse), (max-width: 720px) {
+  .dash-sec__link { display: inline-flex; align-items: center; min-height: 48px; padding: 0 var(--s-1); }
+  .dash-sec__btn { min-height: 48px; }
+  .dash-recent__row { min-height: 48px; }
+  .dash-map .leaflet-bar a { width: 48px; height: 48px; line-height: 48px; font-size: 20px; }
+}

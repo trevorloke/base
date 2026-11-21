@@ -12,7 +12,7 @@ import { useEffect, useRef, useState } from 'react';
 import { html, cx } from './h.js';
 import { Check, Choices, FieldError, Hidden, Honeypot, SelectField, TextField } from './fields.js';
 import { ShareSheet } from './share.js';
-import { EMAIL_RE, money, parseDollars, str, trackFrom } from './util.js';
+import { EMAIL_RE, money, parseDollars, str, thousands, trackFrom } from './util.js';
 import { PRIVACY_LINE } from '../wording.js';
 import { wordsIn } from '../ui-words.js';
 
@@ -108,6 +108,26 @@ function rows(fields) {
     else out.push(f.half ? [f] : f);
   }
   return out;
+}
+
+// A petition or pledge just signed here: the count beside it (GoalBar, drawn
+// with the page) takes the new signature, so "Your name is on the petition"
+// never sits next to a number without it.
+function countMe(form) {
+  const goal = form?.closest('section')?.querySelector('.goal');
+  const strong = goal?.querySelector('.goal-label strong');
+  if (!strong) return;
+  const was = Number(String(strong.textContent).replace(/[^0-9]/g, '')) || 0;
+  const from = thousands(was);
+  const to = thousands(was + 1);
+  strong.textContent = to;
+  const bar = goal.querySelector('progress.goal-bar');
+  if (bar) {
+    bar.value = Math.min(was + 1, Number(bar.max) || was + 1);
+    const label = bar.getAttribute('aria-label');
+    // The number only where it can't be mistaken for the goal's digits.
+    if (label && label.split(from).length === 2) bar.setAttribute('aria-label', label.replace(from, to));
+  }
 }
 
 export function SiteForm(props) {
@@ -283,6 +303,7 @@ export function SiteForm(props) {
           if (target) { window.location.assign(target); return; }
         }
         if (REF.test(str(json.ref_code))) setMine(json.ref_code);
+        if (kind === 'petition' || kind === 'pledge') countMe(form);
         justSent.current = true;
         setDone(true);
         return;

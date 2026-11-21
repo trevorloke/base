@@ -13,7 +13,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { SURREY_BOUNDS, safeAttribution } from '../components/tiles.js';
 
-export default function PlaceMap({ tiles, around = [], point, onPoint }) {
+export default function PlaceMap({ tiles, around = [], point, onPoint, label = 'Map — tap where the shift is' }) {
   const boxRef = useRef(null);
   const mapRef = useRef(null);
   const pinRef = useRef(null);
@@ -58,7 +58,7 @@ export default function PlaceMap({ tiles, around = [], point, onPoint }) {
 
   return (
     <div className="sch-map">
-      <div ref={boxRef} className="sch-map__box" role="application" aria-label="Map — tap where the shift is" />
+      <div ref={boxRef} className="sch-map__box" role="application" aria-label={label} />
       <button type="button" className="btn btn-quiet sch-map__mid" onClick={useMiddle}>Use the middle of the map</button>
       {!point && <p className="sch-note">Tap where it is.</p>}
     </div>

@@ -40,15 +40,15 @@ time. Delete the folder to start over.
 ## 2 · Deploy for the team (Render)
 
 The repo's `render.yaml` is a Blueprint for one client's two environments
-(GOING-LIVE.md): **starbase-staging** from `main` and **starbase** from
+(GOING-LIVE.md): **base-win-staging** from `main` and **base-win** from
 `production`, each with its own managed Postgres database (backups
 included). Every setting below, and where its key comes from:
 INTEGRATIONS.md.
 
 1. Render → **New → Blueprint** → pick this repo (`main` branch)
-   → it creates `starbase-staging` + `starbase-staging-db` and `starbase` +
-   `starbase-db` (paid plans — check Render’s current pricing).
-2. In the `starbase` service → **Environment**, set:
+   → it creates `base-win-staging` + `base-win-staging-db` and `base-win` +
+   `base-win-db` (paid plans — check Render’s current pricing).
+2. In the `base-win` service → **Environment**, set:
 
 | Variable | What for | Needed to test? |
 |---|---|---|
@@ -308,6 +308,34 @@ one tap away under **More**.
   as many sign-ins as it takes) lock the codes from that person's app: the
   sign-in says so, managers get an email and a line on Today, their row
   says *Two-step locked*, and a recovery code signs in and unlocks it.
+- **Forgot password** — Sign in → *Forgot your password?* → your email →
+  *a link is on its way*. The email's link opens *Choose a new password*
+  (the address loses its `#t=` at once); save, and you're in, signed out on
+  every other device; the old password fails; with two-step on it asks the
+  code next. With no sender (or no `STARBASE_PUBLIC_URL`) Forgot says to ask
+  a manager, who taps *Password link* on the person's row in Settings →
+  Members: the link with Copy, or *Emailed* when email is set up (no
+  *Password link* at all without `STARBASE_PUBLIC_URL`).
+  `server/test/password-reset.test.js` covers the server (limits, links that
+  end, the log); `node e2e-reset.mjs` (PORT, SHOTS; the stand-in sender
+  on PORT+1, its controls on PORT+4) walks it in a browser under a client's
+  path.
+- **base.win support from the control centre** — on ops.base.win, **Open
+  desk** on a campaign: a new tab on its own Render address, Today with
+  *You’re in as base.win support · until …* across the top; the address has
+  no `#t=`. Settings → Members shows the *base.win support* chip and the
+  switch greyed out for support. A manager turning **base.win may sign in
+  here** off signs support out on its next tap, and the next Open says it's
+  turned off. Managers' Today says *base.win support signed in*; a person's
+  History says *(via base.win)* after what support did.
+  `server/test/entry.test.js` (the token, against the vector shared with the
+  control centre, `entry-vector.json`), `operator-entry.test.js` (entry,
+  the switch, what a visit may not do, the tags, Today, `/api/team`) and
+  `health.test.js` (the health fields) cover the server; `node
+  e2e-entry.mjs` (PORT, SHOTS; a second server at PORT+2 with
+  `BASE_PATH=/x`, A's controls on PORT+1) walks it in a browser with tokens
+  signed by `server/test/entry-sign.js`. The control centre's own tests:
+  `npm run test:platform` and `e2e-ops.mjs` (`apps/platform/README.md`).
 - **Sign in with Google** (once the Google client is set; INTEGRATIONS.md) —
   *Sign in with Google* sits under *Sign in*. Pressed before linking, it
   says the Google account isn’t linked. Sign in with your password, then
@@ -390,6 +418,37 @@ one tap away under **More**.
   *Put back* is off (*12 at most on the list — take one off first*). Filter
   People → *Opposed*, add a candidate, rate someone for them, reload: the
   same Opposed link (and the Call list carried from it) still finds them.
+- **Pick lists and Private** (`server/test/fields-lists.test.js`): Faith,
+  Dwelling type and Campus on a new campaign; loose choice words and their
+  SQL twin; "Christian – *"; never put back; Private through every path
+  (volunteers, the CSV, the backup and event log, tags, sends, CallHub,
+  phone banks, passes, copies); the upgrade job; Turn into a list (stop,
+  start again, a value another write holds — that one needs a Postgres with
+  two connections: `DATABASE_URL=… PG_POOL_MAX=4`); the membership form's
+  Campus; a move's Undo into "as written". `npm run test:pg -- --twice
+  [files…]` runs each file a second time against the same database, so an
+  upgrade job that touches an existing campaign shows up; many files set
+  up the first campaign or a fixed email and fail a second run for that
+  reason alone, so compare with the commit before. **Speed**:
+  `DATABASE_URL=… PG_POOL_MAX=4 node scripts/bench-fieldlist.mjs` against a
+  Postgres. On a local Postgres 16 (17 November 2026, 300,000 values):
+  GET …/words 0.4 s; the whole conversion 0.5 min, the slowest chunk
+  0.39 s; a profile save on another field mid-run 0.11 s; 300,000
+  different words refused in 1.2 s; GET /fields's grouping about 4 % slower
+  than before (the middle of five tries each; the machine was shared, so a
+  single run swings by more than that).
+- **Pick lists in the browser** (`SHOTS=… [PORT=5450] node
+  e2e-picklists.mjs`; it starts its own in-memory server, with the
+  conversion slowed on PORT+1 so Stop can be pressed): Faith's buttons and
+  the Christian row, Dwelling type's select, Campus, the kept copy's "Needs
+  signal", the People filter's "Christian (any)", Profile fields' Private
+  and Show as, Turn into a list end to end (the bar, Stop and its confirm,
+  again after a Stop, a reload of the words keeping what's typed), the
+  import waiting while a field converts, the import's word mapping (and no
+  room for "as written"), the private download tick, a list picked by
+  Faith (a phone bank and a pass refused in place), the membership form's
+  Campus — at 1440 and 390. The tick turning People's Google Sheets off is
+  in `e2e-drive.mjs`, where Sheets is set up.
 - **People → More → Profile fields** → **Add a field**: a name, a type (Text ·
   Yes/No · Pick one · Number · Date), its choices, and *Volunteers can see
   this* (off by default). Tap a field to rename it, add a choice or *Move
@@ -398,9 +457,61 @@ one tap away under **More**.
   or removed with ✕. **Take off** keeps everything filled in (still in *Export all
   data*); *Taken off → Bring back* restores it. The sample adds *Language at
   home*, *Strata council member* and *Union local*.
-- **GOTV** (Today → More → *GOTV & voting days*) — set *Election day* to
-  today (or add today as an advance-voting day) and **Save**: it reads *On*
-  by itself; or switch *On by hand*. Every volunteer's walk list, door card
+- **Live GOTV (server)** — `server/test/gotv-clock.test.js` (each voting
+  place's close from the voter guide, the override, a release, a mark's own
+  day and the work window, on the moved clock), `gotv-scrutineer.test.js`
+  (the hold on every route, live sending after the CEO's yes, the
+  manager's own actions, posts, the look-up and its limits, same-bytes
+  answers, undo, practice, turf scope, the sign-in code) and
+  `gotv-live.test.js` (the SSE feed read raw: scope, practice, merges,
+  `mode` and `guide` events, three streams a person, no pool connection
+  held; `STARBASE_GOTV_PING_MS` shortens the heartbeat). Its last test needs
+  a real Postgres: `GOTV_REAL_PG=1 DATABASE_URL=postgres://… node --test
+  server/test/gotv-live.test.js` (a held campaign lock makes a mark answer
+  503 *Busy — will try again* after `STARBASE_GOTV_LOCK_MS`, 5 s by
+  default). The load test, `DATABASE_URL=postgres://… PORT=5507 node
+  scripts/load-gotv.mjs` (`LOAD_PEOPLE`, `LOAD_MINUTES`), seeds 300,000
+  people and prints its numbers against the pass lines. Measured on a
+  4-core builder box with Postgres 16, the server and the load generator
+  on the same machine (PG_POOL_MAX 10, 300,000 people, 5 minutes, 600
+  streams, 14,582 marks): mark to stream p95 991 ms, max 1.7 s, no change
+  lost of 1.49 million expected deliveries; event-loop delay p99 18 ms;
+  the guide correction reached all 600 streams within 5 s. Not met there:
+  vote.mark p95 790 ms, /voted/changes 1.9 s, walk list 1.9 s, /brief
+  4.3 s, summary 392 ms, guide refetch 566 ms, server RSS growth 1 GB,
+  and the pool had a waiter for up to 40 s at a time. The campaign's one
+  write lock is the limit: about 68 writes a second (marks and knocks)
+  each wait 25 ms on average for it, holding a pool connection while they
+  wait, so reads queue behind them. A second run with PG_POOL_MAX 30 was
+  worse (more waiters on the same lock, and the box was shared with
+  another full test suite). Measure on the real Render plan before a
+  voting day; see GOTV.md's owner items 8 and 9.
+- **Live GOTV (screens)** — `server/test/gotv-screens.test.js` (the desk's
+  Settings and Ready list, closing times as the campaign's wall time, every
+  voting place listed, *Practice run done*, the stream only for someone
+  with a list, the code session's `scope`), and `e2e-gotv-live.mjs`
+  (`flock -o …/browser.lock node e2e-gotv-live.mjs`; its own server on
+  5500 with a file database, restarted with the clock moved): practice for
+  a ticked canvasser only, the scrutineer's one-primary Today, a sign-in
+  code (two GETs leave it usable; its session gets 403 on people), names
+  held until a release then matched, the CEO's yes and live sending, a
+  name saved offline and matched with its written time, a look-up delayed
+  10 s turned into a note at 4 s, Undo of a name written hours ago, To
+  check resolved with Find, turf B never seeing turf A, the stream cut and
+  polling catching up, Calls skipping a person marked elsewhere (the open
+  card says *Voted — skip*), two tabs (the one holding the stream goes
+  hidden and the other takes it over), 300 names at 180 ms a key (about 20
+  minutes; `GOTV_NAMES=40` for a quicker run) with no 429 and one look-up a
+  name, the guide's *Closed today* reaching an open phone, a runner's
+  look-up refused at a closed place running again at an open one, the held
+  line under a person's Voted, a 19:58 name matched after midnight and
+  back to match after Undo, an off-duty runner's 201 names all matchable
+  with no place picker until one is matched, staff read-only, and Off.
+  A browser's own zone data may predate B.C.'s permanent UTC-7, so closing
+  times on screen come from the server as wall times.
+- **GOTV** (Today → Go to → *Get out the vote*) — set *Election day* to
+  today (or add today as an advance-voting day) under *Settings* and **Save
+  days**: it reads *On by itself today*; or switch *On*. Every volunteer's walk list, door card
   and Calls card now has a 48px *Voted ✓*; mark one person yourself from a
   door card. Today opens with the GOTV card (*1 of N supporters have voted ·
   … to go*, *Call who hasn't voted*, *Map: who hasn't voted*); write a GOTV
@@ -650,19 +761,34 @@ comes back, or asks if words were typed meanwhile).
 
 - **Website (the admin)** — **Website** in the desk's menu (managers, or
   whoever a manager grants the Website area). **Overview**: live or not,
-  where it is (**View site**), this week's sign-ups. **Pages → New page**:
-  in its builder **+ Add a section** (Hero, Text block, Newsletter…), type
-  in each one's boxes (it says *Saved* by itself), drag a section by its
-  handle (or tap the handle, then *Move here*; or ⋯ → *Move up*), ⋯ →
-  *Hide from the page*, ⋯ → *Delete* then **Undo**. **Preview** opens the
-  draft in a new tab (and beside the editor on a wide screen). Add a
-  *Petition or pledge* without picking one and **Publish**: it says which
-  section and which box; pick one and publish — the page is at
-  `/site/<its address>`. **Theme**: make the brand colour light (white text
+  where it is (**View site**), this week's sign-ups. **Pages → New page →
+  An issue**, a name, **Make the page**: the builder opens on the page with
+  the preview beside it and the headline's sample words selected; type —
+  the preview changes before *Saved*. Tap a paragraph or a point in the
+  preview: its box opens with the cursor in it. **Publish** with a sample
+  box left: it's refused and that box opens. **+ Add a section** (a gallery
+  with a search box): Events shows in the preview at once; **Undo** /
+  **Redo** (or Ctrl+Z / Shift+Ctrl+Z) take it away and back. Make a petition
+  in another tab, add a *Petition or pledge* and pick it: "Updating
+  preview…", then it shows. Drag a section by its handle (or tap the handle,
+  then *Move here*; or ⋯ → *Move up*), ⋯ → *Hide from the page*, ⋯ →
+  *Delete* then **Undo**. **Preview** opens the draft in a new tab. On a
+  phone, **Preview** is full screen and a tap opens that section in a sheet.
+  From **Website**, *Edit the home page* → tap the headline → type →
+  **Publish** (4 taps). The page is at `/site/<its address>`. **Pictures**:
+  add a *Picture* section and upload a photo — three sizes are stored; tap
+  the picture to choose the spot to keep in view (the preview follows);
+  **Publish** is refused until it's described (or ticked *Decorative*). A
+  page whose older picture has no words still publishes, and the toast asks
+  for it. **News** → *New post*: the short summary fills itself from the
+  words, the post as it will look sits beside (on a phone, *See it*). **Theme**: make the brand colour light (white text
   on it gets too hard to read) — *Save the look* is blocked until **Fix it**.
   **Petitions and pledges**: signatures against the goal, *See who signed*.
   A volunteer opening `/admin/website` is told it isn't theirs. Tests:
-  `server/test/site-builder.test.js`, `server/test/site-website.test.js`;
+  `server/test/site-builder.test.js`, `server/test/site-website.test.js`,
+  `server/test/site-editor.test.js` (starters, sample words, the preview's
+  browser path drawing every kind exactly as the server does),
+  `server/test/site-pictures.test.js` (sizes, focus, descriptions, srcset);
   in a browser: `e2e-site-admin.mjs`.
 
 - **Languages** (Website → Languages): with no key it says to add one;
@@ -677,6 +803,17 @@ comes back, or asks if words were typed meanwhile).
   browser, `e2e-site-translate.mjs` (it runs its own server on PORT, the
   stand-in Google on PORT+1 and Stripe on PORT+2; it needs a CJK font —
   `apt-get install -y fonts-noto-cjk` — and stops saying so without one).
+
+- **Google fonts** (Website → Theme → **Change fonts**, a manager): pick the
+  Fraunces / Inter pairing and **Save the look** — the site's headings are
+  Fraunces; under **Any Google font** search a family, **Get … and use it**,
+  save — the site loads it from its own address. Body text lists only fonts
+  checked for reading. Tests: `server/test/site-fonts.test.js` (with
+  `server/test/fake-google-fonts.js`; the font file under `/pa` and `/zh` in
+  `site-lang.test.js`); in a browser, `e2e-site-fonts.mjs` (its own server on
+  PORT, 5490; the stand-in Google Fonts on PORT+1 and Translation on PORT+2;
+  every pairing's real first visit on a phone ≤ 150 KB; no request leaves the
+  machine).
 
 - **Other websites** (Website → Other websites, a manager): **New website**
   "Doug Didn’t Example" at a domain; its overview is a draft with the
@@ -1622,3 +1759,25 @@ Built conservatively; the campaign should confirm these rules with counsel
   shorter, Unavailable / Try again on a failed read, No signal);
   Check the records on Import & export; staff, staff denied Data or
   Map, a treasurer denied Outreach, a volunteer's field Today.
+
+## The voter guide (VG)
+
+Server: `server/test/voteguide.test.js` (actions, checklist, import against
+a fake address service, the public pages in every state, the cache's
+expiry, the embed, the field read) and `server/test/voteguide-shared.test.js`
+(states, closed for one day, nearest, words in any zone, the import's
+reader, the QR's longest link) and `server/test/tzrule.test.js`.
+The clock moves only in tests: `STARBASE_CLOCK_SHIFT_MS` (milliseconds) is
+read when `NODE_ENV=test`, under `node --test`, or with `STARBASE_E2E=1`
+(a browser suite's server), and ignored anywhere else — the server says
+so when it starts.
+
+Browser: `e2e-voteguide.mjs` starts its own server (5510, or `BASE_PATH=/imaginesurrey
+PORT=5511`) on a file-backed database and restarts it with the clock moved to walk
+the guide from not out to over; a fake address service on 5513 and a framing page
+on 5514. `e2e-voted.mjs` checks GOTV's "The voter guide has other days" line;
+`e2e-site-render.mjs` draws the module in every state. Load, by hand:
+`node scripts/bench-voteguide.mjs` (`SECONDS=10` for a quick look): its server runs
+in a child process over the Postgres wire protocol (`DATABASE_URL`, else PGlite's
+socket server on 5514) and counts the database's queries — page draws per
+address, the guide's rev reads a minute (`BENCH_KINDS=1` lists the commonest).

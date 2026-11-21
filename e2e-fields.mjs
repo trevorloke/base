@@ -125,7 +125,7 @@ await sleep(600);
 let m = await measure(page);
 // A new campaign starts with the standard fields (server/ext/fields/people.js);
 // the suite's own three sit after them.
-const STANDARD = new Set(['Home phone', 'Province', 'House notes', 'Building notes', 'Access type', 'Dwelling type', 'Interaction status', 'Interaction date', 'Organizer', 'Email opt-in', 'SMS opt-in', 'Sign', 'Support', 'Voted', 'Voter eligibility', 'Language', 'Notes', 'Gender', 'Birth date', 'Citizenship', 'Union member', 'Union local', 'Campus', 'Other language', 'Interests', 'Interested in being a candidate']);
+const STANDARD = new Set(['Home phone', 'Province', 'House notes', 'Building notes', 'Access type', 'Dwelling type', 'Interaction status', 'Interaction date', 'Organizer', 'Email opt-in', 'SMS opt-in', 'Sign', 'Support', 'Voted', 'Voter eligibility', 'Language', 'Notes', 'Gender', 'Birth date', 'Citizenship', 'Union member', 'Union local', 'Campus', 'Other language', 'Faith', 'Interests', 'Interested in being a candidate']);
 const own = (fs) => fs.filter((f) => !STANDARD.has(f.name));
 check('a new campaign: the standard fields, one yellow "Add a field"', /Home phone/.test(await D.text()) && /Voted/.test(await D.text()) && m.yellow === 1 && /Add a field/i.test(await page.innerText('.btn-primary')), JSON.stringify(m));
 console.log(`      words on /people/fields (standard fields): ${m.words}`);
@@ -200,9 +200,12 @@ const before = await measure(spage);
 await sec.click();
 await sleep(300);
 const q = 'form[aria-label="More details"]';
-const labels = await spage.$$eval(`${q} .fd-q__label`, (els) => els.map((e) => e.textContent));
+// A Private field's label ends with its "Private" chip (Faith).
+const labels = await spage.$$eval(`${q} .fd-q__label`, (els) => els.map((e) => e.textContent.replace(/Private$/, '')));
 check('each field, in order', labels.filter((l) => !STANDARD.has(l)).join('|') === 'Language at home|Tenant group|Strata council member', labels.join('|'));
-check('Yes/No and Pick one are tap buttons, not selects', (await spage.$$(`${q} select`)).length === 0
+// The one scroll-down list is Dwelling type's; Pick one fields of 12 choices or fewer are buttons.
+const selects = await spage.$$eval(`${q} select`, (els) => els.map((e) => e.labels?.[0]?.textContent || e.id));
+check('Yes/No and Pick one are tap buttons; the only select is Dwelling type', selects.length === 1 && /Dwelling type/.test(selects[0])
   && (await spage.$$(`${q} .sv-q:has-text("Language at home") .sv-opt`)).length === 3 && (await spage.$$(`${q} .sv-q:has-text("Strata council member") .sv-opt`)).length === 2);
 m = await measure(spage, `${q} .sv-opt, ${q} input, ${q} .fd-save`);
 check('profile at 1360: field targets ≥ 40px (a desk with a mouse), no new yellow', m.minTap >= 40 && m.yellow === before.yellow && m.yellow <= 1, JSON.stringify(m));
@@ -376,16 +379,20 @@ check('Bring back: on the profile again with its value', (await S.api(`/persons/
 // ── 8. Import: a column fills a field by its name; a bad cell is refused by row ──
 await S.go('/people/import');
 await spage.click('button:has-text("Paste text")');
-await spage.fill('#imp-paste', `Name,Phone,Language at home,strata council member\nNew Example,604-555-0151,punjabi,yes\nBad Example,604-555-0152,Klingon,no`);
+await spage.fill('#imp-paste', `Name,Phone,Language at home,strata council member\nNew Example,604-555-0151,punjabi,yes\nBad Example,604-555-0152,Klingon,perhaps`);
 await spage.click('button:has-text("Use this text")');
 await sleep(500);
 const sel = await spage.$$eval('.imp-map__select', (els) => els.map((e) => e.options[e.selectedIndex].text));
 check('columns matched to fields by name (any case)', sel.join('|') === 'Full name|Phone|Language at home|Strata council member', sel.join('|'));
 await S.shot('09-import-mapping');
+// A Pick one's word not on its list is never a refusal now (FLD): the
+// mapping step offers it as "Keep as written". A Yes/No that isn't one is.
+const klingon = await spage.$eval('section.imp-rmap:has(h3:text-is("Language at home")) select[aria-label^="What “Klingon” means"]', (x) => x.selectedOptions[0].text).catch(() => '');
+check('a word not on the list: “Keep as written”, not a refusal', klingon === 'Keep as written', klingon);
 await spage.click('button:has-text("Check 2 rows")');
 await sleep(1200);
 const invalid = await spage.innerText('.imp-invalid').catch(() => '');
-check('a bad cell is refused with its row number', /Row 3/.test(invalid) && /Klingon/.test(invalid) && /isn’t one of the choices/.test(invalid), invalid);
+check('a bad cell is refused with its row number', /Row 3/.test(invalid) && /perhaps/.test(invalid), invalid);
 await spage.click('button:has-text("Import 1 person")');
 await sleep(1500);
 const neu = (await S.api('/persons?q=New%20Example')).json.persons[0];

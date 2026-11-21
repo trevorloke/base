@@ -95,7 +95,7 @@ await page.fill('#su-password', 'harbour-forward-2026');
 await page.click('button[type="submit"]');
 await page.waitForURL(/\/admin\/?$/, { timeout: 15000 });
 await go('/website');
-check('Overview: one row “Other websites”, none yet', /Other websites\s*None yet/.test(await page.locator('a.ms-home-row').innerText()));
+check('Overview: one row “Other websites”, none yet', /Other websites\s*None yet/.test(await page.locator('a.ms-home-row[href$="/website/sites"]').innerText()));
 await page.locator('.wb-tabs').getByRole('link', { name: 'Other websites' }).click();
 await page.waitForURL(/\/website\/sites$/);
 await page.locator('.ms-empty').waitFor();
@@ -129,9 +129,9 @@ await page.locator('.ms-check a', { hasText: 'Home page published' }).click();
 await page.waitForURL(/\/website\/pages\/[0-9a-f-]{36}/, { timeout: 15000 });
 await page.locator('.wb-build__on').waitFor({ timeout: 10000 });
 check('the builder: its home, “On Doug Didn’t Example”', /On Doug Didn’t Example/.test(await page.locator('.wb-build__on').innerText()));
-await page.locator('.wb-build__actions .btn-primary').click();
-await page.waitForFunction(() => /Published/.test(document.querySelector('.wb-build__actions .btn-primary')?.textContent || ''), null, { timeout: 15000 }).catch(() => {});
-check('published', /Published/.test(await page.locator('.wb-build__actions .btn-primary').innerText()));
+await page.locator('.wb-top .btn-primary').click();
+await page.waitForFunction(() => /Published/.test(document.querySelector('.wb-top .btn-primary')?.textContent || ''), null, { timeout: 15000 }).catch(() => {});
+check('published', /Published/.test(await page.locator('.wb-top .btn-primary').innerText()));
 await page.getByRole('link', { name: '← Pages' }).click();
 await page.waitForURL(new RegExp(`/website/sites/${siteId}/pages$`));
 await page.locator('.wb-row').first().waitFor();
@@ -238,7 +238,7 @@ check('the list: name first, Live / Draft, the domain or “No domain yet”, si
   && /Doug Didn’t Example\s*Live\s*dougdidnt\.test\s*1 sign-up this week/.test(rows[0]) && /Second Example\s*Draft\s*No domain yet\s*0 sign-ups this week/.test(rows[1]), JSON.stringify(rows));
 await both('7-sites-two');
 await go('/website');
-check('Overview: “Other websites · 1 live · 1 draft”', /Other websites\s*1 live · 1 draft/.test(await page.locator('a.ms-home-row').innerText()));
+check('Overview: “Other websites · 1 live · 1 draft”', /Other websites\s*1 live · 1 draft/.test(await page.locator('a.ms-home-row[href$="/website/sites"]').innerText()));
 
 // On a phone, a draft's ⋯ sits on the last row of a short page, just above
 // the tabs: its menu must open where Delete can be tapped, and the question

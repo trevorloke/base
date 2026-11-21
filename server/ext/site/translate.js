@@ -19,7 +19,6 @@
 // Nothing is ever translated while a visitor waits: a GET never queues a
 // sweep, and a segment a page needs but doesn't have shows in English.
 import { createHash } from 'node:crypto';
-import { Converter } from 'opencc-js/cn2t';
 import { checkProps } from '@starbase/shared/site/catalogue';
 import { OTHER_CODES, LANG_BY_CODE } from '../../../shared/site/languages.js';
 import { normSeg, segmentsOf, moduleSegments } from '../../../shared/site/segments.js';
@@ -34,8 +33,16 @@ import { cacheClear } from './cache.js';
 import { latestLegal, keyCurrent } from './legal.js';
 
 export const segHash = (text) => createHash('sha256').update(normSeg(text)).digest('hex');
-const toTraditional = Converter({ from: 'cn', to: 'tw' });
-export const convertToTraditional = (text) => toTraditional(String(text ?? ''));
+// The Simplified→Traditional dictionary is about 80 MB once built: loaded
+// the first time Traditional is made, never at start-up.
+let toTraditional = null;
+export const convertToTraditional = async (text) => {
+  if (!toTraditional) {
+    const { Converter } = await import('opencc-js/cn2t');
+    toTraditional = Converter({ from: 'cn', to: 'tw' });
+  }
+  return toTraditional(String(text ?? ''));
+};
 
 // The languages Google is asked for: Punjabi, and Simplified whenever
 // either Chinese is on (Traditional is made from it).
@@ -85,6 +92,10 @@ export const keptNames = async (q, ws, settings = null) => {
       if (m?.kind === 'quote') add(m.props?.name);
     }
   }
+  // The names on the voter guide's ballot (VG), exactly as typed.
+  for (const r of (await q.query('select names from vote_contests where workspace_id = $1 and deleted_at is null order by position', [ws.id])).rows) {
+    for (const n of parseJ(r.names, []) || []) add(n?.name);
+  }
   for (const n of s?.languages?.keep || []) add(n);
   return { names: out.slice(0, MAX_NAMES), tooMany: out.length > MAX_NAMES };
 };
@@ -99,14 +110,18 @@ const YEAR_MS = 365 * 24 * 3600 * 1000;
 export const liveStrings = async (q, ws, { settings = null, now = Date.now() } = {}) => {
   const s = settings || await readSettings(q, ws.id);
   const out = [];
-  const seen = new Set();
+  const seen = new Map(); // hash → its entry
   const push = (text, { kind = 'plain', cls = 'content', place, rank, essential, order = 0 }) => {
     const t = normSeg(text);
     if (!t) return;
     const h = segHash(t);
-    if (seen.has(h)) return;
-    seen.add(h);
-    out.push({ text: t, hash: h, kind, cls, place, rank: RANK[rank], essential, order });
+    // The same words twice are one sentence; checked first if either
+    // place asks for it (a petition's statement quoted on a page is still
+    // a statement people sign).
+    if (seen.has(h)) { if (cls === 'check-first') seen.get(h).cls = cls; return; }
+    const g = { text: t, hash: h, kind, cls, place, rank: RANK[rank], essential, order };
+    seen.set(h, g);
+    out.push(g);
   };
   const field = (type, value, o) => {
     for (const t of segmentsOf(type, value)) push(t, { ...o, kind: type === 'markdown' ? 'markdown' : 'plain' });
@@ -194,8 +209,40 @@ export const liveStrings = async (q, ws, { settings = null, now = Date.now() } =
     'select id, title from shifts where workspace_id = $1 and deleted_at is null and public and coalesce(ends_at, starts_at) >= now() order by starts_at limit 200', [ws.id],
   )).rows) field('text', r.title, { rank: 'shift', essential: false, place: `shift:${r.id}` });
 
+  // The voter guide (VG), once published: what to bring, who can vote, the
+  // note under the ballot, the offices and a closed place's note are shown
+  // translated only once a person checked them; a place's note is content.
+  // Place names, addresses, areas, ballot names and links are never sent.
+  const vg = (await q.query("select status, rules, ballot_note from vote_guide where workspace_id = $1", [ws.id])).rows[0];
+  if (vg?.status === 'published') {
+    const o = { rank: 'page', essential: true, order: 0 };
+    const rules = parseJ(vg.rules, {}) || {};
+    for (const k of ['bring_listed', 'bring_unlisted', 'who', 'mail', 'access']) {
+      for (const t of segmentsOf('markdown', rules[k])) push(t, { ...o, kind: 'markdown', cls: 'check-first', place: `guide:rules:${k}` });
+    }
+    push(vg.ballot_note, { ...o, cls: 'check-first', place: 'guide:ballot_note' });
+    for (const r of (await q.query('select office from vote_contests where workspace_id = $1 and deleted_at is null order by position', [ws.id])).rows) {
+      push(r.office, { ...o, cls: 'check-first', place: 'guide:office' });
+    }
+    for (const r of (await q.query(
+      `select i.note, i.closed_note from vote_place_info i join places p on p.id = i.place_id
+        where i.workspace_id = $1 and p.deleted_at is null order by i.position`, [ws.id],
+    )).rows) {
+      field('text', r.note, { ...o, place: 'guide:place' });
+      push(r.closed_note, { ...o, cls: 'check-first', place: 'guide:closed' });
+    }
+  }
+
   return out.sort((a, b) => (Number(b.essential) - Number(a.essential)) || (a.rank - b.rank) || (a.order - b.order));
 };
+
+// The sentences people sign: each petition's or pledge's statement, by the
+// hash of its words wherever else they also appear (decision 41: a manager
+// handles these).
+export const statementHashes = async (q, wsId) => new Set(
+  (await q.query('select statement from site_campaigns where workspace_id = $1 and deleted_at is null', [wsId])).rows
+    .map((r) => normSeg(r.statement)).filter(Boolean).map((t) => segHash(t)),
+);
 
 // ── The month's characters ──
 const monthOf = (tz) => {
@@ -283,8 +330,8 @@ export const writeBatch = async (db, workspaceId, { lang = null, good = [], fail
         if (!(cur.origin === 'machine' && cur.retranslate)) continue;
         await tx.query("update site_translation_versions set state = 'replaced', decided_at = now() where id = $1", [cur.version_id]);
         await tx.query(
-          `insert into site_translation_versions (id, workspace_id, lang, src_hash, text, origin, state) values ($1, $2, $3, $4, $5, 'machine', 'live')`,
-          [vid, workspaceId, lang, g.hash, g.text],
+          `insert into site_translation_versions (id, workspace_id, lang, src_hash, text, origin, state, replaced_id) values ($1, $2, $3, $4, $5, 'machine', 'live', $6)`,
+          [vid, workspaceId, lang, g.hash, g.text, cur.version_id],
         );
         await tx.query(
           `update site_translations set text = $4, version_id = $5, retranslate = false, checked_by = null, checked_at = null, place = $6, updated_at = now()
@@ -348,7 +395,7 @@ export const bumpRev = (tx, workspaceId, lang, { lastError } = {}) => tx.query(
 // write. A row a person edited in Traditional is never replaced; it goes
 // back under "To check".
 export const convertRow = async (tx, workspaceId, hash, src, simplified, place) => {
-  const text = convertToTraditional(simplified);
+  const text = await convertToTraditional(simplified);
   const cur = (await tx.query("select id, origin, version_id, text from site_translations where workspace_id = $1 and lang = 'zh-Hant' and src_hash = $2", [workspaceId, hash])).rows[0];
   if (cur?.origin === 'edited') {
     await tx.query("update site_translations set checked_by = null, checked_at = null, needs_check = true, updated_at = now() where id = $1", [cur.id]);
@@ -358,8 +405,8 @@ export const convertRow = async (tx, workspaceId, hash, src, simplified, place) 
   const vid = newId();
   if (cur) await tx.query("update site_translation_versions set state = 'replaced', decided_at = now() where id = $1", [cur.version_id]);
   await tx.query(
-    `insert into site_translation_versions (id, workspace_id, lang, src_hash, text, origin, state) values ($1, $2, 'zh-Hant', $3, $4, 'converted', 'live')`,
-    [vid, workspaceId, hash, text],
+    `insert into site_translation_versions (id, workspace_id, lang, src_hash, text, origin, state, replaced_id) values ($1, $2, 'zh-Hant', $3, $4, 'converted', 'live', $5)`,
+    [vid, workspaceId, hash, text, cur?.version_id || null],
   );
   await tx.query(
     `insert into site_translations (id, workspace_id, lang, src_hash, src, text, origin, version_id, place)

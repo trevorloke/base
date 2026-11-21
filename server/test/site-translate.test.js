@@ -7,6 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { renderMarkdown, blocksOf, drawBlocks } from '../../shared/markdown.js';
 import { segmentsOf, normSeg, moduleSegments, heroSegments, bandSegment } from '../../shared/site/segments.js';
 import { MODULES, MODULE_BY_KIND, checkProps } from '../../shared/site/catalogue.js';
@@ -215,9 +216,20 @@ test('islands carry their words in their props; English pages carry none', () =>
   assert.ok(!/"w":\{/.test(en.html));
 });
 
-test('Traditional is converted from Simplified (Taiwan character forms, no phrase swaps)', () => {
-  assert.equal(convertToTraditional('汉语简体发展参与软件'), '漢語簡體發展參與軟件');
-  assert.equal(convertToTraditional('Harbour City Together 选举'), 'Harbour City Together 選舉');
+test('Traditional is converted from Simplified (Taiwan character forms, no phrase swaps)', async () => {
+  assert.equal(await convertToTraditional('汉语简体发展参与软件'), '漢語簡體發展參與軟件');
+  assert.equal(await convertToTraditional('Harbour City Together 选举'), 'Harbour City Together 選舉');
+});
+
+test('the Traditional dictionary loads only when Traditional is made, never at start-up', () => {
+  // About 80 MB once loaded: a campaign that never turns 繁體 on never pays it.
+  const probe = `import { registerHooks } from 'node:module';
+    registerHooks({ resolve(spec, ctx, next) { if (spec.includes('opencc')) console.log('LOADED ' + spec); return next(spec, ctx); } });
+    await import(${JSON.stringify(new URL('../ext/site/index.js', import.meta.url).href)});
+    console.log('IMPORTED');`;
+  const r = spawnSync(process.execPath, ['--input-type=module', '-e', probe], { encoding: 'utf8', env: { ...process.env, STARBASE_DATA: 'memory' }, timeout: 60000 });
+  assert.match(r.stdout, /IMPORTED/, r.stderr.slice(0, 500));
+  assert.doesNotMatch(r.stdout, /LOADED/, 'importing the website does not load the dictionary');
 });
 
 test('every module kind’s fields say whether they are translated', () => {

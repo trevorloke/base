@@ -133,7 +133,12 @@ test('any other campaign: a clean generic site, with its own name and nothing ma
     const all = JSON.stringify(site) + JSON.stringify(home);
     assert.doesNotMatch(all, /Surrey|McCallum|SkyTrain|imaginesurrey/i, 'nothing of Imagine Surrey');
     const seed = await seedFor('base', { name: 'Riverside Neighbours' });
-    for (const p of seed.pages) assert.doesNotThrow(() => checkModules(p.modules, { strict: true }), p.slug);
+    // Its home's hero holds the catalogue's sample words: it shows on the
+    // site as made, and its first Publish asks for real ones (WA decision 18).
+    for (const p of seed.pages) {
+      if (p.slug === 'home') assert.throws(() => checkModules(p.modules, { strict: true }), /still has the sample words/);
+      else assert.doesNotThrow(() => checkModules(p.modules, { strict: true }), p.slug);
+    }
   } finally {
     delete process.env.STARBASE_BRAND;
   }
@@ -145,7 +150,12 @@ test('both seeds pass the publish check, module for module', async () => {
     const ids = Object.fromEntries((seed.campaigns || []).map((c, i) => [`@campaign:${c.slug}`, `00000000-0000-4000-8000-00000000000${i}`]));
     for (const p of seed.pages) {
       const modules = JSON.parse(JSON.stringify(p.modules).replace(/"@campaign:[^"]+"/g, (m) => JSON.stringify(ids[JSON.parse(m)])));
-      assert.doesNotThrow(() => checkModules(modules, { strict: true }), `${brand} ${p.slug}`);
+      // The generic home's hero is the catalogue's sample (WA decision 18):
+      // everything else in it passes.
+      const sample = brand === 'base' && p.slug === 'home';
+      const real = sample ? modules.filter((m) => m.kind !== 'hero') : modules;
+      if (sample) assert.throws(() => checkModules(modules, { strict: true }), /The sample|still has the sample words/);
+      assert.doesNotThrow(() => checkModules(real, { strict: true }), `${brand} ${p.slug}`);
     }
   }
 });

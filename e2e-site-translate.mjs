@@ -208,6 +208,15 @@ try {
   await page.locator('text=Saved').first().waitFor({ timeout: 10000 });
   // The machine's drafts arrive with the first sweep.
   await waitFor(async () => (await api('/site/languages/pa/legal')).json?.draft_from === 'machine');
+  // 繁體 before 简体 is approved: with no draft yet it says why the boxes are
+  // empty and Approve waits; with one (the sweep converted 简体's) it is labelled.
+  await go('/website/languages/zh-Hant/legal');
+  const hantFrom = (await api('/site/languages/zh-Hant/legal')).json?.draft_from ?? null;
+  const hantWait = await page.locator('.lg-wait').innerText().catch(() => '');
+  const hantOff = await page.getByRole('button', { name: 'Approve these words' }).isDisabled().catch(() => false);
+  check('2. 繁體 before 简体 is approved: no draft → “Approve 简体 first”, Approve off; a draft → no waiting note',
+    hantFrom === null ? /Approve 简体 first/.test(hantWait) && hantOff : !hantWait, `${hantFrom} | ${hantWait} | ${hantOff}`);
+  await both('legal-hant-waiting');
   for (const code of ['pa', 'zh-Hans', 'zh-Hant']) {
     await go(`/website/languages/${code}/legal`);
     if (code === 'pa') {
@@ -259,6 +268,24 @@ try {
     return [...document.querySelectorAll('.lang-switch a')].map((a) => { const l1 = lum(rgb(getComputedStyle(a).color)); const l2 = lum(bgOf(a)); return Math.round(((Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05)) * 10) / 10; });
   });
   check('3. the switch reads at 4.5:1 or better', contrast.length === 4 && contrast.every((c) => c >= 4.5), JSON.stringify(contrast));
+
+  // The privacy policy shown in English: its line is the bar's own; "Read it
+  // in English" is one 48 px target on a phone; a band's call to action has an edge.
+  for (const [w, h] of [[1440, 900], [390, 844]]) {
+    await v.setViewportSize({ width: w, height: h });
+    await v.goto(`${BASE}/site/pa/privacy`, { waitUntil: 'networkidle' });
+    const pol = await v.evaluate(() => { const p = document.querySelector('.lang-note--policy'); return p ? Boolean(p.closest('.lang-bar')) : null; });
+    if (pol !== null) check(`3. privacy at ${w}: “our policy is in English” sits inside the language bar`, pol === true);
+    await v.screenshot({ path: `${SHOTS}/privacy-pa-${w}.png` });
+    await v.goto(`${BASE}/site/pa/about`, { waitUntil: 'networkidle' });
+    if (w === 390) {
+      const readH = await v.evaluate(() => Math.round(document.querySelector('.lang-note a')?.getBoundingClientRect().height || 0));
+      check('3. “Read it in English” is 48 px on a phone', readH >= 48, readH);
+    }
+    const edge = await v.evaluate(() => { const b = document.querySelector('.tone-accent .btn--primary'); return b ? getComputedStyle(b).borderTopColor : null; });
+    check(`3. about at ${w}: the band’s button has an edge`, edge && !/rgba\(0, 0, 0, 0\)|transparent/.test(edge), edge);
+    await v.screenshot({ path: `${SHOTS}/about-pa-${w}.png` });
+  }
 
   // ── 4. ਪੰਜਾਬੀ on /about by the switch; the menu under /pa; a clean console; the footer ──
   consoleErr.length = 0;

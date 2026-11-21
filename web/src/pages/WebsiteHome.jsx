@@ -12,6 +12,7 @@ import { Link, useOutletContext } from 'react-router-dom';
 import { NoSignal, noSignal } from '../components/NoSignal.jsx';
 import { WebsiteTabs } from '../components/site/Bits.jsx';
 import { useSite, plural } from '../components/site/useSite.js';
+import { GUIDE_STATE, useSiteGuide } from '../components/site/useSiteGuide.js';
 import './shifts.css';
 import '../editor.css';
 import './website.css';
@@ -39,6 +40,7 @@ const LANG_LABELS = { pa: 'ਪੰਜਾਬੀ', 'zh-Hans': '简体', 'zh-Hant': 
 export default function WebsiteHome() {
   const { me } = useOutletContext() || {};
   const q = useSite();
+  const vg = useSiteGuide();
   const d = q.data;
   const home = d?.pages?.find((p) => p.slug === 'home');
   const live = home?.status === 'published';
@@ -108,6 +110,12 @@ export default function WebsiteHome() {
             <span aria-hidden="true">›</span>
           </Link>
 
+          <Link className="card ms-home-row" to="/website/guide">
+            <span className="ms-home-row__name">Voter guide</span>
+            <span className="ms-home-row__n">{vg.data ? GUIDE_STATE[vg.data.state] : vg.isError ? 'Unavailable' : 'Loading…'}</span>
+            <span aria-hidden="true">›</span>
+          </Link>
+
           <div className="wb-tiles">
             <section className="wb-tile" aria-labelledby="wb-t-week">
               <h2 id="wb-t-week" className="wb-tile__h">Sign-ups this week</h2>
@@ -119,6 +127,10 @@ export default function WebsiteHome() {
               <h2 id="wb-t-pages" className="wb-tile__h">Pages</h2>
               <p className="wb-tile__n">{c.pages ?? 0}</p>
               <p className="wb-tile__sub">{c.published ?? 0} on the site{drafts.length ? ` · ${plural(drafts.length, 'draft')}` : ''}</p>
+              {/* A typo on the home page: fixed and published in a few taps (WA). */}
+              {(d.pages || []).some((p) => p.slug === 'home') && (
+                <Link className="wb-tile__go" to={`/website/pages/${d.pages.find((p) => p.slug === 'home').id}`}>Edit the home page</Link>
+              )}
               <Link className="wb-tile__go" to="/website/pages">Edit pages</Link>
             </section>
             <section className="wb-tile" aria-labelledby="wb-t-news">

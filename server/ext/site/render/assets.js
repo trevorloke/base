@@ -1,8 +1,10 @@
 // The website's own files, served at {site root}site-assets/…:
 //
 //   site.css                  shared/site/site.css
+//   voteguide.css             shared/site/voteguide.css (the voter guide)
 //   fonts/<name>.woff2        shared/site/fonts/
 //   site-islands.js           web/dist/site-islands.js (built by `npm run build`)
+//   site-preview.js           web/dist/site-preview.js (a draft's live preview, WA)
 //
 // readSiteAsset(path) → { body, type, cache } or null, for the site's public
 // routes to send as is. Links carry ?v=<hash of the file> (assetUrl), and a
@@ -18,8 +20,10 @@ const TYPES = { css: 'text/css; charset=utf-8', js: 'text/javascript; charset=ut
 export function siteAssetFile(name) {
   const n = String(name || '').split(/[?#]/)[0].replace(/^\/+/, '');
   if (n === 'site.css') return `${SHARED}site.css`;
+  if (n === 'voteguide.css') return `${SHARED}voteguide.css`;
   if (/^fonts\/[a-z0-9-]+\.woff2$/.test(n)) return `${SHARED}${n}`;
   if (n === 'site-islands.js') return `${DIST}site-islands.js`;
+  if (n === 'site-preview.js') return `${DIST}site-preview.js`;
   return null;
 }
 
@@ -36,6 +40,7 @@ function load(file) {
 }
 
 export const islandsBuilt = () => existsSync(`${DIST}site-islands.js`);
+export const previewBuilt = () => existsSync(`${DIST}site-preview.js`);
 
 // The ?v= for a file (its content hash), '' when it isn't there.
 export function assetVersion(name) {

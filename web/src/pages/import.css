@@ -124,6 +124,18 @@
   .imp-rmap__row { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }
   .imp-rmap__own { display: none; }
 }
+/* A pick list's words (FLD): its choices are long, so the select gets the
+   room; on a phone the word sits on its own line over a full-width select. */
+.imp-rmap--list .imp-rmap__row { grid-template-columns: minmax(0, 1fr) auto minmax(240px, 400px); }
+.imp-rmap--list .imp-rmap__select { min-width: 0; width: 100%; }
+@media (max-width: 560px) {
+  .imp-rmap--list .imp-rmap__row { grid-template-columns: minmax(0, 1fr); gap: 4px; padding: var(--s-2) 0; }
+  .imp-rmap--list .imp-map__arrow { display: none; }
+  .imp-rmap--list .imp-rmap__word { white-space: normal; overflow-wrap: anywhere; }
+  .imp-rmap--list .imp-rmap__select { min-height: 48px; }
+}
+/* Waiting, not wrong: a quiet line, not the red bar. */
+.imp-wait { margin: 0 0 var(--s-4); padding: var(--s-2) var(--s-3); border-left: 3px solid var(--rule-2); color: var(--text-2); }
 
 .imp-map { list-style: none; margin: 0 0 var(--s-4); padding: 0; border-top: 1px solid var(--rule-2); }
 .imp-map__row {

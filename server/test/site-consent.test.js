@@ -157,3 +157,19 @@ test('the site’s preferences page belongs to the campaign it was signed for', 
   const other = await sign('person', { w: '00000000-0000-4000-8000-000000000000', p: p.id }, 600);
   assert.equal((await hit(`/site/preferences?t=${encodeURIComponent(other)}`)).status, 404);
 });
+
+test('Email opt-in marked Private: their own one-click unsubscribe still takes them off', async () => {
+  const F = Object.fromEntries((await mgr.get('/api/fields')).json.fields.filter((f) => !f.retired).map((f) => [f.name, f]));
+  ok(await send('newsletter', { first_name: 'Rae', email: 'rae.private@example.org', consent_email: true }));
+  const p = await one('rae.private@example.org');
+  ok(await mgr.action('field.update', { id: F['Email opt-in'].id, sensitive: true }));
+  try {
+    const t = await personToken(ws, p.id);
+    const done = await hit(`/site/unsubscribe?t=${encodeURIComponent(t)}`, { method: 'POST', form: { 'List-Unsubscribe': 'One-Click' } });
+    assert.equal(done.status, 200);
+    assert.equal((await subOf('rae.private@example.org')).status, 'unsubscribed');
+    assert.equal((await optIns(p.id))['Email opt-in'], false);
+  } finally {
+    ok(await mgr.action('field.update', { id: F['Email opt-in'].id, sensitive: false }));
+  }
+});

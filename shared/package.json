@@ -26,7 +26,10 @@
     "./fillwords": "./fillwords.js",
     "./letters": "./letters.js",
     "./buildings": "./buildings.js",
-    "./email/*": "./email/*.js"
+    "./voteguide": "./voteguide.js",
+    "./qr": "./qr.js",
+    "./email/*": "./email/*.js",
+    "./fieldlists": "./fieldlists.js"
   },
   "dependencies": {
     "htm": "^3.1.1",

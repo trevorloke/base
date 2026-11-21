@@ -31,7 +31,7 @@
 import { httpError } from '../../actions/util.js';
 import { newId, runAction } from '../../lib/events.js';
 import { enqueueJob, runJobsSoon } from '../../lib/jobs.js';
-import { loadList, recipientsOf } from '../lists/audience.js';
+import { handOn, loadList, recipientsOf, whereFor } from '../lists/audience.js';
 import { keyFor, lower, mailchimp, mailchimpOn, MailchimpError, pages } from './mailchimp.js';
 import { firstOf, plural, pull, PULL_JOB, queueDays, sayYes } from './pull.js';
 
@@ -97,6 +97,8 @@ export const startSync = async (tx, ctx, emit, { list_id: listId, everyone = fal
   const ws = ctx.workspaceId;
   const list = (await tx.query('select id, name from lists where id = $1 and workspace_id = $2 and deleted_at is null', [listId, ws])).rows[0];
   if (!list) throw httpError(404, 'list not found');
+  // Never a list picked by a Private field (ext/fields): refused at the tap.
+  await whereFor(tx, handOn(ctx), { list: await loadList(tx, ws, list.id) });
   if (agree) await sayYes(tx, emit, ws, audience, shown);
   else {
     const first = await firstOf(tx, ws, audience);
@@ -329,6 +331,8 @@ export const runSyncJob = async (db, job) => {
       runJobsSoon();
     }
   } catch (e) {
+    // The list was changed since to pick people by a Private field: its words, no retry.
+    if (e?.status === 409) { await stop(db, sync, e.message); return; }
     const words = e instanceof MailchimpError ? e.message : 'It stopped part-way';
     if (e instanceof MailchimpError && !e.retryable) { await stop(db, sync, words); return; }
     // Kept on the sync while the job runner waits to try again.

@@ -56,6 +56,22 @@ export const keptPartial = (data) => Boolean(data) && partial.has(data);
 // The data on screen is a copy (the server gave no answer for it).
 export const keptCopy = (data) => Boolean(data) && keptAt.has(data);
 
+// A profile's More details as kept: each Private field with no value, and
+// kept_out so the profile says "Needs signal" in its place.
+const keptOutPrivate = (d) => (Array.isArray(d?.fields) && d.fields.some((f) => f?.sensitive)
+  ? { ...d, fields: d.fields.map((f) => (f?.sensitive ? { ...f, value: null, at: null, by_name: null, kept_out: true } : f)) }
+  : d);
+
+// A field filter ("<field id>:<choice>") that may be on a Private field:
+// for the desk, unless the fields list it read says that field isn't one
+// (unknown counts as Private). A volunteer is never answered on one.
+const mayBePrivate = (v, me) => {
+  if (!isDeskRole(me.role)) return false;
+  const id = String(v).split(':')[0];
+  const f = (client?.getQueryData(['fields'])?.fields || []).find((x) => x?.id === id);
+  return !f || Boolean(f.sensitive);
+};
+
 // What a query's copy is called and where it lives, or null (not kept).
 // Shifts keep the names the field already uses (pages/Shifts.jsx), so Today
 // and Shifts read the same copy.
@@ -65,7 +81,8 @@ function planFor(key, me) {
   const money = desk ? 'session' : 'local';
   const q = (name, tier) => ({ name: `q:${me.role}:${name}`, tier });
   // A profile's More details (ext/fields), kept beside the profile; a volunteer's comes already narrowed.
-  if (key[0] === 'person' && key[2] === 'fields' && key.length === 3 && typeof key[1] === 'string') return q(`person:${key[1]}:fields`, money);
+  // Private fields (Faith) are kept without their value: no laptop's browser storage holds anyone's faith.
+  if (key[0] === 'person' && key[2] === 'fields' && key.length === 3 && typeof key[1] === 'string') return { ...q(`person:${key[1]}:fields`, money), shape: keptOutPrivate };
   const [k0, k1, k2] = key;
   // A profile's Knows (ext/relationships; desk only), kept beside the profile.
   if (k0 === 'person' && k2 === 'knows' && key.length === 3 && typeof k1 === 'string') return q(`person:${k1}:knows`, money);
@@ -83,9 +100,13 @@ function planFor(key, me) {
       return key.length === 3 && (k2 === 'fields' || k2 === 'knows') ? q(`person:${k1}:${k2}`, money) : null;
     // A search isn't kept (each one typed would be another copy, pushing the
     // whole list out): with no signal it's answered from the kept list. A
-    // desk's lists carry donor tags: this tab only.
-    case 'persons': return k1 === 'list' && key.length === 3
-      ? { ...q(`persons:${k2}`, money), keep: !(new URLSearchParams(String(k2)).get('q') || '').trim() } : null;
+    // desk's lists carry donor tags: this tab only. A list picked by a
+    // Private field (Faith) isn't kept: the copy would say who has it.
+    case 'persons': {
+      if (k1 !== 'list' || key.length !== 3) return null;
+      const p = new URLSearchParams(String(k2));
+      return { ...q(`persons:${k2}`, money), keep: !(p.get('q') || '').trim() && !p.getAll('field').some((v) => mayBePrivate(v, me)) };
+    }
     case 'signs': return key.length === 1 ? q('signs', 'local') : null;
     case 'texting': return (k1 === 'inbox' || k1 === 'thread') && key.length === 3 ? q(`texting:${k1}:${k2}`, 'local') : null;
     case 'shifts': return key.length === 1 ? { name: 'shifts', tier: 'local', field: true } : null;
@@ -100,6 +121,9 @@ function planFor(key, me) {
     case 'shiftturfs': return key.length === 1 ? { name: 'shiftturfs', tier: 'local', field: true } : null;
     // What to say at the door and on the phone (ext/scripts): it shows with no signal.
     case 'scripts': return key.length === 1 ? { name: 'scripts', tier: 'local', field: true } : null;
+    // The published voter guide (ext/voteguide): no person in it, so it lives
+    // in this browser for every role; "Where to vote" opens with no signal.
+    case 'guide': return key.length === 1 ? { name: 'guide', tier: 'local', field: true } : null;
     // Today's "Follow up" (ext/followups): who to call still shows with no
     // signal (a call needs none; the log goes through the outbox). A desk's
     // can hold a ladder's thank-you for a gift: this tab only.
@@ -205,7 +229,9 @@ function answered(query) {
 
 export async function keptPersister(queryFn, context, query) {
   const me = meNow();
-  const plan = planFor(query.queryKey, me);
+  // In as base.win support (ext/operator): the control centre's browser
+  // keeps no campaign's people for later — every read is asked fresh.
+  const plan = me?.operator ? null : planFor(query.queryKey, me);
   if (!plan) {
     const data = await queryFn(context);
     answered(query);
@@ -225,7 +251,7 @@ export async function keptPersister(queryFn, context, query) {
       const tier = tierOf(plan, data);
       // One copy, in one place: the other (an answer before the money came or went) goes.
       if (plan.moneyIn) removeCopy(copyKey(me, plan.name), otherTier(tier));
-      writeCopy(copyKey(me, plan.name), data, Date.now(), {
+      writeCopy(copyKey(me, plan.name), plan.shape ? plan.shape(data) : data, Date.now(), {
         tier, gen, group: plan.field ? null : { scope, name: 'q:', max: DESK_MAX },
       });
     }
@@ -289,7 +315,7 @@ export function watchKeptCopies(queryClient) {
 // meta: { side: true } on that useQuery: its time isn't what the screen
 // shows. Only Today and Money draw the brief (offline-copies.test.js checks).
 const SHOWN = new Set(['brief', 'persons', 'person', 'signs', 'shifts', 'shift', 'records',
-  'receipts', 'doors', 'turf', 'turfs', 'fieldReport', 'shiftturfs']);
+  'receipts', 'doors', 'turf', 'turfs', 'fieldReport', 'shiftturfs', 'guide']);
 const shown = (key) => SHOWN.has(key[0]) || (key[0] === 'texting' && (key[1] === 'inbox' || key[1] === 'thread'));
 // Watched by a screen that draws it (not only by side reads).
 const drawn = (q) => q.observers.some((o) => !o.options?.meta?.side);

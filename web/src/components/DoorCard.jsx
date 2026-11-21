@@ -52,7 +52,8 @@ import RatingButtons, { More, OutcomeButtons, OUTCOME_LABEL, PersonTabs, focusRa
 import { IKnowThem, KnowMeChip } from './RelationshipsBits.jsx';
 import QuickDetails from './QuickDetails.jsx';
 import SurveyQuestions, { answersSaid, answersTail, answersWord, useSurvey } from './SurveyQuestions.jsx';
-import { VotedRow } from './Voted.jsx';
+import { VotedRow, useVotedMode } from './Voted.jsx';
+import WhereToVote from './WhereToVote.jsx';
 import { LIT, OUTCOMES } from './RatingButtons.jsx';
 import RequestAsk from './RequestAsk.jsx';
 import AddressField, { lookupAddress } from './AddressField.jsx';
@@ -446,6 +447,7 @@ export default function DoorCard({ door, selectedId, onSelect, onClose, toast, m
   // A knock logged at this door since the card opened (Nobody home too):
   // inside a building, Next unit becomes the card's one primary.
   const [knocked, setKnocked] = useState(false);
+  const gotv = useVotedMode().on;
   // A Moved tap's "Where did … go?" ({ person, cid, queued }): the card keeps
   // them until it closes, then loads again.
   const [moving, setMoving] = useState(null);
@@ -698,6 +700,8 @@ export default function DoorCard({ door, selectedId, onSelect, onClose, toast, m
             onPick={(code) => log(sel, channel, 'contacted', code)}
           />
           <VotedRow person={sel} source={channel === 'phone' ? 'phone' : 'door'} toast={(text, o) => toast(text, o?.act || null)} onMarked={refresh} />
+          {/* GOTV mode: "Where to vote" a quiet link under Voted, never beside the buttons. */}
+          {gotv && channel === 'door' && <div className="vi-doorlink"><WhereToVote door={door} person={sel} at={doorTitle(door)} className="btn btn-quiet door-act" /></div>}
           <OutcomeButtons items={channel === 'door' ? [...OUTCOMES, LIT] : OUTCOMES} disabled={busy} onPick={(code) => log(sel, channel, code)} />
           {moving && (
             <MovePanel key={moving.cid || moving.person.id} person={{ ...moving.person, address: moving.person.address ?? door.address, unit: moving.person.unit ?? door.unit }}
@@ -747,6 +751,9 @@ export default function DoorCard({ door, selectedId, onSelect, onClose, toast, m
             {/* One look with Call and Text, in the same row. */}
             <Directions to={{ lat: door.lat, lng: door.lng, address: door.address, city: sel.city }} words={doorTitle(door)} mode="walking" className="btn door-act" />
             {sel.phone ? <span className="door-more__phone mono">{sel.phone}</span> : <span className="muted door-more__phone">No phone</span>}
+          </div>
+          <div className="door-more__row">
+            <WhereToVote door={door} person={sel} at={doorTitle(door)} />
           </div>
           {!sel.pending && (
             <QuickDetails key={`qd-${sel.id}`} person={sel} me={me} toast={toast}

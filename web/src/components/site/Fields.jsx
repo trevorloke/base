@@ -3,9 +3,11 @@
 // with nothing else to write. One component per field type:
 //   text · textarea · markdown (a small toolbar, Preview, pictures) · url ·
 //   link ({ label, href }) · image (upload or pick, a description for people
-//   who can't see it) · select · toggle · number · words (chips) · list
-//   (repeatable groups: open, move, remove) · campaign (a petition or
-//   pledge) · page (one of the site's pages)
+//   who can't see it) · select (the columns' icon: a grid of the drawn
+//   icons; a background: swatches in the theme's colours) · toggle · number
+//   · words (chips) · list (repeatable groups: a drag handle, ⋯ to move or
+//   remove, Undo) · campaign (a petition or pledge) · page (one of the
+//   site's pages)
 // Every box has its own label; a problem shows under its box (errors, keyed
 // by the catalogue's path: 'items[2].title') and the box says it's invalid.
 // ImageField is also the share picture's and the logo's (pages, settings,
@@ -13,13 +15,34 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { MODULE_BY_KIND } from '@starbase/shared/site/catalogue';
-import { MarkdownField, uploadImage } from '../MarkdownField.jsx';
+import { Icon } from '@starbase/shared/site/components/icons';
+import { useDragDrop } from '../useDragDrop.js';
+import { MarkdownField, shrinkImage, toDataUrl, uploadImage } from '../MarkdownField.jsx';
+import { pictureCopies } from '../brand-pictures.js';
+import './pictures.css';
+import { action } from '../../api.js';
 import { at } from '../../base.js';
-import { Dialog } from './Bits.jsx';
+import { Dialog, MoreMenu } from './Bits.jsx';
 import { useSitePictures } from './useSite.js';
 import { isSiteLink, tidyLink } from './builder.js';
 
 export const uploadSitePicture = (file) => uploadImage(file, 'site.picture');
+// A section's or a post's picture: with its smaller copies (480, 960 and
+// 1,600 px), so a phone fetches a phone-sized one (WA decision 26).
+export async function uploadSizedPicture(file) {
+  const { blob, width, height } = await shrinkImage(file);
+  const copies = await pictureCopies(file).catch(() => []);
+  const sizes = [];
+  for (const c of copies) sizes.push({ data: await toDataUrl(c.blob), width: c.width, height: c.height });
+  const res = await action('site.picture', { data: await toDataUrl(blob), name: file.name.slice(0, 200), width, height, ...(sizes.length ? { sizes } : {}) });
+  return res.media;
+}
+// The picture's value as the catalogue keeps it, from an upload or the list.
+const pictureValue = (m, alt = '') => ({
+  url: m.url || `/media/${m.id}`, alt,
+  ...(m.width && m.height ? { width: m.width, height: m.height } : {}),
+  ...(m.sizes?.length ? { sizes: m.sizes } : {}),
+});
 const domId = (s) => String(s).replace(/[^A-Za-z0-9_-]+/g, '-');
 const LINK_HINT = 'A page of the site (/donate, /#m-join) or a full address (https://…)';
 
@@ -92,8 +115,10 @@ function LinkField({ id, label, value, onChange, errors, path, pages }) {
   );
 }
 
-// ── A picture: upload or pick one, and say what it shows ──
-export function ImageField({ id, label, value, onChange, error, altError, required, hint }) {
+// ── A picture: upload or pick one, the spot to keep in view, and what it shows ──
+// plain: a logo or a share picture — one file as it is, no spot to keep in
+// view, never decorative.
+export function ImageField({ id, label, value, onChange, error, altError, required, hint, plain = false }) {
   const v = value && typeof value === 'object' ? value : { url: '', alt: '' };
   const file = useRef(null);
   const [busy, setBusy] = useState(false);
@@ -111,9 +136,9 @@ export function ImageField({ id, label, value, onChange, error, altError, requir
     setBusy(true);
     setUpErr(null);
     try {
-      const media = await uploadSitePicture(f);
+      const media = plain ? await uploadSitePicture(f) : await uploadSizedPicture(f);
       const now = latest.current;
-      now.onChange({ url: media.url || `/media/${media.id}`, alt: now.v.alt || '' });
+      now.onChange(plain ? { url: media.url || `/media/${media.id}`, alt: now.v.alt || '' } : pictureValue(media, now.v.alt || ''));
     } catch (err) {
       setUpErr(err.message);
     } finally {
@@ -122,18 +147,20 @@ export function ImageField({ id, label, value, onChange, error, altError, requir
   };
   const errText = error || upErr;
   const errId = errText ? `${id}-err` : null;
-  const noAlt = v.url && !String(v.alt || '').trim();
+  const noAlt = v.url && !v.decorative && !String(v.alt || '').trim();
   return (
     <fieldset className="wb-group wb-image" aria-describedby={describe(errId)}>
       <legend>{label}{required && <span className="wb-req"> (needed to publish)</span>}</legend>
       {hint && <p className="wb-field__hint">{hint}</p>}
       <div className="wb-image__row">
-        <div className="wb-image__thumb" data-empty={v.url ? undefined : ''}>
-          {v.url ? <img src={at(v.url)} alt={v.alt ? `Chosen: ${v.alt}` : 'The chosen picture'} loading="lazy" /> : <span aria-hidden="true">No picture</span>}
-        </div>
+        {v.url && !plain ? <FocusSpot id={id} v={v} onChange={onChange} /> : (
+          <div className="wb-image__thumb" data-empty={v.url ? undefined : ''}>
+            {v.url ? <img src={at(v.url)} alt={v.alt ? `Chosen: ${v.alt}` : 'The chosen picture'} loading="lazy" /> : <span aria-hidden="true">No picture</span>}
+          </div>
+        )}
         <div className="wb-image__tools">
           <input ref={file} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={pick} />
-          <button type="button" className="btn wb-tap" disabled={busy} onClick={() => file.current?.click()}>
+          <button type="button" id={`${id}-upload`} className="btn wb-tap" disabled={busy} onClick={() => file.current?.click()}>
             {busy ? 'Uploading…' : v.url ? 'Upload another' : 'Upload a picture'}
           </button>
           <button type="button" className="btn btn-quiet wb-tap" onClick={() => setPicking(true)}>Choose one uploaded</button>
@@ -141,13 +168,44 @@ export function ImageField({ id, label, value, onChange, error, altError, requir
         </div>
       </div>
       <Problem id={errId} text={errText} />
-      {v.url && (
-        <TextField id={`${id}-alt`} label="What the picture shows (for people who can’t see it)" max={300} value={v.alt}
+      {v.url && !v.decorative && (
+        <TextField id={`${id}-alt`} label="Describe the picture for people who can’t see it" max={300} value={v.alt}
           error={altError} hint={noAlt ? 'Say it in a few words, like “Volunteers knocking on doors on a sunny afternoon”.' : null}
           onChange={(alt) => onChange({ ...v, alt })} />
       )}
-      {picking && <PicturePicker onClose={() => setPicking(false)} onPick={(p) => { setPicking(false); onChange({ url: p.url, alt: v.alt || '' }); }} />}
+      {v.url && !plain && (
+        <ToggleField id={`${id}-deco`} label="Decorative (says nothing new)" value={v.decorative === true}
+          onChange={(on) => { const { decorative, ...rest } = v; onChange(on ? { ...rest, decorative: true } : rest); }} />
+      )}
+      {picking && <PicturePicker onClose={() => setPicking(false)} onPick={(p) => { setPicking(false); onChange(plain ? { url: p.url, alt: v.alt || '' } : pictureValue(p, v.alt || '')); }} />}
     </fieldset>
+  );
+}
+
+// The spot that must stay in view when the picture is cropped (a phone's
+// narrow hero, a square card): tap it on the picture, or move it with the
+// arrow keys. A dot marks it; the middle until someone chooses.
+function FocusSpot({ id, v, onChange }) {
+  const f = v.focus || { x: 50, y: 50 };
+  const set = (x, y) => {
+    const c = (n) => Math.max(0, Math.min(100, Math.round(n)));
+    const next = { x: c(x), y: c(y) };
+    const { focus, ...rest } = v;
+    onChange(next.x === 50 && next.y === 50 ? rest : { ...rest, focus: next });
+  };
+  const tap = (e) => {
+    const box = e.currentTarget.getBoundingClientRect();
+    if (!box.width || !box.height || e.detail === 0) return; // a keyboard "click"
+    set(((e.clientX - box.left) / box.width) * 100, ((e.clientY - box.top) / box.height) * 100);
+  };
+  const keys = { ArrowLeft: [-5, 0], ArrowRight: [5, 0], ArrowUp: [0, -5], ArrowDown: [0, 5] };
+  return (
+    <button type="button" id={`${id}-focus`} className="wb-image__thumb wb-focus" onClick={tap}
+      onKeyDown={(e) => { const k = keys[e.key]; if (k) { e.preventDefault(); set(f.x + k[0], f.y + k[1]); } }}
+      aria-label={`The spot to keep in view: ${f.x}% across, ${f.y}% down. Tap the picture, or use the arrow keys.`}>
+      <img src={at(v.url)} alt="" loading="lazy" />
+      <span className="wb-focus__dot" style={{ left: `${f.x}%`, top: `${f.y}%` }} aria-hidden="true" />
+    </button>
   );
 }
 
@@ -187,6 +245,54 @@ function SelectField({ id, label, value, options, onChange, error }) {
       </select>
       <Problem id={errId} text={error} />
     </div>
+  );
+}
+
+// The columns' icon: the drawn icons, each a radio with its name.
+function IconField({ id, label, value, options, onChange }) {
+  const cur = value || options[0]?.value;
+  const at = Math.max(0, options.findIndex((o) => o.value === cur));
+  const move = (e) => {
+    const d = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+    if (!d) return;
+    e.preventDefault();
+    const next = options[(at + d + options.length) % options.length];
+    onChange(next.value);
+    setTimeout(() => document.getElementById(`${id}-${next.value}`)?.focus(), 0);
+  };
+  return (
+    <fieldset className="wb-group">
+      <legend>{label}</legend>
+      <div className="wb-icons" role="radiogroup" aria-label={label} onKeyDown={move}>
+        {options.map((o) => (
+          <button key={o.value} type="button" id={`${id}-${o.value}`} role="radio" aria-checked={o.value === cur}
+            tabIndex={o.value === cur ? 0 : -1} className="wb-icons__btn" title={o.label} aria-label={o.label}
+            onClick={() => onChange(o.value)}>
+            <Icon name={o.value} size={24} />
+          </button>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
+// A background: swatches in the theme's colours, with their names.
+const TONE_COLOUR = { paper: 'paper', surface: 'surface', brand: 'brand', accent: 'accent', ink: 'ink' };
+function ToneField({ id, label, value, options, onChange, colors }) {
+  const cur = value || options[0]?.value;
+  return (
+    <fieldset className="wb-group">
+      <legend>{label}</legend>
+      <div className="wb-tones" role="radiogroup" aria-label={label}>
+        {options.map((o) => (
+          <label key={o.value} className="wb-tones__one" htmlFor={`${id}-${o.value}`}>
+            <input type="radio" id={`${id}-${o.value}`} name={id} value={o.value} checked={o.value === cur} onChange={() => onChange(o.value)} />
+            <span className="wb-tones__sw" style={colors?.[TONE_COLOUR[o.value]] ? { background: colors[TONE_COLOUR[o.value]] } : undefined} data-tone={o.value} aria-hidden="true" />
+            <span>{o.label}</span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
   );
 }
 
@@ -307,16 +413,29 @@ export function ListField({ id, f, value, onChange, errors, path, ctx }) {
     const bad = badKey.split('|').map((k) => Number(k.slice(path.length + 1).split(']')[0])).filter(Number.isInteger);
     setOpen((s) => (bad.every((i) => s.has(i)) ? s : new Set([...s, ...bad])));
   }, [badKey, path]);
+  // A box to put the cursor in (a tap in the preview): its item opens.
+  const want = ctx?.focus && String(ctx.focus).startsWith(`${path}[`) ? Number(String(ctx.focus).slice(path.length + 1).split(']')[0]) : null;
+  useEffect(() => {
+    if (Number.isInteger(want)) setOpen((s) => (s.has(want) ? s : new Set([...s, want])));
+  }, [want]);
   const toggle = (i) => setOpen((s) => { const n = new Set(s); if (n.has(i)) n.delete(i); else n.add(i); return n; });
-  const move = (i, d) => {
-    const j = i + d;
-    if (j < 0 || j >= items.length) return;
+  // From one place to another (dragged, or ⋯ Move up / Move down).
+  const moveTo = (i, j) => {
+    if (j < 0 || j >= items.length || i === j) return;
     const next = [...items];
-    [next[i], next[j]] = [next[j], next[i]];
+    const [x] = next.splice(i, 1);
+    next.splice(j, 0, x);
     onChange(next);
-    setOpen((s) => { const n = new Set(); for (const k of s) n.add(k === i ? j : k === j ? i : k); return n; });
+    setOpen(new Set());
     ctx?.announce?.(`Moved to ${j + 1} of ${items.length}`);
   };
+  const move = (i, d) => moveTo(i, i + d);
+  const dnd = useDragDrop({
+    onDrop: (item, key) => {
+      const to = Number(String(key).split(':').pop());
+      if (Number.isInteger(to)) moveTo(item.i, to);
+    },
+  });
   const remove = (i) => {
     const gone = items[i];
     onChange(items.filter((_, k) => k !== i));
@@ -341,17 +460,30 @@ export function ListField({ id, f, value, onChange, errors, path, ctx }) {
             const bodyId = `${id}-${i}-body`;
             const isOpen = open.has(i);
             const bad = Object.keys(errors || {}).some((k) => k.startsWith(`${path}[${i}]`));
+            const name = itemSummary(f, item, i);
+            const dropKey = `${id}:${i}`;
+            const isPicked = dnd.picked?.i === i;
             return (
-              <li key={i} className="wb-list__item" data-open={isOpen ? '' : undefined} data-bad={bad ? '' : undefined}>
+              <li key={i} className="wb-list__item" data-open={isOpen ? '' : undefined} data-bad={bad ? '' : undefined}
+                data-drop-key={dropKey} data-over={dnd.over(dropKey)} data-picked={isPicked ? '' : undefined}>
                 <div className="wb-list__head">
+                  <button type="button" className="wb-handle" {...dnd.itemProps({ id: `${id}:${i}`, i, label: name })}
+                    aria-label={isPicked ? `${name}: picked up — choose where it goes` : `Move ${name}`}>
+                    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><circle cx="9" cy="6" r="1.6" /><circle cx="15" cy="6" r="1.6" /><circle cx="9" cy="12" r="1.6" /><circle cx="15" cy="12" r="1.6" /><circle cx="9" cy="18" r="1.6" /><circle cx="15" cy="18" r="1.6" /></svg>
+                  </button>
                   <button type="button" className="wb-list__toggle" aria-expanded={isOpen} aria-controls={bodyId} onClick={() => toggle(i)}>
-                    <span className="wb-list__num" aria-hidden="true">{i + 1}</span>
-                    <span className="wb-list__sum">{itemSummary(f, item, i)}</span>
+                    <span className="wb-list__sum">{name}</span>
                     {bad && <span className="chip chip-danger">Needs a look</span>}
                   </button>
-                  <button type="button" className="btn btn-quiet wb-icon" aria-label={`Move ${itemSummary(f, item, i)} up`} disabled={i === 0} onClick={() => move(i, -1)}>↑</button>
-                  <button type="button" className="btn btn-quiet wb-icon" aria-label={`Move ${itemSummary(f, item, i)} down`} disabled={i === items.length - 1} onClick={() => move(i, 1)}>↓</button>
-                  <button type="button" className="btn btn-quiet wb-icon wb-icon--danger" aria-label={`Remove ${itemSummary(f, item, i)}`} onClick={() => remove(i)}>✕</button>
+                  {dnd.picked && !isPicked ? (
+                    <button type="button" className="btn wb-here" onClick={() => dnd.dropPicked(dropKey)}>Move here</button>
+                  ) : (
+                    <MoreMenu label={`More for ${name}`} items={[
+                      i > 0 && { label: 'Move up', onClick: () => move(i, -1) },
+                      i < items.length - 1 && { label: 'Move down', onClick: () => move(i, 1) },
+                      { label: 'Remove', onClick: () => remove(i), danger: true },
+                    ]} />
+                  )}
                 </div>
                 {isOpen && (
                   <div className="wb-list__body" id={bodyId}>
@@ -367,6 +499,7 @@ export function ListField({ id, f, value, onChange, errors, path, ctx }) {
           })}
         </ol>
       )}
+      <div className="wb-ghost" ref={dnd.ghostRef} hidden={!dnd.dragging} aria-hidden="true">{dnd.dragging?.label}</div>
       <button type="button" className="btn wb-tap wb-list__add" disabled={full} onClick={add}>
         {full ? `That’s the most (${f.max})` : `Add ${/^[aeiou]/i.test(one) ? 'an' : 'a'} ${one}`}
       </button>
@@ -376,15 +509,16 @@ export function ListField({ id, f, value, onChange, errors, path, ctx }) {
 
 // ── A petition or pledge ──
 // campaigns: null while they load (nothing is said to be gone till then).
-function CampaignField({ id, label, value, kinds, onChange, error, required, campaigns = null }) {
+function CampaignField({ id, label, value, kinds, onChange, error, required, campaigns = null, refresh }) {
   const errId = error ? `${id}-err` : null;
   const list = (campaigns || []).filter((c) => !kinds || kinds.includes(c.kind));
   const missing = value && !(campaigns || []).some((c) => c.id === value);
   return (
     <div className="field wb-field">
       <label htmlFor={id}>{label}{required && <span className="wb-req"> (needed to publish)</span>}</label>
+      {/* One made in another tab since: read again when the box is opened. */}
       <select id={id} className="input" value={value || ''} aria-invalid={error ? 'true' : undefined} aria-describedby={describe(errId)}
-        onChange={(e) => onChange(e.target.value)}>
+        onChange={(e) => onChange(e.target.value)} onFocus={() => refresh?.()}>
         <option value="">Pick one…</option>
         {missing && <option value={value}>{campaigns ? '(one that’s gone — pick another)' : 'Loading…'}</option>}
         {list.map((c) => (
@@ -434,12 +568,15 @@ export function Field({ f, id, path, value, onChange, errors, ctx }) {
     case 'url': return <UrlField {...common} error={err} pages={ctx?.pages} />;
     case 'link': return <LinkField {...common} errors={errors} path={path} pages={ctx?.pages} />;
     case 'image': return <ImageField {...common} error={err || errors?.[`${path}.url`]} altError={errors?.[`${path}.alt`]} />;
-    case 'select': return <SelectField {...common} options={f.options || []} error={err} />;
+    case 'select':
+      if (f.key === 'icon') return <IconField {...common} options={f.options || []} />;
+      if (f.key === 'tone') return <ToneField {...common} options={f.options || []} colors={ctx?.colors} />;
+      return <SelectField {...common} options={f.options || []} error={err} />;
     case 'toggle': return <ToggleField {...common} />;
     case 'number': return <NumberField {...common} min={f.min} max={f.max} error={err} />;
     case 'words': return <WordsField {...common} max={f.max} itemMax={f.itemMax} error={err || Object.entries(errors || {}).find(([k]) => k.startsWith(`${path}.`))?.[1]} />;
     case 'list': return <ListField id={id} f={f} value={value} onChange={onChange} errors={errors} path={path} ctx={ctx} />;
-    case 'campaign': return <CampaignField {...common} kinds={f.kinds} error={err} campaigns={ctx?.campaigns} />;
+    case 'campaign': return <CampaignField {...common} kinds={f.kinds} error={err} campaigns={ctx?.campaigns} refresh={ctx?.refreshCampaigns} />;
     case 'page': return <PageField {...common} error={err} pages={ctx?.pages} />;
     default: return null;
   }

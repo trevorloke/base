@@ -470,10 +470,13 @@ try {
     check(`${label}: the only doors read is /api/map/doors?mine=1`, doorAsks.length >= 1 && doorAsks.every((u) => /\/api\/map\/doors\?mine=1$/.test(u)), JSON.stringify(doorAsks));
     // Streets only once it knows where it looks: no city-wide tiles asked
     // for while the doors are on their way (OpenStreetMap's servers are
-    // volunteers'; the turf frames at about zoom 15). The notice probe's two
-    // asks (one far out on purpose) are not the map's tiles.
+    // volunteers'). The phone window is short, so the turf may frame at zoom
+    // 13 or 15 depending on its size: what matters is that the first tiles
+    // asked for are already at the framed zoom (none from a wider view first)
+    // and none is city-wide. The notice probe's two asks (one far out on
+    // purpose) are not the map's tiles.
     const zooms = v.net.osm.filter((t) => t.type !== 'probe').map((t) => Number((new URL(t.url).pathname.match(/^\/(\d+)\//) || [])[1])).filter(Number.isFinite);
-    check(`${label}: no street tiles asked for before the window frames on the turf (none below zoom 14)`, zooms.length > 0 && zooms.every((z) => z >= 14), JSON.stringify(zooms));
+    check(`${label}: no street tiles asked for before the window frames on the turf (none city-wide, none wider than the framed view)`, zooms.length > 0 && zooms.every((z) => z >= 13 && z >= zooms[0]), JSON.stringify(zooms));
     // The window frames its doors clear of the "Open the map" button that sits
     // over its corner: no door's circle under the button.
     const hidden = await pg.evaluate(() => {

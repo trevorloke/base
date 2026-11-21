@@ -46,6 +46,11 @@ import { noCalls } from '@starbase/shared/canvass';
 import { PassChip, TryAgainChip, WalkShow, overlayPass, waitingTries } from '../components/PassBits.jsx';
 import { nextDoor } from '@starbase/shared/buildings';
 import { VotedChip, VotedRow, pendingVoted } from '../components/Voted.jsx';
+import { usePracticeOverlay, useLiveChip } from '../components/GotvLive.js';
+import '../pages/gotv.css';
+import WhereToVote from '../components/WhereToVote.jsx';
+import { nearOpenPlace, useGuide } from '../components/guide.js';
+import { W as guideWords } from '../components/guideWords.js';
 import RequestAsk from '../components/RequestAsk.jsx';
 import './turfs.css';
 import './quick.css'; // the desk's Print beside Map
@@ -235,7 +240,7 @@ function TurfList() {
   return (
     <div className="turfs-page">
       <header className="page-head turfs-head">
-        <h1>{desk ? 'Turfs' : 'My turfs'}</h1>
+        <h1>{desk ? 'Turfs' : 'My walk lists'}</h1>
         {desk && turfs.length > 0 && <Link className="btn turfs-draw" to="/map?draw=1">+ Draw turf</Link>}
       </header>
       <PassChip pass={q.data?.pass} desk={desk} />
@@ -364,6 +369,11 @@ function WalkList({ id }) {
   const [docked, setDocked] = useState(false); // header's Next door scrolled away
   const [infoOpen, setInfoOpen] = useState(false);
   const [toastMsg, setToastMsg] = useState(null); // { text, tone, act }
+  // A get-out-the-vote pass: doors whose last supporter was marked voted
+  // elsewhere (the live list) fade, then leave after 5 s, with a line.
+  const [votedOff, setVotedOff] = useState(() => new Set());
+  const [leftNote, setLeftNote] = useState(0);
+  const live = useLiveChip();
   const toastTimer = useRef(null);
   const alive = useRef(true);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
@@ -427,6 +437,8 @@ function WalkList({ id }) {
   }, [outbox.items]);
   // "Voted ✓" taps still on this phone (ext/voted), laid over voted_at.
   const votes = useMemo(() => pendingVoted(outbox.items), [outbox.items]);
+  // Practice marks (in memory only while practice runs, components/GotvLive.js).
+  const practiced = usePracticeOverlay();
   // Knocks still on this phone that count as tries in the open pass.
   const waiting = useMemo(() => waitingTries(outbox.items, pass), [outbox.items, pass]);
   // Moves still on this phone: "Moving — sends soon" on the person.
@@ -451,7 +463,8 @@ function WalkList({ id }) {
       const persons = d.persons.map((p) => {
         const mine = local[p.id];
         const vote = votes[p.id];
-        const withVote = vote ? { ...p, voted_at: vote.voted ? vote.at || p.voted_at || new Date().toISOString() : null } : p;
+        const withVote = vote ? { ...p, voted_at: vote.voted ? vote.at || p.voted_at || new Date().toISOString() : null }
+          : practiced.has(p.id) ? { ...p, voted_at: practiced.get(p.id) || null } : p;
         const shown = movesWaiting[p.id] ? { ...withVote, moving: true } : withVote;
         return mine
           ? { ...shown, rating: mine.rating ?? p.rating, last_outcome: mine.outcome, last_contact_at: mine.at, door_knocked: true, queued: mine.queued }
@@ -481,8 +494,31 @@ function WalkList({ id }) {
         done: state === 'done',
         tries: Math.max(0, ...laid.map((p) => p.pass_tries || 0)),
       };
-    });
-  }, [q.data, q.dataUpdatedAt, local, added, waitingSigns, pass, votes, waiting, held, movesWaiting]);
+    }).filter((d) => !votedOff.has(d.key) || d.key === openKey || !d.persons.every((p) => p.voted_at));
+  }, [q.data, q.dataUpdatedAt, local, added, waitingSigns, pass, votes, practiced, waiting, held, movesWaiting, votedOff, openKey]);
+
+  // The doors a GOTV pass no longer needs (everyone there voted — marked
+  // here or elsewhere): they fade, and after 5 s leave the list. An open
+  // door never vanishes under the thumb: it leaves when it's closed.
+  const gotvPass = pass?.kind === 'gotv';
+  const leaving = useMemo(() => (gotvPass
+    ? doors.filter((d) => d.state === 'done' && d.persons.length > 0 && d.persons.every((p) => p.voted_at) && d.key !== openKey).map((d) => d.key)
+    : []), [doors, gotvPass, openKey]);
+  const leavingKey = leaving.join('|');
+  useEffect(() => {
+    if (!leaving.length) return undefined;
+    const t = setTimeout(() => {
+      setVotedOff((g) => new Set([...g, ...leaving]));
+      setLeftNote((n) => n + leaving.length);
+    }, 5000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leavingKey]);
+  useEffect(() => {
+    if (!leftNote) return undefined;
+    const t = setTimeout(() => setLeftNote(0), 10_000);
+    return () => clearTimeout(t);
+  }, [leftNote]);
 
   // The latest list, open door and knocks, for handlers that finish after an
   // await (and for the unmount note flush).
@@ -894,7 +930,7 @@ function WalkList({ id }) {
     const err = q.error;
     return (
       <div className="walk" ref={rootRef}>
-        <Link className="btn btn-quiet walk-back" to="/turfs">← Turfs</Link>
+        <Link className="btn btn-quiet walk-back" to="/turfs">{desk ? '← Turfs' : '← Walk lists'}</Link>
         <div className="walk-gone" role="alert">
           <p>
             {err?.status === 403
@@ -933,7 +969,7 @@ function WalkList({ id }) {
   return (
     <div className={`walk${target ? ' has-next' : ''}${openIdx >= 0 ? ' has-open' : ''}`} ref={rootRef} style={{ '--turf': turfColor(turf) }}>
       <div className="walk-nav">
-        <Link className="btn btn-quiet walk-back" to="/turfs">← Turfs</Link>
+        <Link className="btn btn-quiet walk-back" to="/turfs">{desk ? '← Turfs' : '← Walk lists'}</Link>
         <Link className="btn btn-quiet walk-act walk-map" to={`/map?turf=${turf.id}`} aria-label="Map of this turf">Map</Link>
         {/* The desk prints a sheet for a canvasser with no phone (WalkSheet.jsx); never in the field app. */}
         {desk && <Link className="btn btn-quiet walk-act walk-print" to={`/reports/walk?turf=${turf.id}`} aria-label="Print this turf’s walking list">Print</Link>}
@@ -984,6 +1020,11 @@ function WalkList({ id }) {
       )}
       {outbox.pending === 0 && outbox.lastError && <p className="error" role="alert">{outbox.lastError}</p>}
       {offlineCopy && <p className="walk-stale"><span className="chip">{copyChip(q)}</span></p>}
+      {/* GOTV: is this list live? ("Live", "Updated 3 min ago"); the phone copy's chip says Offline. */}
+      {live && !offlineCopy && <p className="walk-stale"><span className={`chip gv-live${live.live ? ' is-live' : ''}`}>{live.text}</span></p>}
+      <p className="gv-left" role="status" aria-live="polite">
+        {leftNote > 0 ? `${leftNote} ${leftNote === 1 ? 'door' : 'doors'} left your list — they voted` : ''}
+      </p>
 
       {total === 0 ? (
         <div className="walk-empty">
@@ -996,6 +1037,7 @@ function WalkList({ id }) {
             <Door
               key={d.key}
               door={d}
+              leaving={leaving.includes(d.key)}
               index={i}
               isNext={openIdx < 0 && i === targetIdx}
               open={openKey === d.key}
@@ -1047,10 +1089,18 @@ function WalkList({ id }) {
   );
 }
 
+// On a voting day while voting is open: a door within 150 m of an open
+// voting place says so in the list (no campaigning near it; VG decision 29).
+function NearChip({ door }) {
+  const g = useGuide({ side: true }).data;
+  if (!nearOpenPlace(g, door)) return null;
+  return <span className="chip vi-nearchip">{guideWords('vg.nearChip')}</span>;
+}
+
 function Door({
   door, index, isNext, open, onToggle, selectedId, onPick, busy, notes, setNote, onNoteFocus, onLog, onNobodyHome,
   onLeftLit, onVoted, onSign, onAdded, toast,
-  pass, moving = null, onMoveClose, desk = false,
+  pass, moving = null, onMoveClose, desk = false, leaving = false,
 }) {
   const [more, setMore] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -1102,7 +1152,7 @@ function Door({
       id={`walk-door-${index}`}
       tabIndex={-1}
       aria-labelledby={headId}
-      className={`walk-door${door.done ? ' is-done' : ''}${isNext ? ' is-next' : ''}${open ? ' is-open' : ''}`}
+      className={`walk-door${door.done ? ' is-done' : ''}${isNext ? ' is-next' : ''}${open ? ' is-open' : ''}${leaving ? ' gv-leaving' : ''}`}
     >
       <h2 className="walk-door__h">
         <button type="button" className="walk-door__head" aria-expanded={open} aria-controls={panelId} onClick={toggle}>
@@ -1122,6 +1172,7 @@ function Door({
               ? rated.length > 0 && <span className="chip walk-rated">{rated.length} rated</span>
               : rated.map((p) => <RatingChip key={p.id} code={p.rating} who brief />)}
             <VotedChip persons={door.persons} />
+            <NearChip door={door} />
           </span>
           <span className="walk-sr">
             {door.done ? (phoneOnly ? ' — called, not knocked' : ' — done') : door.state === 'again' ? ` — try again, ${door.tries} of ${pass?.tries}` : ' — not knocked yet'}{isNext ? ', next door' : ''}
@@ -1179,6 +1230,7 @@ function Door({
               {sel.phone && !noCalls(sel) && <a className="btn walk-act" href={`tel:${dialable(sel.phone)}`}>Call</a>}
               {!sel.pending && <Link className="btn btn-quiet walk-act" to={`/people/${sel.id}`} state={fromHere} onClick={markDoor}>Profile</Link>}
               <Directions to={{ lat: door.lat, lng: door.lng, address: door.address, city: sel.city }} words={door.address ? doorTitle(door) : null} mode="walking" className="btn btn-quiet walk-act" />
+              <WhereToVote door={door} person={sel} at={door.address ? doorTitle(door) : null} className="btn btn-quiet walk-act" />
               {!sel.pending && <RequestAsk person={sel} toast={(t, o) => toast(t, o)} />}
             </div>
             <IKnowThem key={`know-${sel.id}`} person={sel} />

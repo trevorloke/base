@@ -9,9 +9,12 @@
 //   toLocal(x, p)    a timestamptz expression → the campaign's wall-clock time
 //   fromLocal(x, p)  a wall-clock timestamp expression → the moment (timestamptz)
 // p is the SQL for the zone's name, e.g. '$3::text'.
-const BC = "'America/Vancouver'";
-const SINCE_UTC = "timestamptz '2026-03-08 10:00:00+00'"; // 3 a.m. PDT, the last spring-forward
-const SINCE_LOCAL = "timestamp '2026-03-08 03:00:00'";
+// The two moments are lib/tzrule.js's, so the SQL and the JavaScript rule are one.
+import { BC as ZONE, SINCE_UTC as UTC_AT, SINCE_LOCAL as LOCAL_AT } from './tzrule.js';
+
+const BC = `'${ZONE}'`;
+const SINCE_UTC = `timestamptz '${UTC_AT.replace('T', ' ').replace('Z', '+00')}'`; // 3 a.m. PDT, the last spring-forward
+const SINCE_LOCAL = `timestamp '${LOCAL_AT}'`;
 const UTC7 = "interval '-07:00'";
 
 export const toLocal = (x, p) => `(case when ${p} = ${BC} and (${x}) >= ${SINCE_UTC} then (${x}) at time zone ${UTC7} else (${x}) at time zone ${p} end)`;
