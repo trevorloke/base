@@ -47,7 +47,7 @@ const envBlock = (opts) => html`<pre class="oc-pre" id="env-block">${envLines(op
 // The address card's answer, next to the field.
 const ADDRESS_WORDS = {
   'not-checked': 'Not checked yet.',
-  'not-answering': 'Not answering yet. Wait for ‘Live’ in Render, then press Save address again.',
+  'not-answering': 'Not answering yet. Wait for ‘Live’ in Render, then press Save address again. If it never goes ‘Live’, its Render log says why: with DATABASE_URL empty the server won’t start.',
   elsewhere: 'This server says it is somewhere else: check the address.',
   'old-release': 'Answering, but on a release from before base.win sign-in. Run Promote to production (GitHub → Actions), wait for ‘Live’ in Render, then press Save address again.',
 };
@@ -57,17 +57,21 @@ const noKey = html`${status(NO_KEY_WORDS, 'warn')}
   <p class="oc-help">That setting is on the control centre’s own service in Render (base-platform). What to paste shows here once it is set.</p>`;
 
 // "Give it its address": <name>.base.win, a custom domain on the campaign's
-// own service. state: what the last check of that address said.
+// own service. state: what the last check of that address said
+// (campaigns.mjs publicState). old: the campaign is on a release from
+// before base.win sign-in, which never says which server it is.
 const PUBLIC_WORDS = {
   'not-answering': (host) => `Not answering at ${host} yet. It is checked every 5 minutes.`,
   elsewhere: (host) => `${host} answers, but from another server: check the CNAME record.`,
+  unknown: (host, old) => (old ? `${host} answers. Whether it is this campaign’s server shows after Promote to production.`
+    : `${host} answers. Whether it is this campaign’s server isn’t known yet: see the campaign’s page.`),
   answering: (host) => `Answering at ${host}`,
 };
-const publicCard = ({ name, serverUrl, state }) => {
+const publicCard = ({ name, serverUrl, state, old = false }) => {
   const host = publicHost(name);
   let target = '';
   try { target = serverUrl ? new URL(serverUrl).host : ''; } catch { target = ''; }
-  const words = PUBLIC_WORDS[state]?.(host) || '';
+  const words = PUBLIC_WORDS[state]?.(host, old) || '';
   return html`<li class="card"><h2>Give it its address</h2>
     <ol class="oc-howto">
       <li>Render → this campaign’s service → <b>Settings → Custom Domains</b> → add <code>${host}</code>.</li>
@@ -79,9 +83,14 @@ const publicCard = ({ name, serverUrl, state }) => {
   </li>`;
 };
 
+// The first manager's invite link is made from the campaign's own address
+// (its STARBASE_PUBLIC_URL), so it opens only once that address is ready.
+const inviteNotReady = (name) => `Their invite link goes to ${publicHost(name)}, which isn’t ready yet. The link opens once it is: do “Give it its address” first.`;
+
 export const setupPage = ({ v, values, publicKey, serverUrl, addressState, publicState, invited, snippet, stale = false, typed = null, message = '' }) => {
   const name = v.campaign.name;
   const answering = addressState === 'answering';
+  const invite = publicState === 'answering' ? { primary: true } : { primary: true, help: inviteNotReady(name) };
   return page({
     title: `Set up ${v.campaign.display}`, nav: true, here: 'campaigns',
     body: html`<h1>Set up ${v.campaign.display}</h1>
@@ -111,7 +120,7 @@ export const setupPage = ({ v, values, publicKey, serverUrl, addressState, publi
       ${answering ? html`${publicCard({ name, serverUrl, state: publicState })}
       <li class="card"><h2>Invite the first manager</h2>
         ${invited ? html`<p>First manager invited. <a href="/c/${name}">Go to ${v.campaign.display}</a></p>`
-    : v.block ? html`<p class="oc-block">Not ready to open the desk yet: see <a href="/c/${name}">${v.campaign.display}</a>.</p>` : inviteForm(v, { primary: true })}
+    : v.block ? html`<p class="oc-block">Not ready to open the desk yet: see <a href="/c/${name}">${v.campaign.display}</a>.</p>` : inviteForm(v, invite)}
       </li>` : ''}
     </ol>
     <details class="oc-more"><summary class="btn btn-quiet">More</summary>
@@ -125,8 +134,12 @@ export const setupPage = ({ v, values, publicKey, serverUrl, addressState, publi
 // Set-up steps for a campaign added when it was already running. Nothing
 // was typed here to make its settings from, so this page shows none: only
 // the one line every campaign gets (base.win’s public key) and its address.
+// On a release from before base.win sign-in the line isn't read yet, so
+// Promote comes first; adding the line early does no harm.
+const OLD_RELEASE_WORDS = 'This campaign is on a release from before base.win sign-in, which doesn’t read the line below. Run Promote to production (GitHub → Actions) first, wait for ‘Live’ in Render, then press Check now on its page.';
 export const runningSetupPage = ({ v, publicKey, serverUrl, publicState, entry = null, message = '' }) => {
   const name = v.campaign.name;
+  const old = entry === 'old-release';
   return page({
     title: `Set up ${v.campaign.display}`, nav: true, here: 'campaigns',
     body: html`<h1>Set up ${v.campaign.display}</h1>
@@ -134,12 +147,13 @@ export const runningSetupPage = ({ v, publicKey, serverUrl, publicState, entry =
     ${status(message, message ? 'warn' : '')}
     <ol class="oc-steps">
       <li class="card"><h2>Let base.win sign in</h2>
+        ${old ? status(OLD_RELEASE_WORDS, 'warn') : ''}
         ${publicKey ? html`<p>Render → this campaign’s service → <b>Environment</b> → add this line, then <b>Save and deploy</b>.</p>
         <pre class="oc-pre" id="key-line">BASE_PLATFORM_PUBKEY=${publicKey}</pre>
         <button class="btn btn-quiet oc-copy-btn" type="button" data-copy="key-line">Copy</button>
         ${status(entry === 'ready' ? 'base.win sign-in is ready there' : '', entry === 'ready' ? 'ok' : '')}` : noKey}
       </li>
-      ${publicCard({ name, serverUrl, state: publicState })}
+      ${publicCard({ name, serverUrl, state: publicState, old })}
     </ol>
     <p><a class="btn btn-quiet" href="/c/${name}">Back to ${v.campaign.display}</a></p>`,
   });

@@ -38,11 +38,13 @@ The campaign's website sends people in with a key; the API is
 Postgres. On Render, `render.yaml` creates one per environment and fills
 `DATABASE_URL` from it. Without `DATABASE_URL` base.win keeps everything in a
 built-in database on the server's disk (`STARBASE_DATA`, default
-`./data/starbase`) — fine on a laptop, not for the team.
+`./data/starbase`) — fine on a laptop, not for the team. On Render a
+service with no `DATABASE_URL` does not start, and its log says why.
 
 | Setting | Default | Notes |
 |---|---|---|
 | `DATABASE_URL` | — | `postgres://…`; `sslmode=require` in it turns TLS on |
+| `STARBASE_EMBEDDED_DB` | off | `1`: on Render, start on the built-in database anyway. Only with a disk mounted at `STARBASE_DATA`; without one the campaign is lost at the next deploy. The control centre shows such a server as *Not on a real database* |
 | `PGSSL` / `PGSSL_STRICT` | off | `1` to force TLS / to verify the certificate |
 | `PG_POOL_MAX` | `10` | connections per server |
 | `PG_CONNECT_TIMEOUT_MS` | `30000` | how long to wait for a database connection before giving an error (a dropped connection reconnects on the next query; `/api/health` says `"database": "not reachable"` while it's down) |
@@ -875,7 +877,9 @@ translated: a manager approves them per language.
   for the languages list (5 s); **Check translation** sends one fixed
   sentence to Punjabi and says "Names kept · Header accepted · Placeholders
   kept". What it learns chooses how names and the key are sent from then
-  on. Press it once on staging after the key is in Render.
+  on. Press it once after the key is in Render, on the service that holds
+  it: production for a client's key. Staging is public, so it takes
+  base.win's own key or none, never a client's (GOING-LIVE.md, section 0).
 - **Tests** use `server/test/fake-translate.js` through
   `GOOGLE_TRANSLATE_API_BASE`; no test calls Google.
 

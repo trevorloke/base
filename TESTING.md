@@ -49,11 +49,16 @@ database (what Render keeps as backups depends on the plan: GOING-LIVE.md,
 *Getting data back*). Every setting below, and where its key comes from:
 INTEGRATIONS.md.
 
-1. The Blueprint is already in Render: Render → **Blueprints** → the
-   Blueprint → **Manual Sync**, after the name check in GOING-LIVE.md
-   section 0. It holds `base-win-staging` + `base-win-staging-db`,
-   `base-win` + `base-win-db` and `base-platform` + `base-platform-db`
-   (paid plans — check Render’s current pricing).
+1. Render → **Blueprints**: see whether this repository is listed, which
+   branch it follows and whether Auto Sync is on (GOING-LIVE.md section 0,
+   *Before a Blueprint sync*). If it is listed, a change to `render.yaml`
+   is applied by a sync: by itself at the merge when Auto Sync is on,
+   otherwise with the Blueprint → **Manual Sync**; either way after the
+   name check there. A sync applies the whole file. If none is listed, the
+   services were made by hand: do not make a new Blueprint over them
+   without that name check. `render.yaml` holds `base-win-staging` +
+   `base-win-staging-db`, `base-win` + `base-win-db` and `base-platform` +
+   `base-platform-db` (paid plans — check Render’s current pricing).
 2. In the `base-win` service → **Environment**, set:
 
 | Variable | What for | Needed to test? |
@@ -1136,9 +1141,11 @@ comes back, or asks if words were typed meanwhile).
   Google's address rows only with `ADDRESS_SUGGEST=google` and the logo, a
   pick placed by B.C. within 4 s, one Google call for 50 asks after a
   refusal; today's counts survive a restart; Directions links never carry
-  an origin. On staging with a real key, also record one tile's
-  `Cache-Control` and how many tiles a phone walking a turf for an hour
-  used (Settings → Services → Map background shows today's count).
+  an origin. With a real key, also record one tile's `Cache-Control` and
+  how many tiles a phone walking a turf for an hour used (Settings →
+  Services → Map background shows today's count). A client's key is on its
+  production only; staging is public, so there only base.win's own key,
+  with `GOOGLE_TILES_DAILY_MAX` set (GOING-LIVE.md, section 0).
 - **Google Maps, the screens** (`node e2e-gmaps.mjs`: base.win on :5340, a
   stand-in B.C. service on :5341 and a stand-in Google on :5342; every real
   Google and B.C. address is blocked) — with only the key, Show → Map is
@@ -1153,7 +1160,8 @@ comes back, or asks if words were typed meanwhile).
   with or without Google; the *Maps by Google* line ends the Show sheet
   and Your profile. On a phone: a door's More → *Directions* opens Google
   Maps walking to the door; a sign's *Directions* opens it driving.
-- **Map, Google Maps refusing** (staging with `GOOGLE_MAPS_SERVER_KEY` set) — a
+- **Map, Google Maps refusing** (a service with `GOOGLE_MAPS_SERVER_KEY`
+  set; on staging that is base.win's own key, never a client's) — a
   key with billing off, or block `/tiles/` in the browser's network tools
   and reload: the map turns to the free map and says *Google Maps isn’t
   loading — showing the free map*; a manager's *Why?* beside it opens the

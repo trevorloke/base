@@ -3,8 +3,9 @@
 // of staging's, the random lines left to the browser), the time zone from
 // the province, the campaign's own address (<name>.base.win), the
 // render.yaml block for us, the short set-up page of a campaign that was
-// already running, the code window on every save, and the checklist
-// ticking itself (and staying ticked).
+// already running (and what it says while that campaign is on an older
+// release), the code window on every save, and the checklist ticking
+// itself (and staying ticked).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -19,10 +20,12 @@ import { JURISDICTIONS as SERVER_RULES, geoBounds } from '../../../server/lib/or
 baseEnv();
 const INST = 'EBESExQVFhcYGRobHB0eHw';
 const answers = new Map();
+// The status an address answers with, when it isn't 200.
+const statuses = new Map();
 const fetcher = async (url) => {
   const a = answers.get(url);
   if (!a) throw Object.assign(new Error('x'), { name: 'ECONNREFUSED' });
-  return { status: 200, body: JSON.stringify(a), ms: 4 };
+  return { status: statuses.get(url) || 200, body: JSON.stringify(a), ms: 4 };
 };
 const health = (origin, over = {}) => ({
   ok: true, database: 'ok', service: 'starbase', env: 'production', commit: 'd9130ae', tzdataCurrent: true, ownOrigin: origin, instance: INST,
@@ -215,22 +218,39 @@ test('pasting its address: a stale code saves nothing; then it answers, pins, an
   assert.match(body, /btn btn-quiet" type="submit">Save address/);
   assert.equal([...body.matchAll(/btn-primary/g)].length, 1);
   assert.ok(!(await done('riverton')).has('public'), 'not ticked before the address answers');
+  // The invite’s link goes to riverton.base.win: said while that address isn’t ready.
+  const NOT_READY = /id="invite-riverton-help">Their invite link goes to riverton\.base\.win, which isn’t ready yet\. The link opens once it is: do “Give it its address” first\.</;
+  assert.match(body, NOT_READY);
   // Some other server answers at that name: said, and not ticked.
   answers.set('https://riverton.base.win/api/health', health(R, { instance: 'AAAAAAAAAAAAAAAAAAAAAA' }));
   await b.post('/c/riverton/check-now', {});
-  assert.match(await (await b.get('/c/riverton/setup')).text(), /riverton\.base\.win answers, but from another server: check the CNAME record\./);
+  body = await (await b.get('/c/riverton/setup')).text();
+  assert.match(body, /riverton\.base\.win answers, but from another server: check the CNAME record\./);
+  assert.match(body, NOT_READY);
   assert.ok(!(await done('riverton')).has('public'));
+  // On the campaign’s page too: a chip, and the Health row.
+  const other = await (await b.get('/c/riverton')).text();
+  assert.match(other, /<li class="chip chip-warn">riverton\.base\.win answers from another server<\/li>/);
+  assert.match(other, /<dt>riverton\.base\.win<\/dt><dd>Answering from another server<\/dd>/);
   // The domain is added: the check of https://riverton.base.win reaches the pinned server.
   answers.set('https://riverton.base.win/api/health', health(R));
   await b.post('/c/riverton/check-now', {});
   body = await (await b.get('/c/riverton/setup')).text();
   assert.match(body, /class="oc-status oc-ok" role="status" aria-live="polite">Answering at riverton\.base\.win</);
   assert.equal((await done('riverton')).get('public'), 'auto');
-  assert.match(await (await b.get('/c/riverton')).text(), /Answers at riverton\.base\.win<\/span>\s*<span class="oc-check-state">Done by itself/);
+  assert.doesNotMatch(body, /Their invite link goes to|isn’t ready yet/);
+  assert.match(body, /id="invite-riverton-help">Do this first, so the campaign has its own manager\.</);
+  const page = await (await b.get('/c/riverton')).text();
+  assert.match(page, /Answers at riverton\.base\.win<\/span>\s*<span class="oc-check-state">Done by itself/);
+  assert.match(page, /<dt>riverton\.base\.win<\/dt><dd>Answering<\/dd>/);
+  assert.doesNotMatch(page, /another server/);
 });
 
 test('a new service on a release from before base.win sign-in: the address card says so, and what to do', async () => {
   const W = 'https://base-win-westcan.onrender.com';
+  // Not up yet: wait for Live, and where to look if it never gets there.
+  assert.equal((await b.post('/c/westcan/setup', { server_url: W })).status, 303);
+  assert.match(await (await b.get('/c/westcan/setup')).text(), /class="oc-status oc-warn" role="status" aria-live="polite">Not answering yet\. Wait for ‘Live’ in Render, then press Save address again\. If it never goes ‘Live’, its Render log says why: with DATABASE_URL empty the server won’t start\.</);
   answers.set(`${W}/api/health`, { ok: true, database: 'ok', service: 'starbase', env: 'production', commit: '04ab25f', tzdataCurrent: true });
   assert.equal((await b.post('/c/westcan/setup', { server_url: W })).status, 303);
   const body = await (await b.get('/c/westcan/setup')).text();
@@ -306,6 +326,47 @@ test('Set-up steps for a campaign that was already running: a short page, only b
   // The sample and an unknown name have no such page.
   assert.equal((await b.get('/c/sample/setup')).status, 404);
   assert.equal((await b.get('/c/nobody/setup')).status, 404);
+});
+
+test('a running campaign on a release from before base.win sign-in: its own address answers and is never called another server; Promote comes first', async () => {
+  const O = 'https://base-win-oldrun.onrender.com';
+  // What such a release answers, at its Render address and at its own address.
+  const old = { ok: true, database: 'ok', service: 'starbase', env: 'production', commit: '04ab25f', tzdataCurrent: true };
+  answers.set(`${O}/api/health`, old);
+  answers.set('https://oldrun.base.win/api/health', old);
+  assert.equal((await b.post('/existing', { name: 'oldrun', display: 'Example Old', server_url: O })).headers.get('location'), '/c/oldrun');
+  assert.equal((await db.query("select instance from environments where campaign = 'oldrun'")).rows[0].instance, null, 'it says no instance, so none is pinned');
+  let body = await (await b.get('/c/oldrun/setup')).text();
+  assert.doesNotMatch(body, /another server|check the CNAME record/);
+  assert.match(body, /class="oc-status oc-warn" role="status" aria-live="polite">oldrun\.base\.win answers\. Whether it is this campaign’s server shows after Promote to production\.</);
+  // Promote first, above the line to add; the line stays (adding it early does no harm).
+  assert.match(body, /<h2>Let base\.win sign in<\/h2>\s*<p class="oc-status oc-warn" role="status" aria-live="polite">This campaign is on a release from before base\.win sign-in, which doesn’t read the line below\. Run Promote to production \(GitHub → Actions\) first, wait for ‘Live’ in Render, then press Check now on its page\.<\/p>/);
+  assert.match(body, /id="key-line">BASE_PLATFORM_PUBKEY=/);
+  assert.equal([...body.matchAll(/btn-primary/g)].length, 0);
+  // Its page agrees: answering, no chip about another server, and not ticked.
+  let page = await (await b.get('/c/oldrun')).text();
+  assert.match(page, /<dt>oldrun\.base\.win<\/dt><dd>Answering \(not confirmed as this server yet\)<\/dd>/);
+  assert.doesNotMatch(page, /another server/);
+  assert.ok(!(await done('oldrun')).has('public'));
+  // Promoted: the release says where it is, the server is recognised, and the address is its own.
+  answers.set(`${O}/api/health`, health(O, { instance: 'OOOOOOOOOOOOOOOOOOOOOO' }));
+  answers.set('https://oldrun.base.win/api/health', health(O, { instance: 'OOOOOOOOOOOOOOOOOOOOOO' }));
+  await b.post('/c/oldrun/check-now', {});
+  body = await (await b.get('/c/oldrun/setup')).text();
+  assert.match(body, /class="oc-status oc-ok" role="status" aria-live="polite">Answering at oldrun\.base\.win</);
+  assert.doesNotMatch(body, /from before base\.win sign-in|Promote to production/);
+  assert.equal((await done('oldrun')).get('public'), 'auto');
+  // Its database down: a 503 that names no instance. Still its own address, not another server.
+  const down = health(O, { ok: false, database: 'not reachable', instance: null, setupOpen: null, campaignMade: null });
+  for (const url of [`${O}/api/health`, 'https://oldrun.base.win/api/health']) { answers.set(url, down); statuses.set(url, 503); }
+  await b.post('/c/oldrun/check-now', {});
+  body = await (await b.get('/c/oldrun/setup')).text();
+  assert.doesNotMatch(body, /another server|check the CNAME record|Promote to production/);
+  assert.match(body, /class="oc-status oc-warn" role="status" aria-live="polite">oldrun\.base\.win answers\. Whether it is this campaign’s server isn’t known yet: see the campaign’s page\.</);
+  page = await (await b.get('/c/oldrun')).text();
+  assert.match(page, /<li class="chip chip-warn">Database not reachable<\/li>/);
+  assert.doesNotMatch(page, /another server/);
+  statuses.clear();
 });
 
 test('auto ticks are set from the checks and never cleared by a later failure', async () => {

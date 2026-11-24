@@ -6,7 +6,7 @@ import { codeWindow } from './auth-routes.mjs';
 import { form } from './web.mjs';
 import { pollOnce } from './poller.mjs';
 import { pubkeyValue } from './keys.mjs';
-import { NAME_RE, NAME_HELP, RESERVED, normalizeOrigin, getCampaign, campaignView, createCampaign, saveEnv, entryState, oldRelease } from './campaigns.mjs';
+import { NAME_RE, NAME_HELP, RESERVED, normalizeOrigin, getCampaign, campaignView, createCampaign, saveEnv, entryState, oldRelease, publicState } from './campaigns.mjs';
 import { doneFor, setItem } from './checklist.mjs';
 import { PROVINCES, TIME_ZONES, JURISDICTIONS, RACES, tzFor, pickValues, hasValues, mapBounds, renderSnippet } from './snippets.mjs';
 import { newPage, setupPage, runningSetupPage, existingPage } from './pages/wizard.mjs';
@@ -30,12 +30,6 @@ const addressState = (v) => {
   if (!v.server.answering) return 'not-answering';
   if (oldRelease(v.server)) return 'old-release';
   return v.server.own_origin === v.envRow.server_url && v.server.env_reported === 'production' ? 'answering' : 'elsewhere';
-};
-// Does <name>.base.win reach this campaign's server? The same four answers.
-const publicState = (v) => {
-  if (!v.pub) return 'not-checked';
-  if (!v.pub.answering) return 'not-answering';
-  return v.envRow.instance && v.pub.instance === v.envRow.instance ? 'answering' : 'elsewhere';
 };
 
 export const wizardRoutes = (app, ctx) => {

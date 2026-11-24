@@ -6,7 +6,7 @@
 #               Imagine Surrey: base-win → https://imaginesurrey.base.win
 #   Admin       base-platform, the control centre → https://ops.base.win
 # The front page, https://base.win, is apps/front/index.html: a static site set
-# up by hand in Render (not in this file); it frames staging's demo.
+# up by hand in Render (not in this file), from `main`; it frames staging's demo.
 # Each service has its own Postgres database; nothing is shared between them.
 #
 # Another client is made with the control centre: ops.base.win → New campaign
@@ -81,6 +81,9 @@ services:
       # Staging is the public demo: anyone can open it and is signed in as
       # the sample campaign's manager. So its email and texting keys are test
       # keys or unset, never a client's, and it never holds a real list.
+      # Its map and translation keys are base.win's own, with a daily ceiling
+      # set (GOOGLE_TILES_DAILY_MAX, GOOGLE_PLACES_DAILY_MAX), or unset:
+      # never a client's (GOING-LIVE.md §0).
       - key: STARBASE_BRAND
         value: base
       - key: STARBASE_ORG_NAME
@@ -123,9 +126,9 @@ services:
         sync: false
       - key: TWILIO_FROM
         sync: false
-      - key: GOOGLE_MAPS_SERVER_KEY  # optional: Google map tiles and (when ADDRESS_SUGGEST=google) address suggestions (INTEGRATIONS.md)
+      - key: GOOGLE_MAPS_SERVER_KEY  # optional: Google map tiles and (when ADDRESS_SUGGEST=google) address suggestions (INTEGRATIONS.md). Staging is public: base.win's own key with GOOGLE_TILES_DAILY_MAX and GOOGLE_PLACES_DAILY_MAX set, or unset, never a client's
         sync: false
-      - key: GOOGLE_TRANSLATE_KEY  # optional: the website in Punjabi and Chinese (Cloud Translation only; INTEGRATIONS.md)
+      - key: GOOGLE_TRANSLATE_KEY  # optional: the website in Punjabi and Chinese (Cloud Translation only; INTEGRATIONS.md). Staging is public: base.win's own key or unset, never a client's
         sync: false
       - key: GOOGLE_OAUTH_CLIENT_ID  # optional: Sign in with Google and Google connections (INTEGRATIONS.md); staging's own client
         sync: false

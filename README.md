@@ -206,7 +206,7 @@ button isn't shown). Both are on the event log, never the link
 base.win's control centre (ops.base.win, `apps/platform/README.md`) lists
 every campaign and opens any campaign's desk with one tap, already signed
 in. The visit lands on the campaign's own Render address
-(`…onrender.com/admin`), never base.win/<name>, so it can't reach another
+(`…onrender.com/admin`), never `<name>.base.win`, so it can't reach another
 campaign. It comes in as the member **base.win support** (a manager, with no
 password: only the control centre opens it), or as the operator's own
 account when that is already on the team — whose role never changes (a
@@ -231,7 +231,9 @@ sign-up is closed: the control centre's first visit makes the campaign.
 `/api/health` shows what the control centre needs and nothing about people:
 `ownOrigin`, `instance`, `address`, `entry` (`ready`, `no-key`, `bad-key`,
 `no-origin`), `platformKids`, `setupOpen`, `campaignMade` (a workspace
-exists) and `doorKey`.
+exists) and `store` (`postgres` or `embedded`: where the campaign is kept).
+It also says `doorKey`, which only the door option reads (not in use
+today).
 
 ### Email from a person's page
 
@@ -1719,8 +1721,8 @@ environment (`server/lib/org.js`); the code names no client.
 | `STARBASE_PROVINCE` | two letters, for geocoding | `BC` |
 | `STARBASE_GEO_BOUNDS` | `lat,lng\|lat,lng`, the box address lookups and suggestions are kept to (BC, Google, Nominatim) | Surrey's |
 | `STARBASE_SLATES` | `code:Label,code:Label` — the slates a gift can go to, each its own annual limit | `council:City council,school_board:School board` |
-| `STARBASE_CANDIDATES` | `4D:Name:Label;4B:Name` — the opposed candidates a new rating scale starts with (the desk edits them after) | Imagine Surrey's |
-| `STARBASE_ENV` | `production` or `staging` — said on screen and at `/api/health` | from `NODE_ENV` |
+| `STARBASE_CANDIDATES` | `4D:Name:Label;4B:Name` — the opposed candidates a new rating scale starts with (the desk edits them after), or `none` for no opponents | Imagine Surrey's |
+| `STARBASE_ENV` | `production` or `staging` — said on screen and at `/api/health` | `production` when hosted (`NODE_ENV=production`, or on Render), else `local` |
 | `STARBASE_BRAND` | `imagine-surrey` or `base` — the brand a campaign starts from, until a manager saves its own in Settings → Brand (*The look and the brand*, above) | `base` on staging or for another campaign; else Imagine Surrey's |
 | `SITE_HOSTS` | the campaign's own domains (`imaginesurrey.ca,www.imaginesurrey.ca`): the website at `/` there, nothing of the app — written with a final dot too (`imaginesurrey.ca.`), it's the same domain (SITE.md) | blank: the website is at `/site/` only |
 | `APP_HOSTS` | the app's other addresses on this server (an older one people still use, such as `starbase.imaginesurrey.ca`, beside the public `imaginesurrey.base.win`): never made a website domain, so the app keeps answering there (SITE.md) | blank |
