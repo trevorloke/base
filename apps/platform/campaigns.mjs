@@ -6,9 +6,16 @@ import { currentKid } from './keys.mjs';
 import { appendLog } from './log.mjs';
 import { pickValues } from './snippets.mjs';
 
-// The door's own rule for a name, with no trailing dash.
+// A short name is the first part of the campaign's address (<name>.base.win):
+// letters, numbers and dashes, no dash at either end.
 export const NAME_RE = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
-export const RESERVED = ['ops', 'hub', 'api', 'admin', 'platform', '_ops', '_hooks', 'www', 'door', 'status', 'help', 'mail', 'app', 'desk', 'field', 'site', 'login', 'assets', 'sample'];
+// Names base.win keeps for itself (apps/door/door.mjs has the same list; a test checks).
+export const RESERVED = ['ops', 'hub', 'api', 'admin', 'platform', '_ops', '_hooks', 'www', 'door', 'status', 'help', 'mail', 'app', 'desk', 'field', 'site', 'login', 'assets', 'sample', 'staging', 'demo'];
+export const NAME_HELP = 'Use letters, numbers and dashes. It’s the address: <name>.base.win.';
+
+// A client's own address, as the owner reads it and as the poller asks it.
+export const publicHost = (name) => `${name}.base.win`;
+export const publicAddress = (name) => cfg().publicTemplate.replace('{name}', name);
 
 // A pasted Render address → its origin (lowercased, no default port, no
 // path), or null. https only; http://127.0.0.1 or localhost in tests only.
@@ -75,9 +82,17 @@ export const history = async (db, name, env, now = new Date()) => {
 
 const kidsOf = (check) => (Array.isArray(check?.platform_kids) ? check.platform_kids : []);
 
-// What base.win sign-in looks like there: 'ready' | 'not-set-up' | 'wrong-key' | null (no answer).
+// A campaign server that has the control centre's side always says how
+// ready it is for base.win sign-in (health entry) and where it is. One that
+// answers as a campaign server and says neither is on a release from before
+// it: no setting there will help, only a newer release.
+export const oldRelease = (server) => Boolean(server?.answering) && server.entry == null && server.own_origin == null && server.database != null;
+
+// What base.win sign-in looks like there: 'ready' | 'not-set-up' | 'wrong-key' |
+// 'old-release' | null (no answer).
 export const entryState = (server, kid = currentKid()) => {
   if (!server?.answering) return null;
+  if (oldRelease(server)) return 'old-release';
   if (server.entry !== 'ready') return 'not-set-up';
   return kid && kidsOf(server).includes(kid) ? 'ready' : 'wrong-key';
 };
@@ -89,6 +104,7 @@ export const openBlock = (campaign, envRow, server, kid = currentKid()) => {
   if (!envRow?.server_url) return 'no-address';
   if (!server) return 'not-checked';
   if (!server.answering) return 'not-answering';
+  if (oldRelease(server)) return 'old-release';
   if (server.own_origin !== envRow.server_url || server.env_reported !== envRow.env) return 'elsewhere';
   if (!envRow.instance) return server.instance ? 'elsewhere' : 'not-checked';
   if (server.instance !== envRow.instance) return 'changed';
@@ -97,21 +113,36 @@ export const openBlock = (campaign, envRow, server, kid = currentKid()) => {
   return null;
 };
 
-// The chips, only those that are true.
-export const chipsFor = ({ campaign, envRow, server, door, newest, kid = currentKid() }) => {
+// A commit as the pages show it.
+export const shortCommit = (commit) => String(commit || '').slice(0, 7);
+
+// The chips, only those that are true. (pub: the newest check of the
+// client's own address; newest: the production commit deployed last;
+// staging: the commit the sample's staging server is on.)
+export const chipsFor = ({ campaign, envRow, server, pub, newest, staging = null, kid = currentKid() }) => {
   const out = [];
   if (!server?.answering) return out;
+  const client = campaign.kind === 'client';
   if (server.database !== 'ok') out.push('Database not reachable');
+  if (server.store === 'embedded') out.push('Not on a real database');
+  if (client && server.setup_open === true && server.campaign_made === false) out.push('Sign-up is open to anyone');
   if (server.tz_current === false) out.push('Time zone data old');
   const entry = entryState(server, kid);
+  if (entry === 'old-release') out.push('On a release from before base.win sign-in');
   if (entry === 'not-set-up') out.push('base.win sign-in not set up');
   if (entry === 'wrong-key') out.push('Key in Render is wrong: copy base.win’s key again');
-  if (server.own_origin !== envRow.server_url || server.env_reported !== envRow.env) out.push('This server says it is somewhere else');
-  else if (envRow.instance && server.instance !== envRow.instance) out.push('Server changed: confirm it');
-  else if (!envRow.instance && server.instance) out.push('This server says it is somewhere else');
-  if (server.door_key === false && campaign.kind === 'client') out.push('Door key not set');
-  if (campaign.kind === 'client' && door && !door.answering) out.push(`base.win/${campaign.name} not answering`);
-  if (campaign.kind === 'client' && newest && server.commit && server.commit !== newest) out.push('Version differs');
+  // An older release doesn't say where it is: that is not "somewhere else".
+  if (entry !== 'old-release') {
+    if (server.own_origin !== envRow.server_url || server.env_reported !== envRow.env) out.push('This server says it is somewhere else');
+    else if (envRow.instance && server.instance !== envRow.instance) out.push('Server changed: confirm it');
+    else if (!envRow.instance && server.instance) out.push('This server says it is somewhere else');
+  }
+  if (client && pub && !pub.answering) out.push(`${publicHost(campaign.name)} not answering`);
+  if (client && newest && server.commit && server.commit !== newest) out.push('Version differs');
+  // A Promote is waiting: staging has a release production doesn't.
+  if (client && staging && server.commit && shortCommit(server.commit) !== shortCommit(staging)) {
+    out.push(`Production is on ${shortCommit(server.commit)}; staging is on ${shortCommit(staging)}`);
+  }
   return out;
 };
 
@@ -121,14 +152,18 @@ export const listCampaigns = async (db) => {
   const envs = (await db.query('select * from environments')).rows;
   const checks = await latestChecks(db);
   const newest = await newestCommit(db);
+  // What staging is on: the sample's newest answer.
+  const sample = campaigns.find((c) => c.kind === 'sample');
+  const sampleCheck = sample ? checks.get(`${sample.name}/staging/server`) : null;
+  const staging = sampleCheck?.answering && sampleCheck.commit ? sampleCheck.commit : null;
   const out = [];
   for (const c of campaigns) {
     const env = envOf(c);
     const envRow = envs.find((e) => e.campaign === c.name && e.env === env) || { campaign: c.name, env };
     const server = checks.get(`${c.name}/${env}/server`) || null;
-    const door = checks.get(`${c.name}/${env}/door`) || null;
+    const pub = checks.get(`${c.name}/${env}/public`) || null;
     const since = server && !server.answering ? await downSince(db, c.name, env) : null;
-    out.push({ campaign: c, env, envRow, server, door, since, chips: chipsFor({ campaign: c, envRow, server, door, newest }), block: openBlock(c, envRow, server) });
+    out.push({ campaign: c, env, envRow, server, pub, since, chips: chipsFor({ campaign: c, envRow, server, pub, newest, staging }), block: openBlock(c, envRow, server) });
   }
   return out;
 };

@@ -3,10 +3,11 @@ import { html, raw, num, clock, ago, dayClock } from './html.mjs';
 import { page, field, status, codeField } from './layout.mjs';
 import { logLine } from './log.mjs';
 import { openForm, inviteForm, checklist } from './desk.mjs';
+import { publicHost } from '../campaigns.mjs';
 import { RULE_WORDS, RACES } from '../snippets.mjs';
 
 const ENV_WORD = { production: 'Production', staging: 'Staging' };
-const VALUE_WORDS = { city: 'City', province: 'Province', rules: 'Rules', tz: 'Time zone', races: 'Races' };
+const VALUE_WORDS = { city: 'City', province: 'Province', rules: 'Rules', tz: 'Time zone', races: 'Races', bounds: 'Map area' };
 
 // "Production · Answering · d9130ae · checked 2 min ago" (or "Not answering since 3:10 pm").
 export const statusLine = (v, now = Date.now()) => {
@@ -65,11 +66,12 @@ export const campaignsPage = ({ views, sampleStale = false, sampleValue = '', sa
 
 const valueWords = (k, val) => {
   if (k === 'rules') return RULE_WORDS[val] || val;
+  if (k === 'bounds') return String(val).split('|').map((corner) => corner.replace(',', ', ')).join(' to ');
   if (k === 'races' && Array.isArray(val)) return val.map((r) => RACES.find(([code]) => code === r)?.[1] || r).join(', ');
   return Array.isArray(val) ? val.join(', ') : val;
 };
 
-const ENTRY_WORDS = { ready: 'Ready', 'not-set-up': 'Not set up', 'wrong-key': 'Key in Render is wrong' };
+const ENTRY_WORDS = { ready: 'Ready', 'not-set-up': 'Not set up', 'wrong-key': 'Key in Render is wrong', 'old-release': 'Not in this release' };
 
 // Why the desk can't be opened, in one line.
 export const BLOCK_WORDS = {
@@ -77,6 +79,7 @@ export const BLOCK_WORDS = {
   'no-address': 'No Render address saved yet — add it under More → Edit.',
   'not-checked': 'Not checked yet — press Check now.',
   'not-answering': 'Not answering — can’t open the desk.',
+  'old-release': 'This campaign is on a release from before base.win sign-in, so its desk can’t be opened from here yet. Run Promote to production (GitHub → Actions), wait for ‘Live’ in Render, then press Check now.',
   'not-set-up': 'base.win sign-in isn’t set up there: add BASE_PLATFORM_PUBKEY in Render (copy it from base.win’s key), Save and deploy. If you just did, wait for ‘Live’, then press Check now.',
   'wrong-key': 'Key in Render is wrong: copy base.win’s key again, then Save and deploy.',
   elsewhere: 'This server says it is somewhere else — check the Render address saved here.',
@@ -88,11 +91,12 @@ const health = (v, entry) => {
   const rows = [
     ['Answering', !s ? 'Not checked yet' : s.answering ? 'Yes' : (v.since ? `No, since ${clock(v.since)}` : 'No')],
     ['Version', s?.commit || '—'],
-    ['Database', !s?.answering ? '—' : s.database === 'ok' ? 'Fine' : 'Not reachable'],
+    ['Database', !s?.answering ? '—' : s.database !== 'ok' ? 'Not reachable' : s.store === 'embedded' ? 'Built in: not a real database' : 'Fine'],
     ['Time zone data', !s?.answering || s.tz_current == null ? '—' : s.tz_current ? 'Current' : 'Old'],
     ['base.win sign-in', entry ? ENTRY_WORDS[entry] : '—'],
     ['Render address', v.envRow.server_url || 'Not saved'],
     ['base.win address', s?.address || '—'],
+    ...(v.campaign.kind === 'client' ? [[publicHost(v.campaign.name), !v.pub ? 'Not checked yet' : v.pub.answering ? 'Answering' : 'Not answering']] : []),
     ['Last checked', s ? dayClock(s.at) : 'Not yet'],
   ];
   return html`<dl class="oc-dl">${rows.map(([k, val]) => html`<div><dt>${k}</dt><dd>${val}</dd></div>`)}</dl>`;

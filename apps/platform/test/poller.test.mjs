@@ -1,22 +1,24 @@
-// The poller: what a health check keeps, the door check's address, the
-// guard on every fetch, pinning, and the 7-day sweep.
+// The poller: what a health check keeps, the public address it also asks
+// (https://<name>.base.win), the guard on every fetch, pinning, the 7-day
+// sweep, and what the checklist ticks from the answers.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { freshApp, baseEnv } from './helpers.mjs';
 import * as fake from './fake-health.mjs';
 import { safeGet, addressAllowed } from '../safe-fetch.mjs';
 import { pollOnce, checkUrl } from '../poller.mjs';
-import { createCampaign } from '../campaigns.mjs';
+import { createCampaign, publicAddress } from '../campaigns.mjs';
 import { currentKid } from '../keys.mjs';
 
 baseEnv();
 process.env.OPS_ALLOW_LOCAL = '1';
-process.env.OPS_DOOR_ORIGIN = fake.ORIGIN;
+// The stand-in for every client's public address: /<name> on the fake server.
+process.env.OPS_PUBLIC_TEMPLATE = `${fake.ORIGIN}/{name}`;
 const INST = 'EBESExQVFhcYGRobHB0eHw';
 const health = (over = {}) => ({
   ok: true, database: 'ok', service: 'starbase', env: 'production', organization: 'Example Campaign', commit: 'd9130ae', build: 'index-abc.js',
-  tzdataCurrent: true, ownOrigin: fake.ORIGIN, instance: INST, address: 'https://base.win/a', entry: 'ready', platformKids: [currentKid()],
-  setupOpen: false, campaignMade: true, doorKey: true, ...over,
+  tzdataCurrent: true, ownOrigin: fake.ORIGIN, instance: INST, address: 'https://a.base.win', entry: 'ready', platformKids: [currentKid()],
+  setupOpen: false, campaignMade: true, store: 'postgres', ...over,
 });
 const { db } = await freshApp();
 await db.transaction((tx) => createCampaign(tx, { name: 'a', display: 'Example A', serverUrl: fake.ORIGIN }));
@@ -25,7 +27,7 @@ const latest = async (via = 'server') => (await db.query("select * from checks w
 before(fake.start);
 after(fake.stop);
 
-test('a healthy answer: only the known fields kept, strings cut to 200; the door asked at base.win/<name>, never at the address given', async () => {
+test('a healthy answer: only the known fields kept, strings cut to 200; the public address asked where it is built here, never at the address given', async () => {
   fake.handlers.set('/api/health', fake.json(200, health({ commit: 'x'.repeat(500), secretThing: 'nope', address: 'https://evil.example/elsewhere', platformKids: ['k1', 7, 'k2'] })));
   fake.handlers.set('/a/api/health', fake.json(200, health()));
   fake.seen.length = 0;
@@ -37,11 +39,13 @@ test('a healthy answer: only the known fields kept, strings cut to 200; the door
   assert.deepEqual(s.platform_kids, ['k1', 'k2']);
   assert.equal(s.own_origin, fake.ORIGIN);
   assert.equal(s.entry, 'ready');
-  assert.equal(s.door_key, true);
+  assert.equal(s.store, 'postgres');
+  assert.ok(!('door_key' in s), 'nothing of the door is kept');
   assert.ok(!JSON.stringify(s).includes('nope'), 'unknown keys are dropped');
   assert.deepEqual(fake.seen.map((r) => r.url).sort(), ['/a/api/health', '/api/health']);
   assert.ok(fake.seen.every((r) => r.ua === 'base.win-control-centre' && !r.cookie && !r.auth));
-  assert.equal((await latest('door')).answering, true);
+  assert.equal((await latest('public')).answering, true);
+  assert.equal((await db.query("select count(*)::int n from checks where via not in ('server', 'public')")).rows[0].n, 0);
 });
 
 test('a 503 with its database down is still an answer, and kept', async () => {
@@ -174,4 +178,75 @@ test('Campaign made on a server from before campaignMade: setupOpen false with n
   answers.set(`${U}/api/health`, health({ ownOrigin: U, setupOpen: false, campaignMade: undefined, platformKids: [] }));
   await pollOnce(d, { fetcher });
   assert.equal(await made(), 'auto');
+});
+
+// (Each of these starts from an empty database, so they come last.)
+test('a client’s public address is https://<name>.base.win; only a stand-in with {name} in it replaces that', async () => {
+  const was = process.env.OPS_PUBLIC_TEMPLATE;
+  delete process.env.OPS_PUBLIC_TEMPLATE;
+  assert.equal(publicAddress('riverton'), 'https://riverton.base.win');
+  process.env.OPS_PUBLIC_TEMPLATE = 'https://one-address.example.org';
+  assert.equal(publicAddress('riverton'), 'https://riverton.base.win', 'no {name}: every client would share it');
+  process.env.OPS_PUBLIC_TEMPLATE = 'http://127.0.0.1:5603/{name}/';
+  assert.equal(publicAddress('riverton'), 'http://127.0.0.1:5603/riverton');
+  delete process.env.OPS_PUBLIC_TEMPLATE;
+  // Asked there for a client's production; the sample (staging) has no such address.
+  const { db: d } = await freshApp();
+  const asked = [];
+  const fetcher = async (url) => { asked.push(url); return { status: 200, body: JSON.stringify(health({ ownOrigin: new URL(url).origin })), ms: 3 }; };
+  await d.transaction((tx) => createCampaign(tx, { name: 'riverton', display: 'Riverton Forward', serverUrl: 'https://base-win-riverton.onrender.com' }));
+  await d.query("update environments set server_url = 'https://starbase-staging.onrender.com' where campaign = 'sample'");
+  await pollOnce(d, { fetcher });
+  assert.deepEqual(asked.sort(), ['https://base-win-riverton.onrender.com/api/health', 'https://riverton.base.win/api/health', 'https://starbase-staging.onrender.com/api/health']);
+  assert.deepEqual((await d.query('select campaign, via from checks order by campaign, via')).rows,
+    [{ campaign: 'riverton', via: 'public' }, { campaign: 'riverton', via: 'server' }, { campaign: 'sample', via: 'server' }]);
+  process.env.OPS_PUBLIC_TEMPLATE = was;
+});
+
+test('“Answers at <name>.base.win” ticks only when the public address reaches the pinned server', async () => {
+  const { db: d } = await freshApp();
+  const U = 'https://base-win-pub.onrender.com';
+  const P = `${fake.ORIGIN}/pub/api/health`;
+  const answers = new Map();
+  const fetcher = async (url) => {
+    if (!answers.has(url)) throw Object.assign(new Error('x'), { name: 'ENOTFOUND' });
+    return { status: 200, body: JSON.stringify(answers.get(url)), ms: 3 };
+  };
+  await d.transaction((tx) => createCampaign(tx, { name: 'pub', display: 'Example Pub', serverUrl: U }));
+  const ticked = async () => (await d.query("select done_by from checklist where campaign = 'pub' and item = 'public' and done_at is not null")).rows[0]?.done_by;
+  // The domain isn't there yet.
+  answers.set(`${U}/api/health`, health({ ownOrigin: U }));
+  await pollOnce(d, { fetcher });
+  assert.deepEqual([(await d.query("select answering, problem from checks where campaign = 'pub' and via = 'public'")).rows[0]], [{ answering: false, problem: 'ENOTFOUND' }]);
+  assert.equal(await ticked(), undefined);
+  // It answers, but from some other server: not this campaign's.
+  answers.set(P, health({ ownOrigin: U, instance: 'AAAAAAAAAAAAAAAAAAAAAA' }));
+  await pollOnce(d, { fetcher });
+  assert.equal(await ticked(), undefined);
+  // The custom domain reaches the pinned server.
+  answers.set(P, health({ ownOrigin: U }));
+  await pollOnce(d, { fetcher });
+  assert.equal(await ticked(), 'auto');
+});
+
+test('“Answers, database fine” and the service tick only on a real database; a server too old to say still ticks', async () => {
+  const { db: d } = await freshApp();
+  const answers = new Map();
+  const fetcher = async (url) => ({ status: 200, body: JSON.stringify(answers.get(url) || {}), ms: 3 });
+  const E = 'https://base-win-embedded.onrender.com';
+  const O = 'https://base-win-old.onrender.com';
+  await d.transaction((tx) => createCampaign(tx, { name: 'embedded', display: 'Example Embedded', serverUrl: E }));
+  await d.transaction((tx) => createCampaign(tx, { name: 'old', display: 'Example Old', serverUrl: O }));
+  const done = async (name) => (await d.query('select item from checklist where campaign = $1 and done_at is not null order by item', [name])).rows.map((r) => r.item);
+  answers.set(`${E}/api/health`, health({ ownOrigin: E, store: 'embedded' }));
+  answers.set(`${O}/api/health`, health({ ownOrigin: O, store: undefined, instance: 'OOOOOOOOOOOOOOOOOOOOOO' }));
+  await pollOnce(d, { fetcher });
+  assert.equal((await d.query("select store from checks where campaign = 'embedded' and via = 'server'")).rows[0].store, 'embedded');
+  assert.equal((await d.query("select store from checks where campaign = 'old' and via = 'server'")).rows[0].store, null);
+  assert.deepEqual((await done('embedded')).filter((i) => ['answers', 'service'].includes(i)), [], 'the built-in database is not a real one');
+  assert.ok((await done('embedded')).includes('tz'), 'the rest still tick');
+  assert.deepEqual((await done('old')).filter((i) => ['answers', 'service'].includes(i)), ['answers', 'service']);
+  answers.set(`${E}/api/health`, health({ ownOrigin: E, store: 'postgres' }));
+  await pollOnce(d, { fetcher });
+  assert.deepEqual((await done('embedded')).filter((i) => ['answers', 'service'].includes(i)), ['answers', 'service']);
 });

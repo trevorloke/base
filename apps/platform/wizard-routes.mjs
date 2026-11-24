@@ -1,14 +1,15 @@
 // New campaign (its values, then the four cards of Set it up) and Add a
-// campaign that’s already running. Each save goes through the code window
-// and is on the log; a saved address is checked at once.
+// campaign that’s already running (its set-up page is a short one: its
+// settings live in Render). Each save goes through the code window and is
+// on the log; a saved address is checked at once.
 import { codeWindow } from './auth-routes.mjs';
 import { form } from './web.mjs';
 import { pollOnce } from './poller.mjs';
 import { pubkeyValue } from './keys.mjs';
-import { NAME_RE, RESERVED, normalizeOrigin, getCampaign, campaignView, createCampaign, saveEnv } from './campaigns.mjs';
+import { NAME_RE, NAME_HELP, RESERVED, normalizeOrigin, getCampaign, campaignView, createCampaign, saveEnv, entryState, oldRelease } from './campaigns.mjs';
 import { doneFor, setItem } from './checklist.mjs';
-import { PROVINCES, TIME_ZONES, JURISDICTIONS, RACES, tzFor, pickValues, doorValue, renderSnippet } from './snippets.mjs';
-import { newPage, setupPage, existingPage } from './pages/wizard.mjs';
+import { PROVINCES, TIME_ZONES, JURISDICTIONS, RACES, tzFor, pickValues, hasValues, mapBounds, renderSnippet } from './snippets.mjs';
+import { newPage, setupPage, runningSetupPage, existingPage } from './pages/wizard.mjs';
 
 const WRONG_CODE = 'That code didn’t work. Type the one your app shows now.';
 const NOT_AN_ADDRESS = 'That isn’t a Render address: it starts with https:// and has no path.';
@@ -16,18 +17,25 @@ const NOT_AN_ADDRESS = 'That isn’t a Render address: it starts with https:// a
 // Why a short name can't be used, or null.
 export const nameProblem = async (db, name) => {
   if (RESERVED.includes(name)) return 'That name is kept for base.win.';
-  if (!NAME_RE.test(name)) return 'Use letters, numbers and dashes. It’s the address: base.win/<name>.';
+  if (!NAME_RE.test(name)) return NAME_HELP;
   if (await getCampaign(db, name)) return 'That name is taken.';
   return null;
 };
 
 const takenWords = async (db, campaign) => `That address is already saved for ${(await getCampaign(db, campaign))?.display || campaign}.`;
 
-// Is the saved address this campaign's server? 'answering' | 'not-answering' | 'elsewhere' | 'not-checked'
+// Is the saved address this campaign's server? 'answering' | 'not-answering' | 'elsewhere' | 'old-release' | 'not-checked'
 const addressState = (v) => {
   if (!v.server) return 'not-checked';
   if (!v.server.answering) return 'not-answering';
+  if (oldRelease(v.server)) return 'old-release';
   return v.server.own_origin === v.envRow.server_url && v.server.env_reported === 'production' ? 'answering' : 'elsewhere';
+};
+// Does <name>.base.win reach this campaign's server? The same four answers.
+const publicState = (v) => {
+  if (!v.pub) return 'not-checked';
+  if (!v.pub.answering) return 'not-answering';
+  return v.envRow.instance && v.pub.instance === v.envRow.instance ? 'answering' : 'elsewhere';
 };
 
 export const wizardRoutes = (app, ctx) => {
@@ -42,6 +50,7 @@ export const wizardRoutes = (app, ctx) => {
     const v = {
       name: one('name').trim(), display: one('display').trim(), city: one('city').trim(),
       province: one('province'), rules: one('rules'), tz: one('tz'), races: [...new Set(races)],
+      sw: one('sw').trim(), ne: one('ne').trim(),
     };
     if (!PROVINCES.some((p) => p[0] === v.province)) v.province = 'BC';
     if (!TIME_ZONES.includes(v.tz)) v.tz = tzFor(v.province);
@@ -54,8 +63,10 @@ export const wizardRoutes = (app, ctx) => {
     if (!v.city) return again('Type the city.');
     if (!JURISDICTIONS.includes(v.rules)) return again('Choose the rules.');
     if (!v.races.length) return again('Tick at least one race.');
+    const area = mapBounds(v.sw, v.ne);
+    if (area.problem) return again(area.problem);
     try {
-      await db.transaction((tx) => createCampaign(tx, { name: v.name, display: v.display, values: pickValues(v), operatorId: operatorId(c) }));
+      await db.transaction((tx) => createCampaign(tx, { name: v.name, display: v.display, values: pickValues({ ...v, bounds: area.bounds }), operatorId: operatorId(c) }));
     } catch {
       return again('That name is taken.', false, 409);
     }
@@ -65,12 +76,13 @@ export const wizardRoutes = (app, ctx) => {
   const showSetup = async (c, name, { stale = false, typed = null, message = '', code = 200 } = {}) => {
     const v = await campaignView(db, name);
     if (!v || v.campaign.kind !== 'client') return c.text('Not found', 404);
-    const rows = (await db.query(`select c.name, c.display, c.kind, c.archived_at, e.server_url from campaigns c
-      join environments e on e.campaign = c.name and e.env = 'production'`)).rows;
     const values = v.campaign.values || {};
+    const shared = { v, publicKey: pubkeyValue(), serverUrl: v.envRow.server_url, publicState: publicState(v) };
+    // Added when it was already running: nothing was typed here to make a
+    // block from, so only the two steps that are the same for every campaign.
+    if (!hasValues(values)) return c.html(String(runningSetupPage({ ...shared, entry: entryState(v.server), message })), code);
     return c.html(String(setupPage({
-      v, values, publicKey: pubkeyValue(), serverUrl: v.envRow.server_url, addressState: addressState(v),
-      door: doorValue(rows, name), invited: (await doneFor(db, name)).has('first-manager-invited'),
+      ...shared, values, addressState: addressState(v), invited: (await doneFor(db, name)).has('first-manager-invited'),
       snippet: renderSnippet({ name, display: v.campaign.display, values }), stale, typed, message,
     })), code);
   };
