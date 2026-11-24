@@ -6,16 +6,24 @@ outreach and website in one place — built first for **Imagine Surrey**
 README); the website is one of the desk's areas, like People or Donations
 ([SITE.md](SITE.md)).
 
-Each client runs on its own server and database, behind one front door at
-base.win (`apps/door`; [setting it up](apps/door/README.md)):
-`base.win/<client>` opens the campaign's public website (`/<client>/site/`),
-`/<client>/field` is the volunteers' app and `/<client>/desk` the office's.
-The server goes under a client's path with `BASE_PATH=/<client>` (and keeps
-answering at its own address); unset, it runs at a site's root as it always
-has. An old `/<client>/admin…` link goes on to `/<client>/desk…` on the
-address it was opened at, never the server's own. Internal names — the
-`STARBASE_*` settings, package names, the database — are unchanged, so
-nothing deployed moves.
+Each client runs on its own server and database, at its own address,
+`https://<client>.base.win` (Imagine Surrey: `https://imaginesurrey.base.win`):
+the volunteers' app at `/`, the office at `/admin/` and the campaign's
+public website under `/site/`. There are three environments — one shared
+staging (`https://staging.base.win`), each client's production, and the
+control centre (`https://ops.base.win`) — and `https://base.win` is the
+front page; the one map of them is [GOING-LIVE.md](GOING-LIVE.md), section 0.
+Internal names — the `STARBASE_*` settings, package names, the database —
+are unchanged, so nothing deployed moves.
+
+Not in use today: one front door at base.win for every client (`apps/door`;
+[its README](apps/door/README.md)), with `base.win/<client>` the public
+website (`/<client>/site/`), `/<client>/field` the volunteers' app and
+`/<client>/desk` the office's. For that option the server goes under a
+client's path with `BASE_PATH=/<client>` (and keeps answering at its own
+address), and an old `/<client>/admin…` link goes on to `/<client>/desk…`
+on the address it was opened at, never the server's own. Unset, as on
+every service today, the server runs at a site's root.
 
 `apps/web` is Imagine Surrey's website as it runs today (Next.js, [its
 README](apps/web/README.md)), until its pages move into base.win. It came in
@@ -1209,7 +1217,7 @@ gets the default. A send keeps its From (Try again, the A/B winner).
 Invites, shift notices, receipts, two-step and ladder emails stay on
 MAIL_FROM.
 
-Set `STARBASE_PUBLIC_URL` (e.g. `https://starbase.imaginesurrey.ca`) so links
+Set `STARBASE_PUBLIC_URL` (e.g. `https://imaginesurrey.base.win`) so links
 in outbound mail — newsletter unsubscribe footers, invite links, the
 pictures in a message, calendar links — point at the public host. Password
 links are built from it alone: without it Forgot password says to ask a
@@ -1684,9 +1692,9 @@ signature, and blast lists.
 capped (256 KB; 16 MB for a CSV import, 4 MB for a picture); the address
 a request is from is the entry `STARBASE_TRUSTED_PROXIES` hops from the
 right of `X-Forwarded-For` (default 1 — one proxy, as on Render), never
-what the sender wrote — behind the base.win door, the visitor's address
-as the door says it, believed only with the key the door and the server
-share (`BASE_DOOR_KEY`, apps/door/README.md); public writes are limited to 30 per 10 minutes per
+what the sender wrote — behind the base.win door (not in use today), the
+visitor's address as the door says it, believed only with the key the door
+and the server share (`BASE_DOOR_KEY`, apps/door/README.md); public writes are limited to 30 per 10 minutes per
 address and sign-in to 30 tries per address and 10 failures per email per
 15 minutes (two-step codes: 5 tries per sign-in, 10 per person in 15 minutes, and 20 wrong in a row lock the account's app codes); a cookie-carrying write must be the app's own (JSON, same
 origin — a form on another host, even under the campaign's domain, can't
@@ -1715,16 +1723,20 @@ environment (`server/lib/org.js`); the code names no client.
 | `STARBASE_ENV` | `production` or `staging` — said on screen and at `/api/health` | from `NODE_ENV` |
 | `STARBASE_BRAND` | `imagine-surrey` or `base` — the brand a campaign starts from, until a manager saves its own in Settings → Brand (*The look and the brand*, above) | `base` on staging or for another campaign; else Imagine Surrey's |
 | `SITE_HOSTS` | the campaign's own domains (`imaginesurrey.ca,www.imaginesurrey.ca`): the website at `/` there, nothing of the app — written with a final dot too (`imaginesurrey.ca.`), it's the same domain (SITE.md) | blank: the website is at `/site/` only |
-| `APP_HOSTS` | the app's other addresses on this server (`starbase.imaginesurrey.ca` once base.win is the public one): never made a website domain, so the app keeps answering there (SITE.md) | blank |
+| `APP_HOSTS` | the app's other addresses on this server (an older one people still use, such as `starbase.imaginesurrey.ca`, beside the public `imaginesurrey.base.win`): never made a website domain, so the app keeps answering there (SITE.md) | blank |
 | `BASE_PLATFORM_PUBKEY` | the control centre's public key (ops.base.win → base.win’s key; 43 characters; two, comma-separated, while it changes its key): lets base.win support open this desk, and closes first-run sign-up until the first visit makes the campaign. Pasted in Render, never in git (`sync: false`); emptied, all entry stops and open visits end | blank: no entry (`/api/health` says `no-key`) |
 | `STARBASE_OWN_URL` | this server's own origin (`https://<service>.onrender.com`), the address an entry token must name — only when Render's `RENDER_EXTERNAL_URL` is missing or wrong | `RENDER_EXTERNAL_URL` |
 | `SITE_SECRET` | signs the website's preview and email-preference links (16+ characters); each campaign's signing secret for a ladder's *Send to a web address* step is made from it, so changing it changes that secret and breaks those links in every email already sent — to change only the signing secret, the step's *Make a new secret* (INTEGRATIONS.md) | blank: one is made and kept in the database |
 
-Two environments per client: **staging** deploys every push to `main`,
-**production** deploys the `production` branch, which the *Promote to
-production* workflow (GitHub → Actions) fast-forwards to `main` once CI is
-green there. `render.yaml` holds the pair for one client; another client is
-another pair with its own names and values (GOING-LIVE.md, *A new client*).
+Three environments (GOING-LIVE.md, section 0): one shared **staging**
+(`https://staging.base.win`) deploys every push to `main`; each client's
+**production** (`https://<client>.base.win`) deploys the `production`
+branch, which the *Promote to production* workflow (GitHub → Actions)
+fast-forwards to `main` once CI is green there; and the control centre
+(`https://ops.base.win`). `render.yaml` holds staging, Imagine Surrey's
+production and the control centre; another client is one more production
+service and database with its own names and values (GOING-LIVE.md, *A new
+client*).
 
 **A page open across a deploy.** Every `/api` answer names the web build the
 server hands out (`X-Build`; `/api/health` shows it as `build`). A page that

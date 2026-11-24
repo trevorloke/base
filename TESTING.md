@@ -39,20 +39,26 @@ time. Delete the folder to start over.
 
 ## 2 · Deploy for the team (Render)
 
-The repo's `render.yaml` is a Blueprint for one client's two environments
-(GOING-LIVE.md): **base-win-staging** from `main` and **base-win** from
-`production`, each with its own managed Postgres database (backups
-included). Every setting below, and where its key comes from:
+The repo's `render.yaml` is a Blueprint for the three environments
+(GOING-LIVE.md, section 0): **base-win-staging** from `main`, the one
+shared staging at `https://staging.base.win`; **base-win** from
+`production`, Imagine Surrey's production at
+`https://imaginesurrey.base.win`; and **base-platform**, the control
+centre at `https://ops.base.win`. Each has its own managed Postgres
+database (what Render keeps as backups depends on the plan: GOING-LIVE.md,
+*Getting data back*). Every setting below, and where its key comes from:
 INTEGRATIONS.md.
 
-1. Render → **New → Blueprint** → pick this repo (`main` branch)
-   → it creates `base-win-staging` + `base-win-staging-db` and `base-win` +
-   `base-win-db` (paid plans — check Render’s current pricing).
+1. The Blueprint is already in Render: Render → **Blueprints** → the
+   Blueprint → **Manual Sync**, after the name check in GOING-LIVE.md
+   section 0. It holds `base-win-staging` + `base-win-staging-db`,
+   `base-win` + `base-win-db` and `base-platform` + `base-platform-db`
+   (paid plans — check Render’s current pricing).
 2. In the `base-win` service → **Environment**, set:
 
 | Variable | What for | Needed to test? |
 |---|---|---|
-| `STARBASE_PUBLIC_URL` | your address, e.g. `https://starbase.imaginesurrey.ca` — used in invite and unsubscribe links | **yes** |
+| `STARBASE_PUBLIC_URL` | your address, e.g. `https://imaginesurrey.base.win` — used in invite and unsubscribe links | **yes** |
 | `STARBASE_ORG_NAME`, `STARBASE_JURISDICTION`, `STARBASE_TZ`, `STARBASE_CITY`, `STARBASE_SLATES` | the campaign this deployment runs for (README → *One deployment per client*) | set them before the first sign-in |
 | `STARBASE_ENV` | `staging` on the test environment: a *Staging* badge on every screen | **yes**, on staging |
 | `RESEND_API_KEY`, `MAIL_FROM` | real email (invites, newsletters, press, shift alerts) | optional — without it, sends are saved as *queued* and invite links are shown to copy |
@@ -67,6 +73,13 @@ INTEGRATIONS.md.
 
 The whole order of things, from deploy to the public link, is in
 [GOING-LIVE.md](GOING-LIVE.md).
+
+Staging is the public demo: its email, texting and payment keys are test
+keys or unset, never a client's, and it never holds a real list
+(GOING-LIVE.md, section 0). Where a check below is run with `BASE_PATH`
+(under a client's path, `/imaginesurrey` or `/x`), it covers the door
+(`apps/door`), an option nobody uses today: every service runs at its
+address's root.
 
 For Twilio, set the number's incoming messages webhook to
 `https://<your address>/api/public/twilio/sms` (HTTP POST). Calls through the
