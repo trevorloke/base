@@ -132,6 +132,33 @@ test('the phone shows the newer of its scale copies', () => {
   assert.equal(scaleJs.newerScale(undefined, undefined), undefined);
 });
 
+test('with no saved scale the phone starts from the list its server names at sign-in', async () => {
+  const fresh = new Client();
+  assert.equal((await fresh.signup({ workspaceName: `Scale start ${tag}`, email: `scph.start+${tag}@example.org` })).status, 201);
+  const me = ok(await fresh.get('/api/auth/me'));
+  assert.equal(me.workspace.settings.scale, undefined, 'this campaign has saved no scale');
+  // This server sets no STARBASE_CANDIDATES: Imagine Surrey's five, as always.
+  assert.deepEqual(me.org.candidates, [
+    { code: '4D', name: 'McCallum' }, { code: '4B', name: 'Locke' }, { code: '4F', name: 'Annis' }, { code: '4N', name: 'van Vliet' }, { code: '4C', name: 'Randhawa' },
+  ]);
+  const start = scaleJs.meScale(me);
+  assert.deepEqual(normalizeScale(start.scale), normalizeScale(null), 'for Imagine Surrey: exactly the scale the phone showed before');
+  assert.equal(scaleJs.meScale(me), start, 'one answer per sign-in copy');
+  // A server that names nobody (STARBASE_CANDIDATES=none): nobody is offered.
+  const nobody = scaleJs.meScale({ ...me, org: { ...me.org, candidates: [] } });
+  assert.deepEqual(nobody.scale.candidates, []);
+  // A saved scale is the one the sign-in carries, as before.
+  const saved = { v: 3, words: { 1: 'Definitely' }, candidates: [{ code: '4D', name: 'McCallum' }] };
+  assert.equal(scaleJs.meScale({ ...me, workspace: { ...me.workspace, settings: { scale: saved } } }).scale, saved);
+  // Whatever the phone has read from the server since is newer or the same, and wins.
+  const read = { scale: normalizeScale(null) };
+  assert.equal(scaleJs.newerScale(read, start), read);
+  // A sign-in copy kept from before this (no list in it): as before, nothing to go on.
+  const { candidates: _, ...oldOrg } = me.org;
+  assert.equal(scaleJs.meScale({ ...me, org: oldOrg }), undefined);
+  assert.equal(scaleJs.meScale(undefined), undefined);
+});
+
 test('no signal: a profile-field filter is an exact kept copy or No signal — never the whole list', async () => {
   net.cookie = mgr.cookie;
   const queryClient = {

@@ -16,7 +16,8 @@
 //                          to, each its own annual limit (shared/canvass.js)
 //   STARBASE_CANDIDATES    "4D:McCallum:Opposed — Doug McCallum supporter;…"
 //                          — the opposed candidates a new rating scale starts
-//                          with (shared/scale.js); the desk edits them after
+//                          with (shared/scale.js); the desk edits them after.
+//                          "none": nobody. Unset: Imagine Surrey's list
 //   STARBASE_ENV           production | staging — said on screen and at
 //                          /api/health, so nobody mistakes one for the other
 //   STARBASE_BRAND         imagine-surrey | base — the look (lib/brand.js);
@@ -52,8 +53,16 @@ export const geoBox = () => {
   const [a, b] = geoBounds().split('|').map((pt) => pt.split(',').map(Number));
   return [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1])];
 };
-export const envName = () => (['production', 'staging'].includes(str('STARBASE_ENV')) ? str('STARBASE_ENV')
-  : process.env.NODE_ENV === 'production' ? 'production' : 'local');
+// The name is read exactly ("production" or "staging"; spaces around it are
+// dropped). Unset or misspelled, a hosted server is production — NODE_ENV is
+// production (the Dockerfile sets it), or it runs on Render (RENDER is set on
+// every service there) — so staging's powers (the demo sign-in, the sample
+// campaign and its reset) stay off. Only a developer's machine is "local".
+export const envName = (env = process.env) => {
+  const named = String(env.STARBASE_ENV || '').trim();
+  if (named === 'production' || named === 'staging') return named;
+  return env.NODE_ENV === 'production' || env.RENDER ? 'production' : 'local';
+};
 
 // Sign-up past first run: only when this is set (tests, local dev).
 export const openSignupForced = () => process.env.STARBASE_OPEN_SIGNUP === '1';

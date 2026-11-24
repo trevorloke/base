@@ -10,7 +10,7 @@ import { seedSample } from './lib/samplecampaign.js';
 import authRoutes from './routes/auth.js';
 import apiRoutes from './routes/api.js';
 import publicRoutes from './routes/public.js';
-import { getDb, dbReachable } from './db/client.js';
+import { getDb, dbReachable, storeOf, storeRefusal } from './db/client.js';
 import { EXTENSIONS } from './ext.js';
 import { startJobRunner, stopJobRunner } from './lib/jobs.js';
 import { staleTimeZoneData } from './lib/tzcheck.js';
@@ -91,6 +91,8 @@ const COMMIT = String(process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT ||
 // keys it holds (by kid), whether first-run sign-up is open, whether the
 // campaign has been made (a workspace exists: campaignMade), and whether the
 // door's key is set (never the key). Never the campaign's switch.
+// store: where the campaign is kept — "postgres" (DATABASE_URL) or
+// "embedded" (the built-in database, which on a host needs a disk).
 const publicAddress = () => {
   const raw = configuredUrl();
   try { return raw && /^https?:$/.test(new URL(raw).protocol) ? raw : null; } catch { return null; }
@@ -104,7 +106,7 @@ app.get('/api/health', async (c) => {
   return c.json({
     ok: database, database: database ? 'ok' : 'not reachable', service: 'starbase', env: envName(), organization: orgName(), commit: COMMIT, build: currentBuild(), tzdataCurrent: !staleTimeZoneData(),
     ownOrigin: ownOrigin(), instance, address: publicAddress(), entry: entryReadiness(),
-    platformKids: parseKeys().map((k) => k.kid), setupOpen: open, campaignMade: made, doorKey: doorKeySet(),
+    platformKids: parseKeys().map((k) => k.kid), setupOpen: open, campaignMade: made, doorKey: doorKeySet(), store: storeOf(db),
   }, database ? 200 : 503);
 });
 app.route('/api/auth', authRoutes);
@@ -126,8 +128,36 @@ app.get('/assets/*', (c) => c.text('Not found', 404, { 'Cache-Control': 'no-stor
 app.get('*', async (c, next) => appRedirect(c) || next());
 app.get('*', serveStatic({ root: WEB_ROOT, path: 'index.html' }));
 
+// Said loudly in the log when the server starts (it still starts): settings
+// that leave a hosted server half set up. One line each.
+//   - production with no STARBASE_PUBLIC_URL: nothing it sends can link back;
+//   - on Render, a STARBASE_ENV that is neither "production" nor "staging"
+//     (unset, or misspelled): what it is treated as (lib/org.js envName).
+export const bootNotes = (env = process.env) => {
+  const out = [];
+  const typed = String(env.STARBASE_ENV || '').trim();
+  const name = envName(env);
+  if (env.RENDER && typed !== name) {
+    out.push(`starbase: WARNING — STARBASE_ENV is ${typed ? `“${typed}”, which is neither “production” nor “staging”` : 'not set'}: this server is treated as ${name}`
+      + ' (the demo sign-in, the sample campaign and its reset stay off). Set STARBASE_ENV to production or staging: Render → this service → Environment.');
+  }
+  if (name === 'production' && !String(env.STARBASE_PUBLIC_URL || '').trim()) {
+    out.push('starbase: WARNING — STARBASE_PUBLIC_URL is not set on a production server: emails can’t link back here (password resets, shift reminders) and Sign in with Google stays off.'
+      + ' Set it to the campaign’s public address, https://<name>.base.win.');
+  }
+  return out;
+};
+
 const isMain = process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop());
 if (isMain) {
+  // On Render with no database address: say why and stop, before anything
+  // answers a request (db/client.js).
+  const refused = storeRefusal();
+  if (refused) {
+    console.error(refused);
+    process.exit(1);
+  }
+  for (const note of bootNotes()) console.warn(note);
   const port = Number(process.env.PORT) || 3200;
   // BASE_PATH=/imaginesurrey: this Ground answers under base.win/imaginesurrey
   // (lib/mount.js); unset, at the site's root.

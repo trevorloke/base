@@ -11,7 +11,10 @@
 // on every screen) carries the scale as last saved too: whichever of the
 // two is newer (a save bumps the version) is the one the buttons show — so
 // a phone that opened only Today or Shifts since a change still has it.
-// With neither, the default.
+// With neither — a campaign that has saved no scale, on a phone that hasn't
+// read it yet — the list its server starts with, which the sign-in names
+// (me.org.candidates: nobody, for a campaign with no opponents). This file's
+// own default is the last resort: its list is the same for every campaign.
 import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { DEFAULT_SCALE, normalizeScale } from '@starbase/shared/scale';
@@ -53,13 +56,16 @@ export const SCALE_KEY = ['scale'];
 // { scale } answers → the newer one (a higher version); a tie keeps the first.
 const versionOf = (data) => (data?.scale ? scaleFrom(data).version : -1);
 export const newerScale = (a, b) => (versionOf(b) > versionOf(a) ? b : a ?? b);
-// The scale ['me'] carries, as an answer — one per sign-in copy.
+// The scale ['me'] carries, as an answer — one per sign-in copy: the scale
+// as last saved, or for a campaign that has saved none, the candidates its
+// server starts with (version 0: anything read from the server wins).
 const fromMe = new WeakMap();
-const meScale = (me) => {
-  const raw = me?.workspace?.settings?.scale;
-  if (!raw || typeof raw !== 'object') return undefined;
+export const meScale = (me) => {
+  const saved = me?.workspace?.settings?.scale;
+  const raw = saved && typeof saved === 'object' ? saved : Array.isArray(me?.org?.candidates) ? me.org.candidates : null;
+  if (!raw) return undefined;
   let d = fromMe.get(raw);
-  if (!d) { d = { scale: raw }; fromMe.set(raw, d); }
+  if (!d) { d = { scale: Array.isArray(raw) ? { candidates: raw } : raw }; fromMe.set(raw, d); }
   return d;
 };
 

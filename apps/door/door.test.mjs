@@ -223,4 +223,59 @@ test('names kept for base.win can’t be a client; ops.base.win is never sent an
   const r = await withHost('ops.base.win', '/');
   assert.notEqual(r.status, 302);
   assert.notEqual(r.status, 307);
+  // Staging's own address and the demo's are base.win's, never a client's.
+  assert.ok(RESERVED.includes('staging'));
+  assert.ok(RESERVED.includes('demo'));
+});
+
+// A stream held open through the door (election day's live list,
+// /api/voted/live): when the browser goes away the door stops asking the
+// client's server too, so the server isn't left writing to nobody.
+test('the browser goes away: the door ends its request to the client’s server', async () => {
+  const opened = []; // one per request the server got: { url, closed: Promise }
+  const streaming = createServer((req, res) => {
+    let tick = null;
+    const closed = new Promise((ok) => res.on('close', () => { clearInterval(tick); ok(true); }));
+    opened.push({ url: req.url, closed });
+    if (req.url.endsWith('/slow')) return; // an answer that never starts
+    if (!req.url.endsWith('/live')) { res.writeHead(200, { 'content-type': 'text/plain' }); res.end('whole'); return; }
+    res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store' });
+    res.write('data: hello\n\n');
+    tick = setInterval(() => res.write(': still here\n\n'), 20);
+  });
+  const s = await listen(streaming);
+  const live = createServer(handler(readClients(JSON.stringify({ imaginesurrey: { name: 'Imagine Surrey', server: s } })), { doorKey: '' }));
+  const lbase = await listen(live);
+  const within = (p, ms) => Promise.race([p, new Promise((ok) => { setTimeout(() => ok(false), ms).unref(); })]);
+  try {
+    // A stream that has begun: the browser reads the first words, then leaves.
+    const first = await new Promise((ok, no) => {
+      const req = request(`${lbase}/imaginesurrey/api/voted/live`, (res) => {
+        res.once('data', (d) => { req.destroy(); ok({ status: res.statusCode, type: res.headers['content-type'], text: String(d) }); });
+      });
+      req.on('error', no);
+      req.end();
+    });
+    assert.equal(first.status, 200);
+    assert.equal(first.type, 'text/event-stream');
+    assert.match(first.text, /^data: hello/);
+    assert.equal(opened[0].url, '/imaginesurrey/api/voted/live');
+    assert.equal(await within(opened[0].closed, 3000), true, 'the server’s stream is closed once the browser has left');
+
+    // An answer that hasn't begun: the browser gives up waiting.
+    const waiting = request(`${lbase}/imaginesurrey/api/slow`);
+    waiting.on('error', () => {});
+    waiting.end();
+    for (let i = 0; i < 100 && opened.length < 2; i++) await new Promise((r) => setTimeout(r, 10));
+    assert.equal(opened[1]?.url, '/imaginesurrey/api/slow');
+    waiting.destroy();
+    assert.equal(await within(opened[1].closed, 3000), true, 'and a request still waiting for its answer is dropped too');
+
+    // An answer read to its end is as before.
+    const whole = await fetch(`${lbase}/imaginesurrey/site/`);
+    assert.equal(whole.status, 200);
+    assert.equal(await whole.text(), 'whole');
+  } finally {
+    for (const one of [live, streaming]) { one.closeAllConnections(); one.close(); }
+  }
 });

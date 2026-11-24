@@ -8,9 +8,27 @@
 // (default ./data/starbase), or in-memory under the test runner / =memory.
 // Type parsing is pinned so both backends return identical shapes:
 // date → Date at UTC midnight, int8 → number, json → object.
+//
+// On Render (RENDER is set on every service there) with no DATABASE_URL the
+// server does not start: the embedded database would live inside the
+// container, which is thrown away at the next deploy, and the campaign with
+// it. STARBASE_EMBEDDED_DB=1 says a disk is mounted for it on purpose.
 import { bootstrap } from './schema.js';
 
 let dbPromise = null;
+
+// Why this server must not start, in one line for the log — or null.
+export const storeRefusal = (env = process.env) => {
+  if (!env.RENDER || String(env.DATABASE_URL || '').trim() || env.STARBASE_EMBEDDED_DB === '1') return null;
+  return 'starbase: not starting — this service is on Render with no DATABASE_URL, so the campaign would be kept in the built-in database inside the container and lost at the next deploy. '
+    + 'To fix: Render → this service → Environment → DATABASE_URL = the database’s Internal Database URL. '
+    + '(Or set STARBASE_EMBEDDED_DB=1 if a disk is mounted for the built-in database on purpose.)';
+};
+
+// The store's name at /api/health: "postgres" (DATABASE_URL) or "embedded"
+// (the built-in database). Without a database object (it isn't answering),
+// the one the settings name.
+export const storeOf = (db, env = process.env) => ((db ? db.kind === 'postgres' : Boolean(env.DATABASE_URL)) ? 'postgres' : 'embedded');
 
 const createPg = async (url) => {
   const { default: pg } = await import('pg');
@@ -83,6 +101,8 @@ const createPglite = async () => {
 };
 
 const create = async () => {
+  const refused = storeRefusal();
+  if (refused) throw new Error(refused);
   const db = process.env.DATABASE_URL ? await createPg(process.env.DATABASE_URL) : await createPglite();
   await bootstrap(db);
   return db;
