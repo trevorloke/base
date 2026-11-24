@@ -21,7 +21,7 @@ is written) and says exactly what is wrong if anything is.
 | [Gmail](#gmail) | One email to one person, from a staff member's own Gmail | no (Email from a person's page opens the mail app) | none of its own (the Google row's); `GMAIL_DAILY_MAX` optional |
 | [Google Drive and Sheets](#google-drive-and-sheets) | lists, reports and tables sent to a new Google Sheet; files attached from Drive (or linked when too big); a Sheet or file read for the importer | no (Download CSV always works) | `GOOGLE_PICKER_KEY`, `GOOGLE_CLOUD_PROJECT_NUMBER` (+ Google sign-in's three) |
 | [Two-step sign-in key](#two-step-sign-in-key) | seals everyone's authenticator key | before the public link goes out (works without, with a warning) | `STARBASE_TWO_STEP_KEY` |
-| [Hosting — Render](#hosting--render) | the two environments | yes | `render.yaml` |
+| [Hosting — Render](#hosting--render) | the three environments (GOING-LIVE.md, section 0) | yes | `render.yaml` |
 | The control centre (ops.base.win; no vendor: base.win's own, `apps/platform/README.md`) | every campaign on one page; **Open desk** signs base.win support in to a campaign | no (each campaign works without it) | `BASE_PLATFORM_PUBKEY` on each campaign (its public key, pasted; never a secret) |
 | [GitHub Actions](#github-actions) | tests, and promoting staging to production | yes | none |
 | [The campaign's website](#the-campaigns-website) | sign-ups, petitions, volunteers, newsletter opt-ins in | when the website is ready | a website key (Settings → Services) |
@@ -52,7 +52,7 @@ built-in database on the server's disk (`STARBASE_DATA`, default
 ## Public address
 
 `STARBASE_PUBLIC_URL` — this environment's own `https://` address
-(`https://starbase.imaginesurrey.ca`; staging its own). Every link in an
+(`https://imaginesurrey.base.win`; staging `https://staging.base.win`). Every link in an
 email (invites, unsubscribe, receipts, pictures, password links) is built from it, and so are
 the addresses Twilio is told to call back (delivery reports, calls). Without
 it, links use whatever address the page was opened at, background sends
@@ -115,8 +115,8 @@ manager's link is shown to copy.
    the domain's DNS records and check the webhook; a *Sending access* key
    sends just as well, and Settings → Services says what it can't see.
 2. Set `RESEND_API_KEY` to it and `MAIL_FROM` to a sender on the campaign's
-   domain: `Imagine Surrey <team@imaginesurrey.ca>`. Staging: a separate
-   key, or none.
+   domain: `Imagine Surrey <team@imaginesurrey.ca>`. Staging is the public
+   demo: a test key or none there, never the campaign's.
 3. **Settings → Services → Email → Sending domain** → **Add domain**. The
    panel lists the DNS records Resend asks for (SPF, DKIM) and one more,
    DMARC — no sender sets that one up, and Gmail, Yahoo and Outlook ask
@@ -794,7 +794,7 @@ Google Drive and Sheets** says what is missing and nothing Drive shows.
 
 | Setting | Default | Notes |
 |---|---|---|
-| `GOOGLE_PICKER_KEY` | — | a browser API key: Websites `https://base.win/*` (or the public address), the staging address and `https://docs.google.com/*`; API restriction **Google Picker API** only. Not a secret (the Picker needs it in the page), but never in the repo |
+| `GOOGLE_PICKER_KEY` | — | a browser API key: Websites the campaign's public address (`https://imaginesurrey.base.win/*`) and `https://docs.google.com/*`; API restriction **Google Picker API** only. Not a secret (the Picker needs it in the page), but never in the repo |
 | `GOOGLE_CLOUD_PROJECT_NUMBER` | — | digits (IAM & Admin → Settings), the project that holds the OAuth client: the Picker's app ID |
 | `GOOGLE_DRIVE_API_BASE`, `GOOGLE_SHEETS_API_BASE`, `GOOGLE_PICKER_SCRIPT` | Google's | tests only (`server/test/fake-google-drive.js`); ignored in production |
 
@@ -1142,7 +1142,8 @@ What happens:
   rate*, or another question, or none) the people it rated are back to what
   they were before the call, unless something else has rated them since.
 
-**Set it up — on staging first:**
+**Set it up — on production, with your own team's numbers first** (never
+on staging: it is the public demo, and this key can call real people):
 
 1. The API key from the account's settings in CallHub. It goes in the
    host's environment only (Render → the service → **Environment**):
@@ -1242,10 +1243,14 @@ importing.
 
 ## Hosting — Render
 
-`render.yaml` is a Render Blueprint: `base-win-staging` (deploys every push to
-`main`) and `base-win` (deploys the `production` branch), each with its own
-Postgres. Settings marked `sync: false` are asked for when the Blueprint is
-created and are set per service afterwards. GOING-LIVE.md is the order to do
+`render.yaml` is a Render Blueprint for the three environments
+(GOING-LIVE.md, section 0): `base-win-staging` (the one shared staging,
+`https://staging.base.win`, deploys every push to `main`), `base-win`
+(Imagine Surrey's production, `https://imaginesurrey.base.win`, deploys the
+`production` branch) and `base-platform` (the control centre,
+`https://ops.base.win`), each with its own Postgres. Settings marked
+`sync: false` are asked for when the Blueprint is created and are set per
+service afterwards. GOING-LIVE.md is the order to do
 it in.
 
 ## GitHub Actions
@@ -1319,7 +1324,7 @@ minute on one key. Everything accepted is on the event log, as the
 manager who made the key. A key stops working when it is revoked, and when the manager who made it leaves the campaign.
 
 ```sh
-curl https://starbase.imaginesurrey.ca/in/v1/people \
+curl https://imaginesurrey.base.win/in/v1/people \
   -H "Authorization: Bearer $STARBASE_KEY" -H "Content-Type: application/json" \
   -H "Idempotency-Key: form-2026-10-12-0193" \
   -d '{"first_name":"Asha","last_name":"Example","email":"asha@example.org",

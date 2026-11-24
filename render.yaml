@@ -1,13 +1,19 @@
-# Render Blueprint — one client's two environments, from one repo:
-#   base-win-staging    deploys every push to `main`     → test here first
-#   base-win            deploys the `production` branch  → promoted from main
-#                       by the "Promote to production" workflow (GitHub → Actions)
-# Each has its own Postgres database; nothing is shared between them.
+# Render Blueprint — base.win's three environments, from one repo (GOING-LIVE.md §0):
+#   Staging     base-win-staging, every push to `main` → https://staging.base.win
+#               the sample campaign and the public demo; nobody real is on it
+#   Production  one service per client, from the `production` branch, which
+#               "Promote to production" (GitHub → Actions) moves up from main.
+#               Imagine Surrey: base-win → https://imaginesurrey.base.win
+#   Admin       base-platform, the control centre → https://ops.base.win
+# The front page, https://base.win, is apps/front/index.html: a static site set
+# up by hand in Render (not in this file); it frames staging's demo.
+# Each service has its own Postgres database; nothing is shared between them.
 #
 # Another client is made with the control centre: ops.base.win → New campaign
 # walks Render through one production service and its database
-# (base-win-<client>, base-win-<client>-db) — see GOING-LIVE.md §6 "A new
-# client". The fallback: copy the production block (base-win and its
+# (base-win-<name>, base-win-<name>-db), served at its own address,
+# https://<name>.base.win, a custom domain on that service — see GOING-LIVE.md
+# §6 "A new client". The fallback: copy the production block (base-win and its
 # database) under those names with its own STARBASE_* values. Service names
 # are unique per Render account, so the copy must rename both.
 #
@@ -70,8 +76,11 @@ services:
       # Staging is a sample campaign in Vancouver: base.win's own look, a
       # made-up name and no client's brand, so it can be shown to anyone (server/lib/brand.js; a brand a manager saves
       # in Settings → Brand wins over it). The rules below — limits,
-      # time zone, city, slates — are the client's, so staging tests what
-      # production does.
+      # time zone, slates — are the ones a B.C. municipal client runs under,
+      # so staging tests what production does.
+      # Staging is the public demo: anyone can open it and is signed in as
+      # the sample campaign's manager. So its email and texting keys are test
+      # keys or unset, never a client's, and it never holds a real list.
       - key: STARBASE_BRAND
         value: base
       - key: STARBASE_ORG_NAME
@@ -86,7 +95,7 @@ services:
         value: "49.198,-123.225|49.317,-123.023"
       - key: STARBASE_SLATES
         value: "council:City council,school_board:School board"
-      - key: STARBASE_PUBLIC_URL     # this environment's address, e.g. https://starbase-staging.onrender.com
+      - key: STARBASE_PUBLIC_URL     # this environment's address: https://staging.base.win
         sync: false
       # The public demo (server/lib/demo.js; staging only): the base.win
       # website may frame this server, and /api/auth/demo signs a visitor in
@@ -104,11 +113,11 @@ services:
         sync: false
       - key: STARBASE_CANDIDATES     # made-up opponents for the sample's rating scale
         value: "4A:Hartwell:Opposed — Hartwell supporter;4B:Quist:Opposed — Quist supporter;4C:Delmar:Opposed — Delmar supporter"
-      - key: RESEND_API_KEY          # email: newsletters, invites, shift alerts (staging: a test key, or unset)
+      - key: RESEND_API_KEY          # email: newsletters, invites, shift alerts (staging is public: a test key or unset, never a client's)
         sync: false
       - key: MAIL_FROM
         sync: false
-      - key: TWILIO_ACCOUNT_SID      # texting and calls (staging: a test number, or unset)
+      - key: TWILIO_ACCOUNT_SID      # texting and calls (staging is public: test credentials or unset, never a client's)
         sync: false
       - key: TWILIO_AUTH_TOKEN
         sync: false
@@ -164,7 +173,7 @@ services:
         value: Surrey
       - key: STARBASE_SLATES
         value: "council:City council,school_board:School board"
-      - key: STARBASE_PUBLIC_URL     # the public address, e.g. https://starbase.imaginesurrey.ca
+      - key: STARBASE_PUBLIC_URL     # the public address: https://imaginesurrey.base.win
         sync: false
       - key: RESEND_API_KEY
         sync: false
@@ -193,15 +202,18 @@ services:
       - key: BASE_PLATFORM_PUBKEY    # the control centre's public key (ops.base.win → base.win’s key); paste it, never commit it
         sync: false
 
-  # base.win's control centre (apps/platform): one sign-in for every campaign.
-  # Its own address (ops.base.win), never behind the door; its own database.
-  # It never holds a campaign's database address, the door key or a Render key.
+  # base.win's control centre (apps/platform), the admin environment: one
+  # sign-in for every campaign. Its own address (https://ops.base.win) and its
+  # own database. It never holds a campaign's database address or a Render key.
+  # Branch: main until production has been promoted past the control centre's
+  # release; then production, so the control centre goes through Promote like
+  # everything else.
   - type: web
     name: base-platform
     runtime: node
     plan: starter
     region: oregon
-    branch: main                  # moves to production once it is used daily
+    branch: main                  # see the note above: production, once production holds the control centre's release
     buildCommand: npm ci --omit=dev
     startCommand: node apps/platform/server.mjs
     healthCheckPath: /healthz
@@ -226,11 +238,11 @@ services:
 
 databases:
   - name: base-win-staging-db
-    plan: 0.5c-1g              # 0.5 CPU, 1 GB RAM ($19/month); upgraded Nov 2026 for speed
+    plan: basic-1gb            # 0.5 CPU, 1 GB RAM ($19/month); upgraded Nov 2026 for speed
     region: oregon
     postgresMajorVersion: "16"
   - name: base-win-db
-    plan: 0.5c-1g              # 0.5 CPU, 1 GB RAM ($19/month); upgraded Nov 2026 for speed
+    plan: basic-1gb            # 0.5 CPU, 1 GB RAM ($19/month); upgraded Nov 2026 for speed
     region: oregon
     postgresMajorVersion: "16"
   - name: base-platform-db

@@ -3,6 +3,7 @@
 # production). Run it from the Actions tab — "Promote to production" → Run
 # workflow. It refuses when CI has not passed on main's latest commit, and
 # when production has commits main does not (nothing is ever rewritten).
+# Every client's production service deploys from the production branch.
 name: Promote to production
 
 on:
