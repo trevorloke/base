@@ -1,6 +1,9 @@
 // The front door at base.win: one address for every client, each client's
 // base.win on its own server and database.
 //
+// An option, not in use today: each client is served at <name>.base.win by
+// its own service (a custom domain on it), and nothing needs the door.
+//
 //   base.win/<client>          → /<client>/site/ — the campaign's public website
 //   base.win/<client>/site/…   the website ─┐
 //   base.win/<client>/field    the volunteers' app ├─ that client's base.win
@@ -40,7 +43,7 @@ import { Readable } from 'node:stream';
 const NAME_RE = /^[a-z0-9][a-z0-9-]{0,62}$/;
 // Names kept for base.win itself (ops.base.win is the control centre, which
 // never goes through the door). The control centre refuses the same list.
-export const RESERVED = ['ops', 'hub', 'api', 'admin', 'platform', '_ops', '_hooks', 'www', 'door', 'status', 'help', 'mail', 'app', 'desk', 'field', 'site', 'login', 'assets', 'sample'];
+export const RESERVED = ['ops', 'hub', 'api', 'admin', 'platform', '_ops', '_hooks', 'www', 'door', 'status', 'help', 'mail', 'app', 'desk', 'field', 'site', 'login', 'assets', 'sample', 'staging', 'demo'];
 
 export const readClients = (raw = process.env.BASE_CLIENTS) => {
   let parsed;
@@ -151,12 +154,18 @@ export const handler = (clients, { fetchImpl = fetch, doorKey = doorKeyOf() } = 
   const prior = req.headers['x-forwarded-for'];
   const ip = req.socket?.remoteAddress || '';
   headers.set('x-forwarded-for', prior ? `${prior}, ${ip}` : ip);
-  const init = { method: req.method, headers, redirect: 'manual' };
+  // The browser went away before the answer was all sent (a closed tab, a
+  // phone out of signal, a live stream left open): the request to the
+  // client's server ends too, so it isn't left writing to nobody.
+  const gone = new AbortController();
+  res.on('close', () => { if (!res.writableFinished) gone.abort(); });
+  const init = { method: req.method, headers, redirect: 'manual', signal: gone.signal };
   if (req.method !== 'GET' && req.method !== 'HEAD') { init.body = Readable.toWeb(req); init.duplex = 'half'; }
   let up;
   try {
     up = await fetchImpl(`${r.upstream}${url.pathname}${url.search}`, init);
   } catch {
+    if (gone.signal.aborted) return undefined; // nobody left to tell
     return send(page(502, 'Not answering — base.win', `<h1>Not answering</h1><p>${r.client.name} isn’t answering on base.win right now. Try again in a minute.</p>`));
   }
   const out = {};
