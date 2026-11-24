@@ -8,7 +8,7 @@
 // STARBASE_ENV was mistyped never opens without a password
 // (/api/auth/demo), is never framed by another site, never makes the sample
 // campaign and never drops its database for a reset word.
-import { test, beforeEach, afterEach } from 'node:test';
+import { test, before, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { freshDb, Client } from './helpers.js';
 import { app } from '../index.js';
@@ -17,10 +17,17 @@ import { seedSample } from '../lib/samplecampaign.js';
 
 const KEYS = ['STARBASE_ENV', 'NODE_ENV', 'RENDER', 'STARBASE_FRAME_HOSTS', 'STARBASE_DEMO_EMAIL', 'STARBASE_SAMPLE', 'STARBASE_SAMPLE_RESET'];
 let kept; let db;
-beforeEach(async () => {
+// One campaign with one person in it, made once (over Postgres the whole
+// file shares a database): what a reset word would drop.
+before(async () => {
+  db = await freshDb();
+  const mgr = new Client();
+  assert.equal((await mgr.signup({ email: 'demo@example.org' })).status, 201);
+  await mgr.createPerson('Real Person');
+});
+beforeEach(() => {
   kept = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
   for (const k of KEYS) delete process.env[k];
-  db = await freshDb();
 });
 afterEach(() => { for (const k of KEYS) { if (kept[k] === undefined) delete process.env[k]; else process.env[k] = kept[k]; } });
 const count = async (table) => Number((await db.query(`select count(*) as n from ${table}`)).rows[0].n);
@@ -37,9 +44,6 @@ const HOSTED = [
 
 for (const [where, host] of HOSTED) {
   test(`an unset or misspelled STARBASE_ENV is production: ${where}`, async () => {
-    const mgr = new Client();
-    assert.equal((await mgr.signup({ email: 'demo@example.org' })).status, 201);
-    await mgr.createPerson('Real Person');
     host();
     // Everything staging would act on, set as staging sets it.
     process.env.STARBASE_DEMO_EMAIL = 'demo@example.org';
@@ -71,8 +75,6 @@ test('the name is read exactly: spaces around it are dropped, nothing else is fo
 });
 
 test('a developer’s machine (not hosted) is "local"; the sample and its reset still need staging by name', async () => {
-  const mgr = new Client();
-  assert.equal((await mgr.signup({ email: 'demo@example.org' })).status, 201);
   process.env.STARBASE_DEMO_EMAIL = 'demo@example.org';
   process.env.STARBASE_SAMPLE = 'vancouver';
   process.env.STARBASE_SAMPLE_RESET = 'a-word-this-database-has-not-seen';
@@ -81,5 +83,6 @@ test('a developer’s machine (not hosted) is "local"; the sample and its reset 
     assert.equal(envName(), 'local', JSON.stringify(typed));
     assert.equal(await seedSample(app, () => {}, 8), null);
     assert.equal(await count('workspaces'), 1);
+    assert.equal(await count('persons'), 1);
   }
 });
