@@ -56,7 +56,8 @@ it is shared: it is base.win's, not any client's.
 
 **Before a Blueprint sync.** `render.yaml` is a Blueprint, and Render
 matches it to what you have by name. We have not seen Render's dashboard,
-so check there first. Each time, in this order:
+so check there first; the steps below follow how Render documents its
+Blueprints. Each time, in this order:
 
 1. Render → **Blueprints**: see whether this repository is listed, which
    branch it follows and whether **Auto Sync** is on.
@@ -82,7 +83,7 @@ so check there first. Each time, in this order:
 6. Only then Render → **Blueprints** → the Blueprint → **Manual Sync**. A
    sync that finds nothing under a name makes a second, empty one there.
 
-If no Blueprint is listed, the services were made by hand, and a change to
+If no Blueprint is listed, the services were most likely made by hand, and a change to
 `render.yaml` reaches Render only when you make it there too. Do not make a
 new Blueprint over them (**New → Blueprint**) without checking the names
 match (steps 4 and 5): under a name it does not find, it makes a second,
@@ -838,7 +839,7 @@ The control centre is not set up until these are done, in this order:
    - **None is listed:** make the two by hand, with the settings in
      `render.yaml`'s `base-platform` block.
      1. Render → **New → Postgres**: name `base-platform-db`, region
-        Oregon, PostgreSQL 16, the smallest plan.
+        Oregon, PostgreSQL 16, the Basic-256mb plan (as `render.yaml` says).
      2. Render → **New → Web Service** → this repository: name
         `base-platform`, language Node, branch `main`, region Oregon,
         instance Starter. Build command `npm ci --omit=dev`, start command
