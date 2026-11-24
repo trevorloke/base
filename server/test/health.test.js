@@ -27,8 +27,11 @@ test('the exact fields', async () => {
   const h = await health();
   assert.deepEqual(Object.keys(h).sort(), [
     'address', 'build', 'campaignMade', 'commit', 'database', 'doorKey', 'entry', 'env', 'instance', 'ok', 'organization',
-    'ownOrigin', 'platformKids', 'service', 'setupOpen', 'tzdataCurrent',
+    'ownOrigin', 'platformKids', 'service', 'setupOpen', 'store', 'tzdataCurrent',
   ]);
+  // Which database holds the campaign: "postgres" (DATABASE_URL) or
+  // "embedded" (the built-in one, as here unless the suite runs over Postgres).
+  assert.equal(h.store, process.env.DATABASE_URL ? 'postgres' : 'embedded');
   assert.match(h.instance, /^[A-Za-z0-9_-]{22}$/);
   assert.equal(h.ownOrigin, null);
   assert.equal(h.address, null);
