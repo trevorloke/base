@@ -37,6 +37,9 @@ export const checklist = (name, done, { stale = '' } = {}) => html`<ol class="oc
   </li>`;
 })}</ol>`;
 
+// No usable signing key: there is no public half to hand to a campaign.
+export const NO_KEY_WORDS = 'PLATFORM_SIGNING_KEY in Render is missing or too short. Press Generate next to it, then Save and deploy.';
+
 // base.win’s key: what each campaign's BASE_PLATFORM_PUBKEY holds.
 export const keyPage = ({ keys, missing, short = 0 }) => page({
   title: 'base.win’s key', nav: true, here: 'key',
@@ -54,7 +57,7 @@ export const keyPage = ({ keys, missing, short = 0 }) => page({
       <button class="btn btn-primary oc-wide" type="button" data-copy="key-value">Copy</button>
     </div>
     ${keys.length > 1 && missing.length ? status(`Don’t remove the old key yet: ${missing.join(', ')} don’t have the new one.`, 'warn') : status('')}`
-    : status('PLATFORM_SIGNING_KEY in Render is missing or too short. Press Generate next to it, then Save and deploy.', 'warn')}
+    : status(NO_KEY_WORDS, 'warn')}
   </section>`,
 });
 

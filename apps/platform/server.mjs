@@ -1,8 +1,8 @@
 // base.win's control centre (ops.base.win): one sign-in for every campaign.
 // Server-rendered pages for one person, a few forms and lists; its own small
 // database (db.sql). It reads each campaign's public /api/health and nothing
-// else, holds no campaign's database address, door key or Render key, and
-// no campaign ever calls it. See README.md.
+// else, holds no campaign's database address or Render key, and no campaign
+// ever calls it. See README.md.
 import { readFileSync } from 'node:fs';
 import { Hono } from 'hono';
 import { cfg } from './config.mjs';
@@ -54,6 +54,12 @@ export const makeApp = ({ db, fetcher } = {}) => {
 
 const isMain = process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop());
 if (isMain) {
+  // On Render with no database address it would run on the in-memory one
+  // and forget the operator, every campaign and the log at each restart.
+  if (cfg().onRender && !cfg().databaseUrl) {
+    console.error('The control centre can’t start: DATABASE_URL is empty. In Render, open base-platform → Environment, set DATABASE_URL to base-platform-db’s Internal Database URL, then Save and deploy.');
+    process.exit(1);
+  }
   const { serve } = await import('@hono/node-server');
   const db = await openDb(cfg().databaseUrl);
   const app = makeApp({ db });

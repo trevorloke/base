@@ -1,6 +1,6 @@
 -- The control centre's own database (base-platform-db). Run at every start;
 -- every statement is idempotent. It holds no people, no client database
--- address, no door key and no Render key.
+-- address and no Render key.
 
 -- The one operator. Password: scrypt (server/lib/auth.js hashPassword).
 -- Authenticator key: AES-256-GCM, key = HKDF(OPS_SECRET, info 'base.win/ops-totp/v1').
@@ -75,11 +75,13 @@ create unique index if not exists environments_instance_uq on environments (inst
 insert into campaigns (name, display, kind) values ('sample', 'Sample (staging)', 'sample') on conflict (name) do nothing;
 insert into environments (campaign, env) values ('sample', 'staging') on conflict (campaign, env) do nothing;
 
+-- via: 'server' is the Render address saved for it; 'public' is a client's
+-- own address, https://<name>.base.win.
 create table if not exists checks (
   id bigserial primary key,
   campaign text not null,
   env text not null,
-  via text not null check (via in ('server', 'door')),
+  via text not null check (via in ('server', 'public')),
   at timestamptz not null default now(),
   answering boolean not null,
   status int, ms int,
@@ -92,13 +94,31 @@ create table if not exists checks (
   entry text,
   platform_kids jsonb,
   setup_open boolean,
-  door_key boolean,
   problem text                           -- error name only, never a body
 );
 create index if not exists checks_recent on checks (campaign, env, via, at desc);
 -- Whether the campaign's workspace exists (health campaignMade). setup_open
 -- is false on any server holding the control centre's key, made or not.
 alter table checks add column if not exists campaign_made boolean;
+-- Where the campaign keeps its data (health store): 'postgres', or 'embedded'
+-- for the built-in database, which is not a real one. Null from a server
+-- too old to say.
+alter table checks add column if not exists store text;
+-- A database made when the second check went through the door: via was
+-- 'server' or 'door', and each check kept whether the door's key was set.
+-- Those checks were of an address nobody uses now, so they go; this runs
+-- once (afterwards the rule already names 'public').
+do $$
+begin
+  if exists (select 1 from pg_constraint
+      where conrelid = 'checks'::regclass and conname = 'checks_via_check'
+        and pg_get_constraintdef(oid) not like '%''public''%') then
+    alter table checks drop constraint checks_via_check;
+    delete from checks where via = 'door';
+    alter table checks add constraint checks_via_check check (via in ('server', 'public'));
+  end if;
+end $$;
+alter table checks drop column if exists door_key;
 
 create table if not exists checklist (
   campaign text not null references campaigns(name),

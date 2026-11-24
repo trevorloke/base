@@ -13,7 +13,9 @@ export const baseEnv = () => {
     OPS_HOST: HOST, OPS_SETUP_CODE: SETUP_CODE, OPS_SECRET: SECRET, PLATFORM_SIGNING_KEY: SIGNING, OPS_INSECURE_COOKIES: '1',
   });
   delete process.env.OPS_ALLOW_LOCAL;
-  delete process.env.OPS_DOOR_ORIGIN;
+  // A client's public address is https://<name>.base.win unless a test
+  // names a stand-in (OPS_PUBLIC_TEMPLATE, with {name} in it).
+  delete process.env.OPS_PUBLIC_TEMPLATE;
 };
 baseEnv();
 

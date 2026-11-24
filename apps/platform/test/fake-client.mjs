@@ -5,7 +5,13 @@
 // to /api/auth/operator (checked with the campaign side's rules, written
 // again in verify-entry.mjs), and lands on /admin/ (or Settings → Members
 // for an invite) with "You’re in as base.win support".
-//   startFakeClient({ port, env, publicKey, basePath?, ownOrigin?, instance? }) → { close, reset, state }
+//   startFakeClient({ port, env, publicKey, address?, ownOrigin?, instance?, commit? }) → { close, reset, state }
+// state.over: health fields a test changes for a while (store, setupOpen, commit…).
+//
+// startPublicAddresses({ port, clients: { <name>: its origin } }) stands in
+// for every client's public address (https://<name>.base.win) on one port:
+// with OPS_PUBLIC_TEMPLATE=http://127.0.0.1:<port>/{name}, /<name>/… there
+// is that client's server, as a custom domain on its service would be.
 import { createServer } from 'node:http';
 import { randomBytes } from 'node:crypto';
 import { verifyEntry, parseKeys } from './verify-entry.mjs';
@@ -28,14 +34,14 @@ const ENTER_JS = `(() => {
 const page = (title, body) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${title}</title>
 <style>body{font-family:system-ui,sans-serif;margin:0;padding:0}.bar{background:#eef;border-bottom:2px solid #c80;padding:12px 16px}main{padding:16px}</style></head><body>${body}</body></html>`;
 
-export const startFakeClient = ({ port, env = 'production', publicKey, basePath = '', ownOrigin = `http://127.0.0.1:${port}`, instance = randomBytes(16).toString('base64url') }) => {
+export const startFakeClient = ({ port, env = 'production', publicKey, address = null, ownOrigin = `http://127.0.0.1:${port}`, instance = randomBytes(16).toString('base64url'), commit = 'f00dfee' }) => {
   const keys = parseKeys(publicKey);
-  const state = { nonces: new Set(), sessions: new Map(), invites: [], refused: [], made: false };
+  const state = { nonces: new Set(), sessions: new Map(), invites: [], refused: [], made: false, over: {} };
   const own = `http://127.0.0.1:${port}`;
   const health = () => ({
-    ok: true, database: 'ok', service: 'starbase', env, organization: 'Example Campaign', commit: 'f00dfee', build: 'index-test.js', tzdataCurrent: true,
-    ownOrigin, instance, address: basePath ? `http://127.0.0.1:5603${basePath}` : own, entry: keys.length ? 'ready' : 'no-key',
-    platformKids: keys.map((k) => k.kid), setupOpen: false, campaignMade: state.made, doorKey: true,
+    ok: true, database: 'ok', store: 'postgres', service: 'starbase', env, organization: 'Example Campaign', commit, build: 'index-test.js', tzdataCurrent: true,
+    ownOrigin, instance, address: address || own, entry: keys.length ? 'ready' : 'no-key',
+    platformKids: keys.map((k) => k.kid), setupOpen: false, campaignMade: state.made, ...state.over,
   });
   const sessionOf = (req) => {
     const sid = /(?:^|;\s*)sid=([^;]+)/.exec(req.headers.cookie || '')?.[1];
@@ -45,7 +51,7 @@ export const startFakeClient = ({ port, env = 'production', publicKey, basePath 
     const url = new URL(req.url, own);
     const send = (status, type, body, headers = {}) => { res.writeHead(status, { 'content-type': type, 'cache-control': 'no-store', ...headers }); res.end(body); };
     const json = (status, body, headers) => send(status, 'application/json', JSON.stringify(body), headers);
-    if (url.pathname === '/api/health' || (basePath && url.pathname === `${basePath}/api/health`)) return json(200, health());
+    if (url.pathname === '/api/health') return json(200, health());
     if (url.pathname === '/admin/enter') return send(200, 'text/html; charset=utf-8', page('Opening the desk', '<main><p id="say" role="status" aria-live="polite"></p></main><script src="/admin/enter.js"></script>'));
     if (url.pathname === '/admin/enter.js') return send(200, 'text/javascript', ENTER_JS);
     if (url.pathname === '/api/auth/operator' && req.method === 'POST') {
@@ -81,13 +87,38 @@ export const startFakeClient = ({ port, env = 'production', publicKey, basePath 
   server.listen(port, '127.0.0.1');
   return {
     state, instance, own,
-    reset: () => { state.sessions.clear(); state.invites.length = 0; state.made = false; },
+    reset: () => { state.sessions.clear(); state.invites.length = 0; state.made = false; state.over = {}; },
     close: () => new Promise((r) => { server.closeAllConnections?.(); server.close(() => r()); }),
   };
 };
 
-// node apps/platform/test/fake-client.mjs  (PORT, STARBASE_ENV, BASE_PLATFORM_PUBKEY, BASE_PATH)
+// Every client's public address on one port: /<name>/<path> is passed to
+// that client's own server (GET only, which is all a health check needs).
+// clients may be changed while it runs; `down` names are not answering.
+export const startPublicAddresses = ({ port, clients = {} }) => {
+  const down = new Set();
+  const server = createServer(async (req, res) => {
+    const m = /^\/([a-z0-9-]+)(\/.*)$/.exec(req.url || '');
+    const origin = m && !down.has(m[1]) ? clients[m[1]] : null;
+    if (!origin || req.method !== 'GET') { res.writeHead(404, { 'content-type': 'application/json' }); return res.end('{"error":"Not found"}'); }
+    try {
+      const r = await fetch(`${origin}${m[2]}`, { redirect: 'manual' });
+      res.writeHead(r.status, { 'content-type': r.headers.get('content-type') || 'application/json', 'cache-control': 'no-store' });
+      return res.end(await r.text());
+    } catch {
+      res.writeHead(502, { 'content-type': 'application/json' });
+      return res.end('{"error":"Not answering"}');
+    }
+  });
+  server.listen(port, '127.0.0.1');
+  return {
+    clients, down, template: `http://127.0.0.1:${port}/{name}`,
+    close: () => new Promise((r) => { server.closeAllConnections?.(); server.close(() => r()); }),
+  };
+};
+
+// node apps/platform/test/fake-client.mjs  (PORT, STARBASE_ENV, BASE_PLATFORM_PUBKEY, STARBASE_PUBLIC_URL)
 if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop())) {
-  const c = startFakeClient({ port: Number(process.env.PORT) || 5601, env: process.env.STARBASE_ENV || 'production', publicKey: process.env.BASE_PLATFORM_PUBKEY, basePath: process.env.BASE_PATH || '' });
+  const c = startFakeClient({ port: Number(process.env.PORT) || 5601, env: process.env.STARBASE_ENV || 'production', publicKey: process.env.BASE_PLATFORM_PUBKEY, address: process.env.STARBASE_PUBLIC_URL || null });
   console.log(`fake campaign server on ${c.own}`);
 }

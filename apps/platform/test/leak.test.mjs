@@ -39,7 +39,7 @@ const fetcher = async (url) => {
   const origin = url.startsWith(S) ? S : A;
   return { status: 200, ms: 3, body: JSON.stringify({
     ok: true, database: 'ok', env: url.startsWith(S) ? 'staging' : 'production', commit: 'd9130ae', tzdataCurrent: true, ownOrigin: origin,
-    instance: url.startsWith(S) ? 'SSSSSSSSSSSSSSSSSSSSSS' : INST, address: 'https://base.win/leak', entry: 'ready', platformKids: [currentKid()], setupOpen: false, campaignMade: true, doorKey: true,
+    instance: url.startsWith(S) ? 'SSSSSSSSSSSSSSSSSSSSSS' : INST, address: 'https://leak.base.win', entry: 'ready', platformKids: [currentKid()], setupOpen: false, campaignMade: true, store: 'postgres',
   }) };
 };
 
@@ -64,7 +64,7 @@ test('a full run leaks no secret anywhere', async () => {
   const totpSecret = op.secret;
   const steps = [
     () => b.get('/'),
-    () => b.post('/new', { name: 'leak', display: 'Leak Example', city: 'Exampleton', province: 'BC', rules: 'bc-municipal', tz: 'America/Vancouver', races: 'council' }),
+    () => b.post('/new', { name: 'leak', display: 'Leak Example', city: 'Exampleton', province: 'BC', rules: 'bc-municipal', tz: 'America/Vancouver', races: 'council', sw: '50.6, -120.5', ne: '50.8, -120.2' }),
     () => b.get('/c/leak/setup'),
     () => b.post('/c/leak/setup', { server_url: A }),
     () => b.get('/c/leak/setup'),
@@ -92,6 +92,7 @@ test('a full run leaks no secret anywhere', async () => {
   assert.equal(res.status, 303);
   const opened = seen.join('\n');
   assert.match(opened, /bw-entry\.v1\./, 'the run opened desks');
+  assert.match(opened, /id="env-block"/, 'the run made a campaign and showed its block');
   assert.ok(opened.includes(publicKeyOf(SENTINELS.PLATFORM_SIGNING_KEY).publicKey), 'the public key is shown');
 
   let rows = '';

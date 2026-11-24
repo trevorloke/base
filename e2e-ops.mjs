@@ -2,42 +2,49 @@
 //
 // The owner sets it up (the setup code, about you, the authenticator with a
 // code made from the key on the page, the recovery codes), lands on an
-// empty Campaigns with both ways in, makes campaign "a" (its .env block's
-// two random values filled by the page's own script), pastes its address
-// (Answering) and gets the door's whole value ("Adds: a"); sets the
-// sample's address; opens both desks in new tabs, each landing on that
-// campaign's own address with "You’re in as base.win support"; with a code
-// more than 10 minutes old, Open asks for a code in the new tab and opens
-// the desk in that same tab (no third tab); invites the first manager (the
-// invite shows on Members, the checklist says "Done by itself", the door
-// knows it); a server reporting another address shows "This server says it
-// is somewhere else" and no Open; on a real campaign server
+// empty Campaigns with both ways in, makes campaign "a" (its map area; its
+// .env block's two random values filled by the page's own script, its own
+// address a.base.win, no opponents, nothing of the door), pastes its
+// address (Answering) and gets the card that gives it its own address:
+// a.base.win isn't answering yet (said on the card and as a chip), then it
+// is and the checklist ticks by itself; with no signing key the block is
+// replaced by the key page's warning; sets the sample's address; opens
+// both desks in new tabs, each landing on that campaign's own address with
+// "You’re in as base.win support"; with a code more than 10 minutes old,
+// Open asks for a code in the new tab and opens the desk in that same tab
+// (no third tab); the chips for the built-in database, open sign-up and a
+// Promote that is waiting come and go with what the servers say; invites
+// the first manager (the invite shows on Members, the checklist says "Done
+// by itself"); a server reporting another address shows "This server says
+// it is somewhere else" and no Open; on a real campaign server
 // (node server/index.js, fresh, holding base.win's key) Campaign made stays
 // unticked until Invite and open the desk makes the campaign, and the desk
-// opens with the invite on Members; the log is intact with every kind of
-// line; and a recovery code signs in. Screens at 1440x900 and 390x844: one
-// primary button at most (exactly one where the screen has a main action),
-// controls at least 48 px on the phone, no sideways scroll.
+// opens with the invite on Members; a campaign that was already running is
+// added and its set-up page is the short one; the log is intact with every
+// kind of line; and a recovery code signs in. Screens at 1440x900 and
+// 390x844: one primary button at most (exactly one where the screen has a
+// main action), controls at least 48 px on the phone, no sideways scroll.
 //
 // Ports 5600–5609: 5600 the console (in this process, so the test can age
-// the code in its database), 5601 campaign "a" (production, BASE_PATH=/a),
-// 5602 the sample (staging), 5603 the door, 5605 a server that says it is
-// 5601, 5606 campaign "b" — a real campaign server (node server/index.js,
-// in memory; needs npm run build). 5601, 5602 and 5605 are
-// apps/platform/test/fake-client.mjs, which checks each token with the
-// campaign side's rules; "b" checks them with its own.
+// the code in its database), 5601 campaign "a" (production), 5602 the
+// sample (staging), 5603 every client's public address (a stand-in for
+// https://<name>.base.win: /a is campaign a's server, as a custom domain on
+// its service would be), 5604 campaign "c" (already running), 5605 a
+// server that says it is 5601, 5606 campaign "b" — a real campaign server
+// (node server/index.js, in memory; needs npm run build). 5601, 5602, 5604
+// and 5605 are apps/platform/test/fake-client.mjs, which checks each token
+// with the campaign side's rules; "b" checks them with its own.
 //
 // Run (system node, under the browser lock):
 //   flock -o SP/batch6/locks/browser.lock node e2e-ops.mjs
 //   SHOTS=<dir> to keep the screenshots elsewhere.
 import { createRequire } from 'node:module';
-import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 
 const ROOT = new URL('.', import.meta.url).pathname;
 Object.assign(process.env, {
-  OPS_HOST: '127.0.0.1:5600', OPS_INSECURE_COOKIES: '1', OPS_ALLOW_LOCAL: '1', OPS_DOOR_ORIGIN: 'http://127.0.0.1:5603',
+  OPS_HOST: '127.0.0.1:5600', OPS_INSECURE_COOKIES: '1', OPS_ALLOW_LOCAL: '1', OPS_PUBLIC_TEMPLATE: 'http://127.0.0.1:5603/{name}',
   OPS_SETUP_CODE: 'e2e-ops-setup-code-0123456789abcdef', OPS_SECRET: 'e2e-ops-secret-0123456789abcdefghijk',
   PLATFORM_SIGNING_KEY: 'test-only-platform-signing-key-0123456789abcdef',
 });
@@ -47,8 +54,7 @@ const { serve } = await import('@hono/node-server');
 const { openDb } = await import(`${ROOT}apps/platform/db.mjs`);
 const { makeApp } = await import(`${ROOT}apps/platform/server.mjs`);
 const { publicKeyOf } = await import(`${ROOT}apps/platform/keys.mjs`);
-const { startFakeClient } = await import(`${ROOT}apps/platform/test/fake-client.mjs`);
-const { handler, readClients } = await import(`${ROOT}apps/door/door.mjs`);
+const { startFakeClient, startPublicAddresses } = await import(`${ROOT}apps/platform/test/fake-client.mjs`);
 const { totp, base32Decode } = await import(`${ROOT}server/lib/twostep.js`);
 
 const OUT = process.env.SHOTS || '/tmp/starbase-ops';
@@ -61,12 +67,16 @@ const ok = (cond, what) => { if (cond) console.log(`ok   ${what}`); else fail(wh
 
 const db = await openDb('');
 const platform = serve({ fetch: makeApp({ db }).fetch, port: 5600, hostname: '127.0.0.1' });
-const a = startFakeClient({ port: 5601, env: 'production', publicKey: KEY, basePath: '/a' });
+const a = startFakeClient({ port: 5601, env: 'production', publicKey: KEY, address: 'http://127.0.0.1:5603/a' });
 const sample = startFakeClient({ port: 5602, env: 'staging', publicKey: KEY });
+const running = startFakeClient({ port: 5604, env: 'production', publicKey: KEY, address: 'http://127.0.0.1:5603/c' });
 const liar = startFakeClient({ port: 5605, env: 'staging', publicKey: KEY, ownOrigin: 'http://127.0.0.1:5601' });
-const door = createServer(handler(readClients('{"a":{"server":"http://127.0.0.1:5601"}}'), { doorKey: '' })).listen(5603, '127.0.0.1');
 // Campaign "b": a real, fresh campaign server holding base.win's key, as New campaign sets one up.
 const REAL = 'http://127.0.0.1:5606';
+// Each client's own address (<name>.base.win), all on one port. Campaign
+// a's isn't there yet: its custom domain is added during the run.
+const addresses = startPublicAddresses({ port: 5603, clients: { a: 'http://127.0.0.1:5601', b: REAL, c: 'http://127.0.0.1:5604' } });
+addresses.down.add('a');
 const realEnv = { ...process.env, PORT: '5606', STARBASE_DATA: 'memory', STARBASE_JOBS: 'off', STARBASE_ENV: 'production', BASE_PLATFORM_PUBKEY: KEY, STARBASE_OWN_URL: REAL };
 for (const k of ['STARBASE_OPEN_SIGNUP', 'STARBASE_DEMO_EMAIL', 'RENDER_EXTERNAL_URL', 'STARBASE_PUBLIC_URL', 'BASE_PATH', 'DATABASE_URL', 'MAIL_PROVIDER', 'RESEND_API_KEY', 'SENDGRID_API_KEY']) delete realEnv[k];
 let realLog = '';
@@ -111,9 +121,16 @@ const text = (p) => p.textContent('body');
 // A desk tab lands, or says why not.
 const land = async (tab, url) => {
   try { await tab.waitForURL(url, { timeout: 10_000 }); } catch (e) {
-    console.log(`  at ${tab.url()}: ${(await tab.textContent('body').catch(() => '')).trim().slice(0, 300)}; refused: ${[...a.state.refused, ...sample.state.refused].join(', ')}`);
+    console.log(`  at ${tab.url()}: ${(await tab.textContent('body').catch(() => '')).trim().slice(0, 300)}; refused: ${[...a.state.refused, ...sample.state.refused, ...running.state.refused].join(', ')}`);
     throw e;
   }
+};
+// Check now on one campaign's page, and its words on one line.
+const checkNow = async (name) => {
+  await page.goto(`${B}/c/${name}`);
+  await page.click(`form[action="/c/${name}/check-now"] button`);
+  await page.waitForURL(new RegExp(`/c/${name}$`));
+  return (await text(page)).replace(/\s+/g, ' ');
 };
 const newTab = async (click) => {
   const [tab] = await Promise.all([ctx.waitForEvent('page'), click()]);
@@ -174,22 +191,53 @@ try {
   await page.selectOption('#province', 'AB');
   ok(await page.inputValue('#tz') === 'America/Edmonton', 'the time zone follows the province');
   await page.selectOption('#province', 'BC');
+  // The map area, as Google Maps copies each corner.
+  await page.fill('#sw', '50.61234567, -120.51234567');
+  await page.fill('#ne', '50.8, -120.2');
   await page.click('.btn-primary');
   await page.waitForURL(/\/c\/a\/setup$/);
   const randoms = await page.$$eval('[data-random]', (els) => els.map((e) => e.textContent));
   ok(randoms.length === 2 && randoms.every((r) => /^[A-Za-z0-9_-]{43}$/.test(r)) && randoms[0] !== randoms[1], 'the .env block’s two random values, made by the page');
-  ok(/BASE_PLATFORM_PUBKEY=/.test(await page.textContent('#env-block')) && (await page.textContent('#env-block')).includes(KEY), 'the .env block carries base.win’s key');
+  const block = (await page.textContent('#env-block')).split('\n');
+  ok(block.includes(`BASE_PLATFORM_PUBKEY=${KEY}`), 'the .env block carries base.win’s key');
+  ok(block.includes('STARBASE_PUBLIC_URL=https://a.base.win'), 'the .env block: its own address, a.base.win');
+  ok(block.includes('STARBASE_GEO_BOUNDS=50.61235,-120.51235|50.8,-120.2'), 'the .env block: the map area typed');
+  ok(block.includes('STARBASE_CANDIDATES=none'), 'the .env block: no opponents');
+  ok(!/BASE_PATH|BASE_DOOR_KEY|BASE_CLIENTS|base\.win\//.test(block.join('\n')) && !/BASE_DOOR_KEY|the door/i.test(await text(page)), 'nothing of the door on the page');
   await look(page, '08-setup-before-address');
+  // No usable signing key: the key page's warning where the block would be.
+  const signing = process.env.PLATFORM_SIGNING_KEY;
+  process.env.PLATFORM_SIGNING_KEY = '';
+  await page.reload();
+  ok(/PLATFORM_SIGNING_KEY in Render is missing or too short\./.test(await text(page)) && await page.locator('#env-block').count() === 0
+    && !/BASE_PLATFORM_PUBKEY=/.test(await text(page)), 'no signing key: the warning, and no block with an empty key');
+  await look(page, '08b-setup-no-signing-key');
+  process.env.PLATFORM_SIGNING_KEY = signing;
+  await page.reload();
+  ok(await page.locator('#env-block').count() === 1, 'the block is back with the key');
   await page.fill('#server_url', 'http://127.0.0.1:5601');
   await page.click('button:has-text("Save address")');
   await page.waitForURL(/\/c\/a\/setup$/);
-  const setupText = await text(page);
+  const setupText = (await text(page)).replace(/\s+/g, ' ');
   ok(/Answering/.test(setupText), 'the address answers');
-  ok(/Adds: a\./.test(setupText), 'the door card: Adds: a');
-  ok(JSON.parse(await page.textContent('#door-value')).a.server === 'http://127.0.0.1:5601', 'the door value names the server');
+  ok(/Give it its address/.test(setupText) && /Settings → Custom Domains → add a\.base\.win\./.test(setupText), 'the address card: add a.base.win under Custom Domains');
+  ok(/add a CNAME record named a pointing at 127\.0\.0\.1:5601\./.test(setupText), 'the address card: the CNAME record, pointing at the service’s own address');
+  ok(/Not answering at a\.base\.win yet\./.test(setupText), 'the address card: a.base.win not answering yet');
+  ok(await page.locator('#door-value').count() === 0 && !/Tell the door|BASE_CLIENTS/.test(setupText), 'no door card');
   await look(page, '09-setup-all-cards');
   await page.click('summary:has-text("More")');
+  const yaml = await page.textContent('#yaml-snippet');
+  ok(/plan: basic-1gb/.test(yaml) && !/BASE_DOOR_KEY|BASE_PATH/.test(yaml) && /value: "https:\/\/a\.base\.win"/.test(yaml), 'the render.yaml block: the database plan, its own address, nothing of the door');
   await look(page, '09b-setup-render-yaml');
+  // Before the custom domain is there: a chip; once it is, the checklist ticks by itself.
+  let aText = await checkNow('a');
+  ok(/a\.base\.win not answering/.test(aText) && /Answers at a\.base\.win Not yet/.test(aText), 'a.base.win not answering: the chip, and not ticked');
+  await look(page, '09c-one-campaign-address-not-answering');
+  addresses.down.delete('a');
+  aText = await checkNow('a');
+  ok(!/a\.base\.win not answering/.test(aText) && /Answers at a\.base\.win Done by itself/.test(aText), 'a.base.win answers: no chip, ticked by itself');
+  await page.goto(`${B}/c/a/setup`);
+  ok(/Answering at a\.base\.win/.test(await text(page)), 'the address card: Answering at a.base.win');
 
   // 3. The sample's address, from the list.
   await page.goto(`${B}/`);
@@ -228,6 +276,25 @@ try {
   ok(ctx.pages().length === before + 1, 'no third tab');
   await tabC.close();
 
+  // 5b. What the servers say shows as chips, and goes when it is put right.
+  a.state.over = { store: 'embedded', setupOpen: true, campaignMade: false };
+  sample.state.over = { commit: 'abc1234def5678' };
+  await checkNow('sample');
+  aText = await checkNow('a');
+  ok(/Not on a real database/.test(aText), 'chip: Not on a real database');
+  ok(/Sign-up is open to anyone/.test(aText), 'chip: Sign-up is open to anyone');
+  ok(/Production is on f00dfee; staging is on abc1234/.test(aText), 'chip: Production is on f00dfee; staging is on abc1234');
+  ok(/Database\s*Built in: not a real database/.test(aText), 'Health: the database is the built-in one');
+  await look(page, '12b-one-campaign-chips');
+  await page.goto(`${B}/`);
+  ok(/Not on a real database/.test(await text(page)), 'the chips show on Campaigns too');
+  await look(page, '12c-campaigns-chips');
+  a.state.over = {};
+  sample.state.over = {};
+  await checkNow('sample');
+  aText = await checkNow('a');
+  ok(!/Not on a real database|Sign-up is open to anyone|Production is on/.test(aText) && await page.locator('.chip').count() === 0, 'put right: the chips are gone');
+
   // 6. Invite the first manager, on a fresh campaign server.
   a.reset();
   await page.goto(`${B}/c/a`);
@@ -239,7 +306,8 @@ try {
   await page.reload();
   const campaignText = (await text(page)).replace(/\s+/g, ' ');
   ok(/First manager invited Done by itself/.test(campaignText), 'the checklist: First manager invited · Done by itself');
-  ok(/The door knows it: answers at base\.win\/a Done by itself/.test(campaignText), 'the checklist: the door knows it');
+  ok(/Answers at a\.base\.win Done by itself/.test(campaignText), 'the checklist: Answers at a.base.win');
+  ok(!/door|Short address/i.test(campaignText), 'the checklist: nothing of the door');
   await look(page, '13-one-campaign-invited');
 
   // 7. A server that says it is somewhere else.
@@ -260,6 +328,8 @@ try {
   await page.fill('#display', 'Example B');
   await page.fill('#city', 'Exampleton');
   await page.selectOption('#province', 'BC');
+  await page.fill('#sw', '50.6, -120.5');
+  await page.fill('#ne', '50.8, -120.2');
   await page.click('.btn-primary');
   await page.waitForURL(/\/c\/b\/setup$/);
   await page.fill('#server_url', REAL);
@@ -268,10 +338,18 @@ try {
   ok(/Answering/.test(await text(page)), 'the real server answers');
   const freshHealth = await fetch(`${REAL}/api/health`).then((r) => r.json());
   ok(freshHealth.setupOpen === false && freshHealth.campaignMade === false, 'the fresh real server: sign-up closed, no campaign yet');
-  await page.goto(`${B}/c/b`);
-  await page.click('form[action="/c/b/check-now"] button');
-  await page.waitForURL(/\/c\/b$/);
-  ok(!/Campaign made Done by itself/.test((await text(page)).replace(/\s+/g, ' ')), 'the checklist: Campaign made not ticked before any entry');
+  const bBefore = await checkNow('b');
+  ok(!/Campaign made Done by itself/.test(bBefore), 'the checklist: Campaign made not ticked before any entry');
+  ok(/Answers at b\.base\.win Done by itself/.test(bBefore), 'the checklist: Answers at b.base.win (the real server, at its own address)');
+  ok(!/Sign-up is open to anyone/.test(bBefore), 'the real server holds base.win’s key: sign-up is not open');
+  // A campaign server that says where it keeps its data: in memory is not a real database.
+  if (freshHealth.store === 'embedded') {
+    ok(/Not on a real database/.test(bBefore) && /Answers, database fine Not yet/.test(bBefore), 'the real server, in memory: Not on a real database, and not ticked');
+  } else if (freshHealth.store === undefined) {
+    console.log('note the real server here does not say where it keeps its data (no "store" in its health): that chip is checked on campaign a only');
+  } else {
+    fail(`the real server runs in memory but says store: ${freshHealth.store}`);
+  }
   await page.fill('#invite-b', 'kim@example.org');
   const tabB = await newTab(() => page.click('button:has-text("Invite and open the desk")'));
   try { await tabB.waitForURL(`${REAL}/admin/settings/members`, { timeout: 15_000 }); } catch (e) {
@@ -283,16 +361,30 @@ try {
   await tabB.waitForSelector('text=kim@example.org', { timeout: 10_000 }).then(() => ok(true, 'the real desk shows the invite'), () => fail('the real desk shows the invite'));
   await tabB.close();
   ok((await fetch(`${REAL}/api/health`).then((r) => r.json())).campaignMade === true, 'the first entry made the campaign');
-  await page.goto(`${B}/c/b`);
-  await page.click('form[action="/c/b/check-now"] button');
-  await page.waitForURL(/\/c\/b$/);
-  const bText = (await text(page)).replace(/\s+/g, ' ');
+  const bText = await checkNow('b');
   ok(/Campaign made Done by itself/.test(bText), 'the checklist: Campaign made, once the server says so');
   ok(/First manager invited Done by itself/.test(bText), 'the checklist: First manager invited (real server)');
   await look(page, '16b-one-campaign-real-server');
 
+  // 7c. A campaign that was already running: added, and its set-up page is the short one.
   await page.goto(`${B}/existing`);
   await look(page, '17-add-running');
+  ok(/It’s the address: <name>\.base\.win\./.test(await text(page)), 'the short name is the address: <name>.base.win');
+  await page.fill('#name', 'c');
+  await page.fill('#display', 'Example Running');
+  await page.fill('#server_url', 'http://127.0.0.1:5604');
+  await page.click('.btn-primary');
+  await page.waitForURL(/\/c\/c$/);
+  ok(/Answers at c\.base\.win Done by itself/.test((await text(page)).replace(/\s+/g, ' ')), 'the running campaign answers at c.base.win');
+  await page.click('summary:has-text("More")');
+  await page.click('a:has-text("Set-up steps")');
+  await page.waitForURL(/\/c\/c\/setup$/);
+  const runningText = (await text(page)).replace(/\s+/g, ' ');
+  ok(/its settings live in Render/.test(runningText), 'the running campaign’s set-up page says its settings live in Render');
+  ok((await page.textContent('#key-line')).trim() === `BASE_PLATFORM_PUBKEY=${KEY}`, 'it shows the one line to add: base.win’s key');
+  ok(/Custom Domains → add c\.base\.win\./.test(runningText) && /Answering at c\.base\.win/.test(runningText), 'and the address step, answering');
+  ok(await page.locator('#env-block, #yaml-snippet, [data-random]').count() === 0 && !/STARBASE_|GOOGLE_TOKEN_KEY|undefined/.test(runningText), 'none of the campaign’s settings, no random keys');
+  await look(page, '17b-setup-running-campaign', { primaries: 0 });
   await page.goto(`${B}/key`);
   ok((await page.textContent('#key-value')).trim() === KEY, 'base.win’s key');
   await look(page, '18-key');
@@ -301,7 +393,7 @@ try {
   await page.goto(`${B}/log`);
   const logText = await text(page);
   ok(/Log intact · \d+ lines/.test(logText), 'Log intact');
-  for (const words of ['Set up the control centre', 'Made the campaign', 'Recognised the production server', 'Recognised the staging server',
+  for (const words of ['Set up the control centre', 'Made the campaign', 'Added a campaign that was already running', 'Recognised the production server', 'Recognised the staging server',
     'Opened the production desk', 'Opened the staging desk', 'Typed a fresh code', 'Invited the first manager and opened the production desk']) {
     ok(logText.includes(words), `log: ${words}`);
   }
@@ -319,14 +411,13 @@ try {
   ok((await db.query("select count(*)::int n from ops_log where action = 'recovery.used'")).rows[0].n === 1, 'the recovery code is logged');
 
   ok(errors.length === 0, `no console errors${errors.length ? `: ${errors.join(' | ')}` : ''}`);
-  ok(a.state.refused.length === 0 && sample.state.refused.length === 0, 'the campaign side refused no token');
+  ok(a.state.refused.length === 0 && sample.state.refused.length === 0 && running.state.refused.length === 0, 'the campaign side refused no token');
 } catch (e) {
   fail(`threw: ${e.stack || e}`);
 } finally {
   await browser.close();
   platform.close();
-  door.close();
-  await Promise.all([a.close(), sample.close(), liar.close()]);
+  await Promise.all([a.close(), sample.close(), running.close(), liar.close(), addresses.close()]);
   try { real.kill('SIGTERM'); } catch { /* gone */ }
   await db.close();
 }
