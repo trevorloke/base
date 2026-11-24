@@ -46,7 +46,9 @@ export const DEFAULT_STEPS = Object.freeze([
 // The opposed candidates a campaign's scale starts with. The server reads
 // STARBASE_CANDIDATES ("4D:McCallum:Opposed — Doug McCallum supporter;4B:Locke")
 // — a code (4 + one or two letters), a name, and a label (or "Opposed — name");
-// the desk edits the list after (Rating scale). Unset: Imagine Surrey's.
+// the desk edits the list after (Rating scale). "none" (any case): nobody —
+// the scale is the four steps and "Not sure" until the desk adds someone.
+// Unset or empty: Imagine Surrey's.
 export const SURREY_CANDIDATES = Object.freeze([
   { code: '4D', name: 'McCallum',  label: 'Opposed — Doug McCallum supporter' },
   { code: '4B', name: 'Locke',     label: 'Opposed — Surrey Connect / Brenda Locke' },
@@ -66,7 +68,14 @@ export const parseCandidates = (text) => {
   }
   return out.length ? Object.freeze(out) : null;
 };
-export const DEFAULT_CANDIDATES = parseCandidates(globalThis.process?.env?.STARBASE_CANDIDATES) || SURREY_CANDIDATES;
+const NO_CANDIDATES = Object.freeze([]);
+export const startingCandidates = (text) => (String(text ?? '').trim().toLowerCase() === 'none'
+  ? NO_CANDIDATES : parseCandidates(text) || SURREY_CANDIDATES);
+export const DEFAULT_CANDIDATES = startingCandidates(globalThis.process?.env?.STARBASE_CANDIDATES);
+// Only the server (Node, no page) has the campaign's settings. A browser has
+// none — its DEFAULT_CANDIDATES is the fallback above, whoever the campaign
+// is — so it is sent the campaign's scale and adds nothing to it.
+const ON_SERVER = typeof globalThis.process?.versions?.node === 'string' && typeof globalThis.document === 'undefined';
 const DEFAULT_BY_CODE = new Map(DEFAULT_CANDIDATES.map((c) => [c.code, c]));
 
 // One line of text: trimmed, inner runs of space as one.
@@ -76,7 +85,9 @@ const key = (s) => cleanWord(s).toLowerCase();
 // Stored (or already normalized) → the scale every helper takes. Never
 // throws: anything unreadable falls back to the default's words, and a
 // default candidate a stored list somehow lacks comes back off the list (its
-// code may still be on people).
+// code may still be on people). That last part is the server's alone: a
+// browser's list came from the server whole, and the default list a browser
+// holds is not its campaign's to add (ON_SERVER above).
 export function normalizeScale(raw) {
   const src = raw && typeof raw === 'object' ? raw : {};
   const words = src.words && typeof src.words === 'object' ? src.words
@@ -106,7 +117,7 @@ export function normalizeScale(raw) {
     });
   };
   list.forEach((c) => add(c));
-  for (const d of DEFAULT_CANDIDATES) if (!seen.has(d.code)) add(d, true);
+  if (ON_SERVER) for (const d of DEFAULT_CANDIDATES) if (!seen.has(d.code)) add(d, true);
   return { version: Number(src.v ?? src.version) || 0, steps, candidates };
 }
 

@@ -16,7 +16,8 @@
 //                          to, each its own annual limit (shared/canvass.js)
 //   STARBASE_CANDIDATES    "4D:McCallum:Opposed — Doug McCallum supporter;…"
 //                          — the opposed candidates a new rating scale starts
-//                          with (shared/scale.js); the desk edits them after
+//                          with (shared/scale.js); the desk edits them after.
+//                          "none": nobody. Unset: Imagine Surrey's list
 //   STARBASE_ENV           production | staging — said on screen and at
 //                          /api/health, so nobody mistakes one for the other
 //   STARBASE_BRAND         imagine-surrey | base — the look (lib/brand.js);
