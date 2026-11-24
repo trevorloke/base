@@ -210,3 +210,16 @@ test('the first candidate a manager adds is the whole list', async () => {
   const phone = await scaleWith('phone2', undefined, { browser: 'bare' });
   assert.deepEqual(phone.normalizeScale(wire(me.workspace.settings.scale)).candidates.map((c) => [c.code, c.off]), [['4O', true]]);
 });
+
+test('a phone with no copy of the scale yet is told this server’s starting list at sign-in', async () => {
+  // A campaign that has saved no scale: the sign-in carries none to read.
+  const fresh = new Client();
+  await fresh.signup({ workspaceName: `No scale yet ${tag}`, email: `none-fresh+${tag}@example.org` });
+  const me = ok(await fresh.get('/api/auth/me'));
+  assert.equal(me.workspace.settings.scale, undefined);
+  assert.deepEqual(me.org.candidates, [], 'nobody: so the phone offers nobody, not its own fallback list');
+  const phone = await scaleWith('phone3', undefined, { browser: 'bare' });
+  assert.deepEqual(phone.offeredCodes(phone.normalizeScale({ candidates: wire(me).org.candidates })), ['1', '2', '3', '4']);
+  // Before sign-in nothing about the scale is said.
+  assert.equal(ok(await new Client().get('/api/auth/setup')).org.candidates, undefined);
+});
