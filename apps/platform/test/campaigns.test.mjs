@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { freshApp, setUp, codeNow, baseEnv } from './helpers.mjs';
 import { makeApp } from '../server.mjs';
-import { createCampaign, openBlock, chipsFor, entryState } from '../campaigns.mjs';
+import { createCampaign, openBlock, chipsFor, entryState, publicState } from '../campaigns.mjs';
 import { currentKid } from '../keys.mjs';
 
 baseEnv();
@@ -108,6 +108,37 @@ test('a campaign on a release from before base.win sign-in: said so, not “some
   assert.doesNotMatch(page, /somewhere else/);
   assert.doesNotMatch(page, /action="\/c\/old\/open"/);
   await db.query("update campaigns set archived_at = now() where name = 'old'");
+});
+
+test('the campaign’s own address: answering, another server (a chip), or not known yet (no chip)', async () => {
+  const camp = { name: 'a', kind: 'client' };
+  const envRow = { env: 'production', server_url: A, instance: INST };
+  const server = { answering: true, database: 'ok', store: 'postgres', tz_current: true, entry: 'ready', platform_kids: [currentKid()], own_origin: A, env_reported: 'production', instance: INST, setup_open: false, campaign_made: true, commit: 'd9130ae' };
+  const chips = (pub, row = envRow, c = camp) => chipsFor({ campaign: c, envRow: row, server: c.kind === 'sample' ? { ...server, env_reported: 'staging' } : server, pub });
+  const state = (pub, row = envRow) => publicState({ envRow: row, server, pub });
+  // The pinned server answers there.
+  assert.equal(state({ answering: true, instance: INST }), 'answering');
+  assert.deepEqual(chips({ answering: true, instance: INST }), []);
+  // A server that says it is a different one answers there.
+  assert.equal(state({ answering: true, instance: 'AAAAAAAAAAAAAAAAAAAAAA' }), 'elsewhere');
+  assert.deepEqual(chips({ answering: true, instance: 'AAAAAAAAAAAAAAAAAAAAAA' }), ['a.base.win answers from another server']);
+  // The answer names no instance (an older release, or its database is down): not known, so no chip.
+  assert.equal(state({ answering: true, instance: null }), 'unknown');
+  assert.deepEqual(chips({ answering: true, instance: null }), []);
+  // No instance pinned yet: nothing to compare with.
+  assert.equal(state({ answering: true, instance: INST }, { ...envRow, instance: null }), 'unknown');
+  assert.deepEqual(chipsFor({ campaign: camp, envRow: { ...envRow, instance: null }, server: { ...server, instance: null, entry: null, own_origin: null }, pub: { answering: true, instance: 'AAAAAAAAAAAAAAAAAAAAAA' } }), ['On a release from before base.win sign-in']);
+  assert.equal(state({ answering: false, instance: null }), 'not-answering');
+  assert.equal(state(null), 'not-checked');
+  // The server changed (its database was rebuilt) and its own address reaches that same server:
+  // “Server changed” says so, and it is not called another server.
+  const changed = { ...server, instance: 'NNNNNNNNNNNNNNNNNNNNNN' };
+  const samePub = { answering: true, instance: 'NNNNNNNNNNNNNNNNNNNNNN' };
+  assert.equal(publicState({ envRow, server: changed, pub: samePub }), 'unknown');
+  assert.deepEqual(chipsFor({ campaign: camp, envRow, server: changed, pub: samePub }), ['Server changed: confirm it']);
+  assert.equal(publicState({ envRow, server: changed, pub: { answering: true, instance: 'AAAAAAAAAAAAAAAAAAAAAA' } }), 'elsewhere', 'a third server is still another server');
+  // The sample has no address of its own.
+  assert.deepEqual(chips({ answering: true, instance: 'AAAAAAAAAAAAAAAAAAAAAA' }, { ...envRow, env: 'staging' }, { name: 'sample', kind: 'sample' }), []);
 });
 
 test('Sign-up is open to anyone: sign-up open and no campaign made yet, on a client', async () => {

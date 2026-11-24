@@ -343,13 +343,8 @@ try {
   ok(/Answers at b\.base\.win Done by itself/.test(bBefore), 'the checklist: Answers at b.base.win (the real server, at its own address)');
   ok(!/Sign-up is open to anyone/.test(bBefore), 'the real server holds base.win’s key: sign-up is not open');
   // A campaign server that says where it keeps its data: in memory is not a real database.
-  if (freshHealth.store === 'embedded') {
-    ok(/Not on a real database/.test(bBefore) && /Answers, database fine Not yet/.test(bBefore), 'the real server, in memory: Not on a real database, and not ticked');
-  } else if (freshHealth.store === undefined) {
-    console.log('note the real server here does not say where it keeps its data (no "store" in its health): that chip is checked on campaign a only');
-  } else {
-    fail(`the real server runs in memory but says store: ${freshHealth.store}`);
-  }
+  ok(freshHealth.store === 'embedded', `the real server, in memory, says store: embedded (it said ${JSON.stringify(freshHealth.store)})`);
+  ok(/Not on a real database/.test(bBefore) && /Answers, database fine Not yet/.test(bBefore), 'the real server, in memory: Not on a real database, and not ticked');
   await page.fill('#invite-b', 'kim@example.org');
   const tabB = await newTab(() => page.click('button:has-text("Invite and open the desk")'));
   try { await tabB.waitForURL(`${REAL}/admin/settings/members`, { timeout: 15_000 }); } catch (e) {

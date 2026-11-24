@@ -27,19 +27,23 @@ centre is `https://ops.base.win`, and `https://base.win` is the front page.
 
 ## First time
 
-1. Render → Blueprints → Manual Sync: `base-platform` and `base-platform-db` appear.
+The same six steps as GOING-LIVE.md section 8, *First time*, which has the
+detail.
+
+1. Render → Blueprints: see whether this repository is listed, which branch it follows and whether Auto Sync is on. If it is listed: after the name check in GOING-LIVE.md section 0, Manual Sync, and `base-platform` and `base-platform-db` appear. If none is listed, make the two by hand (GOING-LIVE.md section 8, step 1).
 2. `base-platform` → Settings → Custom Domains → add `ops.base.win`, and a CNAME `ops` at the registrar.
 3. Copy `OPS_SETUP_CODE`, open https://ops.base.win → **Set up**: the code, your name, email and password (12+), your authenticator app, then save the ten recovery codes. The email must be one only base.win support uses (you+support@…), never the one you sign in with on a campaign: that account has its own password there, so **Open desk** would be refused.
-4. **base.win’s key → Copy**, and paste it as `BASE_PLATFORM_PUBKEY` on each campaign’s service, then **Save and deploy**.
-5. **Add a campaign that’s already running** for each running campaign: its short name (Imagine Surrey’s is `imaginesurrey`, as in imaginesurrey.base.win), its name, and the Render address at the top of its service’s page. Then set the **Sample (staging)** address on Campaigns the same way.
+4. GitHub → Actions → *Promote to production*, if production is on a release from before the control centre (GOING-LIVE.md section 8, step 4, has what to check first). Imagine Surrey’s was, on 2026-11-24.
+5. **base.win’s key → Copy**, and paste it as `BASE_PLATFORM_PUBKEY` on each campaign’s service, then **Save and deploy**.
+6. **Add a campaign that’s already running** for each running campaign: its short name (Imagine Surrey’s is `imaginesurrey`, as in imaginesurrey.base.win), its name, and the Render address at the top of its service’s page. Then set the **Sample (staging)** address on Campaigns the same way.
 
 **Open desk** works on a campaign only when both of these are true:
 
 - the campaign runs a release that includes the control centre’s side of
-  sign-in. Imagine Surrey’s production does once staging is promoted to it
-  (GitHub → Actions → *Promote to production*). A campaign on an older
-  release shows “On a release from before base.win sign-in” on its page;
-- its `BASE_PLATFORM_PUBKEY` is set (step 4).
+  sign-in (step 4). A campaign on an older release shows “On a release
+  from before base.win sign-in” on its page, and its set-up page says to
+  Promote first;
+- its `BASE_PLATFORM_PUBKEY` is set (step 5).
 
 Health, the checklist and the log work before that.
 
@@ -127,12 +131,24 @@ Every Render change ends with **Save and deploy**, then wait for “Live”.
   `<name>.base.win` is there, verified, with its certificate issued; at the
   registrar, check the CNAME record named `<name>` points at the service’s
   onrender.com address. The Render address still works meanwhile.
-- **“Not on a real database”:** the campaign’s `DATABASE_URL` is empty, so it
-  keeps its data in the built-in database and loses it at a restart. Set
-  `DATABASE_URL` to its database’s Internal Database URL.
+- **“`<name>.base.win` answers from another server”:** the address reaches a
+  campaign server, but not this campaign’s. In Render, check
+  `<name>.base.win` is under Custom Domains on this campaign’s service and
+  on no other; at the registrar, check the CNAME record named `<name>`
+  points at this service’s onrender.com address.
+- **“Not on a real database”:** the campaign keeps its data in the built-in
+  database, not in Postgres. On Render that means `STARBASE_EMBEDDED_DB=1`
+  was set on its service: without it, a service with an empty
+  `DATABASE_URL` does not start. Unless a disk is mounted for it, that
+  data is lost at the next deploy. Set `DATABASE_URL` to its database’s
+  Internal Database URL.
+- **A new campaign never goes “Live”, or stays “Not answering”:** open its
+  service’s log in Render. With `DATABASE_URL` empty the server refuses to
+  start, and the log says so. Set `DATABASE_URL` to its database’s
+  Internal Database URL (card 1, step 4), then Save and deploy.
 - **“Sign-up is open to anyone”:** nobody has made the campaign yet, and the
   first person to open its address can. Set `BASE_PLATFORM_PUBKEY` on it
-  (step 4 of First time; remove `STARBASE_OPEN_SIGNUP` if it is set), then
+  (step 5 of First time; remove `STARBASE_OPEN_SIGNUP` if it is set), then
   **Invite the first manager** from here.
 - **“Production is on …; staging is on …”:** staging has a release this
   campaign doesn’t. Nothing is wrong; GitHub → Actions → *Promote to

@@ -113,6 +113,20 @@ export const openBlock = (campaign, envRow, server, kid = currentKid()) => {
   return null;
 };
 
+// Does <name>.base.win reach this campaign's server? 'not-checked' |
+// 'not-answering' | 'answering' (the pinned instance) | 'elsewhere' (a
+// different instance) | 'unknown' (it answers, but it can't be told: no
+// instance pinned yet; or the answer names none, as from an older release
+// or a server whose database is down; or it is the same server as at the
+// Render address, changed since it was pinned, which "Server changed" says).
+export const publicState = ({ envRow, server = null, pub }) => {
+  if (!pub) return 'not-checked';
+  if (!pub.answering) return 'not-answering';
+  if (!envRow.instance || !pub.instance) return 'unknown';
+  if (pub.instance === envRow.instance) return 'answering';
+  return server?.answering && server.instance === pub.instance ? 'unknown' : 'elsewhere';
+};
+
 // A commit as the pages show it.
 export const shortCommit = (commit) => String(commit || '').slice(0, 7);
 
@@ -138,6 +152,7 @@ export const chipsFor = ({ campaign, envRow, server, pub, newest, staging = null
     else if (!envRow.instance && server.instance) out.push('This server says it is somewhere else');
   }
   if (client && pub && !pub.answering) out.push(`${publicHost(campaign.name)} not answering`);
+  if (client && publicState({ envRow, server, pub }) === 'elsewhere') out.push(`${publicHost(campaign.name)} answers from another server`);
   if (client && newest && server.commit && server.commit !== newest) out.push('Version differs');
   // A Promote is waiting: staging has a release production doesn't.
   if (client && staging && server.commit && shortCommit(server.commit) !== shortCommit(staging)) {

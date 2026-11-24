@@ -3,7 +3,7 @@ import { html, raw, num, clock, ago, dayClock } from './html.mjs';
 import { page, field, status, codeField } from './layout.mjs';
 import { logLine } from './log.mjs';
 import { openForm, inviteForm, checklist } from './desk.mjs';
-import { publicHost } from '../campaigns.mjs';
+import { publicHost, publicState } from '../campaigns.mjs';
 import { RULE_WORDS, RACES } from '../snippets.mjs';
 
 const ENV_WORD = { production: 'Production', staging: 'Staging' };
@@ -86,6 +86,15 @@ export const BLOCK_WORDS = {
   changed: 'This server has changed since it was added.',
 };
 
+// The campaign's own address on the Health list (campaigns.mjs publicState).
+const PUBLIC_WORDS = {
+  'not-checked': 'Not checked yet',
+  'not-answering': 'Not answering',
+  answering: 'Answering',
+  elsewhere: 'Answering from another server',
+  unknown: 'Answering (not confirmed as this server yet)',
+};
+
 const health = (v, entry) => {
   const s = v.server;
   const rows = [
@@ -96,7 +105,7 @@ const health = (v, entry) => {
     ['base.win sign-in', entry ? ENTRY_WORDS[entry] : '—'],
     ['Render address', v.envRow.server_url || 'Not saved'],
     ['base.win address', s?.address || '—'],
-    ...(v.campaign.kind === 'client' ? [[publicHost(v.campaign.name), !v.pub ? 'Not checked yet' : v.pub.answering ? 'Answering' : 'Not answering']] : []),
+    ...(v.campaign.kind === 'client' ? [[publicHost(v.campaign.name), PUBLIC_WORDS[publicState(v)]]] : []),
     ['Last checked', s ? dayClock(s.at) : 'Not yet'],
   ];
   return html`<dl class="oc-dl">${rows.map(([k, val]) => html`<div><dt>${k}</dt><dd>${val}</dd></div>`)}</dl>`;
