@@ -7,6 +7,8 @@
 //   gave=min:500       gave at least $500 in one calendar year, any year
 //   member=now         a membership running today
 //   member=lapsed      a membership that ended, and none running
+//                      (only for a campaign that has a membership,
+//                      lib/preset.js: for any other the rule is not read)
 //   answer=<question>:<value>   their latest answer to that survey question:
 //                      a choice's label · yes | no · 1–5 · any (answered it)
 //   shift=came:30      checked in at a shift that started in the last 30 days
@@ -29,11 +31,13 @@
 //
 //   GET /audience/choices   desk: what the rule builder offers that the
 //       screens can't know — { year, questions: [{ id, text, kind, options,
-//       survey }] } (questions still on a survey that isn't archived)
+//       survey }] } (questions still on a survey that isn't archived); and
+//       membership: false for a campaign that has no membership
 import { Hono } from 'hono';
 import { decide } from '../../lib/perms.js';
 import { DEFAULT_TZ } from '../../lib/org.js';
 import { fromLocal } from '../../lib/tzsql.js';
+import { brandHas } from '../../lib/preset.js';
 
 export const sql = `
 create index if not exists gifts_ws_person_date_idx on gifts (workspace_id, person_id, date) where deleted_at is null;
@@ -136,7 +140,8 @@ const personsWhere = async (db, ctx, query, w) => {
 
   const gave = str(query?.gave, 20).toLowerCase();
   if (gave) add(money ? gaveWhere(gave, ctx, next) : null);
-  const member = str(query?.member, 10).toLowerCase();
+  // Only where there is a membership: for any other campaign it is no rule.
+  const member = brandHas('membership') ? str(query?.member, 10).toLowerCase() : '';
   if (member) add(desk ? memberWhere(member, ctx, next) : null);
   const answer = str(query?.answer);
   if (answer) add(desk ? await answerWhere(answer, db, ctx, next) : null);
@@ -162,6 +167,7 @@ api.get('/audience/choices', async (c) => {
   return c.json({
     year: Number(todayOf(ctx).slice(0, 4)),
     questions: rows.map((q) => ({ id: q.id, kind: q.kind, text: q.text, survey: q.survey, options: parseJ(q.options, []) })),
+    ...(brandHas('membership') ? {} : { membership: false }),
   });
 });
 export const deskOnlyReads = ['/audience/choices'];

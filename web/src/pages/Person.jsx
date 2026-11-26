@@ -15,8 +15,9 @@ import { Link, useParams, useOutletContext, useNavigate, useLocation } from 'rea
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   VOLUNTEER_ROLES, SUGGESTED_TAGS,
-  SIGN_KINDS, SIGN_STATUSES, DONOR_TIERS,
+  SIGN_KINDS, SIGN_STATUSES,
 } from '@starbase/shared/canvass';
+import { ex } from '../brand.js';
 import { ratingByCode } from '@starbase/shared/scale';
 import { SLATES as FALLBACK_SLATES, slateLabel } from '@starbase/shared/canvass';
 import { placeLabel } from '@starbase/shared/shiftkinds';
@@ -51,14 +52,19 @@ import { connectWords } from '../components/gmailWords.js';
 import MovePanel from '../components/MovePanel.jsx';
 import ProfileMove, { addressWords } from '../components/ProfileMove.jsx';
 
+// The donor chip. Every campaign has these two; a tier with a name of its
+// own is a campaign's, and comes from its server with its label and its rank
+// (donor.label, donor.rank: 0 the highest). A page kept from before the
+// server sent them has a tier with no label: no chip until it is read again.
 const TIER_LABEL = {
-  superstar: DONOR_TIERS.superstar.label,
-  star: DONOR_TIERS.star.label,
   monthly: 'Monthly donor',
   'one-time': 'Donor',
 };
-// Ink, not yellow: the brand yellow is only ever the screen's one primary button.
-const TIER_CLASS = { superstar: 'chip pf-tier pf-tier--super', star: 'chip pf-tier', monthly: 'chip chip-ok', 'one-time': 'chip' };
+const tierWord = (donor) => (donor?.tier ? TIER_LABEL[donor.tier] || donor.label || null : null);
+// Ink, not yellow: the brand yellow is only ever the screen's one primary
+// button. A named tier: the highest filled, any other outlined.
+const TIER_CLASS = { monthly: 'chip chip-ok', 'one-time': 'chip' };
+const tierClass = (donor) => TIER_CLASS[donor.tier] || (donor.rank === 0 ? 'chip pf-tier pf-tier--super' : 'chip pf-tier');
 
 const OUTCOME_LABEL = {
   contacted: 'Talked', no_answer: 'No answer', refused: 'Refused', moved: 'Moved', inaccessible: 'No access',
@@ -175,7 +181,7 @@ function Header({ person, donor, me, desk, onLog, onEmail, emailing = false, con
   const located = person.lat != null && person.lng != null;
   // The donor tier chip already says Donor: the level chip never repeats it
   // ("Donor · Volunteer" → "Volunteer"; just "Donor" → no level chip).
-  const tierShown = Boolean(donor?.tier && TIER_LABEL[donor.tier]);
+  const tierShown = Boolean(tierWord(donor));
   const shownLevel = level && tierShown && level.code === 'doer'
     ? { ...level, label: level.label.split(' · ').filter((w) => w !== 'Donor').join(' · ') }
     : level;
@@ -207,8 +213,8 @@ function Header({ person, donor, me, desk, onLog, onEmail, emailing = false, con
         <KnowMeChip person={person} me={me} />
         {/* donor is null for volunteers (the server hides money from them) */}
         {tierShown && (
-          <span className={TIER_CLASS[donor.tier]} title={`${fmtMoney(donor.yearCents)} this year${Number(donor.monthlyCents) ? ` · ${fmtMoney(donor.monthlyCents)}/mo` : ''}`}>
-            {TIER_LABEL[donor.tier]}
+          <span className={tierClass(donor)} title={`${fmtMoney(donor.yearCents)} this year${Number(donor.monthlyCents) ? ` · ${fmtMoney(donor.monthlyCents)}/mo` : ''}`}>
+            {tierWord(donor)}
           </span>
         )}
       </div>
@@ -688,6 +694,9 @@ function Roles({ person, roles, refresh, desk }) {
   const [detail, setDetail] = useState('');
   const act = useAction(refresh, { needsSignal: true });
   const def = VOLUNTEER_ROLES.find((r) => r.code === role);
+  // What the second box asks for. One role's is an example of places, which
+  // a campaign with its own set-up words its own way (brand.js ex).
+  const hint = def?.code === 'community_committee' ? ex('role.community', def.detail) : def?.detail;
   const label = (code) => VOLUNTEER_ROLES.find((r) => r.code === code)?.label || code;
 
   const add = async (e) => {
@@ -723,10 +732,10 @@ function Roles({ person, roles, refresh, desk }) {
               {VOLUNTEER_ROLES.map((r) => <option key={r.code} value={r.code}>{r.label}</option>)}
             </select>
           </div>
-          {def?.detail && (
+          {hint && (
             <div className="field">
-              <label htmlFor="role-detail">{def.detail}</label>
-              <input id="role-detail" className="input" maxLength={200} value={detail} onChange={(e) => setDetail(e.target.value)} placeholder={def.detail} />
+              <label htmlFor="role-detail">{hint}</label>
+              <input id="role-detail" className="input" maxLength={200} value={detail} onChange={(e) => setDetail(e.target.value)} placeholder={hint} />
             </div>
           )}
           <button type="submit" className="btn pp-btn" disabled={!role || act.busy}>Add</button>

@@ -33,7 +33,7 @@ export { sql } from './sql.js';
 export { publicRoutes } from './webhook.js';
 export { api, deskOnlyReads } from './api.js';
 export { actions } from './actions.js';
-export { prepareCheckout, openCheckout, retryCheckout, paymentsData, DECLARATION, DUES } from './checkout.js';
+export { prepareCheckout, openCheckout, retryCheckout, paymentsData, DECLARATION, dues } from './checkout.js';
 export { paymentsReady, stripeMode, STRIPE_EVENTS } from './stripe.js';
 
 export const jobs = { [REFUND_JOB]: runRefundJob };

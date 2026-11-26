@@ -11,9 +11,12 @@ const NAV = [
   { to: '/money', label: 'Donations' }, { to: '/signs', label: 'Signs' }, { to: '/outreach', label: 'Outreach' },
 ];
 const labels = (items) => items.map((i) => i.label);
+// What Imagine Surrey's sign-in says it has (me.org.features): the membership
+// form is offered only to a campaign that has a membership.
+const ORG = { features: ['membership'] };
 
 test('a manager is offered every job and the settings', () => {
-  const { actions, screens } = commandsFor({ role: 'manager', areas: [] }, NAV);
+  const { actions, screens } = commandsFor({ role: 'manager', areas: [], org: ORG }, NAV);
   assert.deepEqual(labels(actions), ['Add person', 'Log a gift', 'Enter a membership form', 'Draw a turf', 'New shift', 'Write an email', 'Write a text', 'Write a letter']);
   assert.equal(actions.find((a) => a.label === 'New shift').to, '/shifts?add=1', 'the week’s add sheet — by tap — not the long form');
   for (const s of ['Today', 'Donations', 'Members', 'Permissions', 'Services', 'Rating scale', 'Profile fields', 'Your profile']) {
@@ -31,7 +34,7 @@ test('Link Google account: only while Google sign-in is on and theirs isn’t li
 });
 
 test('staff without Donations: no gift, no form, no money screens; no settings', () => {
-  const staff = { role: 'staff', areas: ['people', 'map', 'shifts', 'signs', 'outreach', 'data', 'learn'] };
+  const staff = { role: 'staff', areas: ['people', 'map', 'shifts', 'signs', 'outreach', 'data', 'learn'], org: ORG };
   const { actions, screens } = commandsFor(staff, NAV.filter((n) => n.to !== '/money'));
   assert.ok(!labels(actions).includes('Log a gift') && !labels(actions).includes('Enter a membership form'));
   assert.ok(labels(actions).includes('Add person') && labels(actions).includes('Write a text'));
@@ -53,7 +56,7 @@ test('a volunteer given Outreach: its jobs are the desk’s — no jobs, and onl
 });
 
 test('what’s typed: the label’s start first, then a word in it, then its other words; every word must match', () => {
-  const { actions, screens } = commandsFor({ role: 'manager', areas: [] }, NAV);
+  const { actions, screens } = commandsFor({ role: 'manager', areas: [], org: ORG }, NAV);
   const all = [...screens, ...actions];
   assert.equal(rank(all, 'don')[0].label, 'Donations');
   assert.equal(rank(all, 'gift')[0].label, 'Log a gift');

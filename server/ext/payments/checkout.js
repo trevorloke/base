@@ -60,14 +60,16 @@ import { SLATE_CODES, DEFAULT_SLATE, slateLabel } from '@starbase/shared/canvass
 import { DONATE_DECLARATION, JOIN_DECLARATION } from '../../../shared/site/wording.js';
 import { stripeRequest, stripeMode, paymentsReady, StripeError } from './stripe.js';
 import { roomFor, fits, campaignNow, monthlyMax, money } from './limits.js';
+import { preset, brandHas } from '../../lib/preset.js';
 
 // The declaration a contributor makes, in the website's own words (the
 // donate form's; membership dues: JOIN_DECLARATION).
 export const DECLARATION = DONATE_DECLARATION;
-// Membership dues, as on the paper form (ext/membership): at least $10 a
-// year, $5 for members aged 14 to 30 on the day they join; members are 14
-// or older.
-export const DUES = { adult_cents: 1000, youth_cents: 500, youth_ages: [14, 30], min_age: 14 };
+// Membership dues, as on the paper form (ext/membership): a yearly minimum,
+// a lower one for members in the youth ages on the day they join, and the
+// youngest a member may be. They are the campaign's own (lib/preset.js),
+// read when asked; null for a campaign with no membership.
+export const dues = () => preset().membership?.dues ?? null;
 export const MIN_CENTS = 100;
 export const MAX_CENTS = 10_000_000;
 // Stripe's shortest Checkout life is 30 minutes; a little more so a slow
@@ -169,6 +171,9 @@ const requestFor = ({ id, ws, kind, cadence, amountCents, term, email, successUr
 };
 
 export const prepareCheckout = async (tx, ctx, opts = {}, emit = null) => {
+  // Membership dues only where there is a membership: for any other
+  // campaign there is no such checkout to ask for.
+  if (opts.kind === 'membership' && !brandHas('membership')) throw payError(404, 'not found');
   if (!paymentsReady()) throw payError(503, 'Online payments aren’t set up yet.');
   const say = sayOf(ctx, emit);
   const ws = await workspaceOf(tx, ctx);
@@ -196,8 +201,10 @@ export const prepareCheckout = async (tx, ctx, opts = {}, emit = null) => {
   let birthDate = null;
   let citizenship = null;
   if (kind === 'membership') {
+    const DUES = dues();
+    const terms = preset().membership.terms;
     term = Number(opts.term ?? metadata.term ?? 1);
-    if (term !== 1 && term !== 4) throw payError(400, 'Choose 1 or 4 years.', 'term');
+    if (!terms.includes(term)) throw payError(400, `Choose ${terms.join(' or ')} years.`, 'term');
     const b = opts.birthDate ?? opts.birth_date ?? null;
     if (b != null && b !== '') {
       if (!DAY.test(String(b)) || Number.isNaN(Date.parse(`${b}T00:00:00Z`))) throw payError(400, 'Your birth date, as YYYY-MM-DD.', 'birth_date');
@@ -211,7 +218,7 @@ export const prepareCheckout = async (tx, ctx, opts = {}, emit = null) => {
     const youth = age != null && age >= DUES.youth_ages[0] && age <= DUES.youth_ages[1];
     const minimum = term * (youth ? DUES.youth_cents : DUES.adult_cents);
     if (amountCents < minimum) {
-      throw payError(400, `The smallest membership is ${money(minimum)} for ${term} year${term > 1 ? 's' : ''}${youth ? ' (aged 14 to 30)' : ''}.`, 'amount_cents');
+      throw payError(400, `The smallest membership is ${money(minimum)} for ${term} year${term > 1 ? 's' : ''}${youth ? ` (aged ${DUES.youth_ages[0]} to ${DUES.youth_ages[1]})` : ''}.`, 'amount_cents');
     }
   }
 

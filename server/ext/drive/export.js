@@ -22,7 +22,7 @@ import { signinRules } from '../../lib/google/config.js';
 import { timeZone } from '../../lib/org.js';
 import { loadList, pickedByPrivate } from '../lists/audience.js';
 import { LIST_HEAD, listCount, listPage } from '../lists/rows.js';
-import { DATASETS, MONEY_DATASETS, MONEY_REPORTS, REPORTS, datasetCols, datasetCount, datasetPage } from '../reports/rows.js';
+import { hasDataset, MONEY_DATASETS, MONEY_REPORTS, REPORTS, datasetCols, datasetCount, datasetPage } from '../reports/rows.js';
 import { quickSource } from '../reports/quick.js';
 import { DESK, driveRules, driveSetup } from './config.js';
 import { driveGrant } from './grant.js';
@@ -80,7 +80,7 @@ export const sourceOf = async (db, ctx, source, ref) => {
     };
   }
   if (source === 'dataset') {
-    if (!Object.hasOwn(DATASETS, ref)) throw httpError(404, 'No such table');
+    if (!hasDataset(ref)) throw httpError(404, 'No such table');
     return {
       // Money going to Google needs Donations as well as Data.
       area: MONEY_DATASETS.includes(ref) ? ['data', 'money'] : ['data'], name: DATASET_TITLES[ref] || ref,

@@ -28,7 +28,8 @@ import { movedCounts, movedOpenWhere } from '../moves/index.js';
 const walkRoute = () => import('../../routes/api.js');
 import { walkOrder } from '../../lib/geo.js';
 import { civic } from '../../lib/address.js';
-import { VOLUNTEER_ROLES, SIGN_KINDS, donorTier, DONOR_TIERS } from '@starbase/shared/canvass';
+import { VOLUNTEER_ROLES, SIGN_KINDS, donorTier } from '@starbase/shared/canvass';
+import { preset, brandHas } from '../../lib/preset.js';
 import { azSort } from '@starbase/shared/names';
 
 const DESK = ['manager', 'treasurer', 'staff'];
@@ -193,16 +194,18 @@ const donors = {
     const inner = `select ${BASE}, g.total, g.gifts, g.first_gift, g.last_gift, g.last_amount
       from (${agg}) g join persons p on p.id = g.person_id and ${live}
       where true ${cond} order by ${largest ? `g.total desc, ${AZ}` : AZ} limit $${lim}`;
-    // This year's total and the latest monthly gift: the tier (shared/canvass.js donorTier).
+    // This year's total and the latest monthly gift: the tier (shared/canvass.js
+    // donorTier), for a campaign that names tiers (lib/preset.js); else no column.
     const extra = `(select coalesce(sum(y.amount_cents), 0) from gifts y where y.workspace_id = $1 and y.person_id = p.id and y.deleted_at is null and y.date >= $${y0}::date)::bigint as year_cents,
       (select y.amount_cents from gifts y where y.workspace_id = $1 and y.person_id = p.id and y.deleted_at is null and y.cadence = 'monthly' and y.date >= $${m45}::date
         order by y.date desc, y.created_at desc limit 1)::bigint as monthly_cents`;
     const rows = (await db.query(withWhy(inner, order, extra), params)).rows;
+    const tiers = preset().donorTiers;
     const out = rows.map((r) => {
-      const tier = donorTier({ yearCents: Number(r.year_cents || 0), monthlyCents: Number(r.monthly_cents || 0) });
+      const tier = donorTier({ yearCents: Number(r.year_cents || 0), monthlyCents: Number(r.monthly_cents || 0) }, tiers);
       return finish(r, {
         total: dollars(r.total), gifts: r.gifts, first_gift: day(r.first_gift), last_gift: day(r.last_gift), last_amount: dollars(r.last_amount),
-        monthly: r.monthly_cents ? 'Yes' : '', tier: DONOR_TIERS[tier]?.label || '',
+        monthly: r.monthly_cents ? 'Yes' : '', ...(tiers.length ? { tier: tiers.find((t) => t.key === tier)?.label || '' } : {}),
         phone: r.phone || '', email: r.email || '', address: r.address || '', unit: r.unit || '', city: r.city || '', postal: r.postal || '',
         _total: Number(r.total),
       });
@@ -212,7 +215,7 @@ const donors = {
   head: () => [
     col('last_name', 'Last name', true), col('first_name', 'First name', true), col('total', 'Total', true, 'money'),
     col('gifts', 'Gifts', true, 'count'), col('first_gift', 'First gift', false, 'date'), col('last_gift', 'Last gift', true, 'date'),
-    col('last_amount', 'Last amount', true, 'money'), col('monthly', 'Monthly'), col('tier', 'Tier'), col('phone', 'Phone', true),
+    col('last_amount', 'Last amount', true, 'money'), col('monthly', 'Monthly'), ...(brandHas('donorTiers') ? [col('tier', 'Tier')] : []), col('phone', 'Phone', true),
     col('email', 'Email'), col('address', 'Address'), col('unit', 'Unit'), col('city', 'City'), col('postal', 'Postal code'), col('no_contact', 'Do not contact'),
   ],
   filter: (opts) => (opts.period === 'year' ? 'gave=year' : opts.period === 'lapsed' ? 'gave=lapsed' : null),
@@ -221,6 +224,7 @@ const col = (key, label, print = false, type = 'text') => ({ key, label, print, 
 
 // "Interested in being a candidate": the profile field, found by its name
 // as the paper membership form finds it. Renamed or retired: unavailable.
+// Its Member column is there only for a campaign that has a membership.
 const candidateField = async (db, ws) => {
   const f = (await db.query(
     `select id from person_fields where workspace_id = $1 and lower(name) = '${CANDIDATE_FIELD}' and retired_at is null order by created_at limit 1`, [ws],
@@ -251,16 +255,17 @@ const running = {
     params.push(limit);
     const inner = `select ${BASE}, v.updated_at as said_on from person_field_values v join persons p on p.id = v.person_id and ${live}
       where v.workspace_id = $1 and v.field_id = $2 and v.value = 'true'::jsonb ${cond} order by ${AZ} limit $${params.length}`;
-    const rows = (await db.query(withWhy(inner, AZ, `${MEMBER}, ${ROLES}`), params)).rows;
+    const members = brandHas('membership');
+    const rows = (await db.query(withWhy(inner, AZ, members ? `${MEMBER}, ${ROLES}` : ROLES), params)).rows;
     const tz = tzOf(ctx);
     return pageOf(rows.map((r) => finish(r, {
       phone: r.phone || '', email: r.email || '', address: r.address || '', city: r.city || '', postal: r.postal || '',
-      member: r.member || '', volunteers_as: roleWords(r.roles), said_on: dayIn(r.said_on, tz),
+      ...(members ? { member: r.member || '' } : {}), volunteers_as: roleWords(r.roles), said_on: dayIn(r.said_on, tz),
     })), limit);
   },
   head: () => [
     col('last_name', 'Last name', true), col('first_name', 'First name', true), col('phone', 'Phone', true), col('email', 'Email', true),
-    col('address', 'Address'), col('city', 'City'), col('postal', 'Postal code'), col('member', 'Member', true),
+    col('address', 'Address'), col('city', 'City'), col('postal', 'Postal code'), ...(brandHas('membership') ? [col('member', 'Member', true)] : []),
     col('volunteers_as', 'Volunteers as'), col('said_on', 'Said so on', true, 'date'), col('no_contact', 'Do not contact'),
   ],
   filter: async (opts, db, ctx) => `field=${await candidateField(db, ctx.workspaceId)}:yes`,
@@ -473,6 +478,10 @@ const moved = {
 const walk = { title: 'Walking list', what: 'A turf’s doors in walking order, to print', areas: ['map'] };
 
 export const RECIPES = { walk, donors, running, volunteers, members, signs, moved };
+// The reports this campaign has: Members only where there is a membership
+// (lib/preset.js), asked each time. Every read below goes through these two.
+const hasRecipe = (name) => Object.hasOwn(RECIPES, name) && (name !== 'members' || brandHas('membership'));
+const recipesNow = () => Object.entries(RECIPES).filter(([name]) => hasRecipe(name));
 
 // ── Who may pull what ──
 const mayPull = (ctx, recipe) => {
@@ -566,7 +575,7 @@ export const mountQuick = (api) => {
   api.get('/quick-reports-menu', (c) => {
     const no = guard(c); if (no) return no;
     const ctx = c.get('ctx');
-    return c.json({ reports: Object.entries(RECIPES).map(([name, r]) => ({ name, title: r.title, what: r.what, can: mayPull(ctx, r) })) });
+    return c.json({ reports: recipesNow().map(([name, r]) => ({ name, title: r.title, what: r.what, can: mayPull(ctx, r) })) });
   });
 
   // The walking list (Map alone: no phone, no email, one turf).
@@ -599,7 +608,7 @@ export const mountQuick = (api) => {
 
   const recipeOf = (c) => {
     const name = c.req.param('name').replace(/\.csv$/, '');
-    return name !== 'walk' && Object.hasOwn(RECIPES, name) ? [name, RECIPES[name]] : [name, null];
+    return name !== 'walk' && hasRecipe(name) ? [name, RECIPES[name]] : [name, null];
   };
 
   api.get('/quick-reports/:name/count', async (c) => {
@@ -684,7 +693,7 @@ export const quickSource = (db, ctx, ref) => {
   const s = String(ref || '');
   const at = s.indexOf('?');
   const name = at < 0 ? s : s.slice(0, at);
-  const r = name !== 'walk' && Object.hasOwn(RECIPES, name) ? RECIPES[name] : null;
+  const r = name !== 'walk' && hasRecipe(name) ? RECIPES[name] : null;
   if (!r) throw new Refusal(404, 'No such report');
   const opts = parseOptions(r, Object.fromEntries(new URLSearchParams(at < 0 ? '' : s.slice(at + 1))));
   if (opts.order === 'largest') throw new Refusal(400, SHEETS_AZ_ONLY);

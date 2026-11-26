@@ -15,6 +15,7 @@ import { loadScale } from '../scale/rules.js';
 import { azAfter, azCols, azKey } from '../../lib/az.js';
 import { areasFor } from '../../lib/perms.js';
 import { fieldColumns } from '../fields/people.js';
+import { brandHas } from '../../lib/preset.js';
 
 // Money takes Donations as well as Data: a desk member a manager denied
 // Donations sees no gift, in a download or a Sheet (Quick reports' rule).
@@ -106,6 +107,10 @@ const PEOPLE_COLS = `p.first_name, p.middle_name, p.last_name, p.name, p.email, 
       case when p.house_number is not null and p.address like p.house_number || ' %' then substr(p.address, length(p.house_number) + 2) else p.address end as street,
       p.address, p.city, p.postal, p.rating, p.rated_at, p.tags, p.lat, p.lng,
       to_char(p.voted_at, 'YYYY-MM-DD') as voted, p.voter_number, p.kind, p.created_at, p.id as _id, lower(p.name) as _key`;
+// The tables this campaign can take out: Members only where there is a
+// membership (lib/preset.js), asked each time. The CSV (api.js) and "Send to
+// Google Sheets" (ext/drive) both ask here before they read one.
+export const hasDataset = (name) => Object.hasOwn(DATASETS, name) && (name !== 'members' || brandHas('membership'));
 export const DATASETS = {
   // Columns People → Import reads back (a round trip into another campaign).
   people: { sql: `select ${PEOPLE_COLS} from persons p where p.workspace_id = $1 and p.deleted_at is null`,
