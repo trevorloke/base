@@ -103,9 +103,9 @@ Blueprints. Each time, in this order:
 3. A sync applies the whole file, not only what changed. It makes
    `base-platform` and `base-platform-db` if they are missing (both paid),
    sets the plan of both campaign databases, and sets every setting that
-   has a value in `render.yaml`. A value changed by hand in Render (such as
-   `STARBASE_SLATES`, section 7) goes back to the file's, so put it in the
-   file first.
+   has a value in `render.yaml`: staging's sample, `NODE_ENV`,
+   `STARBASE_ENV` and the control centre's address. A client's own
+   settings are `sync: false`, so a sync leaves them as they are in Render.
 4. The name check. In Render, check the services are named exactly as
    `render.yaml` names them: `base-win-staging`, `base-win` and, once it is
    made (section 8), `base-platform`. Check the databases the same way:
@@ -233,14 +233,23 @@ server can send sign-ups in with a website key from Settings → Services
 (INTEGRATIONS.md, *The campaign's website*: the fields, the answers, an
 example).
 
+Its unsubscribes go both ways too. Make a long random secret (`openssl
+rand -base64 32`). Set it on the website as `STARBASE_INBOUND_KEY`, and on
+this client's Render service as `STARBASE_WEBSITE_KEY`, with
+`STARBASE_WEBSITE_URL` (the website's `https://` address, no path). Then
+Settings → Services → *The website — unsubscribes* → **Check**, and send
+the ones already off here. Take both settings away the day the website
+moves onto base.win. (INTEGRATIONS.md, *Unsubscribes, both ways*.)
+
 ## 3 · Settings (Render → the service → Environment)
 
 Set these on each campaign service before the first sign-in; the rest can wait.
 Every outside service, its settings and where each key comes from is in
 [INTEGRATIONS.md](INTEGRATIONS.md). The campaign's own values
-(`STARBASE_ORG_NAME`, `_JURISDICTION`, `_TZ`, `_CITY`, `_SLATES`) are in
-`render.yaml` already for Imagine Surrey; another client's come from the
-control centre's New campaign (section 6). So is the
+(`STARBASE_ORG_NAME`, `_JURISDICTION`, `_TZ`, `_CITY`, `_SLATES`) are set
+on Imagine Surrey's service in Render; `render.yaml` lists them as `sync:
+false`, with the value each was first given, so a sync never changes them.
+Another client's come from the control centre's New campaign (section 6). So is the
 brand: staging is `STARBASE_BRAND=base` with the name *Sample Campaign* in Vancouver, so it
 can be shown to anyone; Imagine Surrey's production is `imagine-surrey`,
 and every other client's is `base`. `imagine-surrey` turns on Imagine
@@ -273,6 +282,7 @@ Then, as each one is ready:
 | `MAIL_PROVIDER`, `SENDGRID_API_KEY`, `SENDGRID_WEBHOOK_PUBLIC_KEY` | only for a campaign that sends through SendGrid instead: `sendgrid`, its key, its Event Webhook's verification key (INTEGRATIONS.md) | email through SendGrid |
 | `RESEND_REGION` | leave unset (`us-east-1`) unless the domain should be made in another Resend region | *Add domain* in Settings → Services |
 | `MAILCHIMP_API_KEY`, `MAILCHIMP_AUDIENCE_ID`, `MAILCHIMP_WEBHOOK_SECRET` | from Mailchimp: the account's key, whole (its ending names the server); the audience's id only when the account has several; the signing secret *Connect* shows, once | only if the campaign builds its emails in Mailchimp: *Send to Mailchimp* on a list, unsubscribes and dead addresses kept in step both ways (INTEGRATIONS.md, *Mailchimp*) |
+| `STARBASE_WEBSITE_URL`, `STARBASE_WEBSITE_KEY` | only while the campaign's website is hosted apart (section 2): its `https://` address, no path; the same secret the website holds as `STARBASE_INBOUND_KEY`. Set by hand on that client's service. Never on staging, never in the Blueprint | sends this client's unsubscribes and STOPs to its own website (INTEGRATIONS.md, *Unsubscribes, both ways*) |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` | from Twilio; for texts to a list in Canada the number should be a verified toll-free number or a short code (INTEGRATIONS.md). Staging: test credentials or unset, never a client's (section 0) | texting and calling through the campaign's number, SMS shift alerts; without them the phone's own apps are used |
 | `GEOCODER` | leave unset (`bc`, the free BC Address Geocoder). `google` is no longer used for pins (Google's terms): take `GEOCODER=google` and `GEOCODER_FALLBACK=google` away | placing people on the map |
 | `GOOGLE_MAPS_SERVER_KEY` | a Google Cloud key with application restriction **None** and API restriction to Map Tiles API and Places API (New) — not a *Websites* key, not an IP restriction on Render (§5, Recipe B). Staging: base.win's own key with a daily ceiling set, or unset, never a client's (section 0). **Before this goes to staging, tell us Google or the free map for canvassing. With a key already set, Google becomes the map and phones stop keeping street maps offline.** | Google Maps tiles; Google's address suggestions when turned on |
@@ -776,8 +786,11 @@ block for `render.yaml` (*Or ask us to add it to render.yaml*): its names
 (`base-win-<name>`, `base-win-<name>-db`), its `STARBASE_*` values,
 `STARBASE_BRAND=base` and `STARBASE_CANDIDATES=none`. Paste that block.
 Never copy `base-win`'s own block: it is Imagine Surrey's, and its
-`STARBASE_BRAND=imagine-surrey` line would give the new client Imagine
-Surrey's set-up. Commit on `main`.
+`STARBASE_BRAND=imagine-surrey` setting would give the new client Imagine
+Surrey's set-up. Those `STARBASE_*` lines stay `sync: false`: set each value
+on the new service in Render (Environment) before its first sign-in. A
+fixed value there would be written over at every sync, and the
+release-settings check refuses it. Commit on `main`.
 The change reaches Render by a Blueprint sync, so go through section 0,
 *Before a Blueprint sync*, first: whether a Blueprint is listed, whether
 Auto Sync is on, and the name check. If none is listed, make the database

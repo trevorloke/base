@@ -22,9 +22,9 @@ is written) and says exactly what is wrong if anything is.
 | [Google Drive and Sheets](#google-drive-and-sheets) | lists, reports and tables sent to a new Google Sheet; files attached from Drive (or linked when too big); a Sheet or file read for the importer | no (Download CSV always works) | `GOOGLE_PICKER_KEY`, `GOOGLE_CLOUD_PROJECT_NUMBER` (+ Google sign-in's three) |
 | [Two-step sign-in key](#two-step-sign-in-key) | seals everyone's authenticator key | before the public link goes out (works without, with a warning) | `STARBASE_TWO_STEP_KEY` |
 | [Hosting — Render](#hosting--render) | the three environments (GOING-LIVE.md, section 0) | yes | `render.yaml` |
-| The control centre (ops.base.win; no vendor: base.win's own, `apps/platform/README.md`) | every campaign on one page; **Open desk** signs base.win support in to a campaign | no (each campaign works without it) | `BASE_PLATFORM_PUBKEY` on each campaign (its public key, pasted; never a secret) |
+| The control centre (ops.base.win; no vendor: base.win's own, `apps/platform/README.md`) | every campaign on one page; **Open desk** signs base.win support in to a campaign; with a Render key, what Render says about each campaign and a short list of named changes there | no (each campaign works without it) | `BASE_PLATFORM_PUBKEY` on each campaign (its public key, pasted; never a secret); optional `RENDER_API_KEY` on `base-platform` only (GOING-LIVE.md, section 8, *The Render key*) |
 | [GitHub Actions](#github-actions) | tests, and promoting staging to production | yes | none |
-| [The campaign's website](#the-campaigns-website) | sign-ups, petitions, volunteers, newsletter opt-ins in | when the website is ready | a website key (Settings → Services) |
+| [The campaign's website](#the-campaigns-website) | sign-ups, petitions, volunteers, newsletter opt-ins in; unsubscribes both ways | when the website is ready | a website key (Settings → Services); `STARBASE_WEBSITE_URL`, `STARBASE_WEBSITE_KEY` to send unsubscribes out |
 | [Website translation — Google](#website-translation--google) | the campaign's website in ਪੰਜਾਬੀ, 简体 and 繁體, made ahead of time | no (the website stays English) | `GOOGLE_TRANSLATE_KEY` |
 | [Online payments — Stripe](#online-payments--stripe) | gifts once or monthly and membership dues on the website, by card, Apple Pay or Google Pay | when the website takes money (test mode first) | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` |
 | [Phone dialer — CallHub](#phone-dialer--callhub) | a list or a phone bank sent to CallHub's dialer; each call's result back on the person | no (only if the campaign calls through CallHub) | `CALLHUB_API_KEY`, `CALLHUB_API_BASE` |
@@ -1296,7 +1296,7 @@ person. An email or a phone, and a name (or `first_name` / `last_name`):
 | `email` | text | how a sign-up is matched first |
 | `phone` | text | any format |
 | `address`, `unit`, `city`, `postal` | text | the street line as typed (`13450 104 Ave`); it's placed on the map |
-| `tags` | up to 20 words | kept as sent (`Petition: Transit`) |
+| `tags` | up to 20 words | kept as sent (`Petition: Transit`). For a campaign whose set-up brings a membership (today Imagine Surrey), the tag `Member (joined online)` also starts a year's membership, unless one is running; for any other campaign it is only a tag |
 | `source` | a word for where they came from (`petition-transit`) | added as a tag; default `website` |
 | `newsletter` | `true` | a new email goes on the newsletter list; someone who unsubscribed or is do-not-email is never put back on from here (typing an address into a form doesn't prove it's yours) |
 | `volunteer` | `true` | a *Wants to volunteer* request under Today → *Needs you*, with `note` |

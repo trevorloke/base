@@ -453,6 +453,12 @@ one tap away under **More**.
   `BASE_PATH=/x`, A's controls on PORT+1) walks it in a browser with tokens
   signed by `server/test/entry-sign.js`. The control centre's own tests:
   `npm run test:platform` and `e2e-ops.mjs` (`apps/platform/README.md`).
+  Its Render pages (only with `RENDER_API_KEY` set) run against a stand-in
+  for Render, `apps/platform/test/fake-render.mjs`: `render-api`,
+  `render-routes`, `isolation` and `render-structural`. `nokey.test.mjs`
+  checks that without the key five pages are the same bytes as before and
+  every `/render` address is Not found; `e2e-ops.mjs` runs first without
+  the key, then with it.
 - **Sign in with Google** (once the Google client is set; INTEGRATIONS.md) —
   *Sign in with Google* sits under *Sign in*. Pressed before linking, it
   says the Google account isn’t linked. Sign in with your password, then
@@ -685,6 +691,17 @@ one tap away under **More**.
   another here: Mailchimp has it unsubscribed. It has not been run against
   a real Mailchimp account yet — this is that test. `node e2e-mailchimp.mjs`
   (PORT, SHOTS) runs all of it in a browser against a stand-in Mailchimp.
+- **Unsubscribes with the campaign's website** — on a client's base.win with
+  the two settings set: Settings → Services → *The website — unsubscribes*
+  → **Check** says *The website answers and takes this key*. Unsubscribe a
+  test address here: in a minute it is off on the website. Unsubscribe
+  another on the website: it is off the newsletter here, and the desk's Add
+  answers *only they can rejoin*. Turn the website off for a moment and
+  unsubscribe here: the row says *1 waiting* and why; **Send again**
+  delivers it. It has not been run against the real website yet — this is
+  that test. `node --test server/test/website-consent.test.js` covers both
+  ways against a stand-in website; `node e2e-consent.mjs` (PORT, SHOTS)
+  walks the row in a browser on a laptop and a phone.
 - **Settings → Services** (managers) — every outside service: what it's
   for, *Set up* / *Not set up* (naming the settings missing) / *Using the
   free default*. **Check** on each makes one real call: Email says whether

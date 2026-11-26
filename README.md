@@ -933,9 +933,16 @@ and answers are in INTEGRATIONS.md, *The campaign's website*): matched
 only by the same email (a visitor's typing never lands on someone else's
 record), never back on the newsletter for someone who left it, a
 volunteer or a message filed as a request under *Needs you*; the answer
-is only the person's id. Donations and RSVPs aren't taken that way. Beside
-the website, base.win's public pages are the ones every email needs, no
-login:
+is only the person's id. Donations and RSVPs aren't taken that way.
+The same key takes the website's unsubscribes: `POST /in/v1/consent` (an
+unsubscribe, a text STOP, a preference change), applied the way base.win's
+own are. An address or number nobody has yet is held, so nothing later puts
+it back. With `STARBASE_WEBSITE_URL` and `STARBASE_WEBSITE_KEY` set,
+base.win's own unsubscribes and STOPs go to the website too, from a queue
+that never gives up while the website is down (`server/ext/intake`:
+`consent.js` in, `outbound.js` out; INTEGRATIONS.md, *Unsubscribes, both
+ways*). Only a no crosses, never a yes. Beside the website, base.win's
+public pages are the ones every email needs, no login:
 
 - `/u/:subscriptionId` — unsubscribe from the newsletter (the link asks; one
   tap on *Unsubscribe* does it, so mail scanners never unsubscribe anyone)
@@ -959,6 +966,8 @@ login:
 - `/brand/:id` — the campaign's brand pictures (the same bytes as
   `/media/:id`, at an address the service worker keeps for no signal)
 - `/api/public/twilio/…` — Twilio's webhooks, signed (INTEGRATIONS.md)
+- `POST /in/v1/consent` — the website's unsubscribes and text STOPs, with a
+  website key (INTEGRATIONS.md, *Unsubscribes, both ways*)
 
 The pictures, the three unsubscribe links and the Stripe, Twilio, CallHub,
 email sender's and Mailchimp's webhooks also answer on the campaign's website
