@@ -25,6 +25,7 @@ import { seedFor } from '../ext/site/seeds/index.js';
 import { liveStrings } from '../ext/site/translate.js';
 import { siteWords } from '../ext/site/from-preset.js';
 import { cacheClear } from '../ext/site/cache.js';
+import { PROBE_SENTENCE } from '../lib/translate.js';
 import { checkTheme, allLooks, SKINS } from '@starbase/shared/site/theme';
 import { MODULES, checkModules, checkProps, newModule } from '@starbase/shared/site/catalogue';
 import { UI_WORDS, translateMessage, fillWords } from '../../shared/site/ui-words.js';
@@ -395,6 +396,15 @@ test('Imagine Surrey: a new band and hero start with its own words, a stored ban
     assert.match(html, /we win/);
     assert.match(html, /href="\/join"/);
   } finally { wear('base'); }
+});
+
+test('“Check translation” sends Google a made-up sentence that names no campaign, whoever asks', () => {
+  for (const brand of ['base', 'imagine-surrey']) {
+    wear(brand);
+    assert.equal(PROBE_SENTENCE, 'Join <span translate="no">Sample Campaign</span> at the town hall & bring <x i="1"/> friend to the next meeting.');
+    assert.doesNotMatch(PROBE_SENTENCE, /Imagine|Surrey/i);
+  }
+  wear('base');
 });
 
 test('a web address that is not one: the example in the message is neutral, and Imagine Surrey’s is its own', async () => {
