@@ -811,8 +811,13 @@ test('the job: a website that hangs costs one wait per pass, not one per job; th
   assert.deepEqual(all.map((j) => j.payload.tries || 0).sort(), [0, 0, 0, 0, 0, 0, 0, 1], 'a try only on the one that called');
   site.slow(0);
   _setTimeoutForTest(null);
+  // Up again, a manager presses Send again: everything goes now, not after the pause.
+  ok(await mgr.action('intake.website.resend', {}));
+  _resetPaceForTest({ down: false });
+  await runDueJobs(db, { workspaceId: ws });
+  assert.equal(site.ledger.length, 8, 'Send again sends at once');
   await run(ws);
-  assert.equal(site.ledger.length, 8, 'all sent once it answers');
+  assert.equal(site.ledger.length, 8, 'each sent once');
   syncOff();
 });
 

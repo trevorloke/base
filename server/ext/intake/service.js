@@ -6,7 +6,7 @@
 // The key is never in an answer: only which settings are present, and the
 // website's host.
 import { timeZone } from '../../lib/org.js';
-import { callWebsite } from './outbound.js';
+import { callWebsite, websiteUp } from './outbound.js';
 import { KEY_ENV, URL_ENV, websiteState, withoutKey } from './website.js';
 
 const NAME = 'The website — unsubscribes';
@@ -68,7 +68,7 @@ export const checkWebsite = async () => {
   if (!s.on) return { ok: false, said: whyOff(s) };
   const r = await callWebsite(s.target, { body: '{}', timeout: 7000 });
   const words = withoutKey(typeof r.body?.error === 'string' ? r.body.error : '').slice(0, 200);
-  if (r.status === 400 && /idempotency-key/i.test(words)) return { ok: true, said: 'The website answers and takes this key' };
+  if (r.status === 400 && /idempotency-key/i.test(words)) { websiteUp(); return { ok: true, said: 'The website answers and takes this key' }; }
   if (r.status === 401) return { ok: false, said: 'The website refused the key: it must equal its STARBASE_INBOUND_KEY' };
   if (r.status === 503) return { ok: false, said: 'The website has no STARBASE_INBOUND_KEY yet' };
   if (r.status === 404) return { ok: false, said: 'No such address on the website. If the website now runs on base.win, take both settings away' };

@@ -231,7 +231,9 @@ const untilRoom = () => Math.max(1000, pace.start + 60_000 - Date.now());
 // website that hangs would otherwise hold every other background job (a
 // ladder's next email, a send, Mailchimp) for its timeout once per job.
 let downUntil = 0;
-export const _resetPaceForTest = () => { pace = { start: 0, n: 0 }; downUntil = 0; };
+// The website answered (Check), or a manager pressed Send again: try now.
+export const websiteUp = () => { downUntil = 0; };
+export const _resetPaceForTest = ({ down = true } = {}) => { pace = { start: 0, n: 0 }; if (down) downUntil = 0; };
 // A job that found no room at all comes back a little apart from the others
 // waiting with it (a big import queues many at once), so they are not all
 // due in the same moment, ahead of the campaign's other background work.
@@ -313,6 +315,7 @@ export const websiteCounts = async (q, ws) => {
 // on too, with their refused items tried once more; and the run that sends
 // what was already off, if it stopped partway. → { items, backfill }
 export const resend = async (tx, ws) => {
+  websiteUp();
   const rows = (await tx.query(
     `select id, payload from jobs where workspace_id = $1 and kind = $2 and status in ('pending', 'failed') for update`, [ws, CONSENT_JOB],
   )).rows;
