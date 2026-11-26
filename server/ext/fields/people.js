@@ -13,12 +13,14 @@
 //                  gets only the fields still blank (an import never
 //                  overwrites); a new person gets them all. A cell for a
 //                  field taken off is passed over (nothing to fill).
-//   sampleLoaded   the Imagine Surrey sample's three fields and a few values
+//   sampleLoaded   the sample's own fields and a few values (a campaign whose
+//                  server has a sample: lib/preset.js)
 //   sampleCleared  removes exactly those; a sample field you filled in for
 //                  your own people stays (no longer sample), and says so.
 import { newId } from '../../lib/events.js';
 import { httpError } from '../../actions/util.js';
-import { FAITHS, DWELLING_TYPES, CAMPUSES, groupMembers } from '@starbase/shared/fieldlists';
+import { preset } from '../../lib/preset.js';
+import { FAITHS, DWELLING_TYPES, LANGUAGES, groupMembers } from '@starbase/shared/fieldlists';
 import { FIELDS_MAX, choicesOf, nameKey, parseValue, valueError } from './kinds.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -169,38 +171,9 @@ export const importRows = async (db, ctx, extras) => {
 };
 
 // ── The sample campaign ──
-// Fictional people from lib/sample.js, by name.
-export const SAMPLE_FIELDS = [
-  {
-    name: 'Language at home',
-    kind: 'choice',
-    choices: ['English', 'Punjabi', 'Mandarin', 'Tagalog', 'Hindi', 'Other'],
-    volunteers: true,
-    values: {
-      'Harjit Gill': 'Punjabi', 'Simran Gill': 'Punjabi', 'Gurpreet Sandhu': 'Punjabi', 'Manpreet Dhaliwal': 'Punjabi',
-      'Mei Lin': 'Mandarin', 'Maya Chen': 'English', 'Isabel Cruz': 'Tagalog', 'Ravi Shankar': 'Hindi', 'Tom Riley': 'English',
-    },
-  },
-  {
-    name: 'Strata council member',
-    kind: 'yesno',
-    volunteers: false,
-    values: { 'Jasmine Wong': true, 'Sofia Petrova': true, 'Hannah Lee': false },
-  },
-  {
-    name: 'Union local',
-    kind: 'text',
-    volunteers: false,
-    values: { 'Kwame Mensah': 'CUPE 402', 'Owen Price': 'UFCW 1518' },
-  },
-];
-
-// The Language field's choices (Pick several): the campaign's membership
-// form's own list, in its order, with Other (the language itself goes in
-// Other language). The desk can change them under Profile fields.
-export const SURREY_LANGUAGES = ['English', 'Punjabi', 'Hindi', 'Urdu', 'Mandarin', 'Cantonese', 'Filipino', 'Korean', 'Vietnamese', 'Arabic', 'Farsi', 'Gujarati', 'Spanish', 'French', 'Other'];
-// The membership form's interests, in its order (Interests, Pick several).
-export const FORM_INTERESTS = ['Safer streets', 'Faster commutes', 'Smarter investments', 'Lower costs', 'Stronger services', 'Homes I can afford', 'Support for small business', 'Healthier communities', 'Better schools / school board issues', 'Climate / parks', 'Metro Vancouver / regional issues'];
+// The fields a sample brings, with who has what (its made-up people, by
+// name): the sample's own, so only a campaign whose server has one.
+const sampleFields = () => preset().sample?.fields ?? [];
 
 // The fields that describe a door, not the person: a move takes them off
 // (they describe the old door) and Undo puts them back (ext/moves). By name,
@@ -212,44 +185,29 @@ export const DOOR_FIELDS = ['house notes', 'building notes', 'access type', 'dwe
 export const doorFieldSql = (f, n) => `(lower(${f}.name) = any(${n}::text[]) or ${f}.as_written_of in (
   select d.id from person_fields d where d.workspace_id = ${f}.workspace_id and lower(d.name) = any(${n}::text[])))`;
 
-// Imagine Surrey's standard fields: one for every column of the campaign's
-// list that the core person record has no home for. Named exactly as the
-// list's columns, so the import maps them by name with no thought. Made
+// The standard fields every campaign starts with: the ten the product
+// itself looks for by name — the door's four (a move clears them), the two
+// opt-ins (a website form sets them), Language (the voter guide's
+// language), Notes, Faith (private) and the candidate report's tick. Made
 // when the campaign is set up (workspaceCreated) and by field.standard
 // (Profile fields → Add the standard fields) for a campaign set up before
 // they existed; a field of the same name already there is left as it is.
-export const STANDARD_FIELDS = [
-  { name: 'Home phone', kind: 'text', volunteers: true },
-  { name: 'Province', kind: 'text', volunteers: false },
+export const NEUTRAL_FIELDS = Object.freeze([
   { name: 'House notes', kind: 'text', volunteers: true },
   { name: 'Building notes', kind: 'text', volunteers: true },
   { name: 'Access type', kind: 'text', volunteers: true },
   { name: 'Dwelling type', kind: 'choice', choices: DWELLING_TYPES, display: 'list', volunteers: true },
-  { name: 'Interaction status', kind: 'text', volunteers: false },
-  { name: 'Interaction date', kind: 'date', volunteers: false },
-  { name: 'Organizer', kind: 'text', volunteers: false },
   { name: 'Email opt-in', kind: 'yesno', volunteers: false },
   { name: 'SMS opt-in', kind: 'yesno', volunteers: false },
-  { name: 'Sign', kind: 'yesno', volunteers: true },
-  { name: 'Support', kind: 'number', volunteers: false },
-  { name: 'Voted', kind: 'yesno', volunteers: false },
-  // Not from the list's columns — asked for by the campaign.
-  { name: 'Voter eligibility', kind: 'choice', choices: ['Eligible', 'Ineligible'], volunteers: true },
-  { name: 'Language', kind: 'choices', choices: SURREY_LANGUAGES, volunteers: true },
+  { name: 'Language', kind: 'choices', choices: LANGUAGES, volunteers: true },
   { name: 'Notes', kind: 'note', volunteers: false },
-  // The membership form's (ext/membership): what a member tells the campaign.
-  { name: 'Gender', kind: 'text', volunteers: false },
-  { name: 'Birth date', kind: 'date', volunteers: false },
-  { name: 'Citizenship', kind: 'choice', choices: ['Canadian citizen', 'Permanent resident'], volunteers: false },
-  { name: 'Union member', kind: 'yesno', volunteers: false },
-  { name: 'Union local', kind: 'text', volunteers: false },
-  { name: 'Campus', kind: 'choice', choices: CAMPUSES, volunteers: false },
-  { name: 'Other language', kind: 'text', volunteers: true },
   // Private: the office only, and only what the person says (README).
   { name: 'Faith', kind: 'choice', choices: FAITHS, sensitive: true, volunteers: false },
-  { name: 'Interests', kind: 'choices', choices: FORM_INTERESTS, volunteers: false },
   { name: 'Interested in being a candidate', kind: 'yesno', volunteers: false },
-];
+]);
+// A campaign with a set-up of its own (lib/preset.js) has its own set
+// instead, with its own lists. Asked each time: the brand is a setting.
+export const standardFields = () => preset().fields.standard ?? NEUTRAL_FIELDS;
 
 // → the fields added ({ id, name, kind }); none when every one is there.
 // auto (the membership form, on every entry): only a field this campaign
@@ -266,7 +224,7 @@ export const addStandardFields = async (tx, ctx, emit, { auto = false } = {}) =>
   let top = live.reduce((m, f) => Math.max(m, f.position), -1);
   let count = live.length;
   const added = [];
-  for (const s of STANDARD_FIELDS) {
+  for (const s of standardFields()) {
     if (had.some((x) => nameKey(x.name) === nameKey(s.name)) || seeded.has(nameKey(s.name))) continue;
     if (count >= FIELDS_MAX) break;
     top += 1; count += 1;
@@ -285,14 +243,21 @@ export const addStandardFields = async (tx, ctx, emit, { auto = false } = {}) =>
   return added;
 };
 // The seeds a campaign set up today already has: the standard fields it
-// was given, and the markers of the upgrades it never needs (sql.js).
+// was given, and the marker of every field or list a start-up could give a
+// campaign from before (sql.js) — whether or not this campaign was given
+// that field. So no later start-up, job or change of brand ever adds one.
 export const LIST_SEEDS = { Faith: 'Faith', 'Dwelling type': 'Dwelling type list', Campus: 'Campus list' };
+// The names sql.js looks for before it adds a field (its two marker inserts).
+export const BOOT_SEEDS = [
+  'Voter eligibility', 'Language', 'Notes',
+  'Gender', 'Birth date', 'Citizenship', 'Union member', 'Union local', 'Campus', 'Other language', 'Interests', 'Interested in being a candidate',
+];
 const seed = (tx, ws, names) => tx.query(
   'insert into fields_seeded (workspace_id, name) select $1, unnest($2::text[]) on conflict do nothing', [ws, names],
 );
 export const workspaceCreated = async (tx, ctx, { emit }) => {
   const added = await addStandardFields(tx, ctx, emit);
-  await seed(tx, ctx.workspaceId, [...added.map((f) => f.name), ...Object.values(LIST_SEEDS)]);
+  await seed(tx, ctx.workspaceId, [...new Set([...added.map((f) => f.name), ...BOOT_SEEDS, ...Object.values(LIST_SEEDS)])]);
   return added;
 };
 
@@ -312,14 +277,19 @@ export const privateFieldIds = async (db, ws) => (await db.query(
 // The fields Turn into a list upgrades a campaign from before (index.js
 // fields.lists): Faith added, an empty Text Dwelling type and Campus made
 // lists. Each step once (fields_seeded), all through the event log.
+// Only on a server whose own set-up gives campaigns from before their
+// fields (lib/preset.js fields.bootBackfill), with that set-up's lists; on
+// any other server it does nothing.
 export const upgradeLists = async (tx, ctx, emit) => {
+  const own = preset().fields;
+  if (!own.bootBackfill) return [];
   const ws = ctx.workspaceId;
   const seeded = new Set((await tx.query('select name from fields_seeded where workspace_id = $1', [ws])).rows.map((r) => r.name));
   const all = (await tx.query('select * from person_fields where workspace_id = $1 for update', [ws])).rows;
   const live = all.filter((f) => !f.retired_at);
   const done = [];
   if (!seeded.has('Faith')) {
-    const s = STANDARD_FIELDS.find((x) => x.name === 'Faith');
+    const s = standardFields().find((x) => x.name === 'Faith');
     if (!all.some((f) => nameKey(f.name) === 'faith') && live.length < FIELDS_MAX - 2) {
       const top = live.reduce((m, f) => Math.max(m, f.position), -1) + 1;
       const f = { id: newId(), name: s.name, kind: s.kind, choices: s.choices, volunteers: false, position: top, display: 'buttons', sensitive: true };
@@ -332,7 +302,7 @@ export const upgradeLists = async (tx, ctx, emit) => {
       done.push('Faith');
     } else if (all.some((f) => nameKey(f.name) === 'faith')) done.push('Faith');
   }
-  for (const [name, choices, display] of [['Dwelling type', DWELLING_TYPES, 'list'], ['Campus', CAMPUSES, 'buttons']]) {
+  for (const [name, choices, display] of [['Dwelling type', DWELLING_TYPES, 'list'], ['Campus', own.campuses, 'buttons']]) {
     if (seeded.has(LIST_SEEDS[name])) continue;
     const f = live.find((x) => nameKey(x.name) === nameKey(name) && x.kind === 'text' && !x.converting);
     if (!f) continue;
@@ -356,7 +326,7 @@ export const sampleLoaded = async (tx, ctx, { people, emit }) => {
   )).rows;
   let top = live.reduce((m, f) => Math.max(m, f.position), -1);
   let count = live.length;
-  for (const s of SAMPLE_FIELDS) {
+  for (const s of sampleFields()) {
     // A field of yours with the same name: the sample's values go on it when
     // it is the same kind (and has the choice); otherwise it is left alone.
     let f = live.find((x) => nameKey(x.name) === nameKey(s.name));

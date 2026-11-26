@@ -4,7 +4,14 @@
 //                             order), then taken off — with how many people
 //                             have it filled in, each choice's count, and the
 //                             most common values of a Text or Number field
-//                             (the People filter offers those)
+//                             (the People filter offers those). Beside them,
+//                             for Turn into a list and the import: standard
+//                             (the list a field of that name starts from, by
+//                             name in lower case) and guesses (the words
+//                             that probably mean one of its choices). The
+//                             product's own is Dwelling type's list; a
+//                             campaign with a set-up of its own
+//                             (lib/preset.js) has its lists and guesses too.
 //   GET /fields/:id           any role: one field's name and kind, for the
 //                             words on a People / Calls filter chip. A
 //                             volunteer only gets a field on the profile
@@ -22,13 +29,24 @@
 // desk-only read (index.js) and the handler checks the role again.
 import { Hono } from 'hono';
 import { fieldOut } from './actions.js';
-import { LIST_TOP, LIST_WORDS_MAX } from '@starbase/shared/fieldlists';
+import { DWELLING_TYPES, LIST_TOP, LIST_WORDS_MAX, flipGuesses } from '@starbase/shared/fieldlists';
 import { DOESNT_SUIT, ONLY_TEXT, suits, wordsOf } from './convert.js';
+import { preset } from '../../lib/preset.js';
 
 export const api = new Hono();
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const COMMON_MAX = 8;
+
+// The lists and guesses that go with the fields, asked each time (the brand
+// is a setting). guesses: { 'field name': { 'typed words': 'the choice' } }.
+const listsOut = () => {
+  const own = preset().fields;
+  return {
+    standard: { 'dwelling type': DWELLING_TYPES, ...(own.campuses.length ? { campus: own.campuses } : {}) },
+    guesses: Object.fromEntries(Object.entries(own.guesses).map(([name, byChoice]) => [name, flipGuesses(byChoice)])),
+  };
+};
 
 api.get('/fields', async (c) => {
   const ctx = c.get('ctx');
@@ -95,6 +113,7 @@ api.get('/fields', async (c) => {
       }
       return out;
     }),
+    ...listsOut(),
   });
 });
 

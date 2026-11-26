@@ -292,7 +292,7 @@ export const actions = {
     },
   },
 
-  // Imagine Surrey's standard fields (people.js), for a campaign set up
+  // The standard fields (people.js standardFields), for a campaign set up
   // before they existed. Already there: nothing changes.
   'field.standard': {
     roles: MANAGERS,

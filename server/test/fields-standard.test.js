@@ -76,12 +76,12 @@ test('a campaign from before gets the three once; one renamed or taken off is ne
   const { sql } = await import('../ext/fields/sql.js');
   await db.query(`delete from person_fields where workspace_id = $1 and name in ('Voter eligibility', 'Language', 'Notes')`, [ws]);
   await db.query("delete from fields_seeded where workspace_id = $1 and name in ('Voter eligibility', 'Language', 'Notes')", [ws]);
-  await db.exec(sql);
+  await db.exec(sql());
   let names = Object.keys(await fieldsBy());
   assert.ok(['Voter eligibility', 'Language', 'Notes'].every((n) => names.includes(n)), 'added once');
   const notes = (await fieldsBy()).Notes;
   ok(await mgr.action('field.update', { id: notes.id, name: 'Comments' }));
-  await db.exec(sql);
+  await db.exec(sql());
   names = Object.keys(await fieldsBy());
   assert.ok(names.includes('Comments') && !names.includes('Notes'), 'renamed: not put back');
   assert.equal(ok(await mgr.get('/api/audit/verify')).ok, true);
@@ -103,13 +103,13 @@ test('the first Language list on a campaign from before becomes the form’s: Ta
   await db.query('update person_fields set choices = $2 where id = $1', [lang.id, JSON.stringify(old)]);
   const p = await mgr.createPerson('Tala Example');
   await db.query(`insert into person_field_values (id, workspace_id, field_id, person_id, value) values (gen_random_uuid(), $1, $2, $3, '["Tagalog","English"]')`, [ws, lang.id, p.id]);
-  await db.exec(sql);
+  await db.exec(sql());
   const after = (await fieldsBy()).Language;
   assert.ok(after.choices.includes('Filipino') && !after.choices.includes('Tagalog') && after.choices.includes('Farsi'));
   const v = ok(await mgr.get(`/api/persons/${p.id}/fields`)).fields.find((f) => f.name === 'Language').value;
   assert.deepEqual(v, ['Filipino', 'English']);
   // A list the desk changed is theirs: left as it is.
   await db.query('update person_fields set choices = $2 where id = $1', [lang.id, JSON.stringify(['English', 'Tagalog', 'Klingon'])]);
-  await db.exec(sql);
+  await db.exec(sql());
   assert.deepEqual((await fieldsBy()).Language.choices, ['English', 'Tagalog', 'Klingon']);
 });

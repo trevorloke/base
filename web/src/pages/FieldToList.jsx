@@ -1,11 +1,14 @@
 // Turn into a list (managers) — Profile fields ?list=<id>: a Text field with
 // words on file becomes a Pick one, and no word is lost.
-//   Choices: Dwelling type and Campus start as the standard list ("The
-//   standard list — change it if you like"), any other field with two empty
-//   rows; "+ Add a choice" and ✕ as in a field's editor, up to 40; Show as.
+//   Choices: a field with a standard list starts as it ("The standard list
+//   — change it if you like") — Dwelling type everywhere, and whatever
+//   else this campaign's server sends with GET /fields (standard, by the
+//   field's name) — any other field with two empty rows; "+ Add a choice"
+//   and ✕ as in a field's editor, up to 40; Show as.
 //   What's on file: "12,408 people · 37 different words", then each word
 //   (most people first, at most 500) → a choice or "Keep as written",
-//   pre-filled by guessChoice; the unguessed come first under "Needs you".
+//   pre-filled by guessChoice (with the server's own guesses, GET /fields
+//   guesses); the unguessed come first under "Needs you".
 //   One primary "Turn into a list", then "Change 12,408 people? …  Yes · No".
 //   While it runs (GET /fields every 2 s, Fields.jsx): a bar, "Turning into a
 //   list… 4,000 of 12,408" and a quiet Stop ("Stop? What's done stays
@@ -14,12 +17,15 @@
 // (ext/fields/convert.js makeAsWritten); the server does the rest.
 import { useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { CAMPUSES, DWELLING_TYPES, choiceKey, guessChoice } from '@starbase/shared/fieldlists';
+import { DWELLING_TYPES, choiceKey, guessChoice } from '@starbase/shared/fieldlists';
 import { action, apiGet } from '../api.js';
 import { NeedsSignalLine } from '../components/NoSignal.jsx';
+import { FIELDS_QUERY } from '../components/FieldsBits.jsx';
 
 const CHOICES_MAX = 40;
-const STANDARD = { 'dwelling type': DWELLING_TYPES, campus: CAMPUSES };
+// The product's own standard list; a campaign's others come from its server.
+const OWN_STANDARD = { 'dwelling type': DWELLING_TYPES };
+const listOf = (v) => (Array.isArray(v) && v.length && v.every((c) => typeof c === 'string') ? v : null);
 const KEEP = '';
 const fmt = (n) => Number(n || 0).toLocaleString('en-CA');
 const people = (n) => `${fmt(n)} ${n === 1 ? 'person' : 'people'}`;
@@ -65,8 +71,11 @@ function WordRow({ w, to, choices, onPick, disabled }) {
 }
 
 // The form, for a field that isn't being turned into a list right now.
-function Plan({ f, words, online, onStarted }) {
-  const standard = STANDARD[f.name.trim().toLowerCase()];
+// lists: what GET /fields sent beside the fields ({ standard, guesses }).
+function Plan({ f, words, online, onStarted, lists }) {
+  const nameKey = f.name.trim().toLowerCase();
+  const standard = listOf(lists?.standard?.[nameKey]) || OWN_STANDARD[nameKey];
+  const guesses = lists?.guesses;
   const [rows, setRows] = useState(() => (standard || ['', '']).map((words, key) => ({ words, key })));
   const choices = rows.map((r) => r.words.trim()).filter(Boolean);
   const [display, setDisplay] = useState(() => ((standard || []).length > 12 || f.name.trim().toLowerCase() === 'dwelling type' ? 'list' : 'buttons'));
@@ -77,14 +86,14 @@ function Plan({ f, words, online, onStarted }) {
   const list = words.words;
   // Which rows a person must look at: from the standard list, not the
   // choices being typed, so a row doesn't jump while it's being picked.
-  const needs = useMemo(() => new Set(list.filter((w) => !guessChoice(f.name, w.word, standard || [])).map((w) => w.word)), [list]); // eslint-disable-line react-hooks/exhaustive-deps
+  const needs = useMemo(() => new Set(list.filter((w) => !guessChoice(f.name, w.word, standard || [], guesses)).map((w) => w.word)), [list]); // eslint-disable-line react-hooks/exhaustive-deps
   // A word that is a choice in any spelling always goes to it (the server does the same).
   const toOf = (w) => {
     const exact = choices.find((c) => choiceKey(c) === choiceKey(w.word));
     if (exact) return exact;
     const p = picked[w.word];
     if (p !== undefined) return p === KEEP || choices.includes(p) ? p : KEEP;
-    return guessChoice(f.name, w.word, choices) || KEEP;
+    return guessChoice(f.name, w.word, choices, guesses) || KEEP;
   };
   const toChoices = list.reduce((m, w) => m + (toOf(w) !== KEEP ? w.n : 0), 0);
   const kept = words.people - toChoices;
@@ -213,6 +222,9 @@ export default function FieldToList({ id, fields, online, onBack }) {
     retry: false,
     staleTime: 0,
   });
+  // The lists and guesses that came with the fields (Profile fields has
+  // read them already: the same query, no second request).
+  const lists = useQuery({ ...FIELDS_QUERY, retry: false }).data;
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['fields'] });
   // After a Stop the words on file are new: drop the old ones so the form
   // starts from what's there now, not from the copy read before it ran.
@@ -245,7 +257,7 @@ export default function FieldToList({ id, fields, online, onBack }) {
         {stopped && <p className="ops-done" role="status">Stopped — what was done stays done. Turn into a list again to finish.</p>}
         {/* Keyed on the field, not the read: a reload of the words (every
             refetch) updates the counts and never wipes what's been picked. */}
-        <Plan key={f.id} f={f} words={words.data} online={online}
+        <Plan key={f.id} f={f} words={words.data} online={online} lists={lists}
           onStarted={() => { setStarted(true); setStopped(false); refresh(); }} />
       </>
     );

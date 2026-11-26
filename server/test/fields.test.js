@@ -5,13 +5,16 @@
 // import fills them by column name with row-numbered errors, the export
 // carries both tables, and the sample campaign brings three. test:pg-safe:
 // unique emails and names per run, every query scoped to this workspace.
-import { STANDARD_FIELDS } from '../ext/fields/people.js';
+import { presetFor } from '../lib/preset.js';
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { freshDb, Client } from './helpers.js';
 import { getDb } from '../db/client.js';
 import { parseValue } from '../ext/fields/kinds.js';
+
+// Imagine Surrey's standard fields (the suite runs as its server does: helpers.js).
+const STANDARD_FIELDS = presetFor('imagine-surrey').fields.standard;
 
 const tag = Math.random().toString(36).slice(2, 8);
 let mgr, staff, vol, other, ws;
