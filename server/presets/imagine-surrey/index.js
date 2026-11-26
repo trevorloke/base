@@ -250,6 +250,17 @@ export default {
       'pay.birth': 'Your birth date, as YYYY-MM-DD.',
       'pay.citizen': 'Canadian citizen or permanent resident.',
     },
+    // Where each new key above sits among the product's fixed words: just
+    // before the word named. So the list a translator works through, and a
+    // translated page's own data, stay in the order they always had.
+    wordsBefore: {
+      'field.term': 'field.comment', 'field.oneYear': 'field.comment', 'field.fourYears': 'field.comment',
+      'srv.members14': 'srv.pickAmount', 'srv.citizenOrPr': 'srv.pickAmount', 'srv.oneOrFour': 'srv.pickAmount',
+      'srv.membershipYear': 'srv.declareJoin', 'srv.membershipFour': 'srv.declareJoin',
+      'srv.membershipYearYouth': 'srv.declareJoin', 'srv.membershipFourYouth': 'srv.declareJoin',
+      'pay.duesOnce': 'pay.tooLarge',
+      'pay.oneOrFour': 'pay.monthlyMost', 'pay.birth': 'pay.monthlyMost', 'pay.citizen': 'pay.monthlyMost',
+    },
     // What a new section starts with, laid over the product's own.
     moduleDefaults: {
       band: { title: 'When we organize,', highlight: 'we win', cta: { label: 'Join us', href: '/join' } },

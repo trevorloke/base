@@ -18,6 +18,7 @@ import { mayReach, address } from '../../lib/reach.js';
 import { TRIGGERS, GOALS, parseJson } from './shape.js';
 import { levelFor, levelCounts } from './levels.js';
 import { WEB_KINDS, WEB_WORDS, campaignOf, campaignWords, campaignsOf } from '../webdid/words.js';
+import { brandHas } from '../../lib/preset.js';
 
 export const api = new Hono();
 
@@ -42,7 +43,8 @@ const options = async (db, ws) => ({
      group by t order by n desc, t limit 100`, [ws],
   )).rows.map((r) => r.t),
   web: [
-    ...WEB_KINDS.map((k) => ({ value: k, label: WEB_WORDS[k] })),
+    // The membership form only where the campaign has a membership.
+    ...WEB_KINDS.filter((k) => k !== 'join' || brandHas('membership')).map((k) => ({ value: k, label: WEB_WORDS[k] })),
     ...(await campaignsOf(db, ws)).map((c) => ({ value: `campaign:${c.id}`, label: campaignWords(c) })),
   ],
   surveys: (await db.query(

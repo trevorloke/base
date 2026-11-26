@@ -42,6 +42,9 @@ function load(file) {
 export const islandsBuilt = () => existsSync(`${DIST}site-islands.js`);
 export const previewBuilt = () => existsSync(`${DIST}site-preview.js`);
 
+// A file's content hash by its path ('' when there is none).
+export const fileVersion = (file) => (file && load(file)?.hash) || '';
+
 // The ?v= for a file (its content hash), '' when it isn't there.
 export function assetVersion(name) {
   const file = siteAssetFile(name);

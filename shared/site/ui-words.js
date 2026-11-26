@@ -6,6 +6,11 @@
 // are never translated ({amount}, {org}, {name}). A new visitor word goes
 // here first (HOME, VG, WA: see TR's Seams); the "no English left" test in
 // server/test/site-lang.test.js finds a miss.
+//
+// These are the product's words, for every campaign. A campaign whose
+// set-up brings words of its own (the rules of its membership, say) has
+// them laid over these on its own server (server/ext/site/from-preset.js
+// siteWords), under their own keys; nothing of one campaign is written here.
 export const UI_WORDS = {
   // Around every page
   'shell.skip': 'Skip to content',
@@ -116,9 +121,6 @@ export const UI_WORDS = {
   'field.citizenship': 'Citizenship',
   'join.citizen': 'Canadian citizen',
   'join.pr': 'Permanent resident',
-  'field.term': 'How long',
-  'field.oneYear': '1 year',
-  'field.fourYears': '4 years',
   'field.comment': 'Add a comment',
   'field.whySigning': 'Why you’re signing',
   'field.roles': 'What would you like to do?',
@@ -187,7 +189,7 @@ export const UI_WORDS = {
   'err.email': 'Enter your email address (or a phone number)',
   'err.emailAddress': 'Enter your email address',
   'err.phone': 'Enter a phone number with its area code',
-  'err.postal_code': 'Enter a postal code like V3T 1A1',
+  'err.postal_code': 'Enter a postal code like A1A 1A1',
   'err.postal': 'Enter your postal code',
   'err.address': 'Enter your street address',
   'err.city': 'Enter your city',
@@ -223,9 +225,6 @@ export const UI_WORDS = {
   'srv.joinEmail': 'Add your email to join',
   'srv.giveEmail': 'Add your email to give',
   'srv.birthLike': 'Your birth date, like 1990-04-21',
-  'srv.members14': 'Members are 14 or older',
-  'srv.citizenOrPr': 'Canadian citizen or permanent resident',
-  'srv.oneOrFour': 'One year or four',
   'srv.pickAmount': 'Pick an amount',
   'srv.smaller': 'Pick a smaller amount',
   'srv.smallestGift': 'The smallest gift online is $5',
@@ -241,23 +240,15 @@ export const UI_WORDS = {
   'srv.eventFull': 'That event is full — pick another',
   'srv.mostYear': 'One person may give at most {amount} in a year',
   'srv.mostMonthly': 'A monthly gift is at most {amount} — the yearly limit over twelve months',
-  'srv.membershipYear': 'The membership is at least {amount} for a year',
-  'srv.membershipFour': 'The membership is at least {amount} for four years',
-  'srv.membershipYearYouth': 'The membership is at least {amount} for a year (aged 14 to 30)',
-  'srv.membershipFourYouth': 'The membership is at least {amount} for four years (aged 14 to 30)',
   'srv.declareJoin': 'Tick the declaration to join',
   'srv.declareGive': 'Tick the declaration: you’re a Canadian citizen or permanent resident living in BC, giving your own money',
   'srv.tooMany': 'Too many tries from here — wait a minute and try again.',
   'srv.wrong': 'Something went wrong on our side — please try again in a minute.',
   'pay.notSetUp': 'Online payments aren’t set up yet.',
   'pay.onceOrMonthly': 'Choose once or monthly.',
-  'pay.duesOnce': 'Membership dues are paid once.',
   'pay.tooLarge': 'That amount is too large.',
   'pay.forWho': 'Choose who the gift is for.',
   'pay.declare': 'Please confirm you can give: tick the declaration.',
-  'pay.oneOrFour': 'Choose 1 or 4 years.',
-  'pay.birth': 'Your birth date, as YYYY-MM-DD.',
-  'pay.citizen': 'Canadian citizen or permanent resident.',
   'pay.monthlyMost': 'The most a monthly gift can be this year is {amount}.',
   'pay.smallest': 'The smallest amount we can take online is {amount}.',
   // Stripe's line item (kept with the checkout: a retry sends the same name)
@@ -404,6 +395,25 @@ export const UI_WORDS = {
   'vg.by': 'A voter guide by {org}',
 };
 
+// A campaign's own words laid over these: a key that is here gets the
+// campaign's words in its place; a new key goes just before the key
+// `before` names for it (so the list reads in one order wherever it is
+// made), or last when it names none. Nothing of its own: these, as they are.
+export const layWords = (own, before) => {
+  const mine = Object.entries(own && typeof own === 'object' ? own : {}).filter(([, v]) => typeof v === 'string');
+  if (!mine.length) return UI_WORDS;
+  const at = before && typeof before === 'object' ? before : {};
+  const added = mine.filter(([k]) => !Object.hasOwn(UI_WORDS, k));
+  const over = Object.fromEntries(mine);
+  const out = {};
+  for (const [k, v] of Object.entries(UI_WORDS)) {
+    for (const [nk, nv] of added) if (at[nk] === k) out[nk] = nv;
+    out[k] = Object.hasOwn(over, k) ? over[k] : v;
+  }
+  for (const [nk, nv] of added) if (!Object.hasOwn(out, nk)) out[nk] = nv;
+  return out;
+};
+
 // A template with its slots filled (a slot with no value stays as typed).
 export const fillWords = (t, slots = {}) => String(t ?? '').replace(/\{([a-z]+)\}/gi, (m, k) => (slots[k] !== undefined && slots[k] !== null ? String(slots[k]) : m));
 
@@ -418,12 +428,22 @@ export const ISLAND_WORDS = {
   menu: ['menu.'],
   voteguide: ['vg.'],
 };
-export const wordsFor = (island, w) => {
+// table: the words to pick from — these, or a campaign's own laid over them.
+export const wordsFor = (island, w, table = UI_WORDS) => {
   const prefixes = ISLAND_WORDS[island] || [];
-  return Object.fromEntries(Object.keys(UI_WORDS).filter((k) => prefixes.some((p) => k.startsWith(p))).map((k) => [k, w(k)]));
+  return Object.fromEntries(Object.keys(table).filter((k) => prefixes.some((p) => k.startsWith(p))).map((k) => [k, w(k)]));
 };
-// In an island: its own words when the page gave them, else the English.
-export const wordsIn = (given) => (key, slots) => fillWords(given && typeof given[key] === 'string' ? given[key] : UI_WORDS[key], slots);
+// The campaign's own English words an island may ask for ({} for most).
+export const ownWordsFor = (island, own) => {
+  const prefixes = ISLAND_WORDS[island] || [];
+  return Object.fromEntries(Object.entries(own || {}).filter(([k, v]) => typeof v === 'string' && prefixes.some((p) => k.startsWith(p))));
+};
+// In an island: its own words when the page gave them (a translated page),
+// else the campaign's own English (`own`, when the page sent any), else the
+// English here.
+export const wordsIn = (given, own) => (key, slots) => fillWords(
+  given && typeof given[key] === 'string' ? given[key] : own && typeof own[key] === 'string' ? own[key] : UI_WORDS[key], slots,
+);
 
 // The English of a server's answer → the same answer in the page's
 // language, when it is one of these (its slots matched and kept).
@@ -436,9 +456,9 @@ const rxOf = (t) => {
   }
   return RX.get(t);
 };
-export const translateMessage = (english, w) => {
+export const translateMessage = (english, w, table = UI_WORDS) => {
   const msg = String(english ?? '');
-  for (const [k, t] of Object.entries(UI_WORDS)) {
+  for (const [k, t] of Object.entries(table)) {
     if (!/^(srv|pay|err|form)\./.test(k)) continue;
     const { re, names } = rxOf(t);
     const m = re.exec(msg);

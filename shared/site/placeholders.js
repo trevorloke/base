@@ -1,6 +1,6 @@
 // Sample words that must never go on the site (WA decision 18): the page
 // starters' words (shared/site/starters.js, which re-exports this) and the
-// catalogue's own hero sample. Keyed by kind and field — a list item's by
+// catalogue's own hero and band samples. Keyed by kind and field — a list item's by
 // its list and sub-field with a * for the item ('columns.items.*.title').
 // A draft may hold them; Publish (the catalogue's strict check) refuses any
 // box whose trimmed words are exactly one of these, and opens that box.
@@ -30,6 +30,9 @@ export const PLACEHOLDERS = {
     'How you started and what you’re working for.',
     'Tell people the best way to reach you and when you’ll answer.',
   ],
+  // The call to action band's own sample (the catalogue's defaults).
+  'band.title': ['Your headline,'],
+  'band.highlight': ['in a few words'],
   'columns.items.*.title': ['A point'],
   'columns.items.*.body': ['One or two sentences on this point.'],
   'people.seats.*.role': ['Their role'],

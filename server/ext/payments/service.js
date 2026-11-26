@@ -3,6 +3,7 @@
 // to tick; and Check — one real read from Stripe (the webhook endpoints),
 // never a charge, never a write.
 import { stripeMode, secretKey, webhookSecrets, stripeRequest, StripeError, STRIPE_EVENTS } from './stripe.js';
+import { brandHas } from '../../lib/preset.js';
 
 const NEEDS = ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET'];
 const has = (k) => Boolean(String(process.env[k] || '').trim());
@@ -14,7 +15,8 @@ export const stripeService = (base) => {
   return {
     key: 'stripe',
     name: 'Online payments (Stripe)',
-    for: 'Gifts once or monthly and membership dues on the website — card, Apple Pay, Google Pay — with the limit checked and the receipt sent by itself',
+    // Membership dues only where the campaign has a membership.
+    for: `Gifts once or monthly${brandHas('membership') ? ' and membership dues' : ''} on the website — card, Apple Pay, Google Pay — with the limit checked and the receipt sent by itself`,
     launch: false,
     missing,
     set: NEEDS.filter(has),

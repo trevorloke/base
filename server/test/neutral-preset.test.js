@@ -115,7 +115,7 @@ test('the neutral set-up has every key the preset has, each holding nothing', ()
     for (const k of Object.keys(a)) {
       if (!(k in b)) { missing.push(`${path}${k}`); continue; }
       // A part the neutral set-up has none of (null) has no keys to compare.
-      if (plain(a[k]) && plain(b[k]) && !['examples', 'words', 'moduleDefaults', 'fieldLabels', 'appFiles', 'guesses'].includes(k)) walk(a[k], b[k], `${path}${k}.`);
+      if (plain(a[k]) && plain(b[k]) && !['examples', 'words', 'wordsBefore', 'moduleDefaults', 'fieldLabels', 'appFiles', 'guesses'].includes(k)) walk(a[k], b[k], `${path}${k}.`);
     }
   };
   walk(IS, N, '');
@@ -124,6 +124,7 @@ test('the neutral set-up has every key the preset has, each holding nothing', ()
   assert.deepEqual([N.map, N.membership, N.sample, N.brand, N.org.box, N.org.city], [null, null, null, null, null, '']);
   assert.deepEqual([N.site.skin, N.site.css, N.site.assets, N.site.seed, N.fields.standard], [null, null, null, null, null]);
   assert.deepEqual([N.examples, N.site.words, N.appFiles, N.training], [{}, {}, {}, { label: 'Training', oldPaths: [] }]);
+  assert.deepEqual([N.site.wordsBefore, N.site.moduleDefaults, N.site.fieldLabels], [{}, {}, {}]);
   assert.doesNotMatch(JSON.stringify(N), /surrey|imagine/i);
 });
 

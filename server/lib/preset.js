@@ -46,7 +46,7 @@ const NEUTRAL = deepFreeze({
   fields: { standard: null, languages: null, interests: null, campuses: [], faiths: null, guesses: {}, bootBackfill: false },
   membership: null,
   donorTiers: [],
-  site: { skin: null, css: null, assets: null, seed: null, words: {}, moduleDefaults: {}, fieldLabels: {} },
+  site: { skin: null, css: null, assets: null, seed: null, words: {}, wordsBefore: {}, moduleDefaults: {}, fieldLabels: {} },
   appFiles: {},
   sample: null,
   examples: {},

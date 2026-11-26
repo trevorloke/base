@@ -30,7 +30,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { newModule } from '../shared/site/catalogue.js';
-import { SKINS } from '../shared/site/theme.js';
+import { presetFor } from '../server/lib/preset.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PORT = Number(process.env.PORT) || 5494;
@@ -41,7 +41,7 @@ const log = (...a) => console.log(...a);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ── The three looks ──
-const IS = SKINS['imagine-surrey'];
+const IS = presetFor('imagine-surrey').site.skin;
 const isTheme = { ...IS, logo: { url: '/site-assets/imagine-surrey/logo.webp', alt: 'Imagine Surrey' } };
 // Civic blue: a proposal for owner item 3 (decision 37), none of Imagine
 // Surrey's colours. Every pair passes 4.5:1 (checkTheme reports no problems).

@@ -1,0 +1,17 @@
+/* Imagine Surrey's own stylesheet, linked after site.css on its website's
+   pages (served at {site root}site-assets/imagine-surrey/look.css, on its
+   own server only). */
+
+/* The layered drop shadow from Imagine Surrey's brand (theme: pop). The
+   colours are the theme's (--pop, --pop-alt, set by site.css per section);
+   with pop off they are transparent and nothing is drawn. */
+.display {
+  text-shadow:
+    0.02em 0.02em 0 var(--pop-c),
+    0.04em 0.04em 0 var(--pop-c),
+    0.06em 0.06em 0 var(--pop-c),
+    0.08em 0.08em 0 var(--pop-c),
+    0.1em 0.1em 0 var(--pop-c),
+    0.12em 0.12em 0 var(--pop-c),
+    0.14em 0.14em 0 var(--pop-c);
+}

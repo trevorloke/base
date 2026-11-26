@@ -31,8 +31,10 @@
 // (words beside money, words in a real person's mouth); 'composed' one
 // segment with the field beside it (a headline built from parts).
 //
-// Defaults here are neutral (the generic template). A client's own words
-// come from its seed (server/ext/site/seeds/*.js), never from this file.
+// Defaults here are neutral (the generic template). A campaign's own words
+// come from its seed, never from this file. A campaign whose set-up brings
+// its own starting words for a section has them laid over these when the
+// program starts (presetModuleDefaults below).
 
 import { samplePath } from './placeholders.js';
 import { describeWords, newUndescribed } from './pictures.js';
@@ -80,7 +82,7 @@ export const MODULES = [
       titlePrefix: 'Your campaign headline',
       words: [],
       text: 'One or two sentences on what you stand for and what you want visitors to do next.',
-      primaryCta: { label: 'Join us', href: '/join' },
+      primaryCta: { label: 'Volunteer', href: '/volunteer' },
       secondaryCtas: [{ label: 'Donate', href: '/donate' }],
       image: { url: '', alt: '' },
     },
@@ -132,7 +134,8 @@ export const MODULES = [
     label: 'Call to action band',
     description: 'A bold one-line call with a button, in the brand colours.',
     fields: [{ ...heading(), translate: 'composed' }, { key: 'highlight', type: 'text', label: 'Highlighted words', max: 40, translate: 'composed' }, button(), tone],
-    defaults: { title: 'When we organize,', highlight: 'we win', cta: { label: 'Join us', href: '/join' }, tone: 'accent' },
+    // Sample words (shared/site/placeholders.js): Publish asks for real ones.
+    defaults: { title: 'Your headline,', highlight: 'in a few words', cta: { label: 'Volunteer', href: '/volunteer' }, tone: 'accent' },
   },
   {
     kind: 'faq',
@@ -215,7 +218,7 @@ export const MODULES = [
     category: 'live',
     label: 'Act now',
     description: 'Live numbers, the next event and shift, and what changed lately.',
-    fields: [heading(), { key: 'showCounts', type: 'toggle', label: 'Show live numbers (members, signatures)' }],
+    fields: [heading(), { key: 'showCounts', type: 'toggle', label: 'Show live numbers (signatures)' }],
     defaults: { title: 'Act now', showCounts: true },
   },
   {
@@ -287,11 +290,29 @@ export const MODULES = [
 export const MODULE_BY_KIND = Object.fromEntries(MODULES.map((m) => [m.kind, m]));
 export const MODULE_KINDS = MODULES.map((m) => m.kind);
 
-// A fresh module instance of a kind, with its defaults (deep-copied).
-export function newModule(kind, id) {
+// A campaign's own starting words for a section ({ band: { title, … } }),
+// laid over the defaults above. Whoever runs this code says what they are —
+// the server from its settings (server/ext/site/from-preset.js), the Website
+// screens from GET /api/site (moduleDefaults), a draft's preview from the
+// page's own data — and they are asked each time. Nothing registered: none.
+let ownDefaults = () => ({});
+export const presetModuleDefaults = (fn) => { ownDefaults = typeof fn === 'function' ? fn : () => ({}); };
+const registered = () => {
+  try { const o = ownDefaults(); return o && typeof o === 'object' ? o : {}; } catch { return {}; }
+};
+// A kind's defaults (deep-copied), with `over[kind]` laid over them.
+// over: left out, the registered ones.
+export function defaultsFor(kind, over = registered()) {
   const m = MODULE_BY_KIND[kind];
   if (!m) throw new Error(`unknown module kind: ${kind}`);
-  return { id, kind, hidden: false, props: JSON.parse(JSON.stringify(m.defaults)) };
+  const mine = over && typeof over === 'object' && over[kind] && typeof over[kind] === 'object' ? over[kind] : {};
+  const known = new Set(m.fields.map((f) => f.key));
+  return JSON.parse(JSON.stringify({ ...m.defaults, ...Object.fromEntries(Object.entries(mine).filter(([k]) => known.has(k))) }));
+}
+
+// A fresh module instance of a kind, with its defaults.
+export function newModule(kind, id, over) {
+  return { id, kind, hidden: false, props: defaultsFor(kind, over) };
 }
 
 // ── Checking what an admin saves ──
@@ -397,10 +418,12 @@ function checkField(f, v, path, strict = false) {
 // placeholders by design, says false. known (with strict): the picture
 // addresses already on the site (pictures.js knownPictures) — any other
 // picture must be described or marked decorative.
-export function checkProps(kind, props, { strict = false, samples = strict, known = null } = {}) {
+// over: a campaign's own starting words (defaultsFor); left out, the
+// registered ones.
+export function checkProps(kind, props, { strict = false, samples = strict, known = null, over } = {}) {
   const m = MODULE_BY_KIND[kind];
   if (!m) throw new Error(`unknown module kind: ${kind}`);
-  const src = { ...JSON.parse(JSON.stringify(m.defaults)), ...(props && typeof props === 'object' ? props : {}) };
+  const src = { ...defaultsFor(kind, over), ...(props && typeof props === 'object' ? props : {}) };
   const out = {};
   for (const f of m.fields) out[f.key] = checkField(f, src[f.key], '', strict);
   // Publishing: no box may still hold a starter's (or this catalogue's)
@@ -416,7 +439,7 @@ export function checkProps(kind, props, { strict = false, samples = strict, know
 export const checkImage = (v, where = 'image') => checkField({ key: where, type: 'image' }, v, '');
 
 // A whole page's module list: known kinds, unique ids, at most 60 modules.
-export function checkModules(list, { strict = false, samples = strict, known = null } = {}) {
+export function checkModules(list, { strict = false, samples = strict, known = null, over } = {}) {
   if (!Array.isArray(list)) throw new Error('modules: a list expected');
   if (list.length > 60) throw new Error('modules: at most 60 on a page');
   const ids = new Set();
@@ -427,6 +450,6 @@ export function checkModules(list, { strict = false, samples = strict, known = n
     if (ids.has(id)) throw new Error(`modules[${i}]: the same id twice`);
     ids.add(id);
     // Hidden modules aren't shown, so they needn't be complete to publish.
-    return { id, kind: m.kind, hidden: Boolean(m.hidden), props: checkProps(m.kind, m.props, { strict: strict && !m.hidden, samples: samples && !m.hidden, known }) };
+    return { id, kind: m.kind, hidden: Boolean(m.hidden), props: checkProps(m.kind, m.props, { strict: strict && !m.hidden, samples: samples && !m.hidden, known, over }) };
   });
 }

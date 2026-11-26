@@ -33,7 +33,10 @@ export const sampleData = (campaigns = {}) => {
     ],
     counts: { members: 1234, signatures: Object.fromEntries(Object.values(campaigns).map((c) => [c.id, c.count])) },
     campaigns,
-    payments: { ready: true, limit_cents: 142970, monthly_max_cents: 11900 },
+    // A campaign with a membership, as the loaders say it (the Join section
+    // draws only then), with its usual amounts.
+    membership: true,
+    payments: { ready: true, limit_cents: 142970, monthly_max_cents: 11900, membership_suggested: [1000, 2500, 5000, 10000] },
     roles: ['Doorknocking', 'Phoning', 'Mainstreeting', 'Event hosting', 'Data entry', 'Driver', 'Translation', 'Food'],
   };
 };

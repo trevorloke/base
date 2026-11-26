@@ -1,7 +1,8 @@
 // The website's look: a handful of tokens an admin edits in Website → Theme,
-// turned into CSS variables on every public page. Two skins ship: the
-// generic Base one and Imagine Surrey's (from its website's own palette and
-// type). Contrast is checked here — a pair that fails WCAG 2.2 AA (4.5:1 for
+// turned into CSS variables on every public page. One look ships, Base; a
+// campaign whose set-up brings its own look has it added when the program
+// starts (presetLooks below), and no other campaign is ever offered it.
+// Contrast is checked here — a pair that fails WCAG 2.2 AA (4.5:1 for
 // text) can't be saved — so no admin can skin the site into unreadable.
 
 // The faces (built-in and a campaign's added Google fonts) live in fonts.js.
@@ -48,20 +49,24 @@ export const SKINS = {
     logo: { url: '', alt: '' },
     pop: false,
   },
-  'imagine-surrey': {
-    key: 'imagine-surrey',
-    label: 'Imagine Surrey',
-    // Navy, yellow, ink, surface and line as on imaginesurrey.ca
-    // (apps/web/src/app/globals.css: --navy, --yellow, --ink, --surface, --line);
-    // action is its red for fills with white text (--red-fill, 5.1:1), and
-    // headings carry the brand's layered red shadow (.pop).
-    colors: { brand: '#003979', brandInk: '#ffffff', accent: '#fff100', accentInk: '#0f1e33', ink: '#0f1e33', paper: '#ffffff', surface: '#f2f4f8', line: '#e3e7ef', link: '#003979', action: '#d81b1e', actionInk: '#ffffff' },
-    fonts: { heading: 'montserrat', body: 'montserrat' },
-    radius: 'soft',
-    logo: { url: '', alt: 'Imagine Surrey' },
-    pop: true,
-  },
 };
+
+// The looks a campaign has beyond Base: its set-up's own, if it has one.
+// Whoever runs this code says what they are — the server from its settings
+// (server/ext/site/from-preset.js), the Website screens from GET /api/site
+// (skins), a draft's preview from the page's own data — and they are asked
+// each time, so nothing is kept here. Nothing registered: Base alone.
+let extraLooks = () => [];
+export const presetLooks = (fn) => { extraLooks = typeof fn === 'function' ? fn : () => []; };
+const isLook = (l) => Boolean(l && typeof l === 'object' && typeof l.key === 'string' && l.key && l.key !== 'base' && l.colors && l.fonts);
+// Base first, then the campaign's own.
+export const allLooks = () => {
+  let more = [];
+  try { more = extraLooks(); } catch { more = []; }
+  return [SKINS.base, ...(Array.isArray(more) ? more.filter(isLook) : [])];
+};
+// A look by its name, or null: a name this campaign doesn't have is no look.
+export const lookOf = (name) => (typeof name === 'string' && name ? allLooks().find((l) => l.key === name) || null : null);
 
 // ── Contrast (WCAG 2.2) ──
 const hex = (s) => {
@@ -94,7 +99,7 @@ export const inkFor = (bg) => (contrast('#000000', bg) >= contrast('#ffffff', bg
 // font the theme was saved with — a theme saved before the rule (Barlow
 // Condensed for body text) keeps working and can still be saved.
 export function checkTheme(input, skin = 'base', { added, punjabi = false, keepBody } = {}) {
-  const base = SKINS[input?.skin] || SKINS[skin] || SKINS.base;
+  const base = lookOf(input?.skin) || lookOf(skin) || SKINS.base;
   const colors = {};
   const given = (k) => (hex(input?.colors?.[k]) ? `#${String(input.colors[k]).trim().replace('#', '').toLowerCase()}` : null);
   for (const k of COLOR_KEYS) colors[k] = given(k) ?? base.colors[k];
@@ -188,7 +193,7 @@ export function themeColors(theme) {
     // (the hero's rotating word, the footer's headings), else plain text.
     accentOnBrand: contrast(c.accent, c.brand) >= 4.5 ? c.accent : c.brandInk,
     // Headings on the accent colour: the link colour (the brand's, usually)
-    // when it reads there, as on imaginesurrey.ca's yellow band; else the
+    // when it reads there (a navy heading on a yellow band, say); else the
     // text-on-accent colour.
     headingOnAccent: contrast(c.link, c.accent) >= 4.5 ? c.link : c.accentInk,
     accentOnDeep: contrast(c.accent, brandDeep) >= 4.5 ? c.accent : c.brandInk,
@@ -201,8 +206,8 @@ export function themeColors(theme) {
 // `added`: the campaign's added fonts the theme may use.
 export function themeCss(theme, added) {
   const { theme: t } = checkTheme(theme, undefined, { added });
-  const heading = fontFor(t.fonts.heading, added) || FONT_BY_VALUE[SKINS[t.skin]?.fonts.heading] || FONT_BY_VALUE.inter;
-  const body = fontFor(t.fonts.body, added) || FONT_BY_VALUE[SKINS[t.skin]?.fonts.body] || FONT_BY_VALUE.inter;
+  const heading = fontFor(t.fonts.heading, added) || FONT_BY_VALUE[lookOf(t.skin)?.fonts.heading] || FONT_BY_VALUE.inter;
+  const body = fontFor(t.fonts.body, added) || FONT_BY_VALUE[lookOf(t.skin)?.fonts.body] || FONT_BY_VALUE.inter;
   const c = themeColors(t);
   const r = RADII.find((x) => x.value === t.radius)?.px ?? 10;
   return `:root{--brand:${c.brand};--brand-ink:${c.brandInk};--accent:${c.accent};--accent-ink:${c.accentInk};--ink:${c.ink};--paper:${c.paper};--surface:${c.surface};--line:${c.line};--link:${c.link};--radius:${r}px;--font-heading:${heading.stack};--font-body:${body.stack};${profileCss(profileFor(heading))}`

@@ -5,7 +5,7 @@ import { useMemo, useState } from 'react';
 import { MODULE_BY_KIND } from '@starbase/shared/site/catalogue';
 import { Dialog } from '../Bits.jsx';
 import { Thumb } from '../thumbs.jsx';
-import { groups } from '../builder.js';
+import { groups, offered } from '../builder.js';
 
 export const MOST_USED = ['hero', 'text', 'petition', 'newsletter', 'donate', 'volunteer'];
 export const ONCE = new Set(['voterguide']);
@@ -34,7 +34,7 @@ export function Gallery({ open, onClose, onPick, modules = [], paymentsReady }) 
   const has = useMemo(() => new Set(modules.map((m) => m.kind)), [modules]);
   const taken = (kind) => ONCE.has(kind) && has.has(kind);
   const words = norm(q).trim();
-  const found = words ? Object.values(MODULE_BY_KIND).filter((m) => norm(`${m.label} ${m.description}`).includes(words)) : null;
+  const found = words ? offered().filter((m) => norm(`${m.label} ${m.description}`).includes(words)) : null;
   const close = () => { setQ(''); onClose(); };
   const pick = (kind) => { setQ(''); onPick(kind); };
   const card = (kind) => <Card key={kind} kind={kind} onPick={pick} taken={taken(kind)} paymentsReady={paymentsReady} />;

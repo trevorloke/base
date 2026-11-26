@@ -55,7 +55,8 @@ import { KIT_CODE_RE, goodPath } from '../socials/share.js';
 import { withSource } from '../../../shared/site/components/util.js';
 import { KINDS, consentWording } from './shape.js';
 import { LANG_BY_CODE, LANG_BY_PREFIX, isOther, labelFor } from '../../../shared/site/languages.js';
-import { UI_WORDS, fillWords } from '../../../shared/site/ui-words.js';
+import { fillWords } from '../../../shared/site/ui-words.js';
+import { siteWords, ownAsset } from './from-preset.js';
 import { languagesFor, translatorFor } from './translate.js';
 import { LEGAL_ENGLISH_HASH, keyCurrent, legalSlots, legalWords, legalRow } from './legal.js';
 // The campaign's website settings, read once until the next Website action
@@ -82,11 +83,14 @@ const LANG_RULES = JSON.stringify({
 });
 
 // ── Files: /site-assets/* ──
-// The site's own pictures (shared/site/assets), its stylesheet and fonts
-// (shared/site), and the islands' script and its pieces (web/dist).
+// The website's stylesheet and fonts (shared/site) and the islands' script
+// and its pieces (web/dist). A campaign whose set-up brings its own
+// pictures and stylesheet has them under its own folder name, from its own
+// folder, on its own server only (from-preset.js ownAsset): on every other
+// server those addresses hold nothing.
 const fromHere = (p) => fileURLToPath(new URL(p, import.meta.url));
+const OWN_EXTS = ['.jpg', '.jpeg', '.png', '.webp', '.svg', '.gif', '.ico', '.woff2', '.woff', '.css'];
 const ROOTS = [
-  { dir: fromHere('../../../shared/site/assets/'), exts: ['.jpg', '.jpeg', '.png', '.webp', '.svg', '.gif', '.ico', '.woff2', '.woff', '.css'] },
   { dir: fromHere('../../../shared/site/'), exts: ['.css', '.woff2', '.woff', '.ttf', '.otf'] },
   // The islands' build: web/dist/site-assets/* (where a build may put the
   // islands' pieces, so they load at /site-assets/… on the site's own
@@ -106,10 +110,16 @@ const serveAsset = async (c) => {
   if (rel === 'lang-rules.json') return c.body(LANG_RULES, 200, { 'Content-Type': 'application/speculationrules+json', 'Cache-Control': 'public, max-age=3600', 'X-Content-Type-Options': 'nosniff' });
   if (!rel || rel.includes('\0') || rel.split('/').some((p) => p === '..' || p.startsWith('.'))) return c.text('not found', 404);
   const ext = extname(rel).toLowerCase();
+  const files = [];
+  const own = OWN_EXTS.includes(ext) ? ownAsset(rel) : null;
+  if (own) files.push(own);
   for (const root of ROOTS) {
     if (!root.exts.includes(ext)) continue;
     const file = normalize(join(root.dir, rel));
     if (!file.startsWith(root.dir.endsWith(sep) ? root.dir : `${root.dir}${sep}`)) continue;
+    files.push(file);
+  }
+  for (const file of files) {
     try {
       const s = await stat(file);
       if (!s.isFile()) continue;
@@ -493,7 +503,7 @@ const plainLanguage = async (c, site, settings) => {
   const tr = await translatorFor(site.db, site.ws.id, want);
   const row = langs.legal[want];
   const slots = legalSlots(settings);
-  const w = (key, sl) => fillWords(tr.look(UI_WORDS[key] ?? key).text, sl);
+  const w = (key, sl) => fillWords(tr.look(siteWords()[key] ?? key).text, sl);
   const legal = (key) => legalWords(row, want, key, slots);
   const auth = legal('authorizedBy');
   return { lang: want, w, legal, row, legalV: `${row.id}.${LEGAL_ENGLISH_HASH}`, auth: auth.lang === want ? auth.text : '' };
@@ -1020,7 +1030,7 @@ export const makeSiteApp = (at) => {
   app.post(route('/api/guide/find'), async (c) => {
     const site = c.get('site');
     const tr = site.lang !== 'en' ? await translatorFor(site.db, site.ws.id, site.lang) : null;
-    const w = (k) => { const en = UI_WORDS[k]; const r = tr ? tr.look(en) : null; return r && r.lang !== 'en' ? r.text : en; };
+    const w = (k) => { const en = siteWords()[k]; const r = tr ? tr.look(en) : null; return r && r.lang !== 'en' ? r.text : en; };
     return findRoute(c, site, w);
   });
   app.get(route('/embed/voter-guide'), async (c) => {

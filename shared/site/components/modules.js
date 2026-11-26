@@ -1,12 +1,11 @@
 // One component for every module kind in the catalogue. Each draws its
 // section — outer element <section data-module="<kind>" id="m-<id>"> — from
-// the module's checked props and the loaders' data, in the look of
-// imaginesurrey.ca (apps/web/src/app/page.tsx), coloured only by the theme's
-// CSS variables. Text is React text (escaped); Markdown goes through
+// the module's checked props and the loaders' data, coloured only by the
+// theme's CSS variables. Text is React text (escaped); Markdown goes through
 // shared/markdown.js; every link and picture through the catalogue's
 // safe-url rule (util.js linkFor / imageFor).
 import { createElement, Fragment } from 'react';
-import { MODULE_BY_KIND, checkProps } from '../catalogue.js';
+import { MODULE_BY_KIND, checkProps, defaultsFor } from '../catalogue.js';
 import { html, cx } from './h.js';
 import { Icon, ICON_NAMES } from './icons.js';
 import { Island } from './islands.js';
@@ -47,7 +46,7 @@ export function propsFor(m) {
   try {
     return checkProps(m.kind, m.props);
   } catch {
-    const src = { ...JSON.parse(JSON.stringify(def?.defaults || {})), ...obj(m.props) };
+    const src = { ...(def ? defaultsFor(m.kind) : {}), ...obj(m.props) };
     return Object.fromEntries((def?.fields || []).map((f) => [f.key, loose(f, src[f.key])]));
   }
 }
@@ -395,12 +394,16 @@ function Newsletter({ m, p, rc, level }) {
 function membershipAmounts(rc) {
   const min = rc.data.payments.membership_min_cents || 0;
   const limit = rc.data.payments.limit_cents;
-  // The minimum, then the usual amounts above it (apps/web contributions.ts), four in all.
-  const usual = [1000, 2500, 5000, 10000];
+  // The minimum, then the campaign's usual amounts above it (the loaders'
+  // payments.membership_suggested), four in all.
+  const usual = rc.data.payments.membership_suggested;
   return (min ? [min, ...usual.filter((c) => c > min)] : usual).filter((c) => !limit || c <= limit).slice(0, 4);
 }
 
+// Only on the website of a campaign that has a membership (the loaders'
+// data.membership): on any other, the section draws nothing.
 function Join({ m, p, rc, level }) {
+  if (!rc.data.membership) return null;
   const pay = rc.data.payments;
   const presets = membershipAmounts(rc);
   const F = makeF(rc);
@@ -836,7 +839,8 @@ function Tracker({ m, p, rc, level }) {
 
 function People({ m, p, rc, level }) {
   const seats = arr(p.seats);
-  const join = rc.anchorFor('join') || rc.link('/join');
+  // An open seat links to the membership form, where the campaign has one.
+  const join = rc.data.membership ? rc.anchorFor('join') || rc.link('/join') : null;
   return html`<${Section} m=${m} tone="surface" className="people">
     <div className="container stack">
       <div className="intro">

@@ -22,7 +22,7 @@ import { createHash } from 'node:crypto';
 import { checkProps } from '@starbase/shared/site/catalogue';
 import { OTHER_CODES, LANG_BY_CODE } from '../../../shared/site/languages.js';
 import { normSeg, segmentsOf, moduleSegments } from '../../../shared/site/segments.js';
-import { UI_WORDS } from '../../../shared/site/ui-words.js';
+import { siteWords } from './from-preset.js';
 import { LEGAL_ENGLISH } from '../../../shared/site/wording.js';
 import { VOLUNTEER_ROLES } from '@starbase/shared/canvass';
 import { newId, runAction } from '../../lib/events.js';
@@ -128,7 +128,7 @@ export const liveStrings = async (q, ws, { settings = null, now = Date.now() } =
   };
 
   for (const [k, v] of Object.entries(LEGAL_ENGLISH)) push(v, { cls: 'legal', place: `legal:${k}`, rank: 'legal', essential: true });
-  for (const [k, v] of Object.entries(UI_WORDS)) push(v, { cls: 'ui', place: `ui:${k}`, rank: 'ui', essential: true });
+  for (const [k, v] of Object.entries(siteWords())) push(v, { cls: 'ui', place: `ui:${k}`, rank: 'ui', essential: true });
   for (const r of VOLUNTEER_ROLES) push(r.label, { cls: 'ui', place: 'ui:roles', rank: 'ui', essential: true });
 
   // Settings: the menu, the title bar and its button, the footer, the

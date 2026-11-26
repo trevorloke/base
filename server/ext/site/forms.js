@@ -67,7 +67,9 @@ import { limitsFor } from './loaders.js';
 import { LEGAL_ENGLISH_HASH, legalRow, legalWords, legalSlots } from './legal.js';
 import { segHash, translatorFor } from './translate.js';
 import { LANG_BY_CODE } from '../../../shared/site/languages.js';
-import { UI_WORDS, fillWords, translateMessage } from '../../../shared/site/ui-words.js';
+import { fillWords, translateMessage } from '../../../shared/site/ui-words.js';
+import { siteWords } from './from-preset.js';
+import { preset, brandHas } from '../../lib/preset.js';
 
 // The Stripe line item in the page's words (ui-words stripe.*) and Stripe's
 // own locale for the language.
@@ -217,28 +219,35 @@ const ofKind = (kind, b, f, day) => {
     k.declaration = true;
   }
   if (kind === 'join') {
+    // The membership's own rules and their words are the campaign's set-up's
+    // (preset().membership, from-preset.js siteWords): the route answers 404
+    // before this for a campaign with no membership.
+    const rules = preset().membership;
+    const W = siteWords();
+    const [youthFrom, youthTo] = rules.dues.youth_ages;
     const birth = str(b, 'birth_date', 10, 'Your birth date');
     if (birth) {
       if (!DAY.test(birth) || Number.isNaN(Date.parse(`${birth}T00:00:00Z`)) || new Date(`${birth}T00:00:00Z`).toISOString().slice(0, 10) !== birth) {
         throw new FormError('birth_date', 'Your birth date, like 1990-04-21');
       }
       const age = ageOn(birth, day);
-      if (age < 14) throw new FormError('birth_date', 'Members are 14 or older');
+      if (age < rules.dues.min_age) throw new FormError('birth_date', W['srv.members14']);
       if (age > 120) throw new FormError('birth_date', 'Your birth date, like 1990-04-21');
     }
     k.birth_date = birth || null;
     const cz = str(b, 'citizenship', 10, 'Citizenship');
-    if (cz && !['citizen', 'pr'].includes(cz)) throw new FormError('citizenship', 'Canadian citizen or permanent resident');
+    if (cz && !rules.citizenship.includes(cz)) throw new FormError('citizenship', W['srv.citizenOrPr']);
     k.citizenship = cz || null;
     const term = int(b, 'term') ?? 1;
-    if (term !== 1 && term !== 4) throw new FormError('term', 'One year or four');
+    if (!rules.terms.includes(term)) throw new FormError('term', W['srv.oneOrFour']);
     k.term = term;
-    const youth = k.birth_date ? (() => { const a = ageOn(k.birth_date, day); return a >= 14 && a <= 30; })() : false;
-    const minimum = term * (youth ? 500 : 1000);
+    const youth = k.birth_date ? (() => { const a = ageOn(k.birth_date, day); return a >= youthFrom && a <= youthTo; })() : false;
+    const minimum = term * (youth ? rules.dues.youth_cents : rules.dues.adult_cents);
     const amount = int(b, 'amount_cents');
     if (Number.isNaN(amount)) throw new FormError('amount_cents', 'Pick an amount');
     if (amount != null && amount < minimum) {
-      throw new FormError('amount_cents', `The membership is at least ${money(minimum)} for ${term === 1 ? 'a year' : 'four years'}${youth ? ' (aged 14 to 30)' : ''}`);
+      const words = term === 1 ? (youth ? 'srv.membershipYearYouth' : 'srv.membershipYear') : (youth ? 'srv.membershipFourYouth' : 'srv.membershipFour');
+      throw new FormError('amount_cents', fillWords(W[words], { amount: money(minimum) }));
     }
     if (amount != null && amount > 10_000_000) throw new FormError('amount_cents', 'Pick a smaller amount');
     k.amount_cents = amount ?? minimum;
@@ -348,6 +357,8 @@ const FIELD = /^[a-z_]{1,40}$/;
 export const formRoute = async (c, site) => {
   const kind = c.req.param('kind');
   if (!KINDS.includes(kind)) return c.json({ error: 'not found' }, 404);
+  // Joining is only on the website of a campaign that has a membership.
+  if (kind === 'join' && !brandHas('membership')) return c.json({ error: 'not found' }, 404);
   // A form on another site can't post here (or spend visitors' addresses
   // on someone else's list).
   if (c.req.header('sec-fetch-site') === 'cross-site') return c.json({ error: 'forms are sent from the site itself' }, 403);
@@ -361,8 +372,9 @@ export const formRoute = async (c, site) => {
   let shown = null;
   if (lang !== 'en') {
     const tr = await translatorFor(db, ws.id, lang);
-    const w = (key, slots) => fillWords(tr.look(UI_WORDS[key] ?? key).text, slots);
-    say = (msg) => translateMessage(msg, w);
+    const words = siteWords();
+    const w = (key, slots) => fillWords(tr.look(words[key] ?? key).text, slots);
+    say = (msg) => translateMessage(msg, w, words);
     shown = await shownOn(db, site, body, kind);
     if (!shown) return plain ? c.text(w('form.reload'), 400) : c.json({ error: w('form.reload'), field: null }, 400);
     shown.w = w;

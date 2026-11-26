@@ -7,7 +7,7 @@ import { MODULE_BY_KIND } from '../catalogue.js';
 import { authorizedBy, consentName, consentWords, LEGAL_ENGLISH, fillSlots } from '../wording.js';
 import { renderMarkdown, blocksOf, drawBlocks } from '../../markdown.js';
 import { LANG_BY_CODE, isOther } from '../languages.js';
-import { UI_WORDS, fillWords, wordsFor } from '../ui-words.js';
+import { fillWords, layWords, wordsFor, ownWordsFor } from '../ui-words.js';
 import { blockText, normSeg } from '../segments.js';
 import { arr, obj, str, cleanRef, cleanSource, DEFAULT_TIME_ZONE } from './util.js';
 import { absolute, imageFor, linkFor, locFrom, safeUrl } from './links.js';
@@ -117,7 +117,13 @@ export function normalizeData(data) {
     shifts: arr(d.shifts || d.events).filter((e) => e && e.id != null && str(e.title)),
     counts: { members: counts.members == null ? null : num(counts.members, null), signatures: obj(counts.signatures) },
     campaigns: obj(d.campaigns),
-    payments: { ready: pay.ready === true, limit_cents: Math.max(0, Math.round(num(pay.limit_cents))), monthly_max_cents: Math.max(0, Math.round(num(pay.monthly_max_cents))), membership_min_cents: Math.max(0, Math.round(num(pay.membership_min_cents))) },
+    // membership: this campaign's website has one (the Join section draws
+    // only then); membership_suggested: its usual amounts, in cents.
+    membership: d.membership === true,
+    payments: {
+      ready: pay.ready === true, limit_cents: Math.max(0, Math.round(num(pay.limit_cents))), monthly_max_cents: Math.max(0, Math.round(num(pay.monthly_max_cents))), membership_min_cents: Math.max(0, Math.round(num(pay.membership_min_cents))),
+      membership_suggested: arr(pay.membership_suggested).map((n) => Math.round(num(n))).filter((n) => n > 0),
+    },
     roles: arr(d.roles).map(str).map((r) => r.trim()).filter(Boolean),
     // The voter guide as the server shaped it (ext/voteguide publicGuide).
     guide: d.guide && typeof d.guide === 'object' ? d.guide : null,
@@ -135,7 +141,7 @@ export const ERROR_WORDS = {
   last_name: 'Enter your last name',
   email: 'Enter your email address (or a phone number)',
   phone: 'Enter a phone number with its area code',
-  postal_code: 'Enter a postal code like V3T 1A1',
+  postal_code: 'Enter a postal code like A1A 1A1',
   address: 'Enter your street address',
   city: 'Enter your city',
   birth_date: 'Enter your date of birth',
@@ -172,6 +178,11 @@ export function renderContext({ kind = 'page', site, page, post, campaign, data,
   // The page's language (TR): ctx.lang, with ctx.tr.look(english, { check })
   // the server's words for it, ctx.legal the approved legal words and
   // ctx.names the approved renderings of kept names. English: none of it.
+  // The website's fixed words: the product's, with the campaign's own laid
+  // over them when the server sent any (ctx.words — its membership's rules,
+  // say; server/ext/site/from-preset.js). Most campaigns have none.
+  const own = Object.fromEntries(Object.entries(obj(c.words)).filter(([, v]) => typeof v === 'string'));
+  const words = layWords(own, obj(c.wordsBefore));
   const lang = isOther(c.lang) && c.tr && typeof c.tr.look === 'function' ? c.lang : 'en';
   const tr = lang === 'en' ? null : c.tr;
   const enShown = new Set();
@@ -207,7 +218,7 @@ export function renderContext({ kind = 'page', site, page, post, campaign, data,
     tt: (text, o) => look(text, o).text,
     // A fixed word (shared/site/ui-words.js), its slots filled.
     w: (key, slots) => {
-      const en = UI_WORDS[key] ?? key;
+      const en = words[key] ?? key;
       if (!tr) return fillWords(en, slots);
       const r = tr.look(en);
       if (r.lang === 'en') { const out = fillWords(en, slots); enShown.add(out.trim()); return out; }
@@ -221,8 +232,14 @@ export function renderContext({ kind = 'page', site, page, post, campaign, data,
       return { text: tidy(fillSlots(LEGAL_ENGLISH[key], all)), lang: 'en' };
     },
     names: withNames,
-    // An island's own words, translated, in its props (none on English pages).
-    islandWords: (name) => (lang === 'en' ? {} : { w: wordsFor(name, (k) => rc.w(k)) }),
+    // An island's own words in its props: translated on a language page.
+    // On an English page only the campaign's own English words the island
+    // may ask for — none for most campaigns, whose pages are as they were.
+    islandWords: (name) => {
+      if (lang !== 'en') return { w: wordsFor(name, (k) => rc.w(k), words) };
+      const mine = ownWordsFor(name, own);
+      return Object.keys(mine).length ? { own: mine } : {};
+    },
     langs: { offered: arr(c.offered).filter(isOther), roots: obj(c.langRoots) },
     loc,
     site: s,

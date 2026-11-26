@@ -46,6 +46,7 @@ import { newId, canonical } from '../../lib/events.js';
 import { httpError } from '../../actions/util.js';
 import { readUpload } from '../abtests/media.js';
 import { brandKey } from '../../lib/brand.js';
+import { preset } from '../../lib/preset.js';
 import { SECTIONS, sectionOf, slugify, slugProblem, SYSTEM_SLUGS, RESERVED_SLUGS, hostOf } from './shape.js';
 import { ensureSiteTx, parseJ, pageOut, postOut, campaignOut, forgetDomains, isAppHost, envHosts, appHostSeen, usedWhy } from './store.js';
 import { cacheClear } from './cache.js';
@@ -283,7 +284,7 @@ export const actions = {
       const hosts = [];
       for (const d of input.domains) {
         const h = hostOf(d);
-        if (!h) throw httpError(400, `“${d}” isn't a web address (like imaginesurrey.ca)`);
+        if (!h) throw httpError(400, `“${d}” isn't a web address (like ${preset().examples.domain ?? 'yourcampaign.ca'})`);
         // On a domain only the site answers: never where the app itself is
         // (this request's host, the server's public address and its other
         // addresses, base.win).

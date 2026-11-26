@@ -12,6 +12,9 @@ import { brandKey, brandFor } from '../../lib/brand.js';
 import { deriveLook } from '@starbase/shared/brand-look';
 import { DEFAULT_TZ } from '../../lib/org.js';
 import { checkTheme } from '@starbase/shared/site/theme';
+// The looks and starting words this server's set-up brings, if any (read by
+// checkTheme and the catalogue each time they are asked).
+import './from-preset.js';
 import { SECTION_KEYS, sectionOf, hostOf, consentWording, tagOf } from './shape.js';
 import { seedSite } from './seeds/index.js';
 
@@ -201,7 +204,7 @@ export const siteWorkspace = async (db, workspaceId = null) => {
   return row ? { ...row, settings: parseJ(row.settings, {}) } : null;
 };
 
-// ── First use: the brand's site (seeds/<brandKey()>.js) ──
+// ── First use: the campaign's first site (seeds/index.js) ──
 // A campaign with no website settings gets them, and — when it has no pages
 // at all — its brand's pages and petitions, in the same write.
 export const ensureSiteTx = async (tx, ws, emit) => {

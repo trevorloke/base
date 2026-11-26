@@ -9,6 +9,7 @@
 // The 'site' area (managers by default; App.jsx guards the route, the
 // server refuses everyone else).
 import { Link, useOutletContext } from 'react-router-dom';
+import { hasFeature } from '../brand.js';
 import { NoSignal, noSignal } from '../components/NoSignal.jsx';
 import { WebsiteTabs } from '../components/site/Bits.jsx';
 import { useSite, plural } from '../components/site/useSite.js';
@@ -28,7 +29,9 @@ const KIND_WORDS = {
   join: ['membership form', 'membership forms'],
   donate: ['donation form', 'donation forms'],
 };
-const kindLine = (byKind = {}) => Object.entries(byKind)
+// membership: the campaign has one (only then can there be membership forms).
+const kindLine = (byKind = {}, membership = false) => Object.entries(byKind)
+  .filter(([k]) => k !== 'join' || membership)
   .sort((a, b) => b[1] - a[1])
   .map(([k, n]) => `${n} ${(KIND_WORDS[k] || [k, k])[n === 1 ? 0 : 1]}`)
   .join(' · ');
@@ -120,7 +123,7 @@ export default function WebsiteHome() {
             <section className="wb-tile" aria-labelledby="wb-t-week">
               <h2 id="wb-t-week" className="wb-tile__h">Sign-ups this week</h2>
               <p className="wb-tile__n">{c.actions_week ?? 0}</p>
-              <p className="wb-tile__sub">{c.actions_week ? kindLine(c.actions_week_by_kind) : 'Nothing from the site in the last 7 days.'}</p>
+              <p className="wb-tile__sub">{c.actions_week ? kindLine(c.actions_week_by_kind, hasFeature(me, 'membership')) : 'Nothing from the site in the last 7 days.'}</p>
               <p className="wb-tile__sub muted">{plural(c.actions ?? 0, 'sign-up', 'sign-ups')} from the site in all.</p>
             </section>
             <section className="wb-tile" aria-labelledby="wb-t-pages">
@@ -149,9 +152,13 @@ export default function WebsiteHome() {
               <h2 id="wb-t-pay" className="wb-tile__h">Online giving</h2>
               <p className="wb-tile__state">{d.payments?.ready ? 'Set up' : 'Not set up yet'}</p>
               <p className="wb-tile__sub">
-                {d.payments?.ready
-                  ? 'Donations and memberships on the site are paid by card, then land in Donations.'
-                  : 'The site’s Donate and Become a member forms say online giving isn’t ready until it is.'}
+                {hasFeature(me, 'membership')
+                  ? (d.payments?.ready
+                    ? 'Donations and memberships on the site are paid by card, then land in Donations.'
+                    : 'The site’s Donate and Become a member forms say online giving isn’t ready until it is.')
+                  : (d.payments?.ready
+                    ? 'Donations on the site are paid by card, then land in Donations.'
+                    : 'The site’s Donate form says online giving isn’t ready until it is.')}
               </p>
               {!d.payments?.ready && me?.role === 'manager' && <Link className="wb-tile__go" to="/settings/services">Settings → Services</Link>}
             </section>

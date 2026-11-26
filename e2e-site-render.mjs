@@ -28,13 +28,17 @@
 //   PORT=5150 SHOTS=/tmp/site-render node e2e-site-render.mjs
 import { chromium } from 'playwright-core';
 import { createServer } from 'node:http';
-import { mkdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { renderSite, readSiteAsset, islandsBuilt } from './server/ext/site/render/index.js';
 import { rewriters } from './server/lib/mount.js';
+import { ownAsset } from './server/ext/site/from-preset.js';
 import { imagineSurrey, baseSample, samplePost, sampleData } from './server/test/site-samples.js';
-import { checkTheme, contrast, mix, PAIRS, SKINS } from './shared/site/theme.js';
+import { checkTheme, contrast, mix, PAIRS, SKINS, lookOf } from './shared/site/theme.js';
 import { buildGuide, publicGuide } from './server/ext/voteguide/read.js';
 
+// The renderer runs here as Imagine Surrey's own server does: its look is
+// there by name only under its brand (server/ext/site/from-preset.js).
+if (process.env.STARBASE_BRAND === undefined) process.env.STARBASE_BRAND = 'imagine-surrey';
 const PORT = Number(process.env.PORT) || 5150;
 const SHOTS = process.env.SHOTS || '/tmp/site-render';
 const ORIGIN = `http://127.0.0.1:${PORT}`;
@@ -55,6 +59,16 @@ if (!islandsBuilt()) {
 const SITES = { is: imagineSurrey, base: baseSample };
 const IMAGES = { 'hero-park': 'hero-park.jpg', 'members-rally': 'members-rally.jpg', 'is-logo': 'logo.webp' };
 const posted = [];
+
+// A file of the site: the product's (site.css, fonts, the scripts), or the
+// campaign's own stylesheet from its set-up's folder, as its server serves it.
+const siteFile = (rel) => {
+  const a = readSiteAsset(rel);
+  if (a) return a;
+  const own = ownAsset(rel.split('?')[0]);
+  if (!own || !own.endsWith('.css') || !existsSync(own)) return null;
+  return { type: 'text/css; charset=utf-8', body: readFileSync(own), cache: 'public, max-age=3600' };
+};
 
 const readBody = (req) => new Promise((resolve) => {
   let b = '';
@@ -117,7 +131,7 @@ const barely = (colors, fg) => {
 const THEMES = [
   { name: 'review: yellow brand, black text on it', theme: { skin: 'base', colors: { brand: '#ffcc00', brandInk: '#000000' } } },
   { name: 'review: pale soft panels', theme: { skin: 'base', colors: { accent: '#3b3fd8', accentInk: '#ffffff', surface: '#a9b0bb' } } },
-  { name: 'Imagine Surrey', theme: { ...SKINS['imagine-surrey'], logo: { url: '', alt: '' } } },
+  { name: 'Imagine Surrey', theme: { ...lookOf('imagine-surrey'), logo: { url: '', alt: '' } } },
   { name: 'Base', theme: { ...SKINS.base } },
 ];
 for (let n = 0; THEMES.length < 16 && n < 400; n += 1) {
@@ -220,7 +234,7 @@ const server = createServer(async (req, res) => {
     const rest = vg[2] || '/';
     const now = Date.now() + VG_SHIFT[vg[1]];
     if (rest.startsWith('/site-assets/')) {
-      const a = readSiteAsset(rest.slice('/site-assets/'.length) + url.search);
+      const a = siteFile(rest.slice('/site-assets/'.length) + url.search);
       return a ? send(200, a.type, a.body, { 'cache-control': a.cache }) : send(404, 'text/plain', 'no such file');
     }
     if (rest === '/api/guide/clock') return send(200, 'application/json', JSON.stringify({ now }));
@@ -234,7 +248,7 @@ const server = createServer(async (req, res) => {
     const root = `/sweep/${sw[1]}/`;
     const rest = sw[2] || '/';
     if (rest.startsWith('/site-assets/')) {
-      const a = readSiteAsset(rest.slice('/site-assets/'.length) + url.search);
+      const a = siteFile(rest.slice('/site-assets/'.length) + url.search);
       return a ? send(200, a.type, a.body, { 'cache-control': a.cache }) : send(404, 'text/plain', 'no such file');
     }
     const site = { ...baseSample.site, theme: THEMES[Number(sw[1])].theme };
@@ -253,7 +267,7 @@ const server = createServer(async (req, res) => {
   const root = `/${key}/`;
   const rest = (m[2] || '/');
   if (rest.startsWith('/site-assets/')) {
-    const a = readSiteAsset(rest.slice('/site-assets/'.length) + url.search);
+    const a = siteFile(rest.slice('/site-assets/'.length) + url.search);
     return a ? send(200, a.type, a.body, { 'cache-control': a.cache }) : send(404, 'text/plain', 'no such file');
   }
   const form = /^\/api\/forms\/([a-z]+)$/.exec(rest);

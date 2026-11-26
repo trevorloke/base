@@ -17,9 +17,42 @@
 //                             → { index, path, text }, to point at the same place
 //   summaryOf(module, ctx)    a section's own words for its row ("Get the newsletter")
 //   groups()                  the catalogue by CATEGORIES, for "Add a section"
+//   offered()                 the kinds of section this campaign can add
+//   takeSite(site)            what GET /api/site says of the campaign's own
+//                             website set-up (its looks beyond Base, its own
+//                             starting words for a section, its own label
+//                             for a field), told to the shared code
+//   siteLooks()               the looks Website → Theme offers, Base first
+//   ownLabel(kind, field)     the field, with the campaign's own label if any
 //
 // "Module" is the catalogue's word; the screens say "section".
-import { CATEGORIES, MODULES, MODULE_BY_KIND, checkProps, newModule } from '@starbase/shared/site/catalogue';
+import { CATEGORIES, MODULES, MODULE_BY_KIND, checkProps, newModule, presetModuleDefaults } from '@starbase/shared/site/catalogue';
+import { allLooks, presetLooks } from '@starbase/shared/site/theme';
+import { hasFeature } from '../../brand.js';
+
+// ── The campaign's own website set-up, from its server ──
+// Most campaigns have none: Base alone, the catalogue's own words and
+// labels. One whose server sends more (GET /api/site: skins, moduleDefaults,
+// fieldLabels) has it registered with the shared code here, so a new
+// section, a check and the Theme screen all read the same thing. Nothing of
+// any campaign is written in this file.
+let taken = null;
+let labels = {};
+const plain = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
+export const takeSite = (site) => {
+  if (!site || typeof site !== 'object' || site === taken) return;
+  taken = site;
+  const looks = (Array.isArray(site.skins) ? site.skins : []).filter((s) => s && s.key !== 'base');
+  const defaults = plain(site.moduleDefaults);
+  presetLooks(() => looks);
+  presetModuleDefaults(() => defaults);
+  labels = plain(site.fieldLabels);
+};
+export const siteLooks = () => allLooks();
+export const ownLabel = (kind, f) => {
+  const own = labels[`${kind}.${f?.key}`];
+  return typeof own === 'string' && own ? { ...f, label: own } : f;
+};
 
 const clone = (v) => JSON.parse(JSON.stringify(v ?? null));
 
@@ -221,7 +254,10 @@ export const summaryOf = (m, { campaigns = null } = {}) => {
   return '';
 };
 
-export const groups = () => CATEGORIES.map((c) => ({ ...c, modules: MODULES.filter((m) => m.category === c.key) }));
+// The kinds of section a page can be given here. "Become a member" only for
+// a campaign that has a membership (what its page says: brand.js).
+export const offered = ({ membership = hasFeature(null, 'membership') } = {}) => MODULES.filter((m) => m.kind !== 'join' || membership);
+export const groups = (opts) => CATEGORIES.map((c) => ({ ...c, modules: offered(opts).filter((m) => m.category === c.key) }));
 
 // ── Links and addresses ──
 // What a link box may hold (the catalogue's rule): the site's own path

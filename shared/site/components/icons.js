@@ -1,6 +1,7 @@
 // Line icons for the website: 24×24, drawn in the current text colour,
 // hidden from screen readers (the words next to them say what they mean).
-// The five pillar icons come from imaginesurrey.ca (apps/web Icons.tsx).
+// General shapes any campaign can use for its points (a shield, a bus, a
+// rising line, a price tag, a city hall, and more).
 import { html } from './h.js';
 
 const PATHS = {

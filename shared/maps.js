@@ -2,9 +2,9 @@
 //
 // directionsUrl({ lat, lng, address, city, province }, { mode }) → the phone's
 //   Google Maps with directions to a place: its pin when it has one, else its
-//   words ("13450 104 Ave, Surrey, BC"; the city and province are added
-//   unless the words already name them, so "Newton Library, 7183 136 St"
-//   still goes to Surrey's 136 St). mode: walking | driving | bicycling | transit, else
+//   words ("123 Main St, Kamloops, BC"; the city and province are added
+//   unless the words already name them, so "North Library, 45 2nd St"
+//   still goes to the campaign's own 2nd St). mode: walking | driving | bicycling | transit, else
 //   Google picks. Never an origin: the phone's Google Maps starts from where
 //   it is, and base.win never sends anyone's location to Google. null when
 //   there is neither a pin nor an address. Right on a screen.

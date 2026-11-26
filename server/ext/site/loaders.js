@@ -11,9 +11,13 @@
 //   shifts     the same rows for every other kind — the volunteer openings.
 //              A shift made before kinds has none and is in both lists, as
 //              it always was
-//   counts     { members, signatures: { [campaignId]: n } }
+//   counts     { members, signatures: { [campaignId]: n } }  members: null
+//              for a campaign with no membership
 //   campaigns  { [id]: { id, slug, kind, title, excerpt, statement, goal, count, status } }
-//   payments   { ready, limit_cents, monthly_max_cents }  this year's limit (lib/cap.js)
+//   membership true for a campaign whose set-up brings a membership (the
+//              Join section draws only then)
+//   payments   { ready, limit_cents, monthly_max_cents }  this year's limit (lib/cap.js);
+//              membership_suggested: the membership's usual amounts, where there is one
 //   roles      [string]  the volunteer roles base.win offers
 //   guide      the voter guide as the public may see it (ext/voteguide
 //              publicGuide: not_out until published; a draft in a
@@ -28,6 +32,7 @@ import { paymentsReady } from './payments.js';
 import { city, province } from '../../lib/org.js';
 import { now as clockNow } from '../../lib/clock.js';
 import { guideFor, publicGuide } from '../voteguide/read.js';
+import { preset, brandHas } from '../../lib/preset.js';
 
 const iso = (d) => (d instanceof Date ? d.toISOString() : d ? new Date(d).toISOString() : null);
 const parseJ = (v, d) => (typeof v === 'string' ? JSON.parse(v) : (v ?? d));
@@ -81,14 +86,15 @@ export const loadGuide = async (q, ws, { now = clockNow(), draft = false, siteId
 });
 
 export const loadData = async (q, ws, { posts = 24, now, draft = false, siteId = null } = {}) => {
+  const membership = brandHas('membership');
   const [postRows, events, shifts, members, sigs, campaigns, limits, ready] = [
     await loadPosts(q, ws, posts),
     await loadEvents(q, ws, 24, 'event'),
     await loadEvents(q, ws, 24, 'opening'),
-    (await q.query(
+    membership ? (await q.query(
       `select count(distinct person_id)::int as n from member_terms
         where workspace_id = $1 and voided_at is null and starts_on <= current_date and ends_on >= current_date`, [ws.id],
-    )).rows[0].n,
+    )).rows[0].n : null,
     (await q.query(
       `select campaign_id, count(distinct person_id)::int as n from site_actions
         where workspace_id = $1 and campaign_id is not null and kind in ('petition', 'pledge') group by campaign_id`, [ws.id],
@@ -110,7 +116,8 @@ export const loadData = async (q, ws, { posts = 24, now, draft = false, siteId =
       id: c.id, slug: c.slug, kind: c.kind, title: c.title, excerpt: c.excerpt || '', statement: c.statement || '',
       goal: c.goal == null ? null : Number(c.goal), count: signatures[c.id] || 0, status: c.status,
     }])),
-    payments: { ready, ...limits },
+    ...(membership ? { membership: true } : {}),
+    payments: { ready, ...limits, ...(membership ? { membership_suggested: preset().membership.suggested } : {}) },
     roles: VOLUNTEER_ROLES.map((r) => r.label),
     guide: await loadGuide(q, ws, { now, draft, siteId }),
   };

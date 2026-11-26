@@ -24,7 +24,7 @@ import { action } from '../../api.js';
 import { at } from '../../base.js';
 import { Dialog, MoreMenu } from './Bits.jsx';
 import { useSitePictures } from './useSite.js';
-import { isSiteLink, tidyLink } from './builder.js';
+import { isSiteLink, ownLabel, tidyLink } from './builder.js';
 
 export const uploadSitePicture = (file) => uploadImage(file, 'site.picture');
 // A section's or a post's picture: with its smaller copies (480, 960 and
@@ -592,7 +592,7 @@ export function ModuleForm({ module, onChange, errors, ctx }) {
   return (
     <div className="wb-form">
       {def.fields.map((f) => (
-        <Field key={f.key} f={f} id={`${domId(uid)}-${domId(module.id)}-${f.key}`} path={f.key} value={props[f.key]}
+        <Field key={f.key} f={ownLabel(module.kind, f)} id={`${domId(uid)}-${domId(module.id)}-${f.key}`} path={f.key} value={props[f.key]}
           errors={errors} ctx={ctx} onChange={(v) => onChange(f.key, v)} />
       ))}
     </div>
