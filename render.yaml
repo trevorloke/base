@@ -164,18 +164,22 @@ services:
           property: connectionString
       # The client: it starts in Imagine Surrey's own look (Surrey Navy,
       # marigold, its wordmark); a brand a manager saves in Settings → Brand wins.
-      - key: STARBASE_BRAND
-        value: imagine-surrey
-      - key: STARBASE_ORG_NAME
-        value: Imagine Surrey
-      - key: STARBASE_JURISDICTION
-        value: bc-municipal
-      - key: STARBASE_TZ
-        value: America/Vancouver
-      - key: STARBASE_CITY
-        value: Surrey
-      - key: STARBASE_SLATES
-        value: "council:City council,school_board:School board"
+      # These are the client's own settings, so each is sync: false: set once
+      # in Render on this service and kept there, never written over by a
+      # Blueprint sync (GOING-LIVE.md section 0). Until 26 Nov 2026 this file
+      # gave them as fixed values; each line names the value it gave.
+      - key: STARBASE_BRAND          # imagine-surrey
+        sync: false
+      - key: STARBASE_ORG_NAME       # Imagine Surrey
+        sync: false
+      - key: STARBASE_JURISDICTION   # bc-municipal
+        sync: false
+      - key: STARBASE_TZ             # America/Vancouver
+        sync: false
+      - key: STARBASE_CITY           # Surrey
+        sync: false
+      - key: STARBASE_SLATES         # council:City council,school_board:School board
+        sync: false
       - key: STARBASE_PUBLIC_URL     # the public address: https://imaginesurrey.base.win
         sync: false
       - key: RESEND_API_KEY
