@@ -226,7 +226,12 @@ const room = () => {
   return PER_MINUTE - pace.n;
 };
 const untilRoom = () => Math.max(1000, pace.start + 60_000 - Date.now());
-export const _resetPaceForTest = () => { pace = { start: 0, n: 0 }; };
+// Down until: after no answer or a 5xx, the other website jobs wait out a
+// minute without calling it (each keeps its own tries). The jobs run one after another, so a
+// website that hangs would otherwise hold every other background job (a
+// ladder's next email, a send, Mailchimp) for its timeout once per job.
+let downUntil = 0;
+export const _resetPaceForTest = () => { pace = { start: 0, n: 0 }; downUntil = 0; };
 // A job that found no room at all comes back a little apart from the others
 // waiting with it (a big import queues many at once), so they are not all
 // due in the same moment, ahead of the campaign's other background work.
@@ -244,6 +249,8 @@ export const runConsentJob = async (db, job) => {
   // The settings were taken away: the website was disconnected on purpose.
   const { on, target } = websiteState();
   if (!on) return undefined;
+  // Spread a little, so the ones held back are not all due together again.
+  if (Date.now() < downUntil) return { again: downUntil - Date.now() + Math.round(Math.random() * 5000) };
   const items = job.payload?.items || [];
   const started = Date.now();
   const left = [];
@@ -269,7 +276,9 @@ export const runConsentJob = async (db, job) => {
     payload.tries = (Number(job.payload?.tries) || 0) + 1;
     payload.last = stop.last;
     stop.again = waitFor(payload.tries);
-  } else if (sent) { payload.tries = 0; delete payload.last; }
+    // A minute at most: a no queued since still goes soon after it answers.
+    if (stop.last.status === 0 || stop.last.status >= 500) downUntil = Date.now() + Math.min(stop.again, WAITS_MS[0]);
+  } else if (sent) { payload.tries = 0; delete payload.last; downUntil = 0; }
   if (JSON.stringify(payload) !== JSON.stringify(job.payload)) await db.query('update jobs set payload = $2 where id = $1', [job.id, JSON.stringify(payload)]);
   if (stop) return { again: stop.again };
   // Only refused items are left: the job fails, is tried again, and after

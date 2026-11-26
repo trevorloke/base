@@ -788,6 +788,34 @@ test('the job: the website’s own headers and the exact bytes; a retry is the s
   syncOff();
 });
 
+test('the job: a website that hangs costs one wait per pass, not one per job; the others wait without calling it, no try used', async () => {
+  syncOn();
+  site.reset();
+  await clearQueue(ws);
+  for (let i = 0; i < 8; i += 1) {
+    await enqueueJob(db, { workspaceId: ws, kind: 'website.consent', payload: { items: [{ id: crypto.randomUUID(), channel: 'email', email: mail(`hang${i}`), reason: 'unsubscribe', at: AT }], tries: 0 } });
+  }
+  _setTimeoutForTest(300);
+  site.slow(2000);
+  const started = Date.now();
+  assert.deepEqual(await runOnce(ws), { ran: 0, failed: 0 });
+  const took = Date.now() - started;
+  assert.ok(took < 1200, `one pass waits for one call, not eight: ${took} ms`);
+  assert.equal(site.calls.length, 1, 'the website was called once');
+  const all = await jobs(ws);
+  assert.equal(all.length, 8);
+  for (const j of all) {
+    assert.deepEqual([j.status, j.attempts, j.payload.items.length], ['pending', 0, 1]);
+    assert.ok(j.wait > 50 && j.wait < 70, `each comes back in about a minute: ${j.wait}`);
+  }
+  assert.deepEqual(all.map((j) => j.payload.tries || 0).sort(), [0, 0, 0, 0, 0, 0, 0, 1], 'a try only on the one that called');
+  site.slow(0);
+  _setTimeoutForTest(null);
+  await run(ws);
+  assert.equal(site.ledger.length, 8, 'all sent once it answers');
+  syncOff();
+});
+
 test('the job: a body the website refuses is kept with its words while the others go, and is given up after five tries; settings taken away end it; 60 a minute at most', async () => {
   syncOn();
   site.reset();
