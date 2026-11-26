@@ -44,6 +44,10 @@ import { driveService, checkDrive } from '../drive/service.js';
 // The website in other languages (ext/site translate.js): its row carries
 // "Check translation", which learns how Google treats names and the key.
 import { translateKey, translateWorks, checkTranslation } from '../../lib/translate.js';
+// The campaign's website, hosted apart (ext/intake): base.win's own
+// unsubscribes sent to it, how many are waiting, and a Check that writes nothing.
+import { websiteService, websiteInbound, checkWebsite } from '../intake/service.js';
+import { websiteCounts } from '../intake/outbound.js';
 
 const MANAGER = 'manager';
 const TIMEOUT_MS = 8000;
@@ -208,6 +212,7 @@ export const services = (base = publicUrl()) => {
       checkable: false,
     }),
     mailchimpService(),
+    websiteService(),
     stripeService(base),
     callhubService(),
     googleService(),
@@ -240,6 +245,7 @@ const inbound = (base, desk) => [
   emailInbound(base),
   mailchimpInbound(base),
   { name: 'The website — people in', url: `${base}/in/v1/people`, how: 'From the website’s server with a website key (below): sign-ups, petitions, volunteers, the newsletter' },
+  websiteInbound(base),
   { name: 'Lists and voted files', url: `${desk}/people/import`, how: 'People → Import: a CSV or spreadsheet (a “voted” column marks who voted)' },
   { name: 'Stripe — payments, refunds, disputes', url: webhookUrl(base), how: 'Set by hand: Stripe → Developers → Webhooks → Add endpoint, with the events under Online payments (above)' },
   callhubInbound(base),
@@ -285,6 +291,7 @@ const CHECKS = {
   },
   email: (db, ws, base) => checkEmail(db, base),
   mailchimp: checkMailchimp,
+  website: checkWebsite,
   texting: async () => {
     const need = ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM'].filter((k) => !has(k));
     if (need.length) return { ok: false, said: `${need.join(', ')} not set` };
@@ -341,6 +348,9 @@ api.get('/connections', async (c) => {
   const g = list.findIndex((s) => s.key === 'google');
   if (g >= 0) list[g] = await googleCounts(c.get('db'), c.get('ctx').workspaceId, list[g]);
   if (g >= 0) list.splice(g + 1, 0, await gmailService(c.get('db'), c.get('ctx').workspaceId));
+  // The website's row with this campaign's counts: how many unsubscribes are waiting, and why.
+  const w = list.findIndex((s) => s.key === 'website');
+  if (w >= 0 && list[w].state === 'ready') list[w] = websiteService(await websiteCounts(c.get('db'), c.get('ctx').workspaceId));
   return c.json({ services: list, inbound: inbound(base, deskOf(c, base)), publicUrl: publicUrl() || null });
 });
 

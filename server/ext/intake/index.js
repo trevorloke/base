@@ -338,3 +338,154 @@ publicRoutes.post('/in/v1/people', async (c) => {
     throw e;
   }
 });
+
+// ── Unsubscribes, both ways (the campaign's website, hosted apart) ──
+// One block, with its own imports: the website's no comes in here, and
+// base.win's own no goes out to the website.
+//
+//   POST /in/v1/consent   → 200 { ok: true }   (the same key, limits and
+//                           Idempotency-Key as /in/v1/people)
+//     { email?, phone?, channel: 'email' | 'sms', action: 'withdraw' | 'grant',
+//       reason: 'unsubscribe' | 'stop' | 'preference' | 'deletion', at }
+//     Applied as base.win's own unsubscribe and STOP are (consent.js). The
+//     answer is the same whether or not anyone matched: it never says who
+//     is on file. A yes is answered and not applied. Every call leaves one
+//     website_consent event (without the address), so a call that changed
+//     nothing is on the log too. Never 404 or 403: the website reads those
+//     as "not built yet" and "a wrong key".
+//   Going out (outbound.js): an events hook queues website.consent jobs when
+//     STARBASE_WEBSITE_URL and STARBASE_WEBSITE_KEY are set (website.js) and
+//     the campaign has a live website key. What the website said
+//     (intake.consent) is never sent back.
+//   intake.website.resend     managers: everything waiting or given up on goes again now
+//   intake.website.backfill   managers: what was already off before the two
+//                             settings were set, sent once
+//   GET /api/intake/website   managers: counts for Settings → Services
+import { jobRunnerOn, runJobsSoon } from '../../lib/jobs.js';
+import { applyWebsiteConsent } from './consent.js';
+import {
+  BACKFILL_JOB, CONSENT_JOB, INBOUND_ACTION, backfillOf, liveKey as hasWebsiteKey, offCount, onEvents as websiteEvents,
+  resend as resendToWebsite, runBackfillJob, runConsentJob, startBackfill, websiteCounts,
+} from './outbound.js';
+import { websiteOn, websiteState } from './website.js';
+
+export const jobs = { [CONSENT_JOB]: runConsentJob, [BACKFILL_JOB]: runBackfillJob };
+export const hooks = { events: websiteEvents };
+
+const consentIn = z.object({
+  email: z.string().trim().toLowerCase().email().max(320).optional().nullable(),
+  phone: str(40),
+  channel: z.enum(['email', 'sms']),
+  action: z.enum(['withdraw', 'grant']),
+  reason: z.enum(['unsubscribe', 'stop', 'preference', 'deletion']),
+  at: z.iso.datetime({ offset: true }),
+}).strict().refine((v) => v.email || v.phone, { message: 'an email or a phone' });
+
+// The answer kept for a retry (as /in/v1/people keeps its own): the same key
+// and body is answered again as a replay; another body is refused.
+const consentBefore = async (q, key, idem, bodyHash) => {
+  const prev = (await q.query('select body_hash from intake_requests where key_id = $1 and idempotency_key = $2', [key.id, idem])).rows[0];
+  if (!prev) return null;
+  return prev.body_hash === bodyHash ? { replayed: true } : { clash: true };
+};
+const CLASH = 'that Idempotency-Key was used with a different body';
+
+publicRoutes.post('/in/v1/consent', async (c) => {
+  const key = c.get('intakeKey');
+  const db = c.get('intakeDb');
+  if (!/^application\/json\b/i.test(c.req.header('content-type') || '')) return refuse(c, 415, 'send JSON (Content-Type: application/json)');
+  const raw = await c.req.text();
+  let body;
+  try { body = JSON.parse(raw); } catch { return refuse(c, 400, 'the body isn’t JSON'); }
+  const parsed = consentIn.safeParse(body);
+  if (!parsed.success) {
+    const i = parsed.error.issues[0];
+    return refuse(c, 400, `${i.path.length ? `${i.path.join('.')}: ` : ''}${i.message}`);
+  }
+  const idem = norm(c.req.header('idempotency-key')).slice(0, 200);
+  const bodyHash = sha(raw);
+  const answer = (was) => (was.clash ? refuse(c, 409, CLASH) : c.json({ ok: true, replayed: true }));
+  if (idem) {
+    const was = await consentBefore(db, key, idem, bodyHash);
+    if (was) return answer(was);
+  }
+  const d = parsed.data;
+  try {
+    const { result: was } = await runAction(db, { workspaceId: key.workspace_id, actorId: key.created_by, action: INBOUND_ACTION }, async (tx, emit) => {
+      // Asked again under the campaign's lock: two retries at once, and the second finds the first's answer.
+      const first = idem ? await consentBefore(tx, key, idem, bodyHash) : null;
+      if (first) return first;
+      const r = await applyWebsiteConsent(tx, key.workspace_id, d, emit);
+      // One line per call, always — without the address (it is in the consent record).
+      emit('website_consent', newId(), 'create', { channel: d.channel, reason: d.reason, at: d.at, outcome: r.outcome, people: r.people, key: key.name });
+      if (idem) {
+        // A week of retries is plenty; older answers go.
+        await tx.query("delete from intake_requests where key_id = $1 and created_at < now() - interval '7 days'", [key.id]);
+        await tx.query(
+          `insert into intake_requests (workspace_id, key_id, idempotency_key, body_hash, answer) values ($1, $2, $3, $4, '{}')`,
+          [key.workspace_id, key.id, idem, bodyHash],
+        );
+      }
+      return null;
+    });
+    // Only ok: never whether anyone matched.
+    return was ? answer(was) : c.json({ ok: true });
+  } catch (e) {
+    if (idem && /intake_requests_pkey|duplicate key/i.test(String(e.message))) {
+      const was = await consentBefore(db, key, idem, bodyHash);
+      if (was) return answer(was);
+    }
+    throw e;
+  }
+});
+
+const NOT_CONNECTED = 'The website isn’t connected here: STARBASE_WEBSITE_URL and STARBASE_WEBSITE_KEY aren’t both set';
+const websiteReady = async (tx, ws) => {
+  if (!websiteOn()) throw httpError(409, NOT_CONNECTED);
+  if (!(await hasWebsiteKey(tx, ws))) throw httpError(409, 'Make a website key first: only a campaign with one sends to the website');
+};
+const sendSoon = async (db, ctx, result) => { runJobsSoon(); return { result }; };
+Object.assign(actions, {
+  'intake.website.resend': {
+    roles: ['manager'],
+    input: z.object({}),
+    handler: async (tx, ctx, input, emit) => {
+      await websiteReady(tx, ctx.workspaceId);
+      const again = await resendToWebsite(tx, ctx.workspaceId);
+      if (again.items || again.backfill) emit('website_sync', ctx.workspaceId, 'update', { resend: again.items });
+      return again;
+    },
+    after: sendSoon,
+  },
+  'intake.website.backfill': {
+    roles: ['manager'],
+    input: z.object({}),
+    handler: async (tx, ctx, input, emit) => {
+      await websiteReady(tx, ctx.workspaceId);
+      const count = await offCount(tx, ctx.workspaceId);
+      const queued = await startBackfill(tx, ctx.workspaceId);
+      if (queued) emit('website_sync', ctx.workspaceId, 'update', { backfill: count });
+      // A second tap adds nothing: it was sent once already.
+      return { queued, count };
+    },
+    after: sendSoon,
+  },
+});
+
+api.get('/intake/website', async (c) => {
+  if (c.get('ctx').role !== 'manager') return c.json({ error: 'managers only' }, 403);
+  const db = c.get('db');
+  const ws = c.get('ctx').workspaceId;
+  const s = websiteState();
+  if (!s.on) return c.json({ on: false });
+  const counts = await websiteCounts(db, ws);
+  const backfill = await backfillOf(db, ws);
+  return c.json({
+    on: true, host: s.host, running: jobRunnerOn(), key: counts.key,
+    waiting: counts.waiting, waiting_note: counts.waitingSaid, waiting_since: counts.waitingSince,
+    refused: counts.refused, refused_note: counts.refusedSaid,
+    // What is already off here and was never sent: counted until it is sent.
+    backfill: backfill || { status: 'none', count: await offCount(db, ws) },
+  });
+});
+deskOnlyReads.push('/intake/website');
