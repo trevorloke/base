@@ -133,6 +133,11 @@ staging, tell us Google or the free map for canvassing. With a key already
 set, Google becomes the map and phones stop keeping street maps offline.**
 Until the owner answers, a service with `GOOGLE_MAPS_SERVER_KEY` set must
 also have `GOOGLE_MAPS_TILES=off` before the release is pushed (§5, Recipe B).
+For staging, with no synced Blueprint: set base-win-staging → Environment →
+`STARBASE_CANDIDATES` to the exact line in `render.yaml`'s staging block (the
+made-up Avendrel, Brindlemoor and Castramont). The sample saves those three
+on its own Rating scale either way; the setting gives their buttons' longer
+words. Then check that staging's `/api/scale` names those three.
 
 **Production is every live client, and ops.base.win.** When we say
 production, we mean every live client's campaign server and the control

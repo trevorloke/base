@@ -37,7 +37,7 @@ import { SESSION_COOKIE } from './auth.js';
 import { demoEmail } from './demo.js';
 import { orgName } from './org.js';
 import { SIGNUP_LOCK } from './setup.js';
-import { AREAS, FIRST_NAMES, SURNAMES, TAGS, SHIFTS, SEGMENTS, HOUSE_FIRST, HOUSE_LAST } from './samplecast.js';
+import { AREAS, FIRST_NAMES, SURNAMES, TAGS, SHIFTS, SEGMENTS, HOUSE_FIRST, HOUSE_LAST, OPPONENTS } from './samplecast.js';
 
 const onStaging = () => String(process.env.STARBASE_ENV || '').trim() === 'staging';
 export const sampleWanted = () => onStaging() && String(process.env.STARBASE_SAMPLE || '').trim().toLowerCase() === 'vancouver';
@@ -46,10 +46,11 @@ const resetWord = () => (sampleWanted() ? String(process.env.STARBASE_SAMPLE_RES
 // What the sample holds, as a number. Raise it by one whenever that
 // changes: this file, samplecast.js, the staging block's STARBASE_ORG_NAME,
 // STARBASE_JURISDICTION or STARBASE_TZ (all stored when the campaign is
-// made), or the fields a new campaign starts with. Not for
-// STARBASE_CANDIDATES (a campaign doesn't store its opponents until someone
-// saves its Rating scale screen) or STARBASE_DEMO_EMAIL (a change of it
-// makes the sample again by itself). The first sample, before this
+// made), or the fields a new campaign starts with. The sample saves the
+// cast's opponents on its own Rating scale when it is made (samplecast.js
+// OPPONENTS), so STARBASE_CANDIDATES gives only their buttons' longer
+// words. Not for STARBASE_DEMO_EMAIL (a change of it makes the sample
+// again by itself). The first sample, before this
 // number, counts as 0. The next release that starts on staging drops the
 // old sample and makes this one, once (G1 to G6 above).
 export const SAMPLE_VERSION = 2;
@@ -223,6 +224,10 @@ const makeSample = async (app, log, n, email) => {
     workspaceName: orgName() || 'Sample Campaign', jurisdiction: process.env.STARBASE_JURISDICTION || 'bc-municipal',
   });
   if (!up.ok) { log(`sample: sign-up → ${up.status} ${JSON.stringify(up.json)?.slice(0, 200)}`); return null; }
+  // Its own opponents, saved on its Rating scale: the demo names the cast's
+  // three whatever staging's STARBASE_CANDIDATES holds in Render.
+  const scale = await call('/api/actions/scale.save', { candidates: OPPONENTS.map(({ code, name }) => ({ code, name })) });
+  if (!scale.ok) log(`sample: scale.save → ${scale.status} ${JSON.stringify(scale.json)?.slice(0, 200)}`);
 
   for (const a of AREAS) {
     const [s, w, n, e] = a.box;
