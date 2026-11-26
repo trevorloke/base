@@ -6,10 +6,14 @@
 // link to the server's start route (components/google.js). Google's return
 // lands here with ?google=<why> when it didn't sign anyone in, or with
 // ?step=code when two-step sign-in asks for the code next.
+// On the public demo (staging; /api/auth/setup says demo), the page sends
+// the visitor straight in through the demo's own door, once a minute at
+// most: ?stay=1 keeps the form, for someone with their own staging account.
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiGet, apiPost, ApiError, noAnswer } from '../api.js'; // no signal at all keeps its own words
+import { at, NS } from '../base.js';
 import { landing } from '../mode.js';
 import { CodeField } from '../components/TwoStep.jsx';
 import AuthPage from '../components/AuthPage.jsx';
@@ -37,6 +41,27 @@ export const signInTrouble = (err, { google = false } = {}) => {
   return err.message;
 };
 
+// The demo's jump: when this tab last made it, until it signs someone in. A
+// browser that keeps no cookie comes straight back here; the second time
+// inside a minute it sees the form and a line, not a loop. Storage it can't
+// read: no jump.
+const DEMO_JUMP = `${NS}demo-jump`;
+const DEMO_AGAIN_MS = 60_000;
+const jumpedLately = () => {
+  try {
+    const t = Number(window.sessionStorage.getItem(DEMO_JUMP));
+    return { readable: true, lately: Number.isFinite(t) && t > 0 && Date.now() - t < DEMO_AGAIN_MS };
+  } catch { return { readable: false, lately: false }; }
+};
+const noteJump = () => {
+  try { window.sessionStorage.setItem(DEMO_JUMP, String(Date.now())); return true; } catch { return false; }
+};
+// The app calls this once someone is signed in (App.jsx).
+export const forgetDemoJump = () => {
+  try { window.sessionStorage.removeItem(DEMO_JUMP); } catch { /* nothing kept */ }
+};
+export const DEMO_FAILED = 'The demo could not sign you in.';
+
 export default function Login({ mode = 'field' }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -55,13 +80,26 @@ export default function Login({ mode = 'field' }) {
   // a reload doesn't say it again.
   const [googleCode] = useState(() => search.get('google'));
   const [busy, setBusy] = useState(false);
+  // Asked for the form (?stay), or back from Google or its second step: no jump.
+  const [noJump] = useState(() => search.has('stay') || search.has('step') || search.has('google'));
+  const [demoFailed, setDemoFailed] = useState(false);
+  const [jumping, setJumping] = useState(false);
+  useEffect(() => {
+    if (!setup.data?.demo || noJump) return;
+    const seen = jumpedLately();
+    if (!seen.readable) return;
+    if (seen.lately) { setDemoFailed(true); return; }
+    if (!noteJump()) return;
+    setJumping(true);
+    window.location.assign(at('/api/auth/demo'));
+  }, [setup.data?.demo, noJump]);
   useEffect(() => {
     takeSignin(); // a Google sign-in that came back here didn't happen
     if (search.has('google')) setSearch((q) => { q.delete('google'); return q; }, { replace: true });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const googleOn = Boolean(setup.data?.google);
   // Said once /auth/setup has answered: the domain rule's words name the domain.
-  const shownError = error || (googleCode && step === 'password' && !setup.isPending ? googleWords(googleCode, { domain: setup.data?.googleDomain }) : null);
+  const shownError = error || (demoFailed && step === 'password' ? DEMO_FAILED : null) || (googleCode && step === 'password' && !setup.isPending ? googleWords(googleCode, { domain: setup.data?.googleDomain }) : null);
   const startAgain = () => {
     setStep('password'); setError(null); setPassword('');
     if (search.has('step')) setSearch((q) => { q.delete('step'); return q; }, { replace: true });
@@ -105,6 +143,15 @@ export default function Login({ mode = 'field' }) {
 
   // Whose sign-in this is (the campaign's name once it is set up).
   const whose = { org: setup.data?.organization || null, staging: setup.data?.org?.env === 'staging' };
+
+  if (jumping) {
+    return (
+      <AuthPage {...whose}>
+        <h1>Sign in</h1>
+        <p className="muted" role="status">Opening the demo…</p>
+      </AuthPage>
+    );
+  }
 
   if (step === 'code') {
     return (

@@ -11,7 +11,7 @@
 // shouldn't pay for it until they open it.
 // Desk-only screens sit under one area guard: someone without the area lands
 // back on Today (the server refuses their data anyway).
-import { lazy, useState } from 'react';
+import { lazy, useEffect, useState } from 'react';
 import { Routes, Route, Navigate, Outlet, useOutletContext, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { apiGet, noAnswer } from './api.js';
@@ -19,7 +19,7 @@ import Shell, { isDesk, hasArea } from './Shell.jsx';
 import { ADMIN_BASE, fieldView, landing, mayAdmin } from './mode.js';
 import { takeSignin } from './components/google.js';
 import { BRAND, hasFeature } from './brand.js';
-import Login from './pages/Login.jsx';
+import Login, { forgetDemoJump } from './pages/Login.jsx';
 import Forgot from './pages/Forgot.jsx';
 import Enter from './pages/Enter.jsx';
 import Reset from './pages/Reset.jsx';
@@ -116,6 +116,10 @@ function RequireAuth({ mode }) {
     staleTime: 60_000,
     refetchInterval: askAgain,
   });
+  // Signed in: the demo's jump worked, so a later sign-out (the demo made
+  // again) jumps straight back in (pages/Login.jsx).
+  const signedInAs = me.data?.user?.id;
+  useEffect(() => { if (signedInAs) forgetDemoJump(); }, [signedInAs]);
   if (me.isLoading) return null;
   if (me.isError && !(noAnswer(me.error) && me.data)) return <Navigate to="/login" replace />;
   // Back from signing in with Google (which returns to the app it started
