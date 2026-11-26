@@ -192,7 +192,9 @@ export const campaignView = async (db, name) => {
 };
 
 // Save the Render address (and name shown). A changed address forgets the
-// pinned instance: the next matching answer pins again. → { ok } | { ok: false, taken }
+// pinned instance (the next matching answer pins again) and Render's ids
+// for the service and database that were at the old address.
+// → { ok } | { ok: false, taken }
 export const saveEnv = async (tx, { name, env, display, serverUrl, operatorId }) => {
   const c = (await tx.query('select * from campaigns where name = $1 for update', [name])).rows[0];
   const before = (await tx.query('select * from environments where campaign = $1 and env = $2', [name, env])).rows[0] || { server_url: null, instance: null };
@@ -204,7 +206,9 @@ export const saveEnv = async (tx, { name, env, display, serverUrl, operatorId })
   await tx.query(`insert into environments (campaign, env, server_url) values ($1, $2, $3)
     on conflict (campaign, env) do update set server_url = excluded.server_url,
       instance = case when $4 then null else environments.instance end,
-      instance_at = case when $4 then null else environments.instance_at end`, [name, env, serverUrl || null, changed]);
+      instance_at = case when $4 then null else environments.instance_at end,
+      render_service = case when $4 then null else environments.render_service end,
+      render_db = case when $4 then null else environments.render_db end`, [name, env, serverUrl || null, changed]);
   if (display && display !== c.display) await tx.query('update campaigns set display = $2 where name = $1', [name, display]);
   if (changed || (display && display !== c.display)) {
     await appendLog(tx, {

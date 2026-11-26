@@ -1,7 +1,7 @@
 // Setup, sign-in and sign-out, the session every other page needs, and the
 // ten-minute code window every state-changing form goes through.
 import { clientIp, makeLimiter } from '../../server/lib/guard.js';
-import { newTotpSecret, setupFor, verifyTotp, base32Decode } from '../../server/lib/twostep.js';
+import { newTotpSecret, setupFor, verifyTotp, base32Decode, looksLikeRecoveryCode } from '../../server/lib/twostep.js';
 import {
   setupState, setupCodeMatches, setupTries, countSetupTry, newSetupTicket, getSetupTicket, SETUP_TICKET_SECONDS,
   SETUP_TRIES_MAX, finishSetup, hashPassword, seal, unseal, signIn, loadSession, endSession, SESSION_SECONDS,
@@ -206,4 +206,20 @@ export const codeWindow = async (c, { db, limits }, f) => {
     if (mark) writeCookie(c, DEVICE, mark, DEVICE_SECONDS);
   }
   return 'ok';
+};
+
+// A change at Render: a code from the app, typed for this one change, every
+// time. The 10-minute window opens nothing here, so an unlocked laptop
+// inside it gains nothing at Render. A recovery code is turned away before
+// it is spent: it signs you in, it doesn't change anything in Render. The
+// code still goes through stepUp, so it works once, is limited and is on
+// the log. → 'ok' | 'missing' | 'recovery' | 'wrong'
+export const freshAppCode = async (c, { db, limits }, f) => {
+  const session = c.get('session');
+  const typed = String(f.code || '').trim();
+  if (!typed) return 'missing';
+  if (looksLikeRecoveryCode(typed)) return 'recovery';
+  if (limits.stepUp(session.tokenHash)) return 'wrong';
+  const via = await stepUp(db, session, typed);
+  return via === 'app' ? 'ok' : 'wrong';
 };

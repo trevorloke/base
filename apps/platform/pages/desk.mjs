@@ -41,7 +41,9 @@ export const checklist = (name, done, { stale = '' } = {}) => html`<ol class="oc
 export const NO_KEY_WORDS = 'PLATFORM_SIGNING_KEY in Render is missing or too short. Press Generate next to it, then Save and deploy.';
 
 // base.win’s key: what each campaign's BASE_PLATFORM_PUBKEY holds.
-export const keyPage = ({ keys, missing, short = 0 }) => page({
+// setFrom: campaigns without the new key that are connected to Render (only
+// with a Render key): each gets a button to the page that sets it there.
+export const keyPage = ({ keys, missing, short = 0, setFrom = [] }) => page({
   title: 'base.win’s key', nav: true, here: 'key',
   body: html`<section class="card oc-narrow oc-keypage"><h1>base.win’s key</h1>
   ${keys.length && short ? status(`PLATFORM_SIGNING_KEY in Render has ${short === 1 ? 'a value' : `${short} values`} after the first that ${short === 1 ? 'is' : 'are'} too short, so ${short === 1 ? 'it is' : 'they are'} left out. Press Generate for a new key, keeping the old one first.`, 'warn') : ''}
@@ -56,7 +58,8 @@ export const keyPage = ({ keys, missing, short = 0 }) => page({
       <pre class="oc-pre" id="key-value">${pubkeyValue(keys)}</pre>
       <button class="btn btn-primary oc-wide" type="button" data-copy="key-value">Copy</button>
     </div>
-    ${keys.length > 1 && missing.length ? status(`Don’t remove the old key yet: ${missing.join(', ')} don’t have the new one.`, 'warn') : status('')}`
+    ${keys.length > 1 && missing.length ? status(`Don’t remove the old key yet: ${missing.join(', ')} don’t have the new one.`, 'warn') : status('')}${setFrom.map((e) => html`
+    <form method="post" action="/c/${e.name}/render/key" class="oc-form" data-busy="Asking Render…"><button class="btn btn-quiet" type="submit">Set base.win’s key on ${e.display}</button></form>`)}`
     : status(NO_KEY_WORDS, 'warn')}
   </section>`,
 });

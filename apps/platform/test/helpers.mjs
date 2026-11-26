@@ -28,6 +28,7 @@ export const freshApp = async () => {
 // Over the wire each file shares one database: start from nothing.
 const wipe = async (db) => {
   await db.query('delete from ops_sessions; delete from operator_setup; delete from setup_tries; delete from operators');
+  await db.query('delete from render_jobs');
   await db.query('delete from checklist; delete from checks; delete from environments; delete from campaigns');
   await db.query('delete from ops_log; update ops_chain set seq = 0, last_hash = \'\'');
   await db.exec((await import('node:fs')).readFileSync(new URL('../db.sql', import.meta.url), 'utf8'));

@@ -38,6 +38,8 @@ test('only the server’s small shared helpers: never its database, extensions, 
 
 test('settings are read in config.mjs only, and only its own', () => {
   const ALLOWED = ['DATABASE_URL', 'PORT', 'NODE_ENV', 'RENDER', 'OPS_HOST', 'OPS_SETUP_CODE', 'OPS_SECRET', 'PLATFORM_SIGNING_KEY', 'OPS_PUBLIC_TEMPLATE', 'OPS_INSECURE_COOKIES', 'OPS_ALLOW_LOCAL'];
+  // The Render key, this service's own id at Render, and the tests' stand-in for Render (render-api.mjs).
+  ALLOWED.push('RENDER_API_KEY', 'RENDER_SERVICE_ID', 'OPS_RENDER_API');
   for (const f of files.filter((x) => x.path !== 'config.mjs')) assert.doesNotMatch(f.text, /process\.env/, f.path);
   const config = files.find((x) => x.path === 'config.mjs').text;
   const read = [...new Set([...config.matchAll(/\benv\.([A-Z_]+)/g)].map((m) => m[1]))];

@@ -1,6 +1,9 @@
 -- The control centre's own database (base-platform-db). Run at every start;
 -- every statement is idempotent. It holds no people, no client database
--- address and no Render key.
+-- address and no Render key. With a Render key set on the service, it keeps
+-- Render's ids for each campaign's service and database and one row per
+-- change asked for there: ids, names and states, never a setting's value
+-- and never anything Render answered.
 
 -- The one operator. Password: scrypt (server/lib/auth.js hashPassword).
 -- Authenticator key: AES-256-GCM, key = HKDF(OPS_SECRET, info 'base.win/ops-totp/v1').
@@ -143,3 +146,26 @@ create table if not exists ops_log (
   payload_hash text not null,
   hash text not null
 );
+
+-- Render's ids for a campaign's service and database (ids only; cleared with the pin when the address changes).
+alter table environments add column if not exists render_service text;
+alter table environments add column if not exists render_db text;
+create unique index if not exists environments_render_service_uq on environments (render_service) where render_service is not null;
+create unique index if not exists environments_render_db_uq on environments (render_db) where render_db is not null;
+-- One row per Render change asked for: the page shown, the one change at a
+-- time per campaign, and the limits on how many (so they hold across a restart).
+create table if not exists render_jobs (
+  id text primary key,                   -- 128 random bits; the confirm page's hidden field
+  campaign text not null references campaigns(name),
+  env text not null,
+  what text not null,                    -- link | deploy | restart | key | domain | close-db
+  target text,                           -- Render's id for the service or database
+  detail jsonb not null default '{}',    -- label, setting (a NAME) and which step has no answer; never a value
+  state text not null check (state in ('asked', 'running', 'done', 'failed', 'unknown')),
+  asked_in text not null,                -- sha256(session token hash + job id): compares only, opens nothing
+  asked_at timestamptz not null default now(),
+  began_at timestamptz, ended_at timestamptz,
+  problem text                           -- a problem's word or a status; never a body
+);
+create unique index if not exists render_jobs_one_running on render_jobs (campaign) where state = 'running';
+create index if not exists render_jobs_recent on render_jobs (campaign, asked_at desc);

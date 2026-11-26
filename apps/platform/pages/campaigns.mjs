@@ -5,6 +5,7 @@ import { logLine } from './log.mjs';
 import { openForm, inviteForm, checklist } from './desk.mjs';
 import { publicHost, publicState } from '../campaigns.mjs';
 import { RULE_WORDS, RACES } from '../snippets.mjs';
+import { cfg } from '../config.mjs';
 
 const ENV_WORD = { production: 'Production', staging: 'Staging' };
 const VALUE_WORDS = { city: 'City', province: 'Province', rules: 'Rules', tz: 'Time zone', races: 'Races', bounds: 'Map area' };
@@ -143,7 +144,8 @@ export const campaignPage = ({ v, entry, logRows, names, done = new Map(), stale
     <section class="card"><h2>Health</h2>
       ${health(v, entry)}
       ${strip(v.history)}
-      <form method="post" action="/c/${c.name}/check-now" data-busy="Checking…"><button class="btn btn-quiet" type="submit">Check now</button></form>
+      <form method="post" action="/c/${c.name}/check-now" data-busy="Checking…"><button class="btn btn-quiet" type="submit">Check now</button></form>${cfg().render ? html`
+      <p><a class="btn btn-quiet" href="/c/${c.name}/render">Render: service, deploys, database</a></p>` : ''}
     </section>
     ${client ? html`<section class="card"><h2>Checklist</h2>${checklist(c.name, done, { stale: stale.startsWith('tick:') ? stale.slice(5) : '' })}</section>` : ''}
     <details class="oc-more"${stale === 'archive' ? raw(' open') : ''}><summary class="btn btn-quiet">More</summary>
