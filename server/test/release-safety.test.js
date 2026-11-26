@@ -52,6 +52,11 @@ test('the server runs start-up SQL from one place, so this check reads all of it
   const KNOWN = {
     'server/db/schema.js': 'bootstrap: the start-up itself, read above',
     'server/db/client.js': 'passes SQL through to the database; runs none of its own',
+    // Not a client's start-up: it runs only on staging (base-win-staging),
+    // behind guards G1–G3, and makes the sample's own bookkeeping table.
+    // Its drop of the old sample is staging's alone; samplecampaign.test.js
+    // and env-closed.test.js prove it never runs on a client's server.
+    'server/lib/samplecampaign.js': 'staging only: the sample’s own bookkeeping table',
   };
   const files = [];
   const walk = (dir) => {
