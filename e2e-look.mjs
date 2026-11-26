@@ -25,12 +25,12 @@
 // themselves, not only in the sums (server/test/brand-look.test.js). Last,
 // signed out, the sign-in page shows the uploaded logo and the colour.
 //
-//   PORT=4190 SHOTS=/tmp/look node e2e-look.mjs      (uses PORT and PORT+1)
+//   PORT=4194 SHOTS=/tmp/look node e2e-look.mjs      (uses PORT and PORT+1; not 4190, which fetch refuses)
 import { chromium } from 'playwright-core';
 import { spawn } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 
-const PORT = Number(process.env.PORT) || 4190;
+const PORT = Number(process.env.PORT) || 4194;
 const SHOTS = process.env.SHOTS || '/tmp/starbase-look';
 mkdirSync(SHOTS, { recursive: true });
 const results = [];
