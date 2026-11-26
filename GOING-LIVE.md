@@ -56,14 +56,13 @@ also have `GOOGLE_MAPS_TILES=off` before the release is pushed (§5, Recipe B).
 
 | Host | What it serves | Where |
 |---|---|---|
-| `starbase.imaginesurrey.ca` (and `base.win/imaginesurrey` through the door, apps/door/README.md) | the staff and volunteer app, and the public forms | Render → Settings → Custom Domains |
+| `imaginesurrey.base.win` (and `starbase.imaginesurrey.ca`, where people used it before) | the staff and volunteer app, and the public forms | Render → Settings → Custom Domains |
 | `imaginesurrey.ca`, `www.imaginesurrey.ca`, once the campaign moves its website onto base.win | the website made under **Website** in the admin, at `/`; nothing of the app answers there | Render → Settings → Custom Domains, then `SITE_HOSTS` (below) |
 
 Add the DNS records Render shows; it issues the certificates.
 
 The website made under **Website** is live from the first deploy at the
-app's own address, under `/site/` (`base.win/imaginesurrey/site/` through
-the door), so it can be checked before any DNS moves (SITE.md). To put it
+app's own address, under `/site/` (`imaginesurrey.base.win/site/`), so it can be checked before any DNS moves (SITE.md). To put it
 on the campaign's own domain, in this order:
 
 1. Add the domain, and its `www.` name, to the service in Render.
@@ -141,7 +140,7 @@ Then, as each one is ready:
 | `STARBASE_TRUSTED_PROXIES` | leave unset on Render (one proxy). Set to the number of proxies in front if there is a CDN before Render | rate limits reading the right address |
 | `BASE_PLATFORM_PUBKEY` | the control centre's key: **ops.base.win → base.win’s key → Copy**, pasted here (never in `render.yaml` or git), then **Save and deploy** | **Open desk** from the control centre (section 8); while it's set and the campaign isn't made yet, sign-up here is closed — the control centre's first visit makes it |
 | `STARBASE_OWN_URL` | only if Render's own address is missing: `https://<service>.onrender.com` | the address the control centre's sign-in must name (Render sets `RENDER_EXTERNAL_URL` itself) |
-| `BASE_DOOR_KEY` | behind the base.win door only: the same 32 or more random characters (`openssl rand -base64 32`) as the door's `BASE_DOOR_KEY` (apps/door/README.md) | each visitor through base.win keeping their own address for the sign-in and form limits — without it, everyone who comes through the door counts as one |
+| `BASE_DOOR_KEY` | behind a shared front door only (`apps/door`; base.win doesn't run one, so leave it unset there): the same 32 or more random characters (`openssl rand -base64 32`) as the door's `BASE_DOOR_KEY` (apps/door/README.md) | each visitor through base.win keeping their own address for the sign-in and form limits — without it, everyone who comes through the door counts as one |
 | `SITE_HOSTS` | the campaign's own domains, once the website moves onto base.win (`imaginesurrey.ca,www.imaginesurrey.ca`; §2) | the website at `/` there, nothing of the app (SITE.md) |
 | `APP_HOSTS` | the app's other addresses on this server, comma-separated: once `STARBASE_PUBLIC_URL` is base.win, the one people used before (`starbase.imaginesurrey.ca`); never the website's own domain | the app keeps answering there: none of them can be made the website's domain |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | from Stripe: **test** keys on staging first; **live** keys on production only once a test gift has gone all the way through | gifts and membership dues paid online on the website (INTEGRATIONS.md, *Online payments — Stripe*) |
