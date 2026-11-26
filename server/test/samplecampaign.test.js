@@ -211,6 +211,7 @@ test('G5: somebody else’s first campaign, or two campaigns: nothing dropped, a
   assert.equal(await seedSample(app, log, N), null);
   assert.equal(await count('persons'), 1);
   assert.match(log.lines.join('\n'), /this database’s first campaign is not the demo account’s, so nothing was dropped\. To start over, set STARBASE_SAMPLE_RESET to a new word\./);
+  assert.equal(await made(), null, 'seen before anything is claimed');
 
   await wipe();
   assert.ok(await seedSample(app, quiet, N));
@@ -221,6 +222,7 @@ test('G5: somebody else’s first campaign, or two campaigns: nothing dropped, a
   assert.equal(await count('workspaces'), 2);
   assert.equal(await count('persons'), N);
   assert.match(log.lines.join('\n'), /nothing was dropped/);
+  assert.deepEqual(await made(), { version: 1, state: 'made', email: DEMO, attempts: 0 }, 'seen before anything is claimed');
 });
 
 test('G5 checked again under sign-up’s lock: a campaign made after the decision is never dropped', async () => {
@@ -339,12 +341,13 @@ test('a new reset word starts it over; the same word again does nothing', async 
 
 test('production, or no sample asked for: nothing made, nothing dropped, whatever the record says', async () => {
   assert.ok(await seedSample(app, quiet, N));
+  await (await enter()).createPerson('Left Behind');
   await db.query('update sample_meta.made set version = 1');
   for (const [k, v] of [['STARBASE_ENV', 'production'], ['STARBASE_SAMPLE', ''], ['STARBASE_DEMO_EMAIL', '']]) {
     const was = process.env[k];
     process.env[k] = v;
     assert.equal(await seedSample(app, quiet, N), null, `${k}=${JSON.stringify(v)}`);
-    assert.equal(await count('persons'), N);
+    assert.equal(await count('persons'), N + 1);
     process.env[k] = was;
   }
 });
@@ -369,8 +372,11 @@ test('the demo account can’t be removed, demoted or given two-step sign-in, so
     assert.equal(r.status, 409, name);
     assert.equal(r.json.error, 'The demo can’t change this.');
   }
-  assert.equal((await demo.action('twostep.start', {})).status, 409);
-  assert.equal((await demo.action('twostep.require', { on: true })).status, 409);
+  for (const [name, input] of [['twostep.start', {}], ['twostep.require', { on: true }]]) {
+    const r = await demo.action(name, input);
+    assert.equal(r.status, 409, name);
+    assert.equal(r.json.error, 'The demo can’t change this.', name);
+  }
   // The second manager can still be changed, as anyone can.
   assert.equal((await demo.action('member.setRole', { user_id: otherId, role: 'staff' })).status, 200);
   // G5 still holds, so the next sample still replaces this one.
