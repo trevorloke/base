@@ -1346,6 +1346,111 @@ un-marks anyone; Settings → Services gives its address:
 own address); **pages out** — the website can link to base.win's public
 lessons (`/learn/…`); every email carries its own unsubscribe page.
 
+### Unsubscribes, both ways
+
+When the website is hosted apart and keeps its own list, a no in one place
+is a no in both: someone who unsubscribes or texts STOP on the website is
+taken off here, and someone who does it here is taken off there. **Only a
+no crosses.** A yes never does: after a no has crossed, saying yes again on
+one side leaves the other side off until the person says yes there too.
+
+**From the website to base.win.** The website's server sends each no with
+the same website key as its sign-ups:
+
+```
+POST https://<public address>/in/v1/consent      → 200 { "ok": true }
+Authorization: Bearer sbk_…
+Content-Type: application/json
+Idempotency-Key: <the website's own id for this change>
+
+{ "email": "pat@example.org", "channel": "email", "action": "withdraw",
+  "reason": "unsubscribe", "at": "2026-11-07T18:30:00.000Z" }
+```
+
+| Field | | |
+|---|---|---|
+| `email`, `phone` | one or both | the phone in any format |
+| `channel` | `email` or `sms` | |
+| `action` | `withdraw` | `grant` is answered and not applied |
+| `reason` | `unsubscribe`, `stop`, `preference` or `deletion` | kept on the consent record as `website-unsubscribe` and so on |
+| `at` | when it happened, with its time zone | a time later than now is read as now |
+
+What base.win does with it:
+
+- **Email:** the address comes off the newsletter list. If it was never on
+  the list, everyone on file with it is tagged `do-not-email`.
+- **Texts:** a STOP for the number, and `do-not-text` on everyone with it.
+  With only an email, texts are turned off for each person with that address.
+- **An address or number nobody has yet is held.** A later sign-up, an
+  import or the desk's Add does not put it back; only the person can.
+- **A deletion on the website** is taken as a no on that channel. base.win
+  deletes nobody by itself.
+- **Their own later yes stands.** A no that happened before someone said yes
+  here themselves changes nothing.
+
+The answer is `200 { "ok": true }` whether or not anyone matched: it never
+says who is on file. The same `Idempotency-Key` and body again answers
+`{ "ok": true, "replayed": true }` and changes nothing; the same key with
+another body is `409`. The other errors are the same as for `/in/v1/people`,
+and the 120 requests a minute are shared with it. Every call is on the event
+log as the manager who made the key, without the address.
+
+**From base.win to the website.** Two settings, on that client's Render
+service only (Render → the service → Environment):
+
+| Setting | Value |
+|---|---|
+| `STARBASE_WEBSITE_URL` | the website's address, starting `https://`, with no path (`https://www.example.org`) |
+| `STARBASE_WEBSITE_KEY` | the same secret the website holds as `STARBASE_INBOUND_KEY` |
+
+With both set, and a website key made for the campaign, base.win sends each
+no to `<website address>/api/in/consent`:
+
+- an unsubscribe by any of its links, the desk's Remove, a spam complaint,
+  and a no that came back from Mailchimp;
+- a text STOP, the carrier's own stop, and the Inbox's one-tap stop;
+- a `do-not-email`, `do-not-text` or `do-not-contact` tag newly put on, by
+  the desk, an import or a merge.
+
+It sends the address or number, the channel, the reason and the time, and
+nothing else: never a name, a tag, a rating or a note. It never sends a yes,
+a START, a bounce, a press release's own unsubscribe or `do-not-call`. What
+the website itself said is never sent back to it.
+
+Each no waits in a queue until the website has taken it, 60 a minute at
+most. If the website is down, or refuses the key, everything waits and is
+tried again after 1 minute, 5 minutes, 30 minutes, 2 hours, then every
+6 hours: a no is never given up for that. A no the website refuses for
+itself (five tries) is kept, with the website's words.
+
+**Settings → Services → The website — unsubscribes** shows whether it is
+on, how many are waiting and why, and how many the website refused.
+
+- **Check** makes one call that changes nothing on the website, and says
+  whether the address and the key are right.
+- **Send again** tries everything waiting or refused, now.
+- **Send the ones already off here.** What was off before the two settings
+  were set is not sent by itself. The row shows how many there are; one tap
+  sends them, once.
+
+Setting it up:
+
+1. Deploy base.win. Nothing is sent yet. The website's waiting unsubscribes
+   start arriving on its next try.
+2. On the website, check that its base.win address and website key are
+   right, and send what is waiting once.
+3. Make a long random secret (`openssl rand -base64 32`). Set it on the
+   website as `STARBASE_INBOUND_KEY`, and on base.win as
+   `STARBASE_WEBSITE_KEY`, with `STARBASE_WEBSITE_URL`.
+4. Settings → Services → The website — unsubscribes → **Check**. Then send
+   the ones already off here.
+5. If the website later moves onto base.win itself, take both settings
+   away. Check says so if they are forgotten.
+
+Nothing is ever sent from staging, to a base.win address, or to an address
+that does not start with `https://`. The two settings are in no Blueprint:
+a new client never inherits another's.
+
 ## Connect anything
 
 For a tool base.win has no section for — Zapier, Make, a Slack channel, the
