@@ -5,6 +5,7 @@
 // Render address. Also the checklist's ticks and base.win’s key.
 import { codeWindow } from './auth-routes.mjs';
 import { form } from './web.mjs';
+import { cfg } from './config.mjs';
 import { appendLog } from './log.mjs';
 import { sha256 } from './ops-auth.mjs';
 import { mintFor } from './mint.mjs';
@@ -87,13 +88,17 @@ export const deskRoutes = (app, ctx, { showCampaign }) => {
   app.get('/key', async (c) => {
     const keys = platformKeys();
     let missing = [];
+    let setFrom = [];
     if (keys.length > 1) {
       const kid = newKid();
       const checks = await latestChecks(db);
-      const envs = (await db.query(`select e.campaign, e.env, c.display from environments e join campaigns c on c.name = e.campaign
+      const envs = (await db.query(`select e.campaign, e.env, c.display, e.render_service from environments e join campaigns c on c.name = e.campaign
         where c.archived_at is null and e.server_url is not null order by c.display`)).rows;
-      missing = envs.filter((e) => !(checks.get(`${e.campaign}/${e.env}/server`)?.platform_kids || []).includes(kid)).map((e) => e.display);
+      const lacking = envs.filter((e) => !(checks.get(`${e.campaign}/${e.env}/server`)?.platform_kids || []).includes(kid));
+      missing = lacking.map((e) => e.display);
+      // With a Render key: each one connected to Render can be given the new key from here.
+      if (cfg().render) setFrom = lacking.filter((e) => e.render_service).map((e) => ({ name: e.campaign, display: e.display }));
     }
-    return c.html(String(keyPage({ keys, missing, short: shortValues() })));
+    return c.html(String(keyPage({ keys, missing, short: shortValues(), setFrom })));
   });
 };

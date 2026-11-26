@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en-CA">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<!-- The header says no-referrer; a browser then sends "Origin: null" on this
+     page's own forms, which the Origin check refuses. same-origin still
+     sends no Referer to any other site. -->
+<meta name="referrer" content="same-origin">
+<title>Campaigns · base.win control centre</title>
+<link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/ops.css">
+<script src="/ops.js" defer></script>
+</head>
+<body class="oc-body">
+<header class="oc-top">
+  <a class="oc-brand" href="/">base.win control centre</a>
+  <nav class="oc-nav" aria-label="Control centre">
+    <a href="/" aria-current="page">Campaigns</a>
+    <a href="/log">Log</a>
+    <a href="/key">base.win’s key</a>
+    <form method="post" action="/signout" class="oc-inline"><button class="btn btn-quiet" type="submit">Sign out</button></form>
+  </nav>
+</header>
+<main class="oc-main">
+<div class="oc-head"><h1>Campaigns</h1><a class="btn btn-primary" href="/new">New campaign</a></div>
+    <section class="oc-sample card" aria-label="Sample (staging)">
+      <a class="oc-name" href="/c/sample">Sample (staging)</a>
+      <span class="oc-line">No address yet</span>
+      
+      <form method="post" action="/sample" class="oc-form">
+  
+<div class="field">
+  <label for="sample-url">Its Render address</label>
+  <input class="input" id="sample-url" name="server_url" type="url" value="" required inputmode="url" aria-describedby="sample-url-help">
+  <p class="oc-help" id="sample-url-help">At the top of base-win-staging’s Render page.</p>
+</div>
+  
+  <p class="oc-status" role="status" aria-live="polite"></p>
+  <button class="btn btn-quiet" type="submit">Set its address</button>
+</form>
+    </section>
+    <ul class="oc-cards"><li class="card oc-card">
+        <a class="oc-name" href="/c/x">Example X</a>
+        <span class="oc-line">No address yet</span>
+        
+        
+      </li></ul>
+      <details class="oc-more"><summary class="btn btn-quiet">More</summary>
+        <p><a href="/existing">Add a campaign that’s already running</a></p>
+        
+      </details>
+</main>
+</body>
+</html>
