@@ -5,10 +5,11 @@
 // the engagement chip, and the profile's Ladders section. Desk only: the
 // server refuses volunteers every ladder read.
 import { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useOutletContext } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiGet, action } from '../api.js';
 import { HOOK_STEP, UNKNOWN_STEP, hookLogLine, hookRowNote } from './LaddersWords.js';
+import { hasFeature } from '../brand.js';
 import '../pages/ladders.css';
 
 // What starts a ladder, grouped as the picker shows them (server:
@@ -28,6 +29,12 @@ export const TRIGGERS = [
   { kind: 'member', label: 'Became a member (or renewed)', group: 'Money and members' },
 ];
 const TRIGGER_GROUPS = [...new Set(TRIGGERS.map((t) => t.group))];
+// A membership starts or ends a ladder only for a campaign that has one (its
+// sign-in says so; the server refuses it for the rest). A ladder that already
+// holds it keeps its choice on screen.
+const useMembership = () => hasFeature(useOutletContext()?.me, 'membership');
+const offered = (list, membership, held) => list.filter((x) => x.kind !== 'member' || membership || held === 'member');
+const groupWord = (g, membership) => (g === 'Money and members' && !membership ? 'Money' : g);
 export const triggerLabel = (kind) => TRIGGERS.find((t) => t.kind === kind)?.label || kind;
 // "Got a tag · host", "Did something on the website · Signed: SkyTrain to Langley".
 const LANG_WORDS = { en: 'English', pa: 'ਪੰਜਾਬੀ', 'zh-Hans': '简体', 'zh-Hant': '繁體' };
@@ -156,6 +163,8 @@ export function LadBack() {
 // ("Signed: SkyTrain to Langley").
 export function TriggerPicker({ value, onChange, options, idp, disabled }) {
   const t = TRIGGERS.find((x) => x.kind === value.kind) || TRIGGERS[0];
+  const membership = useMembership();
+  const triggers = offered(TRIGGERS, membership, value.kind);
   const tags = options?.tags ?? [];
   const web = options?.web ?? [];
   const surveys = options?.surveys ?? [];
@@ -168,8 +177,8 @@ export function TriggerPicker({ value, onChange, options, idp, disabled }) {
         <select id={`${idp}-kind`} className="input lad-select" value={t.kind} disabled={disabled}
           onChange={(e) => onChange({ kind: e.target.value, ref: '' })}>
           {TRIGGER_GROUPS.map((g) => (
-            <optgroup key={g} label={g}>
-              {TRIGGERS.filter((x) => x.group === g).map((x) => <option key={x.kind} value={x.kind}>{x.label}</option>)}
+            <optgroup key={g} label={groupWord(g, membership)}>
+              {triggers.filter((x) => x.group === g).map((x) => <option key={x.kind} value={x.kind}>{x.label}</option>)}
             </optgroup>
           ))}
         </select>
@@ -221,13 +230,14 @@ export const triggerMissing = (t) => {
 
 // ── The goal: none, or what takes them off ──
 export function GoalPicker({ value, onChange, idp, disabled }) {
+  const goals = offered(GOALS, useMembership(), value);
   return (
     <div className="field">
       <label htmlFor={`${idp}-goal`}>Goal</label>
       <select id={`${idp}-goal`} className="input lad-select" value={value || ''} disabled={disabled}
         aria-describedby={`${idp}-goal-hint`} onChange={(e) => onChange(e.target.value || null)}>
         <option value="">No goal — they go through every step</option>
-        {GOALS.map((g) => <option key={g.kind} value={g.kind}>{g.label}</option>)}
+        {goals.map((g) => <option key={g.kind} value={g.kind}>{g.label}</option>)}
       </select>
       <p className="lad-hint" id={`${idp}-goal-hint`}>{GOAL_HINT}</p>
     </div>

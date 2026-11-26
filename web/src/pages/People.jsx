@@ -25,6 +25,7 @@ import { ApiError, apiGet, action, noAnswer } from '../api.js';
 import { noSignal, useOnline, NeedsSignalLine } from '../components/NoSignal.jsx';
 import { keptCopy, keptPartial } from '../components/KeptCopies.js';
 import { FieldFilterChip, FieldFilterGroups } from '../components/FieldsBits.jsx';
+import { ex, hasFeature } from '../brand.js';
 import QuickDetails from '../components/QuickDetails.jsx';
 import './shifts.css'; // the ops-* pieces (a full-height button)
 import './people.css';
@@ -615,7 +616,7 @@ function MovedGroup({ chip }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Add person (inline, ?new=1)
 // ─────────────────────────────────────────────────────────────────────────────
-const emptyPerson = (me) => ({ name: '', first: '', middle: '', last: '', kind: 'person', email: '', phone: '', address: '', unit: '', city: me?.org?.city || 'Surrey', postal: '' });
+const emptyPerson = (me) => ({ name: '', first: '', middle: '', last: '', kind: 'person', email: '', phone: '', address: '', unit: '', city: me?.org?.city || '', postal: '' });
 
 function AddPersonForm({ onClose, me }) {
   const queryClient = useQueryClient();
@@ -702,7 +703,7 @@ function AddPersonForm({ onClose, me }) {
             </div>
             <div className="field" style={{ flex: '0 1 120px' }}>
               <label htmlFor="np-postal">Postal</label>
-              <input id="np-postal" className="input mono" maxLength={20} value={form.postal} onChange={set('postal')} placeholder="V3T 1V8" />
+              <input id="np-postal" className="input mono" maxLength={20} value={form.postal} onChange={set('postal')} placeholder={ex('postal', 'A1A 1A1')} />
             </div>
           </div>
           <div className="field" style={{ maxWidth: 220 }}>
@@ -901,7 +902,7 @@ function PeopleList() {
               desk && { to: '/surveys', label: 'Surveys' },
               desk && { to: '/people/connected', label: 'Most connected' },
               desk && { to: '/people/duplicates', label: 'Duplicates' },
-              desk && { to: '/people/membership-form', label: 'Enter a membership form' },
+              desk && hasFeature(me, 'membership') && { to: '/people/membership-form', label: 'Enter a membership form' },
               me?.role === 'manager' && { to: '/people/fields', label: 'Profile fields' },
             ]}
           />
