@@ -16,6 +16,7 @@ import { envName } from '../lib/org.js';
 import { seedSample } from '../lib/samplecampaign.js';
 import { _resetDbForTest } from '../db/client.js';
 import { serviceBlock } from './sample-prints.js';
+import { bootstrap } from '../db/schema.js';
 
 const KEYS = ['STARBASE_ENV', 'NODE_ENV', 'RENDER', 'STARBASE_FRAME_HOSTS', 'STARBASE_DEMO_EMAIL', 'STARBASE_SAMPLE', 'STARBASE_SAMPLE_RESET'];
 let kept; let db;
@@ -23,6 +24,11 @@ let kept; let db;
 // file shares a database): what a reset word would drop.
 before(async () => {
   db = await freshDb();
+  // From nothing, so a second run over the same database (test:pg --twice)
+  // finds the same one campaign.
+  await db.query('drop schema public cascade');
+  await db.query('create schema public');
+  await bootstrap(db);
   const mgr = new Client();
   assert.equal((await mgr.signup({ email: 'demo@example.org' })).status, 201);
   await mgr.createPerson('Real Person');
