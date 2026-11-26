@@ -117,3 +117,17 @@ services:
   assert.deepEqual(doc.databases.map((s) => s.name), ['base-win-staging-db', 'base-win-db', 'base-platform-db']);
   assert.equal(YAML.split('\n').filter((l) => /^\s+- key: /.test(l)).length, doc.services.reduce((n, s) => n + (s.envVars || []).length, 0));
 });
+
+test('GOING-LIVE section 0 says what production is and what a release never does', () => {
+  const guide = readFileSync(new URL('GOING-LIVE.md', root), 'utf8');
+  const zero = guide.slice(guide.indexOf('## 0 '), guide.indexOf('\n## 1 '));
+  const flat = zero.replace(/\s+/g, ' ');
+  assert.match(flat, /every live client/);
+  assert.match(flat, /ops\.base\.win/);
+  assert.match(flat, /One Promote updates all of them/);
+  assert.match(flat, /replaces the app only/);
+  assert.match(flat, /never changes a client's settings in Render/);
+  assert.match(flat, /never erases its data/);
+  assert.match(flat, /release-safety\.test\.js/);
+  assert.match(flat, /release-settings\.test\.js/);
+});

@@ -99,6 +99,19 @@ set, Google becomes the map and phones stop keeping street maps offline.**
 Until the owner answers, a service with `GOOGLE_MAPS_SERVER_KEY` set must
 also have `GOOGLE_MAPS_TILES=off` before the release is pushed (§5, Recipe B).
 
+**Production is every live client, and ops.base.win.** When we say
+production, we mean every live client's campaign server and the control
+centre at `https://ops.base.win`. One Promote updates all of them together.
+(The control centre moves onto the `production` branch after the next
+Promote; until then it updates from `main`.) A release replaces the app
+only: it never changes a client's settings in Render and never erases its
+data. Two checks keep that promise, and Promote waits for both to pass: one
+fails if the app would drop, empty, rename or retype stored data when it
+starts (`server/test/release-safety.test.js`, and the same for the control
+centre); the other fails if `render.yaml` gives a client's own setting a
+fixed value, which a Blueprint sync would write over
+(`server/test/release-settings.test.js`).
+
 ## 1 · Deploy
 
 1. Render → **Blueprints**: see whether this repository is listed, which
