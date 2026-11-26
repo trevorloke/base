@@ -1372,7 +1372,7 @@ Idempotency-Key: <the website's own id for this change>
 | `email`, `phone` | one or both | the phone in any format |
 | `channel` | `email` or `sms` | |
 | `action` | `withdraw` | `grant` is answered and not applied |
-| `reason` | `unsubscribe`, `stop`, `preference` or `deletion` | kept on the consent record as `website-unsubscribe` and so on |
+| `reason` | `unsubscribe`, `stop`, `preference` or `deletion` | kept on the event log with the call |
 | `at` | when it happened, with its time zone | a time later than now is read as now |
 
 What base.win does with it:
@@ -1430,8 +1430,9 @@ on, how many are waiting and why, and how many the website refused.
   whether the address and the key are right.
 - **Send again** tries everything waiting or refused, now.
 - **Send the ones already off here.** What was off before the two settings
-  were set is not sent by itself. The row shows how many there are; one tap
-  sends them, once.
+  were set is not sent by itself. The row counts everyone who is off here
+  now; one tap sends them all, once. (Anyone the website already heard
+  about is taken as the same no.)
 
 Setting it up:
 
