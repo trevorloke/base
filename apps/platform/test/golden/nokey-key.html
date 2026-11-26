@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en-CA">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<!-- The header says no-referrer; a browser then sends "Origin: null" on this
+     page's own forms, which the Origin check refuses. same-origin still
+     sends no Referer to any other site. -->
+<meta name="referrer" content="same-origin">
+<title>base.win’s key · base.win control centre</title>
+<link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/ops.css">
+<script src="/ops.js" defer></script>
+</head>
+<body class="oc-body">
+<header class="oc-top">
+  <a class="oc-brand" href="/">base.win control centre</a>
+  <nav class="oc-nav" aria-label="Control centre">
+    <a href="/">Campaigns</a>
+    <a href="/log">Log</a>
+    <a href="/key" aria-current="page">base.win’s key</a>
+    <form method="post" action="/signout" class="oc-inline"><button class="btn btn-quiet" type="submit">Sign out</button></form>
+  </nav>
+</header>
+<main class="oc-main">
+<section class="card oc-narrow oc-keypage"><h1>base.win’s key</h1>
+  
+  <p>Paste this as BASE_PLATFORM_PUBKEY on each campaign’s service in Render, then Save and deploy.</p>
+    <div class="oc-copy">
+      <p class="oc-help">The setting</p>
+      <pre class="oc-pre" id="key-name">BASE_PLATFORM_PUBKEY</pre>
+      <button class="btn btn-quiet oc-copy-btn" type="button" data-copy="key-name">Copy the name</button>
+    </div>
+    <div class="oc-copy">
+      <p class="oc-help">Its value</p>
+      <pre class="oc-pre" id="key-value">mkRxeAO03eN7KrA3GBLERx3eKJOHcBJVSdPoSj8hKiU</pre>
+      <button class="btn btn-primary oc-wide" type="button" data-copy="key-value">Copy</button>
+    </div>
+    <p class="oc-status" role="status" aria-live="polite"></p>
+  </section>
+</main>
+</body>
+</html>

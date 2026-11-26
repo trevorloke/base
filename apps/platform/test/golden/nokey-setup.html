@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en-CA">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<!-- The header says no-referrer; a browser then sends "Origin: null" on this
+     page's own forms, which the Origin check refuses. same-origin still
+     sends no Referer to any other site. -->
+<meta name="referrer" content="same-origin">
+<title>Set up Example X · base.win control centre</title>
+<link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/ops.css">
+<script src="/ops.js" defer></script>
+</head>
+<body class="oc-body">
+<header class="oc-top">
+  <a class="oc-brand" href="/">base.win control centre</a>
+  <nav class="oc-nav" aria-label="Control centre">
+    <a href="/" aria-current="page">Campaigns</a>
+    <a href="/log">Log</a>
+    <a href="/key">base.win’s key</a>
+    <form method="post" action="/signout" class="oc-inline"><button class="btn btn-quiet" type="submit">Sign out</button></form>
+  </nav>
+</header>
+<main class="oc-main">
+<h1>Set up Example X</h1>
+    <ol class="oc-steps">
+      <li class="card"><h2>Make its database and service in Render</h2>
+        <ol class="oc-howto">
+          <li>Render → <b>New → Postgres</b>. Name <code>base-win-x-db</code>, region Oregon, PostgreSQL 16, the same plan as Imagine Surrey’s database.</li>
+          <li>Render → <b>New → Web Service</b> → this repository. Name <code>base-win-x</code>, language Docker, branch <code>production</code>, region Oregon, instance Starter. Under Advanced, health check path <code>/api/health</code>.</li>
+          <li>On that page, <b>Environment → Add from .env</b> → paste this block:
+            <pre class="oc-pre" id="env-block">NODE_ENV=production
+STARBASE_ENV=production
+STARBASE_PUBLIC_URL=https://x.base.win
+STARBASE_BRAND=base
+STARBASE_ORG_NAME=&quot;Example X&quot;
+STARBASE_JURISDICTION=bc-municipal
+STARBASE_PROVINCE=BC
+STARBASE_TZ=America/Vancouver
+STARBASE_CITY=&quot;Exampleton&quot;
+STARBASE_SLATES=&quot;council:City council&quot;
+STARBASE_GEO_BOUNDS=50.6,-120.5|50.8,-120.2
+STARBASE_CANDIDATES=none
+BASE_PLATFORM_PUBKEY=mkRxeAO03eN7KrA3GBLERx3eKJOHcBJVSdPoSj8hKiU
+STARBASE_TWO_STEP_KEY=<span data-random></span>
+GOOGLE_TOKEN_KEY=<span data-random></span></pre>
+            <button class="btn btn-quiet oc-copy-btn" type="button" data-copy="env-block">Copy</button>
+            <p class="oc-help" data-when-empty>STARBASE_TWO_STEP_KEY and GOOGLE_TOKEN_KEY are empty: press Generate next to each of these two in Render.</p>
+          </li>
+          <li>Add <code>DATABASE_URL</code> = the database page’s <b>Internal Database URL</b> (copy it across).</li>
+          <li>Press <b>Create Web Service</b> (or <b>Save and deploy</b>). Wait for “Live”.</li>
+        </ol>
+        <p class="oc-help">Email, texting and Google come later, from the app’s Settings → Services.</p>
+      </li>
+      <li class="card"><h2>Paste its address</h2>
+        <form method="post" action="/c/x/setup" class="oc-form" data-busy="Checking…">
+          
+<div class="field">
+  <label for="server_url">Render address</label>
+  <input class="input" id="server_url" name="server_url" type="url" value="" required inputmode="url" aria-describedby="server_url-help">
+  <p class="oc-help" id="server_url-help">The address at the top of its Render page, like https://base-win-x.onrender.com</p>
+</div>
+          
+          <p class="oc-status" role="status" aria-live="polite"></p>
+          <button class="btn btn-primary" type="submit">Save address</button>
+        </form>
+      </li>
+      
+    </ol>
+    <details class="oc-more"><summary class="btn btn-quiet">More</summary>
+      <h2>Or ask us to add it to render.yaml</h2>
+      <pre class="oc-pre" id="yaml-snippet">  # services:
+  - type: web
+    name: base-win-x
+    runtime: docker
+    plan: starter
+    region: oregon
+    branch: production
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: STARBASE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: base-win-x-db
+          property: connectionString
+      - key: STARBASE_PUBLIC_URL
+        value: &quot;https://x.base.win&quot;
+      - key: STARBASE_BRAND
+        value: &quot;base&quot;
+      - key: STARBASE_ORG_NAME
+        value: &quot;Example X&quot;
+      - key: STARBASE_JURISDICTION
+        value: &quot;bc-municipal&quot;
+      - key: STARBASE_PROVINCE
+        value: &quot;BC&quot;
+      - key: STARBASE_TZ
+        value: &quot;America/Vancouver&quot;
+      - key: STARBASE_CITY
+        value: &quot;Exampleton&quot;
+      - key: STARBASE_SLATES
+        value: &quot;council:City council&quot;
+      - key: STARBASE_GEO_BOUNDS
+        value: &quot;50.6,-120.5|50.8,-120.2&quot;
+      - key: STARBASE_CANDIDATES
+        value: &quot;none&quot;
+      - key: BASE_PLATFORM_PUBKEY
+        sync: false
+      - key: STARBASE_TWO_STEP_KEY
+        generateValue: true
+      - key: GOOGLE_TOKEN_KEY
+        generateValue: true
+      - key: RESEND_API_KEY
+        sync: false
+      - key: MAIL_FROM
+        sync: false
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_FROM
+        sync: false
+      - key: GOOGLE_MAPS_SERVER_KEY
+        sync: false
+      - key: GOOGLE_TRANSLATE_KEY
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_ID
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_PICKER_KEY
+        sync: false
+      - key: GOOGLE_CLOUD_PROJECT_NUMBER
+        sync: false
+  # databases:
+  - name: base-win-x-db
+    plan: basic-1gb
+    region: oregon
+    postgresMajorVersion: &quot;16&quot;</pre>
+      <button class="btn btn-quiet oc-copy-btn" type="button" data-copy="yaml-snippet">Copy</button>
+    </details>
+</main>
+</body>
+</html>

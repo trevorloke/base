@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en-CA">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<!-- The header says no-referrer; a browser then sends "Origin: null" on this
+     page's own forms, which the Origin check refuses. same-origin still
+     sends no Referer to any other site. -->
+<meta name="referrer" content="same-origin">
+<title>New campaign · base.win control centre</title>
+<link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/ops.css">
+<script src="/ops.js" defer></script>
+</head>
+<body class="oc-body">
+<header class="oc-top">
+  <a class="oc-brand" href="/">base.win control centre</a>
+  <nav class="oc-nav" aria-label="Control centre">
+    <a href="/" aria-current="page">Campaigns</a>
+    <a href="/log">Log</a>
+    <a href="/key">base.win’s key</a>
+    <form method="post" action="/signout" class="oc-inline"><button class="btn btn-quiet" type="submit">Sign out</button></form>
+  </nav>
+</header>
+<main class="oc-main">
+<section class="card oc-narrow"><h1>New campaign</h1>
+  <form method="post" action="/new" class="oc-form">
+    
+<div class="field">
+  <label for="name">Short name</label>
+  <input class="input" id="name" name="name" type="text" value="" required autocomplete="off" aria-describedby="name-help">
+  <p class="oc-help" id="name-help">Use letters, numbers and dashes. It’s the address: &lt;name&gt;.base.win.</p>
+</div>
+    
+<div class="field">
+  <label for="display">Campaign name</label>
+  <input class="input" id="display" name="display" type="text" value="" required autocomplete="off">
+  
+</div>
+    
+<div class="field">
+  <label for="city">City</label>
+  <input class="input" id="city" name="city" type="text" value="" required autocomplete="off">
+  
+</div>
+    <div class="field">
+  <label for="province">Province</label>
+  <select class="input" id="province" name="province">
+    <option value="BC" selected data-tz="America/Vancouver">British Columbia</option><option value="AB" data-tz="America/Edmonton">Alberta</option><option value="SK" data-tz="America/Regina">Saskatchewan</option><option value="MB" data-tz="America/Winnipeg">Manitoba</option><option value="ON" data-tz="America/Toronto">Ontario</option><option value="QC" data-tz="America/Toronto">Quebec</option><option value="NB" data-tz="America/Halifax">New Brunswick</option><option value="NS" data-tz="America/Halifax">Nova Scotia</option><option value="PE" data-tz="America/Halifax">Prince Edward Island</option><option value="NL" data-tz="America/St_Johns">Newfoundland and Labrador</option><option value="YT" data-tz="America/Whitehorse">Yukon</option><option value="NT" data-tz="America/Yellowknife">Northwest Territories</option><option value="NU" data-tz="America/Iqaluit">Nunavut</option>
+  </select>
+  
+</div>
+    <div class="field">
+  <label for="rules">Rules</label>
+  <select class="input" id="rules" name="rules">
+    <option value="bc-municipal" selected>B.C. municipal</option><option value="bc-provincial">B.C. provincial</option><option value="federal">Federal</option>
+  </select>
+  
+</div>
+    <div class="field">
+  <label for="tz">Time zone</label>
+  <select class="input" id="tz" name="tz">
+    <option value="America/Vancouver" selected>Vancouver</option><option value="America/Edmonton">Edmonton</option><option value="America/Regina">Regina</option><option value="America/Winnipeg">Winnipeg</option><option value="America/Toronto">Toronto</option><option value="America/Halifax">Halifax</option><option value="America/St_Johns">St. John’s</option><option value="America/Whitehorse">Whitehorse</option><option value="America/Yellowknife">Yellowknife</option><option value="America/Iqaluit">Iqaluit</option>
+  </select>
+  
+</div>
+    <fieldset class="oc-fieldset"><legend>Races</legend>
+      <label class="oc-check-label"><input type="checkbox" name="races" value="council" checked> City council</label><label class="oc-check-label"><input type="checkbox" name="races" value="school_board" checked> School board</label>
+    </fieldset>
+    <fieldset class="oc-fieldset"><legend>Map area</legend>
+      <p class="oc-help">A box around the city: the map opens on it and addresses are looked for inside it.</p>
+      
+<div class="field">
+  <label for="sw">South-west corner</label>
+  <input class="input" id="sw" name="sw" type="text" value="" required autocomplete="off" aria-describedby="sw-help">
+  <p class="oc-help" id="sw-help">In Google Maps, right-click the bottom-left corner of the city, then click the two numbers at the top of the menu to copy them. Paste them here.</p>
+</div>
+      
+<div class="field">
+  <label for="ne">North-east corner</label>
+  <input class="input" id="ne" name="ne" type="text" value="" required autocomplete="off" aria-describedby="ne-help">
+  <p class="oc-help" id="ne-help">The same for the top-right corner of the city.</p>
+</div>
+    </fieldset>
+    <p class="oc-help">Candidates are added in the app later.</p>
+    
+    <p class="oc-status" role="status" aria-live="polite"></p>
+    <button class="btn btn-primary oc-wide" type="submit">Next</button>
+  </form></section>
+</main>
+</body>
+</html>
