@@ -2,7 +2,8 @@
 // it's for, whether it's set up, and "Check" — one real call to the service
 // (GET /api/connections, POST /api/connections/check — ext/connections).
 // The Email row carries the sender's "Sending domain" (SendingDomain.jsx);
-// the Mailchimp row its own Connect and Pull now (MailchimpPanel.jsx).
+// the Mailchimp row its own Connect and Pull now (MailchimpPanel.jsx); the
+// website's row its Send again and what was already off (WebsitePanel.jsx).
 // Keys live in the hosting's settings (Render → the service → Environment),
 // never here: a missing one is named, with where it goes. The long version
 // is INTEGRATIONS.md.
@@ -19,6 +20,7 @@ import { action, apiGet, apiPost } from '../api.js';
 import SendingDomain from './SendingDomain.jsx';
 import SenderAddresses from './SenderAddresses.jsx';
 import MailchimpPanel from './MailchimpPanel.jsx';
+import WebsitePanel from './WebsitePanel.jsx';
 import GooglePanel from './GooglePanel.jsx';
 import GmailPanel from './GmailPanel.jsx';
 import DrivePanel from './DrivePanel.jsx';
@@ -61,6 +63,7 @@ function Row({ s, online }) {
         {s.domainPanel && <SendingDomain online={online} />}
         {s.domainPanel && <SenderAddresses online={online} />}
         {s.panel === 'mailchimp' && <MailchimpPanel online={online} onChanged={() => setRes(null)} />}
+        {s.panel === 'website' && <WebsitePanel online={online} />}
         {s.panel === 'google' && s.lines && <GooglePanel s={s} online={online} />}
         {s.panel === 'gmail' && <GmailPanel online={online} />}
         {s.panel === 'drive' && <DrivePanel online={online} />}
