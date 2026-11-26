@@ -23,10 +23,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useOutletContext, useParams } from 'react-router-dom';
 import { COLOR_KEYS, FONT_BY_VALUE, RADII, SKINS, lookOf } from '@starbase/shared/site/theme';
+import { full } from './themeDraft.js';
 import { defaultsFor } from '@starbase/shared/site/catalogue';
 import { siteLooks } from '../components/site/builder.js';
 import { ex } from '../brand.js';
-import { fontFor, isAdded, profileFor } from '@starbase/shared/site/fonts';
+import { fontFor, profileFor } from '@starbase/shared/site/fonts';
 import FontSheet, { useAddedFonts } from '../components/site/FontSheet.jsx';
 import { stackOf, useFaces } from '../components/site/fontFaces.js';
 import { useSitePage } from '../components/site/useSite.js';
@@ -43,23 +44,6 @@ import '../editor.css';
 import './website.css';
 import './website-follow.css';
 
-// A theme as the server keeps it, with every key there (a skin's for any missing).
-const full = (t) => {
-  const skin = lookOf(t?.skin) || SKINS.base;
-  const out = {
-    skin: skin.key,
-    colors: Object.fromEntries(COLOR_KEYS.map((k) => [k, hexOf(t?.colors?.[k]) || skin.colors[k]])),
-    fonts: {
-      heading: FONT_BY_VALUE[t?.fonts?.heading] || isAdded(t?.fonts?.heading) ? t.fonts.heading : skin.fonts.heading,
-      body: FONT_BY_VALUE[t?.fonts?.body] || isAdded(t?.fonts?.body) ? t.fonts.body : skin.fonts.body,
-    },
-    radius: RADII.some((r) => r.value === t?.radius) ? t.radius : skin.radius,
-    logo: { url: t?.logo?.url || '', alt: t?.logo?.alt || '' },
-  };
-  // A look with its own switches (the heading shadow, where theme.js has it) keeps them.
-  if (typeof t?.pop === 'boolean' || typeof skin.pop === 'boolean') out.pop = typeof t?.pop === 'boolean' ? t.pop : Boolean(skin.pop);
-  return out;
-};
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 function ColorRow({ k, value, onChange }) {
