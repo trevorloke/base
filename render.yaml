@@ -233,8 +233,10 @@ services:
   # database. Without the key it walks you through Render by hand, as before.
   # Branch: main until production has been promoted past the control centre's
   # release; then production, so the control centre goes through Promote like
-  # everything else. Set the key only once it runs from production
-  # (GOING-LIVE.md section 8, "Before the key").
+  # everything else. Change it here, in this file, right after that Promote
+  # (never before): a Blueprint sync writes this branch over one changed only
+  # in Render. Set the key only once both say production (GOING-LIVE.md
+  # section 8, "Before the key").
   - type: web
     name: base-platform
     runtime: node

@@ -177,3 +177,16 @@ test('the tables keep ids, names of settings and states: never a value or a body
   assert.match(sql, /create unique index if not exists render_jobs_one_running on render_jobs \(campaign\) where state = 'running';/);
   assert.doesNotMatch(sql, /create table if not exists render_(?!jobs)/, 'no table of Render’s answers');
 });
+
+// A Blueprint sync writes render.yaml's branch over one changed only in
+// Render, so "Before the key" asks for the branch in render.yaml itself,
+// in the page's own steps, the README and GOING-LIVE alike.
+test('before the key: the control centre’s branch is production in render.yaml, not only in Render', () => {
+  const read = (p) => readFileSync(new URL(p, new URL('../', import.meta.url)), 'utf8');
+  const step = (text) => text.slice(text.indexOf('Before the key'), text.indexOf('Before the key') + 1500).replace(/<[^>]+>|[`*]/g, '').replace(/\s+/g, ' ');
+  for (const [name, text] of [['pages/render.mjs', file('pages/render.mjs')], ['README.md', read('README.md')], ['GOING-LIVE.md', read('../../GOING-LIVE.md')]]) {
+    const s = step(text);
+    assert.match(s, /render\.yaml.{0,4}s base-platform block says branch: production/, name);
+    assert.match(s, /A Blueprint sync writes render\.yaml.{0,4}s branch over a change made only in Render/, name);
+  }
+});

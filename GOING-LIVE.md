@@ -102,8 +102,8 @@ Blueprints. Each time, in this order:
    change is merged, or turn Auto Sync off first.
 3. A sync applies the whole file, not only what changed. It makes
    `base-platform` and `base-platform-db` if they are missing (both paid),
-   sets the plan of both campaign databases, and sets every setting that
-   has a value in `render.yaml`: staging's sample, `NODE_ENV`,
+   sets the plan of both campaign databases, sets each service's branch,
+   and sets every setting that has a value in `render.yaml`: staging's sample, `NODE_ENV`,
    `STARBASE_ENV` and the control centre's address. A client's own
    settings are `sync: false`, so a sync leaves them as they are in Render.
 4. The name check. In Render, check the services are named exactly as
@@ -1017,11 +1017,15 @@ service that holds it. Do these in order.
 **Before the key.**
 
 1. Promote (section 0), so production holds this release.
-2. Render → `base-platform` → **Settings**: Branch `production`; Build
-   Command `npm ci --omit=dev --ignore-scripts`. The control centre then
-   goes through Promote like everything else, and no package's install
-   script runs beside the key. The **Render** page warns until both are
-   true.
+2. `render.yaml`'s `base-platform` block says `branch: production`
+   (commit it on `main` right after the Promote, never before: production
+   older than the control centre has no `apps/platform`). Then Render →
+   `base-platform` → **Settings** shows Branch `production` and Build
+   Command `npm ci --omit=dev --ignore-scripts`. A Blueprint sync writes
+   `render.yaml`'s branch over a change made only in Render, so both must
+   say `production`. The control centre then goes through Promote like
+   everything else, and no package's install script runs beside the key.
+   The **Render** page warns until both are true.
 3. GitHub: two-step sign-in on; protect `main` and `production` (no force
    push, CI required). Render: two-step sign-in on.
 4. Render → each database → **Recovery**: read what your plan keeps

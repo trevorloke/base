@@ -186,7 +186,7 @@ const ownerSteps = () => html`<details class="oc-more"><summary class="btn btn-q
   <h2>Before the key</h2>
   <ol class="oc-howto">
     <li>Promote, so production holds this release.</li>
-    <li>Render → <code>base-platform</code> → <b>Settings</b>: Branch <code>production</code>; Build Command <code>npm ci --omit=dev --ignore-scripts</code>.</li>
+    <li><code>render.yaml</code>’s <code>base-platform</code> block says <code>branch: production</code> (commit it right after the Promote, never before). Render → <code>base-platform</code> → <b>Settings</b> then shows Branch <code>production</code> and Build Command <code>npm ci --omit=dev --ignore-scripts</code>. A Blueprint sync writes <code>render.yaml</code>’s branch over a change made only in Render.</li>
     <li>GitHub: two-step sign-in on; protect <code>main</code> and <code>production</code> (no force push, CI required). Render: two-step sign-in on.</li>
     <li>Render → each database → <b>Recovery</b>: read what your plan keeps.</li>
     <li>Turn on Render’s notifications for each service and database.</li>

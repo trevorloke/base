@@ -134,9 +134,12 @@ limits above are this code's, and hold only while the code beside the key
 is ours. So, first:
 
 1. Promote, so production holds this release.
-2. Render → `base-platform` → **Settings**: Branch `production`; Build
-   Command `npm ci --omit=dev --ignore-scripts`. **Render** warns until
-   both are true.
+2. `render.yaml`'s `base-platform` block says `branch: production`
+   (committed right after the Promote, never before), and Render →
+   `base-platform` → **Settings** shows Branch `production` and Build
+   Command `npm ci --omit=dev --ignore-scripts`. A Blueprint sync writes
+   `render.yaml`'s branch over a change made only in Render. **Render**
+   warns until both are true.
 3. GitHub: two-step sign-in on; protect `main` and `production` (no force
    push, CI required). Render: two-step sign-in on.
 4. Render → each database → **Recovery**: read what your plan keeps.
