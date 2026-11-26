@@ -33,10 +33,13 @@ where it is.
 
 **What the control centre does, and what it does not.** It watches every
 campaign's health, opens any campaign's desk signed in as *base.win
-support*, and walks you through adding a client in Render. It does not hold
-any campaign's database address or a Render key. So it cannot deploy,
-change a setting or read people's records by itself: those stay in Render
-and inside each campaign.
+support*, and walks you through adding a client in Render. With
+`RENDER_API_KEY` set it also reads what Render says about each campaign's
+service and database, and makes a short list of named changes there, each
+behind a code typed for it and on the log. It keeps no setting's value,
+reads no secret and never connects to a campaign's database. Without the
+key it walks you through Render by hand, as before (section 8, *The Render
+key*).
 
 **Staging is public.** Anyone can open the demo on base.win, and is signed
 in as the sample campaign's manager. So staging never gets a real email,
@@ -842,8 +845,9 @@ The control centre is not set up until these are done, in this order:
         Oregon, PostgreSQL 16, the Basic-256mb plan (as `render.yaml` says).
      2. Render → **New → Web Service** → this repository: name
         `base-platform`, language Node, branch `main`, region Oregon,
-        instance Starter. Build command `npm ci --omit=dev`, start command
-        `node apps/platform/server.mjs`, health check path `/healthz`.
+        instance Starter. Build command `npm ci --omit=dev
+        --ignore-scripts`, start command `node apps/platform/server.mjs`,
+        health check path `/healthz`.
      3. Under **Environment**: `NODE_VERSION` = `22`, `NODE_ENV` =
         `production`, `OPS_HOST` = `ops.base.win`, and `DATABASE_URL` =
         `base-platform-db`'s **Internal Database URL**.
@@ -914,10 +918,90 @@ The control centre is not set up until these are done, in this order:
   missing there, or its deploy hasn't finished (press **Check now** once it
   says *Live*). **"Key in Render is wrong"**: copy base.win’s key again.
 
+### The Render key
+
+Optional. Without it the control centre is as described above, and no page
+there has a word about this.
+
+With a Render key on `base-platform`, the control centre gets a **Render**
+page: every campaign's service, last deploy and database on one page, and
+five buttons per campaign (**Deploy latest**, **Restart**, **Set base.win’s
+key**, **Add its address**, **Close the database to the internet**). Each
+button first says what it will do, then asks for a code from your app,
+typed for that one change; each change is on the control centre's **Log**.
+It cannot delete, suspend or resize anything, reads no secret and takes no
+typed value (`apps/platform/README.md` has the whole list).
+
+A Render key cannot be narrowed to some services, or to "no delete". Those
+limits are the control centre's own code, so the key is only as safe as the
+service that holds it. Do these in order.
+
+**Before the key.**
+
+1. Promote (section 0), so production holds this release.
+2. Render → `base-platform` → **Settings**: Branch `production`; Build
+   Command `npm ci --omit=dev --ignore-scripts`. The control centre then
+   goes through Promote like everything else, and no package's install
+   script runs beside the key. The **Render** page warns until both are
+   true.
+3. GitHub: two-step sign-in on; protect `main` and `production` (no force
+   push, CI required). Render: two-step sign-in on.
+4. Render → each database → **Recovery**: read what your plan keeps
+   (section 9).
+5. Turn on Render's notifications (section 9).
+
+**Make the key.** Render → your picture, top right → **Account Settings →
+API Keys → Create API Key**, named “base.win control centre” and the month.
+Copy it; Render shows it once.
+
+**Put it in.** Render → `base-platform` → **Environment → Add**
+`RENDER_API_KEY`, paste, **Save and deploy**. Nowhere else: not a chat, an
+email, a note, a file, GitHub or the control centre itself.
+
+**Try it.** ops.base.win → **Render** says Connected. Press **Check
+Render’s answers**: the control centre's idea of Render's API was written
+from memory, and this is where it is checked against the real thing. Each
+line should say *As expected*; tell us any that does not. Connect **Sample
+(staging)** and press each button there first, since staging holds only
+made-up data. Then connect Imagine Surrey. On any campaign that says “Open
+to anyone on the internet”: **Close the database to the internet**.
+
+**Change it** every six months, after a lost laptop or phone, when anyone
+who could push code leaves, and on any doubt: make a new key, replace the
+value, Save and deploy, see Connected, then delete the old key in Render.
+
+**Turn it off.** Delete `RENDER_API_KEY` on `base-platform`, Save and
+deploy, then delete the key in Render. The control centre goes back to
+walking you through Render by hand.
+
+**If the key may have leaked.** Whoever holds it can do anything your
+Render login can, from anywhere, with no line on the control centre's log.
+
+1. Render → **Account Settings → API Keys** → delete the key. That ends it
+   at once.
+2. Change your Render password. Check two-step sign-in is on, and look at
+   the other API keys and the members.
+3. On `base-platform`, press **Generate** on `OPS_SETUP_CODE`, `OPS_SECRET`
+   and `PLATFORM_SIGNING_KEY` (the key could read all three), Save and
+   deploy, set up again, and put the new base.win key on every campaign.
+4. For every service the key could see: new email, texting and Google keys
+   at their providers; a new database password (in Render);
+   `STARBASE_TWO_STEP_KEY` and `GOOGLE_TOKEN_KEY` changed the way their own
+   notes say (the new value first, the old one after a comma).
+5. In Render, look at each database's **Access Control** and each service's
+   branch, repository, commands, addresses and **Events**. Whatever is not
+   on the control centre's **Log** was not done by the control centre.
+6. Treat each client's list as possibly copied: tell the client. Counsel
+   decides what the privacy law asks.
+7. Only then make a new key.
+
 ## 9 · Keeping watch
 
 **Know when something is down.** Render → each service and each database →
-**Notifications**: turn them on for failures. Then set up an uptime check
+**Notifications**: turn them on for failures. With a Render key on the
+control centre (section 8), also look through each service's **Events** in
+Render from time to time: that record is Render's own, and the control
+centre cannot write it. Then set up an uptime check
 outside Render, so you hear about it even when Render does not, on:
 
 - `https://imaginesurrey.base.win/api/health`
@@ -932,7 +1016,9 @@ reached, so the check catches that too.
 Control**. Remove `0.0.0.0/0` if it is listed: that entry lets any address
 on the internet try to connect. With it gone, only Render's own services
 connect. Add one address only while someone needs it, and take it away
-after.
+after. With a Render key on the control centre (section 8), its **Render**
+page says which databases are open to the internet, and **Close the
+database to the internet** removes that entry for you.
 
 **Getting data back.** Render keeps point-in-time recovery or daily
 backups, according to each database's plan. We have not checked what your
