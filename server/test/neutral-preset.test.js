@@ -149,7 +149,9 @@ test('only lib/preset.js imports server/presets/, and nothing but the brand’s 
     if (!rel.startsWith('server/test/') && !rel.startsWith('scripts/') && /\bpresetFor\s*\(/.test(src)) naming.push(rel);
   }
   assert.deepEqual(importing, ['server/lib/preset.js']);
-  assert.deepEqual(naming.sort(), ['server/lib/brand.js', 'server/lib/preset.js'], 'presetFor is for tests, and for a look asked for by its own name');
+  // …and for the read-only report of what another campaign still holds of
+  // a preset's lists (server/neutral-report.mjs: no server loads it).
+  assert.deepEqual(naming.sort(), ['server/lib/brand.js', 'server/lib/preset.js', 'server/neutral-report.mjs'], 'presetFor is for tests, and for a look asked for by its own name');
 });
 
 test('brand base never reaches the preset’s files: nothing to load, nothing to serve', () => {

@@ -4,8 +4,9 @@
 // button, form, restart, job or later change of brand adds another; every
 // start-up marker is written, so nothing can back-fill one; the features
 // that find a field by its name still work; GET /api/fields carries no
-// Campus list and no guesses for one. Under brand imagine-surrey,
-// everything is as it was.
+// Campus list and no guesses for one; and the report (server/
+// neutral-report.mjs) lists what an older campaign still holds. Under brand
+// imagine-surrey, everything is as it was.
 // test:pg-safe: the first campaign made here is the neutral one (the public
 // website at /site/ answers for it); every query is scoped to a campaign.
 import { test, before, after } from 'node:test';
@@ -266,6 +267,37 @@ test('an import whose only phone is a Home Phone column gives each person that n
   assert.deepEqual([r.created, r.invalid.length], [2, 0], JSON.stringify(r.invalid));
   const got = (await db.query("select name, phone from persons where workspace_id = $1 and name in ('Omar Example', 'Pia Example') order by name", [ws])).rows;
   assert.deepEqual(got.map((p) => [p.name, String(p.phone).replace(/\D/g, '').slice(-10)]), [['Omar Example', '2505550177'], ['Pia Example', '2505550178']]);
+});
+
+test('the report lists what an older campaign holds of Imagine Surrey’s lists, and nothing for a neutral one', async () => {
+  const { neutralReport, reportLines } = await import('../neutral-report.mjs');
+  // A campaign made while the server wore Imagine Surrey's brand.
+  const c = new Client();
+  const id = await asBrand('imagine-surrey', async () => ok(await c.signup({ workspaceName: `Seeded ${tag}`, email: `nf-seeded+${tag}@example.org`, jurisdiction: 'bc-municipal' })).workspace.id);
+  const p = await c.createPerson('Uma Example');
+  const campus = (await allFields(c)).find((f) => f.name === 'Campus');
+  ok(await c.action('field.values.set', { person_id: p.id, values: [{ field_id: campus.id, value: 'SFU Surrey' }] }));
+  const before = (await db.query('select (select count(*) from person_fields)::int as f, (select count(*) from events)::int as e, (select count(*) from fields_seeded)::int as s')).rows[0];
+  const all = await neutralReport(db);
+  const after = (await db.query('select (select count(*) from person_fields)::int as f, (select count(*) from events)::int as e, (select count(*) from fields_seeded)::int as s')).rows[0];
+  assert.deepEqual(after, before, 'it only reads');
+  const mine = all.find((w) => w.id === ws);
+  assert.deepEqual([mine.fields, mine.lists, mine.sample], [[], [], null], 'a neutral campaign: nothing');
+  const theirs = all.find((w) => w.id === id);
+  assert.deepEqual(theirs.fields.map((f) => f.name), [
+    'Home phone', 'Province', 'Interaction status', 'Interaction date', 'Organizer', 'Sign', 'Support', 'Voted', 'Voter eligibility',
+    'Gender', 'Birth date', 'Citizenship', 'Union member', 'Union local', 'Campus', 'Other language', 'Interests',
+  ]);
+  assert.equal(theirs.fields.find((f) => f.name === 'Campus').filled, 1);
+  assert.deepEqual(theirs.lists.map((l) => [l.field, l.whole, l.choices.length]), [['Language', true, 15], ['Campus', true, 3], ['Faith', true, 29], ['Interests', true, 11]]);
+  // One plank left on a list the campaign has since changed is still found.
+  const interests = (await allFields(c)).find((f) => f.name === 'Interests');
+  ok(await c.action('field.update', { id: interests.id, choices: ['Transit', 'Safer streets'] }));
+  const again = (await neutralReport(db)).find((w) => w.id === id);
+  assert.deepEqual(again.lists.find((l) => l.field === 'Interests'), { field: 'Interests', whole: false, choices: ['Safer streets'] });
+  const text = reportLines(all).join('\n');
+  assert.match(text, new RegExp(`Kamloops Forward ${tag}[^\\n]*\\n\\s+Nothing here matches`));
+  assert.match(text, /Campus \(Pick one, 1 person\)/);
 });
 
 test('under Imagine Surrey’s brand nothing changes: its 27 fields with its own lists, its Campus list and guesses, its start-up SQL', async () => {
