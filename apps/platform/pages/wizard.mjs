@@ -5,7 +5,7 @@ import { page, field, status, codeField } from './layout.mjs';
 import { inviteForm } from './desk.mjs';
 import { PROVINCES, TIME_ZONES, RACES, JURISDICTIONS, RULE_WORDS, envLines } from '../snippets.mjs';
 
-const NAME_HELP = 'Use letters, numbers and dashes. It’s the address: base.win/<name>.';
+const NAME_HELP = 'Use letters, numbers and dashes. It’s the address: <name>.base.win.';
 // "America/St_Johns" reads "St. John’s"; the rest lose "America/" and "_".
 const zoneWords = (z) => (z === 'America/St_Johns' ? 'St. John’s' : z.replace('America/', '').replace(/_/g, ' '));
 const select = ({ label, name, options, value, help = '' }) => html`<div class="field">
@@ -46,10 +46,12 @@ const ADDRESS_WORDS = {
   elsewhere: 'This server says it is somewhere else: check the address.',
 };
 
-// step: { answering, problem } of the saved address; door: { value, keeps, adds }.
-export const setupPage = ({ v, values, publicKey, serverUrl, addressState, door, invited, snippet, stale = false, typed = null, message = '' }) => {
+// addressState: how the saved Render address answers; ownAnswering: whether
+// <name>.base.win reaches the same server.
+export const setupPage = ({ v, values, publicKey, serverUrl, addressState, ownAnswering, invited, snippet, stale = false, typed = null, message = '' }) => {
   const name = v.campaign.name;
   const answering = addressState === 'answering';
+  const renderHost = serverUrl ? serverUrl.replace(/^https?:\/\//, '') : `base-win-${name}.onrender.com`;
   return page({
     title: `Set up ${v.campaign.display}`, nav: true, here: 'campaigns',
     body: html`<h1>Set up ${v.campaign.display}</h1>
@@ -64,7 +66,6 @@ export const setupPage = ({ v, values, publicKey, serverUrl, addressState, door,
             <p class="oc-help" data-when-empty>STARBASE_TWO_STEP_KEY and GOOGLE_TOKEN_KEY are empty: press Generate next to each of these two in Render.</p>
           </li>
           <li>Add <code>DATABASE_URL</code> = the database page’s <b>Internal Database URL</b> (copy it across).</li>
-          <li>Add <code>BASE_DOOR_KEY</code> = the same value as on the door (the service with base.win under Custom Domains).</li>
           <li>Press <b>Create Web Service</b> (or <b>Save and deploy</b>). Wait for “Live”.</li>
         </ol>
         <p class="oc-help">Email, texting and Google come later, from the app’s Settings → Services.</p>
@@ -77,12 +78,13 @@ export const setupPage = ({ v, values, publicKey, serverUrl, addressState, door,
           <button class="btn ${answering ? 'btn-quiet' : 'btn-primary'}" type="submit">Save address</button>
         </form>
       </li>
-      ${answering ? html`<li class="card"><h2>Tell the door</h2>
-        <p>Replace BASE_CLIENTS with this (Render → the service with base.win under Custom Domains → Environment), then Save and deploy.</p>
-        <p>${door.keeps.length ? `This keeps: ${door.keeps.join(', ')}. ` : ''}Adds: ${door.adds.join(', ')}.</p>
-        <pre class="oc-pre" id="door-value">${door.value}</pre>
-        <button class="btn btn-quiet oc-copy-btn" type="button" data-copy="door-value">Copy</button>
-        <p class="oc-help">If the door has a name not listed here, add that campaign first (Add a campaign that’s already running).</p>
+      ${answering ? html`<li class="card"><h2>Give it its address</h2>
+        <ol class="oc-howto">
+          <li>Render → <code>base-win-${name}</code> → <b>Settings → Custom Domains → Add Custom Domain</b>: <code id="own-address">${name}.base.win</code></li>
+          <li>Where base.win’s DNS is kept, add a <b>CNAME</b> record: name <code>${name}</code>, value <code>${renderHost}</code>.</li>
+          <li>Back in Render, press <b>Verify</b>. The certificate follows in a few minutes.</li>
+        </ol>
+        ${status(ownAnswering ? `Answering at ${name}.base.win` : `${name}.base.win isn’t answering yet. A new record can take a while; press Save address above to check again.`, ownAnswering ? 'ok' : 'warn')}
       </li>
       <li class="card"><h2>Invite the first manager</h2>
         ${invited ? html`<p>First manager invited. <a href="/c/${name}">Go to ${v.campaign.display}</a></p>`

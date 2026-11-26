@@ -37,7 +37,7 @@ test('only the server’s small shared helpers: never its database, extensions, 
 });
 
 test('settings are read in config.mjs only, and only its own', () => {
-  const ALLOWED = ['DATABASE_URL', 'PORT', 'NODE_ENV', 'OPS_HOST', 'OPS_SETUP_CODE', 'OPS_SECRET', 'PLATFORM_SIGNING_KEY', 'OPS_DOOR_ORIGIN', 'OPS_INSECURE_COOKIES', 'OPS_ALLOW_LOCAL'];
+  const ALLOWED = ['DATABASE_URL', 'PORT', 'NODE_ENV', 'OPS_HOST', 'OPS_SETUP_CODE', 'OPS_SECRET', 'PLATFORM_SIGNING_KEY', 'OPS_CLIENT_ORIGIN', 'OPS_INSECURE_COOKIES', 'OPS_ALLOW_LOCAL'];
   for (const f of files.filter((x) => x.path !== 'config.mjs')) assert.doesNotMatch(f.text, /process\.env/, f.path);
   const config = files.find((x) => x.path === 'config.mjs').text;
   const read = [...new Set([...config.matchAll(/\benv\.([A-Z_]+)/g)].map((m) => m[1]))];

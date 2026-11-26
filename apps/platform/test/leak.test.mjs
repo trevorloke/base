@@ -39,7 +39,7 @@ const fetcher = async (url) => {
   const origin = url.startsWith(S) ? S : A;
   return { status: 200, ms: 3, body: JSON.stringify({
     ok: true, database: 'ok', env: url.startsWith(S) ? 'staging' : 'production', commit: 'd9130ae', tzdataCurrent: true, ownOrigin: origin,
-    instance: url.startsWith(S) ? 'SSSSSSSSSSSSSSSSSSSSSS' : INST, address: 'https://base.win/leak', entry: 'ready', platformKids: [currentKid()], setupOpen: false, campaignMade: true, doorKey: true,
+    instance: url.startsWith(S) ? 'SSSSSSSSSSSSSSSSSSSSSS' : INST, address: 'https://leak.base.win', entry: 'ready', platformKids: [currentKid()], setupOpen: false, campaignMade: true, doorKey: true,
   }) };
 };
 

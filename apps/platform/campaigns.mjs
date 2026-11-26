@@ -6,9 +6,10 @@ import { currentKid } from './keys.mjs';
 import { appendLog } from './log.mjs';
 import { pickValues } from './snippets.mjs';
 
-// The door's own rule for a name, with no trailing dash.
+// A short name is the first part of the address (<name>.base.win): letters,
+// digits and dashes, no trailing dash.
 export const NAME_RE = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
-export const RESERVED = ['ops', 'hub', 'api', 'admin', 'platform', '_ops', '_hooks', 'www', 'door', 'status', 'help', 'mail', 'app', 'desk', 'field', 'site', 'login', 'assets', 'sample'];
+export const RESERVED = ['ops', 'hub', 'api', 'admin', 'platform', '_ops', '_hooks', 'www', 'door', 'status', 'help', 'mail', 'app', 'desk', 'field', 'site', 'login', 'assets', 'sample', 'staging'];
 
 // A pasted Render address → its origin (lowercased, no default port, no
 // path), or null. https only; http://127.0.0.1 or localhost in tests only.
@@ -98,7 +99,7 @@ export const openBlock = (campaign, envRow, server, kid = currentKid()) => {
 };
 
 // The chips, only those that are true.
-export const chipsFor = ({ campaign, envRow, server, door, newest, kid = currentKid() }) => {
+export const chipsFor = ({ campaign, envRow, server, address, newest, kid = currentKid() }) => {
   const out = [];
   if (!server?.answering) return out;
   if (server.database !== 'ok') out.push('Database not reachable');
@@ -109,8 +110,7 @@ export const chipsFor = ({ campaign, envRow, server, door, newest, kid = current
   if (server.own_origin !== envRow.server_url || server.env_reported !== envRow.env) out.push('This server says it is somewhere else');
   else if (envRow.instance && server.instance !== envRow.instance) out.push('Server changed: confirm it');
   else if (!envRow.instance && server.instance) out.push('This server says it is somewhere else');
-  if (server.door_key === false && campaign.kind === 'client') out.push('Door key not set');
-  if (campaign.kind === 'client' && door && !door.answering) out.push(`base.win/${campaign.name} not answering`);
+  if (campaign.kind === 'client' && address && !address.answering) out.push(`${campaign.name}.base.win not answering`);
   if (campaign.kind === 'client' && newest && server.commit && server.commit !== newest) out.push('Version differs');
   return out;
 };
@@ -126,9 +126,9 @@ export const listCampaigns = async (db) => {
     const env = envOf(c);
     const envRow = envs.find((e) => e.campaign === c.name && e.env === env) || { campaign: c.name, env };
     const server = checks.get(`${c.name}/${env}/server`) || null;
-    const door = checks.get(`${c.name}/${env}/door`) || null;
+    const address = checks.get(`${c.name}/${env}/door`) || null;
     const since = server && !server.answering ? await downSince(db, c.name, env) : null;
-    out.push({ campaign: c, env, envRow, server, door, since, chips: chipsFor({ campaign: c, envRow, server, door, newest }), block: openBlock(c, envRow, server) });
+    out.push({ campaign: c, env, envRow, server, address, since, chips: chipsFor({ campaign: c, envRow, server, address, newest }), block: openBlock(c, envRow, server) });
   }
   return out;
 };

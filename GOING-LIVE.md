@@ -580,7 +580,8 @@ is shared, and the code names no client.
    step in the Render dashboard — the campaign's values, one block to paste
    into Render's Environment, the database and the service
    (`base-win-<client>`, `base-win-<client>-db`), the address to paste back,
-   then the door's new value — and ticks a checklist as each part answers.
+   then its own address (`<client>.base.win`: the service's Custom Domains
+   and a CNAME record) — and ticks a checklist as each part answers.
    No git and nothing to hash (`apps/platform/README.md`).
 2. **Invite the first manager** there opens the new desk and invites them.
 3. One `main` serves every client: a change lands on every client's

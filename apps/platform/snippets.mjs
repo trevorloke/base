@@ -1,6 +1,5 @@
 // What the New campaign wizard hands the owner to paste (spec §6.5): the
-// .env block for Render's "Add from .env", the door's whole BASE_CLIENTS
-// value, and (for us) a render.yaml block. Built from the campaign's own
+// .env block for Render's "Add from .env" and (for us) a render.yaml block. Built from the campaign's own
 // values only: never staging's sample, demo, frame or opponent settings,
 // and never a secret (the two random values are made in the browser).
 // The campaign server's own rules (server/lib/org.js JURISDICTIONS; a test
@@ -31,8 +30,7 @@ const slates = (races = []) => RACES.filter(([code]) => races.includes(code)).ma
 export const envLines = ({ name, display, values, publicKey = '' }) => [
   { key: 'NODE_ENV', value: 'production' },
   { key: 'STARBASE_ENV', value: 'production' },
-  { key: 'BASE_PATH', value: `/${name}` },
-  { key: 'STARBASE_PUBLIC_URL', value: `https://base.win/${name}` },
+  { key: 'STARBASE_PUBLIC_URL', value: `https://${name}.base.win` },
   { key: 'STARBASE_BRAND', value: 'base' },
   { key: 'STARBASE_ORG_NAME', value: `"${flat(display)}"` },
   { key: 'STARBASE_JURISDICTION', value: values.rules },
@@ -46,19 +44,11 @@ export const envLines = ({ name, display, values, publicKey = '' }) => [
 ];
 export const envText = (opts) => envLines(opts).map((l) => `${l.key}=${l.value}`).join('\n');
 
-// The door's whole BASE_CLIENTS value: every client campaign not archived
-// that has a production address, sorted by name. → { value, keeps, adds }
-export const doorValue = (rows, adding = null) => {
-  const list = rows.filter((r) => r.kind === 'client' && !r.archived_at && r.server_url).sort((a, b) => (a.name < b.name ? -1 : 1));
-  const value = JSON.stringify(Object.fromEntries(list.map((r) => [r.name, { name: r.display, server: r.server_url }])));
-  return { value, keeps: list.map((r) => r.name).filter((n) => n !== adding), adds: list.some((r) => r.name === adding) ? [adding] : [] };
-};
-
 // Never in a block made here: staging's sample, demo and frame settings,
 // and the sample's made-up opponents and map box.
 export const DENY = ['STARBASE_SAMPLE', 'STARBASE_SAMPLE_RESET', 'STARBASE_DEMO_EMAIL', 'STARBASE_FRAME_HOSTS', 'STARBASE_CANDIDATES', 'STARBASE_GEO_BOUNDS'];
 // Pasted or made by Render, never written here with a value.
-const SECRET = { BASE_PLATFORM_PUBKEY: 'sync', BASE_DOOR_KEY: 'sync', STARBASE_TWO_STEP_KEY: 'generate', GOOGLE_TOKEN_KEY: 'generate' };
+const SECRET = { BASE_PLATFORM_PUBKEY: 'sync', STARBASE_TWO_STEP_KEY: 'generate', GOOGLE_TOKEN_KEY: 'generate' };
 // The production block's services, asked for later in the app's Settings.
 const LATER = ['RESEND_API_KEY', 'MAIL_FROM', 'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM', 'GOOGLE_MAPS_SERVER_KEY', 'GOOGLE_TRANSLATE_KEY',
   'GOOGLE_OAUTH_CLIENT_ID', 'GOOGLE_OAUTH_CLIENT_SECRET', 'GOOGLE_PICKER_KEY', 'GOOGLE_CLOUD_PROJECT_NUMBER'];

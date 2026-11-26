@@ -40,7 +40,7 @@ import { Readable } from 'node:stream';
 const NAME_RE = /^[a-z0-9][a-z0-9-]{0,62}$/;
 // Names kept for base.win itself (ops.base.win is the control centre, which
 // never goes through the door). The control centre refuses the same list.
-export const RESERVED = ['ops', 'hub', 'api', 'admin', 'platform', '_ops', '_hooks', 'www', 'door', 'status', 'help', 'mail', 'app', 'desk', 'field', 'site', 'login', 'assets', 'sample'];
+export const RESERVED = ['ops', 'hub', 'api', 'admin', 'platform', '_ops', '_hooks', 'www', 'door', 'status', 'help', 'mail', 'app', 'desk', 'field', 'site', 'login', 'assets', 'sample', 'staging'];
 
 export const readClients = (raw = process.env.BASE_CLIENTS) => {
   let parsed;
