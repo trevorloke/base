@@ -17,13 +17,8 @@
 export const ALLOWED_AT_START = [
   {
     source: 'apps/platform/db.sql',
-    statement: "delete from checks where via = 'door'",
-    why: 'The control centre\'s own health-check log, not a client\'s data: removes the checks of the old "door" address (replaced on 24 Nov 2026, b26bb90). It runs only while the old rule is still on the table, so once per database.',
-  },
-  {
-    source: 'apps/platform/db.sql',
     statement: 'alter table checks drop column if exists door_key',
-    why: 'The control centre\'s own health-check log, not a client\'s data: door_key said whether the old door\'s key was set. Nothing has read or written it since b26bb90.',
+    why: 'The control centre\'s own health-check log, not a client\'s data: door_key said whether the old door\'s key was set. The control centre on main wrote it until this release; nothing in this release reads or writes it.',
   },
 ];
 
