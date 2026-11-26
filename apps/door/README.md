@@ -1,17 +1,20 @@
 # The door — the front door at base.win
 
-One address for every client; each client's base.win on its own server and
-database.
+Every client at its own address, `<client>.base.win`; each client's base.win
+on its own server and database.
 
 | Address | Goes to | Who |
 |---|---|---|
-| `base.win/imaginesurrey` | → `/imaginesurrey/site/` — the campaign's public website | anyone |
-| `base.win/imaginesurrey/site/…` | the website's pages, forms and news | anyone |
-| `base.win/imaginesurrey/field` | the volunteers' app | everyone the campaign invites |
-| `base.win/imaginesurrey/desk` | the office — every area, the Website among them | managers, staff, treasurers (and anyone given an area); a volunteer is turned away |
-| `base.win/imaginesurrey/web…` | → `/imaginesurrey/desk/website` (the old back-office address) | |
-| `base.win/imaginesurrey/admin…` | → `/imaginesurrey/desk…` (the office's old address: the server sends it on as a path, so the browser stays on base.win) | |
-| `imaginesurrey.base.win/…` | → `base.win/imaginesurrey/…` — a short address that only sends people on (path and query kept; a form's POST keeps its body). Signing in, phone storage and offline copies stay at `base.win/imaginesurrey`, so there is one of each | anyone |
+| `imaginesurrey.base.win` | the volunteers' app | everyone the campaign invites |
+| `imaginesurrey.base.win/admin` | the office (the desk) — every area, the Website among them | managers, staff, treasurers (and anyone given an area); a volunteer is turned away |
+| `imaginesurrey.base.win/site/…` | the campaign's public website: pages, forms and news | anyone |
+| `imaginesurrey.base.win/desk…` | → `/admin…` — the desk by its name | |
+| `imaginesurrey.base.win/field…` | → `/…` — the volunteers' app by its name | |
+| `base.win` | base.win's own page | anyone |
+| `base.win/imaginesurrey/…` | → `imaginesurrey.base.win/…` — the address from before, which only sends people on to the same screen (the name alone → `/site/`, `/field…` → `/…`, `/desk…` → `/admin…`; path and query kept; a form's POST keeps its body) | anyone |
+
+Signing in, phone storage and offline copies belong to `<client>.base.win`,
+so each campaign has its own and no campaign sees another's.
 
 The door passes requests through to the client's server with the path as it
 came. It checks no one: signing in, and who may open the desk, are the
@@ -28,9 +31,8 @@ use up everyone's.
 
 1. **The server, for each client.** On the client's base.win service
    (Render: Environment), set
-   - `BASE_PATH=/imaginesurrey`
-   - `STARBASE_PUBLIC_URL=https://base.win/imaginesurrey` (links in emails —
-     invites, unsubscribe, receipts — then use base.win)
+   - `STARBASE_PUBLIC_URL=https://imaginesurrey.base.win` (links in emails —
+     invites, unsubscribe, receipts — then use it)
    - `BASE_DOOR_KEY` — the door's key (step 2), the same on every client's
      server: 32 or more random characters (`openssl rand -base64 32`).
      While moving to a new key the server takes both, comma-separated
@@ -42,10 +44,13 @@ use up everyone's.
      Settings → Your own domain), so the app keeps answering there. Never
      list the website's own domain here.
 
-   It then answers under `/imaginesurrey` **and** at its own address as
-   before, so nothing breaks while people move over (old bookmarks, invites
-   already sent, knocks still waiting on a phone to send). Each campaign
-   keeps its own phone storage, offline copies and sign-in on base.win.
+   No `BASE_PATH`: the server answers at its root, at `imaginesurrey.base.win`
+   through the door **and** at its own address as before. A server set up
+   when `base.win/imaginesurrey` was the address: delete `BASE_PATH` and
+   change `STARBASE_PUBLIC_URL`, then Save and deploy (until then it still
+   opens at `imaginesurrey.base.win`, but its emails link to the old
+   address, which sends people on). People sign in once more at the new
+   address, and a phone with the app installed installs it again from there.
 2. **The door.** A Node web service from this repository: root directory
    `apps/door`, no build command, start command `node door.mjs`, health
    check `/healthz`. Set `BASE_CLIENTS`:
@@ -60,7 +65,7 @@ use up everyone's.
    ```
 
    Some names are kept for base.win itself and the door won’t start with
-   them in the list: `ops, hub, api, admin, platform, _ops, _hooks, www,
+   them in the list: `ops, staging, hub, api, admin, platform, _ops, _hooks, www,
    door, status, help, mail, app, desk, field, site, login, assets, sample`
    (`RESERVED` in door.mjs; the control centre at ops.base.win refuses the
    same names, and builds this whole value for you on New campaign).
@@ -75,16 +80,19 @@ use up everyone's.
    well as Render's, set `BASE_TRUSTED_PROXIES` to how many there are (the
    visitor's address is that many entries from the right of
    `X-Forwarded-For`; default 1).
-3. **The domain.** Point `base.win` at the door service (Render: Settings →
-   Custom Domains → add `base.win`, then the DNS records it shows at your
-   registrar). Render issues the HTTPS certificate. For a client's short
-   address, add `<client>.base.win` to the same door service the same way;
-   the door sends it on to `base.win/<client>` for any name in
-   `BASE_CLIENTS` (and for nothing else). A door on another domain sets
-   `BASE_APEX` to it (default `base.win`).
-4. **A new client** is a new server (its own service and database, with its
-   own `BASE_PATH`) and one more entry in `BASE_CLIENTS`.
+3. **The domain.** Point `base.win` and `*.base.win` at the door service
+   (Render: Settings → Custom Domains → add `base.win`, then `*.base.win`,
+   and the DNS records it shows for each at your registrar; a wildcard asks
+   for two extra records that prove the domain is yours). Render issues the
+   HTTPS certificates. That one wildcard covers every client: the door
+   answers `<client>.base.win` for any name in `BASE_CLIENTS`, and a plain
+   "Not here" page for any other name. A subdomain with a service of its own
+   (`ops.base.win`, `staging.base.win`) keeps its own DNS record and custom
+   domain on that service. A door on another domain sets `BASE_APEX` to it
+   (default `base.win`).
+4. **A new client** is a new server (its own service and database) and one
+   more entry in `BASE_CLIENTS`. No DNS: the wildcard already covers it.
 
-Run it locally: `BASE_CLIENTS='{"imaginesurrey":{"server":"http://127.0.0.1:3200"}}' node door.mjs`
-(base.win with `BASE_PATH=/imaginesurrey` on :3200), then open
-http://127.0.0.1:8080/imaginesurrey. Tests: `npm test`.
+Run it locally: `BASE_APEX=localhost:8080 BASE_CLIENTS='{"imaginesurrey":{"server":"http://127.0.0.1:3200"}}' node door.mjs`
+(base.win on :3200), then open http://imaginesurrey.localhost:8080.
+Tests: `npm test`.

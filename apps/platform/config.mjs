@@ -5,7 +5,8 @@
 //   OPS_SETUP_CODE        Render makes it; typed once to set up (32+ base64 characters)
 //   OPS_SECRET            Render makes it; seals the authenticator key, keys the setup code's HMAC
 //   PLATFORM_SIGNING_KEY  Render makes it; the Ed25519 seed source (old,new while changing; the first signs)
-//   OPS_DOOR_ORIGIN       tests only: the door's origin for "the door knows it" (https://base.win)
+//   OPS_DOOR_ORIGIN       tests only: where the door answers for a campaign, {name} its name
+//                         (https://{name}.base.win), for "the door knows it"
 //   OPS_INSECURE_COOKIES  tests only: 1 drops Secure and __Host-, and expects an http Origin
 //   OPS_ALLOW_LOCAL       tests only: 1 allows 127.0.0.1 in fetches, aud and form-action
 const env = process.env;
@@ -18,7 +19,11 @@ export const cfg = () => ({
   setupCode: String(env.OPS_SETUP_CODE || '').trim(),
   secret: String(env.OPS_SECRET || '').trim(),
   signingKey: String(env.PLATFORM_SIGNING_KEY || ''),
-  doorOrigin: String(env.OPS_DOOR_ORIGIN || 'https://base.win').replace(/\/+$/, ''),
+  doorOrigin: String(env.OPS_DOOR_ORIGIN || 'https://{name}.base.win').replace(/\/+$/, ''),
   insecureCookies: env.OPS_INSECURE_COOKIES === '1',
   allowLocal: env.OPS_ALLOW_LOCAL === '1',
 });
+
+// A campaign's address on base.win, through the door: https://<name>.base.win.
+// Built here from the name alone, never taken from an answer.
+export const doorAddress = (name, origin = cfg().doorOrigin) => origin.replaceAll('{name}', String(name));

@@ -1,8 +1,9 @@
 // What a live page tells search engines and the apps a link is shared to
 // (ext/site/public.js → the renderer's head, SITE.md ctx.origin): the
 // canonical address, og:url and og:image, absolute — on the campaign's own
-// domain, on the app's own address (/site/) and under a client's path
-// (base.win/<client>, where STARBASE_PUBLIC_URL says the public address).
+// domain, on the app's own address (/site/), at <client>.base.win behind the
+// front door and under a client's path (BASE_PATH) — the last two where
+// STARBASE_PUBLIC_URL says the public address.
 // A page's own share picture comes before the site's (seo.shareImage), and
 // that before the hero's. A cached page never carries another host's
 // address (www and the bare domain, or a made-up Host on the app's copy).
@@ -80,7 +81,7 @@ test('a page’s own share picture comes first; then the site’s; then its hero
   ok(await mgr.action('site.settings.save', { seo: s.seo }));
 });
 
-test('under a client’s path (base.win/<client>): the public address is STARBASE_PUBLIC_URL’s, the client’s path once', async () => {
+test('under a client’s path (BASE_PATH): the public address is STARBASE_PUBLIC_URL’s, the client’s path once', async () => {
   const mounted = mountAt(app, '/imaginesurrey');
   const get = async (path) => (await mounted(new Request(`http://starbase-test.onrender.com${path}`, { headers: { 'x-forwarded-for': '192.0.2.40', 'x-forwarded-proto': 'https' } }))).text();
   process.env.STARBASE_PUBLIC_URL = 'https://base.win/imaginesurrey';
@@ -100,6 +101,26 @@ test('under a client’s path (base.win/<client>): the public address is STARBAS
     assert.match(await get('/imaginesurrey/site/robots.txt'), /Sitemap: https:\/\/base\.win\/imaginesurrey\/site\/sitemap\.xml/);
     ok(await mgr.action('site.page.save', { id: donate.id, image: null }));
     ok(await mgr.action('site.page.publish', { id: donate.id }));
+  } finally {
+    delete process.env.STARBASE_PUBLIC_URL;
+  }
+});
+
+test('at <client>.base.win, behind the front door: the public address is STARBASE_PUBLIC_URL’s when the door says that is the address used', async () => {
+  // The door reaches the server at its own address and says which one
+  // people used (x-forwarded-host).
+  const OWN = 'starbase-test.onrender.com';
+  const get = async (path, said) => (await app.request(`http://${OWN}${path}`, { headers: { 'x-forwarded-for': '192.0.2.41', 'x-forwarded-proto': 'https', ...(said ? { 'x-forwarded-host': said } : {}) } })).text();
+  process.env.STARBASE_PUBLIC_URL = 'https://imaginesurrey.base.win';
+  try {
+    const h = head(await get('/site/donate', 'imaginesurrey.base.win'));
+    assert.equal(h.canonical, 'https://imaginesurrey.base.win/site/donate');
+    assert.equal(h.url, 'https://imaginesurrey.base.win/site/donate');
+    assert.ok(h.image?.startsWith('https://imaginesurrey.base.win/'), h.image);
+    assert.match(await get('/site/sitemap.xml', 'imaginesurrey.base.win'), /<loc>https:\/\/imaginesurrey\.base\.win\/site\/donate<\/loc>/);
+    // The server's own address, and a host somebody made up: the request's own.
+    assert.equal(head(await get('/site/donate')).canonical, `https://${OWN}/site/donate`);
+    assert.equal(head(await get('/site/donate', 'evil.example')).canonical, `https://${OWN}/site/donate`);
   } finally {
     delete process.env.STARBASE_PUBLIC_URL;
   }

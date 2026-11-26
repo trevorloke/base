@@ -8,7 +8,7 @@ import { pickValues } from './snippets.mjs';
 
 // The door's own rule for a name, with no trailing dash.
 export const NAME_RE = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
-export const RESERVED = ['ops', 'hub', 'api', 'admin', 'platform', '_ops', '_hooks', 'www', 'door', 'status', 'help', 'mail', 'app', 'desk', 'field', 'site', 'login', 'assets', 'sample'];
+export const RESERVED = ['ops', 'staging', 'hub', 'api', 'admin', 'platform', '_ops', '_hooks', 'www', 'door', 'status', 'help', 'mail', 'app', 'desk', 'field', 'site', 'login', 'assets', 'sample'];
 
 // A pasted Render address → its origin (lowercased, no default port, no
 // path), or null. https only; http://127.0.0.1 or localhost in tests only.
@@ -110,7 +110,7 @@ export const chipsFor = ({ campaign, envRow, server, door, newest, kid = current
   else if (envRow.instance && server.instance !== envRow.instance) out.push('Server changed: confirm it');
   else if (!envRow.instance && server.instance) out.push('This server says it is somewhere else');
   if (server.door_key === false && campaign.kind === 'client') out.push('Door key not set');
-  if (campaign.kind === 'client' && door && !door.answering) out.push(`base.win/${campaign.name} not answering`);
+  if (campaign.kind === 'client' && door && !door.answering) out.push(`${campaign.name}.base.win not answering`);
   if (campaign.kind === 'client' && newest && server.commit && server.commit !== newest) out.push('Version differs');
   return out;
 };

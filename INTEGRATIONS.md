@@ -794,7 +794,7 @@ Google Drive and Sheets** says what is missing and nothing Drive shows.
 
 | Setting | Default | Notes |
 |---|---|---|
-| `GOOGLE_PICKER_KEY` | — | a browser API key: Websites `https://base.win/*` (or the public address), the staging address and `https://docs.google.com/*`; API restriction **Google Picker API** only. Not a secret (the Picker needs it in the page), but never in the repo |
+| `GOOGLE_PICKER_KEY` | — | a browser API key: Websites `https://*.base.win/*` (or the public address), the staging address and `https://docs.google.com/*`; API restriction **Google Picker API** only. Not a secret (the Picker needs it in the page), but never in the repo |
 | `GOOGLE_CLOUD_PROJECT_NUMBER` | — | digits (IAM & Admin → Settings), the project that holds the OAuth client: the Picker's app ID |
 | `GOOGLE_DRIVE_API_BASE`, `GOOGLE_SHEETS_API_BASE`, `GOOGLE_PICKER_SCRIPT` | Google's | tests only (`server/test/fake-google-drive.js`); ignored in production |
 

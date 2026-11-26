@@ -1,18 +1,19 @@
-// Ground under a client's path on a shared domain — base.win/imaginesurrey/…
+// Ground under a path on a shared domain — campaigns.example/imaginesurrey/…
 // (BASE_PATH=/imaginesurrey). Unset, Ground answers at the site's root as it
-// always has, and nothing here runs.
+// always has, and nothing here runs. base.win itself doesn't use this any
+// more: each client there has its own address, <client>.base.win, where the
+// server answers at the root (apps/door).
 //
-// One client's Ground per deployment (its own server and database); the
-// front door at base.win (apps/door) sends /<client>/field, /<client>/desk,
-// /<client>/api… here with the path as it came. Its own address (the host's,
-// e.g. on Render) keeps answering at the root as before, so people can move
-// over to base.win in their own time. On the way in the client's
+// One client's Ground per deployment (its own server and database); a proxy
+// in front sends /<client>/field, /<client>/desk, /<client>/api… here with
+// the path as it came. Its own address (the host's, e.g. on Render) keeps
+// answering at the root as before. On the way in the client's
 // path is taken off, so every route inside is the same as at a root; on the
 // way out it is put back where a browser will read it:
 //   Location     a redirect to /x goes to /imaginesurrey/x (a path, so the
-//                browser stays on base.win)
+//                browser stays on the shared domain)
 //   Set-Cookie   the sign-in cookie's Path is the client's, so two
-//                campaigns on base.win never see each other's sign-in
+//                campaigns on one domain never see each other's sign-in
 //   HTML / CSS   href, src, action and url(…) that start with / (the page
 //                itself, the server's own pages); the app's page also gets
 //                window.__BASE__, which the app reads for everything it
@@ -95,30 +96,9 @@ const rewriteResponse = async (res, base, rw) => {
 
 // A way on that stays on the address the browser used: a path and its
 // query, never a whole address. The URL here is the one this server sees —
-// behind the base.win door, its own host's (http://<service>.onrender.com),
-// which would send people off base.win, signed out.
+// behind a proxy, its own host's (http://<service>.onrender.com),
+// which would send people off the shared domain, signed out.
 const sendOn = (location) => new Response(null, { status: 302, headers: { location, 'cache-control': 'no-store' } });
-
-// A short address on the public URL's own domain — imaginesurrey.base.win
-// when STARBASE_PUBLIC_URL is https://base.win/imaginesurrey — sends people
-// on to the public URL with the path and query kept (under the client's path
-// once), as the door does for the same address (apps/door). So it works
-// whichever service the short address is attached to, and signing in, phone
-// storage and offline copies stay at the one address. Only a subdomain of
-// the public URL's host: the server's own (onrender.com) address, the door's
-// requests (which reach it at that address) and a website's own domain are
-// never one. A form keeps its method and body (307).
-export const shortAddress = (url, base, pub = process.env.STARBASE_PUBLIC_URL) => {
-  let home;
-  try { home = new URL(String(pub || '').trim()); } catch { return null; }
-  if (!/^https?:$/.test(home.protocol)) return null;
-  const host = url.hostname.toLowerCase().replace(/\.$/, '');
-  const apex = home.hostname.toLowerCase();
-  if (host === apex || !host.endsWith(`.${apex}`)) return null;
-  const p = url.pathname;
-  const path = p === base || p.startsWith(`${base}/`) ? p : `${base}${p}`;
-  return `${home.origin}${path}${url.search}`;
-};
 
 // → fetch(req, env) for the server: the app at base (or as is, base '').
 export const mountAt = (app, base) => {
@@ -126,14 +106,9 @@ export const mountAt = (app, base) => {
   const rw = rewriters(base);
   return async (req, env) => {
     const url = new URL(req.url);
-    const short = shortAddress(url, base);
-    if (short) {
-      const keep = req.method !== 'GET' && req.method !== 'HEAD';
-      return new Response(null, { status: keep ? 307 : 302, headers: { location: short, 'cache-control': 'no-store' } });
-    }
     const p = url.pathname;
     // Not under the client's path: the server's own address, as it always
-    // was (a site's root) — so moving to base.win breaks no bookmark, no
+    // was (a site's root) — so moving under a path breaks no bookmark, no
     // invite already sent, and no knock still waiting on a phone to send.
     if (!(p === base || p.startsWith(`${base}/`))) return app.fetch(req, env);
     let inner = p.slice(base.length) || '/';

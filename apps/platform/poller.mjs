@@ -1,12 +1,12 @@
 // Every 5 minutes (±30 s; Check now at once): each campaign's public
 // /api/health, from the Render address saved for it, and for a client's
-// production also through the door (https://base.win/<name>, built here,
+// production also through the door (https://<name>.base.win, built here,
 // never taken from an answer). Only known fields are kept, each string cut
 // to 200 characters; nothing about people is in a health check. The first
 // answer whose own address is the one saved pins the server's instance;
 // a later change is never re-pinned here (the operator confirms it).
 import { safeGet } from './safe-fetch.mjs';
-import { cfg } from './config.mjs';
+import { doorAddress } from './config.mjs';
 import { appendLog } from './log.mjs';
 import { autoTick } from './checklist.mjs';
 
@@ -92,7 +92,7 @@ export const pollOnce = async (db, { only = null, fetcher } = {}) => {
     });
     if (e.kind === 'client' && e.env === 'production') {
       tasks.push(async () => {
-        const r = await checkUrl(`${cfg().doorOrigin}/${e.campaign}/api/health`, { fetcher });
+        const r = await checkUrl(`${doorAddress(e.campaign)}/api/health`, { fetcher });
         await record(db, e.campaign, e.env, 'door', r);
       });
     }

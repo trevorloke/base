@@ -34,7 +34,8 @@ export const envHosts = () => hostList(process.env.SITE_HOSTS);
 // only the site answers: no sign-in, no app): base.win and its subdomains
 // (the front door), this server's public address (STARBASE_PUBLIC_URL), its
 // host's own name (RENDER_EXTERNAL_HOSTNAME) and its other addresses
-// (APP_HOSTS: one people used before base.win, say). site.settings.save
+// (APP_HOSTS: one people used before base.win, say). A client's address,
+// <client>.base.win, is one of base.win's subdomains. site.settings.save
 // refuses these and the host the save came in on; a domain saved as one
 // before is ignored below, so the app can't be locked out of its address.
 const DOOR = 'base.win';

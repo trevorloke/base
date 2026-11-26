@@ -9,7 +9,7 @@
 //                                  unsubscribe links (/u, /bu, /lu): no app
 //                                  route, no sign-in cookie is ever read or
 //                                  set (siteGate, first in server/index.js)
-//   anywhere else (the app's own address, base.win/<client>)
+//   anywhere else (the app's own address, <client>.base.win)
 //                                  the site at /site/… (and /site-assets/*);
 //                                  every app route stays the app's
 //
@@ -190,14 +190,19 @@ const pageHeaders = (c, site, { csp, preview = false, store = false, geo = false
 const isHttps = (c) => (c.req.header('x-forwarded-proto') || '').split(',')[0].trim() === 'https' || c.req.url.startsWith('https:');
 
 // The address people see in front of the site's root (canonical, og:url,
-// og:image, share links, the sitemap): the request's own — except under a
-// client's path, where the front door forwards base.win/<client> from
-// base.win and STARBASE_PUBLIC_URL (https://base.win/<client>) names it.
-const publicOrigin = (base, origin) => {
-  if (!base) return origin;
+// og:image, share links, the sitemap): the request's own — except behind a
+// front door, which reaches this server at its own address. There
+// STARBASE_PUBLIC_URL names it: at <client>.base.win (the door says which
+// address people used, x-forwarded-host; believed only when it is the public
+// URL's own host, so nobody can make a page name another address), and
+// under a client's path (BASE_PATH) when the public URL has the same path.
+const publicOrigin = (base, origin, forwardedHost = '') => {
   try {
     const u = new URL(String(process.env.STARBASE_PUBLIC_URL || '').trim());
-    if (/^https?:$/.test(u.protocol) && u.pathname.replace(/\/+$/, '') === base) return u.origin;
+    if (!/^https?:$/.test(u.protocol) || u.pathname.replace(/\/+$/, '') !== base) return origin;
+    if (base) return u.origin;
+    const said = String(forwardedHost || '').split(',')[0].trim().toLowerCase().replace(/\.$/, '');
+    if (said && said === u.host.toLowerCase()) return u.origin;
   } catch { /* not set: the request's own */ }
   return origin;
 };
@@ -224,7 +229,7 @@ const siteFor = async (c, at) => {
   const home = `${base}${at.home ?? at.root}`;
   return {
     db, ws, inner: at.root, root: `${base}${at.root}`, base, lang, home,
-    origin, address: publicOrigin(base, origin), https: proto === 'https', assets: `${base}/site-assets`,
+    origin, address: publicOrigin(base, origin, c.req.header('x-forwarded-host')), https: proto === 'https', assets: `${base}/site-assets`,
   };
 };
 

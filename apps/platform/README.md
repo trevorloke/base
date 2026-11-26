@@ -31,7 +31,7 @@ calls it.
 
 ## A new campaign
 
-**New campaign**: its short name (`base.win/<name>`), name, city, province,
+**New campaign**: its short name (`<name>.base.win`), name, city, province,
 rules, time zone and races. Then four cards: what to make in Render (one block
 for **Add from .env**; its two random values are made in your browser and
 never reach the control centre), the service’s Render address, the door’s
@@ -42,7 +42,7 @@ render.yaml block if you would rather we add it.
 ## Opening a desk
 
 **Open desk** opens a new tab on the campaign’s own Render address (not
-base.win/<name>), signed in as **base.win support**, for 2 hours. It needs a
+<name>.base.win), signed in as **base.win support**, for 2 hours. It needs a
 code from your app within the last 10 minutes; otherwise the new tab asks for
 one. The token lives one minute, works once, and is checked by the campaign
 itself (its key, its address, its environment, its instance). The campaign

@@ -11,15 +11,14 @@ export const ITEMS = [
   { key: 'tz', words: 'Time zone data current', by: 'auto' },
   { key: 'entry', words: 'base.win sign-in ready', by: 'auto' },
   { key: 'door-key', words: 'Door key set', by: 'auto' },
-  { key: 'door', words: 'The door knows it: answers at base.win/<name>', by: 'auto' },
+  { key: 'door', words: 'The door knows it: answers at <name>.base.win', by: 'auto' },
   { key: 'campaign-made', words: 'Campaign made', by: 'auto' },
   { key: 'first-manager-invited', words: 'First manager invited', by: 'auto' },
   { key: 'email', words: 'Email set up (Settings → Services in the app)', by: 'you' },
   { key: 'first-manager-in', words: 'First manager signed in', by: 'you' },
-  { key: 'short-address', words: 'Short address <name>.base.win (optional): add it under the door’s Custom Domains', by: 'you' },
 ];
 // What the operator may tick or untick by hand.
-export const MANUAL = ['service', 'first-manager-invited', 'email', 'first-manager-in', 'short-address'];
+export const MANUAL = ['service', 'first-manager-invited', 'email', 'first-manager-in'];
 export const wordsOf = (key, name) => (ITEMS.find((i) => i.key === key)?.words || key).replace('<name>', name);
 
 // → Map(item → { done_at, done_by })

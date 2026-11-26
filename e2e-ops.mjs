@@ -20,7 +20,7 @@
 // controls at least 48 px on the phone, no sideways scroll.
 //
 // Ports 5600–5609: 5600 the console (in this process, so the test can age
-// the code in its database), 5601 campaign "a" (production, BASE_PATH=/a),
+// the code in its database), 5601 campaign "a" (production, a.base.win through the door),
 // 5602 the sample (staging), 5603 the door, 5605 a server that says it is
 // 5601, 5606 campaign "b" — a real campaign server (node server/index.js,
 // in memory; needs npm run build). 5601, 5602 and 5605 are
@@ -31,13 +31,13 @@
 //   flock -o SP/batch6/locks/browser.lock node e2e-ops.mjs
 //   SHOTS=<dir> to keep the screenshots elsewhere.
 import { createRequire } from 'node:module';
-import { createServer } from 'node:http';
+import { createServer, request as httpRequest } from 'node:http';
 import { spawn } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 
 const ROOT = new URL('.', import.meta.url).pathname;
 Object.assign(process.env, {
-  OPS_HOST: '127.0.0.1:5600', OPS_INSECURE_COOKIES: '1', OPS_ALLOW_LOCAL: '1', OPS_DOOR_ORIGIN: 'http://127.0.0.1:5603',
+  OPS_HOST: '127.0.0.1:5600', OPS_INSECURE_COOKIES: '1', OPS_ALLOW_LOCAL: '1', OPS_DOOR_ORIGIN: 'http://127.0.0.1:5607/{name}',
   OPS_SETUP_CODE: 'e2e-ops-setup-code-0123456789abcdef', OPS_SECRET: 'e2e-ops-secret-0123456789abcdefghijk',
   PLATFORM_SIGNING_KEY: 'test-only-platform-signing-key-0123456789abcdef',
 });
@@ -61,10 +61,21 @@ const ok = (cond, what) => { if (cond) console.log(`ok   ${what}`); else fail(wh
 
 const db = await openDb('');
 const platform = serve({ fetch: makeApp({ db }).fetch, port: 5600, hostname: '127.0.0.1' });
-const a = startFakeClient({ port: 5601, env: 'production', publicKey: KEY, basePath: '/a' });
+const a = startFakeClient({ port: 5601, env: 'production', publicKey: KEY });
 const sample = startFakeClient({ port: 5602, env: 'staging', publicKey: KEY });
 const liar = startFakeClient({ port: 5605, env: 'staging', publicKey: KEY, ownOrigin: 'http://127.0.0.1:5601' });
 const door = createServer(handler(readClients('{"a":{"server":"http://127.0.0.1:5601"}}'), { doorKey: '' })).listen(5603, '127.0.0.1');
+// In place of DNS: 5607/<name>/… reaches the door as <name>.base.win/… (the
+// control centre only asks 127.0.0.1 here, and the door goes by the Host).
+const dns = createServer((req, res) => {
+  const m = /^\/([a-z0-9-]+)(\/.*)$/.exec(req.url) || [];
+  const up = httpRequest({ host: '127.0.0.1', port: 5603, path: m[2] || '/', method: req.method, headers: { ...req.headers, host: `${m[1] || 'nobody'}.base.win` } }, (r) => {
+    res.writeHead(r.statusCode, r.headers);
+    r.pipe(res);
+  });
+  up.on('error', () => { res.writeHead(502); res.end(); });
+  req.pipe(up);
+}).listen(5607, '127.0.0.1');
 // Campaign "b": a real, fresh campaign server holding base.win's key, as New campaign sets one up.
 const REAL = 'http://127.0.0.1:5606';
 const realEnv = { ...process.env, PORT: '5606', STARBASE_DATA: 'memory', STARBASE_JOBS: 'off', STARBASE_ENV: 'production', BASE_PLATFORM_PUBKEY: KEY, STARBASE_OWN_URL: REAL };
@@ -239,7 +250,7 @@ try {
   await page.reload();
   const campaignText = (await text(page)).replace(/\s+/g, ' ');
   ok(/First manager invited Done by itself/.test(campaignText), 'the checklist: First manager invited · Done by itself');
-  ok(/The door knows it: answers at base\.win\/a Done by itself/.test(campaignText), 'the checklist: the door knows it');
+  ok(/The door knows it: answers at <name>\.base\.win Done by itself/.test(campaignText), 'the checklist: the door knows it');
   await look(page, '13-one-campaign-invited');
 
   // 7. A server that says it is somewhere else.
@@ -326,6 +337,7 @@ try {
   await browser.close();
   platform.close();
   door.close();
+  dns.close();
   await Promise.all([a.close(), sample.close(), liar.close()]);
   try { real.kill('SIGTERM'); } catch { /* gone */ }
   await db.close();

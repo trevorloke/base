@@ -31,8 +31,7 @@ const slates = (races = []) => RACES.filter(([code]) => races.includes(code)).ma
 export const envLines = ({ name, display, values, publicKey = '' }) => [
   { key: 'NODE_ENV', value: 'production' },
   { key: 'STARBASE_ENV', value: 'production' },
-  { key: 'BASE_PATH', value: `/${name}` },
-  { key: 'STARBASE_PUBLIC_URL', value: `https://base.win/${name}` },
+  { key: 'STARBASE_PUBLIC_URL', value: `https://${name}.base.win` },
   { key: 'STARBASE_BRAND', value: 'base' },
   { key: 'STARBASE_ORG_NAME', value: `"${flat(display)}"` },
   { key: 'STARBASE_JURISDICTION', value: values.rules },

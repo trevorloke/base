@@ -1,19 +1,18 @@
-// The front door at base.win: one address for every client, each client's
-// base.win on its own server and database.
+// The front door at base.win: every client at its own address,
+// <client>.base.win, each on its own server and database.
 //
-//   base.win/<client>          → /<client>/site/ — the campaign's public website
-//   base.win/<client>/site/…   the website ─┐
-//   base.win/<client>/field    the volunteers' app ├─ that client's base.win
-//   base.win/<client>/desk     the office's        │  (BASE_PATH=/<client>)
-//   base.win/<client>/api…     (and everything else)┘
-//   base.win/<client>/web…     → /<client>/desk/website — the website's back
-//                                office is the desk's Website area now
-//   <client>.base.win/…        → base.win/<client>/… — a short address that
-//                                only sends people on: signing in, phone
-//                                storage and offline copies all live at
-//                                base.win/<client>, so there is one of each
+//   <client>.base.win/         the volunteers' app ─┐
+//   <client>.base.win/admin    the office's (the desk) ├─ that client's
+//   <client>.base.win/site/…   the campaign's public website │  base.win, at
+//   <client>.base.win/api…     (and everything else) ─┘  its root
+//   <client>.base.win/desk…    → /admin… — the desk by its name
+//   <client>.base.win/field…   → /… — the volunteers' app by its name
+//   base.win/                  base.win's own page
+//   base.win/<client>/…        → <client>.base.win/… — the address from
+//                              before, which only sends people on (a link
+//                              already sent still opens the same screen)
 //
-// The path goes through as it came (the server knows it lives under it), and
+// The path goes through as it came (the server answers at its root), and
 // the door decides nothing about who may see what: signing in, and who may
 // open the desk, are the server's own.
 //
@@ -40,7 +39,7 @@ import { Readable } from 'node:stream';
 const NAME_RE = /^[a-z0-9][a-z0-9-]{0,62}$/;
 // Names kept for base.win itself (ops.base.win is the control centre, which
 // never goes through the door). The control centre refuses the same list.
-export const RESERVED = ['ops', 'hub', 'api', 'admin', 'platform', '_ops', '_hooks', 'www', 'door', 'status', 'help', 'mail', 'app', 'desk', 'field', 'site', 'login', 'assets', 'sample'];
+export const RESERVED = ['ops', 'staging', 'hub', 'api', 'admin', 'platform', '_ops', '_hooks', 'www', 'door', 'status', 'help', 'mail', 'app', 'desk', 'field', 'site', 'login', 'assets', 'sample'];
 
 export const readClients = (raw = process.env.BASE_CLIENTS) => {
   let parsed;
@@ -59,37 +58,57 @@ export const readClients = (raw = process.env.BASE_CLIENTS) => {
   return out;
 };
 
-// → { client, upstream } | { redirect } | null
-export const route = (clients, pathname) => {
-  const m = /^\/([^/]+)(\/.*)?$/.exec(pathname);
-  if (!m) return null;
-  const key = m[1].toLowerCase();
-  const client = clients.get(key);
-  if (!client) return null;
-  const rest = m[2] || '';
-  // The client's name alone: their public website.
-  if (rest === '' || rest === '/') return { redirect: `/${key}/site/` };
-  if (m[1] !== key) return { redirect: `/${key}${rest}` };
-  // Where the website's back office was: the desk's Website area now.
-  if (/^\/web(?:\/|$)/.test(rest)) return { redirect: `/${key}/desk/website` };
-  return { client, upstream: client.origin };
-};
+// The door's own domain (BASE_APEX, default base.win; "localhost:8080" for
+// a door on this machine, where <client>.localhost:8080 opens a client).
+export const apexOf = (raw = process.env.BASE_APEX) => String(raw || 'base.win').trim().toLowerCase().replace(/^\.+|\.+$/g, '').replace(/:\d+$/, '');
+const apexPort = (raw = process.env.BASE_APEX) => (/:(\d+)$/.exec(String(raw || '').trim()) || [])[1] || '';
+const isLocal = (apex) => apex === 'localhost' || apex.endsWith('.localhost');
+// → https://<client>.base.win (http and the port on this machine).
+export const clientOrigin = (key, apex = apexOf(), port = apexPort()) =>
+  `${isLocal(apex) ? 'http' : 'https'}://${key}.${apex}${isLocal(apex) && port ? `:${port}` : ''}`;
 
-// <client>.base.win → base.win/<client>: only for the door's own domain
-// (BASE_APEX, default base.win) and a client the door knows, so a made-up
-// Host can never send a visitor anywhere else. A path that already names the
-// client (an old link) isn't named twice. A form's POST keeps its method and
-// body (307); a page is 302, so the short address can change later.
-export const apexOf = (raw = process.env.BASE_APEX) => String(raw || 'base.win').trim().toLowerCase().replace(/^\.+|\.+$/g, '');
-export const subdomainRedirect = (clients, hostHeader, pathname, search = '', apex = apexOf()) => {
+// Whose address is this? The Host a request came in on:
+//   { client, key }  <client>.base.win, a client the door knows
+//   { unknown }      another name under base.win (nobody's, or one kept for
+//                    base.win itself): a plain page, never anyone's server
+//   null             base.win itself, www, or the door's own address
+// Only the door's own domain names a client, so a made-up Host can never
+// reach a server or send a visitor anywhere else.
+export const hostClient = (clients, hostHeader, apex = apexOf()) => {
   const host = String(hostHeader || '').toLowerCase().replace(/:\d+$/, '').replace(/\.$/, '');
   if (!apex || !host.endsWith(`.${apex}`)) return null;
   const label = host.slice(0, -(apex.length + 1));
-  if (!NAME_RE.test(label) || RESERVED.includes(label) || !clients.has(label)) return null;
-  const path = pathname.toLowerCase() === `/${label}` || pathname.toLowerCase().startsWith(`/${label}/`)
-    ? pathname
-    : `/${label}${pathname === '/' ? '/' : pathname}`;
-  return `https://${apex}${path}${search}`;
+  if (label === 'www') return null;
+  if (!NAME_RE.test(label) || RESERVED.includes(label) || !clients.has(label)) return { unknown: true };
+  return { client: clients.get(label), key: label };
+};
+
+// On a client's own address: the desk and the volunteers' app by the names
+// people say (/desk, /field) open where the server has them (/admin, /).
+// → a path to send the browser to, or null (the request goes to the server).
+export const named = (pathname) => {
+  let m;
+  if ((m = /^\/desk(\/.*)?$/i.exec(pathname))) return `/admin${m[1] || '/'}`;
+  if ((m = /^\/field(\/.*)?$/i.exec(pathname))) return m[1] || '/';
+  return null;
+};
+
+// base.win/<client>/… — the address from before — → the same screen at
+// <client>.base.win: the name alone was the public website, /field the
+// volunteers' app, /desk (and /admin) the office's, /web the website's back
+// office (the desk's Website area now); anything else keeps its path.
+// → a whole address, or null (no client by that name).
+export const moved = (clients, pathname, search = '', apex = apexOf(), port = apexPort()) => {
+  const m = /^\/([^/]+)(\/.*)?$/.exec(pathname);
+  if (!m) return null;
+  const key = m[1].toLowerCase();
+  if (!clients.has(key) || RESERVED.includes(key)) return null;
+  const rest = m[2] || '';
+  let path = rest;
+  if (rest === '' || rest === '/') path = '/site/';
+  else if (/^\/web(?:\/|$)/i.test(rest)) path = '/admin/website';
+  else path = named(rest) || rest;
+  return `${clientOrigin(key, apex, port)}${path}${search}`;
 };
 
 // Hop-by-hop headers stay on this side of the door.
@@ -123,17 +142,20 @@ export const handler = (clients, { fetchImpl = fetch, doorKey = doorKeyOf() } = 
   const url = new URL(req.url, 'http://door');
   const send = ({ status, headers, body }) => { res.writeHead(status, headers); res.end(body); };
   if (url.pathname === '/healthz') return send({ status: 200, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ok: true, service: 'base-door', clients: clients.size }) });
-  const short = subdomainRedirect(clients, req.headers.host, url.pathname, url.search);
-  if (short) {
-    const keep = req.method !== 'GET' && req.method !== 'HEAD';
-    return send({ status: keep ? 307 : 302, headers: { location: short, 'cache-control': 'no-store' }, body: '' });
+  const keep = req.method !== 'GET' && req.method !== 'HEAD';
+  const sendOn = (location) => send({ status: keep ? 307 : 302, headers: { location, 'cache-control': 'no-store' }, body: '' });
+  const nobody = () => send(page(404, 'Not found — base.win', '<h1>Not here</h1><p>There’s no campaign at this address on base.win. Check the link your campaign sent you.</p>'));
+  const at = hostClient(clients, req.headers.host);
+  if (at?.unknown) return nobody();
+  if (!at) {
+    // base.win itself: its own page, and the addresses from before.
+    if (url.pathname === '/' || url.pathname === '') return send({ ...page(200, 'base.win', ''), body: HOME });
+    const to = moved(clients, url.pathname, url.search);
+    return to ? sendOn(to) : nobody();
   }
-  if (url.pathname === '/' || url.pathname === '') {
-    return send({ ...page(200, 'base.win', ''), body: HOME });
-  }
-  const r = route(clients, url.pathname);
-  if (!r) return send(page(404, 'Not found — base.win', '<h1>Not here</h1><p>There’s no campaign at this address on base.win. Check the link your campaign sent you.</p>'));
-  if (r.redirect) return send({ status: 302, headers: { location: `${r.redirect}${url.search}`, 'cache-control': 'no-store' }, body: '' });
+  const say = named(url.pathname);
+  if (say) return sendOn(`${say}${url.search}`);
+  const r = { client: at.client, upstream: at.client.origin };
 
   const headers = new Headers();
   for (const [k, v] of Object.entries(req.headers)) {

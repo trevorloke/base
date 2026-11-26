@@ -22,7 +22,7 @@ const fetcher = async (url) => {
 };
 const health = (origin, over = {}) => ({
   ok: true, database: 'ok', service: 'starbase', env: 'production', commit: 'd9130ae', tzdataCurrent: true, ownOrigin: origin, instance: INST,
-  address: 'https://base.win/a', entry: 'ready', platformKids: [currentKid()], setupOpen: false, campaignMade: true, doorKey: true, ...over,
+  address: 'https://a.base.win', entry: 'ready', platformKids: [currentKid()], setupOpen: false, campaignMade: true, doorKey: true, ...over,
 });
 const { db } = await freshApp();
 const app = makeApp({ db, fetcher });
@@ -43,7 +43,7 @@ test('before the first poll: Not checked yet; the sample row offers to set its a
 
 test('Check now needs no fresh code; a healthy server answers, pins, and shows no chips', async () => {
   answers.set(`${A}/api/health`, { body: health(A) });
-  answers.set('https://base.win/a/api/health', { body: health(A) });
+  answers.set('https://a.base.win/api/health', { body: health(A) });
   await stale();
   const res = await b.post('/c/a/check-now', {});
   assert.equal(res.headers.get('location'), '/c/a');
@@ -67,7 +67,7 @@ test('the chips, only when true', async () => {
   assert.deepEqual(chipsFor({
     campaign: camp, envRow, door: { answering: false }, newest: 'e0e0e0e',
     server: { ...server, database: 'not reachable', tz_current: false, door_key: false, instance: 'AAAAAAAAAAAAAAAAAAAAAA' },
-  }), ['Database not reachable', 'Time zone data old', 'Server changed: confirm it', 'Door key not set', 'base.win/a not answering', 'Version differs']);
+  }), ['Database not reachable', 'Time zone data old', 'Server changed: confirm it', 'Door key not set', 'a.base.win not answering', 'Version differs']);
   assert.deepEqual(chipsFor({ campaign: camp, envRow, server: { ...server, entry: 'no-key' } }), ['base.win sign-in not set up']);
   assert.deepEqual(chipsFor({ campaign: camp, envRow, server: { ...server, platform_kids: ['00000000'] } }), ['Key in Render is wrong: copy base.win’s key again']);
   assert.deepEqual(chipsFor({ campaign: camp, envRow, server: { ...server, own_origin: B } }), ['This server says it is somewhere else']);

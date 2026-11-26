@@ -5,7 +5,7 @@ import { page, field, status, codeField } from './layout.mjs';
 import { inviteForm } from './desk.mjs';
 import { PROVINCES, TIME_ZONES, RACES, JURISDICTIONS, RULE_WORDS, envLines } from '../snippets.mjs';
 
-const NAME_HELP = 'Use letters, numbers and dashes. It’s the address: base.win/<name>.';
+const NAME_HELP = 'Use letters, numbers and dashes. It’s the address: <name>.base.win.';
 // "America/St_Johns" reads "St. John’s"; the rest lose "America/" and "_".
 const zoneWords = (z) => (z === 'America/St_Johns' ? 'St. John’s' : z.replace('America/', '').replace(/_/g, ' '));
 const select = ({ label, name, options, value, help = '' }) => html`<div class="field">

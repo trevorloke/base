@@ -35,7 +35,7 @@ const siteIslands = () => ({
 
 export default defineConfig({
   plugins: [react(), siteIslands()],
-  // One build for any client's path (base.win/imaginesurrey…, BASE_PATH on
+  // One build for any client's path (/imaginesurrey…, BASE_PATH on
   // the server). The page's own /assets links are put under it by the
   // server (server/lib/mount.js); files a script loads (lazy screens, their
   // CSS) are found from window.__BASE__, which the server writes into the

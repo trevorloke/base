@@ -6,8 +6,9 @@
 //               treasurers (and a volunteer given an area under Permissions).
 // main.jsx picks the router's base from the address; links across the two
 // are plain hrefs (a full load), inside each they are router links.
-// On base.win (a client's path, base.js) the two are /<client>/field and
-// /<client>/desk; at a site's root, / and /admin as they always were.
+// Under a client's path (BASE_PATH, base.js) the two are /<client>/field and
+// /<client>/desk; at a site's root — <client>.base.win is one — / and /admin
+// as they always were (the front door also takes /desk and /field there).
 import { BASE } from './base.js';
 export const FIELD_BASE = BASE ? `${BASE}/field` : '';
 export const ADMIN_BASE = BASE ? `${BASE}/desk` : '/admin';

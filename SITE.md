@@ -24,11 +24,12 @@ The contract the website work is built against. Read with ROADMAP.md.
   A host with a final dot is the same host (`imaginesurrey.ca.` is
   `imaginesurrey.ca`): in a request, in these lists, and where the app's
   own addresses are noted (`store.js hostOfRequest`).
-- Everywhere else (the app's own address, base.win/<client>), the site is at
-  `/site/…` (so `base.win/imaginesurrey/site/` works before DNS moves).
-  The front door (`apps/door`) sends `base.win/<client>` itself to
-  `/<client>/site/`, and an old `base.win/<client>/web…` link to
-  `/<client>/desk/website` — the admin's Website area is at `/website`.
+- Everywhere else (the app's own address, `<client>.base.win`), the site is at
+  `/site/…` (so `imaginesurrey.base.win/site/` works before DNS moves).
+  The front door (`apps/door`) sends `base.win/<client>`, the address from
+  before, to `<client>.base.win/site/`, and an old `base.win/<client>/web…`
+  link to `<client>.base.win/admin/website` — the admin's Website area is
+  at `/website`.
 - App routes (`/api`, `/field`, `/desk`, `/admin`, `/media`, `/u`, `/r/…` receipts …) are
   never shadowed on the app host. On a site host, only the site's routes and
   `/media/:id`, `/site-assets/*` are answered, and what services and emails
@@ -373,7 +374,8 @@ data.payments.membership_min_cents   optional: the join form's amounts start the
   cached for everyone (the server reads the cookie when `ref` is missing).
 - `source` *(added)* — the `?source=` tag, carried in the forms.
 - `origin` *(added)* — the public address in front of `root`, e.g.
-  `https://imaginesurrey.ca`, or `https://base.win/imaginesurrey` under
+  `https://imaginesurrey.ca`, `https://imaginesurrey.base.win` behind the
+  front door, or `https://campaigns.example/imaginesurrey` under
   `BASE_PATH`: absolute canonical, `og:url`, `og:image` and share links
   (without it the browser completes share links from the page's address,
   keeping the client's path).

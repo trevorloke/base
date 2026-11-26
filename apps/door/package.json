@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "The front door at base.win: routes base.win/<client>/{site,field,desk} to each client's own server.",
+  "description": "The front door at base.win: routes <client>.base.win to each client's own server.",
   "engines": { "node": ">=22" },
   "scripts": {
     "start": "node door.mjs",

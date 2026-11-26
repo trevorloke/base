@@ -16,7 +16,7 @@ const NOT_AN_ADDRESS = 'That isn’t a Render address: it starts with https:// a
 // Why a short name can't be used, or null.
 export const nameProblem = async (db, name) => {
   if (RESERVED.includes(name)) return 'That name is kept for base.win.';
-  if (!NAME_RE.test(name)) return 'Use letters, numbers and dashes. It’s the address: base.win/<name>.';
+  if (!NAME_RE.test(name)) return 'Use letters, numbers and dashes. It’s the address: <name>.base.win.';
   if (await getCampaign(db, name)) return 'That name is taken.';
   return null;
 };

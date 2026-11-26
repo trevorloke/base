@@ -129,8 +129,8 @@ app.get('*', serveStatic({ root: WEB_ROOT, path: 'index.html' }));
 const isMain = process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop());
 if (isMain) {
   const port = Number(process.env.PORT) || 3200;
-  // BASE_PATH=/imaginesurrey: this Ground answers under base.win/imaginesurrey
-  // (lib/mount.js); unset, at the site's root.
+  // BASE_PATH=/imaginesurrey: this Ground answers under that path
+  // (lib/mount.js); unset, at the site's root — as at <client>.base.win.
   const base = basePath();
   const server = serve({ fetch: mountAt(app, base), port }, () => {
     console.log(`starbase on :${port}${base ? ` at ${base}` : ''}`);
@@ -141,10 +141,13 @@ if (isMain) {
   if (tz) console.warn(`starbase: ${tz}`);
   const moved = clockNote();
   if (moved) console.warn(`starbase: ${moved}`);
-  // Behind the base.win door without its key, everyone who comes through
-  // the door is the door's one address to the limits per address.
-  if (base && !doorKeySet()) {
-    console.warn('starbase: under base.win (BASE_PATH) but BASE_DOOR_KEY is not set (32+ characters, the same as the door’s) — everyone who comes through the door counts as one address for sign-in tries and the website’s forms');
+  // Behind the base.win door (its public address is <client>.base.win)
+  // without the door's key, everyone who comes through the door is the
+  // door's one address to the limits per address.
+  // (Staging has an address of its own there, not the door's.)
+  const onBaseWin = envName() !== 'staging' && (() => { try { return /\.base\.win$/i.test(new URL(publicAddress() || '').hostname); } catch { return false; } })();
+  if ((base || onBaseWin) && !doorKeySet()) {
+    console.warn('starbase: behind the base.win door but BASE_DOOR_KEY is not set (32+ characters, the same as the door’s) — everyone who comes through the door counts as one address for sign-in tries and the website’s forms');
   }
   // Background jobs (ladder steps, A/B winners). STARBASE_JOBS=off disables.
   if (process.env.STARBASE_JOBS !== 'off') {

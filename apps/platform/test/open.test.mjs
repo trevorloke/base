@@ -24,7 +24,7 @@ const fetcher = async (url) => {
 };
 const health = (origin, over = {}) => ({
   ok: true, database: 'ok', service: 'starbase', env: 'production', commit: 'd9130ae', tzdataCurrent: true, ownOrigin: origin, instance: INST,
-  address: 'https://base.win/a', entry: 'ready', platformKids: [currentKid()], setupOpen: false, campaignMade: true, doorKey: true, ...over,
+  address: 'https://a.base.win', entry: 'ready', platformKids: [currentKid()], setupOpen: false, campaignMade: true, doorKey: true, ...over,
 });
 const { db } = await freshApp();
 const app = makeApp({ db, fetcher });
@@ -32,7 +32,7 @@ const op = await setUp(app, db);
 const b = op.b;
 await db.transaction((tx) => createCampaign(tx, { name: 'a', display: 'Example A', serverUrl: A }));
 answers.set(`${A}/api/health`, { body: health(A) });
-answers.set('https://base.win/a/api/health', { body: health(A) });
+answers.set('https://a.base.win/api/health', { body: health(A) });
 await b.post('/c/a/check-now', {});
 const stale = () => db.query("update ops_sessions set code_at = now() - interval '11 minutes'");
 const tables = async () => {

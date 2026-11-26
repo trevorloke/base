@@ -56,13 +56,13 @@ also have `GOOGLE_MAPS_TILES=off` before the release is pushed (§5, Recipe B).
 
 | Host | What it serves | Where |
 |---|---|---|
-| `starbase.imaginesurrey.ca` (and `base.win/imaginesurrey` through the door, apps/door/README.md) | the staff and volunteer app, and the public forms | Render → Settings → Custom Domains |
+| `starbase.imaginesurrey.ca` (and `imaginesurrey.base.win` through the door, apps/door/README.md) | the staff and volunteer app, and the public forms | Render → Settings → Custom Domains |
 | `imaginesurrey.ca`, `www.imaginesurrey.ca`, once the campaign moves its website onto base.win | the website made under **Website** in the admin, at `/`; nothing of the app answers there | Render → Settings → Custom Domains, then `SITE_HOSTS` (below) |
 
 Add the DNS records Render shows; it issues the certificates.
 
 The website made under **Website** is live from the first deploy at the
-app's own address, under `/site/` (`base.win/imaginesurrey/site/` through
+app's own address, under `/site/` (`imaginesurrey.base.win/site/` through
 the door), so it can be checked before any DNS moves (SITE.md). To put it
 on the campaign's own domain, in this order:
 
@@ -581,7 +581,10 @@ is shared, and the code names no client.
    into Render's Environment, the database and the service
    (`base-win-<client>`, `base-win-<client>-db`), the address to paste back,
    then the door's new value — and ticks a checklist as each part answers.
-   No git and nothing to hash (`apps/platform/README.md`).
+   No git and nothing to hash (`apps/platform/README.md`). The campaign's
+   address is `<client>.base.win`: the door holds `*.base.win` (one
+   wildcard domain, set up once — `apps/door/README.md`), so a new client
+   needs no DNS of its own.
 2. **Invite the first manager** there opens the new desk and invites them.
 3. One `main` serves every client: a change lands on every client's
    staging at once, and *Promote to production* moves it to every
@@ -670,7 +673,7 @@ your counsel first whether voter data may go to Google Drive.
 2. Google Auth Platform → **Data access**: add
    `https://www.googleapis.com/auth/drive.file`. Nothing else for Drive.
 3. APIs & Services → Credentials → **Create credentials → API key**. Websites:
-   `https://base.win/*` (or the public address), the staging address and
+   `https://*.base.win/*` (or the public address), the staging address and
    `https://docs.google.com/*`; API restriction: **Google Picker API** only.
    Each campaign gets its own project and key.
 4. IAM & Admin → Settings: copy the **Project number** (digits, not the ID).

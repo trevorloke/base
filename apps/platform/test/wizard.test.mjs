@@ -24,7 +24,7 @@ const fetcher = async (url) => {
 };
 const health = (origin, over = {}) => ({
   ok: true, database: 'ok', service: 'starbase', env: 'production', commit: 'd9130ae', tzdataCurrent: true, ownOrigin: origin, instance: INST,
-  address: 'https://base.win/x', entry: 'ready', platformKids: [currentKid()], setupOpen: false, campaignMade: true, doorKey: true, ...over,
+  address: 'https://x.base.win', entry: 'ready', platformKids: [currentKid()], setupOpen: false, campaignMade: true, doorKey: true, ...over,
 });
 const { db } = await freshApp();
 const app = makeApp({ db, fetcher });
@@ -41,10 +41,10 @@ test('short names: the door’s rule, the reserved list (sample too), no capital
     assert.equal(res.status, 400, name);
     assert.match(await res.text(), /That name is kept for base\.win\./, name);
   }
-  assert.ok(RESERVED.includes('sample') && RESERVED.includes('ops'));
+  assert.ok(RESERVED.includes('sample') && RESERVED.includes('ops') && RESERVED.includes('staging'));
   for (const name of ['Riverton', 'riverton-', '-riverton', 'river ton', '', 'a'.repeat(64)]) {
     const res = await b.post('/new', { ...NEW, name });
-    assert.match(await res.text(), /Use letters, numbers and dashes\. It’s the address: base\.win\/&lt;name&gt;\./, name);
+    assert.match(await res.text(), /Use letters, numbers and dashes\. It’s the address: &lt;name&gt;\.base\.win\./, name);
   }
   assert.equal((await db.query("select count(*)::int n from campaigns where kind = 'client'")).rows[0].n, 0);
 });
@@ -88,7 +88,7 @@ test('the time zone follows the province; a race is needed; the rules are the se
 test('the .env block: every value asked for, the base.win address, base.win’s key; nothing of staging; the random lines empty for the browser', async () => {
   const body = await (await b.get('/c/riverton/setup')).text();
   const block = envBlock(body);
-  for (const line of ['NODE_ENV=production', 'STARBASE_ENV=production', 'BASE_PATH=/riverton', 'STARBASE_PUBLIC_URL=https://base.win/riverton', 'STARBASE_BRAND=base',
+  for (const line of ['NODE_ENV=production', 'STARBASE_ENV=production', 'STARBASE_PUBLIC_URL=https://riverton.base.win', 'STARBASE_BRAND=base',
     'STARBASE_ORG_NAME=&quot;Riverton Forward&quot;', 'STARBASE_JURISDICTION=bc-municipal', 'STARBASE_PROVINCE=ON', 'STARBASE_TZ=America/Toronto',
     'STARBASE_CITY=&quot;Riverton&quot;', 'STARBASE_SLATES=&quot;council:City council&quot;', `BASE_PLATFORM_PUBKEY=${publicKeyOf(SIGNING).publicKey}`]) {
     assert.ok(block.includes(line), line);
@@ -108,7 +108,7 @@ test('the .env block: every value asked for, the base.win address, base.win’s 
 test('pasting its address: a stale code saves nothing; then it answers, pins, and the door card shows the whole value', async () => {
   const R = 'https://base-win-riverton.onrender.com';
   answers.set(`${R}/api/health`, health(R));
-  answers.set('https://base.win/riverton/api/health', health(R));
+  answers.set('https://riverton.base.win/api/health', health(R));
   await stale();
   const s = await b.post('/c/riverton/setup', { server_url: R });
   assert.equal(s.status, 401);
@@ -166,7 +166,7 @@ test('auto ticks are set from the checks and never cleared by a later failure', 
   let d = await done('riverton');
   for (const item of ['service', 'answers', 'tz', 'entry', 'door-key', 'door', 'campaign-made']) assert.equal(d.get(item), 'auto', item);
   answers.set('https://base-win-riverton.onrender.com/api/health', health('https://base-win-riverton.onrender.com', { database: 'not reachable', tzdataCurrent: false, entry: 'no-key', doorKey: false }));
-  answers.delete('https://base.win/riverton/api/health');
+  answers.delete('https://riverton.base.win/api/health');
   await b.post('/c/riverton/check-now', {});
   d = await done('riverton');
   for (const item of ['answers', 'tz', 'entry', 'door-key', 'door', 'campaign-made']) assert.equal(d.get(item), 'auto', item);
@@ -183,7 +183,7 @@ test('the render.yaml block for us: the production block’s keys only, nothing 
   const prodBlock = yaml.slice(yaml.indexOf('name: base-win\n'), yaml.indexOf('name: base-platform\n'));
   const prodKeys = new Set([...prodBlock.matchAll(/- key: ([A-Z0-9_]+)/g)].map((m) => m[1]));
   // What a client behind the door needs that Imagine Surrey's own block doesn't name.
-  const BEHIND_THE_DOOR = ['BASE_PATH', 'STARBASE_PROVINCE', 'STARBASE_TWO_STEP_KEY', 'BASE_DOOR_KEY'];
+  const BEHIND_THE_DOOR = ['STARBASE_PROVINCE', 'STARBASE_TWO_STEP_KEY', 'BASE_DOOR_KEY'];
   const snippet = renderSnippet({ name: 'riverton', display: 'Riverton Forward', values: { city: 'Riverton', province: 'ON', rules: 'bc-municipal', tz: 'America/Toronto', races: ['council'] } });
   const keys = [...snippet.matchAll(/- key: ([A-Z0-9_]+)/g)].map((m) => m[1]);
   for (const k of keys) assert.ok(prodKeys.has(k) || BEHIND_THE_DOOR.includes(k), k);
@@ -195,5 +195,5 @@ test('the render.yaml block for us: the production block’s keys only, nothing 
   assert.equal(after('GOOGLE_TOKEN_KEY'), 'generateValue: true');
   assert.ok(!snippet.includes(publicKeyOf(SIGNING).publicKey));
   assert.match(snippet, /name: base-win-riverton\n/);
-  assert.match(snippet, /- key: STARBASE_PUBLIC_URL\n\s+value: "https:\/\/base\.win\/riverton"/);
+  assert.match(snippet, /- key: STARBASE_PUBLIC_URL\n\s+value: "https:\/\/riverton\.base\.win"/);
 });
