@@ -787,10 +787,11 @@ block for `render.yaml` (*Or ask us to add it to render.yaml*): its names
 `STARBASE_BRAND=base` and `STARBASE_CANDIDATES=none`. Paste that block.
 Never copy `base-win`'s own block: it is Imagine Surrey's, and its
 `STARBASE_BRAND=imagine-surrey` setting would give the new client Imagine
-Surrey's set-up. Those `STARBASE_*` lines stay `sync: false`: set each value
-on the new service in Render (Environment) before its first sign-in. A
-fixed value there would be written over at every sync, and the
-release-settings check refuses it. Commit on `main`.
+Surrey's set-up. The block gives those `STARBASE_*` lines as `sync: false`,
+each value after its `#`: set each value on the new service in Render
+(Environment) before its first sign-in. A fixed value there would be
+written over at every sync, and the release-settings check refuses it.
+Commit on `main`.
 The change reaches Render by a Blueprint sync, so go through section 0,
 *Before a Blueprint sync*, first: whether a Blueprint is listed, whether
 Auto Sync is on, and the name check. If none is listed, make the database

@@ -15,12 +15,12 @@
 # https://<name>.base.win, a custom domain on that service — see GOING-LIVE.md
 # §6 "A new client". The fallback: the same page of the control centre writes
 # that client's own block for this file (its names, its STARBASE_* values and
-# STARBASE_BRAND=base). Paste its STARBASE_* lines as sync: false, each value
-# kept as a comment, and set the values on the new service in Render: a fixed
-# value would be written over at every sync, and the release-settings check
-# refuses it. Never copy base-win's block below: it is Imagine Surrey's, and
-# its STARBASE_BRAND setting (imagine-surrey in Render) turns on Imagine
-# Surrey's own set-up.
+# STARBASE_BRAND=base). Its STARBASE_* lines come as sync: false, each value
+# after its #, as in base-win's block: set those values on the new service in
+# Render. A fixed value would be written over at every sync, and the
+# release-settings check refuses it. Never copy base-win's block below: it
+# is Imagine Surrey's, and its STARBASE_BRAND setting (imagine-surrey in
+# Render) turns on Imagine Surrey's own set-up.
 #
 # Docs: https://render.com/docs/blueprint-spec
 #

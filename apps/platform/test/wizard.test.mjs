@@ -16,6 +16,7 @@ import { publicKeyOf, currentKid } from '../keys.mjs';
 import { ITEMS, MANUAL } from '../checklist.mjs';
 import { tzFor, renderSnippet, envText, envLines, mapBounds, parseCorner, hasValues, JURISDICTIONS, DENY } from '../snippets.mjs';
 import { JURISDICTIONS as SERVER_RULES, geoBounds } from '../../../server/lib/org.js';
+import { parseYaml, settingProblems, explainSettings } from '../../../server/test/release-safety.js';
 
 baseEnv();
 const INST = 'EBESExQVFhcYGRobHB0eHw';
@@ -396,16 +397,40 @@ test('the render.yaml block for us: the production block’s keys only, nothing 
   for (const k of keys) assert.ok(prodKeys.has(k) || A_NEW_CLIENT.includes(k), k);
   assert.equal(new Set(keys).size, keys.length, 'no key twice');
   for (const k of [...DENY, 'BASE_PATH', 'BASE_DOOR_KEY', 'BASE_CLIENTS']) assert.ok(!snippet.includes(k), k);
-  const after = (k) => snippet.split('\n')[snippet.split('\n').findIndex((l) => l.trim() === `- key: ${k}`) + 1].trim();
+  const lines = snippet.split('\n');
+  const at = (k) => lines.findIndex((l) => new RegExp(`^- key: ${k}(\\s|$)`).test(l.trim()));
+  const after = (k) => lines[at(k) + 1].trim();
+  const shown = (k) => (/#\s*(.*)$/.exec(lines[at(k)]) || [])[1];
   assert.equal(after('BASE_PLATFORM_PUBKEY'), 'sync: false');
   assert.equal(after('STARBASE_TWO_STEP_KEY'), 'generateValue: true');
   assert.equal(after('GOOGLE_TOKEN_KEY'), 'generateValue: true');
-  assert.equal(after('STARBASE_GEO_BOUNDS'), `value: "${BOUNDS}"`);
-  assert.equal(after('STARBASE_CANDIDATES'), 'value: "none"');
-  assert.equal(after('STARBASE_PUBLIC_URL'), 'value: "https://riverton.base.win"');
+  assert.equal(after('NODE_ENV'), 'value: production');
+  assert.equal(after('STARBASE_ENV'), 'value: production');
+  // The client's own settings: sync: false, each value shown after its #.
+  for (const [k, v] of [['STARBASE_PUBLIC_URL', 'https://riverton.base.win'], ['STARBASE_BRAND', 'base'], ['STARBASE_ORG_NAME', 'Riverton Forward'],
+    ['STARBASE_JURISDICTION', 'bc-municipal'], ['STARBASE_PROVINCE', 'ON'], ['STARBASE_TZ', 'America/Toronto'], ['STARBASE_CITY', 'Riverton'],
+    ['STARBASE_SLATES', 'council:City council'], ['STARBASE_GEO_BOUNDS', BOUNDS], ['STARBASE_CANDIDATES', 'none']]) {
+    assert.equal(after(k), 'sync: false', k);
+    assert.equal(shown(k), v, `${k}: its value shown as a comment`);
+  }
+  assert.doesNotMatch(snippet, /^\s*value: (?!production$)/m, 'no fixed value but NODE_ENV and STARBASE_ENV');
   assert.ok(!snippet.includes(publicKeyOf(SIGNING).publicKey));
   assert.match(snippet, /name: base-win-riverton\n/);
   // The database: 0.5 CPU, 1 GB, by the name Render gives that plan.
   assert.match(snippet, /- name: base-win-riverton-db\n {4}plan: basic-1gb\n/);
   assert.doesNotMatch(snippet, /0\.5c-1g/);
+});
+
+test('the render.yaml block for us, pasted into render.yaml, passes the release-settings check', () => {
+  const snippet = renderSnippet({ name: 'riverton', display: 'Riverton Forward', values: { city: 'Riverton', province: 'ON', rules: 'bc-municipal', tz: 'America/Toronto', races: ['council', 'school_board'], bounds: BOUNDS } });
+  const [svc, dbs] = snippet.split('  # databases:\n');
+  assert.ok(svc && dbs, 'a service and a database');
+  const pasted = YAML.replace('\nservices:\n', `\nservices:\n${svc.replace('  # services:\n', '')}\n`).replace('\ndatabases:\n', `\ndatabases:\n${dbs}\n`);
+  const doc = parseYaml(pasted);
+  const s = doc.services.find((x) => x.name === 'base-win-riverton');
+  assert.ok(s, 'the new service is read');
+  assert.ok(doc.databases.find((x) => x.name === 'base-win-riverton-db'), 'the new database is read');
+  assert.equal(s.envVars.find((v) => v.key === 'STARBASE_CITY').sync, false);
+  const problems = settingProblems(doc);
+  if (problems.length) assert.fail(explainSettings(problems));
 });

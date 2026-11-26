@@ -125,6 +125,7 @@ export const setupPage = ({ v, values, publicKey, serverUrl, addressState, publi
     </ol>
     <details class="oc-more"><summary class="btn btn-quiet">More</summary>
       <h2>Or ask us to add it to render.yaml</h2>
+      <p>Each of the campaign's own settings is <code>sync: false</code>. Set it on the new service in Render, to the value after its <code>#</code>.</p>
       <pre class="oc-pre" id="yaml-snippet">${snippet}</pre>
       <button class="btn btn-quiet oc-copy-btn" type="button" data-copy="yaml-snippet">Copy</button>
     </details>`,

@@ -83,18 +83,22 @@ const LATER = ['RESEND_API_KEY', 'MAIL_FROM', 'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH
   'GOOGLE_OAUTH_CLIENT_ID', 'GOOGLE_OAUTH_CLIENT_SECRET', 'GOOGLE_PICKER_KEY', 'GOOGLE_CLOUD_PROJECT_NUMBER'];
 
 // For us: the same campaign as a render.yaml service and database, made
-// from the production block's shape.
+// from the production block's shape. Like base-win's block, the client's
+// own settings are sync: false, each value shown after its # to set once on
+// the service in Render: a fixed value would be written over at every
+// Blueprint sync, and the release-settings check refuses it
+// (server/test/release-safety.js FIXED_OK). Only NODE_ENV and STARBASE_ENV,
+// the same on every client, are fixed.
 export const renderSnippet = ({ name, display, values }) => {
-  const q = (s) => JSON.stringify(String(s));
   const env = [];
-  const add = (key, body) => env.push(`      - key: ${key}`, ...body.map((l) => `        ${l}`));
+  const add = (key, body, shown) => env.push(`      - key: ${shown == null ? key : `${key.padEnd(24)}# ${shown}`}`, ...body.map((l) => `        ${l}`));
   add('NODE_ENV', ['value: production']);
   add('STARBASE_ENV', ['value: production']);
   add('DATABASE_URL', ['fromDatabase:', `  name: base-win-${name}-db`, '  property: connectionString']);
   for (const l of envLines({ name, display, values })) {
     if (['NODE_ENV', 'STARBASE_ENV'].includes(l.key) || DENY.includes(l.key)) continue;
     if (SECRET[l.key]) continue;
-    add(l.key, [`value: ${q(l.value.replace(/^"|"$/g, ''))}`]);
+    add(l.key, ['sync: false'], flat(l.value.replace(/^"|"$/g, '')));
   }
   for (const [key, how] of Object.entries(SECRET)) add(key, [how === 'sync' ? 'sync: false' : 'generateValue: true']);
   for (const key of LATER) add(key, ['sync: false']);

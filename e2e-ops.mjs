@@ -239,7 +239,7 @@ try {
   await look(page, '09-setup-all-cards');
   await page.click('summary:has-text("More")');
   const yaml = await page.textContent('#yaml-snippet');
-  ok(/plan: basic-1gb/.test(yaml) && !/BASE_DOOR_KEY|BASE_PATH/.test(yaml) && /value: "https:\/\/a\.base\.win"/.test(yaml), 'the render.yaml block: the database plan, its own address, nothing of the door');
+  ok(/plan: basic-1gb/.test(yaml) && !/BASE_DOOR_KEY|BASE_PATH/.test(yaml) && /- key: STARBASE_PUBLIC_URL +# https:\/\/a\.base\.win\n +sync: false/.test(yaml) && !/value: "/.test(yaml), 'the render.yaml block: the database plan, its own address (sync: false, shown as a comment), nothing of the door');
   await look(page, '09b-setup-render-yaml');
   // Before the custom domain is there: a chip; once it is, the checklist ticks by itself.
   let aText = await checkNow('a');

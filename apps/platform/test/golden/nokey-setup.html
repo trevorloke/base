@@ -71,6 +71,7 @@ GOOGLE_TOKEN_KEY=<span data-random></span></pre>
     </ol>
     <details class="oc-more"><summary class="btn btn-quiet">More</summary>
       <h2>Or ask us to add it to render.yaml</h2>
+      <p>Each of the campaign's own settings is <code>sync: false</code>. Set it on the new service in Render, to the value after its <code>#</code>.</p>
       <pre class="oc-pre" id="yaml-snippet">  # services:
   - type: web
     name: base-win-x
@@ -91,26 +92,26 @@ GOOGLE_TOKEN_KEY=<span data-random></span></pre>
         fromDatabase:
           name: base-win-x-db
           property: connectionString
-      - key: STARBASE_PUBLIC_URL
-        value: &quot;https://x.base.win&quot;
-      - key: STARBASE_BRAND
-        value: &quot;base&quot;
-      - key: STARBASE_ORG_NAME
-        value: &quot;Example X&quot;
-      - key: STARBASE_JURISDICTION
-        value: &quot;bc-municipal&quot;
-      - key: STARBASE_PROVINCE
-        value: &quot;BC&quot;
-      - key: STARBASE_TZ
-        value: &quot;America/Vancouver&quot;
-      - key: STARBASE_CITY
-        value: &quot;Exampleton&quot;
-      - key: STARBASE_SLATES
-        value: &quot;council:City council&quot;
-      - key: STARBASE_GEO_BOUNDS
-        value: &quot;50.6,-120.5|50.8,-120.2&quot;
-      - key: STARBASE_CANDIDATES
-        value: &quot;none&quot;
+      - key: STARBASE_PUBLIC_URL     # https://x.base.win
+        sync: false
+      - key: STARBASE_BRAND          # base
+        sync: false
+      - key: STARBASE_ORG_NAME       # Example X
+        sync: false
+      - key: STARBASE_JURISDICTION   # bc-municipal
+        sync: false
+      - key: STARBASE_PROVINCE       # BC
+        sync: false
+      - key: STARBASE_TZ             # America/Vancouver
+        sync: false
+      - key: STARBASE_CITY           # Exampleton
+        sync: false
+      - key: STARBASE_SLATES         # council:City council
+        sync: false
+      - key: STARBASE_GEO_BOUNDS     # 50.6,-120.5|50.8,-120.2
+        sync: false
+      - key: STARBASE_CANDIDATES     # none
+        sync: false
       - key: BASE_PLATFORM_PUBKEY
         sync: false
       - key: STARBASE_TWO_STEP_KEY
