@@ -143,10 +143,46 @@ The whole order of things, from deploy to the public link, is in
 
 Staging is the public demo: its email, texting and payment keys are test
 keys or unset, never a client's, and it never holds a real list
-(GOING-LIVE.md, section 0). Where a check below is run with `BASE_PATH`
+(GOING-LIVE.md, section 0). Import only made-up files there. Where a check below is run with `BASE_PATH`
 (under a client's path, `/imaginesurrey` or `/x`), it covers the door
 (`apps/door`), an option nobody uses today: every service runs at its
 address's root.
+
+### Staging's sample
+
+Everyone and everything in staging's sample is made up
+(`server/lib/samplecast.js`); only the street map is real.
+
+- **It makes itself again.** A release that raises `SAMPLE_VERSION`
+  (`server/lib/samplecampaign.js`) drops the old sample at staging's next
+  start and makes the new one. Raise it whenever what the sample holds
+  changes; `server/test/samplecampaign.test.js` fails until you do
+  (*the sample changed: raise SAMPLE_VERSION*), and the walk test fails when
+  what a new campaign starts with changes.
+- **How long it takes.** 320 people: about 7 seconds in memory on a
+  laptop. On Render's database: not timed yet. Time the first one (the
+  server's log says *sample: made* when it is done) and write it here.
+  Meanwhile the demo shows *The demo is being refreshed* and tries again
+  every 10 seconds; a visitor is signed back in when it is done.
+- **When it won't.** Staging drops nothing unless its database holds one
+  campaign whose first manager is the demo account. If its log says *this
+  database's first campaign is not the demo account's*, or *could not be
+  made in 3 tries*, set `STARBASE_SAMPLE_RESET` in Render (base-win-staging
+  → Environment) to a new word of your own (GOING-LIVE.md, section 0).
+- **Your own account on staging.** The sign-in page sends everyone into the
+  demo. Open `/login?stay=1` to sign in with your own email and password.
+- **The daily check.** GitHub → Actions → *Staging check* walks the demo
+  every day, and by hand with **Run workflow**. It fails, and opens one
+  issue, when it finds a real name, phone, email or link, an old sample,
+  or a live email or texting key. By hand, against any address:
+  `node scripts/staging-check.mjs https://staging.base.win`.
+- **On your computer.** The same server as staging, in memory:
+  `STARBASE_ENV=staging STARBASE_BRAND=base STARBASE_SAMPLE=vancouver
+  STARBASE_DEMO_EMAIL=demo@base.win STARBASE_ORG_NAME="Sample Campaign"
+  STARBASE_DATA=memory npm start`, then open `http://localhost:3200/` (the
+  sample takes a few seconds). `node --test
+  server/test/staging-walk.test.js` reads every screen's data the way the
+  daily check does, with render.yaml's own staging settings.
 
 For Twilio, set the number's incoming messages webhook to
 `https://<your address>/api/public/twilio/sms` (HTTP POST). Calls through the

@@ -52,7 +52,29 @@ and inside each campaign.
 in as the sample campaign's manager. So staging never gets a real email,
 texting or payment key that can reach real people, and never a real list,
 whole or in part. Its keys are test keys, or left unset. Try a change on
-staging with the sample campaign's made-up people.
+staging with the sample campaign's made-up people. Import only made-up
+files there.
+
+Everyone and everything in the sample is made up: the people's surnames,
+their house numbers (9900 to 9999, which no street in the sample has), the
+opponents on the rating scale and their elector organizations
+(`server/lib/samplecast.js`). The street map is real. A check runs every
+day (GitHub → Actions → *Staging check*): it walks the demo as a visitor
+does, and opens an issue when it finds a real name, phone number, email
+address or link, or a live email or texting key.
+
+**The sample makes itself again.** When a release carries a newer sample
+(`SAMPLE_VERSION` in `server/lib/samplecampaign.js`), staging drops the old
+one at its next start and makes the new one, by itself. It takes about a
+minute (TESTING.md, *Staging*); a visitor in the demo meanwhile sees *The
+demo is being refreshed* and is signed back in when it is done. Staging
+does this only while its database holds one campaign and that campaign's
+first manager is the demo account. If not, it drops nothing, and its log
+says so. Then, and only then, set `STARBASE_SAMPLE_RESET` in Render
+(base-win-staging → Environment) to a new word: any word this database
+hasn't seen, of your own invention (for example `fresh-2026-11`). Nobody
+issues it and it is not a secret. A new word drops everything in staging's
+database and makes the sample again.
 
 The same goes for map and translation keys (Google, Stadia, CARTO): every
 demo visitor would draw on them. Staging gets base.win's own key, with a
@@ -221,7 +243,7 @@ the map's check says *Map area: Not set*.
 | Variable | Set it to | Needed for |
 |---|---|---|
 | `STARBASE_ENV` | `staging` on the staging service, `production` on production (set by `render.yaml`) | the *Staging* badge; `/api/health` |
-| `STARBASE_FRAME_HOSTS`, `STARBASE_DEMO_EMAIL`, `STARBASE_SAMPLE`, `STARBASE_SAMPLE_RESET` | staging only, and ignored on production: the sites that may frame the app; the account every demo visitor is signed in as at `/api/auth/demo`; `vancouver` to make the sample campaign once on an empty database; and a new word to drop everything in staging's database and make the sample again | the demo on the base.win website (`server/lib/demo.js`, `server/lib/samplecampaign.js`). Anyone who opens the demo can do whatever the demo account can, so that server holds the sample campaign and nobody real |
+| `STARBASE_FRAME_HOSTS`, `STARBASE_DEMO_EMAIL`, `STARBASE_SAMPLE`, `STARBASE_SAMPLE_RESET` | staging only, and ignored on production: the sites that may frame the app; the account every demo visitor is signed in as at `/api/auth/demo`; `vancouver` to make the sample campaign on an empty database, and again by itself when a release carries a newer sample; and a new word of your own invention to drop everything in staging's database and make the sample again (only when the log asks for it: section 0) | the demo on the base.win website (`server/lib/demo.js`, `server/lib/samplecampaign.js`). Anyone who opens the demo can do whatever the demo account can, so that server holds the sample campaign and nobody real |
 | `STARBASE_ORG_NAME`, `STARBASE_JURISDICTION`, `STARBASE_TZ`, `STARBASE_CITY`, `STARBASE_SLATES`, `STARBASE_CANDIDATES` | the campaign (README → *One deployment per client*) | the name the first sign-up sets up, the contribution rules, the campaign's day, addresses, the slates a gift can go to, the rating scale's first candidates |
 | `STARBASE_PUBLIC_URL` | the service's own address from section 0: `https://imaginesurrey.base.win` (staging: `https://staging.base.win`) | every link in an email: invites, unsubscribe, receipts, password links (Forgot password is off without it); calendar links and files |
 | `RESEND_API_KEY`, `MAIL_FROM` | from Resend; `Imagine Surrey <team@imaginesurrey.ca>` on the campaign's domain (Settings → Services → Email → *Sending domain* walks through its DNS records). Staging: a test key or unset, never a client's (section 0) | email; without it invites are shown to copy and sends wait as *queued* |
@@ -372,7 +394,8 @@ what volunteers get, and what you see under *Field app ↗* in your account menu
    creates the campaign's workspace (its jurisdiction's rules, the
    contribution limit seeded, its time zone) and closes sign-up. Everyone
    else joins by invite. Staging needs none of this: its sample campaign
-   makes itself (section 3, `STARBASE_SAMPLE`).
+   makes itself (section 3, `STARBASE_SAMPLE`), and its sign-up stays closed
+   to everyone else.
 2. **Today** shows a banner if the server's time-zone data is stale (step 1)
    so a manager can't miss it.
 3. **Admin** (from the account menu, your initials): under **Members**
