@@ -71,7 +71,7 @@ import './today.css';
 import './candidate.css';
 import { at } from '../base.js';
 import { NS } from '../base.js';
-import { BRAND } from '../brand.js';
+import { BRAND, hasFeature } from '../brand.js';
 import MapWindow from '../components/MapWindow.jsx';
 import { useVotedMode } from '../components/Voted.jsx';
 import { gotvNoteCount } from '../components/gotvNotes.js';
@@ -148,7 +148,7 @@ function SampleCard({ onToast }) {
     try {
       const r = await apiPost('/data/sample');
       await queryClient.invalidateQueries();
-      onToast(`Sample data loaded — ${r.people ?? 52} people, ${r.signs ?? 0} signs, ${r.gifts ?? 0} gifts`);
+      onToast(`Sample data loaded — ${r.people ?? 0} people, ${r.signs ?? 0} signs, ${r.gifts ?? 0} gifts`);
     } catch (e) {
       if (e.status === 409) {
         // The server found sample-tagged people. Refresh; if the brief still
@@ -1136,7 +1136,8 @@ function DeskToday({ b, me, nav, toast }) {
   const isManager = me?.role === 'manager';
   const myTurfs = b.myTurfs ?? [];
   const peopleTotal = Number(b.people?.total) || 0;
-  const offerSample = isManager && !b.sampleLoaded && peopleTotal < 5;
+  // Only a campaign whose set-up brings sample people is offered them.
+  const offerSample = isManager && !b.sampleLoaded && peopleTotal < 5 && hasFeature(me, 'sample');
   const scale = useScale();
   const pic = supportPicture(scale, b.ratings);
   const statsById = useTurfStats(myTurfs.length > 0);

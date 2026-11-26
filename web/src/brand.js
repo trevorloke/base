@@ -13,7 +13,7 @@
 import { BRANDS, DEFAULT_BRAND } from '@starbase/shared/brand';
 
 // base.win's own values: what a page with nothing written into it wears.
-const OWN = { ...BRANDS[DEFAULT_BRAND], sampleLede: 'Try it with 52 made-up voters.' };
+const OWN = { ...BRANDS[DEFAULT_BRAND] };
 
 // What the server wrote, taken only in the shapes it writes.
 const sent = typeof window !== 'undefined' && window.__BRAND__ && typeof window.__BRAND__ === 'object' ? window.__BRAND__ : null;
@@ -48,7 +48,8 @@ const fromPage = (s) => ({
   mark: path(s.mark),
   // A campaign's own (a preset's), when its server sent them.
   sitePlaceholder: word(s.sitePlaceholder, OWN.sitePlaceholder),
-  sampleLede: word(s.sampleLede, OWN.sampleLede),
+  // The line on Today's sample card: only a campaign with a sample has one.
+  sampleLede: word(s.sampleLede, ''),
   startWord: word(s.startWord, null),
   flag: hex(s.flag),
   learnAliases: list(s.learnAliases, (p) => Boolean(path(p))),

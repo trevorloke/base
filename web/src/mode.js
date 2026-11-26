@@ -1,6 +1,6 @@
 // Two apps from one build, told apart by the address:
 //   /           the field app — what a volunteer sees and uses (Today ·
-//               Map · Calls · Shifts · ImagineU). Anyone may open it; a
+//               Map · Calls · Shifts · Training). Anyone may open it; a
 //               manager or staffer gets the same screens a volunteer does.
 //   /admin/…    the admin — the desk: everything, for managers, staff and
 //               treasurers (and a volunteer given an area under Permissions).

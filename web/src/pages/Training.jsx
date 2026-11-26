@@ -1,4 +1,4 @@
-// ImagineU — the campaign's training, for every role (GET /api/learn):
+// Training — the campaign's training, for every role (GET /api/learn):
 // courses of modules. A module mixes materials — its own words and file,
 // then more in order: documents, video, audio, pictures, links, notes — and
 // is the marker of progress: read on its own page, ticked "Done", counted
@@ -12,10 +12,10 @@ import { Link, useNavigate, useOutletContext, useParams } from 'react-router-dom
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { renderMarkdown } from '@starbase/shared/markdown';
 import { ApiError, action, apiGet } from '../api.js';
-import './imagineu.css';
+import './training.css';
 import '../editor.css';
 import { at } from '../base.js';
-import { BRAND } from '../brand.js'; // "ImagineU" for Imagine Surrey, "Training" otherwise
+import { BRAND, ex } from '../brand.js'; // BRAND.learn: what this campaign calls its training ("Training" unless its server says otherwise)
 
 const DESK = ['manager', 'staff', 'treasurer'];
 const KINDS = [
@@ -66,7 +66,7 @@ const toDataUrl = (file) => new Promise((resolve, reject) => {
 
 const useLearn = () => useQuery({ queryKey: ['learn'], queryFn: () => apiGet('/learn'), staleTime: 30_000 });
 
-export default function ImagineU() {
+export default function Training() {
   const { me } = useOutletContext();
   const { id } = useParams();
   const desk = DESK.includes(me?.role);
@@ -95,7 +95,7 @@ function Home({ desk }) {
         </div>
         {desk && (
           <div className="head-actions lu-tools">
-            <Link className="btn btn-quiet" to="/imagineu/progress">Progress</Link>
+            <Link className="btn btn-quiet" to="/training/progress">Progress</Link>
             <button type="button" className={`btn${edit ? ' btn-primary' : ''}`} aria-pressed={edit} onClick={() => { setEdit((v) => !v); setAdding(null); }}>{edit ? 'Done editing' : 'Edit'}</button>
           </div>
         )}
@@ -128,7 +128,7 @@ function Home({ desk }) {
           <ul className="lu-list">
             {s.lessons.map((l) => (
               <li key={l.id}>
-                <Link className={`lu-row${l.done ? ' is-done' : ''}${!l.published ? ' is-draft' : ''}`} to={`/imagineu/${l.id}`}>
+                <Link className={`lu-row${l.done ? ' is-done' : ''}${!l.published ? ' is-draft' : ''}`} to={`/training/${l.id}`}>
                   <KindMark kind={l.kind} done={l.done} />
                   <span className="lu-row__main">
                     <span className="lu-row__title">{l.title}{!l.published && <span className="chip lu-chip">Draft</span>}{l.audience === 'desk' && <span className="chip lu-chip">Desk</span>}{l.audience === 'public' && <span className="chip lu-chip">Public</span>}</span>
@@ -380,7 +380,7 @@ function LessonForm({ lesson, sectionId, sections, onDone, onRemoved }) {
         // eslint-disable-next-line react/no-danger -- the site's own safe renderer
         ? <div className="ws-md__preview-body ws-prose lu-prose" dangerouslySetInnerHTML={{ __html: renderMarkdown(f.body) || '<p class="muted">Nothing yet.</p>' }} />
         : <textarea id={`${id}-b`} className="input lu-form__text" rows={f.kind === 'note' || f.kind === 'procedure' ? 10 : 5} value={f.body} maxLength={30_000}
-          placeholder={f.kind === 'procedure' ? '1. Count the sheets\n2. Hand them to the field director' : f.kind === 'contacts' ? '- Field director — Priya, 604-555-0100\n- The office — 604-555-0101, 9–5' : 'Headings with #, lists with -, **bold**.'}
+          placeholder={f.kind === 'procedure' ? '1. Count the sheets\n2. Hand them to the field director' : f.kind === 'contacts' ? `- Field director — Priya, ${ex('phone', '555-555-0100')}\n- The office — ${ex('phone.2', '555-555-0101')}, 9–5` : 'Headings with #, lists with -, **bold**.'}
           onChange={(e) => set('body', e.target.value)} />}
       <fieldset className="lu-parts-ed">
         <legend className="ws-label">More materials</legend>
@@ -440,7 +440,7 @@ function Lesson({ id, desk }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   useEffect(() => { setEditing(false); }, [id]);
-  if (q.isError && !q.data) return <div className="lu"><p className="error" role="alert">{q.error.status === 404 ? 'That module isn’t here.' : q.error.message}</p><Link className="btn" to="/imagineu">{BRAND.learn}</Link></div>;
+  if (q.isError && !q.data) return <div className="lu"><p className="error" role="alert">{q.error.status === 404 ? 'That module isn’t here.' : q.error.message}</p><Link className="btn" to="/training">{BRAND.learn}</Link></div>;
   if (!q.data) return <p className="muted">Loading…</p>;
   const l = q.data.lesson;
   const section = home.data?.sections.find((s) => s.id === l.section_id);
@@ -455,11 +455,11 @@ function Lesson({ id, desk }) {
   const embed = embedOf(l.link);
   return (
     <div className="lu lu-lesson">
-      <p className="lu-back"><Link to="/imagineu">← {BRAND.learn}</Link>{section && <span className="muted"> · {section.title}</span>}</p>
+      <p className="lu-back"><Link to="/training">← {BRAND.learn}</Link>{section && <span className="muted"> · {section.title}</span>}</p>
       {editing ? (
         <LessonForm lesson={l} sections={home.data?.sections || []}
           onDone={(saved) => { setEditing(false); if (saved) { queryClient.invalidateQueries({ queryKey: ['learn', 'lesson', id] }); } }}
-          onRemoved={() => navigate('/imagineu')} />
+          onRemoved={() => navigate('/training')} />
       ) : (
         <>
           <div className="page-head lu-head">
@@ -529,7 +529,7 @@ function Progress() {
   const { members, lessons } = q.data;
   return (
     <div className="lu">
-      <p className="lu-back"><Link to="/imagineu">← {BRAND.learn}</Link></p>
+      <p className="lu-back"><Link to="/training">← {BRAND.learn}</Link></p>
       <div className="page-head"><div><span className="eyebrow">{BRAND.learn}</span><h1>Progress</h1></div></div>
       {!lessons.length ? <p className="muted">No modules yet.</p> : (
         <ul className="lu-plist">
@@ -550,7 +550,7 @@ function Progress() {
                   <ul className="lu-pdetail">
                     {lessons.filter((l) => l.published && (m.role !== 'volunteer' || l.audience !== 'desk')).map((l) => (
                       <li key={l.id} className={m.lessons[l.id] ? 'is-done' : ''}>
-                        <span aria-hidden="true">{m.lessons[l.id] ? '✓' : '·'}</span> <Link to={`/imagineu/${l.id}`}>{byId.get(l.id)?.title}</Link>
+                        <span aria-hidden="true">{m.lessons[l.id] ? '✓' : '·'}</span> <Link to={`/training/${l.id}`}>{byId.get(l.id)?.title}</Link>
                         {m.lessons[l.id] && <span className="muted mono"> {new Date(m.lessons[l.id]).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })}</span>}
                       </li>
                     ))}

@@ -1,5 +1,5 @@
 // Routes + auth gate, for two apps (mode.js):
-//   field  (/)        Today · Map · Calls · Shifts · ImagineU — a volunteer's
+//   field  (/)        Today · Map · Calls · Shifts · Training — a volunteer's
 //                     screens, for every role (a manager sees them as a
 //                     volunteer would). A desk address typed here goes to
 //                     the admin.
@@ -18,6 +18,7 @@ import { apiGet, noAnswer } from './api.js';
 import Shell, { isDesk, hasArea } from './Shell.jsx';
 import { ADMIN_BASE, fieldView, landing, mayAdmin } from './mode.js';
 import { takeSignin } from './components/google.js';
+import { BRAND, hasFeature } from './brand.js';
 import Login from './pages/Login.jsx';
 import Forgot from './pages/Forgot.jsx';
 import Enter from './pages/Enter.jsx';
@@ -26,7 +27,7 @@ import Signup from './pages/Signup.jsx';
 import Today from './pages/Today.jsx';
 const MapPage = lazy(() => import('./pages/Map.jsx'));
 const TextingInbox = lazy(() => import('./pages/TextingInbox.jsx'));
-const ImagineU = lazy(() => import('./pages/ImagineU.jsx'));
+const Training = lazy(() => import('./pages/Training.jsx'));
 const Banks = lazy(() => import('./pages/Banks.jsx'));
 const Lists = lazy(() => import('./pages/Lists.jsx'));
 const Reports = lazy(() => import('./pages/Reports.jsx'));
@@ -178,6 +179,27 @@ const ROUTE_AREA = [
   // Managers only, as GET /api/dashboard.
   [/^\/activity(\/|$)/, 'admin'],
 ];
+// Training is at /training. A campaign whose server names an older address
+// for it (BRAND.learnAliases, written into the page) keeps that one opening:
+// here for a phone whose kept page answers without asking the server, which
+// sends the same addresses on itself. Most campaigns have none.
+function OldTraining({ from }) {
+  const { pathname, search } = useLocation();
+  return <Navigate to={`/training${pathname.startsWith(from) ? pathname.slice(from.length) : ''}${search}`} replace />;
+}
+const oldTrainingRoutes = () => BRAND.learnAliases.filter((p) => p !== '/training').flatMap((old) => [
+  <Route key={old} path={old} element={<OldTraining from={old} />} />,
+  <Route key={`${old}/*`} path={`${old}/*`} element={<OldTraining from={old} />} />,
+]);
+
+// The paper membership form: only for a campaign that has a membership
+// (what its sign-in says); anyone else goes to People.
+function MembershipOnly() {
+  const ctx = useOutletContext();
+  if (!hasFeature(ctx?.me, 'membership')) return <Navigate to="/people" replace />;
+  return <MembershipForm />;
+}
+
 function DeskOnly() {
   const ctx = useOutletContext();
   const { pathname } = useLocation();
@@ -229,8 +251,9 @@ export default function App({ mode = 'field' }) {
           <Route path="/letters/:id" element={<Letters view="one" />} />
         <Route path="/mainstreet" element={<Mainstreet />} />
           <Route path="/mainstreet" element={<Mainstreet />} />
-          <Route path="/imagineu" element={<ImagineU />} />
-          <Route path="/imagineu/:id" element={<ImagineU />} />
+          <Route path="/training" element={<Training />} />
+          <Route path="/training/:id" element={<Training />} />
+          {oldTrainingRoutes()}
           <Route path="/banks" element={<Banks />} />
           <Route path="/banks/:id" element={<Banks />} />
           <Route path="/vote-info" element={<VoteInfo />} />
@@ -272,8 +295,9 @@ export default function App({ mode = 'field' }) {
         <Route path="/letters" element={<Letters />} />
         <Route path="/letters/new" element={<Letters view="new" />} />
         <Route path="/letters/:id" element={<Letters view="one" />} />
-        <Route path="/imagineu" element={<ImagineU />} />
-        <Route path="/imagineu/:id" element={<ImagineU />} />
+        <Route path="/training" element={<Training />} />
+        <Route path="/training/:id" element={<Training />} />
+        {oldTrainingRoutes()}
         <Route path="/banks" element={<Banks />} />
         <Route path="/banks/:id" element={<Banks />} />
         <Route path="/vote-info" element={<VoteInfo />} />
@@ -313,7 +337,7 @@ export default function App({ mode = 'field' }) {
           <Route path="/surveys" element={<Surveys />} />
           <Route path="/scripts" element={<Scripts />} />
           <Route path="/people/duplicates" element={<Duplicates />} />
-          <Route path="/people/membership-form" element={<MembershipForm />} />
+          <Route path="/people/membership-form" element={<MembershipOnly />} />
           <Route path="/data" element={<DataPage />} />
           <Route path="/money/stewardship" element={<Stewardship />} />
           {/* Gifts made in another tool, from its file — and those that need a donor. */}

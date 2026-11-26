@@ -1,7 +1,11 @@
 // Lessons for supporters: a lesson whose audience is "public" has a page
 // of its own — /learn/<slug> lists them, /learn/<slug>/<id> is one — in
 // the look of Starbase's public pages (lib/publicpage.js). Its file is at
-// /learn-files/<id>. Nothing else of ImagineU is public.
+// /learn-files/<id>. Nothing else of the training is public.
+//
+// Training is at /training in the app. A campaign whose set-up gave it
+// another address before (preset().training.oldPaths) keeps that one
+// working: it is sent on to /training, the rest of the address kept.
 import { Hono } from 'hono';
 import { getDb } from '../../db/client.js';
 import { renderMarkdown, markdownText, escapeHtml as esc } from '@starbase/shared/markdown';
@@ -9,8 +13,32 @@ import { page as publicPage } from '../../lib/publicpage.js';
 import { kindOfType } from './files.js';
 import { serveAsset } from './api.js';
 import { learnName } from '../../lib/brand.js';
+import { preset } from '../../lib/preset.js';
 
 export const publicRoutes = new Hono();
+
+// An old training address → /training, in whichever app it was opened
+// (/…, /admin/…, and /field/… or /desk/… under a client's path), with what
+// follows it and the query kept. Asked on every request, never made into a
+// route when the program starts: the brand is a setting. A campaign with no
+// old address is passed straight on. (Under a client's path the way out
+// puts the path back: lib/mount.js.)
+const APPS = ['', '/admin', '/field', '/desk'];
+export const oldTrainingPath = (path, oldPaths = preset().training.oldPaths) => {
+  for (const old of oldPaths || []) {
+    for (const app of APPS) {
+      const at = `${app}${old}`;
+      if (path === at || path.startsWith(`${at}/`)) return `${app}/training${path.slice(at.length)}`;
+    }
+  }
+  return null;
+};
+publicRoutes.use('*', async (c, next) => {
+  if (c.req.method !== 'GET' && c.req.method !== 'HEAD') return next();
+  const to = oldTrainingPath(c.req.path);
+  if (!to) return next();
+  return c.redirect(`${to}${new URL(c.req.url).search}`, 302);
+});
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const settingsOf = (ws) => (typeof ws.settings === 'string' ? JSON.parse(ws.settings) : (ws.settings || {}));
 const wsBySlug = async (db, slug) => {

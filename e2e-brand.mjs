@@ -165,9 +165,13 @@ const BASE = await start(PORT, { STARBASE_BRAND: 'base', STARBASE_ENV: 'staging'
   check('base: the sidebar is light and leads with the campaign — its initials and name, base.win under it', side.initials === 'DC' && side.imgs === 0 && side.org === 'Demo Campaign' && side.sub === 'base.win' && side.ground === 'rgb(243, 244, 246)', JSON.stringify(side));
   await page.screenshot({ path: `${SHOTS}/base-today-desktop.png` });
 
+  await page.goto(`${BASE}/admin/training`, { waitUntil: 'networkidle' });
+  await sleep(500);
+  check('base: the training page is "Training", at /training', (await page.innerText('h1')).trim() === 'Training');
+  // Imagine Surrey's old address for it is nothing here: no training screen opens.
   await page.goto(`${BASE}/admin/imagineu`, { waitUntil: 'networkidle' });
   await sleep(500);
-  check('base: the training page is "Training"', (await page.innerText('h1')).trim() === 'Training');
+  check('base: /imagineu is not an address of this app', !/\/(imagineu|training)/.test(new URL(page.url()).pathname) && (await page.innerText('h1')).trim() !== 'Training', page.url());
   await page.goto(`${BASE}/admin/settings/permissions`, { waitUntil: 'networkidle' });
   await sleep(500);
   const perms = await visibleText(page);

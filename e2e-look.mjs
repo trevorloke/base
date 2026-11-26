@@ -180,7 +180,17 @@ const setUp = async (base, campaign) => {
     const r = body === undefined ? await ctx.request.get(`${base}/api${path}`) : await ctx.request.post(`${base}/api${path}`, { data: body });
     return { status: r.status(), json: await r.json().catch(() => null) };
   };
-  await api('/data/sample', {});
+  const loaded = await api('/data/sample', {});
+  // A campaign with no sample of its own (every one but Imagine Surrey's):
+  // a few made-up people, a turf and a shift to look at.
+  if (loaded.status === 404) {
+    for (const [name, phone, address] of [['Ana Example', '555-555-0101', '101 Main St'], ['Ben Example', '555-555-0102', '103 Main St'], ['Cam Example', '555-555-0103', '12 1st Ave']]) {
+      await api('/actions/person.create', { name, phone, address, email: `${name.split(' ')[0].toLowerCase()}.${tag}@example.org` });
+    }
+    await api('/actions/turf.create', { name: 'North end (made up)', polygon: [[50.69, -120.36], [50.69, -120.34], [50.7, -120.34], [50.7, -120.36]] });
+    const day = new Date(Date.now() + 3 * 86400e3); day.setUTCHours(17, 0, 0, 0);
+    await api('/actions/shift.create', { title: 'Saturday doorknock (made up)', role: 'doorknocking', location: 'Community hall', starts_at: day.toISOString(), ends_at: new Date(day.getTime() + 3 * 3600e3).toISOString(), capacity: 8 });
+  }
   const people = (await api('/persons?limit=50')).json?.persons || [];
   const turfs = (await api('/turfs')).json?.turfs || [];
   const shifts = (await api('/shifts')).json?.shifts || [];
@@ -201,11 +211,11 @@ const setUp = async (base, campaign) => {
 
 const DESK = (s) => ['/', '/people', `/people/${s.person}`, '/map', '/shifts', `/shifts/${s.shift}`, '/shifts/volunteers', '/money', '/money?new=1', '/money/stewardship', '/outreach', '/outreach/texting',
   '/lists', '/signs', '/turfs', '/website', '/website/pages', '/website/theme', '/settings', '/settings/teams', '/settings/permissions', '/settings/services', '/settings/campaign', '/settings/brand',
-  '/rating-scale', '/path-to-win', '/profile', '/data', '/people/import', '/people/fields', '/imagineu', '/requests', '/reports'].map((p) => `/admin${p === '/' ? '' : p}`);
+  '/rating-scale', '/path-to-win', '/profile', '/data', '/people/import', '/people/fields', '/training', '/requests', '/reports'].map((p) => `/admin${p === '/' ? '' : p}`);
 // On a phone, the desk's screens a manager opens most.
 const DESK_PHONE = (s) => ['/', '/people', `/people/${s.person}`, '/shifts', `/shifts/${s.shift}`, '/money', '/money?new=1', '/outreach', '/lists', '/signs', '/website', '/website/theme',
   '/settings', '/settings/permissions', '/settings/services', '/settings/brand', '/path-to-win', '/profile'].map((p) => `/admin${p === '/' ? '' : p}`);
-const FIELD = (s) => ['/', '/map', '/shifts', `/shifts/${s.shift}`, '/calls', '/turfs', `/turfs/${s.turf}`, '/imagineu', '/profile', '/mainstreet', '/my-people'];
+const FIELD = (s) => ['/', '/map', '/shifts', `/shifts/${s.shift}`, '/calls', '/turfs', `/turfs/${s.turf}`, '/training', '/profile', '/mainstreet', '/my-people'];
 // The screens that carry the most of the brand: enough to judge a colour by.
 const CORE = (s) => ['/admin', '/admin/activity', '/admin/people', `/admin/people/${s.person}`, '/admin/shifts', '/admin/money', '/admin/signs', '/admin/website', '/admin/settings', '/admin/settings/brand'];
 // Every pick-one control on these screens (app.css §13): how tall it is, how
