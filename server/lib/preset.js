@@ -116,9 +116,11 @@ presetRoutes.on(['GET', 'HEAD'], '*', async (c, next) => {
   }
   await next();
   // Nothing held the file, so the app's page answered in its place.
+  // A new answer of its own: c.text() would carry the page's headers over,
+  // its length among them, and a browser would wait for bytes never sent.
   if (/^text\/html/i.test(c.res?.headers.get('content-type') || '')) {
     c.res = undefined;
-    c.res = c.text('Not found', 404, { 'Cache-Control': 'no-store' });
+    c.res = new Response('Not found', { status: 404, headers: { 'Content-Type': 'text/plain; charset=UTF-8', 'Cache-Control': 'no-store' } });
   }
   return undefined;
 });

@@ -1,0 +1,54 @@
+# The daily staging check (scripts/staging-check.mjs): staging is the public
+# demo, so everything on it must be made up. Each day, and whenever it is
+# run by hand (Actions → Staging check → Run workflow), it walks
+# https://staging.base.win as a demo visitor and fails when something real
+# is there, the sample is not the current one, or a live email or texting
+# key is set. A failure opens one issue, assigned to the repository's
+# owner, or adds to it while it is open.
+#
+# It never holds up a release: a visitor typing a real name into the demo
+# must not stop a client's Promote.
+#
+# Test email or texting keys on staging, on purpose: set the repository
+# variable STAGING_TEST_KEYS to 1 (Settings → Secrets and variables →
+# Actions → Variables).
+name: Staging check
+
+on:
+  schedule:
+    - cron: '23 18 * * *'   # every day, late morning in Vancouver
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Walk the demo
+        shell: bash
+        env:
+          STAGING_TEST_KEYS: ${{ vars.STAGING_TEST_KEYS }}
+        run: node scripts/staging-check.mjs https://staging.base.win | tee staging-check.txt
+      - name: Open or update the issue
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const out = fs.existsSync('staging-check.txt') ? fs.readFileSync('staging-check.txt', 'utf8') : '(no output: the check did not run)';
+            const title = 'Staging check: something on the demo needs a look';
+            const run = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = `The daily staging check failed on ${new Date().toISOString().slice(0, 10)} ([the run](${run})).\n\n\`\`\`\n${out.slice(-60000)}\n\`\`\``;
+            const { data: open } = await github.rest.issues.listForRepo({ ...context.repo, state: 'open', labels: 'staging-check', per_page: 1 });
+            if (open.length) {
+              await github.rest.issues.createComment({ ...context.repo, issue_number: open[0].number, body });
+            } else {
+              await github.rest.issues.create({ ...context.repo, title, body, labels: ['staging-check'], assignees: [context.repo.owner] });
+            }
