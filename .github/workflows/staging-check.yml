@@ -9,6 +9,10 @@
 # It never holds up a release: a visitor typing a real name into the demo
 # must not stop a client's Promote.
 #
+# This repository is public, so the log and the issue are too. The script
+# prints the kind of thing it found and where, never the value: no phone,
+# email or words a visitor typed (server/test/staging-check-output.test.js).
+#
 # Test email or texting keys on staging, on purpose: set the repository
 # variable STAGING_TEST_KEYS to 1 (Settings → Secrets and variables →
 # Actions → Variables).

@@ -8,7 +8,10 @@
 //     of a JSON answer); an email outside example.org, example.com and
 //     base.win; a link to a host other than the server's own (`own`),
 //     base.win, example.org, example.com, schema.org or the free map's
-//     tiles (*.openstreetmap.org).
+//     tiles (*.openstreetmap.org). Each line says the kind and where, never
+//     the phone, the email or the text around a name: the daily staging
+//     check posts these lines to a public log and issue. (A listed name is
+//     named: the list is in this repository already.)
 //
 // The list: every line of neutral-words/*.txt (Imagine Surrey's words and
 // real-names.txt, the real names the product never held), less 604-555,
@@ -76,11 +79,16 @@ const strings = (v, out = []) => {
 export const wrongIn = (name, text, { json = false, own = [] } = {}) => {
   const t = String(text ?? '');
   const out = [];
-  for (const f of findReal(t)) out.push(`${name}: a real name, “${f.word}” …${f.near}…`);
+  for (const f of findReal(t)) out.push(`${name}: a listed real name, “${f.word}”`);
   let values = [];
   if (json) { try { values = strings(JSON.parse(t)); } catch { values = []; } }
-  for (const v of values) for (const m of v.matchAll(PHONE)) if (!/^604-555-01\d\d$/.test(m[0])) out.push(`${name}: a phone number, ${m[0]}`);
-  for (const m of t.matchAll(EMAIL)) if (!emailOk(m[1])) out.push(`${name}: an email, ${m[0]}`);
+  const phones = new Set();
+  for (const v of values) for (const m of v.matchAll(PHONE)) if (!/^604-555-01\d\d$/.test(m[0])) phones.add(m[0]);
+  const emails = new Set();
+  for (const m of t.matchAll(EMAIL)) if (!emailOk(m[1])) emails.add(m[0].toLowerCase());
+  const many = (n, one) => `${n} ${one}${n === 1 ? '' : 's'}`;
+  if (phones.size) out.push(`${name}: ${many(phones.size, 'phone number')} outside 604-555-01xx`);
+  if (emails.size) out.push(`${name}: ${many(emails.size, 'email')} outside example.org, example.com and base.win`);
   for (const m of t.matchAll(HOST)) if (!hostOk(m[1], own)) out.push(`${name}: a link to ${m[1]}`);
   return [...new Set(out)];
 };

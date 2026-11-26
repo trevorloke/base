@@ -21,7 +21,10 @@
 // demo's own sign-in.
 //
 // .github/workflows/staging-check.yml runs it daily and by hand, and opens
-// or updates one issue when it fails. It does not hold up a release.
+// or updates one issue when it fails. It does not hold up a release. The
+// repository is public, so the log and the issue are too: what it prints
+// says the kind of thing found and where, never a value a visitor typed
+// (no phone, email, name they gave or words around a listed name).
 import { API_PATHS, PAGES, ANON, GONE } from '../server/test/staging-paths.js';
 import { wrongIn } from '../server/test/real-names.js';
 import { STARTING_FIELDS } from '../server/test/sample-prints.js';
@@ -63,7 +66,8 @@ const json = (r) => { try { return JSON.parse(r.text); } catch { return null; } 
 const door = await request('/api/auth/demo');
 const cookie = (door.headers.get('set-cookie') || '').split(';')[0];
 if (door.status !== 302 || !cookie) {
-  fail(`the demo’s door answered ${door.status}: ${(json(door)?.error || door.text).slice(0, 200)}`);
+  // Only the status: its words could hold what a visitor typed.
+  fail(`the demo’s door answered ${door.status}${door.error ? ` (${door.error})` : ''}`);
   if (door.status === 503) console.log(`\n${RESET_WORD}`);
   console.log(`\n${failures.length} failed.`);
   process.exit(1);
@@ -106,12 +110,14 @@ let old = false;
 if (sample.length < 320) { old = true; fail(`only ${sample.length} people at the sample’s 99xx addresses: staging still holds an older sample`); }
 const scale = json(await request('/api/scale', cookie))?.scale;
 const names = (scale?.candidates || []).filter((c) => !c.off).map((c) => c.name);
-if (JSON.stringify(names) !== JSON.stringify(OPPONENTS.map((o) => o.name))) note(`the rating scale names ${JSON.stringify(names)}, not the cast’s three (a visitor may have saved the Rating scale screen)`);
+// The cast's names are in this repository; a visitor's are not printed.
+const cast = OPPONENTS.map((o) => o.name);
+if (JSON.stringify(names) !== JSON.stringify(cast)) note(`the rating scale does not name just the cast’s three (${cast.join(', ')}): a visitor may have saved the Rating scale screen`);
 const fields = (json(await request('/api/fields', cookie))?.fields || []).map((f) => f.name);
 const missing = STARTING_FIELDS.filter((f) => !fields.includes(f));
 const extra = fields.filter((f) => !STARTING_FIELDS.includes(f));
 if (missing.length) note(`fields missing from the ten a campaign starts with: ${missing.join(', ')}`);
-if (extra.length) note(`fields beyond the ten (a visitor’s, or an older sample’s): ${extra.join(', ')}`);
+if (extra.length) note(`${extra.length} field${extra.length === 1 ? '' : 's'} beyond the ten (a visitor’s, or an older sample’s)`);
 for (const path of GONE) {
   const s = (await request(path)).status;
   if (s !== 404) { old = true; fail(`${path} answers ${s}: Imagine Surrey’s pictures are served`); }
