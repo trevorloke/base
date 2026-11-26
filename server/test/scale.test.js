@@ -10,9 +10,8 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { freshDb, Client } from './helpers.js';
 import { getDb } from '../db/client.js';
-import { RATINGS } from '@starbase/shared/canvass';
 import {
-  DEFAULT_SCALE, normalizeScale, ratingText, ratingByCode, matchRating, makeCode, offeredCodes, allCodes, bandOf,
+  defaultScale, ratings, normalizeScale, ratingText, ratingByCode, matchRating, makeCode, offeredCodes, allCodes, bandOf,
 } from '@starbase/shared/scale';
 import { REPLAY_DAYS, ratingRefusal, applyEdit } from '../ext/scale/rules.js';
 
@@ -55,12 +54,12 @@ test('the default scale is exactly the one the app always had', async () => {
     ...s.steps.map((x) => ({ code: x.code, label: x.label, short: x.code, band: x.band })),
     ...s.candidates.map((x) => ({ code: x.code, label: x.label, short: x.code, band: 'opposed' })),
   ];
-  assert.deepEqual(flat, RATINGS, 'same codes, labels and bands, in the same order');
+  assert.deepEqual(flat, ratings(), 'same codes, labels and bands, in the same order');
   assert.deepEqual(s.steps.map((x) => x.word), ['Strong yes', 'Lean yes', 'Undecided', 'Opposed']);
   assert.deepEqual(s.candidates.map((x) => x.name), ['McCallum', 'Locke', 'Annis', 'van Vliet', 'Randhawa']);
   assert.ok(s.candidates.every((x) => !x.off));
   assert.equal(s.version, 0);
-  assert.deepEqual(normalizeScale(null), DEFAULT_SCALE);
+  assert.deepEqual(normalizeScale(null), defaultScale());
   // The words every screen says, unchanged.
   assert.equal(ratingText(s, '1'), '1 · Strong yes');
   assert.equal(ratingText(s, '4B'), '4 · Locke');
@@ -328,8 +327,8 @@ test('one name is never on the list and off it, whichever way a save gets there'
   // A campaign that already holds such a pair (saved before this rule):
   // other changes still save, and so does taking the one on the list off;
   // putting the other back asks for a new name first.
-  const twin = DEFAULT_SCALE.candidates.find((c) => !c.off);
-  const pair = normalizeScale({ candidates: [...DEFAULT_SCALE.candidates, { code: '4TW', name: twin.name, off: true, off_at: new Date().toISOString() }] });
+  const twin = defaultScale().candidates.find((c) => !c.off);
+  const pair = normalizeScale({ candidates: [...defaultScale().candidates, { code: '4TW', name: twin.name, off: true, off_at: new Date().toISOString() }] });
   const L = listOf(pair);
   assert.doesNotThrow(() => applyEdit(pair, { words: { 3: 'Unsure' }, candidates: L }));
   const bothOff = normalizeScale(applyEdit(pair, { candidates: L.map((c) => (c.code === twin.code ? { ...c, off: true } : c)) }).stored);

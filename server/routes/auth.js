@@ -38,7 +38,7 @@ import { ownOrigin, parseKeys, verifyEntry } from '../lib/entry.js';
 import { instanceOf } from '../ext/operator/identity.js';
 import { enter, ENTRY_HOURS } from '../ext/operator/enter.js';
 import { sampleSignup } from '../lib/samplecampaign.js';
-import { DEFAULT_CANDIDATES } from '@starbase/shared/scale';
+import { defaultCandidates } from '@starbase/shared/scale';
 
 const app = new Hono();
 
@@ -108,12 +108,13 @@ const clientWorkspace = (ws) => {
 // the campaign, the role and areas, the deployment, and two-step sign-in
 // (on; required for their role; still to set up — lib/twostep.js).
 // org.candidates: who this server's rating scale starts with (shared/scale.js:
-// nobody when STARBASE_CANDIDATES=none), for a phone that has no copy of the
-// campaign's scale yet — the list in the phone's own code is the same for
-// every campaign, so it isn't this one's (web components/scale.js).
-const START_CANDIDATES = DEFAULT_CANDIDATES.map((c) => ({ code: c.code, name: c.name }));
+// nobody for most campaigns), each with its label, for a phone that has no
+// copy of the campaign's scale yet — the phone's own code holds no list, so
+// this one is its starting list (web components/scale.js). Worked out when
+// asked: the list is the server's settings', read each time.
+const startCandidates = () => defaultCandidates().map((c) => ({ code: c.code, name: c.name, label: c.label }));
 const meOut = (ctx) => ({
-  user: ctx.user, workspace: clientWorkspace(ctx.workspace), role: ctx.role, areas: areasFor(ctx), org: { ...orgOut(), candidates: START_CANDIDATES },
+  user: ctx.user, workspace: clientWorkspace(ctx.workspace), role: ctx.role, areas: areasFor(ctx), org: { ...orgOut(), candidates: startCandidates() },
   two_step: twoStepOut(ctx),
   // A volunteer with a candidate's seat (ext/candidates), else null.
   candidate: candidateOut(ctx.candidate),

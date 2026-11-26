@@ -498,10 +498,15 @@ export const checkLines = (c, page, { num = enCA, clock = (iso) => iso, now = Da
   if (g.unmatched > 0) run[1].note = [run[1].note, `${num(g.unmatched)} couldn’t be matched — they need a pin by hand`].filter(Boolean).join(' · ');
   add('placing', 'Placing addresses', run[0], run[1]);
 
-  const elsewhere = p.onMap > 0 && c.area.inside * 2 <= p.onMap;
-  add('area', 'Outside your area', `${num(c.area.outside)} of the ${num(p.onMap)} on the map`, {
-    note: elsewhere ? 'Most of the list is outside the area this campaign is set to — the map opens on the middle of the list' : null, warn: elsewhere,
-  });
+  // A campaign with no map area set (area.box is null): said, with who sets
+  // it — a manager has no screen for it.
+  if (!c.area.box) add('area', 'Map area', 'Not set', { note: 'Ask base.win to set your map area.', warn: true });
+  else {
+    const elsewhere = p.onMap > 0 && c.area.inside * 2 <= p.onMap;
+    add('area', 'Outside your area', `${num(c.area.outside)} of the ${num(p.onMap)} on the map`, {
+      note: elsewhere ? 'Most of the list is outside the area this campaign is set to — the map opens on the middle of the list' : null, warn: elsewhere,
+    });
+  }
   add('turfs', 'Turfs', num(c.turfs));
 
   const t = page.tiles || { loaded: 0, failed: 0, down: false };

@@ -427,17 +427,19 @@ const doorOf = async (db, ctx, id) => {
 };
 
 // Where the map opens: on the campaign's own list. When most people are
-// inside the campaign's box (lib/org.js geoBounds), where those people are —
+// inside the campaign's box (lib/org.js geoBox), where those people are —
 // strays elsewhere (a mailing address in another city) don't zoom the map
-// out to the province. Otherwise the middle of the list, 5th–95th percentile.
+// out to the province. Otherwise (and for a campaign with no map area set)
+// the middle of the list, 5th–95th percentile.
 const listBounds = async (db, ws, total) => {
   if (!total) return {};
   const located = 'workspace_id = $1 and deleted_at is null and lat is not null and lng is not null';
-  const inside = (await db.query(
+  const box = geoBox();
+  const inside = box ? (await db.query(
     `select count(*)::int as n, min(lat) as s, min(lng) as w, max(lat) as n2, max(lng) as e
      from persons where ${located} and lat between $2 and $4 and lng between $3 and $5`,
-    [ws, ...geoBox()],
-  )).rows[0];
+    [ws, ...box],
+  )).rows[0] : { n: 0 };
   const area = inside.n * 2 > total;
   const b = area ? inside : (await db.query(
     `select percentile_disc(0.05) within group (order by lat) as s, percentile_disc(0.05) within group (order by lng) as w,

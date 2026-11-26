@@ -114,7 +114,7 @@ test('it ships tested and pinned: CI runs its tests on every change and over Pos
   assert.match(ci, /run: npm run test:platform\s*$/m, 'ci.yml runs the control centre’s tests on every change');
   const wf = read('.github/workflows/base-platform.yml');
   assert.match(wf, /run: npm run test:platform:pg\s*$/m, 'base-platform.yml runs them over Postgres');
-  for (const path of ['shared/**', 'web/src/app.css', 'package.json', 'package-lock.json', 'server/lib/**', 'server/test/entry-vector.json']) {
+  for (const path of ['shared/**', 'web/src/app.css', 'package.json', 'package-lock.json', 'server/lib/**', 'server/presets/**', 'server/test/entry-vector.json']) {
     for (const on of ['push', 'pull_request']) {
       const block = new RegExp(`${on}:[\\s\\S]*?paths: \\[([^\\]]*)\\]`).exec(wf)?.[1] || '';
       assert.ok(block.includes(`'${path}'`), `base-platform.yml ${on} paths include ${path}`);

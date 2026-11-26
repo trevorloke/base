@@ -15,7 +15,7 @@
 // suggestions, when turned on, are lib/places.js.
 // Every call has a time limit: placing 8 s, suggesting 4 s.
 
-import { city as defaultCity, province, geoBounds } from './org.js';
+import { city as defaultCity, province, geoBounds, geoBox } from './org.js';
 
 const PLACE_MS = 8000;
 const SUGGEST_MS = 4000;
@@ -114,11 +114,17 @@ export const geocodeAddress = async (parts) => {
 // suggestAddresses('13450 104') → [{ house_number, street, unit, city,
 // postal, lat, lng, label }] — up to `limit` doors, each a real civic
 // address with its pin (no street-only or city-only matches), in the
-// campaign's box where the provider can be told one. → { error } when the
+// campaign's box where the provider can be told one (a campaign with no map
+// area: anywhere). → { error } when the
 // service can't be reached; [] when nothing matches.
 const boxOf = () => {
-  const [[s, w], [n, e]] = geoBounds().split('|').map((pt) => pt.split(',').map(Number));
-  return { s, w, n, e };
+  const typed = geoBounds();
+  if (typed) {
+    const [[s, w], [n, e]] = typed.split('|').map((pt) => pt.split(',').map(Number));
+    return { s, w, n, e };
+  }
+  const box = geoBox();
+  return box ? { s: box[0], w: box[1], n: box[2], e: box[3] } : null;
 };
 const clean = (v) => (v == null ? '' : String(v).trim());
 
@@ -131,7 +137,7 @@ const bcSuggest = async (q, limit) => {
   url.searchParams.set('maxResults', String(limit * 2));
   url.searchParams.set('outputSRS', '4326');
   url.searchParams.set('locationDescriptor', 'accessPoint');
-  url.searchParams.set('bbox', `${box.w},${box.s},${box.e},${box.n}`);
+  if (box) url.searchParams.set('bbox', `${box.w},${box.s},${box.e},${box.n}`);
   const headers = process.env.BC_GEOCODER_KEY ? { apikey: process.env.BC_GEOCODER_KEY } : {};
   const res = await fetch(url, { headers, signal: AbortSignal.timeout(SUGGEST_MS) });
   if (!res.ok) return { error: `geocoder ${res.status}`, status: res.status };
@@ -162,7 +168,7 @@ const nominatimSuggest = async (q, limit) => {
   url.searchParams.set('countrycodes', 'ca');
   url.searchParams.set('addressdetails', '1');
   url.searchParams.set('limit', String(limit));
-  url.searchParams.set('viewbox', `${box.w},${box.n},${box.e},${box.s}`);
+  if (box) url.searchParams.set('viewbox', `${box.w},${box.n},${box.e},${box.s}`);
   const res = await fetch(url, { headers: { 'User-Agent': 'base.win campaign app (address suggestions)' }, signal: AbortSignal.timeout(SUGGEST_MS) });
   if (!res.ok) return { error: `geocoder ${res.status}` };
   return (await res.json())

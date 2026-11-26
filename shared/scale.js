@@ -7,17 +7,17 @@
 // "Definitely"). Under 4 sits the "Voting for?" list: candidates, each with
 // a code made once ("4" + 1–2 capital letters) that keeps its meaning
 // forever. Renaming keeps the code; taking someone off the list keeps their
-// code readable (old ratings say "Locke (off the list)") but stops offering
+// code readable (old ratings say "Hartwell (off the list)") but stops offering
 // it; a new candidate never gets a code that was ever used. "Not sure" (plain
-// 4) always stays. With nothing saved, the scale is the default below —
-// exactly the scale the app always had.
+// 4) always stays. With nothing saved, the scale is the campaign's default: the
+// four steps below and the list its server starts with (defaultScale()).
 //
 // Stored in settings.scale (written only by the scale.save action):
 //   { v, words: { 1, 2, 3, 4 }, candidates: [{ code, name, off?, off_at? }] }
 // Everything here takes the normalized scale (normalizeScale(stored)):
 //   { version, steps: [{ code, band, word, label }] ×4,
 //     candidates: [{ code, name, label, off, off_at }] }   // every code ever, in list order
-// Codes never show on screen: buttons say the words, chips say "4 · Locke".
+// Codes never show on screen: buttons say the words, chips say "4 · Hartwell".
 
 export const BANDS = ['support', 'undecided', 'opposed'];
 const STEP_BAND = { 1: 'support', 2: 'support', 3: 'undecided', 4: 'opposed' };
@@ -43,19 +43,15 @@ export const DEFAULT_STEPS = Object.freeze([
   { code: '3', band: 'undecided', word: 'Undecided',  label: 'Undecided' },
   { code: '4', band: 'opposed',   word: 'Opposed',    label: 'Opposed — support unknown' },
 ]);
-// The opposed candidates a campaign's scale starts with. The server reads
-// STARBASE_CANDIDATES ("4D:McCallum:Opposed — Doug McCallum supporter;4B:Locke")
-// — a code (4 + one or two letters), a name, and a label (or "Opposed — name");
-// the desk edits the list after (Rating scale). "none" (any case): nobody —
-// the scale is the four steps and "Not sure" until the desk adds someone.
-// Unset or empty: Imagine Surrey's.
-export const SURREY_CANDIDATES = Object.freeze([
-  { code: '4D', name: 'McCallum',  label: 'Opposed — Doug McCallum supporter' },
-  { code: '4B', name: 'Locke',     label: 'Opposed — Surrey Connect / Brenda Locke' },
-  { code: '4F', name: 'Annis',     label: 'Opposed — Surrey First / Linda Annis' },
-  { code: '4N', name: 'van Vliet', label: 'Opposed — SurreyNow / Troy van Vliet' },
-  { code: '4C', name: 'Randhawa',  label: 'Opposed — Surrey Conservatives / Honveer Randhawa' },
-]);
+// The opposed candidates a campaign's scale starts with: nobody, unless the
+// campaign's own server says who. The server reads STARBASE_CANDIDATES
+// ("4A:Hartwell:Opposed — Hartwell supporter;4B:Quist") — a code (4 + one or
+// two letters), a name, and a label (or "Opposed — name"); the desk edits
+// the list after (Rating scale). "none" (any case): nobody — the scale is
+// the four steps and "Not sure" until the desk adds someone. Unset or empty:
+// the list the server's preset starts with (server/lib/preset.js registers
+// it with presetCandidates), which for most campaigns is nobody. No list of
+// names lives in this file: it is the same file on every campaign's phones.
 export const parseCandidates = (text) => {
   const out = [];
   for (const part of String(text || '').split(';')) {
@@ -69,14 +65,33 @@ export const parseCandidates = (text) => {
   return out.length ? Object.freeze(out) : null;
 };
 const NO_CANDIDATES = Object.freeze([]);
-export const startingCandidates = (text) => (String(text ?? '').trim().toLowerCase() === 'none'
-  ? NO_CANDIDATES : parseCandidates(text) || SURREY_CANDIDATES);
-export const DEFAULT_CANDIDATES = startingCandidates(globalThis.process?.env?.STARBASE_CANDIDATES);
+export const startingCandidates = (text, fallback = NO_CANDIDATES) => (String(text ?? '').trim().toLowerCase() === 'none'
+  ? NO_CANDIDATES : parseCandidates(text) || fallback);
 // Only the server (Node, no page) has the campaign's settings. A browser has
-// none — its DEFAULT_CANDIDATES is the fallback above, whoever the campaign
-// is — so it is sent the campaign's scale and adds nothing to it.
+// none: its starting list is the one its own server sent at sign-in
+// (web/src/components/scale.js registers me.org.candidates), and nobody
+// until then — so it adds nothing of its own to a list the server sent.
 const ON_SERVER = typeof globalThis.process?.versions?.node === 'string' && typeof globalThis.document === 'undefined';
-const DEFAULT_BY_CODE = new Map(DEFAULT_CANDIDATES.map((c) => [c.code, c]));
+export const onServer = ON_SERVER;
+const NOBODY = { list: NO_CANDIDATES, byCode: new Map() };
+// Who says the starting list when no setting does: a function, asked each
+// time (a server's brand can change between tests; a browser learns its
+// list after this file has loaded).
+let presetList = () => NO_CANDIDATES;
+export const presetCandidates = (fn) => { presetList = typeof fn === 'function' ? fn : () => NO_CANDIDATES; };
+let known = { from: null, text: null, list: NO_CANDIDATES, byCode: new Map(), scale: null };
+const defaults = () => {
+  const given = presetList();
+  const from = Array.isArray(given) ? given : NO_CANDIDATES;
+  const text = ON_SERVER ? String(globalThis.process.env.STARBASE_CANDIDATES ?? '') : '';
+  if (known.from !== from || known.text !== text) {
+    const list = ON_SERVER ? startingCandidates(text, from) : from;
+    known = { from, text, list, byCode: new Map(list.map((c) => [c.code, c])), scale: null };
+  }
+  return known;
+};
+// The list a campaign with no saved scale has, read when asked.
+export const defaultCandidates = () => defaults().list;
 
 // One line of text: trimmed, inner runs of space as one.
 export const cleanWord = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
@@ -84,11 +99,10 @@ const key = (s) => cleanWord(s).toLowerCase();
 
 // Stored (or already normalized) → the scale every helper takes. Never
 // throws: anything unreadable falls back to the default's words, and a
-// default candidate a stored list somehow lacks comes back off the list (its
+// starting candidate a stored list somehow lacks comes back off the list (its
 // code may still be on people). That last part is the server's alone: a
-// browser's list came from the server whole, and the default list a browser
-// holds is not its campaign's to add (ON_SERVER above).
-export function normalizeScale(raw) {
+// browser's list came from the server whole (ON_SERVER above).
+export function normalizeScale(raw, { nobody = false } = {}) {
   const src = raw && typeof raw === 'object' ? raw : {};
   const words = src.words && typeof src.words === 'object' ? src.words
     : Object.fromEntries((Array.isArray(src.steps) ? src.steps : []).map((s) => [s?.code, s?.word]));
@@ -98,30 +112,55 @@ export function normalizeScale(raw) {
     return { code: d.code, band: d.band, word: w, label };
   });
   const four = steps[3].word;
-  const list = Array.isArray(src.candidates) ? src.candidates : DEFAULT_CANDIDATES;
+  const { list: starting, byCode } = nobody ? NOBODY : defaults();
+  const list = Array.isArray(src.candidates) ? src.candidates : starting;
   const seen = new Set();
   const candidates = [];
   const add = (c, forceOff = false) => {
     const code = String(c?.code ?? '');
     if (!CANDIDATE_CODE_RE.test(code) || seen.has(code)) return;
     seen.add(code);
-    const d = DEFAULT_BY_CODE.get(code);
+    const d = byCode.get(code);
     const name = cleanWord(c.name).slice(0, 40) || d?.name || code;
     const off = forceOff || Boolean(c.off);
+    // A starting candidate still called what the list calls them keeps the
+    // list's own label. Anyone else: the label they came with (a scale the
+    // server sent carries each one's), or "Opposed — name".
+    const own = d && d.name === name && four === DEFAULT_STEPS[3].word ? cleanWord(d.label) : '';
     candidates.push({
       code,
       name,
-      label: d && d.name === name && four === DEFAULT_STEPS[3].word ? d.label : `${four} — ${name}`,
+      label: own || cleanWord(c.label).slice(0, 120) || `${four} — ${name}`,
       off,
       off_at: off && c.off_at ? String(c.off_at) : null,
     });
   };
   list.forEach((c) => add(c));
-  if (ON_SERVER) for (const d of DEFAULT_CANDIDATES) if (!seen.has(d.code)) add(d, true);
+  if (ON_SERVER) for (const d of starting) if (!seen.has(d.code)) add(d, true);
   return { version: Number(src.v ?? src.version) || 0, steps, candidates };
 }
 
-export const DEFAULT_SCALE = Object.freeze(normalizeScale(null));
+// The four steps and nobody: all this file knows by itself. A campaign's own
+// default — the steps and the list it starts with — is defaultScale().
+export const DEFAULT_SCALE = Object.freeze(normalizeScale(null, { nobody: true }));
+// The scale a campaign has until it saves one, read when asked (one object
+// per starting list, so its lookups are still made once).
+export const defaultScale = () => {
+  const d = defaults();
+  if (!d.scale) d.scale = d.list.length ? Object.freeze(normalizeScale(null)) : DEFAULT_SCALE;
+  return d.scale;
+};
+// The default scale as one flat list — { code, label, short, band } for the
+// steps, then the starting candidates — and its codes: what seeds and tests
+// use. Screens and checks read the campaign's own scale instead.
+export const ratings = () => {
+  const s = defaultScale();
+  return [
+    ...s.steps.map((x) => ({ code: x.code, label: x.label, short: x.code, band: x.band })),
+    ...s.candidates.map((c) => ({ code: c.code, label: c.label, short: c.code, band: 'opposed' })),
+  ];
+};
+export const ratingCodes = () => ratings().map((r) => r.code);
 
 // Lookups are per scale object, made once.
 const indexes = new WeakMap();
@@ -142,7 +181,7 @@ const indexOf = (scale) => {
 export function ratingByCode(scale, code) {
   if (code == null || code === '') return null;
   const c = String(code);
-  const sc = scale || DEFAULT_SCALE;
+  const sc = scale || defaultScale();
   const hit = indexOf(sc).get(c);
   if (hit) return hit;
   if (!CANDIDATE_CODE_RE.test(c)) return null;
@@ -159,14 +198,14 @@ export const allCodes = (scale) => [...scale.steps.map((s) => s.code), ...scale.
 export const codesInBand = (scale, band) => allCodes(scale).filter((c) => bandOf(c) === band);
 
 // ── Words ──
-// Who an opposed rating backs: "Locke"; plain 4 → "Not sure"; else ''.
+// Who an opposed rating backs: "Hartwell"; plain 4 → "Not sure"; else ''.
 export function ratingWho(scale, code) {
   const r = ratingByCode(scale, code);
   if (!r || r.band !== 'opposed') return '';
   return r.name || UNSURE_WORD;
 }
 // The words on the button that was tapped: "Strong yes", "Undecided",
-// "Opposed", "Locke".
+// "Opposed", "Hartwell".
 export function ratingSay(scale, code) {
   const r = ratingByCode(scale, code);
   return r ? r.word : '';
@@ -175,7 +214,7 @@ export function ratingSay(scale, code) {
 // rating shows, so nobody mistakes it for a choice they still have.
 export const offTail = (r) => (r?.off ? ` (${OFF_WORDS})` : '');
 // One spelling for toasts and history lines, the same as the chip and the
-// button: "1 · Strong yes", "4 · Locke", "4 · Opposed", "4 · Locke (off the list)".
+// button: "1 · Strong yes", "4 · Hartwell", "4 · Opposed", "4 · Hartwell (off the list)".
 export function ratingText(scale, code) {
   const r = ratingByCode(scale, code);
   if (!r) return '';
@@ -183,8 +222,8 @@ export function ratingText(scale, code) {
 }
 
 // ── A value from a spreadsheet → a code ──
-// "4d", "4 D", "1.0", "Strong yes", "strong support", "Locke", "not sure",
-// "Opposed — Surrey Connect / Brenda Locke" (case and spaces don't matter).
+// "4a", "4 A", "1.0", "Strong yes", "strong support", "Hartwell", "not sure",
+// "Opposed — Hartwell supporter" (case and spaces don't matter).
 // A step's default words always read too (its meaning never changes).
 // → { code, off } (off: the candidate was taken off the list) or null.
 export function matchRating(scale, value) {

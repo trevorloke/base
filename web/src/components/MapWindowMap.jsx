@@ -20,7 +20,7 @@ import { apiGet } from '../api.js';
 import { bandOf } from '@starbase/shared/scale';
 import { phoneCopy, useKeepCopy } from './OfflineCache.js';
 import { useOnline } from './NoSignal.jsx';
-import { DEFAULT_TILES, SURREY, safeAttribution } from './tiles.js';
+import { DEFAULT_TILES, homeStart, homeView, openHome, safeAttribution } from './tiles.js';
 import { MARK, TILE_WAIT_MS, css, frontTiles, tileHealth, tileHost, turfColor } from '../pages/mapView.js';
 import { MY_DOORS, readViewPref, tellServiceWorker, useBandTurfs } from '../pages/mapQueries.js';
 import { askNotice } from '../pages/tileProbe.js';
@@ -82,7 +82,7 @@ export default function MapWindowMap({ me, band, turfId }) {
     const el = boxRef.current;
     if (!el) return undefined;
     const map = L.map(el, {
-      center: SURREY, zoom: 12, zoomSnap: 1, // whole zooms: no hairline seams between tiles
+      ...homeStart(homeView(me)), zoomSnap: 1, // whole zooms: no hairline seams between tiles
       zoomControl: false, attributionControl: false,
       dragging: false, touchZoom: false, scrollWheelZoom: false, doubleClickZoom: false, boxZoom: false, keyboard: false, tap: false,
     });
@@ -125,7 +125,7 @@ export default function MapWindowMap({ me, band, turfId }) {
     const frame = tr.length >= 3 ? [...tr, ...pts]
       : [...doors.map((d) => [d.lat, d.lng]), ...outlines.flatMap((t) => ring(t.polygon))];
     fitRef.current = () => {
-      if (!frame.length) { map.setView(SURREY, 12, { animate: false }); return; }
+      if (!frame.length) { openHome(map, homeView(me)); return; }
       // "Open the map" sits over the bottom-right corner (48 px and its
       // gap): frame the doors above it, so none hides under the button.
       map.fitBounds(L.latLngBounds(frame), { paddingTopLeft: [24, 24], paddingBottomRight: [24, 64], maxZoom: 17, animate: false });

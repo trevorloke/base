@@ -30,7 +30,7 @@ import { useQuery } from '@tanstack/react-query';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { apiGet, initials } from '../api.js';
-import { DEFAULT_TILES, SURREY, safeAttribution } from '../components/tiles.js';
+import { DEFAULT_TILES, openHome, safeAttribution, useHomeView } from '../components/tiles.js';
 import { NoSignal, noSignal } from '../components/NoSignal.jsx';
 import { frameOf } from './dashFrame.js';
 import { isGoogleUrl } from './mapView.js';
@@ -325,12 +325,15 @@ function Field({ d, tiles, sel, onSel, period }) {
   const layersRef = useRef(null);
   // The campaign's own frame, every time nobody is picked (dashFrame.js:
   // turfs, else the period's contacts and who was seen today — the
-  // campaign's today — else the city). A resize refits it until someone
+  // campaign's today — else the campaign's own area). A resize refits it until someone
   // zooms or drags (movedRef): a phone's address bar showing or hiding
   // changes the band's height, and must not throw their view away.
   // dataRef: the effects below read the latest.
   const dataRef = useRef(d);
   dataRef.current = d;
+  // Where the campaign's maps open (tiles.js), for the effects below.
+  const homeRef = useRef(null);
+  homeRef.current = useHomeView();
   const fittingRef = useRef(false);
   const movedRef = useRef(false);
   const frameKeyRef = useRef('');
@@ -343,7 +346,7 @@ function Field({ d, tiles, sel, onSel, period }) {
     fittingRef.current = true;
     try {
       if (box) map.fitBounds(box, { padding: [16, 16], maxZoom: 16, animate: false });
-      else map.setView(SURREY, 12, { animate: false });
+      else openHome(map, homeRef.current);
     } finally { fittingRef.current = false; }
     movedRef.current = false;
     frameKeyRef.current = JSON.stringify(box);

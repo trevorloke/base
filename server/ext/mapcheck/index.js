@@ -59,17 +59,18 @@ api.get('/map/check', async (c) => {
      from persons where workspace_id = $1 and deleted_at is null`,
     [ws],
   )).rows[0];
+  // A campaign with no map area set: nothing is inside or outside it.
   const box = geoBox();
-  const inside = (await db.query(
+  const inside = box ? (await db.query(
     `select count(*)::int as n from persons
      where workspace_id = $1 and deleted_at is null and lat between $2 and $4 and lng between $3 and $5`,
     [ws, ...box],
-  )).rows[0].n;
+  )).rows[0].n : null;
   const turfs = (await db.query('select count(*)::int as n from turfs where workspace_id = $1 and deleted_at is null', [ws])).rows[0].n;
   const t = tileConfig();
   return c.json({
     people: { total: p.total, onMap: p.on_map, waiting: p.waiting, noAddress: p.no_address },
-    area: { box, inside, outside: Math.max(0, p.on_map - inside) },
+    area: { box, inside, outside: box ? Math.max(0, p.on_map - inside) : null },
     turfs,
     placing: { ...(await placingStatus(db, ws)), off: (process.env.GEOCODER || '').toLowerCase() === 'off' },
     tiles: {

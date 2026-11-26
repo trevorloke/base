@@ -4,7 +4,7 @@
 //   2. else the period's contact dots from the 2nd to the 98th percentile of
 //      their latitudes and longitudes (one door mis-placed far away does not
 //      throw the map wide), with where people were seen today;
-//   3. else null: the map opens on the city (setView(SURREY, 12)).
+//   3. else null: the map opens on the campaign's own area (tiles.js openHome).
 // → [[south, west], [north, east]] or null.
 const finite = (p) => p && Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lng));
 // The day of t in the campaign's zone (the answer's tz), as YYYY-MM-DD; a

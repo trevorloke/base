@@ -13,11 +13,13 @@
 // a phone that opened only Today or Shifts since a change still has it.
 // With neither — a campaign that has saved no scale, on a phone that hasn't
 // read it yet — the list its server starts with, which the sign-in names
-// (me.org.candidates: nobody, for a campaign with no opponents). This file's
-// own default is the last resort: its list is the same for every campaign.
+// (me.org.candidates: nobody, for a campaign with no opponents).
+// That list is also this phone's starting list (registerStart below): the
+// app's own code holds the four steps and nobody, the same for every
+// campaign, so each starting candidate's label is the one its server sent.
 import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { DEFAULT_SCALE, normalizeScale } from '@starbase/shared/scale';
+import { CANDIDATE_CODE_RE, cleanWord, defaultScale, normalizeScale, onServer, presetCandidates } from '@starbase/shared/scale';
 import { apiGet } from '../api.js';
 import { NS } from '../base.js';
 
@@ -43,9 +45,31 @@ const keep = (key, data, at) => {
 };
 
 // One normalized scale per answer, however many buttons read it.
-const made = new WeakMap();
+let made = new WeakMap();
+// The campaign's starting list, as its server named it at sign-in, told to
+// shared/scale.js once per list (a sign-in kept from before the server sent
+// labels has none: those read "Opposed — name" until it is read again).
+let started = null;
+let startedFrom = null;
+export const registerStart = (me) => {
+  // Under Node (the tests run this file beside the server) the starting list
+  // is the server's own; only a browser is told it by the sign-in.
+  if (onServer) return;
+  const sent = me?.org?.candidates;
+  // Every rating chip on screen asks: the same list again costs nothing.
+  if (!Array.isArray(sent) || sent === startedFrom) return;
+  startedFrom = sent;
+  const as = JSON.stringify(sent);
+  if (as === started) return;
+  started = as;
+  const list = Object.freeze(sent
+    .filter((c) => c && CANDIDATE_CODE_RE.test(String(c.code || '')) && cleanWord(c.name))
+    .map((c) => ({ code: String(c.code), name: cleanWord(c.name), ...(cleanWord(c.label) ? { label: cleanWord(c.label) } : {}) })));
+  presetCandidates(() => list);
+  made = new WeakMap(); // anything worked out from another list is stale
+};
 const scaleFrom = (data) => {
-  if (!data?.scale) return DEFAULT_SCALE;
+  if (!data?.scale) return defaultScale();
   let s = made.get(data);
   if (!s) { s = normalizeScale(data.scale); made.set(data, s); }
   return s;
@@ -61,6 +85,7 @@ export const newerScale = (a, b) => (versionOf(b) > versionOf(a) ? b : a ?? b);
 // server starts with (version 0: anything read from the server wins).
 const fromMe = new WeakMap();
 export const meScale = (me) => {
+  registerStart(me);
   const saved = me?.workspace?.settings?.scale;
   const raw = saved && typeof saved === 'object' ? saved : Array.isArray(me?.org?.candidates) ? me.org.candidates : null;
   if (!raw) return undefined;
@@ -72,6 +97,7 @@ export const meScale = (me) => {
 export function useScale() {
   const qc = useQueryClient();
   const me = qc.getQueryData(['me']);
+  registerStart(me);
   const key = keyFor(me);
   const q = useQuery({
     queryKey: SCALE_KEY,

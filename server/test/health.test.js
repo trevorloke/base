@@ -26,7 +26,7 @@ const health = async () => (await app.request('/api/health')).json();
 test('the exact fields', async () => {
   const h = await health();
   assert.deepEqual(Object.keys(h).sort(), [
-    'address', 'build', 'campaignMade', 'commit', 'database', 'doorKey', 'entry', 'env', 'instance', 'ok', 'organization',
+    'address', 'brand', 'build', 'campaignMade', 'commit', 'database', 'doorKey', 'entry', 'env', 'instance', 'ok', 'organization',
     'ownOrigin', 'platformKids', 'service', 'setupOpen', 'store', 'tzdataCurrent',
   ]);
   // Which database holds the campaign: "postgres" (DATABASE_URL) or

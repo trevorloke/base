@@ -138,8 +138,11 @@ test('with no saved scale the phone starts from the list its server names at sig
   const me = ok(await fresh.get('/api/auth/me'));
   assert.equal(me.workspace.settings.scale, undefined, 'this campaign has saved no scale');
   // This server sets no STARBASE_CANDIDATES: Imagine Surrey's five, as always.
+  // Each with its label: the phone's own code holds no list to take one from.
   assert.deepEqual(me.org.candidates, [
-    { code: '4D', name: 'McCallum' }, { code: '4B', name: 'Locke' }, { code: '4F', name: 'Annis' }, { code: '4N', name: 'van Vliet' }, { code: '4C', name: 'Randhawa' },
+    { code: '4D', name: 'McCallum', label: 'Opposed — Doug McCallum supporter' }, { code: '4B', name: 'Locke', label: 'Opposed — Surrey Connect / Brenda Locke' },
+    { code: '4F', name: 'Annis', label: 'Opposed — Surrey First / Linda Annis' }, { code: '4N', name: 'van Vliet', label: 'Opposed — SurreyNow / Troy van Vliet' },
+    { code: '4C', name: 'Randhawa', label: 'Opposed — Surrey Conservatives / Honveer Randhawa' },
   ]);
   const start = scaleJs.meScale(me);
   assert.deepEqual(normalizeScale(start.scale), normalizeScale(null), 'for Imagine Surrey: exactly the scale the phone showed before');

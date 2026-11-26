@@ -179,9 +179,12 @@ const probeOnce = async () => {
     const s = await createSession(type, signal);
     if (!s.ok) return failed('session', s.status, await s.text().catch(() => ''));
     const { session } = await s.json();
-    const [south, west, north, east] = geoBox();
-    const { x, y } = tileAt((south + north) / 2, (west + east) / 2, 12);
-    const t = await getTile(12, x, y, session, signal);
+    // A tile in the middle of the campaign's map area; with no area, the
+    // one tile that is the whole world.
+    const box = geoBox();
+    const zoom = box ? 12 : 0;
+    const { x, y } = box ? tileAt((box[0] + box[2]) / 2, (box[1] + box[3]) / 2, zoom) : { x: 0, y: 0 };
+    const t = await getTile(zoom, x, y, session, signal);
     if (!t.ok) return failed('tile', t.status, await t.text().catch(() => ''));
     await t.arrayBuffer();
     trouble = null;

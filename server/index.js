@@ -1,5 +1,8 @@
 // Starbase server. Hono app: /api/auth (public), /api/* (workspace-scoped),
 // static web build. Exported for in-process tests via app.request().
+// The preset comes first: which client's own material this server has, if
+// any, is settled before anything else reads it (lib/preset.js).
+import { brandKey, brandNote, presetRoutes } from './lib/preset.js';
 import { Hono } from 'hono';
 import { relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -93,6 +96,7 @@ const COMMIT = String(process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT ||
 // door's key is set (never the key). Never the campaign's switch.
 // store: where the campaign is kept — "postgres" (DATABASE_URL) or
 // "embedded" (the built-in database, which on a host needs a disk).
+// brand: what the campaign starts from — base, or its preset's name.
 const publicAddress = () => {
   const raw = configuredUrl();
   try { return raw && /^https?:$/.test(new URL(raw).protocol) ? raw : null; } catch { return null; }
@@ -104,7 +108,7 @@ app.get('/api/health', async (c) => {
   const open = db ? await setupOpen(db).catch(() => null) : null;
   const made = db ? await noWorkspace(db).then((none) => !none, () => null) : null;
   return c.json({
-    ok: database, database: database ? 'ok' : 'not reachable', service: 'starbase', env: envName(), organization: orgName(), commit: COMMIT, build: currentBuild(), tzdataCurrent: !staleTimeZoneData(),
+    ok: database, database: database ? 'ok' : 'not reachable', service: 'starbase', env: envName(), organization: orgName(), brand: brandKey(), commit: COMMIT, build: currentBuild(), tzdataCurrent: !staleTimeZoneData(),
     ownOrigin: ownOrigin(), instance, address: publicAddress(), entry: entryReadiness(),
     platformKids: parseKeys().map((k) => k.kid), setupOpen: open, campaignMade: made, doorKey: doorKeySet(), store: storeOf(db),
   }, database ? 200 : 503);
@@ -117,6 +121,7 @@ app.route('/api', apiRoutes);
 // Static web build (SPA fallback to index.html for URL routing). Resolved
 // from this file, not the working directory, so any launch location works.
 const WEB_ROOT = relative(process.cwd(), fileURLToPath(new URL('../web/dist', import.meta.url))) || '.';
+app.route('/', presetRoutes); // a preset's own files at the app's addresses (its icons), only under its brand
 app.use('*', brandPages); // the app's page and manifest wear this deployment's look (lib/brand.js)
 app.use('*', serveStatic({ root: WEB_ROOT }));
 // A build file that isn't there (an older build's, asked for by a page left
@@ -132,9 +137,13 @@ app.get('*', serveStatic({ root: WEB_ROOT, path: 'index.html' }));
 // that leave a hosted server half set up. One line each.
 //   - production with no STARBASE_PUBLIC_URL: nothing it sends can link back;
 //   - on Render, a STARBASE_ENV that is neither "production" nor "staging"
-//     (unset, or misspelled): what it is treated as (lib/org.js envName).
+//     (unset, or misspelled): what it is treated as (lib/org.js envName);
+//   - no STARBASE_BRAND on a server named as a preset's campaign: it is
+//     given that preset because of its name (lib/preset.js brandNote).
 export const bootNotes = (env = process.env) => {
   const out = [];
+  const brand = brandNote(env);
+  if (brand) out.push(brand);
   const typed = String(env.STARBASE_ENV || '').trim();
   const name = envName(env);
   if (env.RENDER && typed !== name) {

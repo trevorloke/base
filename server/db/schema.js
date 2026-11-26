@@ -370,7 +370,9 @@ export const bootstrap = async (db) => {
       // An ext may say how long its DDL took when it built something big.
       const t0 = Date.now();
       const note = e.sqlNote ? await e.sqlNote(db) : null;
-      await db.exec(e.sql);
+      // An ext's SQL may be a function: what it runs depends on the server's
+      // settings, read at start-up, not when the file was loaded.
+      await db.exec(typeof e.sql === 'function' ? e.sql() : e.sql);
       note?.(Date.now() - t0);
     }
     await db.exec(SEED);

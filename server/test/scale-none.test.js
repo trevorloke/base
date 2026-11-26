@@ -1,21 +1,24 @@
 // STARBASE_CANDIDATES=none: a campaign with no opponents on its rating scale
 // — the four steps and "Not sure", never Imagine Surrey's list. Unset or
-// empty is Imagine Surrey's five, exactly as before (its production server
-// sets nothing). This whole file runs a server set to "none": the scale it
+// empty is the server's preset's list: Imagine Surrey's five on its own
+// server, exactly as before (its production sets nothing), and nobody on any
+// other. This whole file runs a server set to "none": the scale it
 // hands out, a knock, the import, People's filter, Today's numbers, the walk
 // sheet, the sample, and the first candidate a manager adds.
-// A phone's copy of this code has no settings, so it never adds candidates
-// of its own to a list the server sent.
+// A phone's copy of this code has no settings and no list of its own, so it
+// never adds candidates to a list the server sent.
 // Unique emails and campaign names (test:pg runs every file on one database).
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 
-// Set before anything reads it: the scale's starting list is read once.
+// Set for the whole file: the scale's starting list is read whenever it is asked.
 process.env.STARBASE_CANDIDATES = ' None ';
 const { freshDb, Client } = await import('./helpers.js');
 const { getDb } = await import('../db/client.js');
 const S = await import('@starbase/shared/scale');
-const { RATINGS, RATING_CODES } = await import('@starbase/shared/canvass');
+const { presetFor } = await import('../lib/preset.js');
+// Imagine Surrey's list, from its preset (this file runs as its server does).
+const IS_LIST = presetFor('imagine-surrey').candidates;
 
 // Another copy of shared/scale.js, read with other settings — or as a
 // browser reads it: no settings (browser: 'bare', no process at all — the
@@ -28,7 +31,20 @@ const scaleWith = async (tag, value, { browser = null } = {}) => {
   if (value === undefined) delete proc.env.STARBASE_CANDIDATES; else proc.env.STARBASE_CANDIDATES = value;
   if (browser === 'bare') globalThis.process = undefined;
   if (browser === 'page') globalThis.document = {};
-  try { return await import(`${SCALE_FILE}?${tag}`); } finally {
+  try {
+    const copy = await import(`${SCALE_FILE}?${tag}`);
+    if (browser) return copy; // told nothing until it signs in, and it reads no settings
+    // A server's copy is told its preset's list, as lib/preset.js tells the
+    // real one, and reads its setting each time it is asked: this copy's
+    // setting is `value`, whenever it is called.
+    copy.presetCandidates(() => IS_LIST);
+    const asSet = (fn) => (...args) => {
+      const now = proc.env.STARBASE_CANDIDATES;
+      if (value === undefined) delete proc.env.STARBASE_CANDIDATES; else proc.env.STARBASE_CANDIDATES = value;
+      try { return fn(...args); } finally { if (now === undefined) delete proc.env.STARBASE_CANDIDATES; else proc.env.STARBASE_CANDIDATES = now; }
+    };
+    return Object.fromEntries(Object.entries(copy).map(([k, v]) => [k, typeof v === 'function' ? asSet(v) : v]));
+  } finally {
     globalThis.process = proc;
     delete globalThis.document;
     if (had === undefined) delete proc.env.STARBASE_CANDIDATES; else proc.env.STARBASE_CANDIDATES = had;
@@ -59,33 +75,34 @@ before(async () => {
   P.b = await mgr.createPerson(`Ben None ${tag}`, { address: '102 Example St' });
 });
 
-test('the setting: "none" in any case is no opponents; unset or empty is Imagine Surrey’s, as before', async () => {
+test('the setting: "none" in any case is no opponents; unset or empty is Imagine Surrey’s on its own server, as before', async () => {
   for (const typed of ['none', 'None', 'NONE', '  none  ', '\tNone\n']) {
-    assert.deepEqual(S.startingCandidates(typed), [], JSON.stringify(typed));
+    assert.deepEqual(S.startingCandidates(typed, IS_LIST), [], JSON.stringify(typed));
   }
   for (const typed of [undefined, null, '', '   ']) {
-    assert.equal(S.startingCandidates(typed), S.SURREY_CANDIDATES, `${JSON.stringify(typed)}: Imagine Surrey’s list`);
+    assert.equal(S.startingCandidates(typed, IS_LIST), IS_LIST, `${JSON.stringify(typed)}: Imagine Surrey’s list`);
+    assert.deepEqual(S.startingCandidates(typed), [], `${JSON.stringify(typed)}: with no preset, nobody`);
   }
-  assert.deepEqual(wire(S.SURREY_CANDIDATES), SURREY, 'the list itself is untouched');
+  assert.deepEqual(wire(IS_LIST), SURREY, 'the list itself is untouched');
   // A list is a list; one that can't be read is, as before, Imagine Surrey's.
-  assert.deepEqual(wire(S.startingCandidates('4A:Hartwell:Opposed — Hartwell supporter;4B:Quist')), [
+  assert.deepEqual(wire(S.startingCandidates('4A:Hartwell:Opposed — Hartwell supporter;4B:Quist', IS_LIST)), [
     { code: '4A', name: 'Hartwell', label: 'Opposed — Hartwell supporter' }, { code: '4B', name: 'Quist', label: 'Opposed — Quist' },
   ]);
-  assert.equal(S.startingCandidates('nobody'), S.SURREY_CANDIDATES);
-  assert.deepEqual(wire(S.startingCandidates('none;4B:Quist')), [{ code: '4B', name: 'Quist', label: 'Opposed — Quist' }], '"none" is the whole setting, or it is not that word');
+  assert.equal(S.startingCandidates('nobody', IS_LIST), IS_LIST);
+  assert.deepEqual(wire(S.startingCandidates('none;4B:Quist', IS_LIST)), [{ code: '4B', name: 'Quist', label: 'Opposed — Quist' }], '"none" is the whole setting, or it is not that word');
 
   // A server that sets nothing: the scale the app always had.
   const unset = await scaleWith('unset', undefined);
-  assert.deepEqual(wire(unset.DEFAULT_CANDIDATES), SURREY);
-  assert.deepEqual(unset.offeredCodes(unset.DEFAULT_SCALE), ['1', '2', '3', '4', ...SURREY_CODES]);
-  assert.deepEqual(unset.DEFAULT_SCALE.candidates.map((c) => [c.code, c.name, c.label, c.off]), SURREY.map((c) => [c.code, c.name, c.label, false]));
+  assert.deepEqual(wire(unset.defaultCandidates()), SURREY);
+  assert.deepEqual(unset.offeredCodes(unset.defaultScale()), ['1', '2', '3', '4', ...SURREY_CODES]);
+  assert.deepEqual(unset.defaultScale().candidates.map((c) => [c.code, c.name, c.label, c.off]), SURREY.map((c) => [c.code, c.name, c.label, false]));
   const empty = await scaleWith('empty', '');
-  assert.deepEqual(wire(empty.DEFAULT_SCALE), wire(unset.DEFAULT_SCALE));
+  assert.deepEqual(wire(empty.defaultScale()), wire(unset.defaultScale()));
 });
 
 test('“none”: the scale is the four steps and Not sure', () => {
-  assert.deepEqual(S.DEFAULT_CANDIDATES, []);
-  const s = S.DEFAULT_SCALE;
+  assert.deepEqual(S.defaultCandidates(), []);
+  const s = S.defaultScale();
   assert.deepEqual(s.candidates, []);
   assert.deepEqual(s.steps.map((x) => [x.code, x.band, x.word, x.label]), [
     ['1', 'support', 'Strong yes', 'Strong support'], ['2', 'support', 'Lean yes', 'Lean support'],
@@ -108,9 +125,9 @@ test('“none”: the scale is the four steps and Not sure', () => {
   // A code on a row from somewhere else still reads as opposed, by no name.
   const stray = S.ratingByCode(s, '4B');
   assert.deepEqual([stray.band, stray.name, stray.unknown, stray.label], ['opposed', 'Other', true, 'Opposed — not on the list']);
-  // The default vocabulary (shared/canvass.js): the four steps.
-  assert.deepEqual(RATING_CODES, ['1', '2', '3', '4']);
-  assert.equal(RATINGS.length, 4);
+  // The default vocabulary (shared/scale.js ratings()): the four steps.
+  assert.deepEqual(S.ratingCodes(), ['1', '2', '3', '4']);
+  assert.equal(S.ratings().length, 4);
   // A saved scale with nobody on it stays that way; one with people keeps them.
   assert.deepEqual(S.normalizeScale({ v: 2, words: { 1: 'Definitely' }, candidates: [] }).candidates, []);
   assert.deepEqual(S.normalizeScale({ v: 3, candidates: [{ code: '4S', name: 'Sample' }] }).candidates.map((c) => [c.code, c.name, c.label, c.off]),
@@ -120,9 +137,9 @@ test('“none”: the scale is the four steps and Not sure', () => {
 test('a phone never adds candidates of its own to the list the server sent', async () => {
   // The phone's copy of this code has no settings to read.
   const phone = await scaleWith('phone', undefined, { browser: 'bare' });
-  assert.deepEqual(phone.DEFAULT_CANDIDATES.map((c) => c.code), SURREY_CODES, 'its fallback list is the same for every campaign');
+  assert.deepEqual(phone.defaultCandidates(), [], 'it has no list of its own: the same nobody for every campaign');
   // GET /api/scale from a server set to "none".
-  const sent = wire(S.DEFAULT_SCALE);
+  const sent = wire(S.defaultScale());
   assert.deepEqual(phone.normalizeScale(sent).candidates, [], 'no opponents: none on the phone either');
   assert.deepEqual(phone.offeredCodes(phone.normalizeScale(sent)), ['1', '2', '3', '4']);
   // The scale as the sign-in carries it (stored: v, words, candidates).
@@ -130,10 +147,10 @@ test('a phone never adds candidates of its own to the list the server sent', asy
   assert.deepEqual(phone.normalizeScale({ v: 2, candidates: [{ code: '4S', name: 'Sample' }] }).candidates.map((c) => c.code), ['4S']);
   // A campaign with its own list (as staging's): only its own.
   const listed = await scaleWith('listed', '4A:Hartwell:Opposed — Hartwell supporter;4B:Quist');
-  assert.deepEqual(phone.normalizeScale(wire(listed.DEFAULT_SCALE)).candidates.map((c) => [c.code, c.name, c.off]), [['4A', 'Hartwell', false], ['4B', 'Quist', false]]);
+  assert.deepEqual(phone.normalizeScale(wire(listed.defaultScale())).candidates.map((c) => [c.code, c.name, c.off]), [['4A', 'Hartwell', false], ['4B', 'Quist', false]]);
   // Imagine Surrey's phones read what they always did.
   const surrey = await scaleWith('surrey', undefined);
-  assert.deepEqual(wire(phone.normalizeScale(wire(surrey.DEFAULT_SCALE))), wire(surrey.DEFAULT_SCALE));
+  assert.deepEqual(wire(phone.normalizeScale(wire(surrey.defaultScale()))), wire(surrey.defaultScale()));
   const edited = surrey.normalizeScale({ v: 4, words: { 1: 'Definitely' }, candidates: [{ code: '4B', name: 'Brenda Locke' }, { code: '4D', name: 'McCallum', off: true, off_at: '2026-10-01T00:00:00.000Z' }] });
   assert.deepEqual(edited.candidates.map((c) => [c.code, c.off]), [['4B', false], ['4D', true], ['4F', true], ['4N', true], ['4C', true]],
     'the server still brings back a starting candidate a stored list lacks, off the list');

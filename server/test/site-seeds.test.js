@@ -20,7 +20,8 @@ const here = (p) => fileURLToPath(new URL(p, import.meta.url));
 const web = (p) => readFileSync(here(`../../apps/web/src/${p}`), 'utf8');
 
 before(async () => {
-  delete process.env.STARBASE_BRAND;
+  // Imagine Surrey's own server: the brand its production sets.
+  process.env.STARBASE_BRAND = 'imagine-surrey';
   ({ db, mgr, ws } = await campaign('Imagine Surrey'));
 });
 
@@ -140,7 +141,7 @@ test('any other campaign: a clean generic site, with its own name and nothing ma
       else assert.doesNotThrow(() => checkModules(p.modules, { strict: true }), p.slug);
     }
   } finally {
-    delete process.env.STARBASE_BRAND;
+    process.env.STARBASE_BRAND = 'imagine-surrey';
   }
 });
 

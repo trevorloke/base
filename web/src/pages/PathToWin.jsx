@@ -20,7 +20,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { action, apiGet } from '../api.js';
 import { NeedsSignal, NoSignal, noSignal, useOnline } from '../components/NoSignal.jsx';
-import { DEFAULT_TILES, SURREY_BOUNDS, safeAttribution } from '../components/tiles.js';
+import { DEFAULT_TILES, openHome, safeAttribution, useHomeView } from '../components/tiles.js';
 import './shifts.css';
 import './path-to-win.css';
 
@@ -382,12 +382,15 @@ function TurfMap({ turfs, tiles, onOpen }) {
   const boundsRef = useRef(null);
   const openRef = useRef(onOpen);
   openRef.current = onOpen;
-  // Every turf in view (the city, before they're drawn), at once — no
+  // Where the campaign's maps open (tiles.js), for the effects below.
+  const homeRef = useRef(null);
+  homeRef.current = useHomeView();
+  // Every turf in view (the campaign's area, before they're drawn), at once — no
   // animation; again when the map's box changes width for real (a phone
   // turned, a window narrowed), not for a scrollbar coming or going.
   const fit = (map) => (boundsRef.current
     ? map.fitBounds(boundsRef.current, { padding: [16, 16], maxZoom: 16, animate: false })
-    : map.fitBounds(SURREY_BOUNDS, { padding: [8, 8], animate: false }));
+    : openHome(map, homeRef.current, { fit: true }));
   useEffect(() => {
     const el = boxRef.current;
     if (!el || mapRef.current) return undefined;
