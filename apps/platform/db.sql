@@ -104,17 +104,18 @@ alter table checks add column if not exists campaign_made boolean;
 -- for the built-in database, which is not a real one. Null from a server
 -- too old to say.
 alter table checks add column if not exists store text;
--- A database made when the second check went through the door: via was
+-- A database made when the second check was kept under via 'door' (first
+-- through the door, later at the client's own address): via was
 -- 'server' or 'door', and each check kept whether the door's key was set.
--- Those checks were of an address nobody uses now, so they go; this runs
--- once (afterwards the rule already names 'public').
+-- Those checks are kept and named 'public', the second check's name now;
+-- this runs once (afterwards the rule already names 'public').
 do $$
 begin
   if exists (select 1 from pg_constraint
       where conrelid = 'checks'::regclass and conname = 'checks_via_check'
         and pg_get_constraintdef(oid) not like '%''public''%') then
     alter table checks drop constraint checks_via_check;
-    delete from checks where via = 'door';
+    update checks set via = 'public' where via = 'door';
     alter table checks add constraint checks_via_check check (via in ('server', 'public'));
   end if;
 end $$;
@@ -127,6 +128,10 @@ create table if not exists checklist (
   done_by text check (done_by in ('auto', 'you')),
   primary key (campaign, item)
 );
+-- The tick for "its own address answers" was kept as 'address' by an
+-- earlier control centre; it is 'public' now. Kept, under its new name.
+update checklist c set item = 'public' where item = 'address'
+  and not exists (select 1 from checklist d where d.campaign = c.campaign and d.item = 'public');
 
 -- The operator log: append-only, chained with server/lib/events.js canonical()
 -- and chainHash(prev, seq, action, 'campaign', campaign || '', 'create',
