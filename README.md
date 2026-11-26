@@ -6,14 +6,14 @@ outreach and website in one place — built first for **Imagine Surrey**
 README); the website is one of the desk's areas, like People or Donations
 ([SITE.md](SITE.md)).
 
-Each client runs on its own server and database, behind one front door at
-base.win (`apps/door`; [setting it up](apps/door/README.md)):
-`base.win/<client>` opens the campaign's public website (`/<client>/site/`),
-`/<client>/field` is the volunteers' app and `/<client>/desk` the office's.
-The server goes under a client's path with `BASE_PATH=/<client>` (and keeps
-answering at its own address); unset, it runs at a site's root as it always
-has. An old `/<client>/admin…` link goes on to `/<client>/desk…` on the
-address it was opened at, never the server's own. Internal names — the
+Each client runs on its own server and database, at its own address:
+`<client>.base.win`, a custom domain on that client's own service (no
+shared front door). `<client>.base.win` is the volunteers' app,
+`<client>.base.win/admin` the office's (the desk) and
+`<client>.base.win/site/` the campaign's public website. `base.win/<client>`
+is not an address. (`BASE_PATH=/<client>` can still put a server under a
+path on a shared domain, behind `apps/door`; base.win itself no longer runs
+that way, and no door service is deployed.) Internal names — the
 `STARBASE_*` settings, package names, the database — are unchanged, so
 nothing deployed moves.
 
@@ -198,7 +198,7 @@ button isn't shown). Both are on the event log, never the link
 base.win's control centre (ops.base.win, `apps/platform/README.md`) lists
 every campaign and opens any campaign's desk with one tap, already signed
 in. The visit lands on the campaign's own Render address
-(`…onrender.com/admin`), never base.win/<name>, so it can't reach another
+(`…onrender.com/admin`), never <name>.base.win, so it can't reach another
 campaign. It comes in as the member **base.win support** (a manager, with no
 password: only the control centre opens it), or as the operator's own
 account when that is already on the team — whose role never changes (a

@@ -1,4 +1,10 @@
-# The door — the front door at base.win
+# The door — a shared front door (not in use at base.win)
+
+> **base.win doesn't run this.** Each client there has its own address,
+> `<client>.base.win`, as a custom domain on its own service; the door
+> service was removed. What follows describes the door for a deployment
+> that puts several clients under paths on one domain (`BASE_PATH`), with
+> base.win/imaginesurrey as the example it was written for.
 
 One address for every client; each client's base.win on its own server and
 database.
