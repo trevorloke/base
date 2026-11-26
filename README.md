@@ -1373,8 +1373,8 @@ election week should switch to a paid provider.
 | `STARBASE_TILE_KEY` | the named provider's key, added as `?api_key=` (phones can see it — use only where the provider can't be told the campaign's own web address) | — |
 | `STARBASE_TILE_CARTO_KEY` | the campaign's free CARTO basemap key: the *Clean* look is offered (and the map opens on it) only with it, and it is added to every CARTO address (phones can see it) | — (no Clean) |
 | `STARBASE_TILE_CLEAN` | `off`: never offer CARTO, key or not (the free map behind Google stays, OpenStreetMap's) | — |
-| `GOOGLE_MAPS_SERVER_KEY` | Google's key (Map Tiles API, Places API (New)): Google is the map whenever it is set. **Before this goes to staging, tell us Google or the free map for canvassing. With a key already set, Google becomes the map and phones stop keeping street maps offline.** | — |
-| `GOOGLE_MAPS_TILES` | `off` keeps the free map with a key set (`1` also turns Google on) | unset: on with a key |
+| `GOOGLE_MAPS_SERVER_KEY` | Google's key (Map Tiles API, Places API (New)). Alone it does not change the map. **Tell us Google or the free map for canvassing.** | — |
+| `GOOGLE_MAPS_TILES` | `on` (or `1`) makes Google the map, with the key set. Phones don't keep Google's map for no-signal areas | unset: the free map |
 | `GOOGLE_TRANSLATE_KEY` | Google Cloud Translation, a key restricted to it alone: the campaign's website in Punjabi and Chinese, translated ahead of time (SITE.md "Languages") | no language can be turned on; languages already on keep their words, new wording stays English |
 | `GOOGLE_TRANSLATE_API_BASE` | tests only: the fake Google Translation (`server/test/fake-translate.js`) | Google's own |
 | `GOOGLE_TILES_DAILY_MAX` | Google tiles a day (the campaign's day); then the free map until midnight | none |
@@ -1533,12 +1533,11 @@ Older browsers: every `dvh` height in the map's sheet has the same in `vh`
 before it, and the sidebar's room and the map's width come from classes the
 shell sets (`web/src/layout.js`) as well as `:has()`.
 
-**Google Maps** instead: whenever a `GOOGLE_MAPS_SERVER_KEY` with the **Map
-Tiles API** enabled is set, unless `GOOGLE_MAPS_TILES=off`
-(`GOOGLE_MAPS_TILE_TYPE` roadmap | satellite | terrain). Before this goes to
-staging, tell us Google or the free map for canvassing. With a key already
-set, Google becomes the map and phones stop keeping street maps offline;
-set `GOOGLE_MAPS_TILES=off` to keep the free map. Google hands tiles out against a session, so the map
+**Google Maps** instead: with `GOOGLE_MAPS_TILES=on` and a
+`GOOGLE_MAPS_SERVER_KEY` with the **Map Tiles API** enabled
+(`GOOGLE_MAPS_TILE_TYPE` roadmap | satellite | terrain). Tell us Google or
+the free map for canvassing. A key alone keeps the free map, which phones
+keep for no-signal areas; with Google they don't. Google hands tiles out against a session, so the map
 draws `/tiles/{z}/{x}/{y}.png` from base.win (signed in), which fetches
 each tile from Google with a session it keeps for everyone and renews
 (`server/lib/gtiles.js`, served by `server/ext/offline`), credited to

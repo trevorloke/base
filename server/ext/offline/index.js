@@ -21,8 +21,8 @@
 //   STARBASE_TILE_KEY          the provider's key, if it isn't set to know the
 //                              campaign's own web address (phones can see it)
 // Read on every request, so a restart is all a change needs.
-// Google Maps instead (lib/gtiles.js): whenever GOOGLE_MAPS_SERVER_KEY is
-// set (a key with the Map Tiles API enabled), unless GOOGLE_MAPS_TILES=off.
+// Google Maps instead (lib/gtiles.js): with GOOGLE_MAPS_TILES=on and
+// GOOGLE_MAPS_SERVER_KEY set (a key with the Map Tiles API enabled).
 // The map then draws /tiles/{z}/{x}/{y}.png from Starbase (signed in), which
 // fetches each tile from Google; STARBASE_TILE_* is ignored while it's on.
 //   GOOGLE_TILES_DAILY_MAX   tiles a day (the campaign's day); past it the

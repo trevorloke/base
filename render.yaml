@@ -37,11 +37,10 @@
 #   GOOGLE_TRANSLATE_KEY                                the website in Punjabi and Chinese: Google Cloud
 #                                                       Translation, a separate key restricted to it (asked
 #                                                       for below); GOOGLE_TRANSLATE_API_BASE is for tests only
-#   GOOGLE_MAPS_TILES=off, GOOGLE_MAPS_TILE_TYPE        Google is the map whenever its key is set; =off keeps
-#                                                       the free map. Before this goes to staging, tell us Google
-#                                                       or the free map for canvassing. With a key already set,
-#                                                       Google becomes the map and phones stop keeping street
-#                                                       maps offline. Set GOOGLE_MAPS_TILES=off to keep the free map.
+#   GOOGLE_MAPS_TILES=on, GOOGLE_MAPS_TILE_TYPE         Google is the map only with =on and its key set; unset
+#                                                       or off keeps the free map, which phones keep for
+#                                                       no-signal areas. Google's map is not kept offline.
+#                                                       Tell us Google or the free map for canvassing.
 #   GOOGLE_TILES_DAILY_MAX                              Google tiles a day, then the free map until midnight
 #   ADDRESS_SUGGEST                                     google: Google's address suggestions (only after counsel's yes)
 #   GOOGLE_PLACES_DAILY_MAX, GOOGLE_PLACES_PER_PERSON   Google asks a day (300) and per person (50)

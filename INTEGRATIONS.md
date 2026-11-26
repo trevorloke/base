@@ -592,11 +592,10 @@ provider of the campaign's own there is no second one to switch to. The
 service worker keeps both free providers' tiles as they are looked at
 (never ahead). Before election week, either:
 
-- **Google Maps:** on whenever `GOOGLE_MAPS_SERVER_KEY` is set (Map Tiles
-  API enabled, above); `GOOGLE_MAPS_TILES=off` keeps the free map.
-  **Before this goes to staging, tell us Google or the free map for
-  canvassing. With a key already set, Google becomes the map and phones
-  stop keeping street maps offline.** `GOOGLE_MAPS_TILE_TYPE` roadmap |
+- **Google Maps:** on with `GOOGLE_MAPS_TILES=on` and
+  `GOOGLE_MAPS_SERVER_KEY` set (Map Tiles API enabled, above); unset or
+  `off`, the free map. **Tell us Google or the free map for canvassing.**
+  Phones don't keep Google's map for no-signal areas. `GOOGLE_MAPS_TILE_TYPE` roadmap |
   satellite | terrain (the standard look; each person can switch to the
   others under Show → Map — no Muted or Dark over Google's tiles, whose
   imagery may not be altered). base.win fetches them for signed-in phones

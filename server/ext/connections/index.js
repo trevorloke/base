@@ -82,7 +82,7 @@ const googleTilesRow = () => {
   const max = use.ceilings.tiles;
   const full = max != null && use.tiles >= max;
   const lines = [
-    `Google ${mapType()} tiles, through this server${googleTilesSetting() === 'auto' ? ' · On because a Google key is set · GOOGLE_MAPS_TILES=off turns it off' : ''}`,
+    `Google ${mapType()} tiles, through this server`,
     'Phones don’t keep Google’s map for no-signal areas (Google’s terms)',
     `Today: ${num(use.tiles)} tiles${max != null ? ` of ${num(max)} (then the free map until midnight)` : ''}`,
     `While Google isn’t answering: ${cartoView() ? 'CARTO’s' : 'OpenStreetMap’s'} free map`,

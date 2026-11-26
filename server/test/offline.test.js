@@ -229,7 +229,7 @@ test('no CARTO key: no Clean, and no address on CARTO anywhere — Google on or 
     }
   }
   for (const k of combos) {
-    setEnv({ STARBASE_TILE_CARTO_KEY: null, GOOGLE_MAPS_TILES: null, GOOGLE_MAPS_SERVER_KEY: k.google, STARBASE_TILE_CLEAN: k.clean, STARBASE_TILE_URL: k.tileUrl, STARBASE_TILE_PROVIDER: k.provider });
+    setEnv({ STARBASE_TILE_CARTO_KEY: null, GOOGLE_MAPS_TILES: k.google ? 'on' : null, GOOGLE_MAPS_SERVER_KEY: k.google, STARBASE_TILE_CLEAN: k.clean, STARBASE_TILE_URL: k.tileUrl, STARBASE_TILE_PROVIDER: k.provider });
     for (const who of [c, vol]) {
       const cfg = (await who.get('/api/map/config')).json;
       const at = JSON.stringify(k);
@@ -243,7 +243,7 @@ test('no CARTO key: no Clean, and no address on CARTO anywhere — Google on or 
       }
     }
   }
-  setEnv({ GOOGLE_MAPS_SERVER_KEY: null, STARBASE_TILE_CLEAN: null, STARBASE_TILE_URL: null, STARBASE_TILE_PROVIDER: null });
+  setEnv({ GOOGLE_MAPS_TILES: null, GOOGLE_MAPS_SERVER_KEY: null, STARBASE_TILE_CLEAN: null, STARBASE_TILE_URL: null, STARBASE_TILE_PROVIDER: null });
 });
 
 test('with the campaign’s CARTO key: Clean carries it; behind Google, CARTO unless STARBASE_TILE_CLEAN=off; never in setup', async () => {
@@ -257,7 +257,7 @@ test('with the campaign’s CARTO key: Clean carries it; behind Google, CARTO un
   cfg = (await c.get('/api/map/config')).json;
   assert.equal(cfg.views, undefined);
   // Google the map: the free map behind it is CARTO with the key…
-  setEnv({ STARBASE_TILE_CLEAN: null, GOOGLE_MAPS_SERVER_KEY: 'g-key' });
+  setEnv({ STARBASE_TILE_CLEAN: null, GOOGLE_MAPS_TILES: 'on', GOOGLE_MAPS_SERVER_KEY: 'g-key' });
   cfg = (await vol.get('/api/map/config')).json;
   const free = cfg.views.filter((v) => v.fallback);
   assert.deepEqual(free.map((v) => [v.key, v.label]), [['free', 'Free map']]);
@@ -267,7 +267,7 @@ test('with the campaign’s CARTO key: Clean carries it; behind Google, CARTO un
   setEnv({ STARBASE_TILE_CLEAN: 'off' });
   cfg = (await vol.get('/api/map/config')).json;
   assert.deepEqual(cfg.views.filter((v) => v.fallback).map((v) => [v.key, v.url]), [['free', TILE_DEFAULTS.url]]);
-  setEnv({ STARBASE_TILE_CARTO_KEY: null, GOOGLE_MAPS_SERVER_KEY: null, STARBASE_TILE_CLEAN: null });
+  setEnv({ STARBASE_TILE_CARTO_KEY: null, GOOGLE_MAPS_TILES: null, GOOGLE_MAPS_SERVER_KEY: null, STARBASE_TILE_CLEAN: null });
 });
 
 test('a STARBASE_TILE_URL on CARTO: the key added where there is one; without one, kept as set and said', () => {

@@ -132,7 +132,7 @@ INTEGRATIONS.md.
 | `RESEND_WEBHOOK_SECRET` | bounces, spam complaints and "delivered" back from Resend (INTEGRATIONS.md; SendGrid: `MAIL_PROVIDER`, `SENDGRID_API_KEY`, `SENDGRID_WEBHOOK_PUBLIC_KEY`) | optional — without it a send says *sent* and a dead address is tried again next time |
 | `MAILCHIMP_API_KEY` | *Send to Mailchimp* on a list, unsubscribes kept in step both ways (INTEGRATIONS.md; `MAILCHIMP_AUDIENCE_ID` for an account with several audiences, `MAILCHIMP_WEBHOOK_SECRET` to check its webhook's signature) | optional — without it the button is not there |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` | SMS shift alerts; texting and calling from the app through the campaign's number | optional — without it, Calls opens the phone's own Messages and dialer |
-| `GOOGLE_MAPS_SERVER_KEY` | Google Maps tiles (on whenever it is set, unless `GOOGLE_MAPS_TILES=off`) and, with `ADDRESS_SUGGEST=google`, Google's address suggestions; pins always come from the B.C. service | optional — the free BC geocoder and OpenStreetMap tiles work without it |
+| `GOOGLE_MAPS_SERVER_KEY` | Google Maps tiles (with `GOOGLE_MAPS_TILES=on`) and, with `ADDRESS_SUGGEST=google`, Google's address suggestions; pins always come from the B.C. service | optional — the free BC geocoder and OpenStreetMap tiles work without it |
 | `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_TOKEN_KEY` | Sign in with Google, and the one Google connection Gmail, Drive and Calendar use (INTEGRATIONS.md); in tests a stand-in Google (`server/test/fake-google.js`, pointed at with `GOOGLE_ACCOUNTS_BASE` and `GOOGLE_OAUTH_BASE`) — never real Google | optional — without them no Google button shows, and passwords work as always |
 | `GMAIL_DAILY_MAX` | emails a person may send from their own Gmail in 24 hours (INTEGRATIONS.md, *Gmail*); in tests Gmail is the stand-in Google too (`GMAIL_API_BASE`) | optional — 100 |
 | `GOOGLE_PICKER_KEY`, `GOOGLE_CLOUD_PROJECT_NUMBER` | Google Drive and Sheets, on top of the Google client (INTEGRATIONS.md); in tests the same stand-in Google answers Drive and Sheets (`server/test/fake-google-drive.js`, pointed at with `GOOGLE_DRIVE_API_BASE` and `GOOGLE_SHEETS_API_BASE`) | optional — without them no Drive button shows; Download CSV works as always |
@@ -1227,7 +1227,7 @@ comes back, or asks if words were typed meanwhile).
   no shop icons or house numbers); *Muted* greys the standard streets (the
   doors keep their colours), *Dark* is for night; it stays on that browser.
   With Google as the map (a `GOOGLE_MAPS_SERVER_KEY` set, `GOOGLE_MAPS_TILES`
-  not `off`), the list is *Streets · Satellite · Terrain*: no *Muted* or
+  `on`), the list is *Streets · Satellite · Terrain*: no *Muted* or
   *Dark* over Google's map, and a saved one draws *Streets*.
 - **Map, zooming in** — from the whole city to a street: every door is a
   dot in its rating's colour (grey: not asked yet), no number bubbles; a
@@ -1250,8 +1250,8 @@ comes back, or asks if words were typed meanwhile).
 - **Google Maps, the server's part** (`node --test server/test/gtiles.test.js
   server/test/places.test.js server/test/gusage.test.js
   server/test/maps-links.test.js`, against stand-in Google and B.C.
-  services, never the real ones): a key alone makes Google the map and
-  `GOOGLE_MAPS_TILES=off` keeps the free one; tiles carry Google's own cache
+  services, never the real ones): a key alone keeps the free map and
+  `GOOGLE_MAPS_TILES=on` makes Google the map; tiles carry Google's own cache
   header and the service worker never keeps them; a slow Google tile is a
   504 with no pause; `GOOGLE_TILES_DAILY_MAX` stops tiles until midnight;
   Google's address rows only with `ADDRESS_SUGGEST=google` and the logo, a
@@ -1264,7 +1264,7 @@ comes back, or asks if words were typed meanwhile).
   with `GOOGLE_TILES_DAILY_MAX` set (GOING-LIVE.md, section 0).
 - **Google Maps, the screens** (`node e2e-gmaps.mjs`: base.win on :5340, a
   stand-in B.C. service on :5341 and a stand-in Google on :5342; every real
-  Google and B.C. address is blocked) — with only the key, Show → Map is
+  Google and B.C. address is blocked) — with the key and `GOOGLE_MAPS_TILES=on`, Show → Map is
   *Streets · Satellite · Terrain*, the phone keeps no Google tiles, and with
   no signal the map says *No signal — the street map is back when you are.
   Your doors are all here.*; New door offers the campaign's doors and then

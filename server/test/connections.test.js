@@ -268,7 +268,7 @@ test('the free map row says which free map, and why Clean is missing (a choice, 
 const API_BLOCKED = { error: { code: 403, message: 'Requests to this API places.googleapis.com method google.maps.places.v1.Places.AutocompletePlaces are blocked.', status: 'PERMISSION_DENIED',
   details: [{ '@type': 'type.googleapis.com/google.rpc.ErrorInfo', reason: 'API_KEY_SERVICE_BLOCKED', domain: 'googleapis.com' }] } };
 
-test('Google’s map row: on with only a key, the offline trade-off said; GOOGLE_MAPS_TILES=1 with no key flagged; unset with no key the free row', async () => {
+test('Google’s map row: a key alone keeps the free row; on with the key and =on, the offline trade-off said; GOOGLE_MAPS_TILES=1 with no key flagged; unset with no key the free row', async () => {
   for (const k of ['GOOGLE_MAPS_TILES', 'GOOGLE_MAPS_SERVER_KEY']) delete process.env[k];
   resetTiles();
   let t = byKey(await list()).tiles;
@@ -279,9 +279,12 @@ test('Google’s map row: on with only a key, the offline trade-off said; GOOGLE
   delete process.env.GOOGLE_MAPS_TILES;
   process.env.GOOGLE_MAPS_SERVER_KEY = 'gkey';
   t = byKey(await list()).tiles;
+  assert.deepEqual([t.name, t.state], ['Map background (OpenStreetMap)', 'default'], 'a key alone: still the free map');
+  process.env.GOOGLE_MAPS_TILES = 'on';
+  t = byKey(await list()).tiles;
   assert.deepEqual([t.name, t.state], ['Map background (Google Map Tiles)', 'ready']);
   assert.deepEqual(t.detail.split('\n'), [
-    'Google roadmap tiles, through this server · On because a Google key is set · GOOGLE_MAPS_TILES=off turns it off',
+    'Google roadmap tiles, through this server',
     'Phones don’t keep Google’s map for no-signal areas (Google’s terms)',
     'Today: 0 tiles',
     'While Google isn’t answering: OpenStreetMap’s free map',

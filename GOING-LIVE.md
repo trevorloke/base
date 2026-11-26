@@ -128,11 +128,11 @@ empty service or database. The control centre can be made by hand instead
 **Before a release goes to staging or production,** check each service's
 Environment for anything the release notes ask. On Render a campaign's
 service must have `DATABASE_URL` set, or it does not start (section 1,
-step 2). For Google Maps: **Before this goes to
-staging, tell us Google or the free map for canvassing. With a key already
-set, Google becomes the map and phones stop keeping street maps offline.**
-Until the owner answers, a service with `GOOGLE_MAPS_SERVER_KEY` set must
-also have `GOOGLE_MAPS_TILES=off` before the release is pushed (§5, Recipe B).
+step 2). For Google Maps: **tell us Google or the free map for
+canvassing.** Until then the free map stays: Google is the map only with
+`GOOGLE_MAPS_TILES=on` and `GOOGLE_MAPS_SERVER_KEY` both set, so a key set
+for address lookup does not change the map (§5, Recipe B). Google's map is
+not kept on phones for no-signal areas.
 For staging, with no synced Blueprint: set base-win-staging → Environment →
 `STARBASE_CANDIDATES` to the exact line in `render.yaml`'s staging block (the
 made-up Avendrel, Brindlemoor and Castramont). The sample saves those three
@@ -290,8 +290,8 @@ Then, as each one is ready:
 | `STARBASE_WEBSITE_URL`, `STARBASE_WEBSITE_KEY` | only while the campaign's website is hosted apart (section 2): its `https://` address, no path; the same secret the website holds as `STARBASE_INBOUND_KEY`. Set by hand on that client's service. Never on staging, never in the Blueprint | sends this client's unsubscribes and STOPs to its own website (INTEGRATIONS.md, *Unsubscribes, both ways*) |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` | from Twilio; for texts to a list in Canada the number should be a verified toll-free number or a short code (INTEGRATIONS.md). Staging: test credentials or unset, never a client's (section 0) | texting and calling through the campaign's number, SMS shift alerts; without them the phone's own apps are used |
 | `GEOCODER` | leave unset (`bc`, the free BC Address Geocoder). `google` is no longer used for pins (Google's terms): take `GEOCODER=google` and `GEOCODER_FALLBACK=google` away | placing people on the map |
-| `GOOGLE_MAPS_SERVER_KEY` | a Google Cloud key with application restriction **None** and API restriction to Map Tiles API and Places API (New) — not a *Websites* key, not an IP restriction on Render (§5, Recipe B). Staging: base.win's own key with a daily ceiling set, or unset, never a client's (section 0). **Before this goes to staging, tell us Google or the free map for canvassing. With a key already set, Google becomes the map and phones stop keeping street maps offline.** | Google Maps tiles; Google's address suggestions when turned on |
-| `GOOGLE_MAPS_TILES` | `off` keeps the free map with a key set (set it on staging and production until the owner chooses); unset, Google is the map whenever the key is set (`GOOGLE_MAPS_TILE_TYPE` roadmap, satellite or terrain). Google's tiles are not kept on phones for no-signal areas (Google's terms) | the map's background |
+| `GOOGLE_MAPS_SERVER_KEY` | a Google Cloud key with application restriction **None** and API restriction to Map Tiles API and Places API (New) — not a *Websites* key, not an IP restriction on Render (§5, Recipe B). Staging: base.win's own key with a daily ceiling set, or unset, never a client's (section 0). **Tell us Google or the free map for canvassing.** The key alone does not make Google the map | Google Maps tiles with `GOOGLE_MAPS_TILES=on`; Google's address suggestions when turned on |
+| `GOOGLE_MAPS_TILES` | `on` makes Google the map, with the key set (`GOOGLE_MAPS_TILE_TYPE` roadmap, satellite or terrain). Unset or `off`: the free map, until the owner chooses Google. Google's tiles are not kept on phones for no-signal areas (Google's terms) | the map's background |
 | `GOOGLE_TILES_DAILY_MAX` | leave unset (no ceiling), or tiles a day after which phones turn to the free map until the campaign's midnight | a cap on Google's map costs |
 | `GOOGLE_TRANSLATE_KEY` | a **separate** key in the same Google Cloud project, API restriction **Cloud Translation API** only, application restriction None; set a project quota on Cloud Translation "Characters per day" of 300,000 as a backstop. Then press Settings → Services → Translation → Check translation on the service that holds the key: production for a client's key. Staging: base.win's own key, or unset, never a client's (section 0) | the website in Punjabi and Chinese (SITE.md "Languages") |
 | `ADDRESS_SUGGEST` | leave unset (the B.C. service suggests addresses, never Google). `google` only after counsel's or Google's written yes and with Google's logo in the build (§5, Recipe B) | Google's address suggestions as you type |
@@ -608,13 +608,11 @@ writing** before relying on offline maps.
 
 #### Recipe B — Google Maps (through the server)
 
-**Before this goes to staging, tell us Google or the free map for
-canvassing. With a key already set, Google becomes the map and phones stop
-keeping street maps offline.** Google is the map whenever
-`GOOGLE_MAPS_SERVER_KEY` is set; `GOOGLE_MAPS_TILES=off` keeps the free map
-for as long as the campaign wants. Until the owner answers, staging and
-production carry `GOOGLE_MAPS_TILES=off` in Render, and a release is not
-pushed to staging while either service has the key without that setting.
+**Tell us Google or the free map for canvassing.** Google is the map only
+with `GOOGLE_MAPS_TILES=on` and `GOOGLE_MAPS_SERVER_KEY` set. Unset or
+`off`, the free map stays, and phones keep it for no-signal areas; with
+Google they do not. Until the owner chooses Google, leave
+`GOOGLE_MAPS_TILES` unset (or `off`) on staging and production.
 
 1. Go to console.cloud.google.com and create (or pick) the project. If the
    campaign's domain is on Google Workspace, create it inside that
@@ -644,8 +642,8 @@ pushed to staging while either service has the key without that setting.
    and 100% (a budget warns; only quotas and base.win's ceilings stop
    spending).
 6. On the campaign's production service in Render, set
-   `GOOGLE_MAPS_SERVER_KEY=<the key>` (no spaces) and save; keep
-   `GOOGLE_MAPS_TILES=off` if the free map was chosen. A client's key
+   `GOOGLE_MAPS_SERVER_KEY=<the key>` (no spaces) and save; set
+   `GOOGLE_MAPS_TILES=on` only if Google was chosen for the map. A client's key
    never goes on staging: staging is public, so it gets base.win's own
    key with `GOOGLE_TILES_DAILY_MAX` and `GOOGLE_PLACES_DAILY_MAX` set,
    or none (section 0). Optional:
@@ -704,8 +702,8 @@ When Google refuses (a bad key, billing off, the API not turned on, the
 usage limit used up), base.win stops asking it for a minute (30 seconds
 after the usage limit) instead of asking again for every tile on every
 phone, then tries once more. A key pasted with a space or a new line at
-the end, and `GOOGLE_MAPS_TILES` set to `true`, `yes` or `on`, work the
-same as the plain values; `0` or `off` turns Google off quietly. A Google
+the end, and `GOOGLE_MAPS_TILES` set to `1`, `true` or `yes`, work the
+same as the plain values; unset, `0` or `off` keeps Google off quietly. A Google
 answer slower than its limit is not a refusal: that tile fails and the next
 is asked. Places is paused 10 minutes after a key, API or billing refusal
 (60 seconds after the usage limit), and the B.C. service suggests meanwhile.
@@ -946,8 +944,8 @@ The control centre is not set up until these are done, in this order:
    the control centre. Imagine Surrey's was, on 2026-11-24. **Open desk**
    needs the campaign to run a release that knows the control centre.
    Before this Promote, do the release check in section 0 on `base-win`
-   (`DATABASE_URL` set; `GOOGLE_MAPS_TILES=off` if `GOOGLE_MAPS_SERVER_KEY`
-   is set; `STARBASE_PUBLIC_URL` is `https://imaginesurrey.base.win`) and
+   (`DATABASE_URL` set; `GOOGLE_MAPS_TILES` unset or `off` unless the
+   owner chose Google; `STARBASE_PUBLIC_URL` is `https://imaginesurrey.base.win`) and
    run it outside canvassing hours (section 1, step 3).
 5. In the control centre: **base.win’s key** → **Copy**. Paste it as
    `BASE_PLATFORM_PUBKEY` on `base-win` and on `base-win-staging` (Render →
