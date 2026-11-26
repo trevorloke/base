@@ -27,6 +27,8 @@
 #   RESEND_WEBHOOK_SECRET, RESEND_REGION                email: bounces and complaints back; where Add domain makes the domain
 #   MAIL_PROVIDER, SENDGRID_API_KEY, SENDGRID_WEBHOOK_PUBLIC_KEY   email through SendGrid instead of Resend
 #   MAILCHIMP_API_KEY, MAILCHIMP_AUDIENCE_ID, MAILCHIMP_WEBHOOK_SECRET   Mailchimp: a list out as a tag, unsubscribes back
+#   STARBASE_WEBSITE_URL, STARBASE_WEBSITE_KEY          unsubscribes sent to the campaign's own website, when it is hosted
+#                                                       apart; set by hand on that one service, never listed below
 #   GEOCODER (bc), GEOCODER_FALLBACK, BC_GEOCODER_KEY   map pins (google is no longer used for pins)
 #   GOOGLE_TRANSLATE_KEY                                the website in Punjabi and Chinese: Google Cloud
 #                                                       Translation, a separate key restricted to it (asked
