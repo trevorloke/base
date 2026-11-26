@@ -48,9 +48,10 @@ there:
   standard fields* adds none. There is no Campus and no Interests.
 - **People → More** has no *Enter a membership form*, and a donor's
   profile says *Donor*, never *Star*.
-- **Settings → Rating scale** offers nobody as an opponent.
-- The fifth tab is **Training**, at `/training`. `/imagineu` shows the
-  app's own not-found screen.
+- **Rating scale** (your initials → *Rating scale*) lists only *Not sure*
+  under *Voting for?*.
+- The fifth tab is **Training**, at `/training`. `/imagineu` is not an
+  address here: the app goes back to Today.
 - **Website** opens on a finished generic site in the Base look. Theme
   offers one look. *Add a section* has no *Become a member*.
 - `/star.png` and `/site-assets/imagine-surrey/logo.webp` answer 404.
