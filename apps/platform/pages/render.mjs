@@ -116,7 +116,7 @@ export const jobWords = (job) => {
   if (job.state === 'done') {
     if (job.detail?.note === 'no-deploy') return 'The key is set. The deploy didn’t start: press Deploy latest.';
     if (job.what === 'link') return 'Connected. Nothing in Render was changed.';
-    if (job.what === 'deploy' || job.what === 'key') return 'Render did it. The new version is live in 2 to 3 minutes.';
+    if (job.what === 'deploy' || job.what === 'key') return 'Render did it. A new version takes 2 to 3 minutes to go live.';
     if (job.what === 'domain') return 'Render did it. The address works once its DNS record is in place and Render has checked it.';
     return 'Render did it.';
   }
@@ -173,8 +173,8 @@ export const campaignRenderPage = ({ v, s, message = '', kind = 'warn' }) => {
     ${s.job ? status(jobWords(s.job), s.job.state === 'done' ? 'ok' : 'warn') : ''}
     <section class="card"><dl class="oc-dl">${rows}</dl>
       ${refusal ? html`<p class="oc-block">${refusal}</p>${s.code === 'changed' ? ask(name, 'link', 'Connect again') : ''}`
-    : html`<div class="oc-actions">${s.buttons.map(([what, words]) => ask(name, what, words))}</div>
-      <p class="oc-help">Each button first shows what it will do, and asks for a code.</p>`}
+    : s.buttons.length ? html`<div class="oc-actions">${s.buttons.map(([what, words]) => ask(name, what, words))}</div>
+      <p class="oc-help">Each button first shows what it will do, and asks for a code.</p>` : ''}
     </section>
     ${back}`,
   });

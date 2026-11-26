@@ -24,6 +24,13 @@
 // kind of line; and a recovery code signs in. Screens at 1440x900 and
 // 390x844: one primary button at most (exactly one where the screen has a
 // main action), controls at least 48 px on the phone, no sideways scroll.
+// Then, with a Render key set mid-run and a stand-in for Render's API
+// (apps/platform/test/fake-render.mjs): Render in the menu says Connected;
+// Check Render’s answers; Connect the sample and campaign a; a's page names
+// BASE_PLATFORM_PUBKEY as missing; Set base.win’s key, Restart (a code even
+// inside a fresh 10-minute window), Add its address and Close the database,
+// each through a page that says what will happen and asks for a code;
+// Render down shows one line of words and the rest is as before.
 //
 // Ports 5600–5609: 5600 the console (in this process, so the test can age
 // the code in its database), 5601 campaign "a" (production), 5602 the
@@ -33,7 +40,8 @@
 // server that says it is 5601, 5606 campaign "b" — a real campaign server
 // (node server/index.js, in memory; needs npm run build). 5601, 5602, 5604
 // and 5605 are apps/platform/test/fake-client.mjs, which checks each token
-// with the campaign side's rules; "b" checks them with its own.
+// with the campaign side's rules; "b" checks them with its own. 5608 is the
+// stand-in for Render's API (only once the first part has run with no key).
 //
 // Run (system node, under the browser lock):
 //   flock -o SP/batch6/locks/browser.lock node e2e-ops.mjs
@@ -407,6 +415,136 @@ try {
 
   ok(errors.length === 0, `no console errors${errors.length ? `: ${errors.join(' | ')}` : ''}`);
   ok(a.state.refused.length === 0 && sample.state.refused.length === 0 && running.state.refused.length === 0, 'the campaign side refused no token');
+
+  // 10. Render, with a key (everything above ran without one: exactly as before).
+  // The key and Render's stand-in arrive mid-run (settings are read on each
+  // request): a stand-in for Render's API on 5608, holding a made-up
+  // workspace with staging's service at the sample's address and campaign
+  // a's service at a's.
+  const { fakeWorld, startFakeRender, KEY: RENDER_KEY, IDS: RENDER_IDS } = await import(`${ROOT}apps/platform/test/fake-render.mjs`);
+  const world = fakeWorld();
+  world.service('base-win-staging').serviceDetails.url = 'http://127.0.0.1:5602';
+  world.service('base-win-a').serviceDetails.url = 'http://127.0.0.1:5601';
+  const beforeKey = await page.goto(`${B}/render`);
+  ok(beforeKey.status() === 404 && await page.locator('.oc-nav a[href="/render"]').count() === 0, 'no key: no Render page, and (above) no Render in the menu');
+  for (let i = errors.length - 1; i >= 0; i--) if (/\/render: Failed to load resource: .* 404/.test(errors[i])) errors.splice(i, 1);
+  const fakeRender = await startFakeRender({ port: 5608, world });
+  try {
+    // The sample back at its own address (step 7 pointed it at a server that says it is somewhere else).
+    await page.goto(`${B}/c/sample/edit`);
+    await page.fill('#server_url', 'http://127.0.0.1:5602');
+    await page.click('.btn-primary');
+    await page.waitForURL(/\/c\/sample$/);
+    Object.assign(process.env, { RENDER_API_KEY: RENDER_KEY, RENDER_SERVICE_ID: RENDER_IDS.platform, OPS_RENDER_API: 'http://127.0.0.1:5608/v1' });
+    const flat = async (p = page) => (await text(p)).replace(/\s+/g, ' ');
+    // One change, as the owner makes it: the button, the page that says what
+    // will happen (one primary, a Code field), a code typed for it.
+    const confirm = async (what, name, shot = null) => {
+      await page.click(`form[action="/c/${name}/render/${what}"] button`);
+      await page.waitForSelector('#code');
+      ok(await page.locator('.btn-primary').count() === 1 && await page.locator('input[name="job"]').count() === 1, `${what} on ${name}: a page that says what will happen, one primary, a code`);
+      if (shot) await look(page, shot);
+      await page.fill('#code', await code());
+      await page.click('.btn-primary');
+      await page.waitForURL(new RegExp(`/c/${name}/render$`));
+      return flat();
+    };
+
+    await page.goto(`${B}/`);
+    ok(await page.locator('.oc-nav a[href="/render"]').count() === 1, 'with a key: Render is in the menu');
+    await page.click('.oc-nav a[href="/render"]');
+    await page.waitForURL(/\/render$/);
+    let board = await flat();
+    ok(/Connected to Render: base\.win/.test(board), 'Render says Connected');
+    ok(/Sample \(staging\) Not connected/.test(board) && /Example Campaign Not connected/.test(board), 'the board lists each campaign, not connected yet');
+    await look(page, '20-render-board', { primaries: 0 });
+    await page.click('button:has-text("Check Render’s answers")');
+    await page.waitForSelector('h1:has-text("Check Render’s answers")');
+    ok((await page.locator('dd', { hasText: 'As expected' }).count()) === 5 && /Connect Sample \(staging\) to check the rest/.test(await flat()), 'Check Render’s answers: the five reads that need no campaign are as expected');
+
+    // Connect the sample, then campaign a.
+    await page.goto(`${B}/render`);
+    let now = await confirm('link', 'sample', '21-render-confirm-connect');
+    ok(/Staging: made-up data only\./.test(now) && /Service\s*base-win-staging · main branch/.test(now), 'the sample is connected to staging’s service: made-up data only');
+    await page.goto(`${B}/c/a`);
+    await page.click('a:has-text("Render: service, deploys, database")');
+    await page.waitForURL(/\/c\/a\/render$/);
+    ok(/Not connected/.test(await flat()), 'campaign a: not connected yet');
+    await look(page, '22-render-not-connected');
+    now = await confirm('link', 'a');
+    ok(/Service\s*base-win-a · production branch · Starter · Oregon · deploys by itself/.test(now), 'campaign a is connected to its own service');
+    ok(/Settings\s*Missing: BASE_PLATFORM_PUBKEY/.test(now), 'a’s page names BASE_PLATFORM_PUBKEY as missing');
+    ok(/Addresses\s*a\.base\.win · Not added yet/.test(now) && /Open to anyone on the internet/.test(now), 'and its address not added, its database open');
+    await look(page, '23-render-campaign', { primaries: 0 });
+    await page.goto(`${B}/render`);
+    await page.click('button:has-text("Check Render’s answers")');
+    await page.waitForSelector('h1:has-text("Check Render’s answers")');
+    ok((await page.locator('dd', { hasText: 'As expected' }).count()) === 10 && /Every answer is as expected\./.test(await flat()), 'Check Render’s answers: all ten reads, against staging, as expected');
+    await look(page, '24-render-check', { primaries: 0 });
+
+    // A campaign Render doesn't have at its address: Connect is refused, nothing changes.
+    await page.goto(`${B}/c/c/render`);
+    await page.click('form[action="/c/c/render/link"] button');
+    await page.waitForSelector('h1:has-text("Nothing was changed")');
+    ok(/No service in Render has this campaign’s address: check the address on Edit\./.test(await flat()), 'a campaign with no service at its address: Connect is refused in words');
+    await look(page, '25-render-refused', { primaries: 0 });
+    for (let i = errors.length - 1; i >= 0; i--) if (/Failed to load resource: .* 409/.test(errors[i])) errors.splice(i, 1);
+
+    // Set base.win's key → Deploying → Nothing missing.
+    await page.goto(`${B}/c/a/render`);
+    now = await confirm('key', 'a', '26-render-confirm-key');
+    ok(/Last deploy\s*Deploying/.test(now) && /Settings\s*Nothing missing/.test(now), 'Set base.win’s key: Deploying, then Nothing missing');
+    ok(world.settingsOf(RENDER_IDS.a).BASE_PLATFORM_PUBKEY === KEY, 'Render holds base.win’s public key for a, and nothing else changed there');
+    world.finishDeploys(RENDER_IDS.a);
+    // Restart: the 10-minute window is fresh, and it still asks for a code.
+    const age = (await db.query('select extract(epoch from now() - code_at)::float8 as s from ops_sessions order by code_at desc limit 1')).rows[0].s;
+    await page.click('form[action="/c/a/render/restart"] button');
+    await page.waitForSelector('h1:has-text("Restart")');
+    ok(age < 600 && await page.locator('#code[required]').count() === 1, `Restart inside a fresh 10-minute window (${Math.round(age)} s) still asks for a code`);
+    await page.fill('#code', await code());
+    await page.click('.btn-primary');
+    await page.waitForURL(/\/c\/a\/render$/);
+    ok(/Render did it\./.test(await flat()) && world.restarts.length === 1, 'Restart: Render did it, once');
+    now = await confirm('domain', 'a');
+    ok(/Addresses\s*a\.base\.win · Waiting for the DNS record/.test(now), 'Add its address: Waiting for the DNS record');
+    now = await confirm('close-db', 'a', '27-render-confirm-close');
+    ok(/Closed to the internet/.test(now) && !/Open to anyone on the internet/.test(now), 'Close the database: Closed to the internet');
+    await look(page, '28-render-campaign-after', { primaries: 0 });
+    await page.goto(`${B}/render`);
+    board = await flat();
+    ok(/Example Campaign: a\.base\.win is waiting for its DNS record/.test(board) && !/Example Campaign: its database is open/.test(board), 'the board: what still needs a look on a');
+    await look(page, '29-render-board-connected', { primaries: 0 });
+
+    // Render down: one line of words; the rest of the console as before.
+    world.down();
+    await page.click('button:has-text("Check Render’s answers")');
+    await page.waitForSelector('h1:has-text("Check Render’s answers")');
+    ok(/Render didn’t answer/.test(await flat()) && (await page.locator('dd', { hasText: 'As expected' }).count()) === 0, 'Render down: Check Render’s answers says so');
+    await page.goto(`${B}/c/a/render`);
+    ok(/Render didn’t answer\. The rest of this page is as usual\./.test(await flat()) && await page.locator('form[action="/c/a/render/restart"]').count() === 0, 'Render down: the words, and no buttons');
+    await look(page, '30-render-down', { primaries: 0 });
+    const aAsBefore = await checkNow('a');
+    ok(/Answering\s*Yes/.test(aAsBefore) && /Answers at a\.base\.win Done by itself/.test(aAsBefore) && await page.locator('form[action="/c/a/open"]').count() === 1, 'Render down: the campaign page is as before, Open desk and all');
+    world.up();
+
+    // The log: intact, with the new lines in words.
+    await page.goto(`${B}/log`);
+    const renderLog = await text(page);
+    ok(/Log intact · \d+ lines/.test(renderLog), 'Log intact, after the Render changes');
+    for (const words of ['Connected to Render: base-win-staging and base-win-staging-db', 'Connected to Render: base-win-a and base-win-a-db', 'Asked Render to set base.win’s key',
+      'Asked Render to restart the server', 'Asked Render to add a.base.win', 'Asked Render to close the database to the internet', 'Render did it']) {
+      ok(renderLog.includes(words), `log: ${words}`);
+    }
+    ok(world.forbidden.length === 0, `Render was asked for nothing forbidden${world.forbidden.length ? `: ${world.forbidden.join(' | ')}` : ''}`);
+    ok(world.received.length > 30 && world.received.every((r) => r.auth === `Bearer ${RENDER_KEY}`), 'every request to Render carried the key');
+    const sentOut = world.received.filter((r) => r.method !== 'GET').map((r) => `${r.method} ${r.path}`);
+    ok(sentOut.length === 5 && sentOut.every((line) => line.includes(RENDER_IDS.a) || line.includes(RENDER_IDS.aDb)), `five changes went to Render, all to campaign a’s service and database (${sentOut.join(', ')})`);
+    ok(!(await page.content()).includes(RENDER_KEY) && !JSON.stringify((await db.query('select * from render_jobs')).rows).includes(RENDER_KEY), 'the key is on no page and in no row');
+    ok(errors.length === 0, `no console errors with Render${errors.length ? `: ${errors.join(' | ')}` : ''}`);
+  } finally {
+    await fakeRender.close();
+    for (const k of ['RENDER_API_KEY', 'RENDER_SERVICE_ID', 'OPS_RENDER_API']) delete process.env[k];
+  }
 } catch (e) {
   fail(`threw: ${e.stack || e}`);
 } finally {

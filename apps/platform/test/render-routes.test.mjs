@@ -328,7 +328,7 @@ test('each change: the exact requests, the log line before and the result after,
   assert.deepEqual([wordsFor('render.start', two[0].payload), wordsFor('render.result', two[1].payload)], ['Asked Render to set base.win’s key', 'Render did it']);
   assert.ok(r.asked.at(-1).includes('a.base.win') || r.asked.at(-1).startsWith(ADDR.a), 'the campaign’s health is checked again afterwards');
   body = await page();
-  assert.match(body, /Render did it\. The new version is live in 2 to 3 minutes\./);
+  assert.match(body, /Render did it\. A new version takes 2 to 3 minutes to go live\./);
   assert.match(body, /<dt>Last deploy<\/dt><dd>Deploying · c41f2aa/);
   assert.match(body, /<dt>Settings<\/dt><dd>Nothing missing/);
   assert.doesNotMatch(body, /render\/key"/, 'the button goes once the key is set');
@@ -620,6 +620,7 @@ test('Check Render’s answers: reads only, no code; and what the pages say when
   body = (await r.page('/c/a/render')).body;
   assert.match(body, /Render didn’t answer\. The rest of this page is as usual\./);
   assert.doesNotMatch(body, /render\/(deploy|restart)"/);
+  assert.doesNotMatch(body, /Each button first shows/, 'no buttons, so no line about them');
   const board = await r.page('/render');
   assert.equal(board.status, 200);
   assert.match(board.body, /Render didn’t answer/);
