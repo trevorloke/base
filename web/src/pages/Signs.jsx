@@ -26,6 +26,7 @@ import { NoSignal, noSignal, useOnline, NeedsSignalLine } from '../components/No
 import './shifts.css';
 import './signs.css';
 import AddressField, { lookupAddress, pinOf } from '../components/AddressField.jsx';
+import { ex } from '../brand.js';
 
 // The registry label carries the size ("Large sign (4×4)"); it rides along as a tooltip.
 const kindSize = (code) => SIGN_KINDS.find((k) => k.code === code)?.label ?? code;
@@ -267,7 +268,7 @@ function PlaceSignForm({ presetPersonId, canCreatePerson, onSaved, onClose }) {
             id="sign-address"
             label={mode === 'address' ? 'Address' : 'Different address?'}
             required={mode === 'address'}
-            placeholder={mode === 'address' ? '104 Ave & King George Blvd' : person?.address || 'Street address'}
+            placeholder={mode === 'address' ? ex('sign.corner', 'Main St & 1st Ave') : person?.address || 'Street address'}
             value={address}
             placed={Boolean(pin)}
             onChange={(v) => { setAddress(v); setPin(null); }}

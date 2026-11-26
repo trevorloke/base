@@ -19,6 +19,7 @@ import './shifts.css';
 import '../editor.css';
 import './website.css';
 import './website-sites.css';
+import { ex } from '../brand.js';
 
 const HOST = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,61}[a-z0-9]$/;
 export const bareHost = (raw) => String(raw ?? '').trim().toLowerCase().replace(/^[a-z]+:\/\//, '').replace(/[/?#].*$/, '')
@@ -90,7 +91,7 @@ function NewWebsite({ onClose }) {
       <div className="field">
         <label htmlFor="ms-new-name">Name</label>
         <input id="ms-new-name" className="input" required autoFocus maxLength={60} autoComplete="off"
-          placeholder="Doug Didn’t" value={name} onChange={(e) => setName(e.target.value)} />
+          placeholder={ex('microsite.name', 'Transit petition')} value={name} onChange={(e) => setName(e.target.value)} />
       </div>
       <div className="field">
         <label htmlFor="ms-new-domain">Web address (optional)</label>

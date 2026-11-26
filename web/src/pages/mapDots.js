@@ -15,6 +15,7 @@
 import L from 'leaflet';
 import { BUILDING_MIN } from '@starbase/shared/buildings';
 import { MARK, css, cellFill, CELL_ALPHA, dotRadius, ringedAt } from './mapView.js';
+import { BRAND } from '../brand.js';
 
 const ORDER = ['unrated', 'undecided', 'opposed', 'support']; // drawn last = on top
 
@@ -159,7 +160,7 @@ export const DotLayer = BucketLayer.extend({
         const y = at(d)[1] - r0 * 0.55;
         ctx.strokeStyle = this._dark ? '#e8edf7' : '#161a2e';
         ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - 9); ctx.stroke();
-        ctx.fillStyle = '#ffc72c';
+        ctx.fillStyle = BRAND.flag || '#f2b01e';
         ctx.beginPath(); ctx.moveTo(x, y - 9); ctx.lineTo(x + 7, y - 6.5); ctx.lineTo(x, y - 4); ctx.closePath(); ctx.fill(); ctx.stroke();
       }
     }

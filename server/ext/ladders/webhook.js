@@ -25,6 +25,7 @@ import { isMoneyTag } from '../../lib/viewer.js';
 import { e164 } from '../texting/rules.js';
 import { siteSecret } from '../site/tokens.js';
 import { TRIGGERS, tagsOf } from './shape.js';
+import { preset } from '../../lib/preset.js';
 
 export const HOOK_TIMEOUT_MS = 5000;
 // Tests wait out an address that never answers in a fraction of that.
@@ -178,12 +179,17 @@ export const hookBody = ({ id, test = false, event, ref = null, ladder, step, at
 // "Send a test": the same message, marked `test: true`, about nobody — so
 // the other tool can be set up (a Zapier catch hook wants one request
 // first) before anyone real reaches the step.
-const TEST_PERSON = {
-  id: '00000000-0000-4000-8000-000000000000', name: 'Sam Example', first_name: 'Sam', last_name: 'Example',
-  email: 'sam@example.org', phone: '604-555-0100', postal: 'V3T 1V8', tags: ['test'],
+// The made-up phone and postal code are the campaign's own examples where
+// its set-up brings any (read when the test is sent), else neutral ones.
+const testPerson = () => {
+  const ex = preset().examples;
+  return {
+    id: '00000000-0000-4000-8000-000000000000', name: 'Sam Example', first_name: 'Sam', last_name: 'Example',
+    email: 'sam@example.org', phone: ex.phone ?? '555-555-0100', postal: ex.postal ?? 'A1A 1A1', tags: ['test'],
+  };
 };
 export const testBody = (about) => hookBody({
-  ...about, test: true, at: new Date().toISOString(), person: TEST_PERSON, emailOk: true, textOk: true,
+  ...about, test: true, at: new Date().toISOString(), person: testPerson(), emailOk: true, textOk: true,
 });
 
 // What an address's answer is noted as — on a run's log, on the event log,

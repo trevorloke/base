@@ -1,6 +1,6 @@
 // AddressField — one "Address" box that knows where addresses are.
 //   <AddressField id label value onChange onPick placed required autoFocus />
-//   value: the civic line as typed ("13450 104 Ave"). As someone types (3+
+//   value: the civic line as typed ("123 Main St"). As someone types (3+
 //   characters, with signal) it offers up to five doors under the box: the
 //   campaign's own doors first ("On the map"), then the address service's
 //   (GET /api/address/suggest — ext/addresses). Arrow keys or a tap pick
@@ -25,6 +25,7 @@ import { apiGet } from '../api.js';
 import { at } from '../base.js';
 import { useOnline } from './NoSignal.jsx';
 import './address-field.css';
+import { ex } from '../brand.js';
 
 const WAIT_MS = 250;
 const norm = (s) => String(s || '').toLowerCase().replace(/[.,]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -60,7 +61,7 @@ export async function lookupAddress(line) {
 
 export default function AddressField({
   id, label = 'Address', value, onChange, onPick, placed = false, hint = null, required = false, autoFocus = false,
-  placeholder = '13450 104 Ave', disabled = false, placedText = 'Pinned on the map', allowGoogle = true,
+  placeholder = ex('address', '123 Main St'), disabled = false, placedText = 'Pinned on the map', allowGoogle = true,
 }) {
   const online = useOnline();
   const listId = useId();

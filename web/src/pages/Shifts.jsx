@@ -91,6 +91,7 @@ import './schedule.css';
 import { NS } from '../base.js';
 import { shiftEvent } from '@starbase/shared/ics';
 import AddToCalendar from '../components/AddToCalendar.jsx';
+import { ex } from '../brand.js';
 
 // The desk's last choice of List or Week, on this device only.
 const VIEW_KEY = `${NS}shifts-view`;
@@ -242,7 +243,7 @@ function ShiftForm({ tz, onClose }) {
       <h2 className="sch-formtitle">More options</h2>
       <div className="field">
         <label htmlFor="shift-title">What</label>
-        <input id="shift-title" className="input" required autoFocus placeholder="Saturday doorknock — Fleetwood"
+        <input id="shift-title" className="input" required autoFocus placeholder={ex('shift.title', 'Saturday doorknock — east side')}
           value={f.title} onChange={set('title')} />
       </div>
       <div className="field">

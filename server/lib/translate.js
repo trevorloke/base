@@ -254,7 +254,8 @@ export async function translateWorks({ key = translateKey() } = {}) {
     return { state: 'refused', code: 'unreachable', plain: 'Google Translation couldn’t be reached.' };
   }
 }
-export const PROBE_SENTENCE = 'Join <span translate="no">Imagine Surrey</span> at the town hall & bring <x i="1"/> friend to the next meeting.';
+// A made-up sentence about nobody: it names no campaign to Google.
+export const PROBE_SENTENCE = 'Join <span translate="no">Sample Campaign</span> at the town hall & bring <x i="1"/> friend to the next meeting.';
 export async function checkTranslation({ key = translateKey() } = {}) {
   if (!key) return { works: false, plain: 'Add the translation key first.' };
   try {
@@ -264,7 +265,7 @@ export async function checkTranslation({ key = translateKey() } = {}) {
       works: true,
       headerAccepted: r.keyIn === 'header',
       keyIn: r.keyIn,
-      namesKept: /<span translate="no">Imagine Surrey<\/span>/.test(t),
+      namesKept: /<span translate="no">Sample Campaign<\/span>/.test(t),
       placeholdersKept: (t.match(/<x i="1"\s*\/?>/g) || []).length === 1,
       at: new Date().toISOString(),
     };
