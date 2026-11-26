@@ -30,6 +30,10 @@ import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { startFakeGoogle } from './server/test/fake-google.js';
 
+// The fixtures here are Imagine Surrey's, so the server runs as its production
+// does (render.yaml sets this brand); a brand set by hand is left as set.
+if (process.env.STARBASE_BRAND === undefined) process.env.STARBASE_BRAND = 'imagine-surrey';
+
 const SHOTS = process.env.SHOTS || '/tmp/starbase-gca';
 mkdirSync(SHOTS, { recursive: true });
 const HOST = '127.0.0.1';

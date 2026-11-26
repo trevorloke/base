@@ -7,7 +7,7 @@
 // count that gets a 502 says Unavailable, never the rows on screen; the
 // snapshot form's taps are 48px.
 //
-//   STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4130 node server/index.js &
+//   STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4130 node server/index.js &
 //   BASE=http://127.0.0.1:4130 SHOTS=/tmp/cuts node e2e-cuts.mjs
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';

@@ -12,7 +12,7 @@
 // renewal says it starts when the current term ends. Credit card shows the
 // note and no card-number box anywhere. Nothing scrolls sideways on a phone.
 //
-//   STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4110 node server/index.js &
+//   STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4110 node server/index.js &
 //   BASE=http://127.0.0.1:4110 SHOTS=/tmp/membership node e2e-membership.mjs
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';

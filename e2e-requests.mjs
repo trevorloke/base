@@ -14,7 +14,7 @@
 // it and offers Reopen. Every claim on a screen is checked against the API;
 // each screen is measured (yellow buttons, sideways scroll, 48px targets).
 //
-//   STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4440 node server/index.js &
+//   STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4440 node server/index.js &
 //   BASE=http://127.0.0.1:4440 SHOTS=/tmp/requests node e2e-requests.mjs
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';

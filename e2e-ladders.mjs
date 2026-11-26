@@ -26,7 +26,7 @@
 // measured at both sizes. A step kind the page doesn't know says so and is
 // saved as it is.
 //
-//   STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4103 STARBASE_JOBS_EVERY_MS=1000 node server/index.js &
+//   STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4103 STARBASE_JOBS_EVERY_MS=1000 node server/index.js &
 //   BASE=http://127.0.0.1:4103 SHOTS=/tmp/ladders node e2e-ladders.mjs
 //
 // To also watch the step deliver — a test about a made-up person, one

@@ -13,7 +13,7 @@
 // screen is checked against the API; each screen is measured (one yellow
 // button, no sideways scroll, 48px targets on the phone).
 //
-//   STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4450 node server/index.js &
+//   STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4450 node server/index.js &
 //   BASE=http://127.0.0.1:4450 SHOTS=/tmp/shiftturfs node e2e-shiftturfs.mjs
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';

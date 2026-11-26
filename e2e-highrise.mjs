@@ -32,8 +32,8 @@
 // ONLY=1,3,4 runs just those (the BASE_PATH run); RED=1 runs 1, 3 and 7
 // against a tree without buildings and expects them to fail.
 //
-//   STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=5520 node server/index.js &
-//   STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory STARBASE_MAP_ALL=100 STARBASE_MAP_VIEW=100 PORT=5523 node server/index.js &
+//   STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=5520 node server/index.js &
+//   STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory STARBASE_MAP_ALL=100 STARBASE_MAP_VIEW=100 PORT=5523 node server/index.js &
 //   BASE=http://127.0.0.1:5520 BUSY=http://127.0.0.1:5523 SHOTS=/tmp/hr node e2e-highrise.mjs
 //   (BASE_PATH=/imaginesurrey on 5521: BASE=http://127.0.0.1:5521 BP=/imaginesurrey ONLY=1,3,4 …)
 import { chromium } from 'playwright-core';

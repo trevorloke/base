@@ -54,6 +54,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const STUB = `${SHOTS}/entry-stub.mjs`;
 writeFileSync(STUB, `
 import { createServer } from 'node:http';
+// The fixtures here are Imagine Surrey's, so the server runs as its production
+// does (render.yaml sets this brand); a brand set by hand is left as set.
+if (process.env.STARBASE_BRAND === undefined) process.env.STARBASE_BRAND = 'imagine-surrey';
+
 createServer(async (req, res) => {
   let body = '';
   for await (const c of req) body += c;

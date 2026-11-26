@@ -58,6 +58,10 @@ const href = (p) => JSON.stringify(pathToFileURL(`${serverDir}${p}`).href);
 const STUB = `${SHOTS}/letters-stub.mjs`;
 writeFileSync(STUB, `
 import { createServer } from 'node:http';
+// The fixtures here are Imagine Surrey's, so the server runs as its production
+// does (render.yaml sets this brand); a brand set by hand is left as set.
+if (process.env.STARBASE_BRAND === undefined) process.env.STARBASE_BRAND = 'imagine-surrey';
+
 const { startFakeMail } = await import(${href('test/fake-mail.js')});
 const fake = await startFakeMail({ provider: 'resend', port: ${FAKE} });
 createServer(async (req, res) => {

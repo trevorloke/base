@@ -31,6 +31,10 @@ import { spawn } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 import { startFakeCallHub } from './server/test/fake-callhub.js';
 
+// The fixtures here are Imagine Surrey's, so the server runs as its production
+// does (render.yaml sets this brand); a brand set by hand is left as set.
+if (process.env.STARBASE_BRAND === undefined) process.env.STARBASE_BRAND = 'imagine-surrey';
+
 const PORT = Number(process.env.PORT) || 4980;
 const SHOTS = process.env.SHOTS || '/tmp/starbase-callhub';
 mkdirSync(SHOTS, { recursive: true });

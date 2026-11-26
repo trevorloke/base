@@ -15,7 +15,7 @@
 // (they're signed out, and set it up again at sign-in). Phones: no
 // sideways scroll; screenshots of every new screen, desktop and phone.
 //
-//   STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4150 node server/index.js &
+//   STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4150 node server/index.js &
 //   BASE=http://127.0.0.1:4150 SHOTS=/tmp/platform node e2e-platform.mjs
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';

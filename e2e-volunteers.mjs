@@ -32,7 +32,7 @@
 // stacks, nothing scrolls sideways, and the tap path works. Screens are
 // measured (≤1 yellow, 48px targets on the phone).
 //
-//   STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4511 node server/index.js &
+//   STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4511 node server/index.js &
 //   BASE=http://127.0.0.1:4511 SHOTS=/tmp/volunteers node e2e-volunteers.mjs
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';

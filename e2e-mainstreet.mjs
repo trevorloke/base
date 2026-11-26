@@ -5,7 +5,7 @@
 // sees them on file: first and last apart, a Mainstreeting contact with the
 // place, the volunteer request. Measured at 390.
 //
-//   STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4136 node server/index.js &
+//   STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4136 node server/index.js &
 //   BASE=http://127.0.0.1:4136 SHOTS=/tmp/mainstreet node e2e-mainstreet.mjs
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';

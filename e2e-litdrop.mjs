@@ -12,7 +12,7 @@
 // a screen is checked against the API; each screen is measured (yellow
 // buttons, sideways scroll, 48px targets); the audit chain verifies.
 //
-//   STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4430 node server/index.js &
+//   STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4430 node server/index.js &
 //   BASE=http://127.0.0.1:4430 SHOTS=/tmp/litdrop node e2e-litdrop.mjs
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';

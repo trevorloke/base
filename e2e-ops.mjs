@@ -42,6 +42,10 @@ import { createRequire } from 'node:module';
 import { spawn } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 
+// The fixtures here are Imagine Surrey's, so the server runs as its production
+// does (render.yaml sets this brand); a brand set by hand is left as set.
+if (process.env.STARBASE_BRAND === undefined) process.env.STARBASE_BRAND = 'imagine-surrey';
+
 const ROOT = new URL('.', import.meta.url).pathname;
 Object.assign(process.env, {
   OPS_HOST: '127.0.0.1:5600', OPS_INSECURE_COOKIES: '1', OPS_ALLOW_LOCAL: '1', OPS_PUBLIC_TEMPLATE: 'http://127.0.0.1:5603/{name}',

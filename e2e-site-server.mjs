@@ -14,7 +14,7 @@
 // and /unsubscribe asks before it does it. The desk's preview link shows a
 // draft. Phone and desktop: no sideways scroll; tap targets 48px.
 //
-//   SITE_HOSTS=127.0.0.1 SITE_SECRET=e2e-site-secret-0123456789 STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=5010 node server/index.js &
+//   SITE_HOSTS=127.0.0.1 SITE_SECRET=e2e-site-secret-0123456789 STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=5010 node server/index.js &
 //   BASE=http://127.0.0.1:5010 SITE_SECRET=e2e-site-secret-0123456789 SHOTS=/tmp/site-server node e2e-site-server.mjs
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
