@@ -2,7 +2,10 @@
 // sections. Every word a starter adds beyond the catalogue's defaults is in
 // PLACEHOLDERS (shared/site/placeholders.js), so Publish won't put it on the
 // site; fields not named keep the catalogue's defaults, which are real,
-// usable words ("Upcoming events", "Sign up").
+// usable words ("Upcoming events", "Sign up") — but for the hero's and the
+// band's headline, which are samples too and in PLACEHOLDERS. A campaign
+// whose set-up brings its own starting words has those instead
+// (catalogue.js presetModuleDefaults).
 //
 //   STARTERS                     [{ key, label, sections: [kinds] }] in the sheet's order
 //   starterModules(key, { newId, social })
