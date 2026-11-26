@@ -281,6 +281,18 @@ test('two starts at once: only the one that wins the claim makes it', async () =
   assert.equal(await count('persons'), N);
 });
 
+test('two starts at once over an older sample: only the one that wins the claim drops it and makes it again', async () => {
+  assert.ok(await seedSample(app, quiet, N));
+  await db.query('update sample_meta.made set version = 1');
+  const lines = logs();
+  const [a, b] = await Promise.all([seedSample(app, lines, N), seedSample(app, lines, N)]);
+  assert.equal([a, b].filter(Boolean).length, 1);
+  assert.equal(lines.lines.filter((l) => /the old sample was dropped/.test(l)).length, 1, 'dropped once');
+  assert.equal(await count('workspaces'), 1);
+  assert.equal(await count('persons'), N);
+  assert.equal((await made()).state, 'made');
+});
+
 test('a make that throws is "failed", made again at the next start, and left alone after three tries', async () => {
   const boom = appThat((path) => (path === '/api/actions/turf.create' ? Promise.reject(new Error('boom')) : null));
   assert.equal(await seedSample(boom, quiet, N), null);
