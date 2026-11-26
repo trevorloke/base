@@ -30,3 +30,12 @@ export const demoEmail = () => {
   const e = String(process.env.STARBASE_DEMO_EMAIL || '').trim().toLowerCase();
   return /^[^\s@]+@[^\s@]+$/.test(e) ? e.slice(0, 320) : '';
 };
+
+// Whether an address is the demo account's (never on production).
+export const isDemoAccount = (email) => Boolean(demoEmail()) && String(email ?? '').trim().toLowerCase() === demoEmail();
+// The demo account's by its user id.
+export const isDemoUser = async (db, userId) => {
+  if (!demoEmail() || !userId) return false;
+  const row = (await db.query('select email from users where id = $1', [userId])).rows[0];
+  return isDemoAccount(row?.email);
+};
