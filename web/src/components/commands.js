@@ -5,6 +5,7 @@
 //   commandsFor(me, nav) → { actions, screens } this person may open
 //   rank(items, query)   → the items matching every word typed, best first
 //   quickFor(me, nav, brief) → Today's "Go to": at most six everyday places
+import { hasFeature } from '../brand.js';
 
 // The same rule as Shell's hasArea: the areas the server gave, else a desk
 // role's usual ones; managers have every area. A screen a role may not open
@@ -20,6 +21,9 @@ export const allowed = (me, item) => {
   // Shifts in Google Calendar is on here (GET /api/gcal's available, which
   // the bar reads when it opens).
   if (item.gcal && !me?.gcal) return false;
+  // Something only some campaigns have (the membership form): the sign-in
+  // says which (me.org.features).
+  if (item.feature && !hasFeature(me, item.feature)) return false;
   // Every area an entry needs (a report needs Data and its own area too).
   const need = item.areas || (item.area ? [item.area] : []);
   return need.every((a) => me?.role === 'manager' || areasOf(me).includes(a));
@@ -29,7 +33,7 @@ export const allowed = (me, item) => {
 export const ACTIONS = [
   { label: 'Add person', to: '/people?new=1', area: 'people', desk: true, words: 'new person contact supporter voter' },
   { label: 'Log a gift', to: '/money?new=1', area: 'money', words: 'donation donate money cheque' },
-  { label: 'Enter a membership form', to: '/people/membership-form', area: 'money', desk: true, words: 'member paper join' },
+  { label: 'Enter a membership form', to: '/people/membership-form', area: 'money', desk: true, feature: 'membership', words: 'member paper join' },
   { label: 'Draw a turf', to: '/map?draw=1', area: 'map', desk: true, words: 'cut turf walk list map area polygon' },
   { label: 'New shift', to: '/shifts?add=1', area: 'shifts', desk: true, words: 'schedule event canvass shift' },
   { label: 'Write an email', to: '/outreach/email?new=1', area: 'outreach', desk: true, words: 'email newsletter blast send' },

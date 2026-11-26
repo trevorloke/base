@@ -3,6 +3,7 @@
 // words the screens use for them.
 import { z } from 'zod';
 import { isWebValue } from '../webdid/words.js';
+import { brandHas } from '../../lib/preset.js';
 
 // What starts a ladder. `ref` narrows one of them: a tag (required); what
 // was done on the website (required: a kind — "petition" — or one petition
@@ -18,7 +19,9 @@ import { isWebValue } from '../webdid/words.js';
 //                   "Can't make it" or a no-show counts)
 //   shift_attended  checked in on a shift ("Here")
 //   shift_no_show   marked a no-show
-//   member          a membership: joined or renewed (paper or online)
+//   member          a membership: joined or renewed (paper or online) —
+//                   only for a campaign that has a membership (lib/preset.js);
+//                   any other is refused it, as a trigger or as a goal
 //   survey          answered a survey's question at the door or on a call
 export const TRIGGERS = {
   newsletter: { label: 'Joined the newsletter' },
@@ -34,6 +37,9 @@ export const TRIGGERS = {
   survey:     { label: 'Answered a survey', ref: 'survey' },
 };
 export const TRIGGER_KINDS = Object.keys(TRIGGERS);
+// Asked when a ladder is saved, never at load: the brand is a setting.
+const NO_MEMBERSHIP = 'this campaign has no membership';
+const noMembership = (kind) => kind === 'member' && !brandHas('membership');
 
 // A goal: the thing the ladder is for. As soon as the person does it, they
 // come off the ladder ("Reached the goal") — whatever step they're on, the
@@ -93,13 +99,14 @@ export const triggerSchema = z.object({
   ref: z.string().trim().max(120).nullish(),
   lang: z.enum(TRIGGER_LANGS).nullish(),
 }).superRefine((t, ctx) => {
+  if (noMembership(t.kind)) ctx.addIssue({ code: 'custom', message: NO_MEMBERSHIP, path: ['kind'] });
   if (t.lang && t.kind !== 'web') ctx.addIssue({ code: 'custom', message: 'only a website trigger has a language', path: ['lang'] });
   const need = { tag: 'pick a tag', web: 'pick what they did on the website' };
   if (TRIGGERS[t.kind].refRequired && !t.ref) ctx.addIssue({ code: 'custom', message: need[t.kind] || 'pick one', path: ['ref'] });
   if (t.kind === 'web' && t.ref && !isWebValue(t.ref)) ctx.addIssue({ code: 'custom', message: 'not something done on the website', path: ['ref'] });
   if (t.kind === 'survey' && t.ref && !UUID_RE.test(t.ref)) ctx.addIssue({ code: 'custom', message: 'not a survey', path: ['ref'] });
 });
-export const goalSchema = z.enum(GOAL_KINDS);
+export const goalSchema = z.enum(GOAL_KINDS).refine((g) => !noMembership(g), { message: NO_MEMBERSHIP });
 
 export const parseJson = (v, fallback) => {
   if (v == null) return fallback;

@@ -32,7 +32,7 @@ import { makeLimiter } from '../../lib/guard.js';
 import { civic } from '../../lib/address.js';
 import { httpError } from '../../actions/util.js';
 import { splitFirst } from '@starbase/shared/names';
-import { WEBSITE_MEMBER_TAG, ensureWebsiteMembership } from '../membership/index.js';
+import { websiteMemberTag, ensureWebsiteMembership } from '../membership/index.js';
 
 export const sql = `
 create table if not exists intake_keys (
@@ -285,8 +285,10 @@ const takeIn = async (tx, ws, p, emit) => {
     emit('door_request', id, 'create', { id, person_id: personId, kind, note, from: 'website' });
   }
   // A membership that became active on the website (Base Web tags it): a
-  // year, unless one is already running (ext/membership).
-  if ((p.tags || []).some((t) => tagAsSent(t) === WEBSITE_MEMBER_TAG)) await ensureWebsiteMembership(tx, ws, personId, emit);
+  // year, unless one is already running (ext/membership). Only a campaign
+  // that has a membership has the tag: for any other it is just a tag.
+  const memberTag = websiteMemberTag();
+  if (memberTag && (p.tags || []).some((t) => tagAsSent(t) === memberTag)) await ensureWebsiteMembership(tx, ws, personId, emit);
   // Only the id: never whether they were on file, what was blank, or
   // whether they had left the list.
   return { person_id: personId };

@@ -1,11 +1,19 @@
-// Members — the campaign's membership form, on paper or online, in one place.
+// Members — a campaign's membership form, on paper or online, in one place.
 //
-//   memberships   one per term a person joins for: 1 or 4 years from the day
-//                 the form was signed (a renewal starts when the current term
-//                 ends); youth when they were 14 to 30 that day (the $5 rate);
-//                 citizen or permanent resident as ticked; the day the
-//                 declaration was signed; paper (entered at the desk, by
-//                 whom) or website (Base Web sends "Member (joined online)").
+// Only a campaign whose set-up brings a membership has any of this
+// (lib/preset.js: preset().membership — its terms, dues, ages, clubs and
+// words; today Imagine Surrey's). For every other campaign the action and
+// the three reads below answer "not found", and the two tables stay empty.
+// Everything that is one campaign's own is read from the preset when a form
+// comes in, never kept here.
+//
+//   memberships   one per term a person joins for, counted in years from the
+//                 day the form was signed (a renewal starts when the current
+//                 term ends); youth when their age that day is in the youth
+//                 range (the lower rate); citizen or permanent resident as
+//                 ticked; the day the declaration was signed; paper (entered
+//                 at the desk, by whom) or website (Base Web sends the
+//                 preset's tag).
 //   gift_pledges  a monthly gift pledged on the form: amount, slate, method,
 //                 from when. Each month's money is a gift logged as it comes
 //                 in (the first with the form).
@@ -15,14 +23,15 @@
 //                      profile fields (gender, birth date, citizenship, union
 //                      and local, campus, languages, interests, candidate),
 //                      volunteer (a request for the desk), a sign (a request),
-//                      the membership, gifts once and monthly (Superstar and
-//                      Star Club from the year's contribution limit, per
-//                      slate; contribution limits checked as for any gift),
+//                      the membership, gifts once and monthly (the clubs
+//                      from the year's contribution limit, per slate;
+//                      contribution limits checked as for any gift),
 //                      and the opt-in the form makes on joining. Card numbers,
 //                      expiry and CVV are never taken: the card is run on the
 //                      terminal and the number blacked out on the paper.
-//   GET /membership/form        the club amounts for a day's year, and the
-//                               minimum ($10 a year; $5 aged 14 to 30)
+//   GET /membership/form        the club amounts for a day's year, the
+//                               minimum dues, and the form itself: its
+//                               terms, amounts, clubs, city and lists
 //   GET /membership/match       people already on file a form may be
 //   GET /persons/:id/membership their memberships and monthly pledges
 import { Hono } from 'hono';
@@ -35,6 +44,7 @@ import { SLATES, SLATE_CODES, SIGN_KIND_CODES } from '@starbase/shared/canvass';
 import { addStandardFields } from '../fields/people.js';
 import { actions as fieldActions } from '../fields/actions.js';
 import { NOTE_MAX, choiceKey } from '../fields/kinds.js';
+import { preset, brandHas } from '../../lib/preset.js';
 import { actions as requestActions } from '../requests/actions.js';
 
 export const sql = `
@@ -88,7 +98,12 @@ end $$;
 export const exportTables = ['member_terms', 'gift_pledges'];
 
 const MONEY = ['manager', 'treasurer', 'staff'];
-export const WEBSITE_MEMBER_TAG = 'Member (joined online)';
+// This campaign's membership (null when it has none), read when asked.
+const rules = () => preset().membership;
+const notHere = () => httpError(404, 'not found');
+// The tag Base Web puts on someone who joined on the website; null for a
+// campaign with no membership, so no tag ever makes one.
+export const websiteMemberTag = () => (brandHas('membership') ? rules().websiteTag : null);
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const iso = (d) => (d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10));
 const today = () => new Date().toISOString().slice(0, 10);
@@ -105,9 +120,9 @@ const ageOn = (birth, day) => {
 };
 const money = (c) => `$${(c / 100).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-// The club amounts for a year: Star is the limit on one slate; Superstar the
-// limit on every slate. Monthly is a twelfth of it, in whole dollars, so a
-// year of it stays under the limit ($1,429.70 → $119 a month).
+// The club amounts for a year: one club is the limit on one slate, the
+// other the limit on every slate. Monthly is a twelfth of it, in whole
+// dollars, so a year of it stays under the limit ($1,429.70 → $119 a month).
 export const clubsFor = async (db, workspace, year) => {
   const rule = await capFor(db, workspace.jurisdiction, year, workspace.settings || {});
   if (!rule) return null;
@@ -120,7 +135,15 @@ export const clubsFor = async (db, workspace, year) => {
   };
 };
 
-// A website membership (Base Web's "Member (joined online)" tag): a year from
+// The clubs as the form shows them: the preset's names, each with the year's
+// amounts (null when no limit is known for that year).
+const clubRows = (clubs) => rules().clubs.map((c) => ({
+  key: c.key, label: c.label, schoolBoard: Boolean(c.schoolBoard),
+  once_cents: clubs ? clubs[`${c.key}_once`] ?? null : null,
+  monthly_cents: clubs ? clubs[`${c.key}_monthly`] ?? null : null,
+}));
+
+// A website membership (Base Web's tag, websiteMemberTag): a year from
 // today, unless one is already running.
 export const ensureWebsiteMembership = async (tx, workspaceId, personId, emit) => {
   const day = today();
@@ -142,7 +165,7 @@ export const ensureWebsiteMembership = async (tx, workspaceId, personId, emit) =
 const giftIn = z.object({
   kind: z.enum(['superstar', 'star', 'amount']),
   amount_cents: z.number().int().positive().max(10_000_000).nullish(),
-  // Star Club's slate: the council's unless they ticked the school board's.
+  // A one-slate club's slate: the council's unless they ticked the school board's.
   slate: z.enum(SLATE_CODES).nullish(),
 });
 const str = (n) => z.string().trim().max(n).nullish();
@@ -163,13 +186,20 @@ export const actions = {
       sign: z.enum(SIGN_KIND_CODES).nullish(),
       languages: z.array(z.string().trim().min(1).max(80)).max(30).default([]), other_language: str(80),
       interests: z.array(z.string().trim().min(1).max(120)).max(30).default([]),
-      term: z.union([z.literal(1), z.literal(4)]).nullish(),
+      // Which terms there are is the campaign's own (checked in the handler).
+      term: z.number().int().nullish(),
       once: giftIn.nullish(), monthly: giftIn.nullish(),
       method: z.enum(['cash', 'cheque', 'card', 'etransfer', 'pad']).nullish(),
       signed: z.boolean().default(false), signed_on: z.string().regex(DAY).nullish(),
-      opt_in: z.boolean().default(true),
+      // Left out: what this campaign's form does on joining.
+      opt_in: z.boolean().nullish(),
     }),
     handler: async (tx, ctx, input, emit) => {
+      if (!brandHas('membership')) throw notHere();
+      const m = rules();
+      if (input.term != null && !m.terms.includes(input.term)) {
+        throw httpError(400, `the membership: ${m.terms.map((t) => `${t} year${t > 1 ? 's' : ''}`).join(' or ')}`);
+      }
       const ws = ctx.workspaceId;
       const { ACTIONS } = await import('../../actions/index.js');
       const warnings = [];
@@ -192,7 +222,7 @@ export const actions = {
       const filedBirth = input.birth_date ? null : await onFile('birth date');
       const birth = input.birth_date || (DAY.test(String(filedBirth)) ? filedBirth : null);
       const age = birth ? ageOn(birth, day) : null;
-      if (joins && age != null && age < 14) throw httpError(400, `members are 14 or older (${age} on ${day})`);
+      if (joins && age != null && age < m.dues.min_age) throw httpError(400, `members are ${m.dues.min_age} or older (${age} on ${day})`);
       const filedCitizenship = input.citizenship ? null : await onFile('citizenship');
       const citizenship = input.citizenship || (filedCitizenship === 'Canadian citizen' ? 'citizen' : filedCitizenship === 'Permanent resident' ? 'pr' : null);
       if ((joins || gives) && !input.citizenship) {
@@ -280,7 +310,7 @@ export const actions = {
       set('Interests', [...new Set(iPicked)]);
       if (input.candidate) set('Interested in being a candidate', true);
       // The form: "By joining, you're automatically opted in to emails and texts."
-      const optIn = input.opt_in && input.signed && joins;
+      const optIn = (input.opt_in ?? m.optIn) && input.signed && joins;
       if (optIn && (input.email || person.email)) set('Email opt-in', true);
       if (optIn && (input.phone || person.phone)) set('SMS opt-in', true);
       if (values.length) await fieldActions['field.values.set'].handler(tx, { ...ctx, form: true }, { person_id: person.id, values }, emit);
@@ -311,7 +341,7 @@ export const actions = {
 
       // ── The membership ──
       let membership = null;
-      const youth = age != null && age >= 14 && age <= 30;
+      const youth = age != null && age >= m.dues.youth_ages[0] && age <= m.dues.youth_ages[1];
       if (joins) {
         const current = (await tx.query(
           `select max(ends_on) as ends_on from member_terms where workspace_id = $1 and person_id = $2 and voided_at is null and ends_on >= $3`,
@@ -347,7 +377,7 @@ export const actions = {
         if (g.kind === 'superstar') return SLATE_CODES.map((slate) => ({ slate, amount_cents: each }));
         return [{ slate: g.slate || SLATE_CODES[0], amount_cents: each }];
       };
-      const label = (g, mode) => (g.kind === 'superstar' ? 'Superstar Club' : g.kind === 'star' ? 'Star Club' : mode === 'once' ? 'Gift' : 'Monthly gift');
+      const label = (g, mode) => m.clubs.find((c) => c.key === g.kind)?.label || (mode === 'once' ? 'Gift' : 'Monthly gift');
       if (input.once) {
         for (const part of split(input.once, 'once')) {
           const r = await logGift(tx, ctx.workspace, {
@@ -377,9 +407,11 @@ export const actions = {
       }
       for (const g of gifts) if (g.flagged) warnings.push(`Over the limit: ${g.flag_reason}`);
       if (joins) {
-        const minimum = input.term * (youth ? 500 : 1000);
+        const rate = youth ? m.dues.youth_cents : m.dues.adult_cents;
+        const minimum = input.term * rate;
         const paid = gifts.reduce((a, g) => a + g.amount_cents, 0);
-        if (paid < minimum) warnings.push(`The membership minimum is ${money(minimum)} (${input.term} year${input.term > 1 ? 's' : ''} at ${youth ? '$5 — aged 14 to 30' : '$10'} a year); ${paid ? `${money(paid)} is logged` : 'no gift is logged'}.`);
+        const rateWords = `$${rate / 100}${youth ? ` — aged ${m.dues.youth_ages[0]} to ${m.dues.youth_ages[1]}` : ''}`;
+        if (paid < minimum) warnings.push(`The membership minimum is ${money(minimum)} (${input.term} year${input.term > 1 ? 's' : ''} at ${rateWords} a year); ${paid ? `${money(paid)} is logged` : 'no gift is logged'}.`);
       }
 
       // ── The newsletter, on joining — never back on for someone who left it ──
@@ -412,14 +444,30 @@ export const actions = {
 export const api = new Hono();
 const desk = (c) => MONEY.includes(c.get('ctx').role);
 
+// One gate in front of the three reads: a campaign with no membership has
+// none of them (asked on each request — the brand is a setting).
+const gate = async (c, next) => (brandHas('membership') ? next() : c.json({ error: 'not found' }, 404));
+api.use('/membership/*', gate);
+api.use('/persons/:id/membership', gate);
+
 api.get('/membership/form', async (c) => {
   if (!desk(c)) return c.json({ error: 'the desk only' }, 403);
   const ctx = c.get('ctx');
+  const m = rules();
   const day = DAY.test(c.req.query('date') || '') ? c.req.query('date') : today();
   const clubs = await clubsFor(c.get('db'), ctx.workspace, Number(day.slice(0, 4)));
+  const { adult_cents, youth_cents, youth_ages } = m.dues;
   return c.json({
     day, clubs, slates: SLATES,
-    minimum: { adult_cents: 1000, youth_cents: 500, youth_ages: [14, 30] },
+    minimum: { adult_cents, youth_cents, youth_ages },
+    // The form as the desk's screen draws it: nothing of it is in the app.
+    form: {
+      terms: m.terms, once: m.once, monthly: m.monthly,
+      clubs: clubRows(clubs), schoolBoardLine: m.schoolBoardLine,
+      dues: m.dues, city: m.formCity,
+      // What the screen offers when the campaign's own fields can't be read.
+      fallback: { languages: m.fallback.languages, interests: m.fallback.interests, campuses: preset().fields.campuses },
+    },
   });
 });
 
