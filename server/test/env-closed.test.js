@@ -14,6 +14,8 @@ import { freshDb, Client } from './helpers.js';
 import { app } from '../index.js';
 import { envName } from '../lib/org.js';
 import { seedSample } from '../lib/samplecampaign.js';
+import { _resetDbForTest } from '../db/client.js';
+import { serviceBlock } from './sample-prints.js';
 
 const KEYS = ['STARBASE_ENV', 'NODE_ENV', 'RENDER', 'STARBASE_FRAME_HOSTS', 'STARBASE_DEMO_EMAIL', 'STARBASE_SAMPLE', 'STARBASE_SAMPLE_RESET'];
 let kept; let db;
@@ -24,6 +26,14 @@ before(async () => {
   const mgr = new Client();
   assert.equal((await mgr.signup({ email: 'demo@example.org' })).status, 201);
   await mgr.createPerson('Real Person');
+  // An old record of a sample (lib/samplecampaign.js), as if this database
+  // had once been staging's: an older version than the code's, which on
+  // staging would mean "make it again".
+  await db.query('drop schema if exists sample_meta cascade');
+  await db.query('create schema sample_meta');
+  await db.query(`create table sample_meta.made (id int primary key check (id = 1), version int not null,
+    state text not null check (state in ('making','made','failed')), email text not null, attempts int not null default 0, at timestamptz not null default now())`);
+  await db.query("insert into sample_meta.made (id, version, state, email) values (1, 1, 'made', 'demo@example.org')");
 });
 beforeEach(() => {
   kept = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
@@ -85,4 +95,61 @@ test('a developer’s machine (not hosted) is "local"; the sample and its reset 
     assert.equal(await count('workspaces'), 1);
     assert.equal(await count('persons'), 1);
   }
+});
+
+test('staging with no STARBASE_SAMPLE: no sample, nothing dropped, whatever the old record says', async () => {
+  process.env.STARBASE_ENV = 'staging';
+  process.env.STARBASE_DEMO_EMAIL = 'demo@example.org';
+  for (const typed of [undefined, '', 'surrey', 'vancouver-2']) {
+    if (typed === undefined) delete process.env.STARBASE_SAMPLE; else process.env.STARBASE_SAMPLE = typed;
+    assert.equal(await seedSample(app, () => {}, 8), null, JSON.stringify(typed));
+    assert.equal(await count('workspaces'), 1);
+    assert.equal(await count('persons'), 1);
+  }
+});
+
+// Imagine Surrey's server, set exactly as render.yaml's base-win block sets
+// it (and on Render, as it is). The two places it runs this work's code.
+// → a function that puts the settings back.
+const imagineSurrey = () => {
+  const block = serviceBlock('base-win');
+  const was = Object.fromEntries(Object.keys(block).map((k) => [k, process.env[k]]));
+  Object.assign(process.env, block);
+  process.env.RENDER = 'true';
+  // What staging's block holds, wrongly set here too: still nothing.
+  process.env.STARBASE_SAMPLE = 'vancouver';
+  process.env.STARBASE_DEMO_EMAIL = 'demo@example.org';
+  process.env.STARBASE_SAMPLE_RESET = 'a-word-this-database-has-not-seen';
+  return () => { for (const [k, v] of Object.entries(was)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; } };
+};
+
+test('Imagine Surrey: /api/auth/setup has exactly the keys it had', async () => {
+  const restore = imagineSurrey();
+  try {
+    const setup = await (await app.request('/api/auth/setup')).json();
+    assert.deepEqual(Object.keys(setup).sort(), ['fromControlCentre', 'google', 'googleDomain', 'open', 'org', 'organization', 'resetByEmail']);
+  } finally { restore(); }
+});
+
+// Last in the file: it swaps the database out. On Render with no
+// DATABASE_URL, asking for the database fails at once (db/client.js
+// storeRefusal), so a sample code that so much as asked would reject here:
+// resolving null proves it never asked (zero calls), before anything else.
+test('Imagine Surrey: the sample code returns before it asks for the database', async () => {
+  const url = process.env.DATABASE_URL;
+  const restore = imagineSurrey();
+  delete process.env.DATABASE_URL;
+  delete process.env.STARBASE_EMBEDDED_DB;
+  _resetDbForTest();
+  try {
+    await assert.rejects(import('../db/client.js').then((m) => m.getDb()), /not starting/, 'any ask for the database fails here');
+    _resetDbForTest();
+    assert.equal(await seedSample(app, () => {}, 8), null);
+  } finally {
+    restore();
+    if (url !== undefined) process.env.DATABASE_URL = url;
+    _resetDbForTest();
+  }
+  assert.equal(await count('workspaces'), 1, 'nothing made, nothing dropped');
+  assert.equal(await count('persons'), 1);
 });

@@ -108,20 +108,25 @@ services:
         value: "https://base.win,https://www.base.win"
       - key: STARBASE_DEMO_EMAIL     # the demo account, the sample campaign's manager (an address on a domain you hold)
         value: demo@base.win
-      # The sample campaign (server/lib/samplecampaign.js; staging only): made once
-      # when the database holds no campaign. STARBASE_SAMPLE_RESET, set by
-      # hand to a new word, drops everything in staging's database first.
+      # The sample campaign (server/lib/samplecampaign.js; staging only):
+      # everyone and everything in it is made up. It is made when the
+      # database holds no campaign, and made again by itself when a release
+      # carries a newer SAMPLE_VERSION (only while the database's one
+      # campaign is the demo account's). STARBASE_SAMPLE_RESET is the
+      # by-hand override: a word of your own choosing, which nobody issues
+      # and which is not a secret; a word this database hasn't seen drops
+      # everything in staging's database first.
       - key: STARBASE_SAMPLE
         value: vancouver
       - key: STARBASE_SAMPLE_RESET
         sync: false
-      - key: STARBASE_CANDIDATES     # made-up opponents for the sample's rating scale
-        value: "4A:Hartwell:Opposed — Hartwell supporter;4B:Quist:Opposed — Quist supporter;4C:Delmar:Opposed — Delmar supporter"
-      - key: RESEND_API_KEY          # email: newsletters, invites, shift alerts (staging is public: a test key or unset, never a client's)
+      - key: STARBASE_CANDIDATES     # made-up opponents and made-up elector organizations for the sample's rating scale (server/lib/samplecast.js)
+        value: "4A:Avendrel:Opposed — Lantern Quay Electors / Tamsin Avendrel;4B:Brindlemoor:Opposed — Juniper Bridge Alliance / Odell Brindlemoor;4C:Castramont:Opposed — Foghorn Civic League / Mireille Castramont"
+      - key: RESEND_API_KEY          # email: newsletters, invites, shift alerts (staging is public: a test key or unset, never a client's; the daily staging check fails on a live one)
         sync: false
       - key: MAIL_FROM
         sync: false
-      - key: TWILIO_ACCOUNT_SID      # texting and calls (staging is public: test credentials or unset, never a client's)
+      - key: TWILIO_ACCOUNT_SID      # texting and calls (staging is public: test credentials or unset, never a client's; the daily staging check fails on live ones)
         sync: false
       - key: TWILIO_AUTH_TOKEN
         sync: false

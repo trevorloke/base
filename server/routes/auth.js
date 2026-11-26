@@ -37,7 +37,7 @@ import { RUN_OUT, TOKEN_RE, checkLink, queueReset, resetByEmail, resetEvent, use
 import { ownOrigin, parseKeys, verifyEntry } from '../lib/entry.js';
 import { instanceOf } from '../ext/operator/identity.js';
 import { enter, ENTRY_HOURS } from '../ext/operator/enter.js';
-import { sampleSignup } from '../lib/samplecampaign.js';
+import { sampleSignup, sampleWanted, sampleMaking } from '../lib/samplecampaign.js';
 import { defaultCandidates } from '@starbase/shared/scale';
 
 const app = new Hono();
@@ -163,7 +163,9 @@ const signInCode = async (db, { userId, workspaceId }, code) => {
 // set up); once it's done, the campaign's own, renames included.
 app.get('/setup', async (c) => {
   const db = await getDb();
-  const open = await setupOpen(db);
+  // Staging's sample server: closed to everyone but the sample's own
+  // sign-up (below).
+  const open = !sampleWanted() && (await setupOpen(db));
   // Sign in with Google: set up on this server and on for the campaign
   // (the first one, as campaignName); its domain rule, if any. Never the
   // client's id.
@@ -176,6 +178,9 @@ app.get('/setup', async (c) => {
     resetByEmail: resetByEmail(),
     // Closed because the control centre sets this campaign up (its key, no campaign yet).
     fromControlCentre: !open && (await closedWords(db)) === FROM_CONTROL_CENTRE,
+    // The public demo (lib/demo.js): the sign-in page sends a visitor
+    // straight in. Only where there is one: never a key on production.
+    ...(demoEmail() ? { demo: true } : {}),
   });
 });
 
@@ -183,6 +188,10 @@ app.post('/signup', async (c) => {
   const db = await getDb();
   // Staging's sample campaign is made through this door at boot (lib/samplecampaign.js).
   const sample = sampleSignup(c);
+  // On staging's sample server nobody else signs up: the sample is made
+  // again by itself (lib/samplecampaign.js), and a stranger who signed up
+  // on an empty database in between would hold the server.
+  if (!sample && sampleWanted()) return c.json({ error: 'The demo is not open for sign-up.' }, 403);
   if (!sample && !(await setupOpen(db))) return c.json({ error: await closedWords(db) }, 403);
   const parsed = signupInput.safeParse(await c.req.json().catch(() => ({})));
   if (!parsed.success) return c.json({ error: parsed.error.issues[0].message }, 400);
@@ -225,18 +234,34 @@ app.post('/signup', async (c) => {
 // can do whatever that account can — a manager's is everything — so the
 // campaign on this server is the sample one (lib/samplecampaign.js), with nobody
 // real in it. The same limit from one address as sign-in.
+// While the sample is being made again (a release that carries a newer
+// one), a page that tries again every 10 seconds; with no demo account and
+// nothing being made, a page that says so and stops.
+const REFRESHING = 'The demo is being refreshed. It will be back in about a minute.';
+const UNAVAILABLE = 'The demo is not available right now.';
+const demoPage = (c, words, refresh) => {
+  if (!/text\/html/i.test(c.req.header('accept') || '')) return c.json({ error: words }, 503);
+  return c.html(`<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+${refresh ? '<meta http-equiv="refresh" content="10">\n' : ''}<title>base.win demo</title>
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;padding:16px;box-sizing:border-box;font:16px/1.5 system-ui,sans-serif;color:#1f2430;background:#fff}
+@media (prefers-color-scheme:dark){body{color:#e8eaf0;background:#14161c}}</style></head>
+<body><p>${words}</p></body></html>`, 503, { 'cache-control': 'no-store' });
+};
+
 app.get('/demo', async (c) => {
   const email = demoEmail();
   if (!email) return c.json({ error: 'not found' }, 404);
-  if (triesFrom(clientIp(c))) return c.json({ error: TOO_MANY }, 429);
   const db = await getDb();
+  if (await sampleMaking(db)) return demoPage(c, REFRESHING, true);
+  if (triesFrom(clientIp(c))) return c.json({ error: TOO_MANY }, 429);
   const row = (await db.query(
     `select u.id, m.workspace_id from users u
        join memberships m on m.user_id = u.id
       where u.email = $1 order by m.created_at limit 1`,
     [email],
   )).rows[0];
-  if (!row) return c.json({ error: 'the demo is not set up' }, 503);
+  if (!row) return demoPage(c, UNAVAILABLE, false);
   setCookie(c, SESSION_COOKIE, await createSession(db, row.id, row.workspace_id), cookieOpts);
   return c.redirect(`${c.env?.base || ''}/`, 302);
 });

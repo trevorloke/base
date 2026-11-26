@@ -34,6 +34,7 @@ import { mayReach, person, address, whyNotSql } from '../lib/reach.js';
 import { e164, namesCampaign, MAX_BODY as TEXT_MAX } from '../ext/texting/rules.js';
 import { textConfigured } from '../lib/notify.js';
 import { DEFAULT_TZ } from '../lib/org.js';
+import { demoEmail } from '../lib/demo.js';
 // Kinds, saved places and the campaign's clock for shifts (ext/schedule).
 import { SHIFT_KIND_CODES, shiftKind } from '@starbase/shared/shiftkinds';
 import {
@@ -116,6 +117,18 @@ const activeOnShift = async (tx, workspaceId, shiftId) => (await tx.query(
    where shift_id = $1 and workspace_id = $2 and status = any($3::text[])`,
   [shiftId, workspaceId, HOLD_SHIFT_STATUSES],
 )).rows[0].n;
+
+
+// The public demo (lib/demo.js; never on production): every visitor is the
+// demo account, a manager. Another manager a visitor invites can't remove
+// or demote it: that would end the demo, and staging's sample could no
+// longer be made again by itself (lib/samplecampaign.js demoOwnsIt).
+const DEMO_KEEPS = 'The demo can’t change this.';
+const isDemoAccount = async (tx, userId) => {
+  const demo = demoEmail();
+  if (!demo) return false;
+  return Boolean((await tx.query('select 1 from users where id = $1 and lower(email) = $2', [userId, demo])).rows[0]);
+};
 
 export const FIELD_ACTIONS = {
   // ── Canvassing ──
@@ -1203,6 +1216,7 @@ export const FIELD_ACTIONS = {
     roles: MANAGER_ONLY,
     input: z.object({ user_id: uuid(), role: z.enum(['manager', 'treasurer', 'staff', 'volunteer']) }),
     handler: async (tx, ctx, input, emit) => {
+      if (await isDemoAccount(tx, input.user_id)) throw httpError(409, DEMO_KEEPS);
       if (input.user_id === ctx.user.id && input.role !== 'manager') {
         throw httpError(400, 'you cannot remove your own manager role');
       }
@@ -1231,6 +1245,7 @@ export const FIELD_ACTIONS = {
     roles: MANAGER_ONLY,
     input: z.object({ user_id: uuid() }),
     handler: async (tx, ctx, input, emit) => {
+      if (await isDemoAccount(tx, input.user_id)) throw httpError(409, DEMO_KEEPS);
       if (input.user_id === ctx.user.id) throw httpError(400, 'you cannot remove yourself');
       const n = await tx.query(
         'delete from memberships where user_id = $1 and workspace_id = $2',

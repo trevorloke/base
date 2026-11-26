@@ -36,6 +36,7 @@ import {
   openSecret, peekCode, recoveryHashFor, requiredFor, sealSecret, setupFor, twoStepRow, verifyTotp,
 } from '../../lib/twostep.js';
 import { LOCKED_ACTION, tellLocked } from './locked.js';
+import { demoEmail } from '../../lib/demo.js';
 
 const EVERYONE = ['manager', 'treasurer', 'staff', 'volunteer'];
 const MANAGER = ['manager'];
@@ -79,11 +80,18 @@ const freshCodes = async () => {
   return { codes, salt, hashes: await Promise.all(codes.map((c) => hashRecoveryCode(c, salt))) };
 };
 
+// The public demo (lib/demo.js; never on production): every visitor is the
+// demo account. Two-step sign-in on it, or required of every manager,
+// would lock the next visitor out and end the demo.
+const DEMO_KEEPS = 'The demo can’t change this.';
+const isDemo = (ctx) => Boolean(demoEmail()) && String(ctx.user?.email || '').toLowerCase() === demoEmail();
+
 export const actions = {
   'twostep.start': {
     roles: EVERYONE,
     input: z.object({}).passthrough(),
     handler: async (tx, ctx) => {
+      if (isDemo(ctx)) throw httpError(409, DEMO_KEEPS);
       const row = await twoStepRow(tx, ctx.user.id, { lock: true });
       if (row?.on_since) throw httpError(409, 'two-step sign-in is already on');
       const secret = newTotpSecret();
@@ -202,6 +210,7 @@ export const actions = {
     roles: MANAGER,
     input: z.object({ on: z.boolean() }),
     handler: async (tx, ctx, input, emit) => {
+      if (input.on && demoEmail()) throw httpError(409, DEMO_KEEPS);
       if (input.on && !(await twoStepRow(tx, ctx.user.id))?.on_since) {
         throw httpError(409, 'turn on two-step sign-in for yourself first (Your profile)');
       }
