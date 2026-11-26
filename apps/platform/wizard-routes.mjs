@@ -7,7 +7,7 @@ import { pollOnce } from './poller.mjs';
 import { pubkeyValue } from './keys.mjs';
 import { NAME_RE, RESERVED, normalizeOrigin, getCampaign, campaignView, createCampaign, saveEnv } from './campaigns.mjs';
 import { doneFor, setItem } from './checklist.mjs';
-import { PROVINCES, TIME_ZONES, JURISDICTIONS, RACES, tzFor, pickValues, doorValue, renderSnippet } from './snippets.mjs';
+import { PROVINCES, TIME_ZONES, JURISDICTIONS, RACES, tzFor, pickValues, renderSnippet } from './snippets.mjs';
 import { newPage, setupPage, existingPage } from './pages/wizard.mjs';
 
 const WRONG_CODE = 'That code didn’t work. Type the one your app shows now.';
@@ -16,7 +16,7 @@ const NOT_AN_ADDRESS = 'That isn’t a Render address: it starts with https:// a
 // Why a short name can't be used, or null.
 export const nameProblem = async (db, name) => {
   if (RESERVED.includes(name)) return 'That name is kept for base.win.';
-  if (!NAME_RE.test(name)) return 'Use letters, numbers and dashes. It’s the address: base.win/<name>.';
+  if (!NAME_RE.test(name)) return 'Use letters, numbers and dashes. It’s the address: <name>.base.win.';
   if (await getCampaign(db, name)) return 'That name is taken.';
   return null;
 };
@@ -65,12 +65,12 @@ export const wizardRoutes = (app, ctx) => {
   const showSetup = async (c, name, { stale = false, typed = null, message = '', code = 200 } = {}) => {
     const v = await campaignView(db, name);
     if (!v || v.campaign.kind !== 'client') return c.text('Not found', 404);
-    const rows = (await db.query(`select c.name, c.display, c.kind, c.archived_at, e.server_url from campaigns c
-      join environments e on e.campaign = c.name and e.env = 'production'`)).rows;
+    const own = (await db.query(`select answering, instance from checks where campaign = $1 and env = 'production' and via = 'door'
+      order by at desc, id desc limit 1`, [name])).rows[0] || null;
     const values = v.campaign.values || {};
     return c.html(String(setupPage({
       v, values, publicKey: pubkeyValue(), serverUrl: v.envRow.server_url, addressState: addressState(v),
-      door: doorValue(rows, name), invited: (await doneFor(db, name)).has('first-manager-invited'),
+      ownAnswering: !!(own?.answering && v.envRow.instance && own.instance === v.envRow.instance), invited: (await doneFor(db, name)).has('first-manager-invited'),
       snippet: renderSnippet({ name, display: v.campaign.display, values }), stale, typed, message,
     })), code);
   };

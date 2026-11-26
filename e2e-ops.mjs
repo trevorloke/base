@@ -37,7 +37,7 @@ import { mkdirSync } from 'node:fs';
 
 const ROOT = new URL('.', import.meta.url).pathname;
 Object.assign(process.env, {
-  OPS_HOST: '127.0.0.1:5600', OPS_INSECURE_COOKIES: '1', OPS_ALLOW_LOCAL: '1', OPS_DOOR_ORIGIN: 'http://127.0.0.1:5603',
+  OPS_HOST: '127.0.0.1:5600', OPS_INSECURE_COOKIES: '1', OPS_ALLOW_LOCAL: '1', OPS_CLIENT_ORIGIN: 'http://127.0.0.1:5603/{name}',
   OPS_SETUP_CODE: 'e2e-ops-setup-code-0123456789abcdef', OPS_SECRET: 'e2e-ops-secret-0123456789abcdefghijk',
   PLATFORM_SIGNING_KEY: 'test-only-platform-signing-key-0123456789abcdef',
 });
@@ -185,8 +185,8 @@ try {
   await page.waitForURL(/\/c\/a\/setup$/);
   const setupText = await text(page);
   ok(/Answering/.test(setupText), 'the address answers');
-  ok(/Adds: a\./.test(setupText), 'the door card: Adds: a');
-  ok(JSON.parse(await page.textContent('#door-value')).a.server === 'http://127.0.0.1:5601', 'the door value names the server');
+  ok(/Give it its address/.test(setupText) && (await page.textContent('#own-address')) === 'a.base.win', 'the address card names a.base.win');
+  ok(/Answering at a\.base\.win/.test(setupText), 'its own address answers');
   await look(page, '09-setup-all-cards');
   await page.click('summary:has-text("More")');
   await look(page, '09b-setup-render-yaml');
@@ -239,7 +239,7 @@ try {
   await page.reload();
   const campaignText = (await text(page)).replace(/\s+/g, ' ');
   ok(/First manager invited Done by itself/.test(campaignText), 'the checklist: First manager invited · Done by itself');
-  ok(/The door knows it: answers at base\.win\/a Done by itself/.test(campaignText), 'the checklist: the door knows it');
+  ok(/Its own address answers: a\.base\.win Done by itself/.test(campaignText), 'the checklist: its own address answers');
   await look(page, '13-one-campaign-invited');
 
   // 7. A server that says it is somewhere else.

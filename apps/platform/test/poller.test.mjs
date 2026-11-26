@@ -1,4 +1,4 @@
-// The poller: what a health check keeps, the door check's address, the
+// The poller: what a health check keeps, the client's own address, the
 // guard on every fetch, pinning, and the 7-day sweep.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -11,11 +11,11 @@ import { currentKid } from '../keys.mjs';
 
 baseEnv();
 process.env.OPS_ALLOW_LOCAL = '1';
-process.env.OPS_DOOR_ORIGIN = fake.ORIGIN;
+process.env.OPS_CLIENT_ORIGIN = `${fake.ORIGIN}/{name}`;
 const INST = 'EBESExQVFhcYGRobHB0eHw';
 const health = (over = {}) => ({
   ok: true, database: 'ok', service: 'starbase', env: 'production', organization: 'Example Campaign', commit: 'd9130ae', build: 'index-abc.js',
-  tzdataCurrent: true, ownOrigin: fake.ORIGIN, instance: INST, address: 'https://base.win/a', entry: 'ready', platformKids: [currentKid()],
+  tzdataCurrent: true, ownOrigin: fake.ORIGIN, instance: INST, address: 'https://a.base.win', entry: 'ready', platformKids: [currentKid()],
   setupOpen: false, campaignMade: true, doorKey: true, ...over,
 });
 const { db } = await freshApp();
@@ -25,7 +25,7 @@ const latest = async (via = 'server') => (await db.query("select * from checks w
 before(fake.start);
 after(fake.stop);
 
-test('a healthy answer: only the known fields kept, strings cut to 200; the door asked at base.win/<name>, never at the address given', async () => {
+test('a healthy answer: only the known fields kept, strings cut to 200; its own address asked at <name>.base.win, never at the address given', async () => {
   fake.handlers.set('/api/health', fake.json(200, health({ commit: 'x'.repeat(500), secretThing: 'nope', address: 'https://evil.example/elsewhere', platformKids: ['k1', 7, 'k2'] })));
   fake.handlers.set('/a/api/health', fake.json(200, health()));
   fake.seen.length = 0;

@@ -5,8 +5,8 @@ answering, open any campaign’s desk already signed in, and set up new
 campaigns step by step in the Render dashboard.
 
 It is its own Render service (`base-platform`, Node, no Dockerfile) with its
-own small database (`base-platform-db`). It never goes through the door. It
-holds no campaign’s database address, no door key, no Render key and nobody’s
+own small database (`base-platform-db`). It
+holds no campaign’s database address, no Render key and nobody’s
 details: it reads only each campaign’s public `/api/health`. No campaign ever
 calls it.
 
@@ -19,7 +19,7 @@ calls it.
 | `OPS_SETUP_CODE` | made by Render; copy it once to set up. Setup stays closed unless it looks like one Render made (32+ characters of the base64 alphabets): past the guessing limits a guess still gets right or wrong, so its length is what stops guessing. Press **Generate** to set up again. | `generateValue` |
 | `OPS_SECRET` | made by Render; seals the authenticator key. Changing it means setting up again. | `generateValue` |
 | `PLATFORM_SIGNING_KEY` | made by Render; opens desks. Its public half is each campaign’s `BASE_PLATFORM_PUBKEY` (see **base.win’s key**). `old,new` while changing; the first signs. | `generateValue` |
-| `OPS_DOOR_ORIGIN`, `OPS_INSECURE_COOKIES`, `OPS_ALLOW_LOCAL` | tests only | not listed |
+| `OPS_CLIENT_ORIGIN`, `OPS_INSECURE_COOKIES`, `OPS_ALLOW_LOCAL` | tests only | not listed |
 
 ## First time
 
@@ -31,18 +31,19 @@ calls it.
 
 ## A new campaign
 
-**New campaign**: its short name (`base.win/<name>`), name, city, province,
+**New campaign**: its short name (`<name>.base.win`), name, city, province,
 rules, time zone and races. Then four cards: what to make in Render (one block
 for **Add from .env**; its two random values are made in your browser and
-never reach the control centre), the service’s Render address, the door’s
-whole new `BASE_CLIENTS` value, and **Invite the first manager**. The
+never reach the control centre), the service’s Render address, its own
+address (`<name>.base.win` under the service’s Custom Domains, and a CNAME
+record where base.win’s DNS is kept), and **Invite the first manager**. The
 checklist ticks itself as things start answering. Under More there is a
 render.yaml block if you would rather we add it.
 
 ## Opening a desk
 
 **Open desk** opens a new tab on the campaign’s own Render address (not
-base.win/<name>), signed in as **base.win support**, for 2 hours. It needs a
+<name>.base.win), signed in as **base.win support**, for 2 hours. It needs a
 code from your app within the last 10 minutes; otherwise the new tab asks for
 one. The token lives one minute, works once, and is checked by the campaign
 itself (its key, its address, its environment, its instance). The campaign
