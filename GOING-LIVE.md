@@ -31,6 +31,16 @@ Every client's production deploys from that branch, so one promote updates
 every client. Only code moves this way, never data: each database stays
 where it is.
 
+**Before a promote, check Imagine Surrey's brand line.** Render →
+`base-win` → **Environment** must show `STARBASE_BRAND=imagine-surrey`.
+That line is what gives Imagine Surrey its own set-up: its look, opponents,
+fields, membership, website and sample. With the line missing, a server
+named exactly *Imagine Surrey* still gets it and says so once in its log
+(*STARBASE_BRAND is not set on a server named Imagine Surrey*): add the
+line. After the promote, open `https://imaginesurrey.base.win/api/health`
+and read `"brand":"imagine-surrey"`. Every other client's reads
+`"brand":"base"`.
+
 **What the control centre does, and what it does not.** It watches every
 campaign's health, opens any campaign's desk signed in as *base.win
 support*, and walks you through adding a client in Render. It does not hold
@@ -194,13 +204,19 @@ Every outside service, its settings and where each key comes from is in
 `render.yaml` already for Imagine Surrey; another client's come from the
 control centre's New campaign (section 6). So is the
 brand: staging is `STARBASE_BRAND=base` with the name *Sample Campaign* in Vancouver, so it
-can be shown to anyone; production is `imagine-surrey`. That is the look each
-starts from: once a manager saves the campaign's own in **Settings → Brand**,
+can be shown to anyone; Imagine Surrey's production is `imagine-surrey`,
+and every other client's is `base`. `imagine-surrey` turns on Imagine
+Surrey's own set-up (README, *One campaign's own set-up*); `base` is a
+campaign with nothing of anyone else's. Unset, or a word that names
+nothing, is `base`. For the look, that is only where a campaign starts:
+once a manager saves the campaign's own in **Settings → Brand**,
 that one stays, whatever the setting says. A campaign already set up keeps
 the name it was given: a manager renames it in **Settings → Campaign**.
-`STARBASE_CANDIDATES` is not: until it's set, a new rating scale starts with
-the candidates the code ships with (`shared/scale.js`). Set it to `none`
-for no opponents; New campaign does that for a new client.
+`STARBASE_CANDIDATES` unset means nobody on a new rating scale (on Imagine
+Surrey's server, its own five). New campaign writes `none` for a new
+client, which says the same thing out loud. `STARBASE_CITY` unset means no
+city, and `STARBASE_GEO_BOUNDS` unset means no map area: maps open wide and
+the map's check says *Map area: Not set*.
 
 | Variable | Set it to | Needed for |
 |---|---|---|
@@ -668,7 +684,14 @@ the tile hosts can't be reached, on stand-in tiles. Look at it on staging.
 
 ### Faith, Dwelling type and Campus
 
-Every campaign gets **Faith** (Private) once, and an empty Dwelling type or
+This part is Imagine Surrey's (its 27 fields). A campaign on
+`STARBASE_BRAND=base` starts with ten fields, Faith and Dwelling type among
+them as lists already, and no Campus; nothing is added to it at a later
+start. A campaign set up before that rule keeps what it was given:
+`node server/neutral-report.mjs` in the service's Shell lists it (it only
+reads).
+
+On Imagine Surrey's server every campaign gets **Faith** (Private) once, and an empty Dwelling type or
 Campus becomes a pick list by itself, at the first boot (a background job).
 A Dwelling type or Campus with words on file stays Text until a manager
 turns it into a list: People → More → Profile fields → *Turn into a list*,
@@ -709,11 +732,13 @@ code names no client.
 Some short names are kept for base.win itself and can't be a client's:
 `staging`, `demo`, `ops`, `www` and the others the control centre refuses.
 
-The fallback, for us: copy the production block in `render.yaml` under new
-names (`base-win-<name>`, `base-win-<name>-db`) with its `STARBASE_*`
-values and `STARBASE_BRAND=base`. Give it `STARBASE_CANDIDATES` too: its
-own opponents, or `none` for no opponents on the rating scale (left out,
-the scale starts with the ones the code ships with). Commit on `main`.
+The fallback, for us: New campaign's page also writes that client's own
+block for `render.yaml` (*Or ask us to add it to render.yaml*): its names
+(`base-win-<name>`, `base-win-<name>-db`), its `STARBASE_*` values,
+`STARBASE_BRAND=base` and `STARBASE_CANDIDATES=none`. Paste that block.
+Never copy `base-win`'s own block: it is Imagine Surrey's, and its
+`STARBASE_BRAND=imagine-surrey` line would give the new client Imagine
+Surrey's set-up. Commit on `main`.
 The change reaches Render by a Blueprint sync, so go through section 0,
 *Before a Blueprint sync*, first: whether a Blueprint is listed, whether
 Auto Sync is on, and the name check. If none is listed, make the database

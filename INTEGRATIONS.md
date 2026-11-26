@@ -555,7 +555,7 @@ browser never sees it.
 
 | Setting | Default | Notes |
 |---|---|---|
-| `STARBASE_GEO_BOUNDS` | a box around Surrey | `lat,lng\|lat,lng` — suggestions and lookups stay in it |
+| `STARBASE_GEO_BOUNDS` | none (Imagine Surrey's set-up: a box around Surrey) | `lat,lng\|lat,lng` — suggestions and lookups stay in it. With none they are not kept to a box, and maps open wide |
 | `STARBASE_PROVINCE` | `BC` | |
 | `GEOCODE_MIN_SCORE` | `75` | BC's match score a pin needs |
 | `GEOCODE_ON_SAVE` | on | `off`: no lookup when a person is saved (the background run still places them) |

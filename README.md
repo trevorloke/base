@@ -39,8 +39,8 @@ One build, two apps, told apart by the address:
 
 | | Address | Who | What |
 |---|---|---|---|
-| **Field app** | `/` | everyone — it is what a volunteer sees and uses | Today · Map · Calls · Shifts · ImagineU, the door card, walk lists, your call lists, your people, your texts. A manager who opens it gets exactly a volunteer's screens (and *Admin ↗* in the account menu). |
-| **Admin** | `/admin/` | managers, staff, treasurers — and a volunteer given an area under Permissions | everything: the dashboard, the map with turfs, People and imports, Shifts, Donations, Signs, Outreach, ImagineU's editor and Progress, phone banks, **Settings** (members, teams, permissions), the rating scale. A plain volunteer who opens it is told it isn't theirs. |
+| **Field app** | `/` | everyone — it is what a volunteer sees and uses | Today · Map · Calls · Shifts · Training, the door card, walk lists, your call lists, your people, your texts. A manager who opens it gets exactly a volunteer's screens (and *Admin ↗* in the account menu). |
+| **Admin** | `/admin/` | managers, staff, treasurers — and a volunteer given an area under Permissions | everything: the dashboard, the map with turfs, People and imports, Shifts, Donations, Signs, Outreach, Training's editor and Progress, phone banks, **Settings** (members, teams, permissions), the rating scale. A plain volunteer who opens it is told it isn't theirs. |
 
 Signing in sends each person to their app: a desk role to the admin, a
 volunteer to the field app. A desk address typed into the field app
@@ -65,9 +65,9 @@ button, no paragraphs, everything else one tap away.
 | **Website** | The campaign's public site (managers, and whoever is granted the Website area): pages built from sections (hero, text, petition, donate, events, news…) that are added from a catalogue, dragged into order, hidden, edited in plain forms and published — the draft saves itself, *Preview* shows it, *Publish* says exactly which section needs a look; the theme (colours checked for contrast as they're picked, fonts, corners, logo); the menu, footer, announcement bar, search and sharing; news posts; petitions and pledges with their signatures. SITE.md has how it fits together |
 | **Path to win** | Today → Go to, and the search (desk; the Data area). Each race's win number — typed in, or worked out from eligible voters × expected turnout × share needed, the campaign's own numbers (managers set them) — and the supporters to find for it; supporters found (rated 1 or 2) against that, the pace a week to election day (GOTV's, else one set here) beside the last 4 weeks', a 12-week trend from the ratings, and the turfs ranked by a score out of 100 whose parts are shown (supporters still to find = doors not yet knocked × supporters per 100 doors knocked; persuadables left; time since the last knock), on a map coloured by priority and in a list — tap one to open it on the main map. Counted in SQL, kept a minute (`STARBASE_PTW_CACHE_MS`) |
 | **Outreach** | Two modules. **Email** (like Mailchimp): *Write an email* to the newsletter's subscribers or to any list, in Markdown (headings, bold, lists, links, pictures; files attached; *Send me a test*; two subject lines to test), then what went out — opens, clicks, past sends — the subscribers, and ladders (automatic emails, texts and follow-ups, started by what people do on the website, a shift booked, came to or missed, a gift, a membership, a survey; a goal — came to a shift, gave, joined, voted — takes them off; a *Send to a web address* step posts one small signed message about the person to another tool — Zapier, Make, a Slack channel — with *Send a test* to set the other end up first: INTEGRATIONS.md, *Connect anything*; Settings → Services → *Going out* points there). Ladders → Follow-ups: every open follow-up by organizer and the time to first contact. **Texting** (like CallHub): *Write a text* to any list, with the one-to-one rules (quiet hours, STOP, do-not-contact); the Inbox of replies; phone banks; texting one by one; texting settings |
-| **ImagineU** | Training for every role: courses of modules, each module a mix of materials — notes, documents, videos, audio, pictures, links — and the marker of progress: ticked *Done*, counted per course (*2 of 5 modules done*); the desk edits in place and sees who has done what; a module marked public has a page anyone can open at `/learn/<slug>` |
+| **Training** | Training for every role (Imagine Surrey calls its own *ImagineU*): courses of modules, each module a mix of materials — notes, documents, videos, audio, pictures, links — and the marker of progress: ticked *Done*, counted per course (*2 of 5 modules done*); the desk edits in place and sees who has done what; a module marked public has a page anyone can open at `/learn/<slug>` |
 
-Volunteers get five tabs — **Today · Map · Calls · Shifts · ImagineU** — plus
+Volunteers get five tabs — **Today · Map · Calls · Shifts · Training** — plus
 *Signs to put up* for sign crews; desk-only addresses send them back to Today.
 
 **One campaign per deployment; setup is one-time.** Each client runs on
@@ -118,7 +118,7 @@ Managers reach **Admin** from the account menu (their initials):
   a lead; a whole team goes onto a turf in one go (Map → turf → Add a
   canvasser → Teams). Someone removed from the campaign leaves every team.
 - **Permissions**: the app is nine areas — People, Map & turfs, Shifts,
-  Donations, Signs, Outreach, Data, Admin, ImagineU. Each role has its usual ones
+  Donations, Signs, Outreach, Data, Admin, Training. Each role has its usual ones
   (`server/lib/perms.js`); a manager can take an area from a whole role or
   give one to a single person on top of their role (a volunteer who runs
   Outreach, a staffer kept out of Donations). The server decides on every action
@@ -310,8 +310,9 @@ a separate choice, recorded in `drive_links` and undone by
 On the desk, **Ctrl+K** (⌘K on a Mac) or **Search** in the header opens one
 box: type to jump to any screen you may open, find someone by name, email or
 phone (typed any way: *604 555 0142* finds 604-555-0142), or start a common
-job — *Add person, Log a gift, Enter a membership form, Draw a turf, New
-shift, Write an email, Write a text*. ↑ ↓ and Enter, Esc to close; it offers
+job — *Add person, Log a gift, Draw a turf, New shift, Write an email,
+Write a text* (and *Enter a membership form*, for a campaign that has a
+membership). ↑ ↓ and Enter, Esc to close; it offers
 only what your areas allow (`web/src/components/commands.js`). People come
 from the person search (`GET /api/search/people`, `server/ext/search`): the
 start of each part of a name in any order (*kevin smith*, *smith kevin*,
@@ -468,7 +469,12 @@ than a week after they came off is refused. Contacts are door, phone, text or
   for a row with the same email). It is in the People spreadsheet and the
   full export, a merge keeps it, and a volunteer never receives it.
 - **Membership form** (People → More → *Enter a membership form*, the desk
-  that handles money): the paper membership form, box for box and in its
+  that handles money). Only for a campaign whose set-up brings a membership:
+  today that is Imagine Surrey (*One campaign's own set-up*, below). Another
+  campaign has no form, no Members report or download, no Membership rule
+  on a list, no ladder that starts on a membership and no named donor
+  tiers; its donors read *Donor* or *Monthly donor*. For Imagine Surrey it
+  is the paper membership form, box for box and in its
   order. Name, gender, birth date, email, mobile, address; citizen or
   permanent resident; union member (+local); campus; volunteer, candidate
   interest, a sign (lawn, window, large, billboard); languages (one not on
@@ -488,7 +494,8 @@ than a week after they came off is refused. Contacts are door, phone, text or
   box. Card numbers and bank details are never typed — black them out on
   the paper. A website membership (the website tags it *Member (joined
   online)*) is a membership too, and **Data → Take data out → Members** lists
-  both, current or lapsed.
+  both, current or lapsed. For a campaign with no membership that tag
+  is only a tag: it makes no membership.
 - **Mainstreeting** (Today → *Mainstreeting*, everyone on the field
   team): meeting people where they are — an event, a bus loop, a market.
   Say where you are once (kept on the phone); then for each person first
@@ -644,7 +651,9 @@ than a week after they came off is refused. Contacts are door, phone, text or
   answer someone mapped
   (`server/ext/callhub`; INTEGRATIONS.md, *Phone dialer — CallHub*, says
   how to set it up and what is not yet confirmed against a real account).
-- **ImagineU** (a tab for every role): the campaign's training. **Courses**
+- **Training** (a tab for every role, at `/training`): the campaign's
+  training. Imagine Surrey calls its own *ImagineU*, and its old address
+  `/imagineu` still opens it. **Courses**
   of **modules**; a module opens with words (Markdown) and a file or link —
   a note, a document (PDF, Word, PowerPoint, Excel), a video (a YouTube or
   Vimeo link, or a short MP4), audio (MP3, M4A, WAV), a picture, contacts or
@@ -944,7 +953,7 @@ login:
 - `POST /hooks/callhub/<key>` — each call's result from CallHub's dialer;
   the address's last part, made from the API key, is its lock
   (INTEGRATIONS.md, *Phone dialer — CallHub*)
-- `/learn/:slug` (and `/learn-files/:id`) — ImagineU's public lessons
+- `/learn/:slug` (and `/learn-files/:id`) — Training's public lessons
 - `/media/:id`, `/o/…`, `/c/…` — pictures in emails, and the open and click
   counts
 - `/brand/:id` — the campaign's brand pictures (the same bytes as
@@ -1595,15 +1604,18 @@ variable names (`--mark`, `--paper`, `--ink`, `--navy`, `--gold`…) stay, as
 aliases of the roles. Rating colours, status colours and the map's pins are
 data: no brand recolours them.
 
-A campaign starts from one of two built-in brands, set by `STARBASE_BRAND`
-(`shared/brand.js`, `server/lib/brand.js`): **`imagine-surrey`** — Surrey
-Navy `#003979` with marigold `#ffc72c` as the second colour, Imagine
-Surrey's wordmark as the logo, training called *ImagineU* — or **`base`**,
-base.win's own (indigo, no logo, training called *Training*; nothing names
-Imagine Surrey), for staging and any other campaign. Both are data through
-the same rule. Unset, it's worked out so nothing changes by accident:
-`base` on staging (`STARBASE_ENV=staging`) or for a campaign named anything
-but Imagine Surrey, Imagine Surrey's otherwise.
+A campaign starts in base.win's own look: **`base`** (indigo, no logo,
+training called *Training*; `shared/brand.js`). Nothing in it names any
+campaign. `STARBASE_BRAND` unset, or a word that names nothing, is `base`.
+
+One campaign has a set-up of its own, turned on by
+`STARBASE_BRAND=imagine-surrey`: Surrey Navy `#003979` with marigold
+`#ffc72c` as the second colour, Imagine Surrey's wordmark as the logo,
+training called *ImagineU*, and the rest of *One campaign's own set-up*
+(below). One exception keeps a server from changing under its campaign: a
+server that is not staging and is named exactly `Imagine Surrey`
+(`STARBASE_ORG_NAME`) still gets that set-up with no brand line, and its log
+says to add the line.
 
 Once a manager saves the campaign's own brand (**Settings → Brand**;
 `server/ext/brand`), that is the look, whatever `STARBASE_BRAND` says: one
@@ -1662,6 +1674,70 @@ service worker keeps the fonts and the campaign's logo with the build, so
 the field app opens with no signal looking like itself; the logo's alt text
 is the campaign's name.
 
+## One campaign's own set-up
+
+base.win is the same code for every campaign. What belongs to one campaign
+is kept apart, in one folder (`server/presets/imagine-surrey/`), and used
+only by the server whose `STARBASE_BRAND` names it. No other campaign's
+server reads it, sends it or serves it. `server/lib/preset.js` is the one
+file that opens the folder.
+
+What a campaign on `STARBASE_BRAND=base` starts with:
+
+- **Rating scale**: nobody on it, until the campaign adds its own opponents.
+- **City and map**: the ones typed for it in New campaign. With none, new
+  addresses get no city and maps open wide.
+- **Look**: base.win's own, until a manager saves one in Settings → Brand.
+- **Profile fields**: ten. House notes, Building notes, Access type,
+  Dwelling type, Email opt-in, SMS opt-in, Language, Notes, Faith (private)
+  and Interested in being a candidate. A manager adds, renames or takes off
+  fields under People → More → Profile fields.
+- **Website**: a finished generic site in the Base look: a hero, what you
+  stand for, newsletter, donate and volunteer, with pages for Donate,
+  Volunteer, News and Privacy. The words are placeholders that say what
+  goes where.
+- **Training**: called *Training*, at `/training`.
+- **Example words** in empty boxes are neutral: *123 Main St*, *A1A 1A1*,
+  *555-555-0100*.
+- **Not there at all**: the membership form and everything built on it,
+  named donor tiers, "Become a member" on the website, and "Load sample
+  data".
+
+What only Imagine Surrey's server has: its five opponents, Surrey as the
+city and the map area, its navy look and star icons, its 27 profile fields
+with their lists, the paper membership form with its dues, terms and clubs,
+the *Star* and *Superstar* donor tiers, its website (the look, the logo and
+photographs, the first site, "Become a member"), the 52 made-up Surrey
+voters of "Load sample data", *ImagineU* and `/imagineu`, and its own example
+words.
+
+Three checks keep it so:
+
+- `npm run test:bundle` (after `npm run build`) searches the built app, the
+  files served as written and every file name for the words in
+  `server/test/neutral-words/`. It fails on the first one.
+- `server/test/neutral-boot.test.js` starts another campaign's server and
+  searches every answer for the same words.
+- `server/test/neutral-*.test.js` check each part as another campaign, then
+  as Imagine Surrey.
+
+**A campaign set up before this.** Nothing is deleted from a database. A
+campaign made earlier keeps the fields and sample it was given. To see what
+it still holds of Imagine Surrey's lists: Render → the campaign's service →
+Shell → `node server/neutral-report.mjs`. It only reads. Take a field off
+under People → More → Profile fields; remove the sample with Today → Clear
+sample data.
+
+**Importing a Home Phone column** on a campaign with no *Home phone* field:
+alone, the column comes in as Phone. Beside a mobile column it is set to
+*Don't import*; add a field named Home phone first to keep those numbers.
+
+**For anyone reading the API**: `/api/health` has `brand`. `/api/auth/me`
+has `org.features` (`membership`, `sample`) and `org.map`. `GET /api/fields`
+has `standard` and `guesses`. `GET /api/site` has `skins`, `moduleDefaults`
+and `fieldLabels`. `GET /api/membership/form` has `form`, and a person's
+`donor` has `label` and `rank` for a named tier.
+
 ## Architecture
 
 **Five primitives** — Person (first-class table, real FKs) · Record
@@ -1717,13 +1793,13 @@ environment (`server/lib/org.js`); the code names no client.
 | `STARBASE_ORG_NAME` | the campaign's name until it's set up: shown on sign-in and taken by the first sign-up (after that, sign-in shows the campaign's own name, which a manager can change in Settings → Campaign) | blank: the first sign-up names it |
 | `STARBASE_JURISDICTION` | `bc-municipal`, `bc-provincial` or `federal` — which contribution-limit rules apply (`cap_rules`) | `bc-municipal` |
 | `STARBASE_TZ` | the campaign's time zone (shifts, receipts, quiet hours, the campaign's day) | `America/Vancouver` |
-| `STARBASE_CITY` | the city new addresses default to | `Surrey` |
+| `STARBASE_CITY` | the city new addresses default to | none (Imagine Surrey's set-up: `Surrey`) |
 | `STARBASE_PROVINCE` | two letters, for geocoding | `BC` |
-| `STARBASE_GEO_BOUNDS` | `lat,lng\|lat,lng`, the box address lookups and suggestions are kept to (BC, Google, Nominatim) | Surrey's |
+| `STARBASE_GEO_BOUNDS` | `lat,lng\|lat,lng`, the box address lookups and suggestions are kept to (BC, Google, Nominatim), and where maps open | none: lookups are not kept to a box, maps open wide and the map's check says *Map area: Not set* (Imagine Surrey's set-up: a box around Surrey) |
 | `STARBASE_SLATES` | `code:Label,code:Label` — the slates a gift can go to, each its own annual limit | `council:City council,school_board:School board` |
-| `STARBASE_CANDIDATES` | `4D:Name:Label;4B:Name` — the opposed candidates a new rating scale starts with (the desk edits them after), or `none` for no opponents | Imagine Surrey's |
+| `STARBASE_CANDIDATES` | `4D:Name:Label;4B:Name` — the opposed candidates a new rating scale starts with (the desk edits them after), or `none` for no opponents | nobody (Imagine Surrey's set-up: its five) |
 | `STARBASE_ENV` | `production` or `staging` — said on screen and at `/api/health` | `production` when hosted (`NODE_ENV=production`, or on Render), else `local` |
-| `STARBASE_BRAND` | `imagine-surrey` or `base` — the brand a campaign starts from, until a manager saves its own in Settings → Brand (*The look and the brand*, above) | `base` on staging or for another campaign; else Imagine Surrey's |
+| `STARBASE_BRAND` | `base`, or `imagine-surrey` to turn on Imagine Surrey's own set-up (*One campaign's own set-up*, above). The look is the one a campaign starts from, until a manager saves its own in Settings → Brand | `base` (a server named exactly `Imagine Surrey` that is not staging: `imagine-surrey`, with a line in its log) |
 | `SITE_HOSTS` | the campaign's own domains (`imaginesurrey.ca,www.imaginesurrey.ca`): the website at `/` there, nothing of the app — written with a final dot too (`imaginesurrey.ca.`), it's the same domain (SITE.md) | blank: the website is at `/site/` only |
 | `APP_HOSTS` | the app's other addresses on this server (an older one people still use, such as `starbase.imaginesurrey.ca`, beside the public `imaginesurrey.base.win`): never made a website domain, so the app keeps answering there (SITE.md) | blank |
 | `BASE_PLATFORM_PUBKEY` | the control centre's public key (ops.base.win → base.win’s key; 43 characters; two, comma-separated, while it changes its key): lets base.win support open this desk, and closes first-run sign-up until the first visit makes the campaign. Pasted in Render, never in git (`sync: false`); emptied, all entry stops and open visits end | blank: no entry (`/api/health` says `no-key`) |
@@ -1760,8 +1836,10 @@ its settings and where each key comes from: [INTEGRATIONS.md](INTEGRATIONS.md);
 ```sh
 cd starbase
 npm install
-npm test                 # server suite, in-memory Postgres, no setup
-node e2e.mjs             # browser journey against a running server (see header)
+npm test                 # server suite, in-memory Postgres, no setup (it runs as
+                         # Imagine Surrey's server; the neutral-*.test.js files as another campaign's)
+node e2e.mjs             # browser journey against a running server (see header); the
+                         # e2e scripts start their server as Imagine Surrey's own
 npm run build            # web → web/dist
 STARBASE_DATA=./data node server/index.js   # API + web on :3200
 ```

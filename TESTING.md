@@ -15,8 +15,14 @@ git clone https://github.com/trevorloke/starbase.git
 cd starbase
 npm install
 npm run build
-npm start                 # → http://localhost:3200
+STARBASE_BRAND=imagine-surrey npm start     # → http://localhost:3200
 ```
+
+This guide walks through Imagine Surrey's own set-up, so the server is
+started with its brand line. Started with plain `npm start`, the server is
+any other campaign's: no sample data, ten profile fields, no membership
+form, nobody on the rating scale, training called *Training* (*Another
+campaign*, at the end of this section).
 
 1. Open **http://localhost:3200/signup** and set up base.win for Imagine
    Surrey: your name, email and password. You become its manager (the
@@ -30,6 +36,61 @@ npm start                 # → http://localhost:3200
 
 Your data lives in `data/`. Stop with Ctrl-C; it's still there next
 time. Delete the folder to start over.
+
+### Another campaign
+
+Stop the server, delete `data/` and start it with plain `npm start`. Sign
+up as *Kamloops Forward*. Then check that nothing of Imagine Surrey's is
+there:
+
+- **Today** has no *Load sample data* card.
+- **People → More → Profile fields** lists ten fields, and *Add the
+  standard fields* adds none. There is no Campus and no Interests.
+- **People → More** has no *Enter a membership form*, and a donor's
+  profile says *Donor*, never *Star*.
+- **Settings → Rating scale** offers nobody as an opponent.
+- The fifth tab is **Training**, at `/training`. `/imagineu` shows the
+  app's own not-found screen.
+- **Website** opens on a finished generic site in the Base look. Theme
+  offers one look. *Add a section* has no *Become a member*.
+- `/star.png` and `/site-assets/imagine-surrey/logo.webp` answer 404.
+- The map opens wide with *Ask base.win to set your map area* until
+  `STARBASE_GEO_BOUNDS` is set.
+
+The same is checked by machine, on every change:
+
+- `npm run build && npm run test:bundle` searches the built app, the files
+  served as written and every file name for the words in
+  `server/test/neutral-words/` (one word or phrase a line). It ends 1 on
+  the first find and says where. No list is excused: a word found is a
+  failure.
+- `server/test/neutral-boot.test.js` (in `npm test`) starts another
+  campaign's server with the control centre's own settings and searches
+  what it answers (the same reads the dump below makes) for the same words.
+- `server/test/neutral-*.test.js` test each part as another campaign and
+  then as Imagine Surrey. A new one follows `neutral-membership.test.js`:
+  import the helper, set `STARBASE_BRAND` to `base`, call `forgetBrand()`,
+  and put the brand back at the end.
+
+The rest of `npm test`, and every `e2e-*.mjs` script, runs as Imagine
+Surrey's own server (the helper and each script set the brand), so they
+test Imagine Surrey as it is deployed.
+
+**Proving a change leaves Imagine Surrey as it was.** Take a dump before
+and after, on the same side of midnight in Vancouver (07:00 UTC), and
+compare:
+
+```sh
+scripts/preset-dump.sh /tmp/before 4190        # on the old code
+scripts/preset-dump.sh /tmp/after 4190         # on the new code
+diff -r /tmp/before/norm /tmp/after/norm
+node scripts/preset-screens.mjs /tmp/screens-before 4191   # the same for ten screens
+```
+
+The dump is what a server started with Imagine Surrey's production
+settings answers: its reads and pages, signed in and signed out, plus its
+sample, one membership, its icons and its website's pictures. `e2e-map.mjs` can fail on a busy machine; run it
+again on a quiet one before reading anything into it.
 
 > Testing on your phone on the same Wi-Fi: open `http://<your-computer's-IP>:3200`.
 > Location ("Locate me") and "Add to Home Screen" need **https** — use the
@@ -109,7 +170,8 @@ one tap away under **More**.
 - **Two apps.** Sign in at `/login` and you land in the **admin** at
   `/admin/` (the header reads *base.win*, your campaign under it): every screen below. Your
   account menu has *Field app ↗* — open it and you see exactly what a
-  volunteer sees (Today · Map · Calls · Shifts · ImagineU), with *Admin ↗*
+  volunteer sees (Today · Map · Calls · Shifts · ImagineU, which another
+  campaign reads as Training), with *Admin ↗*
   to come back. A volunteer who opens `/admin/` is told it isn't theirs.
 - **Today → Dashboard → In the field** — tap a dot: who, the outcome, who
   logged it and when, with *Profile* and *On the map* links; tap a person's
@@ -1558,7 +1620,8 @@ comes back, or asks if words were typed meanwhile).
   a date three weeks out, **Save dates**: Donations counts the days down
   under the big number, and Today lists it under *Coming up*. Nothing is
   there until you type it.
-- **People → More → Enter a membership form** — type a paper form for a
+- **People → More → Enter a membership form** (Imagine Surrey's set-up
+  only; another campaign has no such link) — type a paper form for a
   made-up person: a birth date 25 years ago (*the $5 youth rate applies*),
   *Canadian citizen*, a union local, a campus, *I'd like to volunteer*, *A
   sign → Window*, two languages and *Other: Tamil*, two interests, *1 year*,

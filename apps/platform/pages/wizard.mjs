@@ -97,7 +97,7 @@ export const setupPage = ({ v, values, publicKey, serverUrl, addressState, publi
     <ol class="oc-steps">
       <li class="card"><h2>Make its database and service in Render</h2>
         <ol class="oc-howto">
-          <li>Render → <b>New → Postgres</b>. Name <code>base-win-${name}-db</code>, region Oregon, PostgreSQL 16, the same plan as Imagine Surrey’s database.</li>
+          <li>Render → <b>New → Postgres</b>. Name <code>base-win-${name}-db</code>, region Oregon, PostgreSQL 16, the plan named in <code>render.yaml</code> (<code>basic-1gb</code>).</li>
           <li>Render → <b>New → Web Service</b> → this repository. Name <code>base-win-${name}</code>, language Docker, branch <code>production</code>, region Oregon, instance Starter. Under Advanced, health check path <code>/api/health</code>.</li>
           <li>On that page, <b>Environment → Add from .env</b> → paste this block:
             ${publicKey ? html`${envBlock({ name, display: v.campaign.display, values, publicKey })}
