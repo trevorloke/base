@@ -15,8 +15,12 @@
 # https://<name>.base.win, a custom domain on that service — see GOING-LIVE.md
 # §6 "A new client". The fallback: the same page of the control centre writes
 # that client's own block for this file (its names, its STARBASE_* values and
-# STARBASE_BRAND=base). Never copy base-win's block below: it is Imagine
-# Surrey's, and its STARBASE_BRAND line turns on Imagine Surrey's own set-up.
+# STARBASE_BRAND=base). Paste its STARBASE_* lines as sync: false, each value
+# kept as a comment, and set the values on the new service in Render: a fixed
+# value would be written over at every sync, and the release-settings check
+# refuses it. Never copy base-win's block below: it is Imagine Surrey's, and
+# its STARBASE_BRAND setting (imagine-surrey in Render) turns on Imagine
+# Surrey's own set-up.
 #
 # Docs: https://render.com/docs/blueprint-spec
 #
@@ -170,24 +174,28 @@ services:
         fromDatabase:
           name: base-win-db
           property: connectionString
-      # The client. This one line turns on Imagine Surrey's own set-up
-      # (server/presets/imagine-surrey): its look, its opponents and city, its
-      # profile fields, its membership, its website and its sample people. It
-      # must stay on this service and be on no other: every other campaign is
-      # STARBASE_BRAND=base. A brand a manager saves in Settings → Brand
-      # still wins for the look.
-      - key: STARBASE_BRAND
-        value: imagine-surrey
-      - key: STARBASE_ORG_NAME
-        value: Imagine Surrey
-      - key: STARBASE_JURISDICTION
-        value: bc-municipal
-      - key: STARBASE_TZ
-        value: America/Vancouver
-      - key: STARBASE_CITY
-        value: Surrey
-      - key: STARBASE_SLATES
-        value: "council:City council,school_board:School board"
+      # The client. This setting, imagine-surrey in Render, turns on Imagine
+      # Surrey's own set-up (server/presets/imagine-surrey): its look, its
+      # opponents and city, its profile fields, its membership, its website and
+      # its sample people. It must stay on this service and be on no other:
+      # every other campaign is STARBASE_BRAND=base. A brand a manager saves in
+      # Settings → Brand still wins for the look.
+      # These are the client's own settings, so each is sync: false: set once
+      # in Render on this service and kept there, never written over by a
+      # Blueprint sync (GOING-LIVE.md section 0). Until 26 Nov 2026 this file
+      # gave them as fixed values; each line names the value it gave.
+      - key: STARBASE_BRAND          # imagine-surrey
+        sync: false
+      - key: STARBASE_ORG_NAME       # Imagine Surrey
+        sync: false
+      - key: STARBASE_JURISDICTION   # bc-municipal
+        sync: false
+      - key: STARBASE_TZ             # America/Vancouver
+        sync: false
+      - key: STARBASE_CITY           # Surrey
+        sync: false
+      - key: STARBASE_SLATES         # council:City council,school_board:School board
+        sync: false
       - key: STARBASE_PUBLIC_URL     # the public address: https://imaginesurrey.base.win
         sync: false
       - key: RESEND_API_KEY
