@@ -15,21 +15,22 @@ to it.
 | **Staging** | `base-win-staging` | `main` | `base-win-staging-db` | `https://staging.base.win` | the sample campaign and the public demo; it says *Staging* on every screen |
 | **Production**, one service per client | Imagine Surrey: `base-win` | `production` | `base-win-db` | `https://imaginesurrey.base.win` | the campaign's own desk, field app and website |
 | | a new client: `base-win-<name>` | `production` | `base-win-<name>-db` | `https://<name>.base.win` | the same, for that client alone (section 6) |
-| **Admin**, the control centre | `base-platform` | `main` | `base-platform-db` | `https://ops.base.win` | every campaign on one page, for base.win support (section 8) |
+| **Admin**, the control centre | `base-platform` | `production` | `base-platform-db` | `https://ops.base.win` | every campaign on one page, for base.win support (section 8) |
 | The front page | a static site, set up by hand in Render (it is not in `render.yaml`) | `main` | none | `https://base.win` | the page `apps/front/index.html`; it frames staging's demo |
 
 Each address is a custom domain on its service (section 2). A service also
 keeps the address Render gave it, ending in `.onrender.com`.
 
 **How code moves.** Every merge to `main` deploys staging by itself. The
-control centre and the front page deploy from `main` too. To move it on:
+front page deploys from `main` too. The control centre deploys from
+`production`, with the clients. To move it on:
 GitHub → **Actions** → *Promote to production* → **Run workflow**. It
 fast-forwards the `production` branch to what `main` is now (or to a commit
 you name), refuses while CI is red on that commit, and never rewrites
 production.
-Every client's production deploys from that branch, so one promote updates
-every client. Only code moves this way, never data: each database stays
-where it is.
+Every client's production and the control centre deploy from that branch,
+so one promote updates every client and ops.base.win together. Only code
+moves this way, never data: each database stays where it is.
 
 **Before a promote, check Imagine Surrey's brand line.** Render →
 `base-win` → **Environment** must show `STARBASE_BRAND=imagine-surrey`.
@@ -162,7 +163,7 @@ fixed value, which a Blueprint sync would write over
    comes first. If none is listed, the services were made by hand, and the
    change is made by hand in Render too. `render.yaml` holds
    `base-win-staging` (from `main`), `base-win` (from `production`) and
-   `base-platform` (from `main`), each with its own database.
+   `base-platform` (from `production`), each with its own database.
 2. Wait for the deploy, then open the service's health page:
    `https://staging.base.win/api/health` or
    `https://imaginesurrey.base.win/api/health`. Staging's answer includes
@@ -922,7 +923,7 @@ The control centre is not set up until these are done, in this order:
      1. Render → **New → Postgres**: name `base-platform-db`, region
         Oregon, PostgreSQL 16, the Basic-256mb plan (as `render.yaml` says).
      2. Render → **New → Web Service** → this repository: name
-        `base-platform`, language Node, branch `main`, region Oregon,
+        `base-platform`, language Node, branch `production`, region Oregon,
         instance Starter. Build command `npm ci --omit=dev
         --ignore-scripts`, start command `node apps/platform/server.mjs`,
         health check path `/healthz`.

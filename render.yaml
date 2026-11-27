@@ -231,18 +231,17 @@ services:
   # changes there, each behind a code typed for it and on the log. It keeps no
   # setting's value, reads no secret and never connects to a campaign's
   # database. Without the key it walks you through Render by hand, as before.
-  # Branch: main until production has been promoted past the control centre's
-  # release; then production, so the control centre goes through Promote like
-  # everything else. Change it here, in this file, right after that Promote
-  # (never before): a Blueprint sync writes this branch over one changed only
-  # in Render. Set the key only once both say production (GOING-LIVE.md
-  # section 8, "Before the key").
+  # Branch: production, like every client, so the control centre changes only
+  # when Promote runs. (It was main until production held the control centre's
+  # release.) A Blueprint sync writes this branch over one changed only in
+  # Render, so it is changed here. Set the key only once Render says
+  # production too (GOING-LIVE.md section 8, "Before the key").
   - type: web
     name: base-platform
     runtime: node
     plan: starter
     region: oregon
-    branch: main                  # see the note above: production, once production holds the control centre's release
+    branch: production            # see the note above: it goes out with Promote, like every client
     buildCommand: npm ci --omit=dev --ignore-scripts   # no package's install script runs beside the Render key
     startCommand: node apps/platform/server.mjs
     healthCheckPath: /healthz

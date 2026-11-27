@@ -1819,7 +1819,8 @@ Three environments (GOING-LIVE.md, section 0): one shared **staging**
 **production** (`https://<client>.base.win`) deploys the `production`
 branch, which the *Promote to production* workflow (GitHub → Actions)
 fast-forwards to `main` once CI is green there; and the control centre
-(`https://ops.base.win`). `render.yaml` holds staging, Imagine Surrey's
+(`https://ops.base.win`), which deploys `production` too, so one promote
+updates every client and the control centre together. `render.yaml` holds staging, Imagine Surrey's
 production and the control centre; another client is one more production
 service and database with its own names and values (GOING-LIVE.md, *A new
 client*).
