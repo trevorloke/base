@@ -251,7 +251,8 @@ test('the turf index: a turf rebuilds alone, a person’s pin moves them, and a 
   // between turns of a setImmediate ticker. In these tests the database runs
   // in this same thread (PGlite), so a query's own time blocks the loop here
   // as it never does over Postgres's wire: that time is taken out of each
-  // gap, leaving the build's own work.
+  // gap, leaving the build's own work. The last tick() in finally counts
+  // the stretch after the build's last yield too.
   const q0 = db.query;
   let busy = 0, since = 0, inQueries = 0;
   const queryTime = () => inQueries + (busy ? performance.now() - since : 0);
@@ -268,7 +269,7 @@ test('the turf index: a turf rebuilds alone, a person’s pin moves them, and a 
   };
   setImmediate(tick);
   let built;
-  try { built = await rebuild(db, k.ws); } finally { on = false; db.query = q0; }
+  try { built = await rebuild(db, k.ws); } finally { on = false; tick(); db.query = q0; }
   assert.ok(built.turfs.get(big).ids.size > 5000);
   assert.ok(turns > 2, `the ticker ran between the build's steps (${turns} turns)`);
   assert.ok(longest < 250, `the build held the event loop ${longest.toFixed(0)} ms at a stretch`);
