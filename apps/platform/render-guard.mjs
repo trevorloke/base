@@ -8,7 +8,7 @@
 // changed (the one exception is base.win's own public key).
 import { publicHost } from './campaigns.mjs';
 import { pubkeyValue } from './keys.mjs';
-import { hasValues } from './snippets.mjs';
+import { hasValues, serviceSettings, JURISDICTIONS, PROVINCES, TIME_ZONES } from './snippets.mjs';
 
 // Settings the control centre may ask Render about, one at a time, and only
 // "is it set?": the value is dropped inside render-api.mjs. None is a secret.
@@ -17,6 +17,11 @@ export const READABLE = ['NODE_ENV', 'STARBASE_ENV', 'STARBASE_PUBLIC_URL', 'STA
 // Settings the control centre may set, and only to a value it works out
 // itself. Today that is base.win's public key and nothing else.
 export const WRITABLE = ['BASE_PLATFORM_PUBKEY'];
+// Stage 2, once Check Render’s answers has opened it: on a campaign made
+// with New campaign, a missing setting may also be added, to the value
+// worked out from that campaign's own row (the same as its .env block).
+export const WRITABLE_MADE = ['BASE_PLATFORM_PUBKEY', 'STARBASE_PUBLIC_URL', 'STARBASE_BRAND', 'STARBASE_ORG_NAME', 'STARBASE_CITY', 'STARBASE_JURISDICTION',
+  'STARBASE_PROVINCE', 'STARBASE_TZ', 'STARBASE_SLATES', 'STARBASE_GEO_BOUNDS', 'STARBASE_CANDIDATES'];
 // Every campaign service has this one, so it tells whether Render lets one
 // setting be read alone: if Render says it isn't set, nothing was read.
 export const CANARY = 'STARBASE_ENV';
@@ -29,16 +34,66 @@ export const neededFor = (campaign) => {
   if (!hasValues(campaign.values)) return [...READABLE.slice(0, 9), 'BASE_PLATFORM_PUBKEY'];
   return [...READABLE];
 };
-export const writableFor = () => [...WRITABLE];
+// A campaign made with New campaign: a client with every value kept here.
+// Never the sample, never a campaign added as already running.
+export const madeHere = (campaign) => campaign?.kind === 'client' && hasValues(campaign.values);
+export const writableFor = (campaign, { stage2 = false } = {}) => (stage2 && madeHere(campaign) ? [...WRITABLE_MADE] : [...WRITABLE]);
 
 const PUBKEY_VALUE_RE = /^[A-Za-z0-9_-]{43}(,[A-Za-z0-9_-]{43})*$/;
-// The value a setting gets, worked out here from base.win's own key. Null
-// when the setting may not be written or there is no usable key. No caller
-// ever hands a value in.
-export const valueFor = (campaign, key) => {
-  if (!writableFor(campaign).includes(key)) return null;
-  const value = pubkeyValue();
-  return PUBKEY_VALUE_RE.test(value) ? value : null;
+// One line of words: 1 to 120 characters, no control characters.
+const plain = (v) => typeof v === 'string' && v.length >= 1 && v.length <= 120 && !/[\u0000-\u001f\u007f]/.test(v);
+const NUM = '-?\\d{1,3}(?:\\.\\d{1,6})?';
+// What each value must look like, whatever the campaign's row says.
+const SHAPE_OK = {
+  BASE_PLATFORM_PUBKEY: (v) => PUBKEY_VALUE_RE.test(v),
+  STARBASE_PUBLIC_URL: (v, c) => v === `https://${publicHost(c.name)}`,
+  STARBASE_BRAND: (v) => v === 'base',
+  STARBASE_ORG_NAME: plain,
+  STARBASE_CITY: plain,
+  STARBASE_JURISDICTION: (v) => JURISDICTIONS.includes(v),
+  STARBASE_PROVINCE: (v) => PROVINCES.some((p) => p[0] === v),
+  STARBASE_TZ: (v) => TIME_ZONES.includes(v),
+  STARBASE_SLATES: (v) => /^[a-z_]{1,30}:[^,:\u0000-\u001f]{1,60}(,[a-z_]{1,30}:[^,:\u0000-\u001f]{1,60}){0,9}$/.test(v),
+  STARBASE_GEO_BOUNDS: (v) => new RegExp(`^${NUM},${NUM}\\|${NUM},${NUM}$`).test(v),
+  STARBASE_CANDIDATES: (v) => v === 'none',
+  NODE_ENV: (v) => v === 'production',
+  STARBASE_ENV: (v) => v === 'production',
+};
+// The settings a campaign made here is given, from its own row only, each
+// checked against its shape: [{ key, value } | { key, generateValue }].
+// Null when there is nothing to make them from or any value is off.
+export const settingsFor = (campaign) => {
+  if (!madeHere(campaign)) return null;
+  const list = serviceSettings({ name: campaign.name, display: campaign.display, values: campaign.values, publicKey: pubkeyValue() });
+  for (const e of list) {
+    if (e.generateValue) { if (!['STARBASE_TWO_STEP_KEY', 'GOOGLE_TOKEN_KEY'].includes(e.key)) return null; continue; }
+    if (!SHAPE_OK[e.key]?.(e.value, campaign)) return null;
+  }
+  return list;
+};
+// The value a setting gets, worked out here: base.win's own key, or (stage
+// 2, a campaign made here) the campaign's own value. Null when the setting
+// may not be written or its value is off. No caller ever hands a value in.
+export const valueFor = (campaign, key, { stage2 = false } = {}) => {
+  if (!writableFor(campaign, { stage2 }).includes(key)) return null;
+  if (key === 'BASE_PLATFORM_PUBKEY') {
+    const value = pubkeyValue();
+    return PUBKEY_VALUE_RE.test(value) ? value : null;
+  }
+  const line = settingsFor(campaign)?.find((e) => e.key === key);
+  return line && !line.generateValue ? line.value : null;
+};
+
+// ── Making (stage 2): the names a new campaign's service and database get ──
+export const makeNames = (name) => ({ service: `base-win-${name}`, database: `base-win-${name}-db` });
+const PROTECTED = ['base-win', 'base-win-db', 'base-win-staging', 'base-win-staging-db', 'base-platform', 'base-platform-db'];
+// Why a short name can't be made in Render, or null.
+export const makeRefusal = (name) => {
+  const n = makeNames(name);
+  const then = 'Make it by hand (More), or start again with another short name.';
+  if (name === 'db' || name.endsWith('-db')) return `The short name ${name} can’t be made in Render: ${n.service} would look like a database’s name. ${then}`;
+  if (PROTECTED.includes(n.service) || PROTECTED.includes(n.database)) return `The short name ${name} can’t be made in Render: ${n.service} is kept for base.win. ${then}`;
+  return null;
 };
 
 // Names nothing here may ever target: the control centre itself.
@@ -79,7 +134,9 @@ export const REFUSALS = {
 //   health            the newest check of the saved Render address (or null)
 //   self              render-api's self(): this service's own workspace and repository
 //   svc, db           render-api's reduced answers
-export const guard = ({ campaign, envRow, health = null, self, svc, db, ownId, phase = 'use' }) => {
+//   made              stage 2: the service was made here by this campaign's own
+//                     make job and hasn't answered yet (no pin to check)
+export const guard = ({ campaign, envRow, health = null, self, svc, db, ownId, phase = 'use', made = false }) => {
   const later = (code) => (phase === 'use' ? 'changed' : code);
   if (!svc || !self) return 'unread';
   // 1. Not ourselves.
@@ -94,7 +151,7 @@ export const guard = ({ campaign, envRow, health = null, self, svc, db, ownId, p
   }
   // 4. This campaign's server.
   if (!envRow?.server_url || !svc.url || svc.url !== envRow.server_url) return later('address');
-  if (!envRow.instance) return 'unpinned';
+  if (!envRow.instance && !made) return 'unpinned';
   if (health?.answering && (health.own_origin !== envRow.server_url || health.env_reported !== envRow.env)) return 'elsewhere';
   // 5. The right kind.
   if (campaign.kind === 'sample') {

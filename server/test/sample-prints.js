@@ -16,7 +16,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 
-export const SAMPLE_PRINT = { version: 2, print: '1613bfca58363d1d2fe694a53531c43bae83ec0580f65a7001f2b64598c00503' };
+export const SAMPLE_PRINT = { version: 3, print: '197a8a280be6dfac93428ae75965cf4ad115bce25ffa8bb95071a8223561bf03' };
 
 export const STARTING_FIELDS = [
   'House notes', 'Building notes', 'Access type', 'Dwelling type', 'Email opt-in', 'SMS opt-in',

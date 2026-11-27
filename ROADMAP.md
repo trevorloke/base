@@ -54,6 +54,13 @@ BC campaign will need in 2030.
     donor tiers and next year's lapsed list are whole. The financial
     agent's filing dates are typed in and counted down. A person carries
     the list of electors' voter number.
+11. **A group calendar.** Built: one Calendar page in both apps, where each
+    person sees what is on it for them — their shifts, the website's
+    events, the voting days, the filing dates for the money desk, and what
+    managers add for everyone, for candidates, for one candidate, for
+    managers or for a team. Each entry links straight to Google Calendar,
+    and each person's own calendar link keeps all of it in their calendar
+    (README, *Calendars*).
 
 ## Next (in order)
 
@@ -84,12 +91,6 @@ BC campaign will need in 2030.
 - **Events and attendance.** Supporter-hosted events, QR check-in, calendar
   invites with the reminders (the reminder the evening before a shift goes
   out today), attendance feeding ladders.
-- **A group calendar.** One calendar for the campaign, where each person
-  sees what is on it for them, by role: a candidate sees their call time
-  and their own events; a volunteer sees their shifts and the events open
-  to them. Each item has a direct link to add it to Google Calendar. Not built
-  yet: today each person's own shifts go to their calendar (README,
-  *Calendars*).
 - **Between elections.** Write-to-council letters and batched petition
   deliveries; election cycles (2026 ratings carried into 2030 filters).
 - **Supporter portal.** My actions, my referrals, renew my membership.

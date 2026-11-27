@@ -3,9 +3,8 @@
 // every name comes from lib/samplecast.js, where each was made up for it;
 // the emails are example.org, the phones are in the 555-01xx range kept for
 // fiction, and the house numbers (9900-9999) exist on none of these
-// streets. Each pin is in the roadway once its street's piece of
-// centreline is in samplecast.js (SEGMENTS); until then, in the
-// neighbourhood's box.
+// streets. Each pin is in the roadway, on its street's piece of
+// centreline (samplecast.js SEGMENTS).
 //   STARBASE_SAMPLE=vancouver   make it when the database holds no
 //                               campaign, and make it again by itself when
 //                               a release carries a newer SAMPLE_VERSION:
@@ -53,7 +52,7 @@ const resetWord = () => (sampleWanted() ? String(process.env.STARBASE_SAMPLE_RES
 // again by itself). The first sample, before this
 // number, counts as 0. The next release that starts on staging drops the
 // old sample and makes this one, once (G1 to G6 above).
-export const SAMPLE_VERSION = 2;
+export const SAMPLE_VERSION = 3;
 // A make still under way after this long has died (the process stopped).
 const MAKING_MINUTES = 10;
 
@@ -78,8 +77,8 @@ const seedOf = (text) => {
 // Where a house's dot goes: (number - 9900) / 100 of the way along its
 // street's piece of centreline (samplecast.js SEGMENTS), so it is in the
 // roadway, numbers rise along the street, and one address is one dot.
-// A street with no piece yet: a point in the neighbourhood's box that
-// depends only on the address.
+// A street with no piece (none today): a point in the neighbourhood's box
+// that depends only on the address.
 export const pinFor = (area, number, street) => {
   const seg = SEGMENTS[street];
   if (seg) {

@@ -23,7 +23,8 @@
 //   GET /cal/<43>.ics   no cookie: their shifts (no instructions, no
 //       Details link — the link lives in another company's calendar and may
 //       be forwarded), the voting days, and for money roles the filing
-//       dates. Who they are and what they may see is read again on every
+//       dates, and the group calendar's public events and items for them
+//       (ext/groupcal). Who they are and what they may see is read again on every
 //       fetch; a stopped link or a member no longer on the campaign answers
 //       an empty calendar, so their app clears what it had.
 // Nothing here is on a website's domain (not in the site's SHARED list).
@@ -44,6 +45,7 @@ import { decide, permsOf } from '../../lib/perms.js';
 import { loginEmail } from '../../lib/viewer.js';
 import { filingDays, isDesk, myShifts, seesMoney, votingDays } from './content.js';
 import { keepFile, readFile } from './tickets.js';
+import { linkExtras } from '../groupcal/group.js';
 
 export { sql } from './sql.js';
 
@@ -251,9 +253,9 @@ publicRoutes.get('/cal/:file{[A-Za-z0-9_-]{43}\\.ics}', async (c) => {
   if (perLink(token)) return c.text('Too many requests — try again later.', 429, NOT_FOUND);
   const db = await getDb();
   const f = (await db.query(
-    `select f.workspace_id, f.stopped_at, u.email, w.name, w.settings, m.role, m.permissions,
-            exists (select 1 from candidates c where c.workspace_id = f.workspace_id and c.user_id = f.user_id
-                      and c.removed_at is null and m.role = 'volunteer') as candidate
+    `select f.workspace_id, f.user_id, f.stopped_at, u.email, w.name, w.settings, m.role, m.permissions,
+            (select c.id from candidates c where c.workspace_id = f.workspace_id and c.user_id = f.user_id
+               and c.removed_at is null and m.role = 'volunteer' limit 1) as candidate_id
        from calendar_feeds f join users u on u.id = f.user_id join workspaces w on w.id = f.workspace_id
        left join memberships m on m.workspace_id = f.workspace_id and m.user_id = f.user_id
       where f.token = $1`,
@@ -267,7 +269,7 @@ publicRoutes.get('/cal/:file{[A-Za-z0-9_-]{43}\\.ics}', async (c) => {
   const settings = parseJ(f.settings, {}) || {};
   // A candidate's grants and denies are the Candidates row's, as when they
   // sign in (lib/auth.js loadContext).
-  const perms = permsOf(f.candidate ? 'candidate' : f.role, settings, parseJ(f.permissions, {}) || {});
+  const perms = permsOf(f.candidate_id ? 'candidate' : f.role, settings, parseJ(f.permissions, {}) || {});
   const tz = tzOf(settings);
   const publicUrl = (configuredUrl() || `${new URL(c.req.url).origin}${c.env?.base || ''}`).replace(/\/$/, '');
   const events = [];
@@ -282,6 +284,12 @@ publicRoutes.get('/cal/:file{[A-Za-z0-9_-]{43}\\.ics}', async (c) => {
   }
   events.push(...await votingDays(db, f.workspace_id, f.name));
   if (seesMoney(f.role, perms)) events.push(...await filingDays(db, f.workspace_id));
+  // The group calendar's (ext/groupcal): the website's public events and the
+  // items for this person, by the page's own rule.
+  events.push(...await linkExtras(db, {
+    workspaceId: f.workspace_id, userId: f.user_id, role: f.role, perms, candidateId: f.candidate_id || null,
+    email: f.email, tz, name: f.name, publicUrl,
+  }, new Set(events.map((e) => e.uid))));
   return send(events);
 });
 

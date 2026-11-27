@@ -13,6 +13,7 @@
 //       through any link of theirs, all time.
 import { Hono } from 'hono';
 import { here } from '../../lib/mount.js';
+import { siteDomain } from '../site/domain.js';
 import { azKey } from '../../lib/az.js';
 import { selfPerson } from '../relationships/match.js';
 import { authLine, kitOut, kitPage, kitText } from './share.js';
@@ -24,9 +25,12 @@ const SHARE_MAX = 20;
 const TOP_MAX = 10;
 const parseJ = (v, d) => (typeof v === 'string' ? JSON.parse(v) : (v ?? d));
 
-// Where a shared link starts: the campaign's own domain, else the app's
-// /site address (the public address when the app runs under a client's path).
+// Where a shared link starts: the website's own domain (STARBASE_SITE_DOMAIN),
+// else the campaign's first saved domain, else the app's /site address (the
+// public address when the app runs under a client's path).
 export const baseOf = (c, domains) => {
+  const own = siteDomain();
+  if (own) return `https://${own}`;
   const d = Array.isArray(domains) ? String(domains[0] || '').trim().toLowerCase() : '';
   if (d) return `https://${d}`;
   const url = new URL(c.req.url);

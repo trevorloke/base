@@ -17,6 +17,15 @@
 //     treasurer's filing countdown;
 //   · the website: after a sign-up, Google · Outlook · Apple & others; the
 //     Events list's "Get our events in your calendar" serves events.ics;
+//   · the group calendar: a manager adds an item on the Calendar page (the
+//     campaign's clock; its Google link in UTC), sees every item and who it
+//     is for, edits it, adds one from 8 pm to 1 am ("Ends the next day",
+//     listed on its first day), changes an item for a team since deleted
+//     (it says "(removed)" and keeps it), shows every shift; the volunteer
+//     on her phone sees the item for everyone, her team's and her shift —
+//     not the candidates' or the managers' — each with Add to Google
+//     Calendar, and her calendar
+//     link carries the same; Calendar rows on both Todays;
 //   · words (no feed, iCal, ICS, token, webcal, subscribe), at most one
 //     yellow button, no sideways scroll at 390, 48px targets on phones.
 //
@@ -430,6 +439,144 @@ try {
   check('no JavaScript: the page-level line is on screen', await np.locator('.rsvp-done--page').first().isVisible(), String(await np.locator('.rsvp-done--page').count()));
   await shot(np, '17-website-no-js-signed-up-390');
   await plain.close();
+
+  // ── 8. The group calendar: a manager adds items and says who sees them ──
+  // The items go on the day of the shift above (its own day on the campaign's
+  // clock), so the month shown is that day's.
+  const gDay = ymd(day);
+  const gMonth = gDay.slice(0, 7);
+  const gNext = ymd(new Date(new Date(`${gDay}T12:00:00Z`).getTime() + 864e5)).replace(/-/g, '');
+  const anaId = (await vapi('/auth/me')).json?.user?.id;
+  const team = (await api('/actions/team.create', { name: 'Phone crew' })).json?.team;
+  check('a team with the volunteer on it', team?.id && (await api('/actions/team.member.add', { team_id: team.id, user_id: anaId })).status === 200);
+  const addItem = (input) => api('/actions/calendar.item.add', { all_day: false, day: gDay, ...input });
+  check('items for the team, for candidates and for managers (by the desk’s own action)',
+    (await addItem({ title: 'Phone crew huddle', start: '17:00', end: '17:30', who: `team:${team.id}` })).status === 200
+    && (await addItem({ title: 'Candidates’ photo day', start: '10:00', end: '12:00', who: 'candidates' })).status === 200
+    && (await addItem({ title: 'Budget check-in', start: '12:30', end: '13:00', who: 'managers' })).status === 200);
+  await page.goto(`${ADMIN}/calendar?month=${gMonth}`, { waitUntil: 'domcontentloaded' });
+  const addBtn = page.getByRole('button', { name: 'Add to the calendar' });
+  await addBtn.waitFor({ timeout: 10000 });
+  await addBtn.click();
+  const gForm = page.getByRole('form', { name: 'Add to the calendar' });
+  await gForm.getByLabel('What').fill('Phone bank kickoff');
+  await gForm.getByLabel('Day', { exact: true }).fill(gDay);
+  await gForm.getByLabel('Starts').fill('18:30');
+  await gForm.getByLabel('Ends').fill('20:00');
+  await gForm.getByLabel('Where (optional)').fill('Campaign office');
+  check('the form says whose clock the times are on', (await words(gForm)).includes('Times are the campaign’s (America/Vancouver).'));
+  check('who sees it: everyone, all candidates, managers and the team', JSON.stringify(await gForm.getByLabel('Who sees it').locator('option').allInnerTexts())
+    === JSON.stringify(['Everyone', 'All candidates', 'Managers', 'Phone crew']));
+  await shot(page, '18-group-calendar-form-1440');
+  await gForm.getByRole('button', { name: 'Add', exact: true }).click();
+  const kickoff = page.locator('.gc-entry', { hasText: 'Phone bank kickoff' });
+  await kickoff.waitFor({ timeout: 10000 });
+  check('added: “Added”, on its day, 6:30–8 pm, with its place', (await words(page.locator('.cal-said'))) === 'Added'
+    && (await words(kickoff)).includes('6:30–8 pm') && (await words(kickoff)).includes('Campaign office'), await words(kickoff));
+  const kGoogle = await kickoff.getByRole('link', { name: 'Add to Google Calendar' }).getAttribute('href');
+  check('Add to Google Calendar: Google with the item filled in, 6:30 pm in Surrey as UTC', kGoogle.startsWith('https://calendar.google.com/calendar/render?action=TEMPLATE&text=Phone%20bank%20kickoff')
+    && kGoogle.includes(`dates=${gNext}T013000Z/${gNext}T030000Z`) && await kickoff.getByRole('link', { name: 'Add to Google Calendar' }).getAttribute('target') === '_blank', kGoogle);
+  const deskAll = await words(page.locator('.gc-page'));
+  check('the manager sees every item and who it is for', ['Phone crew huddle', 'For Phone crew', 'Candidates’ photo day', 'For Candidates', 'Budget check-in', 'For Managers'].every((w) => deskAll.includes(w)), deskAll.slice(0, 400));
+  await kickoff.getByRole('button', { name: 'Edit' }).click();
+  const edit = page.getByRole('form', { name: 'Change this item' });
+  check('Edit opens the item as it was', await edit.getByLabel('Starts').inputValue() === '18:30' && await edit.getByLabel('What').inputValue() === 'Phone bank kickoff');
+  await edit.getByLabel('What').fill('Phone bank kickoff night');
+  await edit.getByRole('button', { name: 'Save' }).click();
+  await page.locator('.gc-entry', { hasText: 'Phone bank kickoff night' }).waitFor({ timeout: 10000 });
+  check('saved under its new name', (await words(page.locator('.cal-said'))) === 'Saved');
+  // An evening past midnight: 8 pm to 1 am, on the day it starts.
+  await addBtn.click();
+  const nForm = page.getByRole('form', { name: 'Add to the calendar' });
+  await nForm.getByLabel('What').fill('Election night watch');
+  await nForm.getByLabel('Day', { exact: true }).fill(gDay);
+  await nForm.getByLabel('Starts').fill('20:00');
+  check('no “next day” while the end is after the start', await nForm.locator('.gc-next-day').count() === 0);
+  await nForm.getByLabel('Ends').fill('01:00');
+  check('an end earlier than the start: “Ends the next day.”', (await words(nForm.locator('.gc-next-day'))) === 'Ends the next day.');
+  await shot(page, '18b-group-calendar-past-midnight-1440');
+  await nForm.getByRole('button', { name: 'Add', exact: true }).click();
+  const night = page.locator('.gc-entry', { hasText: 'Election night watch' });
+  await night.waitFor({ timeout: 10000 });
+  const dayOfEntry = (loc) => loc.locator('xpath=ancestor::section[1]').getAttribute('aria-label');
+  check('past midnight: added, “8 pm–1 am next day”, under the day it starts', (await words(page.locator('.cal-said'))) === 'Added'
+    && (await words(night)).includes('8 pm–1 am next day') && await dayOfEntry(night) === await dayOfEntry(kickoff), await words(night));
+  const datesOf = (href) => new URL(href).searchParams.get('dates').split('/').map((x) => Date.parse(x.replace(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/, '$1-$2-$3T$4:$5:$6Z')));
+  const [nFrom, nTo] = datesOf(await night.getByRole('link', { name: 'Add to Google Calendar' }).getAttribute('href'));
+  const [kFrom] = datesOf(kGoogle);
+  check('past midnight: its Google link runs five hours, from 8 pm', nFrom - kFrom === 1.5 * 3600e3 && nTo - nFrom === 5 * 3600e3, `${nFrom} ${nTo} ${kFrom}`);
+  await night.getByRole('button', { name: 'Edit' }).click();
+  const nEdit = page.getByRole('form', { name: 'Change this item' });
+  check('Edit: still “Ends the next day.”', await nEdit.getByLabel('Ends').inputValue() === '01:00' && (await words(nEdit.locator('.gc-next-day'))) === 'Ends the next day.');
+  await nEdit.getByRole('button', { name: 'Cancel' }).click();
+  // An item for a team since deleted: it says so, and Edit keeps it.
+  const oldTeam = (await api('/actions/team.create', { name: 'Old crew' })).json?.team;
+  check('an item for a team, then the team deleted', oldTeam?.id
+    && (await addItem({ title: 'Old crew drive', start: '09:00', end: '10:00', who: `team:${oldTeam.id}` })).status === 200
+    && (await api('/actions/team.delete', { id: oldTeam.id })).status === 200);
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  const oldItem = page.locator('.gc-entry', { hasText: 'Old crew drive' });
+  await oldItem.waitFor({ timeout: 10000 });
+  check('the item says its team was removed', (await words(oldItem)).includes('For Old crew (removed)'), await words(oldItem));
+  await oldItem.getByRole('button', { name: 'Edit' }).click();
+  const oEdit = page.getByRole('form', { name: 'Change this item' });
+  const oWho = oEdit.getByLabel('Who sees it');
+  check('Edit shows who it is for: the removed team', await oWho.inputValue() === `team:${oldTeam.id}`
+    && (await oWho.locator('option:checked').innerText()) === 'Old crew (removed)', await oWho.inputValue());
+  await oEdit.getByLabel('Starts').fill('09:30');
+  await oEdit.getByRole('button', { name: 'Save' }).click();
+  await page.locator('.gc-entry', { hasText: 'Old crew drive' }).filter({ hasText: '9:30' }).waitFor({ timeout: 10000 });
+  check('saved with a new time, still for the removed team', (await words(page.locator('.cal-said'))) === 'Saved'
+    && (await words(page.locator('.gc-entry', { hasText: 'Old crew drive' }))).includes('For Old crew (removed)'));
+  const every = page.getByLabel('Every shift');
+  check('the desk can show every shift', await every.count() === 1);
+  await every.check();
+  await page.waitForURL(/every=1/, { timeout: 5000 });
+  await page.locator('.gc-entry', { hasText: 'Morning wave at King George' }).waitFor({ timeout: 10000 });
+  check('every shift: the shift board’s shift is on the calendar', (await words(page.locator('.gc-entry', { hasText: 'Morning wave at King George' }))).includes('Shift'));
+  await every.uncheck();
+  m = await measure(page, '.gc-page .btn');
+  check('group calendar, desk 1440: one yellow button at most, no sideways scroll', m.yellow <= 1 && m.overflow <= 0, JSON.stringify(m));
+  await shot(page, '19-group-calendar-desk-1440');
+  const deskBanned = (await words(page.locator('.gc-page'))).match(BANNED);
+  check('group calendar, desk: no feed, iCal, ICS, token, webcal, subscribe', !deskBanned, deskBanned?.[0]);
+  await page.goto(`${ADMIN}/`, { waitUntil: 'domcontentloaded' });
+  const deskRow = page.locator('.today-section a.today-row[href$="/calendar"]');
+  await deskRow.waitFor({ timeout: 10000 });
+  check('desk Today: Calendar under Coming up', (await words(deskRow.locator('.today-row__main'))) === 'Calendar', await words(deskRow));
+
+  // The volunteer on her phone: her shift, the event, her team's item; not the candidates' or the managers'.
+  await vp.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
+  const vRow = vp.locator('a.today-row[href="/calendar"]');
+  await vRow.waitFor({ timeout: 10000 });
+  check('volunteer Today: a Calendar row', (await words(vRow.locator('.today-row__main'))) === 'Calendar', await words(vRow));
+  await vp.goto(`${BASE}/calendar?month=${gMonth}`, { waitUntil: 'domcontentloaded' });
+  await vp.locator('.gc-entry', { hasText: 'Phone bank kickoff night' }).waitFor({ timeout: 10000 });
+  const vAll = await words(vp.locator('.gc-page'));
+  check('volunteer: the item for everyone, her team’s, her own shift', vAll.includes('Phone bank kickoff night') && vAll.includes('Phone crew huddle')
+    && (await words(vp.locator('.gc-entry', { hasText: 'Morning wave at King George' }))).includes('Your shift'), vAll.slice(0, 400));
+  check('volunteer: not the candidates’ or the managers’ items', !vAll.includes('Candidates’ photo day') && !vAll.includes('Budget check-in'));
+  check('volunteer: nothing to add, change or remove', await vp.getByRole('button', { name: 'Add to the calendar' }).count() === 0
+    && await vp.getByRole('button', { name: 'Edit' }).count() === 0 && await vp.getByRole('button', { name: 'Remove' }).count() === 0
+    && await vp.getByLabel('Every shift').count() === 0);
+  const vg2 = await vp.locator('.gc-entry', { hasText: 'Phone crew huddle' }).getByRole('link', { name: 'Add to Google Calendar' }).getAttribute('href');
+  check('volunteer: each item has its Google link', vg2.startsWith('https://calendar.google.com/calendar/render?action=TEMPLATE&text=Phone%20crew%20huddle'), vg2);
+  m = await measure(vp, '.gc-page .btn');
+  check('group calendar, volunteer 390: one yellow button at most, no sideways scroll, 48px buttons', m.yellow <= 1 && m.overflow <= 0 && m.minTap >= 48, JSON.stringify(m));
+  const vBanned = vAll.match(BANNED);
+  check('group calendar, volunteer: no feed, iCal, ICS, token, webcal, subscribe', !vBanned, vBanned?.[0]);
+  await shot(vp, '20-group-calendar-volunteer-390');
+  // Her own calendar link from here: what she may see, and nobody else's.
+  const own = vp.locator('#calendar');
+  await own.scrollIntoViewIfNeeded();
+  // She kept the link she made on Your profile: the same link, here.
+  check('her calendar link, here under the calendar’s own heading', (await words(own)).startsWith('In your own calendar')
+    && await own.getByRole('button', { name: 'Copy link' }).count() === 1, await words(own));
+  const gFeed = await fetchIcs((await vapi('/calendar/feed')).json?.feed?.url);
+  check('her calendar link: the item for everyone and her team’s, not the candidates’ or the managers’', gFeed.status === 200
+    && gFeed.body.includes('SUMMARY:Phone bank kickoff night') && gFeed.body.includes('SUMMARY:Phone crew huddle')
+    && !gFeed.body.includes('photo day') && !gFeed.body.includes('Budget check-in') && !gFeed.body.includes('Door code'), gFeed.body.slice(0, 300));
+  await shot(vp, '21-group-calendar-link-390');
 
   check('no page errors', errors.length === 0, errors.join(' | '));
 } catch (e) {

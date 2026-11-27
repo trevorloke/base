@@ -23,6 +23,10 @@
 // the Imagine Surrey home page against imaginesurrey.ca's design (navy hero,
 // red Donate, Montserrat, the red heading shadow, yellow band, deep-navy
 // footer). Screenshots of both skins, desktop and phone, go to SHOTS.
+// Last, the site as its own domain gets it (STARBASE_SITE_DOMAIN): the
+// browser reaches campaign.example at this machine, so the request carries
+// that Host, and the page is drawn at the domain's root with the domain as
+// its address — canonical, og:url, og:image, links and forms on it.
 //
 //   cd web && npm run build && cd ..
 //   PORT=5150 SHOTS=/tmp/site-render node e2e-site-render.mjs
@@ -42,6 +46,9 @@ if (process.env.STARBASE_BRAND === undefined) process.env.STARBASE_BRAND = 'imag
 const PORT = Number(process.env.PORT) || 5150;
 const SHOTS = process.env.SHOTS || '/tmp/site-render';
 const ORIGIN = `http://127.0.0.1:${PORT}`;
+// The website's own domain, reached by its Host header (the browser maps it here).
+const DOMAIN = 'campaign.example';
+const DOMAIN_ORIGIN = `http://${DOMAIN}:${PORT}`;
 mkdirSync(SHOTS, { recursive: true });
 const results = [];
 const check = (name, ok, extra = '') => {
@@ -260,6 +267,20 @@ const server = createServer(async (req, res) => {
       : renderSite({ kind: 'page', site, page: SWEEP_PAGE, data: SWEEP_DATA, ctx: { ...ctx, path: '/' } });
     return send(r.status, 'text/html; charset=utf-8', r.html);
   }
+  // The website's own domain, by the request's Host: the site at its root,
+  // its address the domain's own (as server/ext/site/public.js draws it there).
+  const asked = String(req.headers.host || '').toLowerCase().replace(/:\d+$/, '');
+  if (asked === DOMAIN) {
+    if (url.pathname.startsWith('/site-assets/')) {
+      const a = siteFile(url.pathname.slice('/site-assets/'.length) + url.search);
+      return a ? send(200, a.type, a.body, { 'cache-control': a.cache }) : send(404, 'text/plain', 'no such file');
+    }
+    const ctx = { root: '/', path: url.pathname, origin: `http://${req.headers.host}`, islands: true };
+    const r = url.pathname === '/'
+      ? renderSite({ kind: 'page', site: imagineSurrey.site, page: imagineSurrey.page, data: imagineSurrey.data, ctx })
+      : renderSite({ kind: 'notFound', site: imagineSurrey.site, data: imagineSurrey.data, ctx });
+    return send(r.status, 'text/html; charset=utf-8', r.html);
+  }
   const m = /^\/(is|base)(\/.*)?$/.exec(url.pathname);
   if (!m) return send(404, 'text/plain', 'not found');
   const key = m[1];
@@ -305,7 +326,7 @@ await new Promise((r) => server.listen(PORT, '127.0.0.1', r));
 // ── The browser ──
 const browser = await chromium.launch({
   executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
-  args: ['--no-sandbox', '--disable-dev-shm-usage'],
+  args: ['--no-sandbox', '--disable-dev-shm-usage', `--host-resolver-rules=MAP ${DOMAIN} 127.0.0.1`, '--no-proxy-server'],
 });
 const errors = [];
 async function newPage({ width = 1360, height = 900, js = true, reducedMotion = 'no-preference', mobile = false } = {}) {
@@ -818,6 +839,29 @@ for (const state of Object.keys(VG_SHIFT)) {
   for (const f of failures) console.log(`      ${f}`);
   check(`theme sweep: in ${swept.length} themes the check lets through, every piece of text on every module, tone, form state and the campaign page reads at AA`, swept.length >= 12 && failures.length === 0, failures.slice(0, 3).join(' || '));
   await page.context().close();
+}
+
+// ── On the website's own domain (its Host header) ──
+{
+  const ctx = await browser.newContext({ viewport: { width: 1360, height: 900 }, timezoneId: 'America/Vancouver' });
+  await ctx.route('**/*', (route) => (route.request().url().startsWith(DOMAIN_ORIGIN) ? route.continue() : route.abort()));
+  const page = await ctx.newPage();
+  page.on('pageerror', (e) => errors.push(`${page.url()}: ${e.message}`));
+  const res = await page.goto(`${DOMAIN_ORIGIN}/`, { waitUntil: 'networkidle' });
+  await hydrated(page);
+  const at = await page.evaluate(() => ({
+    canon: document.querySelector('link[rel=canonical]')?.href,
+    url: document.querySelector('meta[property="og:url"]')?.content,
+    og: document.querySelector('meta[property="og:image"]')?.content,
+    donate: [...document.querySelectorAll('a')].map((a) => a.getAttribute('href')).find((h) => /donate$/.test(h || '')),
+    action: document.querySelector('form.site-form')?.getAttribute('action'),
+    css: [...document.styleSheets].some((x) => /\/site-assets\/site\.css/.test(x.href || '') && x.cssRules.length > 0),
+  }));
+  check('own domain (by Host): the page at its root', res.status() === 200);
+  check('own domain: canonical, og:url and og:image name the domain', at.canon === `${DOMAIN_ORIGIN}/` && at.url === `${DOMAIN_ORIGIN}/` && at.og === `${DOMAIN_ORIGIN}/media/members-rally`, JSON.stringify(at));
+  check('own domain: links and forms at its root, its stylesheet from it', at.donate === '/donate' && /^\/api\/forms\//.test(at.action || '') && at.css, JSON.stringify(at));
+  await shot(page, 'own-domain-home');
+  await ctx.close();
 }
 
 check('no page errors, no hydration mismatches', errors.length === 0, errors.slice(0, 5).join(' | '));

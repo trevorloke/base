@@ -10,9 +10,12 @@ const RENDER_ASKED = {
   key: () => 'set base.win’s key',
   domain: (p) => (p.host ? `add ${p.host}` : 'add its address'),
   'close-db': () => 'close the database to the internet',
+  set: (p) => `add ${p.setting || 'a missing setting'}`,
+  make: (p) => ({ database: `make the database${p.label ? ` ${p.label}` : ''}`, service: `make the service${p.label ? ` ${p.label}` : ''}`, domain: `add ${p.host || 'its address'}` }[p.step] || 'make the campaign'),
 };
-const RENDER_DENIED = { code: 'wrong code', old: 'old page', target: 'not this campaign’s service', caps: 'too many changes', busy: 'another change was still running', state: 'nothing to change' };
+const RENDER_DENIED = { code: 'wrong code', old: 'old page', target: 'not this campaign’s service', caps: 'too many changes', busy: 'another change was still running', state: 'nothing to change', gate: 'Check Render’s answers hasn’t opened it', wait: 'wait two minutes after a make with no answer' };
 const renderResult = (p) => {
+  if (p.found) return 'Found what Render had already made';
   if (p.ok) return 'Render did it';
   if (p.unsure) return 'No answer from Render';
   return p.status ? `Render didn’t do it (answer ${p.status})` : 'Render didn’t do it';
@@ -38,6 +41,7 @@ export const WORDS = {
   'render.start': (p) => `Asked Render to ${(RENDER_ASKED[p.what] || (() => 'make a change'))(p)}`,
   'render.result': (p) => renderResult(p),
   'render.denied': (p) => `Refused a Render change: ${RENDER_DENIED[p.problem] || 'not allowed'}`,
+  'render.check': (p) => `Checked Render’s answers: ${p.make ? 'New campaign can make things in Render' : 'New campaign walks you through Render by hand'}`,
 };
 
 export const ACTIONS = Object.keys(WORDS);

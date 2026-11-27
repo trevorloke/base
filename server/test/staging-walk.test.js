@@ -20,7 +20,7 @@ import { fileURLToPath } from 'node:url';
 import { stagingBlock, STARTING_FIELDS } from './sample-prints.js';
 import { API_PATHS, PAGES, ANON, GONE, APP } from './staging-paths.js';
 import { wrongIn } from './real-names.js';
-import { OPPONENTS } from '../lib/samplecast.js';
+import { OPPONENTS, SEGMENTS } from '../lib/samplecast.js';
 
 // NODE_ENV is left out: it sets the cookies' Secure flag when the server
 // loads, which an in-process request has no use for.
@@ -97,6 +97,17 @@ test('the people are the sample’s 320, read whole', async () => {
   for (const p of persons) {
     assert.match(p.address, /^99\d\d /);
     assert.equal(p.city, 'Vancouver');
+  }
+});
+
+test('each person’s dot, read back, is on their street’s piece of centreline', async () => {
+  const { persons } = await get('/api/persons?limit=500');
+  for (const p of persons) {
+    const seg = SEGMENTS[p.address.slice(5)];
+    assert.ok(seg, `${p.address}: its street has no piece`);
+    const [[y1, x1], [y2, x2]] = seg;
+    const f = (Number(p.address.slice(0, 4)) - 9900) / 100;
+    assert.ok(Math.abs(Number(p.lat) - (y1 + f * (y2 - y1))) < 1e-6 && Math.abs(Number(p.lng) - (x1 + f * (x2 - x1))) < 1e-6, `${p.address}: ${p.lat}, ${p.lng}`);
   }
 });
 

@@ -37,7 +37,9 @@ import { getDb } from '../../db/client.js';
 import { runAction } from '../../lib/events.js';
 import { envName } from '../../lib/org.js';
 import { renderSite } from './render/index.js';
-import { siteHost, siteWorkspace, ensureSite, readSettings, menuPages, siteOf, parseJ, mainAddress } from './store.js';
+import { siteHost, siteWorkspace, ensureSite, readSettings, menuPages, siteOf, parseJ, mainAddress, envHosts, hostOfRequest } from './store.js';
+import { siteDomain, siteDomainHosts } from './domain.js';
+import { oldPathAnswer } from './old-paths.js';
 import { authorizedBy } from '../../../shared/site/wording.js';
 import { loadData } from './loaders.js';
 import { calendarHeaders, eventsCalendar } from './calendar.js';
@@ -232,9 +234,13 @@ const siteFor = async (c, at) => {
   // without the language (where the cookies live, where English is).
   const lang = isOther(at.lang) ? at.lang : 'en';
   const home = `${base}${at.home ?? at.root}`;
+  // On the website's own domain (STARBASE_SITE_DOMAIN) or its pair, the
+  // address is the domain's itself: one canonical for both.
+  const own = !at.siteId && !at.siteKey && (at.home ?? at.root) === '' && siteDomainHosts().includes(hostOfRequest(c));
+  const address = own ? `${proto}://${siteDomain()}${url.port ? `:${url.port}` : ''}` : publicOrigin(base, origin);
   return {
     db, ws, inner: at.root, root: `${base}${at.root}`, base, lang, home,
-    origin, address: publicOrigin(base, origin), https: proto === 'https', assets: `${base}/site-assets`,
+    origin, address, https: proto === 'https', assets: `${base}/site-assets`,
   };
 };
 
@@ -361,7 +367,9 @@ const draw = async (c, site, { kind, page = null, post = null, campaign = null, 
   return c.body(hit.html, hit.status, { 'Content-Type': 'text/html; charset=UTF-8' });
 };
 
-const notFound = (c, site) => draw(c, site, { kind: 'notFound', key: ['404'], status: 404 });
+// An address the site has no page for: the website the domain had before
+// may have had one (old-paths.js), else the site's own 404 page.
+const notFound = async (c, site) => (await oldPathAnswer(c, site, livePage)) || draw(c, site, { kind: 'notFound', key: ['404'], status: 404 });
 
 // After a page is drawn (TR decision 33): the switch's prefetch rules; a
 // language page remembers its language (never on a prefetch); English's
@@ -684,7 +692,7 @@ export const makeSiteApp = (at) => {
     if (appCopy && site.micro) site.mirror = site.micro.domains.length > 0;
     else if (appCopy) {
       const domains = (await settingsOf(site))?.domains;
-      site.mirror = Boolean(String(process.env.SITE_HOSTS || '').trim()) || (Array.isArray(domains) && domains.length > 0);
+      site.mirror = envHosts().length > 0 || (Array.isArray(domains) && domains.length > 0);
     }
     c.set('site', site);
     await next();
@@ -1098,7 +1106,28 @@ const microAtApp = (c, next) => {
   // /site/sites/<key>/pa/…: that website in Punjabi.
   return atKey(key, langOfPath(c.req.path, `/site/sites/${key}`)).fetch(c.req.raw, c.env);
 };
-const siteAtApp = (c) => atSite(langOfPath(c.req.path, '/site')).fetch(c.req.raw, c.env);
+// Once the website has its own domain (STARBASE_SITE_DOMAIN), /site on the
+// app's address sends a page on to it, for good (301; kept an hour, so the
+// way back is quick): the same path under the root and the same query. Not
+// what can't move: anything but a GET (a form or an unsubscribe sent from a
+// page opened before), a draft's preview (the builder frames it on the
+// app's own origin) and what a preview loads (/api/…, /site-assets/…).
+const STAYS = new RegExp(`^(?:/(?:${Object.keys(LANG_BY_PREFIX).join('|')}))?/(?:__preview|api|site-assets)(?:/|$)`);
+// The path goes on as it came, still encoded (a decoded word in another
+// alphabet can't be put in a header); a path whose /site came encoded is
+// sent decoded, with what isn't plain ASCII encoded again.
+const toDomain = (c) => {
+  const domain = siteDomain();
+  if (!domain || !(c.req.method === 'GET' || c.req.method === 'HEAD')) return null;
+  const rest = c.req.path.slice('/site'.length).replace(/^\/+/, '/') || '/';
+  if (STAYS.test(rest)) return null;
+  const url = new URL(c.req.url);
+  const raw = /^\/site(?:\/|$)/.test(url.pathname) ? url.pathname.slice('/site'.length).replace(/^\/+/, '/') || '/'
+    : rest.replace(/[^\x21-\x7e]+/g, encodeURI);
+  const proto = isHttps(c) ? 'https' : url.protocol.replace(':', '');
+  return new Response(null, { status: 301, headers: { location: `${proto}://${domain}${url.port ? `:${url.port}` : ''}${raw}${url.search}`, 'cache-control': 'public, max-age=3600' } });
+};
+const siteAtApp = (c) => toDomain(c) || atSite(langOfPath(c.req.path, '/site')).fetch(c.req.raw, c.env);
 export const publicRoutes = new Hono();
 publicRoutes.get('/site-assets/*', serveAsset);
 publicRoutes.all('/site/sites/:key', microAtApp);
@@ -1138,6 +1167,14 @@ export const siteGate = async (c, next) => {
   const at = await siteHost(c);
   if (!at) return next();
   if (shared(c)) return next();
+  // The website's own domain's pair (www.): a page goes on to the domain,
+  // the same path and query; a form sent there is answered there.
+  const [domain, pair] = siteDomainHosts();
+  if (pair && at.host === pair && !at.siteId && (c.req.method === 'GET' || c.req.method === 'HEAD')) {
+    const url = new URL(c.req.url);
+    const proto = isHttps(c) ? 'https' : url.protocol.replace(':', '');
+    return new Response(null, { status: 301, headers: { location: `${proto}://${domain}${url.port ? `:${url.port}` : ''}${url.pathname}${url.search}`, 'cache-control': 'public, max-age=3600' } });
+  }
   // A closed website's address: every route, any method, says so.
   if (at.gone) {
     const site = await siteFor(c, { root: '', workspaceId: at.workspaceId });

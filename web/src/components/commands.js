@@ -89,6 +89,8 @@ export const SCREENS = [
   { label: 'Profile fields', to: '/people/fields', area: 'admin', manager: true, words: 'custom fields profile' },
   { label: 'Rating scale', to: '/rating-scale', area: 'admin', manager: true, words: 'support scale voting for candidates' },
   { label: 'Your profile', to: '/profile', words: 'account two-step sign-in authenticator me' },
+  // The group calendar (pages/Calendar.jsx), everyone's own.
+  { label: 'Calendar', to: '/calendar', words: 'dates events schedule google month what’s on' },
   { label: 'Shifts in Google Calendar', to: '/profile#gcal', gcal: true, words: 'google calendar shifts' },
   { label: 'Path to win', to: '/path-to-win', area: 'data', words: 'win number supporters needed pace goal race' },
   { label: 'Activity', to: '/activity', manager: true, words: 'dashboard out now chart teams latest contacts trail' },

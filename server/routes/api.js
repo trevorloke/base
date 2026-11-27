@@ -1344,7 +1344,8 @@ app.get('/brief', async (c) => {
 // ── Export: contractual open data — everything, one click ──
 // Every campaign table, as rows: the core's below, the record types, and
 // each feature's own (exportTables). Never sign-ins, sessions or invites, and
-// never a link's secret token (omit).
+// never a link's secret token (omit). A feature's rows(rows, { db, ctx }) may
+// blank what this person may not read (the group calendar's notes).
 const CORE_EXPORT = [
   'contacts', 'signs', 'volunteer_roles', 'shifts', 'shift_assignments', 'turfs', 'turf_members',
   'subscriptions', 'blasts', { table: 'blast_recipients', omit: ['token'] },
@@ -1368,8 +1369,9 @@ app.get('/export', async (c) => {
     out[t.table] = (await db.query(`select * from ${t.table} where workspace_id = $1`, [ws])).rows;
   }
   for (const spec of [...CORE_EXPORT, ...EXTENSIONS.flatMap((e) => e.exportTables || [])]) {
-    const { table, omit } = exportSpec(spec);
-    const rows = (await db.query(`select * from ${table} where workspace_id = $1`, [ws])).rows;
+    const { table, omit, rows: limit } = exportSpec(spec);
+    const read = (await db.query(`select * from ${table} where workspace_id = $1`, [ws])).rows;
+    const rows = limit ? await limit(read, { db, ctx }) : read;
     out[table] = omit.length
       ? rows.map((r) => Object.fromEntries(Object.entries(r).filter(([k]) => !omit.includes(k))))
       : rows;

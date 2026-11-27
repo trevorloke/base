@@ -14,7 +14,9 @@
 //   deskOnlyReads  ['/surveys/results', …] — GET paths volunteers may not read
 //   exportTables   ['surveys', { table: 'receipts', omit: ['token'] }, …] —
 //                  the feature's tables in GET /api/export (rows of this
-//                  workspace; omit drops secrets such as a link's token)
+//                  workspace; omit drops secrets such as a link's token;
+//                  rows(rows, { db, ctx }) may blank what the person
+//                  exporting may not read)
 //   bodyMax        { '/hooks/mail/sendgrid': bytes } — a bigger request body
 //                  than the 256 KB every address takes, for one of its own
 //

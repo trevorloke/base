@@ -5,6 +5,8 @@
 //   a, b            two clients made with New campaign
 //   imaginesurrey   a client added as already running (no values kept here),
 //                   at the hand-made service base-win's address
+//   fresh: [...]    stage 2: clients made with New campaign and nothing more
+//                   (no Render address yet), for Make it in Render
 // Each campaign's server "answers" through the injected fetcher, so its
 // instance is pinned the way the poller pins it.
 import { baseEnv, freshApp, setUp, browser, codeNow } from './helpers.mjs';
@@ -20,15 +22,18 @@ export const ADDR = {
   imaginesurrey: 'https://base-win.onrender.com',
 };
 const INSTANCE = { sample: 'S', a: 'A', b: 'B', imaginesurrey: 'I' };
+// No waiting in tests: a new database is read again at once.
+export const FAST = { readyEveryMs: 0, readyTries: 3, lookEveryMs: 0 };
 const NEW = { city: 'Exampleton', province: 'BC', rules: 'bc-municipal', tz: 'America/Vancouver', races: 'council', sw: '50.6, -120.5', ne: '50.8, -120.2' };
 
-export const rig = async ({ world = fakeWorld(), campaigns = ['sample', 'a', 'b', 'imaginesurrey'], cacheMs = 0 } = {}) => {
+export const rig = async ({ world = fakeWorld(), campaigns = ['sample', 'a', 'b', 'imaginesurrey'], fresh = [], cacheMs = 0, waits = FAST } = {}) => {
   baseEnv();
   renderEnv();
   const { db } = await freshApp();
   // What each campaign's server says when asked for its health. Set
   // health[name] = null for a server that isn't answering.
   const health = {};
+  for (const name of fresh) { ADDR[name] = `https://base-win-${name}.onrender.com`; INSTANCE[name] = name[0].toUpperCase(); }
   const answer = (name) => ({
     ok: true, database: 'ok', env: name === 'sample' ? 'staging' : 'production', commit: 'd9130ae', tzdataCurrent: true, ownOrigin: ADDR[name],
     instance: INSTANCE[name].repeat(22), address: `https://${name}.base.win`, entry: 'ready', platformKids: [currentKid()], setupOpen: false, campaignMade: true, store: 'postgres',
@@ -42,8 +47,9 @@ export const rig = async ({ world = fakeWorld(), campaigns = ['sample', 'a', 'b'
     if (!h) { const e = new Error('ECONNREFUSED'); e.name = 'ECONNREFUSED'; throw e; }
     return { status: 200, ms: 3, body: JSON.stringify(h) };
   };
-  const render = makeRender({ send: world.send, cacheMs, timeoutMs: 300 });
-  let app = makeApp({ db, fetcher, render });
+  // world.send is looked up on each request, so a test can wrap it.
+  const render = makeRender({ send: (...args) => world.send(...args), cacheMs, timeoutMs: 300 });
+  let app = makeApp({ db, fetcher, render, waits });
   const op = await setUp(app, db);
   let b = op.b;
   for (const name of campaigns) {
@@ -57,6 +63,10 @@ export const rig = async ({ world = fakeWorld(), campaigns = ['sample', 'a', 'b'
     }
     if (res.status !== 303) throw new Error(`adding ${name}: ${res.status} ${await res.text()}`);
   }
+  for (const name of fresh) {
+    const res = await b.post('/new', { name, display: `Example ${name.toUpperCase()}`, ...NEW });
+    if (res.status !== 303) throw new Error(`adding ${name}: ${res.status} ${await res.text()}`);
+  }
   const startCalls = world.calls.length;
   const r = {
     db, world, health, answer, asked, op, render,
@@ -66,7 +76,7 @@ export const rig = async ({ world = fakeWorld(), campaigns = ['sample', 'a', 'b'
     // A new console over the same database and the same Render (its limits
     // on typed codes start again), signed in as the same session.
     again: () => {
-      app = makeApp({ db, fetcher, render });
+      app = makeApp({ db, fetcher, render, waits });
       const next = browser(app);
       for (const [k, v] of b.jar) next.jar.set(k, v);
       b = next;

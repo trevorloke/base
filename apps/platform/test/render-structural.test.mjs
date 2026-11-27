@@ -15,7 +15,7 @@ import { baseEnv } from './helpers.mjs';
 
 baseEnv();
 const { CALLS } = await import('../render-api.mjs');
-const { READABLE, WRITABLE, neededFor, writableFor } = await import('../render-guard.mjs');
+const { READABLE, WRITABLE, WRITABLE_MADE, neededFor, writableFor } = await import('../render-guard.mjs');
 const { DENY } = await import('../snippets.mjs');
 const { cfg } = await import('../config.mjs');
 
@@ -67,12 +67,27 @@ test('the calls Render can be asked are exactly these, and nothing destructive c
     addDomain: ['POST', '/services/{id}/custom-domains'],
     checkDomain: ['POST', '/services/{id}/custom-domains/{host}/verify'],
     closeDatabase: ['PATCH', '/postgres/{id}'],
+    // Stage 2: a new campaign's database and service (spec rows 17 and 18).
+    makeDatabase: ['POST', '/postgres'],
+    connectionInfo: ['GET', '/postgres/{id}/connection-info'],
+    makeService: ['POST', '/services'],
   });
   assert.ok(Object.isFrozen(CALLS));
   for (const never of ['DELETE', '/suspend', '/resume', '/scale', '/rollback', '/jobs', '/logs', '/export', '/recovery', '/credentials', '/secret-files',
-    '/env-groups', '/disks', '/members', '/webhooks', 'rejectUnauthorized', 'connection-info', 'action:']) {
+    '/env-groups', '/disks', '/members', '/webhooks', 'rejectUnauthorized', 'action:']) {
     assert.ok(!api.includes(never), `render-api.mjs holds ${never}`);
   }
+  // A new database's connection details: named once (the table), asked for
+  // once (inside makeService), and never returned.
+  assert.equal([...api.matchAll(/connection-info/g)].length, 1, 'connection-info is named once, in the table');
+  assert.equal([...api.matchAll(/call\('connectionInfo'/g)].length, 1, 'and asked for in one place');
+  const makeService = api.slice(api.indexOf('const makeService = '), api.indexOf('\n  };\n', api.indexOf('const makeService = ')));
+  assert.match(makeService, /call\('connectionInfo'/, 'that place is makeService');
+  assert.doesNotMatch(makeService, /return[^;]*internalConnectionString/, 'the address is never handed back');
+  assert.equal([...api.matchAll(/internalConnectionString/g)].length, 1, 'read in one place');
+  // A create only after the gate's target, and only through these two functions.
+  assert.equal([...api.matchAll(/call\('makeDatabase'/g)].length, 1);
+  assert.equal([...api.matchAll(/call\('makeService'/g)].length, 1);
   assert.doesNotMatch(api, /'PUT',\s*'[^']*\/env-vars'/, 'no write of the whole settings list');
   assert.doesNotMatch(api, /'(PATCH|PUT)',\s*'\/services(\/\{id\})?'/, 'no change to a service itself');
   assert.doesNotMatch(api, /method:\s*'(?!GET)/, 'no method outside the table');
@@ -152,6 +167,13 @@ test('the settings that may be read or written are exactly these: no secret, not
     'STARBASE_CITY', 'STARBASE_SLATES', 'BASE_PLATFORM_PUBKEY'], 'a campaign added as already running: the three it never had are its own configuration');
   assert.deepEqual(neededFor(made), READABLE);
   for (const c of [running, made, { kind: 'sample', values: {} }]) assert.deepEqual(writableFor(c), ['BASE_PLATFORM_PUBKEY']);
+  // Stage 2, with the gate open: a campaign made with New campaign may have
+  // its missing settings added, each to its own value. Never the others.
+  assert.deepEqual(WRITABLE_MADE, ['BASE_PLATFORM_PUBKEY', 'STARBASE_PUBLIC_URL', 'STARBASE_BRAND', 'STARBASE_ORG_NAME', 'STARBASE_CITY', 'STARBASE_JURISDICTION',
+    'STARBASE_PROVINCE', 'STARBASE_TZ', 'STARBASE_SLATES', 'STARBASE_GEO_BOUNDS', 'STARBASE_CANDIDATES']);
+  for (const name of [...never, 'NODE_ENV', 'STARBASE_ENV', 'STARBASE_OWN_URL', 'APP_HOSTS', 'GOOGLE_MAPS_TILES']) assert.ok(!WRITABLE_MADE.includes(name), `${name} can be written`);
+  assert.deepEqual(writableFor(made, { stage2: true }), WRITABLE_MADE);
+  for (const c of [running, { kind: 'sample', values: {} }, { ...made, kind: 'sample' }]) assert.deepEqual(writableFor(c, { stage2: true }), ['BASE_PLATFORM_PUBKEY']);
 });
 
 // S6
@@ -165,6 +187,28 @@ test('nothing under apps/platform can run other code, and it has no package of i
   const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
   for (const kind of ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies']) assert.equal(pkg[kind], undefined, kind);
   assert.equal(readdirSync(ROOT).includes('node_modules'), false);
+});
+
+// S4 for making: each create is asked for only after its "Asked Render
+// to…" line is committed, and a create is only ever called from the steps.
+test('every create is asked for after its log line, from one place, with the gate’s target', () => {
+  const make = file('render-make.mjs');
+  for (const fn of ['makeDatabase', 'makeService']) {
+    const calls = [...make.matchAll(new RegExp(`client\\.${fn}\\(`, 'g'))];
+    assert.equal(calls.length, 1, `${fn} is called once`);
+    const before = make.slice(0, calls[0].index);
+    assert.ok(before.lastIndexOf('await begin(') > before.lastIndexOf('const step'), `${fn}: the start line is written first`);
+  }
+  assert.match(make, /const begin = [^\n]*\n[\s\S]*?action: 'render\.start'/, 'begin() writes render.start');
+  for (const f of files.filter((x) => !['render-api.mjs', 'render-make.mjs'].includes(x.path))) {
+    assert.doesNotMatch(f.text, /\.make(Database|Service|Target)\(/, `${f.path} makes something in Render`);
+  }
+  assert.match(file('render-routes.mjs'), /makeGate\(/, 'the routes ask the gate');
+});
+
+// S7: nothing under apps/platform (but its tests) names a client.
+test('no file of the control centre names a client', () => {
+  for (const f of files) assert.doesNotMatch(f.text, /Surrey|Imagine/, f.path);
 });
 
 test('the tables keep ids, names of settings and states: never a value or a body', () => {
