@@ -26,6 +26,8 @@ COPY web/package.json web/
 RUN npm ci --omit=dev && npm cache clean --force
 COPY shared ./shared
 COPY server ./server
+# HR-1's three read-only counts, run by hand in Render's Shell (GOING-LIVE.md)
+COPY scripts/hr-counts.mjs ./scripts/hr-counts.mjs
 COPY --from=build /app/web/dist ./web/dist
 RUN mkdir -p /data && chown -R node:node /data
 USER node
