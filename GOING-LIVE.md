@@ -512,6 +512,17 @@ manager**), which makes the campaign and signs you in as *base.win support*.
    the office.* Bring them back, and type the results in on the turf's
    walk list. A turf with more than 6,000 people in its box must be split
    on the map before it prints.
+8. **Hi-rises: three numbers, once**, after the voters list is in. In
+   Render → **base-win** → **Shell**, run `node scripts/hr-counts.mjs`. It
+   only reads (the database refuses any change while it runs) and prints
+   three lines, with no names or addresses:
+   - *Located doors*: addresses with a pin, one per unit.
+   - *Addresses with 4 or more units*: the ones the map shows as a building.
+   - *People with the unit inside the address* (like `1203-13450 104 Ave`).
+
+   Send the three lines to the team. If the second number is under 50, the
+   building layer will rarely appear on your map: say so before more
+   hi-rise work is done.
 
 ### The street map: choose a provider before election week
 
