@@ -183,6 +183,22 @@ test('the legal lines: each on its own line, readable, in every look, and no loo
     const html = draw({ theme: { ...l, skin: l.key }, org });
     assert.match(html, /<div class="footer-bottom">[\s\S]*Authorized by Ada Example, 604-555-0100/, l.key);
   }
+  // A campaign's own look too, with its own stylesheet linked (Imagine
+  // Surrey's server: its brand, for this check only). Whether a stylesheet
+  // can hide the line is read in a browser (e2e-site-render, every look).
+  const brand = process.env.STARBASE_BRAND;
+  process.env.STARBASE_BRAND = 'imagine-surrey';
+  try {
+    const keys = everyLook().map((l) => l.key);
+    assert.ok(keys.includes('imagine-surrey'), `the campaign's own look is checked too: ${keys.join(', ')}`);
+    for (const l of everyLook()) {
+      const html = draw({ theme: { ...l, skin: l.key }, org });
+      assert.match(html, /<link rel="stylesheet" href="[^"]*imagine-surrey\/look\.css[^"]*">/, `${l.key}: the campaign's own stylesheet`);
+      assert.match(html, /<div class="footer-bottom">[\s\S]*Authorized by Ada Example, 604-555-0100/, `${l.key} on the campaign's own server`);
+    }
+  } finally {
+    process.env.STARBASE_BRAND = brand;
+  }
   const block = rule('.footer-bottom');
   for (const want of ['display: flex !important', 'flex-direction: column !important', 'visibility: visible !important', 'opacity: 1 !important', 'position: static !important', 'font-size: 15px !important']) {
     assert.ok(block.includes(want), `.footer-bottom: ${want}`);
