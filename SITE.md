@@ -679,8 +679,11 @@ seo           { title, description, shareImage: { url, alt } }
 org           { name, shortName, email, phone, address, platformUrl, platformLabel, privacyUrl,
                 agentName, agentContact, authorizationLine (drawn only while no agent is named) }
 social        { accounts: [{ name, short, handle, url }] }
-theme         shared/site/theme.js (checkTheme: a pair under 4.5:1 is refused)
+theme         shared/site/theme.js (checkTheme: a pair under 4.5:1 is refused; scale: 'modern' or left out)
 domains       ['imaginesurrey.ca', …]       // the site answers at / on these too
+look_before   the look the main site had before its last change, and when
+              (columns look_before, look_before_at; GET /api/site: settings.look_before
+              = { theme, at } or null) — Theme's "Back to the look from …"
 ```
 
 Additions to the renderer's input (additive to "Rendering" above):
@@ -930,11 +933,11 @@ theirs, and the server refuses its data anyway).
 
 | Address | Screen |
 |---|---|
-| `/website` | Overview: live or not, where it lives, "View site", this week's sign-ups by kind, pages ("Edit the home page"), news, petitions, online giving |
+| `/website` | Overview: live or not, where it lives, "View site"; "Before you share the site" (no one named on the Authorized by line, no privacy link — each to its field, gone once set); Look · its name; this week's sign-ups by kind, pages ("Edit the home page"), news, petitions, online giving |
 | `/website/pages` | Pages in the menu's order: New page ("What's this page for?": a starter, a name and its address), In the menu, ⋯ Move up/down · Duplicate · Delete (Undo); drag by the handle or tap it and "Move here" |
 | `/website/pages/:id` | The builder (below) |
-| `/website/theme` | A skin, the colours (every `PAIRS` pair's contrast as it changes; under 4.5:1 blocks saving; "Fix it" picks the nearest readable text colour), fonts, corners, logo, a live sample |
-| `/website/settings` | Menu and title bar, announcement bar, footer, organization, social accounts, search and sharing, your own domain |
+| `/website/theme` | Opens on the looks (Base, the campaign's own, Civic blue, Evergreen; "In use") beside a live preview of the published home page in the look being tried; "Use this look"; "Back to the look from …". Then the details: heading sizes (As today · Modern) and shadow, the colours (every `PAIRS` pair's contrast as it changes; under 4.5:1 blocks saving; "Fix it" picks the nearest readable text colour), fonts, corners, logo |
+| `/website/settings` | Small panels, each with its own Save and Undo: Menu (Your links; Pages in the menu, dragged or ⋯), Title bar, Announcement bar, Footer, Who's behind the site, Social accounts, Search and sharing, Your own domain. `#org` or a field's id (`#wb-s-agent`) opens its panel |
 | `/website/news` · `/:id` | Posts: list, editor (picture, the words beside the post as it will look, short summary), publish/unpublish, delete (Undo) |
 | `/website/petitions` · `/:id` | Petitions and pledges: signatures and a bar to the goal, "See who signed" (People by `signers_tag`), editor, close/open again, delete (Undo) |
 | `/website/sites` | Other websites: each one's name, Live / Draft, domain and sign-ups this week; New website (a manager: a name and, optionally, the address — checked as it's typed in the save's words); deleted ones whose address still says it has closed |
@@ -1041,6 +1044,47 @@ name, if that will point here too), then point its DNS here: the site
 answers there from the first request, and nobody signs in there before it
 does.
 
+
+### Looks and the public site's shape (WA stage 3, rebuilt as WEB)
+
+- **Looks.** `shared/site/looks.js`: Civic blue and Evergreen, for every
+  campaign, beside Base and the campaign's own (`allLooks()`). Both use the
+  modern heading sizes. A theme's `scale` is `'modern'` or left out (as
+  every site was drawn before); `checkTheme` keeps it only when the theme
+  says so, so a saved theme never changes by itself. The renderer marks a
+  modern page `<html data-scale="modern">`; site.css's modern rules hang on
+  that: the hero is the biggest heading, section headings are smaller and
+  the heavy shadow (a look's own stylesheet, `--pop-c`) stays on the hero
+  and the bands.
+- **The hero's picture** (`layout`: `beside`, the default, or `behind`).
+  Beside, in the modern sizes: a 7:5 grid, the picture 4:5 at 900px and
+  wider, above the words at 16:9 under that; as before otherwise. Behind:
+  the picture fills the hero and the words sit on a panel of the brand
+  colour. No picture: the words alone; the builder's preview of a modern
+  hero shows a dashed "Your picture" box. `sizes` follow the place.
+- **For every theme:** one gap for every section (`clamp(48px, 7vw,
+  96px)`, two plain sections in a row share a smaller one); a still hero
+  headline keeps no room for a second line (rotating words do:
+  `.hero-title--words`); "What we stand for" points are cards in a grid,
+  3 across at most (`--cols-n`), 2 on a tablet, 1 on a phone; a page whose
+  first section's heading is its title (and with no description) has no
+  title band — that heading is the `h1` (so `/news` has one heading); news
+  cards: the picture on top, the title is the card's one link, the summary
+  cut at two lines; the legal lines at the foot (©, Authorized by, privacy,
+  "A website by …") each on its own line at 15px in the body face, drawn
+  with `!important` rules no look's stylesheet can undo; the small print
+  under forms is 15px.
+- **Theme's preview.** `POST /api/site/preview-token { pageId, live: true }`
+  signs a link to the page as published (409 if it never was). The Theme
+  screen frames it and posts `{ type: 'wa:look', theme }`;
+  `web/src/site-preview.js` draws the page again in that look (its
+  variables, faces, `data-scale` and logo) and nothing in it goes anywhere.
+- **The way back.** A theme save that changes the main site's look (not the
+  same look again, not starting or stopping following the brand) keeps the
+  look it had in `look_before` with the time; going back is a save of that
+  look, so the one left becomes the way back.
+- `scripts/wa-mock.mjs` drew this before it was built; `scripts/wa-before-after.mjs`
+  takes the same pages from two running servers (main and this branch).
 
 ## The voter guide (`server/ext/voteguide`, VG)
 

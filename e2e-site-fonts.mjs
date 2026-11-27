@@ -160,7 +160,7 @@ try {
   check('2. the pinned sample switches to Fraunces', /^'?"?Fraunces/.test(sampleFace), sampleFace);
   await sheet().getByRole('button', { name: 'Use these fonts' }).click();
   await sheet().waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
-  await page.getByRole('button', { name: 'Save the look' }).click();
+  await page.getByRole('button', { name: 'Use this look' }).click();
   await page.locator('text=Saved — the site has its new look').first().waitFor({ timeout: 10000 });
   const pubFace = await headingFont();
   check('2. the public heading is in Fraunces, and loaded', /^"?Fraunces/.test(pubFace) && await pub.evaluate(() => document.fonts.check('40px Fraunces')), pubFace);
@@ -181,7 +181,7 @@ try {
   const getting = await sheet().locator('.fs-said').innerText().catch(() => '');
   await sheet().waitFor({ state: 'detached', timeout: 15000 }).catch(() => {});
   check('3. “Getting Fake Display from Google…” then the sheet closes', /Getting Fake Display from Google…|^$/.test(getting) && await sheet().count() === 0, getting);
-  await page.getByRole('button', { name: 'Save the look' }).click();
+  await page.getByRole('button', { name: 'Use this look' }).click();
   await page.locator('text=Saved — the site has its new look').first().waitFor({ timeout: 10000 });
   const fileResp = pub.waitForResponse((r) => /\/site-assets\/fonts\/g\/[a-f0-9]{64}\.woff2$/.test(r.url()), { timeout: 15000 });
   const homeResp = await pub.goto(`${BASE}/site/`, { waitUntil: 'load' });

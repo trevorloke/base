@@ -16,7 +16,13 @@
 // on the site; ⋯ → Page settings. A typo on the home page fixed and
 // published in at most 4 clicks from Website. Theme: a light brand colour
 // under white text is too hard to read — saving is blocked — "Fix it"
-// picks a readable text colour and it saves. A page duplicated and deleted
+// picks a readable text colour and it saves. Theme opens on the looks
+// beside the published home page: Evergreen picked shows there before
+// saving while the public site is unchanged, the preview never shows the
+// home page's newer draft, "Use this look", "Back to the look from …".
+// Settings as small panels: Menu has Your links and Pages in the menu, one
+// of each dragged and saved; Who's behind the site from the Overview's
+// line, saved with Undo, still there after a reload, the line gone. A page duplicated and deleted
 // comes back with Undo. Every kind of section opens with a box for every
 // field; the voter guide is offered once a page. A post is written and
 // published. Pictures (2b): an upload stores three sizes (WebP; JPEG where
@@ -467,7 +473,7 @@ await page.locator('#wb-c-brand').waitFor();
 await page.fill('#wb-c-brand', '#7fb2ff');
 const bad = page.locator('.wb-pair:not([data-ok])');
 check('a light brand colour under white text: "too hard to read"', (await bad.count()) === 1 && /Text on brand colour/.test(await bad.innerText()), await bad.count());
-check('…and saving is blocked', await page.getByRole('button', { name: 'Save the look' }).isDisabled() && /too hard to read/.test(await page.locator('.wb-alert').innerText()));
+check('…and saving is blocked', await page.getByRole('button', { name: 'Use this look' }).isDisabled() && /too hard to read/.test(await page.locator('.wb-alert').innerText()));
 const refused = await api('/actions/site.settings.save', { theme: { skin: 'imagine-surrey', colors: { brand: '#7fb2ff', brandInk: '#ffffff' } } });
 check('the server refuses it too', refused.status === 400 && /4\.5:1/.test(refused.json?.error || ''), JSON.stringify(refused.json));
 await shot('6-theme-blocked', false);
@@ -475,7 +481,7 @@ await bad.getByRole('button', { name: /Fix it/ }).click();
 await page.waitForFunction(() => document.querySelector('#wb-c-brandInk')?.value !== '#ffffff', null, { timeout: 5000 }).catch(() => {});
 check('"Fix it": every pair readable', (await page.locator('.wb-pair:not([data-ok])').count()) === 0);
 const ink = await page.inputValue('#wb-c-brandInk');
-await page.getByRole('button', { name: 'Save the look' }).click();
+await page.getByRole('button', { name: 'Use this look' }).click();
 await page.locator('.wb-toast', { hasText: 'new look' }).waitFor({ timeout: 10000 });
 const theme = (await api('/site')).json.settings.theme;
 check('saved: the brand colour and its readable text', theme.colors.brand === '#7fb2ff' && theme.colors.brandInk === ink && ink !== '#ffffff', `${theme.colors.brand} ${theme.colors.brandInk}`);
@@ -584,7 +590,7 @@ await page.locator('.wb-toast', { hasText: 'Published' }).waitFor({ timeout: 100
 const report = (await api('/site/posts')).json.posts.find((p) => p.title === `Sample rally report ${tag}`);
 const newsList = await site('/site/news');
 const reportPage = await site(`/site/news/${report?.slug}`);
-const card = /<article[^>]*class="card"[^>]*>((?:(?!<\/article>)[\s\S])*)<\/article>/g;
+const card = /<article[^>]*class="card(?: has-picture)?"[^>]*>((?:(?!<\/article>)[\s\S])*)<\/article>/g;
 const reportCard = [...newsList.html.matchAll(card)].map((x) => x[1]).find((x) => x.includes(`Sample rally report ${tag}`)) || '';
 check('published: on /news as a card with its picture, and its own page draws the sizes', report?.status === 'published' && /<img[^>]*news-card-image/.test(reportCard)
   && /<img(?=[^>]*class="news-image")(?=[^>]*srcset=)/i.test(reportPage.html), report?.slug);
@@ -633,12 +639,128 @@ check('"See who signed": People, filtered to them', await page.getByText('Lena E
 
 // ── Settings: the announcement bar ──
 await page.goto(`${BASE}/admin/website/settings`);
+await page.locator('#announcement .wb-panel__toggle').click();
 await page.getByLabel('Show a line across the top of every page').check();
 await page.fill('#wb-s-ann-text', 'Town hall Thursday');
-await page.getByRole('button', { name: 'Save settings' }).click();
+await page.locator('#announcement').getByRole('button', { name: 'Save', exact: true }).click();
 await page.locator('.wb-toast', { hasText: 'Saved' }).waitFor({ timeout: 10000 });
 const ann = (await api('/site')).json.settings.announcement;
 check('Settings: the announcement bar is saved', ann.enabled === true && ann.text === 'Town hall Thursday', JSON.stringify(ann));
+
+// ── 3b: Theme opens on the looks, beside the published home page in the look being tried ──
+{
+  const home = (await api('/site')).json.pages.find((p) => p.slug === 'home');
+  const homeDraft = (await api(`/site/pages/${home.id}`)).json.page.draft;
+  // A change on the home page that isn't published: the preview never shows it.
+  await api('/actions/site.page.save', { id: home.id, modules: [...homeDraft.modules, { id: `draft-${tag}`, kind: 'text', props: { title: `Draft words ${tag}` } }] });
+  const was = (await api('/site')).json.settings.theme;
+  const liveBefore = await site('/site/');
+  await page.goto(`${BASE}/admin/website/theme`, { waitUntil: 'domcontentloaded' });
+  await page.locator('.wb-look-pv iframe').waitFor({ timeout: 15000 });
+  const frame = async () => {
+    for (let i = 0; i < 50; i += 1) {
+      const f = page.frames().find((x) => /__preview\//.test(x.url()));
+      if (f) return f;
+      await sleep(200);
+    }
+    return null;
+  };
+  const f = await frame();
+  await f.locator('main').waitFor({ timeout: 15000 });
+  const looks = await page.locator('.wb-skin').allInnerTexts();
+  check('Theme opens on the looks — Base, its own, Civic blue, Evergreen — the one in use marked, beside the published home page',
+    (await page.locator('#wb-th-skin').innerText()) === 'Looks' && looks.some((x) => /^Base/.test(x)) && looks.some((x) => /^Civic blue/.test(x)) && looks.some((x) => /^Evergreen/.test(x))
+      && (await page.locator('.wb-skin[data-on] .wb-skin__use').innerText().catch(() => '')) === 'In use', JSON.stringify(looks));
+  await page.locator('.wb-skin', { hasText: 'Evergreen' }).locator('input').check();
+  const tried = await f.waitForFunction(() => getComputedStyle(document.documentElement).getPropertyValue('--brand').trim() === '#1e5a3c'
+    && document.documentElement.dataset.scale === 'modern', null, { timeout: 8000 }).then(() => true).catch(() => false);
+  const pubWhile = await site('/site/');
+  check('picking Evergreen: the preview wears it before anything is saved; the public home page is unchanged',
+    tried && !pubWhile.html.includes('--brand:#1e5a3c') && pubWhile.html.includes(`--brand:${was.colors.brand}`) && !/data-scale="modern"/.test(pubWhile.html));
+  const pvText = await f.locator('main').innerText();
+  check('the preview shows the published words, not the home page’s newer draft', !pvText.includes(`Draft words ${tag}`) && pvText.length > 40 && liveBefore.html.length > 0);
+  await shot('16-theme-looks', false);
+  await page.getByRole('button', { name: 'Use this look' }).click();
+  await page.locator('.wb-toast', { hasText: 'new look' }).waitFor({ timeout: 10000 });
+  const used = await site('/site/');
+  check('“Use this look”: Evergreen is live, with the modern heading sizes', used.html.includes('--brand:#1e5a3c') && /<html [^>]*data-scale="modern"/.test(used.html));
+  const back = page.getByRole('button', { name: /^Back to the look from / });
+  await back.waitFor({ timeout: 8000 }).catch(() => {});
+  check('a way back: “Back to the look from …”', await back.isVisible().catch(() => false));
+  await back.click();
+  await page.locator('.wb-toast', { hasText: 'again' }).waitFor({ timeout: 10000 });
+  const again = await site('/site/');
+  const now = (await api('/site')).json.settings.theme;
+  check('…and it puts the look it had back on the site', again.html.includes(`--brand:${was.colors.brand}`) && !/data-scale="modern"/.test(again.html) && now.skin === was.skin
+    && JSON.stringify(now.colors) === JSON.stringify(was.colors), JSON.stringify(now).slice(0, 160));
+  await api('/actions/site.page.save', { id: home.id, modules: homeDraft.modules });
+}
+
+// ── 3b: Settings as small panels ──
+await page.goto(`${BASE}/admin/website`, { waitUntil: 'domcontentloaded' });
+await page.locator('.wb-live').waitFor();
+const authLine = page.locator('.wb-todo [data-todo="auth"]');
+check('Overview: “No one is named on the Authorized by line yet”, to the field', await authLine.isVisible().catch(() => false)
+  && /\/website\/settings#wb-s-agent$/.test(await authLine.getByRole('link').getAttribute('href').catch(() => '')));
+await page.goto(`${BASE}/admin/website/settings`, { waitUntil: 'domcontentloaded' });
+await page.locator('.wb-panel').first().waitFor();
+const panels = await page.locator('.wb-panel__title').allInnerTexts();
+check('Settings: small panels, each a line saying what is set', JSON.stringify(panels) === JSON.stringify(['Menu', 'Title bar', 'Announcement bar', 'Footer', 'Who’s behind the site', 'Social accounts', 'Search and sharing', 'Your own domain'])
+  && (await page.locator('.wb-panel__body:visible').count()) === 0, JSON.stringify(panels));
+await page.locator('#menu .wb-panel__toggle').click();
+const menuPanel = page.locator('#menu');
+const legends = await menuPanel.locator('legend').allInnerTexts();
+check('Menu shows “Your links” and “Pages in the menu”', legends.some((x) => /^Your links/.test(x)) && legends.some((x) => /^Pages in the menu/.test(x)), JSON.stringify(legends));
+const dragTop = async (list, from) => {
+  await list.locator('.wb-list__item').nth(from).evaluate((el) => el.scrollIntoView({ block: 'center' }));
+  await sleep(150);
+  const h = await list.locator('.wb-list__item').nth(from).locator('.wb-handle').boundingBox();
+  const t = await list.locator('.wb-list__item').nth(0).boundingBox();
+  await page.mouse.move(h.x + h.width / 2, h.y + h.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(h.x + h.width / 2, h.y + h.height / 2 - 20, { steps: 4 });
+  await page.mouse.move(t.x + t.width / 2, t.y + t.height / 2, { steps: 12 });
+  await page.mouse.up();
+  await sleep(300);
+};
+const links = menuPanel.locator('fieldset').filter({ has: page.locator('legend', { hasText: 'Your links' }) });
+const pagesIn = menuPanel.locator('fieldset').filter({ has: page.locator('legend', { hasText: 'Pages in the menu' }) });
+// Enough of each to move one.
+while ((await links.locator('.wb-list__item').count()) < 2) {
+  await links.getByRole('button', { name: /^Add a link/ }).click();
+  const n = (await links.locator('.wb-list__item').count()) - 1;
+  await page.fill(`#wb-s-menu-list-${n}-label`, `Sample link ${n + 1}`);
+  await page.fill(`#wb-s-menu-list-${n}-href`, '/news');
+}
+const linksBefore = await links.locator('.wb-list__sum').allInnerTexts();
+await dragTop(links, 1);
+const linksAfter = await links.locator('.wb-list__sum').allInnerTexts();
+const pagesBefore = await pagesIn.locator('.wb-list__sum').allInnerTexts();
+if (pagesBefore.length >= 2) await dragTop(pagesIn, 1);
+const pagesAfter = await pagesIn.locator('.wb-list__sum').allInnerTexts();
+check('drag within each: a link and a page moved to the top', linksAfter[0] === linksBefore[1] && linksAfter[1] === linksBefore[0]
+  && pagesBefore.length >= 2 && pagesAfter[0] === pagesBefore[1] && pagesAfter[1] === pagesBefore[0], JSON.stringify([linksBefore, linksAfter, pagesBefore, pagesAfter]));
+await menuPanel.getByRole('button', { name: 'Save', exact: true }).click();
+await page.locator('.wb-toast', { hasText: 'Saved' }).waitFor({ timeout: 10000 });
+const afterMenu = (await api('/site')).json;
+const navPages = afterMenu.pages.filter((p) => p.show_in_nav && p.status === 'published').map((p) => p.title);
+check('saved: the links and the menu’s pages in their new order', afterMenu.settings.nav.menu[0].label === linksBefore[1] && navPages[0] === pagesBefore[1], JSON.stringify([afterMenu.settings.nav.menu.map((l) => l.label), navPages]));
+// Who's behind the site, from the Overview's link.
+await page.goto(`${BASE}/admin/website/settings#wb-s-agent`, { waitUntil: 'domcontentloaded' });
+await page.locator('#wb-s-agent').waitFor({ state: 'visible', timeout: 10000 });
+check('the Overview’s link opens “Who’s behind the site” with the cursor in the field', await page.evaluate(() => document.activeElement?.id) === 'wb-s-agent');
+await page.fill('#wb-s-agent', 'Sam Example');
+await page.fill('#wb-s-agentc', '604-555-0101');
+await page.locator('#org').getByRole('button', { name: 'Save', exact: true }).click();
+await page.locator('.wb-toast', { hasText: 'Saved' }).waitFor({ timeout: 10000 });
+check('saved, with Undo in the toast', await page.locator('.wb-toast').getByRole('button', { name: 'Undo' }).isVisible().catch(() => false));
+await page.reload({ waitUntil: 'domcontentloaded' });
+await page.locator('.wb-panel').first().waitFor();
+check('reloaded: still there', await page.inputValue('#wb-s-agent') === 'Sam Example' && /Authorized by Sam Example/.test(await page.locator('#org .wb-panel__line').innerText()));
+await page.goto(`${BASE}/admin/website`, { waitUntil: 'domcontentloaded' });
+await page.locator('.wb-live').waitFor();
+check('Overview’s line is gone', (await page.locator('.wb-todo [data-todo="auth"]').count()) === 0);
+await shot('17-overview-after');
 
 // ── Nothing typed is lost to a slow answer (a phone on a slow connection) ──
 // Each answer below comes back 2.5 s after the server has done the work.
@@ -793,7 +915,7 @@ await page.goto(`${BASE}/admin/website`, { waitUntil: 'domcontentloaded' });
 await page.locator('.wb-live').waitFor();
 await shot('11-overview-phone');
 await page.goto(`${BASE}/admin/website/theme`, { waitUntil: 'domcontentloaded' });
-await page.locator('.wb-sample').waitFor();
+await page.locator('.wb-theme__sample').waitFor();
 await shot('12-theme-phone');
 // The post on a phone: Write · See it.
 await page.goto(`${BASE}/admin/website/news/${report?.id}`, { waitUntil: 'domcontentloaded' });
@@ -803,7 +925,7 @@ await page.getByRole('button', { name: 'See it', exact: true }).click();
 check('on a phone: a post’s Write · See it — See it shows the post as it will look', await page.locator('.wb-postpv__title').innerText() === `Sample rally report ${tag}` && !(await page.locator('#wb-p-title').isVisible()) && (await overflow()) <= 0);
 await shot('15b-post-see-phone', false);
 await page.goto(`${BASE}/admin/website/theme`, { waitUntil: 'domcontentloaded' });
-await page.locator('.wb-sample').waitFor();
+await page.locator('.wb-theme__sample').waitFor();
 
 // ── Theme: the website can follow the campaign's brand, and take its own look back ──
 // (This campaign's website has its own look, as Imagine Surrey's live one does.)
