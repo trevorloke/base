@@ -70,7 +70,8 @@ export const HOUSE_LAST = 9999;
 // (number - 9900) / 100 of the way along it, so the dot is in the roadway,
 // and the numbers rise the way the street's own do (its low-numbered end
 // comes first). Each piece is the longest straight run of whole blocks
-// inside the box, every corner along it within 1.5 m of the line.
+// inside the box, every corner along it within 1.5 m of the line, counting
+// the City's blocks written as a range ("1500-1600 E 10TH AV") too.
 // Source: the City of Vancouver's "Public streets" open data (street
 // centrelines), looked up on 2026-11-27 by scripts/sample-streets.mjs and
 // kept here as numbers; staging never looks anything up. Contains
@@ -89,14 +90,14 @@ export const SEGMENTS = Object.freeze({
   'Yew St': [[49.271696, -123.155004], [49.262901, -123.155334]],
   'Vine St': [[49.271734, -123.157374], [49.262939, -123.157703]],
   'Balsam St': [[49.271772, -123.159744], [49.262976, -123.160069]],
-  'Charles St': [[49.273075, -123.074328], [49.273012, -123.065688]],
+  'Charles St': [[49.273075, -123.074328], [49.272973, -123.060534]],
   'Kitchener St': [[49.272172, -123.074344], [49.272066, -123.060552]],
   'Graveley St': [[49.270537, -123.073475], [49.270444, -123.06187]],
   'Cotton Dr': [[49.273956, -123.071486], [49.268712, -123.071573]],
   'Victoria Dr': [[49.277535, -123.065616], [49.268664, -123.065771]],
-  'E 49th Ave': [[49.22549, -123.09197], [49.225354, -123.081435]],
-  'E 51st Ave': [[49.223725, -123.099629], [49.223622, -123.09413]],
-  'Prince Edward St': [[49.229744, -123.097353], [49.224633, -123.097545]],
+  'E 49th Ave': [[49.225524, -123.094091], [49.225354, -123.081435]],
+  'E 51st Ave': [[49.223681, -123.097566], [49.223456, -123.081512]],
+  'Prince Edward St': [[49.227484, -123.09745], [49.220067, -123.097682]],
   'Fraser St': [[49.229183, -123.090661], [49.218255, -123.090953]],
   'Ross St': [[49.225381, -123.082815], [49.221878, -123.082951]],
 });

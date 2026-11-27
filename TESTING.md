@@ -161,7 +161,9 @@ Everyone and everything in staging's sample is made up
   the City's address list (Burnaby's was not checked). To look them up
   again: `NODE_USE_ENV_PROXY=1 node scripts/sample-streets.mjs` (drop
   `NODE_USE_ENV_PROXY=1` when you have no proxy). It prints the pieces and
-  the check; copy the pieces in, then raise `SAMPLE_VERSION`.
+  the check; copy the pieces in, then raise `SAMPLE_VERSION`. It reads the
+  City's blocks written as a range too (*1500-1600 E 10TH AV*);
+  `server/test/sample-streets.test.js` checks that, with no network.
 
 - **It makes itself again.** A release that raises `SAMPLE_VERSION`
   (`server/lib/samplecampaign.js`) drops the old sample at staging's next
