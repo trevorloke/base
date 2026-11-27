@@ -153,6 +153,18 @@ address's root.
 Everyone and everything in staging's sample is made up
 (`server/lib/samplecast.js`); only the street map is real.
 
+- **Where the dots go.** Each person's dot is on their street's centreline,
+  in the roadway, not on a lot. The 20 street pieces come from the City of
+  Vancouver's open data (*Public streets*, under the Open Government
+  Licence – Vancouver), kept as numbers in `samplecast.js`. The same lookup
+  checked that no number from 9900 to 9999 is on any of the 20 streets in
+  the City's address list (Burnaby's was not checked). To look them up
+  again: `NODE_USE_ENV_PROXY=1 node scripts/sample-streets.mjs` (drop
+  `NODE_USE_ENV_PROXY=1` when you have no proxy). It prints the pieces and
+  the check; copy the pieces in, then raise `SAMPLE_VERSION`. It reads the
+  City's blocks written as a range too (*1500-1600 E 10TH AV*);
+  `server/test/sample-streets.test.js` checks that, with no network.
+
 - **It makes itself again.** A release that raises `SAMPLE_VERSION`
   (`server/lib/samplecampaign.js`) drops the old sample at staging's next
   start and makes the new one. Raise it whenever what the sample holds

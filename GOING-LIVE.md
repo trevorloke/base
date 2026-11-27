@@ -62,7 +62,10 @@ files there.
 Everyone and everything in the sample is made up: the people's surnames,
 their house numbers (9900 to 9999, which no street in the sample has), the
 opponents on the rating scale and their elector organizations
-(`server/lib/samplecast.js`). The street map is real. A check runs every
+(`server/lib/samplecast.js`). The street map is real: each person's dot sits
+in the middle of their street, on a piece of the City of Vancouver's street
+centreline (open data, under the Open Government Licence – Vancouver), never
+on a house. A check runs every
 day (GitHub → Actions → *Staging check*): it walks the demo as a visitor
 does, and opens an issue when it finds a real name, phone number, email
 address or link, or a live email or texting key.
