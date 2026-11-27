@@ -1113,14 +1113,19 @@ const microAtApp = (c, next) => {
 // page opened before), a draft's preview (the builder frames it on the
 // app's own origin) and what a preview loads (/api/…, /site-assets/…).
 const STAYS = new RegExp(`^(?:/(?:${Object.keys(LANG_BY_PREFIX).join('|')}))?/(?:__preview|api|site-assets)(?:/|$)`);
+// The path goes on as it came, still encoded (a decoded word in another
+// alphabet can't be put in a header); a path whose /site came encoded is
+// sent decoded, with what isn't plain ASCII encoded again.
 const toDomain = (c) => {
   const domain = siteDomain();
   if (!domain || !(c.req.method === 'GET' || c.req.method === 'HEAD')) return null;
   const rest = c.req.path.slice('/site'.length).replace(/^\/+/, '/') || '/';
   if (STAYS.test(rest)) return null;
   const url = new URL(c.req.url);
+  const raw = /^\/site(?:\/|$)/.test(url.pathname) ? url.pathname.slice('/site'.length).replace(/^\/+/, '/') || '/'
+    : rest.replace(/[^\x21-\x7e]+/g, encodeURI);
   const proto = isHttps(c) ? 'https' : url.protocol.replace(':', '');
-  return new Response(null, { status: 301, headers: { location: `${proto}://${domain}${url.port ? `:${url.port}` : ''}${rest}${url.search}`, 'cache-control': 'public, max-age=3600' } });
+  return new Response(null, { status: 301, headers: { location: `${proto}://${domain}${url.port ? `:${url.port}` : ''}${raw}${url.search}`, 'cache-control': 'public, max-age=3600' } });
 };
 const siteAtApp = (c) => toDomain(c) || atSite(langOfPath(c.req.path, '/site')).fetch(c.req.raw, c.env);
 export const publicRoutes = new Hono();

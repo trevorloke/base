@@ -119,6 +119,13 @@ test('/site on the app’s address sends people on to the domain, for good', asy
   assert.equal((await hit('/site/r/abc123')).location, `http://${DOMAIN}/r/abc123`, 'a referral link');
   assert.equal((await hit('/site//evil.example/x')).location, `http://${DOMAIN}/evil.example/x`, 'always the domain');
   assert.equal((await hit('/site/donate', { method: 'HEAD' })).status, 301);
+  // A link with words of another alphabet (a Punjabi word), an accent or an
+  // encoded % goes on as it came, still encoded.
+  let r2 = await hit('/site/news/%E0%A8%B8%E0%A8%A4?x=1');
+  assert.deepEqual([r2.status, r2.location], [301, `http://${DOMAIN}/news/%E0%A8%B8%E0%A8%A4?x=1`]);
+  r2 = await hit('/site/pa/news/caf%C3%A9');
+  assert.deepEqual([r2.status, r2.location], [301, `http://${DOMAIN}/pa/news/caf%C3%A9`]);
+  assert.equal((await hit('/site/news/a%2541')).location, `http://${DOMAIN}/news/a%2541`);
 });
 
 test('/site keeps what can’t move: previews, what they load, forms sent from a page opened before, other websites', async () => {
@@ -196,6 +203,10 @@ test('the present website’s own links (in emails it sent) go to it at its own 
   assert.deepEqual([r.status, r.location], [307, 'https://former-site.example.net/api/newsletter/unsubscribe?token=abc'], 'a one-click unsubscribe keeps its POST');
   assert.equal((await at('/me/verify?token=x')).location, 'https://former-site.example.net/me/verify?token=x');
   assert.equal((await at('/admin')).location, 'https://former-site.example.net/admin');
+  // A link with words of another alphabet goes on as it came, still encoded.
+  r = await at('/me/%E0%A8%B8?x=1');
+  assert.deepEqual([r.status, r.location], [302, 'https://former-site.example.net/me/%E0%A8%B8?x=1']);
+  assert.equal((await at('/me/caf%C3%A9')).location, 'https://former-site.example.net/me/caf%C3%A9');
   // Never the domain itself, the app's address, or a plain http one.
   for (const bad of [`https://${DOMAIN}`, `https://${WWW}`, 'https://imaginesurrey.base.win', 'http://former-site.example.net']) {
     process.env.STARBASE_SITE_FORMER_URL = bad;

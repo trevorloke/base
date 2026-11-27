@@ -70,7 +70,7 @@ export const oldPathAnswer = async (c, site, livePage) => {
   if (to === 'former') {
     const at = formerUrl();
     if (!at) return null;
-    return new Response(null, { status: read ? 302 : 307, headers: { location: `${at}${c.req.path}${url.search}`, 'cache-control': 'no-store' } });
+    return new Response(null, { status: read ? 302 : 307, headers: { location: `${at}${url.pathname}${url.search}`, 'cache-control': 'no-store' } });
   }
   if (!read || !(await liveAt(site, to, livePage))) return null;
   return new Response(null, { status: 301, headers: { location: `${site.base}${to}${url.search}`, 'cache-control': 'public, max-age=3600' } });
