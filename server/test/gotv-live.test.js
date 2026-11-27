@@ -17,7 +17,6 @@ import { app } from '../index.js';
 import { campaign, ok, no, readSSE, clockBack, square, plus, at } from './gotv-helpers.js';
 import { turfIndex, rebuild, dropIndex } from '../ext/voted/turfindex.js';
 import { forgetSummary } from '../ext/voted/summary.js';
-import { monitorEventLoopDelay } from 'node:perf_hooks';
 
 process.env.STARBASE_GOTV_PING_MS = '300';
 let k;
@@ -248,12 +247,31 @@ test('the turf index: a turf rebuilds alone, a person’s pin moves them, and a 
        from generate_series(1, 20000) g`, [ws2],
   );
   dropIndex(k.ws);
-  const h = monitorEventLoopDelay({ resolution: 10 });
-  h.enable();
-  const built = await rebuild(db, k.ws);
-  h.disable();
+  // The longest stretch the build keeps the event loop to itself, measured
+  // between turns of a setImmediate ticker. In these tests the database runs
+  // in this same thread (PGlite), so a query's own time blocks the loop here
+  // as it never does over Postgres's wire: that time is taken out of each
+  // gap, leaving the build's own work.
+  const q0 = db.query;
+  let busy = 0, since = 0, inQueries = 0;
+  const queryTime = () => inQueries + (busy ? performance.now() - since : 0);
+  db.query = async (...a) => {
+    if (busy++ === 0) since = performance.now();
+    try { return await q0.apply(db, a); } finally { if (--busy === 0) inQueries += performance.now() - since; }
+  };
+  let longest = 0, turns = 0, on = true, prev = performance.now(), prevQ = 0;
+  const tick = () => {
+    const t = performance.now(), q = queryTime();
+    longest = Math.max(longest, (t - prev) - (q - prevQ));
+    prev = t; prevQ = q; turns += 1;
+    if (on) setImmediate(tick);
+  };
+  setImmediate(tick);
+  let built;
+  try { built = await rebuild(db, k.ws); } finally { on = false; db.query = q0; }
   assert.ok(built.turfs.get(big).ids.size > 5000);
-  assert.ok(h.percentile(99) / 1e6 < 250, `event-loop delay p99 ${(h.percentile(99) / 1e6).toFixed(0)} ms`);
+  assert.ok(turns > 2, `the ticker ran between the build's steps (${turns} turns)`);
+  assert.ok(longest < 250, `the build held the event loop ${longest.toFixed(0)} ms at a stretch`);
 });
 
 test('the summary: by voting place, marked in the last hour by when it reached the office, held, kept 15 s', async () => {
