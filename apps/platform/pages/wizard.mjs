@@ -89,9 +89,12 @@ const inviteNotReady = (name) => `Their invite link goes to ${publicHost(name)},
 
 // Stage 2, with a Render key and Check Render’s answers done: card 1 is
 // Make it in Render. make: { lines: [[words, 'Done' | 'Not yet' | 'Failed']],
-// words, button ('Make it in Render' | 'Carry on' | null), began, refresh }.
+// words, button ('Make it in Render' | 'Carry on' | null), began, names,
+// refresh, paused }. Once a make has begun it stays card 1, paused (no
+// button, only what is saved here) while Render can't be asked.
 const makeCard = ({ name, make, answering }) => html`<li class="card"><h2>Make it in Render</h2>
-        ${make.began ? '' : html`<p>Makes its database and service in Render from here, with this campaign’s own settings, then adds ${publicHost(name)}. It asks for a code first.</p>`}
+        ${make.began ? html`<p>In Render: the database <code>${make.names.database}</code> and the service <code>${make.names.service}</code>.</p>`
+    : html`<p>Makes its database and service in Render from here, with this campaign’s own settings, then adds ${publicHost(name)}. It asks for a code first.</p>`}
         <dl class="oc-dl oc-make">${make.lines.map(([k, w]) => html`<div><dt>${k}</dt><dd>${w}</dd></div>`)}</dl>
         ${status(make.words, make.words ? (make.done ? 'ok' : 'warn') : '')}
         ${make.button ? html`<form method="post" action="/c/${name}/render/make" class="oc-form" data-busy="Asking Render…">
@@ -99,6 +102,9 @@ const makeCard = ({ name, make, answering }) => html`<li class="card"><h2>Make i
         </form>` : ''}
         <p class="oc-help">Email, texting and Google come later, from the app’s Settings → Services. Or do it by hand: More, below.</p>
       </li>`;
+
+// Saving an address by hand clears the ids Make it in Render saved.
+const MADE_HERE_WORDS = 'Make it in Render began here. An address saved by hand stops it: finish by hand from then on.';
 
 export const setupPage = ({ v, values, publicKey, serverUrl, addressState, publicState, invited, snippet, stale = false, typed = null, message = '', make = null }) => {
   const name = v.campaign.name;
@@ -120,7 +126,7 @@ export const setupPage = ({ v, values, publicKey, serverUrl, addressState, publi
       </li>`;
   const pasteCard = (quiet) => html`<li class="card"><h2>Paste its address</h2>
         <form method="post" action="/c/${name}/setup" class="oc-form" data-busy="Checking…">
-          ${field({ label: 'Render address', name: 'server_url', type: 'url', inputmode: 'url', required: true, value: typed ?? serverUrl ?? '', help: `The address at the top of its Render page, like https://base-win-${name}.onrender.com` })}
+          ${field({ label: 'Render address', name: 'server_url', type: 'url', inputmode: 'url', required: true, value: typed ?? serverUrl ?? '', help: `The address at the top of its Render page, like https://base-win-${name}.onrender.com` })}${make?.began ? status(MADE_HERE_WORDS, 'warn') : ''}
           ${codeField(stale)}
           ${status(message || (serverUrl ? (answering ? 'Answering' : ADDRESS_WORDS[addressState] || '') : ''), message || (serverUrl && !answering) ? 'warn' : (answering ? 'ok' : ''))}
           <button class="btn ${answering || quiet ? 'btn-quiet' : 'btn-primary'}" type="submit">Save address</button>
