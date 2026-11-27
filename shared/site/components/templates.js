@@ -24,11 +24,12 @@ function PageView({ rc, page }) {
   const name = rc.site.site?.name || rc.site.org.name;
   const title = str(p.slug) === 'home' ? name || str(p.title) : str(p.title) || name;
   // One page heading (WEB decision 33): a first section whose heading is the
-  // page's title, on a page with no words under its title, is the page's
-  // heading itself — no title band above it saying the same thing (News).
+  // page's title is the page's heading itself — no title band above it
+  // saying the same thing (News). The page's description still goes to
+  // search engines and shares (headFor).
   const norm = (x) => str(x).replace(/\s+/g, ' ').trim().toLowerCase();
   const firstTitle = !heroFirst && modules[0] ? (rc.lang === 'en' ? propsFor(modules[0]).title : translateProps(modules[0].kind, propsFor(modules[0]), rc).title) : '';
-  const titled = !heroFirst && !str(p.description).trim() && Boolean(norm(firstTitle)) && norm(firstTitle) === norm(title);
+  const titled = !heroFirst && Boolean(norm(firstTitle)) && norm(firstTitle) === norm(title);
   const top = heroFirst || titled;
   return html`<${Fragment}>
     ${top ? null : html`<${PageHead} title=${title} lede=${p.description} />`}

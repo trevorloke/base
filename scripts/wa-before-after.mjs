@@ -144,7 +144,8 @@ async function shootSeed(seed) {
       mod('text', 'mock-text', { title: 'A sample heading', body: 'Some sample words for this section. **Bold words** here.' }),
       mod('columns', 'mock-cols', { items: [{ icon: 'civic', title: 'First sample point', body: '' }, { icon: 'civic', title: 'Second sample point', body: '' }] }),
       mod('newsletter', 'mock-news'),
-      mod('band', 'mock-band'),
+      // Sample words of its own: Publish refuses the band's starting samples.
+      mod('band', 'mock-band', { title: 'Sample words for a band,', highlight: 'with a button' }),
     ],
   });
   const sampleId = sample.id || sample.page?.id;

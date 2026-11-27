@@ -128,9 +128,13 @@ test('one page heading: a first section titled as the page is the page’s headi
   const sample = draw({ page: { slug: 'sample-page', title: 'Sample page' }, modules: [mod('text', 't1', { title: '  sample   PAGE ', body: 'Words.' })] });
   assert.equal((sample.match(/<h1\b/g) || []).length, 1);
   assert.doesNotMatch(sample, /page-head/);
-  // A page with words under its title keeps its band (nothing written is dropped),
-  // and so does one whose first heading is something else.
-  assert.match(draw({ page: { title: 'News', description: 'What we’ve been up to.' }, modules: [mod('news', 'n', { title: 'News' })] }), /page-head/);
+  // With words under its title too (Imagine Surrey's News page): one heading,
+  // the section's; the words stay the page's description for search and shares.
+  const described = draw({ page: { title: 'News', description: 'What we’ve been up to.' }, modules: [mod('text', 't1', { title: 'News', body: 'Releases and updates.', tone: 'brand' })] });
+  assert.equal((described.match(/<h1\b/g) || []).length, 1);
+  assert.doesNotMatch(described, /page-head/);
+  assert.match(described, /<meta name="description" content="What we’ve been up to\.">/);
+  // A page whose first heading is something else keeps its title band.
   assert.match(draw({ page: { title: 'About' }, modules: [mod('text', 't1', { title: 'Our story', body: 'Words.' })] }), /page-head[\s\S]*<h1 class="display">About<\/h1>/);
 });
 

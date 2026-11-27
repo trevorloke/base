@@ -1067,8 +1067,9 @@ does.
   headline keeps no room for a second line (rotating words do:
   `.hero-title--words`); "What we stand for" points are cards in a grid,
   3 across at most (`--cols-n`), 2 on a tablet, 1 on a phone; a page whose
-  first section's heading is its title (and with no description) has no
-  title band — that heading is the `h1` (so `/news` has one heading); news
+  first section's heading is its title has no title band — that heading is
+  the `h1`, the page's description still goes to search and shares (so
+  `/news` has one heading); news
   cards: the picture on top, the title is the card's one link, the summary
   cut at two lines; the legal lines at the foot (©, Authorized by, privacy,
   "A website by …") each on its own line at 15px in the body face, drawn
