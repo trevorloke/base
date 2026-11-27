@@ -230,6 +230,34 @@ export default {
     // Its pictures: served at /site-assets/imagine-surrey/… from this folder.
     assets: { prefix: 'imagine-surrey/', dir: new URL('./assets/site/', import.meta.url) },
     seed: () => import('./site-seed.js'),
+    // The present website's addresses (apps/web), for the day its domain
+    // points here (SITE.md "On its own domain"): each to the page here that
+    // does the same thing, sent on only when that page is live; 'former' —
+    // its own links in emails it already sent, its members' and its staff's
+    // pages — to the present website at its own address, when
+    // STARBASE_SITE_FORMER_URL names it. Retired pages go home, as /stats did.
+    oldPaths: [
+      ['/stats', '/'],
+      ['/join/welcome', '/'],
+      ['/donate/thanks', '/donate'],
+      ['/act/:slug/print', '/act/:slug'],
+      ['/tracker/:page', '/tracker'],
+      ['/volunteer/openings/*', '/volunteer'],
+      ['/events/:slug', '/events'],
+      ['/neighbourhoods', '/'],
+      ['/neighbourhoods/:slug', '/'],
+      ['/shop', '/'],
+      ['/shop/thanks', '/'],
+      ['/newsletter/*', 'former'],
+      ['/api/newsletter/*', 'former'],
+      ['/api/tracker/*', 'former'],
+      ['/me', 'former'],
+      ['/me/*', 'former'],
+      ['/api/me/*', 'former'],
+      ['/admin', 'former'],
+      ['/admin/*', 'former'],
+      ['/api/admin/*', 'former'],
+    ],
     // Words on the public site that are this campaign's (the membership's
     // rules, and its own example of a postal code). A saved translation is
     // found by its English sentence, so these stay word for word.

@@ -25,6 +25,7 @@ const WHY = {
   'not-https': () => `${URL_ENV} must start with https://, so the key is never sent in the open. Nothing is sent.`,
   own: () => `${URL_ENV} is this base.win’s own address. It is the website’s address that goes there. Nothing is sent.`,
   'base-win': () => `${URL_ENV} is a base.win address. Only a website hosted somewhere else is sent to. Nothing is sent.`,
+  moved: (s) => `${URL_ENV} is this campaign’s own website, now on base.win (${s.host}). Take both settings away. Nothing is sent.`,
 };
 export const whyOff = (s = websiteState()) => (s.on ? null : WHY[s.problem](s));
 
