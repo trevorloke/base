@@ -15,7 +15,7 @@
 // Every test ends with nothing forbidden asked of Render.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { IDS, OWNER, REPO, SENTINELS } from './fake-render.mjs';
+import { IDS, OWNER, REPO, SENTINELS, renderEnv } from './fake-render.mjs';
 import { rig } from './render-rig.mjs';
 import { makeRender, CALLS, SHAPES } from '../render-api.mjs';
 import { serviceSettings, envLines, DENY } from '../snippets.mjs';
@@ -310,6 +310,112 @@ test('Render lists a new thing late; the save fails after Render made it; the co
   await r.change('x', 'make');
   atMostOne(r);
   assert.ok(made(r).svc);
+  clean(r.world);
+});
+
+// Render made it and said so, but its answer can't be read (not JSON, or too
+// big to read): not "refused". The next look finds it and uses it.
+const UNREAD = {
+  unreadable: (w, on) => w.madeButUnreadable({ on }),
+  'too big': (w, on) => w.madeButBig({ on }),
+};
+for (const step of ['database', 'service']) {
+  for (const [kind, fault] of Object.entries(UNREAD)) {
+    test(`made, but Render’s answer can’t be read: ${step}, ${kind}`, async () => {
+      const r = await rig({ campaigns: ['sample'], fresh: ['x'] });
+      await openGate(r);
+      fault(r.world, STEPS[step]);
+      assert.equal((await r.change('x', 'make')).status, 303);
+      atMostOne(r);
+      assert.equal(r.world.named(step === 'database' ? 'base-win-x-db' : 'base-win-x').length, 1, 'Render made it');
+      assert.match(await setup(r), new RegExp(`Render didn’t say whether it made the ${step}\\. Wait two minutes, then Carry on`));
+      r.again();
+      r.mark();
+      const early = await r.ask('x', 'make');
+      assert.equal(early.res.status, 409, 'inside two minutes, Carry on is turned away');
+      assert.deepEqual(r.calls(), []);
+      for (let press = 0; press < 3 && !(await r.env('x')).server_url; press += 1) {
+        await age(r);
+        r.again();
+        assert.equal((await r.change('x', 'make')).status, 303, `Carry on ${press + 1}`);
+        atMostOne(r);
+      }
+      const { svc, db } = made(r);
+      assert.ok(svc && db, 'made in the end');
+      const env = await r.env('x');
+      assert.deepEqual([env.render_db, env.render_service, env.server_url], [db.id, svc.id, 'https://base-win-x.onrender.com']);
+      assert.doesNotMatch(await setup(r), /this page didn’t make it/);
+      const found = (await r.log('render.result')).filter((l) => l.payload.step === step && l.payload.found);
+      assert.equal(found.length, 1, 'adopted once, logged as found');
+      assert.equal((await verifyLog(r.db)).ok, true);
+      clean(r.world);
+    });
+  }
+}
+
+// Once a make has begun, the set-up page keeps its card whatever happens to
+// the gate or to Render: never today's hand steps as card 1 (they would make
+// a second database under the name), never the render.yaml block.
+test('once a make has begun, the set-up page never sends you back to making it by hand', async () => {
+  const r = await rig({ campaigns: ['sample'], fresh: ['x'] });
+  await openGate(r);
+  r.world.never('available');
+  assert.equal((await r.change('x', 'make')).status, 303);
+  assert.equal(r.world.named('base-win-x-db').length, 1);
+  const HALF = { 'Database made': 'Done', 'Service made': 'Not yet', 'Address added': 'Not yet', Answering: 'Not yet' };
+  const WARN = 'Make it in Render began here. An address saved by hand stops it: finish by hand from then on.';
+  const look = async () => {
+    const body = (await r.page('/c/x/setup')).body;
+    const before = body.slice(0, body.indexOf('<details class="oc-more">'));
+    const first = before.slice(before.indexOf('<ol class="oc-steps">')).split('</li>')[0];
+    return { body, before, first: flat(first) };
+  };
+  const paused = async (why, words, want = HALF) => {
+    const { body, before, first } = await look();
+    assert.match(first, /^\s*Make it in Render/, `card 1 is Make it in Render: ${why}`);
+    assert.match(first, /In Render: the database base-win-x-db and the service base-win-x \./, `the two names: ${why}`);
+    assert.ok(first.includes(words), `${why}: ${first}`);
+    assert.deepEqual(lines(first), want, `only what is saved here: ${why}`);
+    assert.doesNotMatch(before, /New → Postgres|New → Web Service|Paste its address/, `no hand steps before More: ${why}`);
+    assert.doesNotMatch(before, /type="submit">(Carry on|Make it in Render)</, `no button while Render can’t be asked: ${why}`);
+    assert.doesNotMatch(body, /Or ask us to add it to render\.yaml/, `a Blueprint would make a second service: ${why}`);
+    assert.ok(flat(body).includes(WARN), `the paste form under More warns: ${why}`);
+  };
+  // Render down for a moment, the gate still open.
+  r.world.down();
+  await paused('Render down', 'Render isn’t answering just now. What was made is kept: look again in a minute.');
+  r.world.up();
+  // A check that fails (Render down during it) closes the gate.
+  r.world.down();
+  await r.b.post('/render/check', {});
+  r.world.up();
+  await paused('a failing check', 'Paused. What was made is kept. Press Check Render’s answers (Render, in the menu), then Carry on here.');
+  // A release that changes the words sent.
+  await r.db.transaction((tx) => appendLog(tx, { action: 'render.check', payload: { ok: true, make: true, shapes: '0'.repeat(16), owner: OWNER } }));
+  await paused('changed shapes', 'Paused. What was made is kept. Press Check Render’s answers (Render, in the menu), then Carry on here.');
+  // A key for another workspace than the one checked.
+  await r.db.transaction((tx) => appendLog(tx, { action: 'render.check', payload: { ok: true, make: true, shapes: r.render.makeShapes, owner: 'tea-another000000000001' } }));
+  await paused('another workspace', 'This key is for another Render workspace than the one Check Render’s answers saw. What was made is kept.');
+  // No key.
+  delete process.env.RENDER_API_KEY;
+  await paused('no key', 'Render isn’t connected here now. What was made is kept in Render.');
+  renderEnv();
+  // Checked again: the card as before, with Carry on; the paste form under More warns there too.
+  await openGate(r);
+  assert.ok(flat((await look()).body).includes(WARN));
+  assert.match((await look()).before, /type="submit">Carry on</);
+  r.world.lift('available');
+  r.again();
+  assert.equal((await r.change('x', 'make')).status, 303);
+  atMostOne(r);
+  const { svc, db } = made(r);
+  assert.ok(svc && db);
+  assert.deepEqual([(await r.env('x')).render_db, (await r.env('x')).render_service], [db.id, svc.id]);
+  // Made, then the gate closes: still its card, not the hand steps.
+  r.world.down();
+  await r.b.post('/render/check', {});
+  r.world.up();
+  await paused('made, then a failing check', 'Made in Render.', { 'Database made': 'Done', 'Service made': 'Done', 'Address added': 'Done', Answering: 'Not yet' });
   clean(r.world);
 });
 

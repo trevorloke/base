@@ -410,6 +410,25 @@ test('what a new campaign is made as: the same words as the wizard’s block and
   assert.equal(Object.keys(CALLS).length, 19, 'stage 1’s sixteen and stage 2’s three');
 });
 
+test('a create Render answered (2xx) but whose answer can’t be read is “unsure”, never “refused”', async () => {
+  const c = client();
+  const x = { ...campaignA, name: 'xr', display: 'Example XR' };
+  const envX = { campaign: 'xr', env: 'production', server_url: null, instance: null, render_service: null, render_db: null };
+  const got = await c.makeTarget(x, envX, { shapes: c.makeShapes, owner: OWNER });
+  assert.equal(got.ok, true);
+  const on = /^POST \/postgres$/;
+  world.madeButUnreadable({ on });
+  assert.deepEqual(clean(await c.makeDatabase(got.target)), { ok: false, status: 201, problem: 'unexpected-answer', unsure: true });
+  world.madeButBig({ on });
+  assert.deepEqual(clean(await c.makeDatabase(got.target)), { ok: false, status: null, problem: 'unexpected-answer', unsure: true });
+  assert.equal(world.databases.filter((d) => d.name === 'base-win-xr-db').length, 2, 'Render made it both times');
+  // Render refused it: sure, nothing was made.
+  world.refuse(422, { on });
+  assert.deepEqual(clean(await c.makeDatabase(got.target)), { ok: false, status: 422, problem: 'invalid', unsure: false });
+  world.up();
+  world.databases = world.databases.filter((d) => d.name !== 'base-win-xr-db');
+});
+
 test('the stand-in was never asked for anything forbidden, and always got the key', () => {
   assert.deepEqual(world.forbidden, []);
   assert.ok(world.received.length > 50);

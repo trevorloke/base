@@ -165,6 +165,8 @@ export const fakeWorld = (over = {}) => {
   world.refuse = (status, opts) => fault('refuse', { status, ...opts });          // Render says no; nothing changes
   world.madeButSaid = (status, opts) => fault('made-but-said', { status, ...opts }); // the change happens; the answer says otherwise
   world.madeButTimedOut = (opts) => fault('made-but-timed-out', opts);            // the change happens; no answer comes
+  world.madeButUnreadable = (opts) => fault('made-but-unreadable', opts);          // the change happens; the answer (2xx) isn't JSON
+  world.madeButBig = (opts) => fault('made-but-big', opts);                        // the change happens; the answer is too big to read
   world.slow = (ms, opts) => fault('slow', { ms, ...opts });
   world.big = (opts) => fault('big', opts);
   world.redirect = (opts) => fault('redirect', opts);
@@ -373,6 +375,8 @@ export const fakeWorld = (over = {}) => {
     const res = handle(method, path, body);
     if (f?.kind === 'made-but-said') return { status: f.status, json: { message: 'SENTINEL-RENDER-BODY: an error' } };
     if (f?.kind === 'made-but-timed-out') { const e = new Error('timeout'); e.name = 'timeout'; throw e; }
+    if (f?.kind === 'made-but-unreadable') return { status: res.status, json: null, unreadable: true };
+    if (f?.kind === 'made-but-big') { const e = new Error('too-big'); e.name = 'too-big'; throw e; }
     return { status: res.status, json: drop(line, res.json) };
   };
   world.handle = handle;
@@ -411,6 +415,8 @@ export const startFakeRender = ({ port = 5608, world = fakeWorld() } = {}) => ne
       const r = world.handle(req.method, path, body);
       if (f?.kind === 'made-but-said') return out(f.status, { message: 'SENTINEL-RENDER-BODY: an error' });
       if (f?.kind === 'made-but-timed-out') return req.socket.destroy();
+      if (f?.kind === 'made-but-unreadable') { res.writeHead(r.status, { 'content-type': 'application/json' }); return res.end('<html>SENTINEL-RENDER-BODY: not JSON'); }
+      if (f?.kind === 'made-but-big') { res.writeHead(r.status, { 'content-type': 'application/json' }); return res.end(JSON.stringify({ ...r.json, filler: 'x'.repeat(600 * 1024) })); }
       return out(r.status, world.drop(line, r.json));
     });
   });
