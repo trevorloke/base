@@ -230,6 +230,11 @@ On the day it moves, base.win's website answers there at `/` and
    `NEXT_PUBLIC_SITE_URL` to its Render address (`https://<its
    service>.onrender.com`) and redeploy; point its Stripe webhook and its
    Twilio number at that address. Stripe and Twilio don't follow a redirect.
+   Its two Render Cron Jobs (reminders and email, `apps/web/SETUP.md` §2b)
+   call `https://imaginesurrey.ca/api/cron/…`: in each job's command, change
+   `https://imaginesurrey.ca` to that address too. **If the present website
+   stops instead,** delete those two jobs: after the move they would reach
+   base.win, fail every day and hand it their key.
 3. **Render → the present website's service → Settings → Custom Domains:**
    remove `imaginesurrey.ca` and `www.imaginesurrey.ca`. The domain is down
    from here until step 6 is done, so do steps 3 to 6 together.
@@ -255,20 +260,28 @@ On the day it moves, base.win's website answers there at `/` and
    - The desk works at `https://imaginesurrey.base.win`.
    - Settings → Services → *The website — unsubscribes* says Not set.
    - A test sign-up on the website lands in People.
+   - If the present website keeps running: its two cron jobs pass on their
+     next run.
 
 `SITE_HOSTS` isn't needed with `STARBASE_SITE_DOMAIN`. Never put either in
 `render.yaml`: a value there is written over at every sync.
 
 **The way back**, if something is wrong:
 
-1. Render → `base-win` → Environment: remove `STARBASE_SITE_DOMAIN` (and
+1. First the domain leaves `base-win`: Render → `base-win` → Settings →
+   Custom Domains: remove `imaginesurrey.ca` and `www.imaginesurrey.ca`; add
+   them back on the present website's service, and the registrar's records
+   with them. Keep `STARBASE_SITE_DOMAIN` set until this is done: without it
+   the app's sign-in page would answer on the domain.
+2. Once `https://imaginesurrey.ca/` is the present website again: Render →
+   `base-win` → Environment: remove `STARBASE_SITE_DOMAIN` (and
    `STARBASE_SITE_FORMER_URL`). The website is at `/site/` again at once. A
-   browser that saw the move may take up to an hour to forget it.
-2. Move the two custom domains back to the present website's service, and
-   the registrar's records with them.
+   browser that saw the move may for up to an hour still send `/site/` on to
+   the domain, which by then is the present website.
 3. On the present website: `NEXT_PUBLIC_SITE_URL` back to
    `https://imaginesurrey.ca`, redeploy, and its Stripe and Twilio webhooks
-   back.
+   back; its two cron jobs back to `https://imaginesurrey.ca` (or made again
+   from `apps/web/SETUP.md` §2b, if they were deleted).
 4. On `base-win`: set `STARBASE_WEBSITE_URL` and `STARBASE_WEBSITE_KEY`
    again. Then Settings → Services → *The website — unsubscribes* →
    **Check**, and **Send the ones already off here**, so the unsubscribes

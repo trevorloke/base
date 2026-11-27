@@ -129,7 +129,10 @@ the present website), one setting on that client's Render service says so:
 2. If the present website keeps running for a while (its members' pages,
    monthly gifts, its emails already sent): its `NEXT_PUBLIC_SITE_URL` set to
    its own Render address and redeployed; its Stripe webhook and its Twilio
-   number's webhook pointed at that address.
+   number's webhook pointed at that address; its two Render Cron Jobs
+   (`apps/web/SETUP.md` §2b, which call `<domain>/api/cron/…`) changed to that
+   address. If it stops instead, its cron jobs are deleted: after the move
+   they would reach base.win, fail every day and hand it their key.
 3. Render → the present website's service → Custom Domains: remove the
    domain and its `www.`.
 4. Render → the client's base.win service → Environment, in one save:
@@ -141,15 +144,20 @@ the present website), one setting on that client's Render service says so:
 7. Check: the domain shows the website, its `www.` and `<name>.base.win/site/`
    go to it, `<domain>/api/health` is the website's "Page not found", the
    desk works at `<name>.base.win`, Settings → Services → *The website —
-   unsubscribes* says Not set, and a test sign-up lands in People.
+   unsubscribes* says Not set, a test sign-up lands in People, and (if the
+   present website keeps running) its cron jobs pass on their next run.
 
-**The way back:** remove `STARBASE_SITE_DOMAIN` (and
+**The way back, in this order:** first move the custom domain (and its
+`www.`) off the base.win service and back to the present website's service,
+its registrar records with it — `STARBASE_SITE_DOMAIN` stays set until then,
+or the app's sign-in page would answer on the domain; once the domain shows
+the present website again, remove `STARBASE_SITE_DOMAIN` (and
 `STARBASE_SITE_FORMER_URL`) — `/site/` answers again at once (a browser that
-saw the move may take up to an hour to forget it); move the custom domain
-back to the present website's service and its registrar records with it; set
-its `NEXT_PUBLIC_SITE_URL` back and its webhooks; set `STARBASE_WEBSITE_URL`
-and `STARBASE_WEBSITE_KEY` again, then **Check** and **Send the ones already
-off here**, so the nos made in between reach it.
+saw the move may for up to an hour still send it on to the domain, by then
+the present website); set its `NEXT_PUBLIC_SITE_URL` back, its webhooks and
+its cron jobs; set `STARBASE_WEBSITE_URL` and `STARBASE_WEBSITE_KEY` again,
+then **Check** and **Send the ones already off here**, so the nos made in
+between reach it.
 
 ## Other websites (`server/ext/site/microsites.js`)
 
