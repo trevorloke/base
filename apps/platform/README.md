@@ -135,7 +135,15 @@ with (plan, region, PostgreSQL 16, Docker, the health check), and keeps
 what it saw on **Log**. The newest check decides: a failing one, a release
 that changes what is sent, or a key for another workspace turns it off
 again. Off, the set-up page is as before and the two routes below are Not
-found.
+found. A campaign whose make has already begun is the exception: its card
+stays, paused, with the two names and what is saved here, and no button,
+until a new check opens it again (or Render answers again). It never goes
+back to the hand steps or the render.yaml block, which would make a second
+database or service under the name.
+
+A Render answer to a making call that can't be read (not JSON, or too big)
+counts as "no answer": wait two minutes, then Carry on finds what Render
+made and uses it.
 
 On, a new campaign's set-up page has **Make it in Render**. It says what it
 makes (two paid things), asks for a code, then:

@@ -1058,8 +1058,10 @@ for a code; it may ask you to press **Carry on** once while Render gets the
 database ready. It never makes two of anything: if Render doesn't answer,
 wait two minutes and press Carry on, and it looks before it makes. Until
 that check, the set-up page walks you through Render by hand, as before; a
-later check that fails, or a release that changes what is sent, puts it
-back by hand until you check again. Do the first one with a throwaway
+later check that fails, or a release that changes what is sent, turns it
+off for new campaigns until you check again. A campaign already part made
+keeps its card, paused: press Check Render’s answers again, then Carry on.
+Don't make its database or service by hand. Do the first one with a throwaway
 campaign and made-up values, then delete it by hand in Render (its DNS
 record first). The CNAME record where base.win's domain is registered is
 still yours to add.
