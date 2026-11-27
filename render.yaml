@@ -53,6 +53,8 @@
 #   CALLHUB_API_KEY, CALLHUB_API_BASE                   the phone dialer (CallHub): call lists out, results back
 #   STARBASE_CANDIDATES, STARBASE_PROVINCE, STARBASE_GEO_BOUNDS   the campaign
 #   APP_HOSTS                                           the app's other addresses, never the website's
+#   STARBASE_SITE_DOMAIN, STARBASE_SITE_FORMER_URL      the website on its own domain, the day it moves onto base.win
+#                                                       (GOING-LIVE.md §2); set by hand on that one service, never listed below
 #   BASE_PLATFORM_PUBKEY (listed below, sync: false)    the control centre's public key (ops.base.win → base.win’s key):
 #                                                       lets it open this desk; pasted, never committed
 #   STARBASE_OWN_URL                                    this server's own address, only when RENDER_EXTERNAL_URL is
