@@ -29,8 +29,9 @@ test('render.yaml: every client’s service deploys from production by itself, s
   }
   assert.equal(service('base-win-staging').branch, 'main');
   assert.equal(service('base-win-staging').autoDeploy, true);
-  // The control centre's branch moves to production after the next Promote
-  // (render.yaml says so beside it); either way it deploys by itself.
+  // The control centre is production too: it goes out with Promote, beside
+  // every client, and deploys by itself when production moves.
+  assert.equal(service('base-platform').branch, 'production', 'the control centre deploys from production');
   assert.equal(service('base-platform').autoDeploy, true);
 });
 
