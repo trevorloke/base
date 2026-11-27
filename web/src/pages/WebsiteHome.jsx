@@ -6,6 +6,10 @@
 //   changes not on the site yet), news, petitions and pledges, and whether
 //   online giving is set up (donate and join need it). One row for the
 //   campaign's other websites ("Other websites · 2 live").
+//   Before the tiles (WEB 3b): a line for each legal piece the site still
+//   lacks — no one named on the Authorized by line, no privacy policy link —
+//   each to its field in Settings → Who's behind the site, gone once set;
+//   and a row for the look it wears ("Look · Evergreen"), to Theme.
 // The 'site' area (managers by default; App.jsx guards the route, the
 // server refuses everyone else).
 import { Link, useOutletContext } from 'react-router-dom';
@@ -13,6 +17,7 @@ import { hasFeature } from '../brand.js';
 import { NoSignal, noSignal } from '../components/NoSignal.jsx';
 import { WebsiteTabs } from '../components/site/Bits.jsx';
 import { useSite, plural } from '../components/site/useSite.js';
+import { lookOf } from '@starbase/shared/site/theme';
 import { GUIDE_STATE, useSiteGuide } from '../components/site/useSiteGuide.js';
 import './shifts.css';
 import '../editor.css';
@@ -52,6 +57,13 @@ export default function WebsiteHome() {
   const own = [...(d?.urls?.domains || []), ...(d?.urls?.hosts || [])];
   const here = typeof window !== 'undefined' ? `${window.location.host}${d?.urls?.site || '/site/'}` : d?.urls?.site;
   const c = d?.counts || {};
+  const org = d?.settings?.org || {};
+  const missing = [
+    !(org.agentName && org.agentContact) && { key: 'auth', words: 'No one is named on the Authorized by line yet', to: '/website/settings#wb-s-agent', fix: 'Add who authorized the site' },
+    !org.privacyUrl && { key: 'privacy', words: 'No privacy policy link yet', to: '/website/settings#wb-s-priv', fix: 'Add the link' },
+  ].filter(Boolean);
+  const theme = d?.settings?.theme || {};
+  const lookName = theme.follow ? 'The campaign’s brand' : lookOf(theme.skin)?.label || 'Its own';
   return (
     <div className="wb-page">
       <div className="ops-head">
@@ -98,6 +110,26 @@ export default function WebsiteHome() {
               </p>
             )}
           </section>
+
+          {missing.length > 0 && (
+            <section className="card wb-todo" aria-labelledby="wb-todo-h">
+              <h2 id="wb-todo-h" className="wb-todo__h">Before you share the site</h2>
+              <ul className="wb-todo__list">
+                {missing.map((m) => (
+                  <li key={m.key} className="wb-todo__item" data-todo={m.key}>
+                    <span>{m.words}.</span> <Link to={m.to}>{m.fix}</Link>
+                  </li>
+                ))}
+              </ul>
+              <p className="wb-tile__sub muted">Election rules ask every page of the site to carry them.</p>
+            </section>
+          )}
+
+          <Link className="card ms-home-row" to="/website/theme">
+            <span className="ms-home-row__name">Look</span>
+            <span className="ms-home-row__n">{lookName}</span>
+            <span aria-hidden="true">›</span>
+          </Link>
 
           <Link className="card ms-home-row" to="/website/sites">
             <span className="ms-home-row__name">Other websites</span>
