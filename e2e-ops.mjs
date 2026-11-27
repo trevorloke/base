@@ -31,6 +31,13 @@
 // inside a fresh 10-minute window), Add its address and Close the database,
 // each through a page that says what will happen and asks for a code;
 // Render down shows one line of words and the rest is as before.
+// Stage 2: New campaign "d" shows no Make it in Render until Check Render’s
+// answers (with the sample connected) has seen what making needs; then
+// Make it in Render, through a page that says what it makes and asks for a
+// code; Render makes the service and never answers; Carry on (two minutes
+// later) finds it, makes nothing twice, saves its address and adds
+// d.base.win; once its first build is live its server (5609) answers, the
+// six lines are Done, the checklist ticks and Invite opens the desk.
 //
 // Ports 5600–5609: 5600 the console (in this process, so the test can age
 // the code in its database), 5601 campaign "a" (production), 5602 the
@@ -41,7 +48,8 @@
 // (node server/index.js, in memory; needs npm run build). 5601, 5602, 5604
 // and 5605 are apps/platform/test/fake-client.mjs, which checks each token
 // with the campaign side's rules; "b" checks them with its own. 5608 is the
-// stand-in for Render's API (only once the first part has run with no key).
+// stand-in for Render's API (only once the first part has run with no key);
+// 5609 campaign "d", made by Make it in Render (only once its first build is live).
 //
 // Run (system node, under the browser lock):
 //   flock -o SP/batch6/locks/browser.lock node e2e-ops.mjs
@@ -545,6 +553,77 @@ try {
     ok(sentOut.length === 5 && sentOut.every((line) => line.includes(RENDER_IDS.a) || line.includes(RENDER_IDS.aDb)), `five changes went to Render, all to campaign a’s service and database (${sentOut.join(', ')})`);
     ok(!(await page.content()).includes(RENDER_KEY) && !JSON.stringify((await db.query('select * from render_jobs')).rows).includes(RENDER_KEY), 'the key is on no page and in no row');
     ok(errors.length === 0, `no console errors with Render${errors.length ? `: ${errors.join(' | ')}` : ''}`);
+
+    // 11. Stage 2: Make it in Render, for New campaign "d".
+    world.madeUrl = 'http://127.0.0.1:5609';
+    const madeBefore = world.received.length;
+    await page.goto(`${B}/new`);
+    await page.fill('#name', 'd');
+    await page.fill('#display', 'Example Made');
+    await page.fill('#city', 'Exampleton');
+    await page.fill('#sw', '50.6, -120.5');
+    await page.fill('#ne', '50.8, -120.2');
+    if (await page.locator('#code').count()) await page.fill('#code', await code());
+    await page.click('.btn-primary');
+    await page.waitForURL(/\/c\/d\/setup$/);
+    ok(!/Make it in Render/.test(await flat()) && await page.locator('#env-block').count() === 1, 'before the check (the last one found Render down): the hand steps, as before');
+    await page.goto(`${B}/render`);
+    await page.click('button:has-text("Check Render’s answers")');
+    await page.waitForSelector('h1:has-text("Check Render’s answers")');
+    ok(/Staging’s service, as a new one is made\s*Matches/.test(await flat()) && /New campaign can make a campaign’s database and service in Render from here/.test(await flat()), 'Check Render’s answers: making matches, and opens Make it in Render');
+    await page.goto(`${B}/c/d/setup`);
+    ok(await page.locator('.btn-primary', { hasText: 'Make it in Render' }).count() === 1 && await page.locator('#env-block').count() === 1, 'the set-up page: Make it in Render, the hand steps under More');
+    await look(page, '31-make-card');
+    // Render makes the service and never answers.
+    world.madeButTimedOut({ on: /^POST \/services$/ });
+    await page.click('button:has-text("Make it in Render")');
+    await page.waitForSelector('#code');
+    ok(/Makes two paid things in Render: the database base-win-d-db \(Basic 1 GB, PostgreSQL 16, Oregon, closed to the internet\) and the service base-win-d/.test(await flat()), 'the page says what it makes, and that Render bills for it');
+    await look(page, '32-make-confirm');
+    await page.fill('#code', await code());
+    await page.click('.btn-primary');
+    await page.waitForURL(/\/c\/d\/setup$/);
+    let made = await flat();
+    ok(/Render didn’t say whether it made the service\. Wait two minutes, then Carry on/.test(made) && /Database made\s*Done/.test(made) && /Service made\s*Not yet/.test(made), 'no answer for the service: the card says wait, then Carry on');
+    ok(world.named('base-win-d').length === 1 && world.named('base-win-d-db').length === 1, 'Render holds one database and one service');
+    await look(page, '33-make-no-answer');
+    await db.query("update render_jobs set began_at = began_at - interval '3 minutes', ended_at = ended_at - interval '3 minutes' where campaign = 'd'");
+    await page.click('button:has-text("Carry on")');
+    await page.waitForSelector('#code');
+    await page.fill('#code', await code());
+    await page.click('.btn-primary');
+    await page.waitForURL(/\/c\/d\/setup$/);
+    made = await flat();
+    const dSvc = world.service('base-win-d');
+    ok(world.named('base-win-d').length === 1 && world.named('base-win-d-db').length === 1, 'Carry on found what Render had made: still one of each');
+    ok(/Service made\s*Done/.test(made) && /Address added\s*Done/.test(made) && /First build live\s*Not yet/.test(made), 'service found, address saved, d.base.win added; the first build still to come');
+    ok(world.domains[dSvc.id].some((x) => x.name === 'd.base.win') && (await db.query("select server_url from environments where campaign = 'd'")).rows[0].server_url === 'http://127.0.0.1:5609', 'Render lists d.base.win; its Render address is saved here');
+    // Its first build goes live: the server answers.
+    world.finishDeploys(dSvc.id);
+    const dServer = startFakeClient({ port: 5609, env: 'production', publicKey: KEY, address: 'http://127.0.0.1:5603/d' });
+    addresses.clients.d = 'http://127.0.0.1:5609';
+    try {
+      const dPage = await checkNow('d');
+      ok(/Database and service made in Render Done by itself/.test(dPage) && /Answers at d\.base\.win Done by itself/.test(dPage), 'the checklist ticks by itself');
+      await page.goto(`${B}/c/d/setup`);
+      made = await flat();
+      ok(['Database made', 'Database ready', 'Service made', 'Address added', 'First build live', 'Answering'].every((w) => new RegExp(`${w}\\s*Done`).test(made)), 'all six lines Done');
+      await look(page, '34-make-done');
+      await page.fill('#invite-d', 'lee@example.org');
+      const tabD = await newTab(() => page.click('button:has-text("Invite and open the desk")'));
+      await land(tabD, 'http://127.0.0.1:5609/admin/settings/members');
+      ok(/Invited lee@example\.org/.test(await text(tabD)), 'Invite opens the new campaign’s desk');
+      await tabD.close();
+      const sentMake = world.received.slice(madeBefore).filter((r) => r.method !== 'GET');
+      ok(sentMake.every((r) => !JSON.stringify(r).includes(RENDER_IDS.a) && !JSON.stringify(r).includes(RENDER_IDS.first) && !JSON.stringify(r).includes(RENDER_IDS.staging)), 'nothing sent while making names another campaign');
+      ok(world.forbidden.length === 0, `making asked Render for nothing forbidden${world.forbidden.length ? `: ${world.forbidden.join(' | ')}` : ''}`);
+      ok(!(await page.content()).includes('SENTINEL-NEW-DB-PASS') && !JSON.stringify((await db.query('select * from render_jobs')).rows).includes('SENTINEL-NEW-DB-PASS')
+        && !JSON.stringify((await db.query('select * from ops_log')).rows).includes('SENTINEL-NEW-DB-PASS'), 'the new database’s address is on no page, in no row, on no line');
+      ok(dServer.state.refused.length === 0, 'the new campaign’s server refused no token');
+      ok(errors.length === 0, `no console errors while making${errors.length ? `: ${errors.join(' | ')}` : ''}`);
+    } finally {
+      await dServer.close();
+    }
   } finally {
     await fakeRender.close();
     for (const k of ['RENDER_API_KEY', 'RENDER_SERVICE_ID', 'OPS_RENDER_API']) delete process.env[k];

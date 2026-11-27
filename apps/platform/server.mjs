@@ -30,8 +30,9 @@ const STATIC = {
 };
 
 // fetcher: tests hand in a fake for the health checks. render: tests hand in
-// a Render client made over a stand-in for Render.
-export const makeApp = ({ db, fetcher, render } = {}) => {
+// a Render client made over a stand-in for Render. waits: how long Make it
+// in Render waits between looks (tests: not at all).
+export const makeApp = ({ db, fetcher, render, waits } = {}) => {
   const app = new Hono();
   app.use('*', headers);
   // Any host: the platform's own health check (Render's), nothing else.
@@ -44,7 +45,7 @@ export const makeApp = ({ db, fetcher, render } = {}) => {
     app.get(path, (c) => c.body(body, 200, { 'Content-Type': type }));
   }
   app.use('*', sameOrigin);
-  const ctx = { db, fetcher, limits: makeLimits() };
+  const ctx = { db, fetcher, limits: makeLimits(), waits };
   // The Render client, asked for on each request: none without a key, none
   // while this service doesn't know its own Render id.
   ctx.render = () => render ?? (cfg().render && cfg().ownService ? sharedRender() : null);

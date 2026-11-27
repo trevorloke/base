@@ -10,6 +10,19 @@ import { NAME_RE, NAME_HELP, RESERVED, normalizeOrigin, getCampaign, campaignVie
 import { doneFor, setItem } from './checklist.mjs';
 import { PROVINCES, TIME_ZONES, JURISDICTIONS, RACES, tzFor, pickValues, hasValues, mapBounds, renderSnippet } from './snippets.mjs';
 import { newPage, setupPage, runningSetupPage, existingPage } from './pages/wizard.mjs';
+import { makeGate, makeState, makeLines, makeWords, byHand, finished } from './render-make.mjs';
+import { makeRefusal, makeNames } from './render-guard.mjs';
+import { cfg } from './config.mjs';
+
+// A paused make card: why Render can't be asked now. Nothing is lost.
+const PAUSED_WORDS = {
+  'no-key': 'Render isn’t connected here now. What was made is kept in Render.',
+  closed: 'Paused. What was made is kept. Press Check Render’s answers (Render, in the menu), then Carry on here.',
+  down: 'Render isn’t answering just now. What was made is kept: look again in a minute.',
+  'other-workspace': 'This key is for another Render workspace than the one Check Render’s answers saw. What was made is kept.',
+};
+// The card's two lines that need a fresh read of Render: left out while paused, not guessed.
+const UNREAD_LINES = ['Database ready', 'First build live'];
 
 const WRONG_CODE = 'That code didn’t work. Type the one your app shows now.';
 const NOT_AN_ADDRESS = 'That isn’t a Render address: it starts with https:// and has no path.';
@@ -67,6 +80,47 @@ export const wizardRoutes = (app, ctx) => {
     return c.redirect(`/c/${v.name}/setup`, 303);
   });
 
+  // Stage 2: card 1 as Make it in Render, or null for today's hand steps.
+  // Off without a Render key, until Check Render’s answers has opened it,
+  // for a campaign whose service was set up by hand, and for a short name
+  // that can't be made there. Reads Render only once it is on.
+  // Once a make has begun here it is never null again: with the gate
+  // closed, no key, or Render not answering, the card is paused (what is
+  // saved here, the two names, no button), so the page never sends you
+  // back to making a second database or service under the name by hand.
+  const makeView = async (v) => {
+    const name = v.campaign.name;
+    const st = await makeState(db, name);
+    const client = ctx.render?.();
+    const gate = await makeGate(db, client);
+    if (!st.began && (!gate.open || byHand(v.envRow, st) || makeRefusal(name))) return null;
+    const answering = addressState(v) === 'answering';
+    const made = finished(v.envRow, st);
+    const paused = (why) => ({
+      paused: true, began: true, button: null, done: made, names: makeNames(name),
+      lines: makeLines({ envRow: v.envRow, st, db: null, deploy: null, answering }).filter(([k]) => !UNREAD_LINES.includes(k)),
+      words: made ? 'Made in Render.' : PAUSED_WORDS[why],
+      refresh: why === 'down' && st.recent && !made,
+    });
+    if (!cfg().render || !client) return paused('no-key');
+    if (!gate.open) return paused('closed');
+    const me = await client.self();
+    if (!me.ok) return st.began ? paused('down') : null;
+    if (me.ownerId !== gate.owner) return st.began ? paused('other-workspace') : null;
+    // Read afresh: while it is being made this page looks again every 15 seconds.
+    const [dbRead, deploy] = await Promise.all([
+      v.envRow.render_db ? client.database(v.envRow.render_db, { fresh: true }) : null,
+      v.envRow.render_service ? client.lastDeploy(v.envRow.render_service, { fresh: true }) : null,
+    ]);
+    const lines = makeLines({ envRow: v.envRow, st, db: dbRead, deploy, answering });
+    const done = lines.every(([, w]) => w === 'Done');
+    let words = makeWords(st.last?.detail?.stopped, name);
+    if (deploy?.ok && deploy.state === 'failed') words = 'The first build failed. Open its log in Render, then Deploy latest (Render, in the menu).';
+    else if (made && !done) words = 'Made in Render. The first build takes a few minutes; this page looks again by itself.';
+    else if (done) words = 'Made in Render, and answering.';
+    return { lines, words, done, began: st.began, names: makeNames(name), button: made ? null : st.began ? 'Carry on' : 'Make it in Render', refresh: st.recent && !done };
+  };
+
   const showSetup = async (c, name, { stale = false, typed = null, message = '', code = 200 } = {}) => {
     const v = await campaignView(db, name);
     if (!v || v.campaign.kind !== 'client') return c.text('Not found', 404);
@@ -77,7 +131,7 @@ export const wizardRoutes = (app, ctx) => {
     if (!hasValues(values)) return c.html(String(runningSetupPage({ ...shared, entry: entryState(v.server), message })), code);
     return c.html(String(setupPage({
       ...shared, values, addressState: addressState(v), invited: (await doneFor(db, name)).has('first-manager-invited'),
-      snippet: renderSnippet({ name, display: v.campaign.display, values }), stale, typed, message,
+      snippet: renderSnippet({ name, display: v.campaign.display, values }), stale, typed, message, make: await makeView(v),
     })), code);
   };
   app.get('/c/:name/setup', (c) => showSetup(c, c.req.param('name')));

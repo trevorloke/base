@@ -11,6 +11,12 @@
 // that must never be read: an email key and a database address, as
 // sentinels a test can look for.
 //
+// Stage 2: it can also make a database (POST /postgres) and a service
+// (POST /services) the way render-api.mjs believes Render does, and give a
+// database's connection details, but only for one it made itself and
+// before any service uses it. A name already taken is made again (the
+// worst case), so a test sees any second one.
+//
 // It keeps two lists a suite checks at its end:
 //   world.calls      every request, in order
 //   world.forbidden  every request the control centre must never make (any
@@ -56,7 +62,7 @@ const clientSettings = (name, display) => ({
 const service = ({ id, name, ownerId = OWNER, repo = REPO, branch = 'production', url = `https://${name}.onrender.com`, plan = 'starter', docker = true, build = null, createdAt = '2026-10-01T18:00:00Z' }) => ({
   id, name, type: 'web_service', ownerId, repo, branch, autoDeploy: 'yes', suspended: 'not_suspended', createdAt,
   serviceDetails: {
-    url, plan, region: 'oregon', env: docker ? 'docker' : 'node',
+    url, plan, region: 'oregon', env: docker ? 'docker' : 'node', runtime: docker ? 'docker' : 'node', healthCheckPath: docker ? '/api/health' : '/healthz',
     envSpecificDetails: docker ? { dockerfilePath: './Dockerfile', dockerContext: '.' } : { buildCommand: build, startCommand: 'node apps/platform/server.mjs' },
   },
 });
@@ -123,8 +129,12 @@ export const fakeWorld = (over = {}) => {
     ignoreOwnerFilter: false,
     pageSize: 100,
     faults: [],
+    hold: new Set(),       // never('available'): a new database stays "creating"
+    lagLeft: { services: 0, postgres: 0 },
+    madeUrl: null,         // where a service made here answers (a test's own campaign server)
   };
   let deployCount = 100;
+  let madeCount = 0;
 
   const byId = (id) => world.services.find((s) => s.id === id);
   const dbById = (id) => world.databases.find((d) => d.id === id);
@@ -155,12 +165,20 @@ export const fakeWorld = (over = {}) => {
   world.refuse = (status, opts) => fault('refuse', { status, ...opts });          // Render says no; nothing changes
   world.madeButSaid = (status, opts) => fault('made-but-said', { status, ...opts }); // the change happens; the answer says otherwise
   world.madeButTimedOut = (opts) => fault('made-but-timed-out', opts);            // the change happens; no answer comes
+  world.madeButUnreadable = (opts) => fault('made-but-unreadable', opts);          // the change happens; the answer (2xx) isn't JSON
+  world.madeButBig = (opts) => fault('made-but-big', opts);                        // the change happens; the answer is too big to read
   world.slow = (ms, opts) => fault('slow', { ms, ...opts });
   world.big = (opts) => fault('big', opts);
   world.redirect = (opts) => fault('redirect', opts);
   world.dropField = (name, opts) => fault('drop', { field: name, times: Infinity, ...opts });
   world.down = (opts) => fault('refuse', { status: 503, times: Infinity, ...opts });
   world.up = () => { world.faults.length = 0; return world; };
+  // A new database that never gets ready, until lifted.
+  world.never = (what) => { world.hold.add(what); return world; };
+  world.lift = (what) => { world.hold.delete(what); return world; };
+  // Lists miss what was made here for the next n reads of each list.
+  world.lag = (n) => { world.lagLeft = { services: n, postgres: n }; return world; };
+  world.made = () => [...world.services, ...world.databases].filter((x) => x.madeByApi);
   const faultFor = (line) => {
     const f = world.faults.find((x) => x.times > 0 && x.kind !== 'drop' && x.on.test(line));
     if (f) f.times -= 1;
@@ -185,20 +203,80 @@ export const fakeWorld = (over = {}) => {
   };
   const no = (line) => { world.forbidden.push(line); return { status: 404, json: { message: `SENTINEL-RENDER-BODY: nothing at ${line}` } }; };
 
+  // ── Making (stage 2) ──
+  world.connectionReads = [];
+  const internalOf = (d) => `postgres://u:${SENTINELS.newDb}-${d.id}@${d.id}-a/db`;
+  const publicDb = (d) => { const { madeByApi, wired, ...rest } = d; return rest; };
+  const keysAre = (o, list) => o && typeof o === 'object' && !Array.isArray(o) && JSON.stringify(Object.keys(o).sort()) === JSON.stringify([...list].sort());
+  const DB_PLANS = ['basic_1gb', 'basic-1gb'];
+  const makeDatabase = (line, body) => {
+    const shaped = keysAre(body, ['name', 'ownerId', 'plan', 'region', 'version', 'ipAllowList'])
+      && /^base-win-[a-z0-9-]+-db$/.test(body.name) && body.ownerId === OWNER && DB_PLANS.includes(body.plan) && body.region === 'oregon'
+      && body.version === '16' && Array.isArray(body.ipAllowList) && body.ipAllowList.length === 0;
+    if (!shaped) return no(`${line} ${JSON.stringify(body)}`);
+    madeCount += 1;
+    const d = { ...database({ id: `dpg-made${String(madeCount).padStart(15, '0')}`, name: body.name }), status: 'creating', createdAt: new Date().toISOString(), madeByApi: true, wired: false };
+    world.databases.push(d);
+    return { status: 201, json: publicDb(d) };
+  };
+  // What a new client's service may be given, and nothing else.
+  const MAY_SET = [...READABLE, 'DATABASE_URL', 'STARBASE_TWO_STEP_KEY', 'GOOGLE_TOKEN_KEY'];
+  const makeService = (line, body) => {
+    const no2 = () => no(`${line} ${JSON.stringify(body)}`);
+    if (!keysAre(body, ['type', 'name', 'ownerId', 'repo', 'branch', 'autoDeploy', 'envVars', 'serviceDetails'])) return no2();
+    if (body.type !== 'web_service' || !/^base-win-[a-z0-9-]+$/.test(body.name) || body.ownerId !== OWNER || body.repo !== REPO || body.branch !== 'production' || body.autoDeploy !== 'yes') return no2();
+    const sd = body.serviceDetails;
+    if (!keysAre(sd, ['runtime', 'plan', 'region', 'healthCheckPath', 'envSpecificDetails']) || sd.runtime !== 'docker' || sd.plan !== 'starter' || sd.region !== 'oregon'
+      || sd.healthCheckPath !== '/api/health' || !keysAre(sd.envSpecificDetails, ['dockerfilePath', 'dockerContext'])
+      || sd.envSpecificDetails.dockerfilePath !== './Dockerfile' || sd.envSpecificDetails.dockerContext !== '.') return no2();
+    if (!Array.isArray(body.envVars)) return no2();
+    const keys = body.envVars.map((e) => e?.key);
+    if (new Set(keys).size !== keys.length || keys.some((k) => !MAY_SET.includes(k))) return no2();
+    const settings = {};
+    let wires = null;
+    for (const e of body.envVars) {
+      if (keysAre(e, ['key', 'generateValue'])) {
+        if (e.generateValue !== true || !['STARBASE_TWO_STEP_KEY', 'GOOGLE_TOKEN_KEY'].includes(e.key)) return no2();
+        settings[e.key] = `${SENTINELS.client}-generated-${e.key}`;
+      } else if (keysAre(e, ['key', 'value']) && typeof e.value === 'string') {
+        if (['STARBASE_TWO_STEP_KEY', 'GOOGLE_TOKEN_KEY'].includes(e.key)) return no2();
+        if (e.key === 'DATABASE_URL') {
+          wires = world.databases.find((d) => d.madeByApi && !d.wired && internalOf(d) === e.value && d.name === `${body.name}-db`);
+          if (!wires) return no2();
+        }
+        settings[e.key] = e.value;
+      } else return no2();
+    }
+    if (!wires) return no2();
+    wires.wired = true;
+    madeCount += 1;
+    const s = { ...service({ id: `srv-made${String(madeCount).padStart(15, '0')}`, name: body.name, url: world.madeUrl || `https://${body.name}.onrender.com` }), createdAt: new Date().toISOString(), madeByApi: true };
+    world.services.push(s);
+    world.settings[s.id] = settings;
+    world.domains[s.id] = [];
+    deployCount += 1;
+    const dep = { ...deployOf(deployCount, 'build_in_progress', 'c41f2aa0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6'), createdAt: new Date().toISOString() };
+    world.deploys[s.id] = [dep];
+    const { madeByApi, ...shown } = s;
+    return { status: 201, json: { service: shown, deployId: dep.id } };
+  };
+
   // One request → { status, json }. Never throws.
   const handle = (method, path, body) => {
     const line = `${method} ${path}`;
     const url = new URL(path, 'http://fake.invalid');
     const parts = url.pathname.split('/').filter(Boolean);
     if (method === 'DELETE') return no(line);
-    if (/\/(suspend|resume|scale|rollback|jobs|logs|export|recovery|credentials|secret-files|env-groups|disks|members|webhooks|connection-info)\b/.test(url.pathname)) return no(line);
+    if (/\/(suspend|resume|scale|rollback|jobs|logs|export|recovery|credentials|secret-files|env-groups|disks|members|webhooks)\b/.test(url.pathname)) return no(line);
     if (parts[0] === 'owners' && parts.length === 1 && method === 'GET') return { status: 200, json: page(world.owners, 'owner', url) };
     if (parts[0] === 'blueprints' && parts.length === 1 && method === 'GET') return { status: 200, json: page(world.blueprints, 'blueprint', url) };
     if (parts[0] === 'services') {
       if (parts.length === 1) {
+        if (method === 'POST') return makeService(line, body);
         if (method !== 'GET') return no(line);
         const owner = url.searchParams.get('ownerId');
-        const list = world.ignoreOwnerFilter ? world.services : world.services.filter((s) => s.ownerId === owner);
+        let list = world.ignoreOwnerFilter ? world.services : world.services.filter((s) => s.ownerId === owner);
+        if (world.lagLeft.services > 0) { world.lagLeft.services -= 1; list = list.filter((s) => !s.madeByApi); }
         return { status: 200, json: page(list, 'service', url) };
       }
       const s = byId(parts[1]);
@@ -251,15 +329,28 @@ export const fakeWorld = (over = {}) => {
     }
     if (parts[0] === 'postgres') {
       if (parts.length === 1) {
+        if (method === 'POST') return makeDatabase(line, body);
         if (method !== 'GET') return no(line);
         const owner = url.searchParams.get('ownerId');
-        const list = world.ignoreOwnerFilter ? world.databases : world.databases.filter((d) => d.owner.id === owner);
+        let list = world.ignoreOwnerFilter ? world.databases : world.databases.filter((d) => d.owner.id === owner);
+        if (world.lagLeft.postgres > 0) { world.lagLeft.postgres -= 1; list = list.filter((d) => !d.madeByApi); }
         return { status: 200, json: page(list, 'postgres', url) };
       }
       const d = dbById(parts[1]);
       if (!d) return { status: 404, json: { message: 'SENTINEL-RENDER-BODY: not found' } };
+      if (parts.length === 3 && parts[2] === 'connection-info' && method === 'GET') {
+        // Only for a database made here, before any service uses it.
+        if (!d.madeByApi || d.wired) return no(line);
+        world.connectionReads.push(d.id);
+        return { status: 200, json: { password: `${SENTINELS.newDb}-${d.id}`, internalConnectionString: internalOf(d), externalConnectionString: `postgres://u:${SENTINELS.newDb}-${d.id}@${d.id}-a.oregon-postgres.render.com/db`, psqlCommand: `PGPASSWORD=${SENTINELS.newDb}-${d.id} psql` } };
+      }
       if (parts.length !== 2) return no(line);
-      if (method === 'GET') return { status: 200, json: d };
+      if (method === 'GET') {
+        // A new database is "creating" when first read, then ready, unless held.
+        const json = publicDb(d);
+        if (d.status === 'creating' && !world.hold.has('available')) d.status = 'available';
+        return { status: 200, json };
+      }
       if (method === 'PATCH') {
         const held = d.ipAllowList.map((e) => JSON.stringify(e));
         const sent = body?.ipAllowList;
@@ -284,6 +375,8 @@ export const fakeWorld = (over = {}) => {
     const res = handle(method, path, body);
     if (f?.kind === 'made-but-said') return { status: f.status, json: { message: 'SENTINEL-RENDER-BODY: an error' } };
     if (f?.kind === 'made-but-timed-out') { const e = new Error('timeout'); e.name = 'timeout'; throw e; }
+    if (f?.kind === 'made-but-unreadable') return { status: res.status, json: null, unreadable: true };
+    if (f?.kind === 'made-but-big') { const e = new Error('too-big'); e.name = 'too-big'; throw e; }
     return { status: res.status, json: drop(line, res.json) };
   };
   world.handle = handle;
@@ -322,6 +415,8 @@ export const startFakeRender = ({ port = 5608, world = fakeWorld() } = {}) => ne
       const r = world.handle(req.method, path, body);
       if (f?.kind === 'made-but-said') return out(f.status, { message: 'SENTINEL-RENDER-BODY: an error' });
       if (f?.kind === 'made-but-timed-out') return req.socket.destroy();
+      if (f?.kind === 'made-but-unreadable') { res.writeHead(r.status, { 'content-type': 'application/json' }); return res.end('<html>SENTINEL-RENDER-BODY: not JSON'); }
+      if (f?.kind === 'made-but-big') { res.writeHead(r.status, { 'content-type': 'application/json' }); return res.end(JSON.stringify({ ...r.json, filler: 'x'.repeat(600 * 1024) })); }
       return out(r.status, world.drop(line, r.json));
     });
   });

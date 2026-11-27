@@ -63,8 +63,31 @@ export const CHANGES = {
     title: 'Close the database to the internet', button: 'Close the database to the internet', busy: 'Asking Render…',
     words: (t) => [`Removes ‘anywhere’ from who may connect to ${t.database}. The campaign’s own server still connects. A database tool on your own computer stops connecting until you add its address in Render.`],
   },
+  // Stage 2.
+  set: {
+    title: 'Add a missing setting', button: 'Add it', busy: 'Asking Render…',
+    words: (t) => [`Adds ${t.setting} = ${t.value} to ${t.label}, then deploys. It is added only because it is missing.`],
+  },
+  make: {
+    title: 'Make it in Render', button: 'Make it in Render', busy: 'Making it in Render… this can take a minute',
+    words: (t) => (t.carry
+      ? ['Carries on from where it stopped. It looks first and never makes a second one.',
+        `It finishes ${t.database} and ${t.label}, then adds ${t.host}. Nothing else in Render is touched.`]
+      : [`Makes two paid things in Render: the database ${t.database} (Basic 1 GB, PostgreSQL 16, Oregon, closed to the internet) and the service ${t.label} (Starter, Docker, from the production branch). Render bills for both from today: check its prices. Then it adds ${t.host}. Nothing else in Render is touched and nothing is copied from another campaign. It takes about 5 minutes and may ask you to press Carry on once.`]),
+  },
 };
-const changeTitle = (what, t) => (what === 'domain' && t?.listed ? 'Check the address again' : CHANGES[what].title);
+const changeTitle = (what, t) => {
+  if (what === 'domain' && t?.listed) return 'Check the address again';
+  if (what === 'make' && t?.carry) return 'Carry on making it in Render';
+  if (what === 'set' && t?.setting) return `Add ${t.setting}`;
+  return CHANGES[what].title;
+};
+const changeButton = (what, t) => {
+  if (what === 'domain' && t.listed) return 'Check the address again';
+  if (what === 'make' && t.carry) return 'Carry on';
+  if (what === 'set' && t.setting) return `Add ${t.setting}`;
+  return CHANGES[what].button;
+};
 
 export const CODE_WORDS = {
   missing: 'Render changes take a code every time.',
@@ -78,15 +101,15 @@ export const confirmPage = ({ campaign, what, job, t, message = '' }) => {
   return page({
     title: `${heading} · ${campaign.display}`, nav: true, here: 'render',
     body: html`<section class="card oc-narrow"><h1>${heading}</h1>
-    <p class="oc-help">${campaign.display} · ${t.label} · ${t.url}</p>
+    <p class="oc-help">${campaign.display} · ${t.label} · ${what === 'make' ? t.database : t.url}</p>
     ${CHANGES[what].words(t).map((w) => html`<p>${w}</p>`)}
     <form method="post" action="/c/${campaign.name}/render/${what}" class="oc-form" data-busy="${CHANGES[what].busy}">
       <input type="hidden" name="job" value="${job}">
       ${field({ label: 'Code', name: 'code', inputmode: 'numeric', autocomplete: 'one-time-code', required: true, help: 'From your app, typed for this change. Render changes take a code every time.' })}
       ${status(message, message ? 'warn' : '')}
-      <button class="btn btn-primary oc-wide" type="submit">${what === 'domain' && t.listed ? 'Check the address again' : CHANGES[what].button}</button>
+      <button class="btn btn-primary oc-wide" type="submit">${changeButton(what, t)}</button>
     </form>
-    <p><a class="btn btn-quiet" href="/c/${campaign.name}/render">Cancel</a></p></section>`,
+    <p><a class="btn btn-quiet" href="/c/${campaign.name}/${what === 'make' ? 'setup' : 'render'}">Cancel</a></p></section>`,
   });
 };
 
@@ -99,8 +122,8 @@ export const refusedPage = ({ campaign, message }) => page({
 });
 
 // ── One campaign ──
-const ask = (name, what, words, { primary = false } = {}) => html`<form method="post" action="/c/${name}/render/${what}" class="oc-inline-form" data-busy="Asking Render…">
-  <button class="btn ${primary ? 'btn-primary' : 'btn-quiet'}" type="submit">${words}</button>
+const ask = (name, what, words, { primary = false, setting = null } = {}) => html`<form method="post" action="/c/${name}/render/${what}" class="oc-inline-form" data-busy="Asking Render…">
+  ${setting ? html`<input type="hidden" name="setting" value="${setting}">` : ''}<button class="btn ${primary ? 'btn-primary' : 'btn-quiet'}" type="submit">${words}</button>
 </form>`;
 
 // How the last change ended, from its row (never from anything Render said).
@@ -111,12 +134,15 @@ export const jobWords = (job) => {
   if (job.state === 'failed') {
     if (job.problem === 'still-open') return 'Render didn’t close it.';
     if (job.problem === 'not-read-back') return 'Render took the change, but it doesn’t show there: look in Render.';
+    if (job.problem === 'already-set') return 'It was already set in Render. Nothing was changed.';
+    if (job.what === 'make') return 'Making it in Render stopped: its set-up page says why.';
     return /^\d{3}$/.test(job.problem || '') ? `Render didn’t do it (answer ${job.problem}).` : 'Render didn’t do it.';
   }
   if (job.state === 'done') {
     if (job.detail?.note === 'no-deploy') return 'The key is set. The deploy didn’t start: press Deploy latest.';
     if (job.what === 'link') return 'Connected. Nothing in Render was changed.';
-    if (job.what === 'deploy' || job.what === 'key') return 'Render did it. A new version takes 2 to 3 minutes to go live.';
+    if (job.what === 'deploy' || job.what === 'key' || job.what === 'set') return 'Render did it. A new version takes 2 to 3 minutes to go live.';
+    if (job.what === 'make') return 'Made in Render. Its set-up page shows the first build.';
     if (job.what === 'domain') return 'Render did it. The address works once its DNS record is in place and Render has checked it.';
     return 'Render did it.';
   }
@@ -173,7 +199,7 @@ export const campaignRenderPage = ({ v, s, message = '', kind = 'warn' }) => {
     ${s.job ? status(jobWords(s.job), s.job.state === 'done' ? 'ok' : 'warn') : ''}
     <section class="card"><dl class="oc-dl">${rows}</dl>
       ${refusal ? html`<p class="oc-block">${refusal}</p>${s.code === 'changed' ? ask(name, 'link', 'Connect again') : ''}`
-    : s.buttons.length ? html`<div class="oc-actions">${s.buttons.map(([what, words]) => ask(name, what, words))}</div>
+    : s.buttons.length ? html`<div class="oc-actions">${s.buttons.map(([what, words, setting]) => ask(name, what, words, { setting }))}</div>
       <p class="oc-help">Each button first shows what it will do, and asks for a code.</p>` : ''}
     </section>
     ${back}`,
@@ -252,13 +278,28 @@ const checkWords = (l) => {
   if (l.problem) return `${problemWords(l.problem).replace(' Nothing was changed.', '')}${l.fields.length ? ` Missing: ${l.fields.join(', ')}.` : ''}${l.status ? ` (answer ${l.status})` : ''}`;
   return `Not as expected. Missing: ${l.fields.join(', ')}.`;
 };
-export const checkPage = ({ lines, sample }) => page({
+// Stage 2: Render's own answer about staging, set against the words a new
+// campaign's database and service are made with.
+const MAKE_CALL_WORDS = { 'make-service': 'Staging’s service, as a new one is made', 'make-database': 'Staging’s database, as a new one is made' };
+const makeCheckWords = (l) => {
+  if (l.ok) return 'Matches';
+  if (l.problem) return `${problemWords(l.problem).replace(' Nothing was changed.', '')}${l.status ? ` (answer ${l.status})` : ''}`;
+  return `Doesn’t match: ${l.fields.join(', ')}`;
+};
+export const checkPage = ({ lines, sample, make = { lines: [], open: false } }) => page({
   title: 'Check Render’s answers', nav: true, here: 'render',
   body: html`<h1>Check Render’s answers</h1>
   <p>Each question the Render page asks, and whether Render’s answer came back the way the control centre expects. Nothing was changed.</p>
   <section class="card"><dl class="oc-dl">${lines.map((l) => row(CALL_WORDS[l.call] || l.call, checkWords(l)))}</dl></section>
   ${sample ? '' : html`<p class="oc-block">Connect Sample (staging) to check the rest: its service, last deploy, addresses, one setting and its database.</p>`}
   ${status(lines.every((l) => l.ok) ? 'Every answer is as expected.' : 'Some answers are not as expected. Each is put right in one file, apps/platform/render-api.mjs; until then the pages say “not read” for what they can’t tell.', lines.every((l) => l.ok) ? 'ok' : 'warn')}
+  <section class="card"><h2>Making a new campaign here</h2>
+    <p>Staging’s service and database were made from render.yaml with the same words a new campaign’s are made with. Render’s answer about them shows whether it uses those words.</p>
+    ${make.lines.length ? html`<dl class="oc-dl">${make.lines.map((l) => row(MAKE_CALL_WORDS[l.call] || l.call, makeCheckWords(l)))}</dl>` : ''}
+    ${status(make.open ? 'New campaign can make a campaign’s database and service in Render from here (Make it in Render, on its set-up page). Each press still asks for a code.'
+    : 'New campaign still walks you through Render by hand. It makes things in Render from here once every answer above is as expected, with the sample connected.', make.open ? 'ok' : 'warn')}
+    <p class="oc-help">Not seen by reading: how Render answers the two making calls themselves. The first campaign made here shows that; do it with made-up values.</p>
+  </section>
   <p><a class="btn btn-quiet" href="/render">Back to Render</a></p>`,
 });
 export { raw };

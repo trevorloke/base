@@ -5,12 +5,15 @@
 import { html, raw } from './html.mjs';
 import { cfg } from '../config.mjs';
 
-export const page = ({ title, body, nav = false, here = '' }) => html`<!doctype html>
+// refresh: seconds after which the page loads itself again (a page that is
+// waiting on something), or nothing.
+export const page = ({ title, body, nav = false, here = '', refresh = 0 }) => html`<!doctype html>
 <html lang="en-CA">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex">
+<meta name="robots" content="noindex">${refresh ? html`
+<meta http-equiv="refresh" content="${String(Number(refresh))}">` : ''}
 <!-- The header says no-referrer; a browser then sends "Origin: null" on this
      page's own forms, which the Origin check refuses. same-origin still
      sends no Referer to any other site. -->

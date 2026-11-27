@@ -14,6 +14,11 @@
 //        again, "Asked Render to…" is written to the log and saved before
 //        Render is asked, the change is read back, and the result is logged.
 // Rows and log lines hold names and ids only: never a value or Render's answer.
+//
+// Stage 2 (render-make.mjs): Make it in Render and adding a missing setting
+// on a campaign made with New campaign. Both are Not found until Check
+// Render’s answers has opened them (makeGate), and go through the same ask,
+// code, lease, caps and log as every change.
 import { randomBytes } from 'node:crypto';
 import { cfg } from './config.mjs';
 import { freshAppCode } from './auth-routes.mjs';
@@ -23,16 +28,20 @@ import { appendLog } from './log.mjs';
 import { pollOnce } from './poller.mjs';
 import { campaignView, listCampaigns, getCampaign, envOf, entryState, shortCommit } from './campaigns.mjs';
 import { platformKeys } from './keys.mjs';
-import { guard, neededFor, domainFor, CANARY, REFUSALS } from './render-guard.mjs';
+import { guard, neededFor, domainFor, CANARY, REFUSALS, madeHere, makeRefusal, makeNames, WRITABLE_MADE, valueFor } from './render-guard.mjs';
+import { makeGate, makeState, runMake, byHand, finished, MAKES_A_DAY, MAKE_WORDS, WAITS } from './render-make.mjs';
 import { NO_KEY_WORDS } from './pages/desk.mjs';
 import { renderPage, campaignRenderPage, confirmPage, refusedPage, checkPage, problemWords, CODE_WORDS } from './pages/render.mjs';
 
-export const WHATS = ['link', 'deploy', 'restart', 'key', 'domain', 'close-db'];
+export const WHATS = ['link', 'deploy', 'restart', 'key', 'domain', 'close-db', 'set', 'make'];
 export const CAPS = { perCampaignAnHour: 6, aDay: 30 };
 const KEY_SETTING = 'BASE_PLATFORM_PUBKEY';
 const OLD_PAGE = 'That page is old. Start again.';
 const BUSY = 'Already working on a change here. Wait a minute.';
 const TOO_MANY = 'Too many changes. Wait, or do it in Render.';
+const TWO_A_DAY = 'Two new campaigns were made in Render today. Make the next one tomorrow, or by hand (More).';
+const BY_HAND = 'This campaign’s service was set up by hand. Nothing was changed.';
+const ALREADY_MADE = 'This campaign is made in Render already. Nothing more to make.';
 const notFound = (c) => c.text('Not found', 404);
 
 // At most `limit` reads at once.
@@ -99,8 +108,8 @@ const looksFor = (v, s, job) => {
   return out;
 };
 
-// The buttons a campaign's page shows: [what, words].
-const buttonsFor = (v, s) => {
+// The buttons a campaign's page shows: [what, words, setting?].
+const buttonsFor = (v, s, { stage2 = false } = {}) => {
   if (s.refusal || !s.me.ok || !s.svc.ok) return [];
   const out = [['deploy', 'Deploy latest'], ['restart', 'Restart']];
   const entry = entryState(v.server);
@@ -112,13 +121,17 @@ const buttonsFor = (v, s) => {
     else if (!mine.verified) out.push(['domain', 'Check the address again']);
   }
   if (v.envRow.render_db && s.db?.ok && s.db.open === true) out.push(['close-db', 'Close the database to the internet']);
+  // Stage 2: a campaign made with New campaign gets each missing setting of its own added.
+  if (stage2 && madeHere(v.campaign) && s.settings?.read) {
+    for (const k of s.settings.missing) if (k !== KEY_SETTING && WRITABLE_MADE.includes(k) && valueFor(v.campaign, k, { stage2 })) out.push(['set', `Add ${k}`, k]);
+  }
   return out;
 };
 
 // The calls a change makes, then the read-back: the setting is set, the
 // address is listed, the database is closed. t is a checked target.
 // → { state: 'done' | 'failed' | 'unknown', status, problem, step, note }
-const run = async (what, client, t, host) => {
+const run = async (what, client, t, host, setting = null) => {
   const ended = (r, step) => ({ state: r.unsure ? 'unknown' : 'failed', status: r.status ?? null, problem: r.problem, step });
   const unread = (r, step) => ({ state: 'unknown', status: r.status ?? null, problem: r.problem, step });
   if (what === 'deploy') {
@@ -133,6 +146,19 @@ const run = async (what, client, t, host) => {
     const set = await client.setOne(t, KEY_SETTING);
     if (!set.ok) return ended(set, 'set');
     const back = await client.isSet(t.service, KEY_SETTING, { fresh: true });
+    if (!back.ok) return unread(back, 'read-back');
+    if (!back.set) return { state: 'failed', status: null, problem: 'not-read-back', step: 'read-back' };
+    const dep = await client.deploy(t);
+    return dep.ok ? { state: 'done' } : { state: 'done', note: 'no-deploy', status: dep.status ?? null, problem: dep.problem, step: 'deploy' };
+  }
+  if (what === 'set') {
+    // Added only because it is missing: asked again just before.
+    const now = await client.isSet(t.service, setting, { fresh: true });
+    if (!now.ok) return { state: 'failed', status: now.status ?? null, problem: now.problem, step: 'look' };
+    if (now.set) return { state: 'failed', status: null, problem: 'already-set', step: 'look' };
+    const set = await client.setOne(t, setting);
+    if (!set.ok) return ended(set, 'set');
+    const back = await client.isSet(t.service, setting, { fresh: true });
     if (!back.ok) return unread(back, 'read-back');
     if (!back.set) return { state: 'failed', status: null, problem: 'not-read-back', step: 'read-back' };
     const dep = await client.deploy(t);
@@ -160,6 +186,7 @@ const run = async (what, client, t, host) => {
 
 export const renderRoutes = (app, ctx) => {
   const { db } = ctx;
+  const waits = ctx.waits || WAITS;
   const names = async () => new Map((await db.query('select name, display from campaigns')).rows.map((r) => [r.name, r.display]));
 
   // One campaign's Render page, with a line of words when a change was refused.
@@ -169,18 +196,23 @@ export const renderRoutes = (app, ctx) => {
       s = await readOne(client, v);
       s.settings = s.svc.ok ? await readSettings(client, v) : { read: false, missing: [] };
       s.job = await lastJob(db, v.campaign.name);
-      s.buttons = buttonsFor(v, s);
+      s.buttons = buttonsFor(v, s, { stage2: (await makeGate(db, client)).open });
     }
     return c.html(String(campaignRenderPage({ v, s, message })), code);
   };
 
   // What a change needs to be true before it is offered, and again before it is made.
-  const notNow = async (what, client, got) => {
+  const notNow = async (what, client, got, setting = null) => {
     if (what === 'deploy') {
       const d = await client.lastDeploy(got.target.service, { fresh: true });
       if (d.ok && d.state === 'deploying') return 'A deploy is already running there. Wait for it to finish.';
     }
     if (what === 'key' && !platformKeys().length) return NO_KEY_WORDS;
+    if (what === 'set') {
+      const now = await client.isSet(got.target.service, setting, { fresh: true });
+      if (!now.ok) return problemWords(now.problem);
+      if (now.set) return `${setting} is already set on ${got.svc.name}. Nothing was changed.`;
+    }
     if (what === 'close-db') {
       if (got.db.open === false) return 'This database is already closed to the internet.';
       if (got.db.open !== true) return 'Render’s answer about who may connect couldn’t be read: press Check Render’s answers.';
@@ -244,7 +276,13 @@ export const renderRoutes = (app, ctx) => {
     if (!client) return notFound(c);
     const sample = (await db.query("select e.render_service, e.render_db from environments e join campaigns c on c.name = e.campaign where c.kind = 'sample'")).rows[0];
     const lines = await client.check({ service: sample?.render_service || null, database: sample?.render_db || null });
-    return c.html(String(checkPage({ lines, sample: Boolean(sample?.render_service) })));
+    // Stage 2: the words making needs, in Render's own answer about
+    // staging. What was seen goes on the log; the newest line opens or
+    // closes Make it in Render (makeGate).
+    const make = await client.checkMake({ service: sample?.render_service || null, database: sample?.render_db || null });
+    const ok = lines.every((l) => l.ok);
+    await db.transaction((tx) => appendLog(tx, { operatorId: c.get('session').operator.id, action: 'render.check', payload: { ok, make: ok && make.ready, shapes: make.shapes, owner: make.owner } }));
+    return c.html(String(checkPage({ lines, sample: Boolean(sample?.render_service), make: { ...make, open: ok && make.ready } })));
   });
 
   app.get('/c/:name/render', async (c) => {
@@ -265,19 +303,26 @@ export const renderRoutes = (app, ctx) => {
     const camp = client ? await getCampaign(db, name) : null;
     if (!camp || !WHATS.includes(what)) return notFound(c);
     if (what === 'domain' && camp.kind !== 'client') return notFound(c);
+    // Stage 2: nothing of it until Check Render’s answers has opened it, and
+    // only on a campaign made with New campaign.
+    const gate = what === 'set' || what === 'make' ? await makeGate(db, client) : null;
+    if (gate && (!gate.open || !madeHere(camp))) return notFound(c);
     const f = await form(c);
     const env = envOf(camp);
     await sweep(db, name);
     const v = await campaignView(db, name);
-    if (what === 'link' ? !v.envRow.server_url : !v.envRow.render_service) return notFound(c);
+    if (what !== 'make' && (what === 'link' ? !v.envRow.server_url : !v.envRow.render_service)) return notFound(c);
     if (what === 'close-db' && !v.envRow.render_db) return notFound(c);
+    // set: one setting of this campaign's own, missing, and never base.win's key (it has its own button).
+    const settingOk = (k) => WRITABLE_MADE.includes(k) && k !== KEY_SETTING && Boolean(valueFor(camp, k, { stage2: true }));
+    if (what === 'set' && !f.job && !settingOk(String(f.setting || ''))) return notFound(c);
     const session = c.get('session');
     const operatorId = session.operator.id;
     const host = domainFor(camp);
     // A change turned away: one line of words, and no further question to Render.
     const refuse = (message, code = 409) => c.html(String(refusedPage({ campaign: camp, message })), code);
     // The service this change would go to, read from Render now and checked.
-    const find = () => (what === 'link' ? client.candidate(camp, v.envRow, v.server) : client.target(camp, v.envRow, v.server, { database: what === 'close-db' }));
+    const find = () => (what === 'link' ? client.candidate(camp, v.envRow, v.server) : client.target(camp, v.envRow, v.server, { database: what === 'close-db', stage2: what === 'set' }));
     const wordsOf = (got) => got.refusal || problemWords(got.problem);
     // What the confirm page names: Render's own names for this campaign's service, nothing else.
     const named = async (got) => {
@@ -290,17 +335,48 @@ export const renderRoutes = (app, ctx) => {
       }
       return { id: svc.id, target: what === 'link' ? svc.id : got.target.id, label: svc.name, url: svc.url, branch: svc.branch, database: dbName || null, host, listed };
     };
+    // Make it in Render: may this press go ahead? The words why not, or null.
+    const n = makeNames(name);
+    // What is known here is looked at first; Render is asked last.
+    const makeBlock = async () => {
+      const st = await makeState(db, name);
+      const envRow = (await db.query('select * from environments where campaign = $1 and env = $2', [name, env])).rows[0];
+      const why = makeRefusal(name) || (camp.archived_at ? REFUSALS.archived : null) || (byHand(envRow, st) ? BY_HAND : null)
+        || (finished(envRow, st) ? ALREADY_MADE : null) || (!platformKeys().length ? NO_KEY_WORDS : null)
+        || (st.unsure ? MAKE_WORDS[`unsure-${st.unsure}`]() : null);
+      if (why) return { words: why, st };
+      const today = (await db.query("select count(distinct campaign)::int as n from render_jobs where what = 'make' and began_at > now() - interval '1 day' and campaign <> $1", [name])).rows[0].n;
+      if (today >= MAKES_A_DAY) return { words: TWO_A_DAY, code: 429, st };
+      // The workspace Check Render’s answers saw.
+      const me = await client.self({ fresh: true });
+      if (!me.ok) return { words: problemWords(me.problem), st };
+      if (me.ownerId !== gate.owner) return { notFound: true, st };
+      return { st };
+    };
 
+    if (!f.job && what === 'make') {
+      // ── Ask: Make it in Render (nothing exists yet to target) ──
+      const block = await makeBlock();
+      if (block.notFound) return notFound(c);
+      if (block.words) return refuse(block.words, block.code || 409);
+      const job = randomBytes(16).toString('hex');
+      const t = { label: n.service, database: n.database, host, carry: block.st.began };
+      await db.query("delete from render_jobs where state = 'asked' and asked_at < now() - interval '1 hour'");
+      await db.query(`insert into render_jobs (id, campaign, env, what, target, detail, state, asked_in) values ($1, $2, $3, $4, null, $5, 'asked', $6)`,
+        [job, name, env, what, JSON.stringify(t), sha256(session.tokenHash + job)]);
+      return c.html(String(confirmPage({ campaign: camp, what, job, t })));
+    }
     if (!f.job) {
       // ── Ask ──
       const got = await find();
       if (!got.ok) return refuse(wordsOf(got));
-      const wait = what === 'link' ? null : await notNow(what, client, got);
+      const setting = what === 'set' ? String(f.setting) : null;
+      const wait = what === 'link' ? null : await notNow(what, client, got, setting);
       if (wait) return refuse(wait);
-      const t = await named(got);
+      const t = { ...(await named(got)), ...(setting ? { setting, value: valueFor(camp, setting, { stage2: true }) } : {}) };
       const job = randomBytes(16).toString('hex');
       const detail = {
-        label: t.label, branch: t.branch, ...(t.database ? { database: t.database } : {}), ...(what === 'key' ? { setting: KEY_SETTING } : {}),
+        label: t.label, branch: t.branch, ...(t.database ? { database: t.database } : {}), ...(what === 'key' ? { setting: KEY_SETTING } : {}), ...(setting ? { setting } : {}),
         ...(what === 'domain' ? { host, listed: t.listed } : {}),
       };
       await db.query("delete from render_jobs where state = 'asked' and asked_at < now() - interval '1 hour'");
@@ -322,7 +398,8 @@ export const renderRoutes = (app, ctx) => {
     if (typed !== 'ok') {
       // Nothing is asked of Render. The page comes back for another try, from what the job row kept.
       await denied('code', { service: row.target, label: row.detail.label });
-      const t = { label: row.detail.label, url: v.envRow.server_url, branch: row.detail.branch, database: row.detail.database || null, host, listed: Boolean(row.detail.listed) };
+      const t = { label: row.detail.label, url: v.envRow.server_url, branch: row.detail.branch, database: row.detail.database || null, host, listed: Boolean(row.detail.listed),
+        carry: Boolean(row.detail.carry), ...(what === 'set' ? { setting: row.detail.setting, value: valueFor(camp, row.detail.setting, { stage2: true }) } : {}) };
       return c.html(String(confirmPage({ campaign: camp, what, job: jobId, t, message: CODE_WORDS[typed] })), 401);
     }
     const used = (state, problem) => db.query("update render_jobs set state = $2, ended_at = now(), problem = $3 where id = $1 and state = 'asked'", [jobId, state, problem]);
@@ -340,6 +417,34 @@ export const renderRoutes = (app, ctx) => {
         await used('failed', 'denied');
         return refuse(TOO_MANY, 429);
       }
+    }
+    if (what === 'make') {
+      // Everything again, now; then the steps (render-make.mjs), each with
+      // its own "Asked Render to…" line before Render is asked.
+      const block = await makeBlock();
+      if (block.notFound || block.words) {
+        await denied(block.code === 429 ? 'caps' : block.st?.unsure ? 'wait' : 'state', { label: n.service });
+        await used('failed', 'denied');
+        return block.notFound ? notFound(c) : refuse(block.words, block.code || 409);
+      }
+      let started = false;
+      try {
+        started = (await db.query("update render_jobs set state = 'running', began_at = now() where id = $1 and state = 'asked' returning id", [jobId])).rows.length > 0;
+      } catch { started = false; }
+      if (!started) {
+        await denied('busy');
+        await used('failed', 'denied');
+        return refuse(BUSY);
+      }
+      let out;
+      try {
+        out = await runMake({ db, client, fetcher: ctx.fetcher, camp, env, jobId, operatorId, gate, waits });
+      } catch { out = { state: 'unknown', stopped: { code: 'error' } }; }
+      await db.query('update render_jobs set state = $2, ended_at = now(), problem = $3, detail = detail || $4::jsonb where id = $1',
+        [jobId, out.state, out.stopped?.code || null, JSON.stringify({ stopped: out.stopped })]);
+      client.forget();
+      await pollOnce(db, { only: name, fetcher: ctx.fetcher });
+      return c.redirect(`/c/${name}/setup`, 303);
     }
     // The service again, now: it must still be the one the page named.
     const got = await find();
@@ -369,7 +474,7 @@ export const renderRoutes = (app, ctx) => {
       return c.redirect(`/c/${name}/render`, 303);
     }
 
-    const wait = await notNow(what, client, got);
+    const wait = await notNow(what, client, got, row.detail.setting || null);
     if (wait) {
       await denied('state', { service: payload.service, label: payload.label });
       await used('failed', 'denied');
@@ -391,7 +496,7 @@ export const renderRoutes = (app, ctx) => {
       return refuse(BUSY);
     }
     let out;
-    try { out = await run(what, client, got.target, host); } catch { out = { state: 'unknown', status: null, problem: 'error', step: 'none' }; }
+    try { out = await run(what, client, got.target, host, row.detail.setting || null); } catch { out = { state: 'unknown', status: null, problem: 'error', step: 'none' }; }
     await db.transaction(async (tx) => {
       await tx.query('update render_jobs set state = $2, ended_at = now(), problem = $3, detail = detail || $4::jsonb where id = $1',
         [jobId, out.state, out.state === 'done' ? null : String(out.status || out.problem || 'error'), JSON.stringify({ ...(out.step ? { step: out.step } : {}), ...(out.note ? { note: out.note } : {}) })]);
