@@ -20,11 +20,14 @@ import { prepareCheckout } from '../ext/payments/index.js';
 import { sourceOf } from '../ext/drive/export.js';
 import { donorTier } from '@starbase/shared/canvass';
 import { commandsFor } from '../../web/src/components/commands.js';
+import { todayOf } from '../ext/audience/index.js';
 
 const tag = Math.random().toString(36).slice(2, 8);
 const ok = (r, msg = '') => { assert.ok(r.status === 200 || r.status === 201, `${msg} ${r.status} ${JSON.stringify(r.json)}`); return r.json; };
 const raw = (c, path) => app.request(path, { headers: { cookie: c.cookie } });
-const today = new Date().toISOString().slice(0, 10);
+// The campaign's own day (as "a membership running today" counts it), not UTC's:
+// from 00:00 UTC until midnight in the campaign's time zone the two differ.
+const today = todayOf({});
 const year = Number(today.slice(0, 4));
 const IS = presetFor('imagine-surrey');
 
