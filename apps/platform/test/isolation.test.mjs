@@ -9,6 +9,10 @@
 //       nothing but what was pressed on its own page.
 //   N3  Opening Campaigns, a campaign, the log or base.win's key, or running
 //       the health checks, asks Render nothing.
+//   N4  A campaign made here (stage 2): its new service's settings hold
+//       nothing of the hand-made client's or staging's, its database
+//       address is its own new database's, and no request while it was
+//       made named another campaign's service or database.
 //   N5  No Render page or log line for one campaign holds another's name,
 //       display name or address.
 import { test } from 'node:test';
@@ -121,6 +125,42 @@ test('N3: Campaigns, a campaign, the log, base.win’s key, the health checks an
   assert.deepEqual(await (await r.b.get('/healthz')).json(), { ok: true, db: 'ok' }, '/healthz says nothing about Render');
   // The health checks themselves carry nothing of Render's.
   assert.ok(r.asked.length >= 8 && r.asked.every((url) => /\/api\/health$/.test(url)));
+  assert.deepEqual(r.world.forbidden, []);
+});
+
+test('N4: a campaign made here gets nothing of another campaign’s: its own values, its own new database, no other service named', async () => {
+  const r = await rig({ fresh: ['x'] });
+  await r.connect('a', 'b', 'imaginesurrey', 'sample');
+  assert.equal((await r.b.post('/render/check', {})).status, 200);
+  const before = ofOthers(r.world, []);
+  r.mark();
+  r.world.never('available');
+  assert.equal((await r.change('x', 'make')).status, 303);
+  r.world.lift('available');
+  r.again();
+  assert.equal((await r.change('x', 'make')).status, 303);
+  const svc = r.world.service('base-win-x');
+  const db = r.world.database('base-win-x-db');
+  assert.ok(svc && db, 'made');
+  const mine = r.world.settingsOf(svc.id);
+  // Its time zone is its own (the rig's campaigns are in B.C.): the rest is looked through.
+  assert.equal(mine.STARBASE_TZ, 'America/Vancouver');
+  const text = JSON.stringify({ ...mine, STARBASE_TZ: undefined });
+  const ofFirst = Object.values(r.world.settingsOf(IDS.first)).filter((v) => !['production', 'bc-municipal', 'America/Vancouver', 'council:City council'].includes(v));
+  const ofStaging = Object.values(r.world.settingsOf(IDS.staging)).filter((v) => !['production'].includes(v));
+  // (Words of four letters or more: a one-letter setting like STARBASE_SAMPLE=1 says nothing.)
+  for (const v of [...ofFirst, ...ofStaging, SENTINELS.db, 'Surrey', 'Imagine', 'imagine', 'Vancouver', 'Hartwell', 'Opposed', 'demo@'].filter((x) => x.length >= 4)) assert.ok(!text.includes(v), `the new service holds ${v}`);
+  for (const k of ['STARBASE_SAMPLE', 'STARBASE_SAMPLE_RESET', 'STARBASE_DEMO_EMAIL', 'STARBASE_FRAME_HOSTS', 'RESEND_API_KEY', 'APP_HOSTS', 'STARBASE_OWN_URL']) assert.ok(!(k in mine), k);
+  assert.equal(mine.STARBASE_BRAND, 'base');
+  assert.equal(mine.STARBASE_CANDIDATES, 'none');
+  assert.equal(mine.STARBASE_PUBLIC_URL, 'https://x.base.win');
+  assert.equal(mine.STARBASE_ORG_NAME, 'Example X');
+  assert.equal(mine.DATABASE_URL, `postgres://u:${SENTINELS.newDb}-${db.id}@${db.id}-a/db`, 'its own new database');
+  const others = [IDS.a, IDS.aDb, IDS.b, IDS.bDb, IDS.first, IDS.firstDb, IDS.staging, IDS.stagingDb, IDS.other, IDS.otherDb, IDS.platformDb];
+  for (const c of r.world.calls.slice(r.from)) {
+    for (const id of others) assert.ok(!`${c.path} ${JSON.stringify(c.body)}`.includes(id), `${c.method} ${c.path} names ${id}`);
+  }
+  assert.deepEqual(ofOthers(r.world, [svc.id, db.id]), before, 'every other service, database, setting, address and deploy is as it was');
   assert.deepEqual(r.world.forbidden, []);
 });
 

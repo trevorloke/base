@@ -407,7 +407,7 @@ test('what a new campaign is made as: the same words as the wizard’s block and
   assert.match(yaml.slice(yaml.indexOf('\ndatabases:')), new RegExp(`- name: base-win-db\\n\\s+plan: ${m.databasePlan}\\b[^\\n]*\\n\\s+region: ${m.region}\\n\\s+postgresMajorVersion: "${m.postgres}"`));
   const platform = yaml.slice(yaml.indexOf('name: base-platform\n'), yaml.indexOf('\ndatabases:'));
   assert.match(platform, new RegExp(`^    buildCommand: ${SHAPES.platformBuild}\\s*(#.*)?$`, 'm'), 'render.yaml builds the control centre the way the Render page checks for');
-  assert.equal(Object.keys(CALLS).length, 16);
+  assert.equal(Object.keys(CALLS).length, 19, 'stage 1’s sixteen and stage 2’s three');
 });
 
 test('the stand-in was never asked for anything forbidden, and always got the key', () => {
