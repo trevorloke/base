@@ -82,9 +82,10 @@ export const wizardRoutes = (app, ctx) => {
     if (byHand(v.envRow, st) || makeRefusal(name)) return null;
     const me = await client.self();
     if (!me.ok || me.ownerId !== gate.owner) return null;
+    // Read afresh: while it is being made this page looks again every 15 seconds.
     const [dbRead, deploy] = await Promise.all([
-      v.envRow.render_db ? client.database(v.envRow.render_db) : null,
-      v.envRow.render_service ? client.lastDeploy(v.envRow.render_service) : null,
+      v.envRow.render_db ? client.database(v.envRow.render_db, { fresh: true }) : null,
+      v.envRow.render_service ? client.lastDeploy(v.envRow.render_service, { fresh: true }) : null,
     ]);
     const answering = addressState(v) === 'answering';
     const lines = makeLines({ envRow: v.envRow, st, db: dbRead, deploy, answering });
