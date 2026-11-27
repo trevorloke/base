@@ -1,5 +1,5 @@
 // The hero headline: a fixed start and a word that changes every few
-// seconds (as on imaginesurrey.ca). It can be paused (WCAG 2.2.2: it moves
+// seconds. It can be paused (WCAG 2.2.2: it moves
 // for longer than five seconds), never moves under prefers-reduced-motion,
 // and is not read out again on every change.
 import { createElement, useEffect, useState } from 'react';

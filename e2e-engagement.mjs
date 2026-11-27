@@ -17,7 +17,7 @@
 // scroll, 48px targets); screenshots at 1360×900 and 390×844. The books
 // verify.
 //
-//   STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4180 STARBASE_JOBS_EVERY_MS=1000 node server/index.js &
+//   STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4180 STARBASE_JOBS_EVERY_MS=1000 node server/index.js &
 //   BASE=http://127.0.0.1:4180 SHOTS=/tmp/engagement node e2e-engagement.mjs
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';

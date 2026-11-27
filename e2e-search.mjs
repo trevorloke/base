@@ -22,7 +22,7 @@
 // "Already on the list" while the list is filtered. Each screen at 1440×900 and 390×844: one yellow button at most,
 // no sideways scroll, 48 px targets on a phone.
 //
-//   STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=5440 node server/index.js &
+//   STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=5440 node server/index.js &
 //   BASE=http://127.0.0.1:5440 SHOTS=/tmp/search node e2e-search.mjs
 // Under a client's path (BASE_PATH=/imaginesurrey on the server):
 //   BASE=http://127.0.0.1:5441 BASE_PATH=/imaginesurrey SHOTS=/tmp/search-bp node e2e-search.mjs

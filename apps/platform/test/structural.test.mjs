@@ -2,7 +2,7 @@
 // helpers (never its database, extensions, routes or index), reads only its
 // own settings, keeps secret-like columns to the sign-in tables, keeps a
 // campaign's values to an allow-list, never changes or removes a log line,
-// and refuses the same names as the door.
+// keeps the same names as the door, and needs nothing of the door's.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
@@ -37,7 +37,9 @@ test('only the server’s small shared helpers: never its database, extensions, 
 });
 
 test('settings are read in config.mjs only, and only its own', () => {
-  const ALLOWED = ['DATABASE_URL', 'PORT', 'NODE_ENV', 'OPS_HOST', 'OPS_SETUP_CODE', 'OPS_SECRET', 'PLATFORM_SIGNING_KEY', 'OPS_CLIENT_ORIGIN', 'OPS_INSECURE_COOKIES', 'OPS_ALLOW_LOCAL'];
+  const ALLOWED = ['DATABASE_URL', 'PORT', 'NODE_ENV', 'RENDER', 'OPS_HOST', 'OPS_SETUP_CODE', 'OPS_SECRET', 'PLATFORM_SIGNING_KEY', 'OPS_PUBLIC_TEMPLATE', 'OPS_INSECURE_COOKIES', 'OPS_ALLOW_LOCAL'];
+  // The Render key, this service's own id at Render, and the tests' stand-in for Render (render-api.mjs).
+  ALLOWED.push('RENDER_API_KEY', 'RENDER_SERVICE_ID', 'OPS_RENDER_API');
   for (const f of files.filter((x) => x.path !== 'config.mjs')) assert.doesNotMatch(f.text, /process\.env/, f.path);
   const config = files.find((x) => x.path === 'config.mjs').text;
   const read = [...new Set([...config.matchAll(/\benv\.([A-Z_]+)/g)].map((m) => m[1]))];
@@ -72,8 +74,8 @@ test('secret-like columns only in the sign-in tables, by their allowed names; a 
     }
   }
   assert.ok(seen > 50, `columns read: ${seen}`);
-  assert.deepEqual(VALUE_KEYS, ['city', 'province', 'rules', 'tz', 'races']);
-  assert.deepEqual(pickValues({ city: 'X', tz: 'America/Toronto', token: 's', email: 'e@example.org', races: ['council'] }), { city: 'X', tz: 'America/Toronto', races: ['council'] });
+  assert.deepEqual(VALUE_KEYS, ['city', 'province', 'rules', 'tz', 'races', 'bounds']);
+  assert.deepEqual(pickValues({ city: 'X', tz: 'America/Toronto', token: 's', email: 'e@example.org', races: ['council'], sw: '1, 2', ne: '3, 4' }), { city: 'X', tz: 'America/Toronto', races: ['council'] });
   assert.match(files.find((x) => x.path === 'campaigns.mjs').text, /JSON\.stringify\(pickValues\(values\)\)/);
 });
 
@@ -85,8 +87,23 @@ test('no line of the log is ever changed or removed', () => {
   }
 });
 
-test('the same kept names as the door', () => {
+test('the same kept names as the door; staging and demo are kept too', () => {
   assert.deepEqual(RESERVED, DOOR_RESERVED);
+  for (const name of ['staging', 'demo', 'ops', 'www', 'sample']) assert.ok(RESERVED.includes(name), name);
+});
+
+// Each client is at its own address (https://<name>.base.win, a custom
+// domain on its own service). The door is in the repo, and nothing here
+// needs it: none of its settings, and no base.win/<name> address.
+test('nothing here needs the door: none of its settings, no base.win/<name> address', () => {
+  for (const f of files) {
+    assert.doesNotMatch(f.text, /BASE_PATH|BASE_DOOR_KEY|BASE_CLIENTS|OPS_DOOR_ORIGIN|doorOrigin|doorValue/, f.path);
+    assert.doesNotMatch(f.text, /base\.win\/(<name>|\$\{)/, f.path);
+    for (const m of f.text.matchAll(/\bfrom\s+'([^']+)'/g)) assert.doesNotMatch(m[1], /door/, `${f.path} imports ${m[1]}`);
+  }
+  const readme = readFileSync(join(ROOT, 'README.md'), 'utf8');
+  assert.doesNotMatch(readme, /BASE_PATH|BASE_DOOR_KEY|BASE_CLIENTS|OPS_DOOR_ORIGIN|base\.win\/</);
+  assert.match(readme, /<name>\.base\.win/);
 });
 
 // How it ships: ops.base.win deploys from main whatever changed, so its
@@ -99,7 +116,7 @@ test('it ships tested and pinned: CI runs its tests on every change and over Pos
   assert.match(ci, /run: npm run test:platform\s*$/m, 'ci.yml runs the control centre’s tests on every change');
   const wf = read('.github/workflows/base-platform.yml');
   assert.match(wf, /run: npm run test:platform:pg\s*$/m, 'base-platform.yml runs them over Postgres');
-  for (const path of ['shared/**', 'web/src/app.css', 'package.json', 'package-lock.json', 'server/lib/**', 'server/test/entry-vector.json']) {
+  for (const path of ['shared/**', 'web/src/app.css', 'package.json', 'package-lock.json', 'server/lib/**', 'server/presets/**', 'server/test/entry-vector.json']) {
     for (const on of ['push', 'pull_request']) {
       const block = new RegExp(`${on}:[\\s\\S]*?paths: \\[([^\\]]*)\\]`).exec(wf)?.[1] || '';
       assert.ok(block.includes(`'${path}'`), `base-platform.yml ${on} paths include ${path}`);

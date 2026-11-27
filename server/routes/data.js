@@ -1,5 +1,6 @@
-// Data routes (desk roles): bulk import with dedupe, batch geocoding, and the
-// Imagine Surrey sample dataset. Mounted under /api/data, after auth.
+// Data routes (desk roles): bulk import with dedupe, batch geocoding, and
+// "Load sample data" for a campaign whose set-up brings a sample (and
+// "Clear sample data" for every campaign). Mounted under /api/data, after auth.
 import { civic } from '../lib/address.js';
 import { KEY, NAME_ADDR } from '../lib/matchkeys.js';
 import { Hono } from 'hono';
@@ -13,7 +14,7 @@ import { fromLocal } from '../lib/tzsql.js';
 import { loadScale } from '../ext/scale/rules.js';
 import { runAction, newId } from '../lib/events.js';
 import { geocodeAddress } from '../lib/geocode.js';
-import { buildSample } from '../lib/sample.js';
+import { preset, brandHas } from '../lib/preset.js';
 import { logGift } from '../lib/gifts.js';
 import { runHooks } from '../lib/hooks.js';
 import { readVoted } from '../ext/voted/import.js';
@@ -683,12 +684,17 @@ const idLists = (src = {}) => Object.fromEntries(SAMPLE_KEYS.map((k) => [
   k, Array.isArray(src[k]) ? [...new Set(src[k].filter((v) => UUID_RE.test(String(v))))] : [],
 ]));
 
-// "sample-town-hall-newton" is taken when a kept sample event still holds it.
+// A sample event’s address is taken when a kept sample event still holds it.
 app.post('/sample', async (c) => {
   const ctx = c.get('ctx');
   if (ctx.role !== 'manager') return c.json({ error: 'managers only' }, 403);
+  // The sample people are one campaign's own (server/lib/preset.js): a
+  // campaign whose set-up brings none has nothing to load. Clearing a sample
+  // loaded earlier (DELETE below) stays for everyone.
+  if (!brandHas('sample')) return c.json({ error: 'not found' }, 404);
   const db = c.get('db');
-  const S = buildSample();
+  const sample = preset().sample;
+  const S = (await sample.load()).buildSample();
   const year = new Date().getUTCFullYear();
   const W = ctx.workspaceId;
   const { result } = await runAction(db, { workspaceId: W, actorId: ctx.user.id, action: 'sample.load' }, async (tx, emit) => {
@@ -846,14 +852,14 @@ app.post('/sample', async (c) => {
       ids.signs.push(sid);
       emit('sign', sid, 'create', { kind, status, sample: true });
     }
-    // An upcoming Saturday shift, the Newton turf.
+    // An upcoming Saturday shift, on the sample's turf.
     const sat = new Date(); sat.setUTCDate(sat.getUTCDate() + ((6 - sat.getUTCDay() + 7) % 7 || 7)); sat.setUTCHours(17, 0, 0, 0);
     const shiftId = newId();
     await tx.query(
       `insert into shifts (id, workspace_id, title, role, location, starts_at, ends_at, instructions, link, capacity, created_by)
-       values ($1, $2, 'Saturday canvass — Newton (sample)', 'doorknocking', 'Newton Rec Centre, 13730 72 Ave', $3, $4,
+       values ($1, $2, $6, 'doorknocking', $7, $3, $4,
                'Meet at the north entrance. Bring water and comfortable shoes.', null, 8, $5)`,
-      [shiftId, W, sat.toISOString(), new Date(sat.getTime() + 3 * 3600e3).toISOString(), ctx.user.id],
+      [shiftId, W, sat.toISOString(), new Date(sat.getTime() + 3 * 3600e3).toISOString(), ctx.user.id, sample.shift.title, sample.shift.place],
     );
     ids.shifts.push(shiftId);
     emit('shift', shiftId, 'create', { sample: true });

@@ -1,15 +1,26 @@
-# Render Blueprint — one client's two environments, from one repo:
-#   base-win-staging    deploys every push to `main`     → test here first
-#   base-win            deploys the `production` branch  → promoted from main
-#                       by the "Promote to production" workflow (GitHub → Actions)
-# Each has its own Postgres database; nothing is shared between them.
+# Render Blueprint — base.win's three environments, from one repo (GOING-LIVE.md §0):
+#   Staging     base-win-staging, every push to `main` → https://staging.base.win
+#               the sample campaign and the public demo; nobody real is on it
+#   Production  one service per client, from the `production` branch, which
+#               "Promote to production" (GitHub → Actions) moves up from main.
+#               Imagine Surrey: base-win → https://imaginesurrey.base.win
+#   Admin       base-platform, the control centre → https://ops.base.win
+# The front page, https://base.win, is apps/front/index.html: a static site set
+# up by hand in Render (not in this file), from `main`; it frames staging's demo.
+# Each service has its own Postgres database; nothing is shared between them.
 #
 # Another client is made with the control centre: ops.base.win → New campaign
 # walks Render through one production service and its database
-# (base-win-<client>, base-win-<client>-db) — see GOING-LIVE.md §6 "A new
-# client". The fallback: copy the production block (base-win and its
-# database) under those names with its own STARBASE_* values. Service names
-# are unique per Render account, so the copy must rename both.
+# (base-win-<name>, base-win-<name>-db), served at its own address,
+# https://<name>.base.win, a custom domain on that service — see GOING-LIVE.md
+# §6 "A new client". The fallback: the same page of the control centre writes
+# that client's own block for this file (its names, its STARBASE_* values and
+# STARBASE_BRAND=base). Its STARBASE_* lines come as sync: false, each value
+# after its #, as in base-win's block: set those values on the new service in
+# Render. A fixed value would be written over at every sync, and the
+# release-settings check refuses it. Never copy base-win's block below: it
+# is Imagine Surrey's, and its STARBASE_BRAND setting (imagine-surrey in
+# Render) turns on Imagine Surrey's own set-up.
 #
 # Docs: https://render.com/docs/blueprint-spec
 #
@@ -20,15 +31,16 @@
 #   RESEND_WEBHOOK_SECRET, RESEND_REGION                email: bounces and complaints back; where Add domain makes the domain
 #   MAIL_PROVIDER, SENDGRID_API_KEY, SENDGRID_WEBHOOK_PUBLIC_KEY   email through SendGrid instead of Resend
 #   MAILCHIMP_API_KEY, MAILCHIMP_AUDIENCE_ID, MAILCHIMP_WEBHOOK_SECRET   Mailchimp: a list out as a tag, unsubscribes back
+#   STARBASE_WEBSITE_URL, STARBASE_WEBSITE_KEY          unsubscribes sent to the campaign's own website, when it is hosted
+#                                                       apart; set by hand on that one service, never listed below
 #   GEOCODER (bc), GEOCODER_FALLBACK, BC_GEOCODER_KEY   map pins (google is no longer used for pins)
 #   GOOGLE_TRANSLATE_KEY                                the website in Punjabi and Chinese: Google Cloud
 #                                                       Translation, a separate key restricted to it (asked
 #                                                       for below); GOOGLE_TRANSLATE_API_BASE is for tests only
-#   GOOGLE_MAPS_TILES=off, GOOGLE_MAPS_TILE_TYPE        Google is the map whenever its key is set; =off keeps
-#                                                       the free map. Before this goes to staging, tell us Google
-#                                                       or the free map for canvassing. With a key already set,
-#                                                       Google becomes the map and phones stop keeping street
-#                                                       maps offline. Set GOOGLE_MAPS_TILES=off to keep the free map.
+#   GOOGLE_MAPS_TILES=on, GOOGLE_MAPS_TILE_TYPE         Google is the map only with =on and its key set; unset
+#                                                       or off keeps the free map, which phones keep for
+#                                                       no-signal areas. Google's map is not kept offline.
+#                                                       Tell us Google or the free map for canvassing.
 #   GOOGLE_TILES_DAILY_MAX                              Google tiles a day, then the free map until midnight
 #   ADDRESS_SUGGEST                                     google: Google's address suggestions (only after counsel's yes)
 #   GOOGLE_PLACES_DAILY_MAX, GOOGLE_PLACES_PER_PERSON   Google asks a day (300) and per person (50)
@@ -70,8 +82,14 @@ services:
       # Staging is a sample campaign in Vancouver: base.win's own look, a
       # made-up name and no client's brand, so it can be shown to anyone (server/lib/brand.js; a brand a manager saves
       # in Settings → Brand wins over it). The rules below — limits,
-      # time zone, city, slates — are the client's, so staging tests what
-      # production does.
+      # time zone, slates — are the ones a B.C. municipal client runs under,
+      # so staging tests what production does.
+      # Staging is the public demo: anyone can open it and is signed in as
+      # the sample campaign's manager. So its email and texting keys are test
+      # keys or unset, never a client's, and it never holds a real list.
+      # Its map and translation keys are base.win's own, with a daily ceiling
+      # set (GOOGLE_TILES_DAILY_MAX, GOOGLE_PLACES_DAILY_MAX), or unset:
+      # never a client's (GOING-LIVE.md §0).
       - key: STARBASE_BRAND
         value: base
       - key: STARBASE_ORG_NAME
@@ -86,7 +104,7 @@ services:
         value: "49.198,-123.225|49.317,-123.023"
       - key: STARBASE_SLATES
         value: "council:City council,school_board:School board"
-      - key: STARBASE_PUBLIC_URL     # this environment's address, e.g. https://starbase-staging.onrender.com
+      - key: STARBASE_PUBLIC_URL     # this environment's address: https://staging.base.win
         sync: false
       # The public demo (server/lib/demo.js; staging only): the base.win
       # website may frame this server, and /api/auth/demo signs a visitor in
@@ -95,28 +113,33 @@ services:
         value: "https://base.win,https://www.base.win"
       - key: STARBASE_DEMO_EMAIL     # the demo account, the sample campaign's manager (an address on a domain you hold)
         value: demo@base.win
-      # The sample campaign (server/lib/samplecampaign.js; staging only): made once
-      # when the database holds no campaign. STARBASE_SAMPLE_RESET, set by
-      # hand to a new word, drops everything in staging's database first.
+      # The sample campaign (server/lib/samplecampaign.js; staging only):
+      # everyone and everything in it is made up. It is made when the
+      # database holds no campaign, and made again by itself when a release
+      # carries a newer SAMPLE_VERSION (only while the database's one
+      # campaign is the demo account's). STARBASE_SAMPLE_RESET is the
+      # by-hand override: a word of your own choosing, which nobody issues
+      # and which is not a secret; a word this database hasn't seen drops
+      # everything in staging's database first.
       - key: STARBASE_SAMPLE
         value: vancouver
       - key: STARBASE_SAMPLE_RESET
         sync: false
-      - key: STARBASE_CANDIDATES     # made-up opponents for the sample's rating scale
-        value: "4A:Hartwell:Opposed — Hartwell supporter;4B:Quist:Opposed — Quist supporter;4C:Delmar:Opposed — Delmar supporter"
-      - key: RESEND_API_KEY          # email: newsletters, invites, shift alerts (staging: a test key, or unset)
+      - key: STARBASE_CANDIDATES     # made-up opponents and made-up elector organizations for the sample's rating scale (server/lib/samplecast.js)
+        value: "4A:Avendrel:Opposed — Lantern Quay Electors / Tamsin Avendrel;4B:Brindlemoor:Opposed — Juniper Bridge Alliance / Odell Brindlemoor;4C:Castramont:Opposed — Foghorn Civic League / Mireille Castramont"
+      - key: RESEND_API_KEY          # email: newsletters, invites, shift alerts (staging is public: a test key or unset, never a client's; the daily staging check fails on a live one)
         sync: false
       - key: MAIL_FROM
         sync: false
-      - key: TWILIO_ACCOUNT_SID      # texting and calls (staging: a test number, or unset)
+      - key: TWILIO_ACCOUNT_SID      # texting and calls (staging is public: test credentials or unset, never a client's; the daily staging check fails on live ones)
         sync: false
       - key: TWILIO_AUTH_TOKEN
         sync: false
       - key: TWILIO_FROM
         sync: false
-      - key: GOOGLE_MAPS_SERVER_KEY  # optional: Google map tiles and (when ADDRESS_SUGGEST=google) address suggestions (INTEGRATIONS.md)
+      - key: GOOGLE_MAPS_SERVER_KEY  # optional: Google map tiles and (when ADDRESS_SUGGEST=google) address suggestions (INTEGRATIONS.md). Staging is public: base.win's own key with GOOGLE_TILES_DAILY_MAX and GOOGLE_PLACES_DAILY_MAX set, or unset, never a client's
         sync: false
-      - key: GOOGLE_TRANSLATE_KEY  # optional: the website in Punjabi and Chinese (Cloud Translation only; INTEGRATIONS.md)
+      - key: GOOGLE_TRANSLATE_KEY  # optional: the website in Punjabi and Chinese (Cloud Translation only; INTEGRATIONS.md). Staging is public: base.win's own key or unset, never a client's
         sync: false
       - key: GOOGLE_OAUTH_CLIENT_ID  # optional: Sign in with Google and Google connections (INTEGRATIONS.md); staging's own client
         sync: false
@@ -150,21 +173,29 @@ services:
         fromDatabase:
           name: base-win-db
           property: connectionString
-      # The client: it starts in Imagine Surrey's own look (Surrey Navy,
-      # marigold, its wordmark); a brand a manager saves in Settings → Brand wins.
-      - key: STARBASE_BRAND
-        value: imagine-surrey
-      - key: STARBASE_ORG_NAME
-        value: Imagine Surrey
-      - key: STARBASE_JURISDICTION
-        value: bc-municipal
-      - key: STARBASE_TZ
-        value: America/Vancouver
-      - key: STARBASE_CITY
-        value: Surrey
-      - key: STARBASE_SLATES
-        value: "council:City council,school_board:School board"
-      - key: STARBASE_PUBLIC_URL     # the public address, e.g. https://starbase.imaginesurrey.ca
+      # The client. This setting, imagine-surrey in Render, turns on Imagine
+      # Surrey's own set-up (server/presets/imagine-surrey): its look, its
+      # opponents and city, its profile fields, its membership, its website and
+      # its sample people. It must stay on this service and be on no other:
+      # every other campaign is STARBASE_BRAND=base. A brand a manager saves in
+      # Settings → Brand still wins for the look.
+      # These are the client's own settings, so each is sync: false: set once
+      # in Render on this service and kept there, never written over by a
+      # Blueprint sync (GOING-LIVE.md section 0). Until 26 Nov 2026 this file
+      # gave them as fixed values; each line names the value it gave.
+      - key: STARBASE_BRAND          # imagine-surrey
+        sync: false
+      - key: STARBASE_ORG_NAME       # Imagine Surrey
+        sync: false
+      - key: STARBASE_JURISDICTION   # bc-municipal
+        sync: false
+      - key: STARBASE_TZ             # America/Vancouver
+        sync: false
+      - key: STARBASE_CITY           # Surrey
+        sync: false
+      - key: STARBASE_SLATES         # council:City council,school_board:School board
+        sync: false
+      - key: STARBASE_PUBLIC_URL     # the public address: https://imaginesurrey.base.win
         sync: false
       - key: RESEND_API_KEY
         sync: false
@@ -193,16 +224,26 @@ services:
       - key: BASE_PLATFORM_PUBKEY    # the control centre's public key (ops.base.win → base.win’s key); paste it, never commit it
         sync: false
 
-  # base.win's control centre (apps/platform): one sign-in for every campaign.
-  # Its own address (ops.base.win), never behind the door; its own database.
-  # It never holds a campaign's database address, the door key or a Render key.
+  # base.win's control centre (apps/platform), the admin environment: one
+  # sign-in for every campaign. Its own address (https://ops.base.win) and its
+  # own database. With RENDER_API_KEY set it also reads what Render says about
+  # each campaign's service and database, and makes a short list of named
+  # changes there, each behind a code typed for it and on the log. It keeps no
+  # setting's value, reads no secret and never connects to a campaign's
+  # database. Without the key it walks you through Render by hand, as before.
+  # Branch: main until production has been promoted past the control centre's
+  # release; then production, so the control centre goes through Promote like
+  # everything else. Change it here, in this file, right after that Promote
+  # (never before): a Blueprint sync writes this branch over one changed only
+  # in Render. Set the key only once both say production (GOING-LIVE.md
+  # section 8, "Before the key").
   - type: web
     name: base-platform
     runtime: node
     plan: starter
     region: oregon
-    branch: main                  # moves to production once it is used daily
-    buildCommand: npm ci --omit=dev
+    branch: main                  # see the note above: production, once production holds the control centre's release
+    buildCommand: npm ci --omit=dev --ignore-scripts   # no package's install script runs beside the Render key
     startCommand: node apps/platform/server.mjs
     healthCheckPath: /healthz
     autoDeploy: true
@@ -223,14 +264,16 @@ services:
         generateValue: true
       - key: PLATFORM_SIGNING_KEY    # opens campaign desks; its public half is each campaign's BASE_PLATFORM_PUBKEY
         generateValue: true
+      - key: RENDER_API_KEY          # optional: paste a Render key here in Render, and nowhere else; never a value in git
+        sync: false
 
 databases:
   - name: base-win-staging-db
-    plan: 0.5c-1g              # 0.5 CPU, 1 GB RAM ($19/month); upgraded Nov 2026 for speed
+    plan: basic-1gb            # 0.5 CPU, 1 GB RAM ($19/month); upgraded Nov 2026 for speed
     region: oregon
     postgresMajorVersion: "16"
   - name: base-win-db
-    plan: 0.5c-1g              # 0.5 CPU, 1 GB RAM ($19/month); upgraded Nov 2026 for speed
+    plan: basic-1gb            # 0.5 CPU, 1 GB RAM ($19/month); upgraded Nov 2026 for speed
     region: oregon
     postgresMajorVersion: "16"
   - name: base-platform-db

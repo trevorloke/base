@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Starbase \u2014 the campaign OS for Imagine Surrey. See README.md.",
+  "description": "base.win, the campaign OS.",
   "workspaces": [
     "shared",
     "server",
@@ -16,6 +16,7 @@
     "test:pg": "node scripts/test-pg.mjs",
     "test:platform": "node --test apps/platform/test/*.test.mjs",
     "test:platform:pg": "node scripts/test-pg.mjs apps/platform/test/*.test.mjs",
+    "test:bundle": "node scripts/neutral-bundle.mjs",
     "build": "npm run build -w web"
   },
   "dependencies": {

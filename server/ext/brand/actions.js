@@ -25,15 +25,18 @@ import { newId } from '../../lib/events.js';
 import { httpError } from '../../actions/util.js';
 import { readUpload } from '../abtests/media.js';
 import { SIDEBARS, CORNERS, HEADINGS, deriveLook } from '@starbase/shared/brand-look';
-import { APP_NAME, BRANDS } from '@starbase/shared/brand';
-import { brandKey, forgetBrand, plainWords } from '../../lib/brand.js';
+import { APP_NAME } from '@starbase/shared/brand';
+import { forgetBrand, plainWords } from '../../lib/brand.js';
+import { preset } from '../../lib/preset.js';
 import { cacheClear } from '../site/cache.js';
 import { fontFor, profileFor } from '@starbase/shared/site/fonts';
 import { BRAND_PICTURES, BRAND_PICTURE_KINDS, EXT, imageSize, pictureProblem } from './pictures.js';
 
 const MANAGER = ['manager'];
 const parseJ = (v, d) => (typeof v === 'string' ? JSON.parse(v) : (v ?? d));
-const hex = z.string().trim().regex(/^#[0-9a-fA-F]{6}$/, 'a colour like #003979').transform((s) => s.toLowerCase());
+// The message is made when it is shown: its example colour is the
+// campaign's own (a preset's), or a neutral one.
+const hex = z.string().trim().regex(/^#[0-9a-fA-F]{6}$/, { error: () => `a colour like ${preset().examples.colour ?? '#4f46e5'}` }).transform((s) => s.toLowerCase());
 // Words people read under the icon and in the menu: one line of them.
 const words = (max) => z.string().max(max * 4).transform((s) => plainWords(s, max)).refine((s) => s.length > 0, 'some words, not blanks');
 const picture = () => z.object({ id: z.uuid() }).nullish();
@@ -138,7 +141,7 @@ export const actions = {
         heading: input.heading,
         ...(await headingFaceFor(tx, ws, input.heading)),
         // Unsaid: what the campaign's look called it until now.
-        learn: input.learn || BRANDS[brandKey()].learn,
+        learn: input.learn || preset().training.label,
         shortName: input.short_name || APP_NAME,
         emailHeader: input.email_header,
         logo: await pic('logo', input.logo?.id),

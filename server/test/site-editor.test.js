@@ -5,7 +5,7 @@
 // markers only on the builder's own preview.
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
-import { MODULES, MODULE_BY_KIND, checkModules, checkProps, newModule } from '@starbase/shared/site/catalogue';
+import { MODULES, checkModules, checkProps, newModule, defaultsFor } from '@starbase/shared/site/catalogue';
 import { STARTERS, PLACEHOLDERS, starterModules, samplePath } from '@starbase/shared/site/starters';
 import { needsReload } from '@starbase/shared/site/components/context';
 import { drawBody, markSections } from '@starbase/shared/site/components/preview';
@@ -24,7 +24,9 @@ const words = (m) => {
   walk(m.props);
   return out;
 };
-const defaultsOf = (kind) => words({ props: MODULE_BY_KIND[kind].defaults });
+// The catalogue's starting words as this campaign has them (the suite runs
+// as Imagine Surrey's server, whose band and hero start with its own).
+const defaultsOf = (kind) => words({ props: defaultsFor(kind) });
 const ALL_PLACEHOLDERS = new Set(Object.values(PLACEHOLDERS).flat());
 
 test('each starter makes exactly its sections, in order', () => {
@@ -50,7 +52,7 @@ test('the starters’ words: exactly the listed ones, every one beyond the catal
   const issue = make('issue');
   assert.equal(issue[0].props.titlePrefix, 'Your issue’s headline');
   assert.equal(issue[0].props.text, 'One or two sentences on the problem and what you’d do about it.');
-  assert.deepEqual(issue[0].props.primaryCta, MODULE_BY_KIND.hero.defaults.primaryCta, 'buttons: the catalogue’s');
+  assert.deepEqual(issue[0].props.primaryCta, defaultsFor('hero').primaryCta, 'buttons: the catalogue’s');
   assert.deepEqual(issue[2].props.items.map((i) => i.icon), ['civic', 'people', 'home']);
   assert.ok(issue[2].props.items.every((i) => i.title === 'A point' && i.body === 'One or two sentences on this point.'));
   assert.equal(issue[2].props.title, 'What we stand for');

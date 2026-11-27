@@ -6,7 +6,7 @@
 // are four tabs and "More". (e2e-platform.mjs walks every desk screen for
 // the old names.)
 //
-//   STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4140 node server/index.js &
+//   STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4140 node server/index.js &
 //   BASE=http://127.0.0.1:4140 SHOTS=/tmp/base node e2e-base.mjs
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';

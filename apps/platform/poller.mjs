@@ -1,13 +1,12 @@
 // Every 5 minutes (±30 s; Check now at once): each campaign's public
 // /api/health, from the Render address saved for it, and for a client's
-// production also at its own address (https://<name>.base.win, built here,
-// never taken from an answer; kept under via 'door', the name from when one
-// shared service answered for every client at base.win/<name>). Only known fields are kept, each string cut
+// production also at its public address (https://<name>.base.win, built
+// here, never taken from an answer). Only known fields are kept, each string cut
 // to 200 characters; nothing about people is in a health check. The first
 // answer whose own address is the one saved pins the server's instance;
 // a later change is never re-pinned here (the operator confirms it).
 import { safeGet } from './safe-fetch.mjs';
-import { addressOf } from './config.mjs';
+import { publicAddress } from './campaigns.mjs';
 import { appendLog } from './log.mjs';
 import { autoTick } from './checklist.mjs';
 
@@ -29,7 +28,7 @@ export const fieldsOf = (h) => ({
   platform_kids: Array.isArray(h.platformKids) ? h.platformKids.filter((k) => typeof k === 'string').slice(0, 8).map((k) => k.slice(0, 200)) : null,
   setup_open: bool(h.setupOpen),
   campaign_made: bool(h.campaignMade),
-  door_key: bool(h.doorKey),
+  store: str(h.store),
 });
 
 // One request → a check's columns.
@@ -50,7 +49,7 @@ export const checkUrl = async (url, { fetcher = safeGet } = {}) => {
   }
 };
 
-const COLS = ['answering', 'status', 'ms', 'database', 'commit', 'build', 'tz_current', 'env_reported', 'own_origin', 'instance', 'address', 'entry', 'platform_kids', 'setup_open', 'campaign_made', 'door_key', 'problem'];
+const COLS = ['answering', 'status', 'ms', 'database', 'commit', 'build', 'tz_current', 'env_reported', 'own_origin', 'instance', 'address', 'entry', 'platform_kids', 'setup_open', 'campaign_made', 'store', 'problem'];
 const record = (db, campaign, env, via, r) => db.query(
   `insert into checks (campaign, env, via, ${COLS.join(', ')}) values ($1, $2, $3, ${COLS.map((_, i) => `$${i + 4}`).join(', ')})`,
   [campaign, env, via, ...COLS.map((k) => (k === 'platform_kids' ? (r[k] == null ? null : JSON.stringify(r[k])) : r[k] ?? null))],
@@ -93,8 +92,8 @@ export const pollOnce = async (db, { only = null, fetcher } = {}) => {
     });
     if (e.kind === 'client' && e.env === 'production') {
       tasks.push(async () => {
-        const r = await checkUrl(`${addressOf(e.campaign)}/api/health`, { fetcher });
-        await record(db, e.campaign, e.env, 'door', r);
+        const r = await checkUrl(`${publicAddress(e.campaign)}/api/health`, { fetcher });
+        await record(db, e.campaign, e.env, 'public', r);
       });
     }
   }

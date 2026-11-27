@@ -104,8 +104,12 @@ const failed = (e, what) => {
 };
 
 // ── Autocomplete ──
+// The campaign's map area, or null: with none, Google is told no place to
+// keep to.
 const box = () => {
-  const [s, w, n, e] = geoBox();
+  const b = geoBox();
+  if (!b) return null;
+  const [s, w, n, e] = b;
   return { low: { latitude: s, longitude: w }, high: { latitude: n, longitude: e } };
 };
 const STREET_TYPES = ['street_address', 'premise', 'subpremise'];
@@ -118,7 +122,7 @@ const autocomplete = (q, session, signal) => fetch(`${api()}/places:autocomplete
     includedRegionCodes: ['ca'],
     languageCode: 'en-CA',
     regionCode: 'ca',
-    locationRestriction: { rectangle: box() },
+    ...(box() ? { locationRestriction: { rectangle: box() } } : {}),
   }),
   signal,
 });

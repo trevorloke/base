@@ -43,7 +43,8 @@ import DoorCard, { AddDoorForm, SIGN_LABEL, doorTitle, patchDoors } from '../com
 import GoogleNotice from '../components/GoogleNotice.jsx';
 import { More, useScale } from '../components/RatingButtons.jsx';
 import GeocodeButton from '../components/GeocodeButton.jsx';
-import { DEFAULT_TILES, safeAttribution } from '../components/tiles.js';
+import { DEFAULT_TILES, homeStart, homeView, safeAttribution } from '../components/tiles.js';
+import { ex } from '../brand.js';
 import { DotLayer, DensityLayer, cellAt, countLabel, isBuildingDot, nearest } from './mapDots.js';
 import { groupBuildings, unitRows } from '@starbase/shared/buildings';
 import BuildingSheet, { GONE_LINE, buildingKey, nextUnit, rowDoorKey, seedDoor, unitLine, useBuilding } from '../components/BuildingSheet.jsx';
@@ -59,7 +60,6 @@ import { NS } from '../base.js';
 import { OWN_BUILD } from '../build.js';
 import MapCheck from './MapCheck.jsx';
 
-const SURREY = [49.1913, -122.849];
 // "My turf" (volunteers with a turf) comes first and is where they start:
 // their walk list's doors, not the whole city's.
 const MINE = { key: 'mine', label: 'My turf' };
@@ -928,7 +928,7 @@ function NameTurfForm({ points, doors, takenNames, busy, error, counted = true, 
           {/* Prefilled and selected: Save works at once, typing replaces it. */}
           <input
             id="turf-name" className="input" autoFocus required maxLength={200} autoComplete="off"
-            placeholder="e.g. Fleetwood East" value={name} onChange={(e) => setName(e.target.value)}
+            placeholder={ex('turf.name', 'e.g. North end, east')} value={name} onChange={(e) => setName(e.target.value)}
             onFocus={(e) => e.target.select()}
           />
         </div>
@@ -2136,7 +2136,9 @@ export default function MapPage() {
   useEffect(() => {
     // zoomSnap 0.25: a turf can fill the screen exactly, so its doors open
     // far enough apart that every 48px pin is its own tap.
-    const map = L.map(canvasRef.current, { center: SURREY, zoom: 12, zoomSnap: 0.25, zoomControl: false, attributionControl: false });
+    // It opens on the campaign's own area (wide, when none is set) until the
+    // list or a turf frames it.
+    const map = L.map(canvasRef.current, { ...homeStart(homeView(me)), zoomSnap: 0.25, zoomControl: false, attributionControl: false });
     L.control.attribution({ position: 'bottomleft', prefix: false }).addTo(map);
     L.control.zoom({ position: 'bottomleft' }).addTo(map);
     // Tiles: added below once GET /api/map/config (or the phone's copy) says which.
@@ -2988,6 +2990,10 @@ export default function MapPage() {
       ) : null}
       {zoomNote && !hasSheet && !mode && (
         <p className="map-zoomnote" role="status">{zoomNote}</p>
+      )}
+      {/* No map area set for this campaign: a manager is told who sets it. */}
+      {!homeView(me) && me?.role === 'manager' && !zoomNote && !nobodyHere && !hasSheet && !mode && (
+        <p className="map-zoomnote" role="status">Ask base.win to set your map area, so the map opens on your city.</p>
       )}
       {nobodyHere && !zoomNote && !hasSheet && !mode && (
         <div className="map-nobody" role="status">

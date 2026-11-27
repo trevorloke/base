@@ -57,6 +57,10 @@ import { qrMatrix } from './shared/qr.js';
 import { LEGAL_ENGLISH } from './shared/site/wording.js';
 import { startFakeTranslate } from './server/test/fake-translate.js';
 
+// The fixtures here are Imagine Surrey's, so the server runs as its production
+// does (render.yaml sets this brand); a brand set by hand is left as set.
+if (process.env.STARBASE_BRAND === undefined) process.env.STARBASE_BRAND = 'imagine-surrey';
+
 const PORT = Number(process.env.PORT || 5510);
 const P = String(process.env.BASE_PATH || '').replace(/\/+$/, '');
 const ORIGIN = `http://127.0.0.1:${PORT}`;

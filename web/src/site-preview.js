@@ -11,12 +11,17 @@
 // a button or a picture posts { type: 'wa:pick', section, field } back.
 // Only messages from the page that framed this one, from this origin, and
 // only these types; it never navigates and never writes anything.
-import { MODULE_BY_KIND } from '../../shared/site/catalogue.js';
+import { MODULE_BY_KIND, presetModuleDefaults } from '../../shared/site/catalogue.js';
+import { presetLooks } from '../../shared/site/theme.js';
 import { drawBody, markSections } from '../../shared/site/components/preview.js';
 import { markdownText } from '../../shared/markdown.js';
 
 const el = document.getElementById('wa-rc');
 const wa = el ? JSON.parse(el.textContent) : null;
+// The campaign's own looks and starting words, where its server put any in
+// the page's data: sections drawn here read as the server draws them.
+presetLooks(() => (Array.isArray(wa?.looks) ? wa.looks : []));
+presetModuleDefaults(() => (wa?.moduleDefaults && typeof wa.moduleDefaults === 'object' ? wa.moduleDefaults : {}));
 const edit = document.documentElement.hasAttribute('data-wa-edit');
 let modules = wa?.page?.modules || [];
 let drawn = 0;

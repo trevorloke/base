@@ -4,11 +4,12 @@
 //                                donations by month, the newsletter list, sends
 //   GET /reports/:name.csv       one of them as a spreadsheet
 //   GET /export/:dataset.csv     a whole table as a spreadsheet: people, gifts,
-//                                subscribers, contacts, lists
+//                                subscribers, contacts, lists (and members,
+//                                for a campaign that has a membership)
 // Volunteers are refused all of it. The full JSON export stays at GET /export.
 import { Hono } from 'hono';
 import { csvResponse } from '../../lib/csv.js';
-import { DATASETS, REPORTS, datasetRows, MONEY_REPORTS, MONEY_DATASETS, hasMoney } from './rows.js';
+import { DATASETS, REPORTS, datasetRows, hasDataset, MONEY_REPORTS, MONEY_DATASETS, hasMoney } from './rows.js';
 import { mountQuick } from './quick.js';
 
 export const api = new Hono();
@@ -64,7 +65,7 @@ api.get('/export/:dataset', async (c) => {
   const ctx = c.get('ctx'); const db = c.get('db');
   if (!DESK.includes(ctx.role)) return refuse(c);
   const name = c.req.param('dataset').replace(/\.csv$/, '');
-  if (!DATASETS[name]) return c.json({ error: 'no such export' }, 404);
+  if (!hasDataset(name)) return c.json({ error: 'no such export' }, 404);
   if (MONEY_DATASETS.includes(name) && !hasMoney(ctx)) return noMoney(c);
   // Private profile fields (Faith): a manager's download, when asked for.
   const privateToo = c.req.query('private') === '1';

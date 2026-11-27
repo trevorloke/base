@@ -9,10 +9,10 @@
 //   brief         Today's "Moved — needs an address", for desk roles that
 //                 hold People: { moved: { open } }. A failure leaves it out
 //                 (one line in the log); Today never fails because of it.
-//   sampleLoaded  the sample's three movers (lib/sample.js SAMPLE_MOVERS).
+//   sampleLoaded  the sample's three movers (the set-up's sample: SAMPLE_MOVERS).
 import { areasFor } from '../../lib/perms.js';
 import { newId } from '../../lib/events.js';
-import { SAMPLE_MOVERS } from '../../lib/sample.js';
+import { preset } from '../../lib/preset.js';
 import { movedCounts } from './open.js';
 import { keptCount } from '../todaycounts/index.js';
 import { applyMove } from './actions.js';
@@ -59,7 +59,11 @@ export const sampleMovers = async (tx, ctx, { people, emit, ids }) => {
     emit('contact', cid, 'create', { person_id: people[who], outcome: 'moved', sample: true });
   };
   const row = async (who) => (await tx.query('select * from persons where id = $1 and workspace_id = $2 for update', [people[who], ctx.workspaceId])).rows[0];
-  const { moved, to, unknown, open } = SAMPLE_MOVERS;
+  // Who moves is the loaded sample's own word (only a campaign whose
+  // set-up brings a sample ever loads one).
+  const sample = preset().sample;
+  if (!sample) return;
+  const { moved, to, unknown, open } = (await sample.load()).SAMPLE_MOVERS;
   if (![moved, to, unknown, open].every((k) => people[k])) return;
   for (const who of [moved, unknown, open]) await knock(who);
   const there = await row(to);

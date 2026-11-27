@@ -6,6 +6,10 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { geocodeAddress, suggestAddresses, probeLookup, _resetLookupForTest } from '../lib/geocode.js';
 
+// The addresses here are Imagine Surrey's, so this runs as its server does
+// (its city and map area are its preset's; any other campaign has none).
+process.env.STARBASE_BRAND = 'imagine-surrey';
+
 const realFetch = globalThis.fetch;
 const env = { ...process.env };
 const calls = [];

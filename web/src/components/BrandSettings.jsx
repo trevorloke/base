@@ -26,7 +26,7 @@ import FontSheet, { useAddedFonts } from './site/FontSheet.jsx';
 import { stackOf, useFaces } from './site/fontFaces.js';
 import { action, initials } from '../api.js';
 import { at, NS } from '../base.js';
-import { BRAND } from '../brand.js';
+import { BRAND, ex } from '../brand.js';
 import { NeedsSignalLine, useOnline } from './NoSignal.jsx';
 import { copyKey, readCopy, removeCopy, writeCopyNow } from './OfflineCache.js';
 import { hexOf } from './site/colors.js';
@@ -42,7 +42,7 @@ const SAVED_FLAG = `${NS}brand-saved`;
 const draftKey = (me) => copyKey(me, 'brand-draft');
 const SIDEBAR_WORD = { light: 'Light', brand: 'Brand colour', dark: 'Dark' };
 const CORNER_WORD = { square: 'Square', soft: 'Soft', round: 'Round' };
-const startWord = BRAND.key === 'imagine-surrey' ? 'Imagine Surrey’s look' : 'base.win’s look';
+const startWord = BRAND.startWord || 'base.win’s look';
 
 const kept = (p) => (p?.id && p.type ? { id: p.id, url: `/brand/${p.id}.${p.type}`, w: p.w, h: p.h } : null);
 // The form as it opens: the saved brand, or the look the campaign started in
@@ -112,7 +112,7 @@ function ColourField({ id, label, value, fallback, onChange, hint, optional }) {
           }}
           onBlur={() => setTyped(null)} />
         {hint && <p className="bs-hint" id={`${id}-hint`}>{hint}</p>}
-        {bad && <p className="error bs-err" id={`${id}-err`}>A colour like #003979</p>}
+        {bad && <p className="error bs-err" id={`${id}-err`}>{`A colour like ${ex('colour', '#4f46e5')}`}</p>}
         {/* An optional colour goes back to none by a tap too, not only by the keyboard. */}
         {optional && value && <button type="button" className="btn btn-quiet bs-colour__clear" onClick={() => { setTyped(null); onChange(''); }}>Remove {label.toLowerCase()}</button>}
       </div>

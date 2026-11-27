@@ -1,8 +1,9 @@
 // The page every console screen sits in: the app's own look (app.css and
 // its variables), the console's few classes (ops.css, prefixed oc-), the
 // one script (ops.js), and when signed in a short bar: Campaigns, Log,
-// base.win’s key, Sign out.
+// base.win’s key, Sign out (and Render, only while a Render key is set).
 import { html, raw } from './html.mjs';
+import { cfg } from '../config.mjs';
 
 export const page = ({ title, body, nav = false, here = '' }) => html`<!doctype html>
 <html lang="en-CA">
@@ -25,7 +26,8 @@ export const page = ({ title, body, nav = false, here = '' }) => html`<!doctype 
   ${nav ? html`<nav class="oc-nav" aria-label="Control centre">
     <a href="/"${here === 'campaigns' ? raw(' aria-current="page"') : ''}>Campaigns</a>
     <a href="/log"${here === 'log' ? raw(' aria-current="page"') : ''}>Log</a>
-    <a href="/key"${here === 'key' ? raw(' aria-current="page"') : ''}>base.win’s key</a>
+    <a href="/key"${here === 'key' ? raw(' aria-current="page"') : ''}>base.win’s key</a>${cfg().render ? html`
+    <a href="/render"${here === 'render' ? raw(' aria-current="page"') : ''}>Render</a>` : ''}
     <form method="post" action="/signout" class="oc-inline"><button class="btn btn-quiet" type="submit">Sign out</button></form>
   </nav>` : ''}
 </header>

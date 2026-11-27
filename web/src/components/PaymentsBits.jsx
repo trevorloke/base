@@ -14,9 +14,10 @@
 //                         (paid, refunded, disputed…), and whether online
 //                         giving is live, in test mode or not set up
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useOutletContext } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { apiGet, action, fmtMoney } from '../api.js';
+import { hasFeature } from '../brand.js';
 import './payments.css';
 
 export const usePayments = (enabled) => useQuery({
@@ -145,6 +146,8 @@ export function MonthlyDonors({ list, totalCents }) {
 const LATEST = 5;
 export function OnlinePayments({ data }) {
   const [all, setAll] = useState(false);
+  // Membership dues only where there is a membership.
+  const what = hasFeature(useOutletContext()?.me, 'membership') ? 'Gifts and membership dues' : 'Gifts';
   if (!data) return null;
   const { stripe, recent } = data;
   const state = !stripe?.ready ? 'not set up' : stripe.mode === 'test' ? 'test mode' : 'live';
@@ -153,7 +156,7 @@ export function OnlinePayments({ data }) {
     <section className="pay-section" aria-labelledby="pay-online-h">
       <h2 className="eyebrow ops-label pay-h" id="pay-online-h">Online giving · {state}</h2>
       {!stripe?.ready && (
-        <p className="ops-meta pay-note">Gifts and membership dues by card on the website start once a manager sets up Stripe under Settings → Services.</p>
+        <p className="ops-meta pay-note">{what} by card on the website start once a manager sets up Stripe under Settings → Services.</p>
       )}
       {stripe?.ready && stripe.mode === 'test' && (
         <p className="ops-meta pay-note">Test mode: no real money moves. Live keys take real gifts.</p>

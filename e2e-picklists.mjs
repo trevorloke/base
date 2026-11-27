@@ -46,6 +46,10 @@ const serverDir = fileURLToPath(new URL('./server/', import.meta.url));
 const STUB = `${SHOTS}/picklists-stub.mjs`;
 writeFileSync(STUB, `
 import { createServer } from 'node:http';
+// The fixtures here are Imagine Surrey's, so the server runs as its production
+// does (render.yaml sets this brand); a brand set by hand is left as set.
+if (process.env.STARBASE_BRAND === undefined) process.env.STARBASE_BRAND = 'imagine-surrey';
+
 const { _setPaceForTest } = await import(${JSON.stringify(pathToFileURL(`${serverDir}ext/fields/convert.js`).href)});
 createServer(async (req, res) => {
   let body = '';

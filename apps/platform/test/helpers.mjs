@@ -13,7 +13,9 @@ export const baseEnv = () => {
     OPS_HOST: HOST, OPS_SETUP_CODE: SETUP_CODE, OPS_SECRET: SECRET, PLATFORM_SIGNING_KEY: SIGNING, OPS_INSECURE_COOKIES: '1',
   });
   delete process.env.OPS_ALLOW_LOCAL;
-  delete process.env.OPS_CLIENT_ORIGIN;
+  // A client's public address is https://<name>.base.win unless a test
+  // names a stand-in (OPS_PUBLIC_TEMPLATE, with {name} in it).
+  delete process.env.OPS_PUBLIC_TEMPLATE;
 };
 baseEnv();
 
@@ -26,6 +28,7 @@ export const freshApp = async () => {
 // Over the wire each file shares one database: start from nothing.
 const wipe = async (db) => {
   await db.query('delete from ops_sessions; delete from operator_setup; delete from setup_tries; delete from operators');
+  await db.query('delete from render_jobs');
   await db.query('delete from checklist; delete from checks; delete from environments; delete from campaigns');
   await db.query('delete from ops_log; update ops_chain set seq = 0, last_hash = \'\'');
   await db.exec((await import('node:fs')).readFileSync(new URL('../db.sql', import.meta.url), 'utf8'));

@@ -26,3 +26,7 @@ jobs:
         run: npm run test:platform
       - name: Build (web)
         run: npm run build
+      # Nothing of one client's reaches another: the built app and the files
+      # served as written hold none of the words in server/test/neutral-words.
+      - name: No client's own material in the build
+        run: npm run test:bundle

@@ -21,6 +21,7 @@ import './shifts.css'; // the ops-* pieces: a full-height button, a row of actio
 import './banks.css';
 import './banks-calltime.css';
 import '../editor.css';
+import { ex } from '../brand.js';
 
 const DESK = ['manager', 'staff', 'treasurer'];
 const plural = (n, w, many = `${w}s`) => (n === 1 ? w : many);
@@ -201,7 +202,7 @@ function NewBank() {
       <div className="page-head"><div><span className="eyebrow">Calls</span><h1>New phone bank</h1></div></div>
       <form className="bk-form" onSubmit={submit}>
         <label htmlFor={`${id}-n`} className="ws-label">Name</label>
-        <input id={`${id}-n`} className="input" value={name} maxLength={120} required autoFocus placeholder="Undecided in Newton — week of Nov 3" onChange={(e) => setName(e.target.value)} />
+        <input id={`${id}-n`} className="input" value={name} maxLength={120} required autoFocus placeholder={ex('bank.name', 'Undecided, north end — week of Nov 3')} onChange={(e) => setName(e.target.value)} />
         {candidates.length > 0 && (
           <div className="bk-caller-pick">
             <label htmlFor={`${id}-who`} className="ws-label">Who calls</label>
@@ -252,7 +253,7 @@ function NewBank() {
             <div><label htmlFor={`${id}-b`} className="ws-label">Rating</label>
               <select id={`${id}-b`} className="input" value={f.band} onChange={(e) => setF({ ...f, band: e.target.value })}>{BANDS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></div>
             <div><label htmlFor={`${id}-t`} className="ws-label">Tag</label>
-              <input id={`${id}-t`} className="input" value={f.tag} placeholder="volunteer, newton…" onChange={(e) => setF({ ...f, tag: e.target.value })} /></div>
+              <input id={`${id}-t`} className="input" value={f.tag} placeholder={ex('bank.tag', 'volunteer, north-end…')} onChange={(e) => setF({ ...f, tag: e.target.value })} /></div>
             {web.length > 0 && (
               <div><label htmlFor={`${id}-w`} className="ws-label">Did on the website</label>
                 <select id={`${id}-w`} className="input" value={f.web} onChange={(e) => setF({ ...f, web: e.target.value })}>
@@ -261,7 +262,7 @@ function NewBank() {
                 </select></div>
             )}
             <div className="bk-who__grow"><label htmlFor={`${id}-q`} className="ws-label">Search (name, street, phone)</label>
-              <input id={`${id}-q`} className="input" value={f.q} placeholder="104 Ave" onChange={(e) => setF({ ...f, q: e.target.value })} /></div>
+              <input id={`${id}-q`} className="input" value={f.q} placeholder={ex('bank.street', 'Main St')} onChange={(e) => setF({ ...f, q: e.target.value })} /></div>
           </div>
           {/* A read that failed is never "0 people". */}
           {people.isError && !people.data ? <p className="error" role="alert"><Unavailable onRetry={() => people.refetch()} /></p> : (

@@ -1,26 +1,24 @@
 // The brand the campaign wears. Until a manager saves one (Settings → Brand,
-// ext/brand), it is one of the two built-in looks (shared/brand.js BRANDS —
-// Imagine Surrey's own, or base.win's), each a preset through the one rule
-// that turns a brand colour into every shade on screen
-// (shared/brand-look.js). Once saved, the saved brand is the look:
-// STARBASE_BRAND only chooses the preset a campaign STARTS from.
+// ext/brand), it is the look it starts from: base.win's own
+// (shared/brand.js), or its own when its server has a preset
+// (lib/preset.js) — each through the one rule that turns a brand colour
+// into every shade on screen (shared/brand-look.js). Once saved, the saved
+// brand is the look: STARBASE_BRAND only chooses what a campaign STARTS from.
 //
-//   STARBASE_BRAND   imagine-surrey | base. Unset, it is worked out, so a
-//                    deployment that never heard of this setting starts where
-//                    it always did:
-//                      staging (STARBASE_ENV=staging)             → base
-//                      a campaign named anything but Imagine Surrey → base
-//                      otherwise (Imagine Surrey, or no name set)  → imagine-surrey
+//   STARBASE_BRAND   base, or a preset's name. Unset or unknown is base
+//                    (lib/preset.js brandKey says the one exception).
 //
 // The app's page (index.html) leaves marked <html data-brand="…"> (the
-// preset it started from), with the brand's shades written into it as CSS
+// look it started from), with the brand's shades written into it as CSS
 // variables (before the stylesheets, so it never paints in another look),
 // its logo asked for early, its icons, the browser's bar colours and the
 // name under the home-screen icon — and so does the install manifest. A
-// saved brand also rides in the page as window.__BRAND__ (what script needs:
-// the logos, the sidebar, what training is called; web/src/brand.js). The
-// base preset's shades are the ones app.css already holds, so its page
-// carries no block. Signed out, it is the same page: sign-in wears the brand.
+// saved brand, and a preset's, also rides in the page as window.__BRAND__
+// (what script needs: the logos, the sidebar, what training is called, and
+// under a preset its own words and where its maps open; web/src/brand.js).
+// base.win's shades are the ones app.css already holds, so its page, with
+// nothing saved, is the page as built. Signed out, it is the same page:
+// sign-in wears the brand.
 // (Under a client's path, lib/mount.js then adds the path to every address
 // in an attribute; the block has no address in it, and the app puts the
 // path in front of the ones in window.__BRAND__ itself.)
@@ -32,17 +30,14 @@
 import { APP_NAME, BRANDS } from '@starbase/shared/brand';
 import { deriveLook, lookCss, lookChrome, SIDEBARS, CORNERS, headingOf } from '@starbase/shared/brand-look';
 import { FONT_BY_VALUE, BUILT_FILES, LATIN, LATIN_EXT } from '@starbase/shared/site/fonts';
-import { envName, orgName } from './org.js';
+import { brandKey, presetFor } from './preset.js';
 import { getDb } from '../db/client.js';
 
-export const brandKey = () => {
-  const set = String(process.env.STARBASE_BRAND || '').trim().toLowerCase();
-  if (BRANDS[set]) return set;
-  if (envName() === 'staging') return 'base';
-  const org = String(orgName() || '').replace(/\s+/g, ' ').trim().toLowerCase();
-  if (org && org !== 'imagine surrey') return 'base';
-  return 'imagine-surrey';
-};
+// Which brand this server wears: lib/preset.js (kept here for its importers).
+export { brandKey };
+// A look by its name: base.win's, or the named preset's own. Production
+// code only ever asks for this server's (brandKey()).
+const lookOf = (key) => (key === 'base' ? BRANDS.base : presetFor(key).brand || null);
 
 // ── A saved brand, read back ──
 const HEX = /^#[0-9a-f]{6}$/;
@@ -73,13 +68,13 @@ const derived = (b) => {
   return { ...b, ...lookChrome(b), sideDark, link: light.accentWords, edge: light.accentEdge, css: lookCss(b) };
 };
 
-// A preset as the campaign wears it before anything is saved: its own
-// pictures (bundled files, at the same address on the app and the website),
-// base.win under the home-screen icon, no email header.
+// A look as the campaign wears it before anything is saved: its own
+// pictures (the server's own files, at the same address on the app and the
+// website), base.win under the home-screen icon, no email header.
 const presets = new Map();
 const presetBrand = (key = brandKey()) => {
   if (!presets.has(key)) {
-    const p = BRANDS[key] || BRANDS.base;
+    const p = lookOf(key) || BRANDS.base;
     presets.set(key, derived({
       ...p, saved: false, shortName: APP_NAME, title: APP_NAME, emailHeader: false,
       publicLogo: p.logo, publicLogoDark: p.logoDark, emailLogo: null, logoSize: null, mark: null, siteIcon: null,
@@ -107,7 +102,7 @@ const headingFaceOf = (s) => {
 };
 
 const savedBrand = (s, key) => {
-  const start = BRANDS[key] || BRANDS.base;
+  const start = lookOf(key) || BRANDS.base;
   const logo = picture(s.logo);
   const logoDark = picture(s.logoDark);
   const mark = picture(s.mark);
@@ -116,7 +111,7 @@ const savedBrand = (s, key) => {
   const pub = (p) => (p ? `/media/${p.id}.${p.type}` : null);
   const shortName = plainWords(s.shortName, 30) || APP_NAME;
   return derived({
-    key: BRANDS[key] ? key : 'base',
+    key: lookOf(key) ? key : 'base',
     saved: true,
     color: hexOf(s.color) || start.color,
     second: hexOf(s.second),
@@ -169,8 +164,8 @@ export const brandFor = (settings, key = brandKey()) => {
 // The preset alone, for code with no campaign's settings at hand (prefer
 // brandFor(settings): it is the saved brand when there is one).
 export const brand = () => presetBrand();
-// What the campaign's training is called (the Learn area): "ImagineU" for
-// Imagine Surrey's look, "Training" for base.win's, or what a manager set.
+// What the campaign's training is called (the Learn area): "Training", a
+// preset's own word for it, or what a manager set.
 export const learnName = (settings) => brandFor(settings).learn;
 
 // ── The campaign's brand, for pages nobody signed in to (the app's page,
@@ -221,15 +216,31 @@ const attr = (s) => String(s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': 
 const scriptJson = (v) => JSON.stringify(v).replace(/[<>&'\u2028\u2029]/g, (ch) => `\\u${ch.charCodeAt(0).toString(16).padStart(4, '0')}`);
 const BASE_CSS = presetBrand('base').css;
 
-// What script needs of a saved brand (web/src/brand.js): no address in it
-// but the campaign's own pictures, which the app puts its path in front of.
+// What script needs of a brand (web/src/brand.js): no address in it but the
+// campaign's own pictures, which the app puts its path in front of. Under a
+// preset it also carries what is the preset's own, so that none of it lives
+// in the built app every campaign shares: its website placeholder, the
+// sample's line, the word for its look, the map flag's colour, training's
+// old addresses, its example words, its features and where its maps open.
+const FEATURES = ['membership', 'sample'];
+const has = (v) => (Array.isArray(v) ? v.length > 0 : Boolean(v));
+const presetForScript = (b) => {
+  const p = presetFor(b.key);
+  if (!p.brand) return {};
+  return {
+    sitePlaceholder: b.sitePlaceholder ?? null, sampleLede: p.sample?.lede ?? null, startWord: p.brand.startWord ?? null, flag: p.brand.mapFlag ?? null,
+    learnAliases: p.training.oldPaths, examples: p.examples, features: FEATURES.filter((f) => has(p[f])), map: p.map,
+  };
+};
 const forScript = (b) => ({
-  key: b.key, saved: true, color: b.color, second: b.second, sidebar: b.sidebar, sideDark: b.sideDark, corners: b.corners, heading: b.heading, ...(b.headingFace ? { headingFace: b.headingFace } : {}),
+  key: b.key, saved: b.saved === true, color: b.color, second: b.second, sidebar: b.sidebar, sideDark: b.sideDark, corners: b.corners, heading: b.heading, ...(b.headingFace ? { headingFace: b.headingFace } : {}),
   learn: b.learn, shortName: b.shortName, logo: b.logo, logoDark: b.logoDark, logoSize: b.logoSize, mark: b.mark,
+  ...presetForScript(b),
 });
 
 // What goes into the page's head for a brand: its shades (none when they are
-// app.css's own), a saved brand's data, and its logo asked for early — which
+// app.css's own), its data (a saved brand's, and a preset's: base.win's own
+// look with nothing saved has none), and its logo asked for early — which
 // is also how the service worker learns which pictures to keep for no
 // signal (sw.js). So is a heading face from outside the app's /fonts/: the
 // website's Montserrat (web/public/fonts/fonts.css declares it), and any
@@ -255,7 +266,7 @@ const headingFaceHead = (b) => {
 const brandHead = (b) => {
   const out = [];
   if (b.css !== BASE_CSS) out.push(`<style id="brand">${b.css}</style>`);
-  if (b.saved) out.push(`<script id="brand-data">window.__BRAND__=${scriptJson(forScript(b))}</script>`);
+  if (b.saved || presetFor(b.key).brand) out.push(`<script id="brand-data">window.__BRAND__=${scriptJson(forScript(b))}</script>`);
   // On a dark sidebar both logos are on screen whatever the scheme.
   if (b.logo) out.push(`<link rel="preload" as="image" href="${attr(b.logo)}" data-brand${b.logoDark && !b.sideDark ? ' media="(prefers-color-scheme: light)"' : ''} />`);
   if (b.logoDark) out.push(`<link rel="preload" as="image" href="${attr(b.logoDark)}" data-brand${b.sideDark ? '' : ' media="(prefers-color-scheme: dark)"'} />`);

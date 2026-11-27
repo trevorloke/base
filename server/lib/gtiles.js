@@ -6,10 +6,13 @@
 // phone's service worker does not keep them: Google's terms allow no offline
 // use of its tiles, so with no signal a Google map shows the doors on a
 // blank background.
-//   GOOGLE_MAPS_SERVER_KEY      a key with the Map Tiles API enabled: Google
-//                               is the map whenever it is set
-//   GOOGLE_MAPS_TILES=off       keep the free map with a key set (unset: on
-//                               with a key; 1 also turns it on)
+//   GOOGLE_MAPS_SERVER_KEY      a key with the Map Tiles API enabled
+//   GOOGLE_MAPS_TILES=on        Google is the map (with the key; 1, true and
+//                               yes also turn it on). Unset or off: the free
+//                               map, which phones keep for no-signal areas.
+//                               A key set for something else never turns
+//                               Google's map on by itself: that is the
+//                               owner's choice to make, on purpose.
 //   GOOGLE_MAPS_TILE_TYPE       roadmap (default) | satellite | terrain — the
 //                               map's standard look; each person can also pick
 //                               the others (/tiles/…png?t=satellite)
@@ -34,16 +37,16 @@ export const MAX_ZOOM = 22;
 // address lookup and Settings → Services all ask here), so a key pasted with
 // a trailing space, or `1` with a newline, reads the same everywhere.
 export const googleKey = (env = process.env) => String(env.GOOGLE_MAPS_SERVER_KEY ?? '').trim();
-// → 'on' | 'off' | 'auto' (not set: on whenever a key is) | 'unknown'
-// (something set that isn't a yes or a no).
+// → 'on' | 'off' (also not set) | 'unknown' (something set that isn't a
+// yes or a no).
 export const googleTilesSetting = (env = process.env) => {
   const v = String(env.GOOGLE_MAPS_TILES ?? '').trim().toLowerCase();
-  if (v === '') return 'auto';
+  if (v === '') return 'off';
   if (['1', 'true', 'yes', 'on'].includes(v)) return 'on';
   if (['0', 'false', 'no', 'off'].includes(v)) return 'off';
   return 'unknown';
 };
-export const googleTilesOn = (env = process.env) => ['on', 'auto'].includes(googleTilesSetting(env)) && Boolean(googleKey(env));
+export const googleTilesOn = (env = process.env) => googleTilesSetting(env) === 'on' && Boolean(googleKey(env));
 // "Google Maps" in words where the map has no room for Google's logo (its
 // tile policy allows the text where space is limited); the live credit for
 // the view on screen is creditFor(), below.
@@ -179,9 +182,12 @@ const probeOnce = async () => {
     const s = await createSession(type, signal);
     if (!s.ok) return failed('session', s.status, await s.text().catch(() => ''));
     const { session } = await s.json();
-    const [south, west, north, east] = geoBox();
-    const { x, y } = tileAt((south + north) / 2, (west + east) / 2, 12);
-    const t = await getTile(12, x, y, session, signal);
+    // A tile in the middle of the campaign's map area; with no area, the
+    // one tile that is the whole world.
+    const box = geoBox();
+    const zoom = box ? 12 : 0;
+    const { x, y } = box ? tileAt((box[0] + box[2]) / 2, (box[1] + box[3]) / 2, zoom) : { x: 0, y: 0 };
+    const t = await getTile(zoom, x, y, session, signal);
     if (!t.ok) return failed('tile', t.status, await t.text().catch(() => ''));
     await t.arrayBuffer();
     trouble = null;

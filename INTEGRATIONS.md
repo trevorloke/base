@@ -21,10 +21,10 @@ is written) and says exactly what is wrong if anything is.
 | [Gmail](#gmail) | One email to one person, from a staff member's own Gmail | no (Email from a person's page opens the mail app) | none of its own (the Google row's); `GMAIL_DAILY_MAX` optional |
 | [Google Drive and Sheets](#google-drive-and-sheets) | lists, reports and tables sent to a new Google Sheet; files attached from Drive (or linked when too big); a Sheet or file read for the importer | no (Download CSV always works) | `GOOGLE_PICKER_KEY`, `GOOGLE_CLOUD_PROJECT_NUMBER` (+ Google sign-in's three) |
 | [Two-step sign-in key](#two-step-sign-in-key) | seals everyone's authenticator key | before the public link goes out (works without, with a warning) | `STARBASE_TWO_STEP_KEY` |
-| [Hosting — Render](#hosting--render) | the two environments | yes | `render.yaml` |
-| The control centre (ops.base.win; no vendor: base.win's own, `apps/platform/README.md`) | every campaign on one page; **Open desk** signs base.win support in to a campaign | no (each campaign works without it) | `BASE_PLATFORM_PUBKEY` on each campaign (its public key, pasted; never a secret) |
+| [Hosting — Render](#hosting--render) | the three environments (GOING-LIVE.md, section 0) | yes | `render.yaml` |
+| The control centre (ops.base.win; no vendor: base.win's own, `apps/platform/README.md`) | every campaign on one page; **Open desk** signs base.win support in to a campaign; with a Render key, what Render says about each campaign and a short list of named changes there | no (each campaign works without it) | `BASE_PLATFORM_PUBKEY` on each campaign (its public key, pasted; never a secret); optional `RENDER_API_KEY` on `base-platform` only (GOING-LIVE.md, section 8, *The Render key*) |
 | [GitHub Actions](#github-actions) | tests, and promoting staging to production | yes | none |
-| [The campaign's website](#the-campaigns-website) | sign-ups, petitions, volunteers, newsletter opt-ins in | when the website is ready | a website key (Settings → Services) |
+| [The campaign's website](#the-campaigns-website) | sign-ups, petitions, volunteers, newsletter opt-ins in; unsubscribes both ways | when the website is ready | a website key (Settings → Services); `STARBASE_WEBSITE_URL`, `STARBASE_WEBSITE_KEY` to send unsubscribes out |
 | [Website translation — Google](#website-translation--google) | the campaign's website in ਪੰਜਾਬੀ, 简体 and 繁體, made ahead of time | no (the website stays English) | `GOOGLE_TRANSLATE_KEY` |
 | [Online payments — Stripe](#online-payments--stripe) | gifts once or monthly and membership dues on the website, by card, Apple Pay or Google Pay | when the website takes money (test mode first) | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` |
 | [Phone dialer — CallHub](#phone-dialer--callhub) | a list or a phone bank sent to CallHub's dialer; each call's result back on the person | no (only if the campaign calls through CallHub) | `CALLHUB_API_KEY`, `CALLHUB_API_BASE` |
@@ -38,11 +38,13 @@ The campaign's website sends people in with a key; the API is
 Postgres. On Render, `render.yaml` creates one per environment and fills
 `DATABASE_URL` from it. Without `DATABASE_URL` base.win keeps everything in a
 built-in database on the server's disk (`STARBASE_DATA`, default
-`./data/starbase`) — fine on a laptop, not for the team.
+`./data/starbase`) — fine on a laptop, not for the team. On Render a
+service with no `DATABASE_URL` does not start, and its log says why.
 
 | Setting | Default | Notes |
 |---|---|---|
 | `DATABASE_URL` | — | `postgres://…`; `sslmode=require` in it turns TLS on |
+| `STARBASE_EMBEDDED_DB` | off | `1`: on Render, start on the built-in database anyway. Only with a disk mounted at `STARBASE_DATA`; without one the campaign is lost at the next deploy. The control centre shows such a server as *Not on a real database* |
 | `PGSSL` / `PGSSL_STRICT` | off | `1` to force TLS / to verify the certificate |
 | `PG_POOL_MAX` | `10` | connections per server |
 | `PG_CONNECT_TIMEOUT_MS` | `30000` | how long to wait for a database connection before giving an error (a dropped connection reconnects on the next query; `/api/health` says `"database": "not reachable"` while it's down) |
@@ -52,7 +54,7 @@ built-in database on the server's disk (`STARBASE_DATA`, default
 ## Public address
 
 `STARBASE_PUBLIC_URL` — this environment's own `https://` address
-(`https://starbase.imaginesurrey.ca`; staging its own). Every link in an
+(`https://imaginesurrey.base.win`; staging `https://staging.base.win`). Every link in an
 email (invites, unsubscribe, receipts, pictures, password links) is built from it, and so are
 the addresses Twilio is told to call back (delivery reports, calls). Without
 it, links use whatever address the page was opened at, background sends
@@ -115,8 +117,8 @@ manager's link is shown to copy.
    the domain's DNS records and check the webhook; a *Sending access* key
    sends just as well, and Settings → Services says what it can't see.
 2. Set `RESEND_API_KEY` to it and `MAIL_FROM` to a sender on the campaign's
-   domain: `Imagine Surrey <team@imaginesurrey.ca>`. Staging: a separate
-   key, or none.
+   domain: `Imagine Surrey <team@imaginesurrey.ca>`. Staging is the public
+   demo: a test key or none there, never the campaign's.
 3. **Settings → Services → Email → Sending domain** → **Add domain**. The
    panel lists the DNS records Resend asks for (SPF, DKIM) and one more,
    DMARC — no sender sets that one up, and Gmail, Yahoo and Outlook ask
@@ -553,7 +555,7 @@ browser never sees it.
 
 | Setting | Default | Notes |
 |---|---|---|
-| `STARBASE_GEO_BOUNDS` | a box around Surrey | `lat,lng\|lat,lng` — suggestions and lookups stay in it |
+| `STARBASE_GEO_BOUNDS` | none (Imagine Surrey's set-up: a box around Surrey) | `lat,lng\|lat,lng` — suggestions and lookups stay in it. With none they are not kept to a box, and maps open wide |
 | `STARBASE_PROVINCE` | `BC` | |
 | `GEOCODE_MIN_SCORE` | `75` | BC's match score a pin needs |
 | `GEOCODE_ON_SAVE` | on | `off`: no lookup when a person is saved (the background run still places them) |
@@ -590,11 +592,10 @@ provider of the campaign's own there is no second one to switch to. The
 service worker keeps both free providers' tiles as they are looked at
 (never ahead). Before election week, either:
 
-- **Google Maps:** on whenever `GOOGLE_MAPS_SERVER_KEY` is set (Map Tiles
-  API enabled, above); `GOOGLE_MAPS_TILES=off` keeps the free map.
-  **Before this goes to staging, tell us Google or the free map for
-  canvassing. With a key already set, Google becomes the map and phones
-  stop keeping street maps offline.** `GOOGLE_MAPS_TILE_TYPE` roadmap |
+- **Google Maps:** on with `GOOGLE_MAPS_TILES=on` and
+  `GOOGLE_MAPS_SERVER_KEY` set (Map Tiles API enabled, above); unset or
+  `off`, the free map. **Tell us Google or the free map for canvassing.**
+  Phones don't keep Google's map for no-signal areas. `GOOGLE_MAPS_TILE_TYPE` roadmap |
   satellite | terrain (the standard look; each person can switch to the
   others under Show → Map — no Muted or Dark over Google's tiles, whose
   imagery may not be altered). base.win fetches them for signed-in phones
@@ -794,7 +795,7 @@ Google Drive and Sheets** says what is missing and nothing Drive shows.
 
 | Setting | Default | Notes |
 |---|---|---|
-| `GOOGLE_PICKER_KEY` | — | a browser API key: Websites `https://base.win/*` (or the public address), the staging address and `https://docs.google.com/*`; API restriction **Google Picker API** only. Not a secret (the Picker needs it in the page), but never in the repo |
+| `GOOGLE_PICKER_KEY` | — | a browser API key: Websites the campaign's public address (`https://imaginesurrey.base.win/*`) and `https://docs.google.com/*`; API restriction **Google Picker API** only. Not a secret (the Picker needs it in the page), but never in the repo |
 | `GOOGLE_CLOUD_PROJECT_NUMBER` | — | digits (IAM & Admin → Settings), the project that holds the OAuth client: the Picker's app ID |
 | `GOOGLE_DRIVE_API_BASE`, `GOOGLE_SHEETS_API_BASE`, `GOOGLE_PICKER_SCRIPT` | Google's | tests only (`server/test/fake-google-drive.js`); ignored in production |
 
@@ -875,7 +876,9 @@ translated: a manager approves them per language.
   for the languages list (5 s); **Check translation** sends one fixed
   sentence to Punjabi and says "Names kept · Header accepted · Placeholders
   kept". What it learns chooses how names and the key are sent from then
-  on. Press it once on staging after the key is in Render.
+  on. Press it once after the key is in Render, on the service that holds
+  it: production for a client's key. Staging is public, so it takes
+  base.win's own key or none, never a client's (GOING-LIVE.md, section 0).
 - **Tests** use `server/test/fake-translate.js` through
   `GOOGLE_TRANSLATE_API_BASE`; no test calls Google.
 
@@ -1142,7 +1145,8 @@ What happens:
   rate*, or another question, or none) the people it rated are back to what
   they were before the call, unless something else has rated them since.
 
-**Set it up — on staging first:**
+**Set it up — on production, with your own team's numbers first** (never
+on staging: it is the public demo, and this key can call real people):
 
 1. The API key from the account's settings in CallHub. It goes in the
    host's environment only (Render → the service → **Environment**):
@@ -1242,10 +1246,14 @@ importing.
 
 ## Hosting — Render
 
-`render.yaml` is a Render Blueprint: `base-win-staging` (deploys every push to
-`main`) and `base-win` (deploys the `production` branch), each with its own
-Postgres. Settings marked `sync: false` are asked for when the Blueprint is
-created and are set per service afterwards. GOING-LIVE.md is the order to do
+`render.yaml` is a Render Blueprint for the three environments
+(GOING-LIVE.md, section 0): `base-win-staging` (the one shared staging,
+`https://staging.base.win`, deploys every push to `main`), `base-win`
+(Imagine Surrey's production, `https://imaginesurrey.base.win`, deploys the
+`production` branch) and `base-platform` (the control centre,
+`https://ops.base.win`), each with its own Postgres. Settings marked
+`sync: false` are asked for when the Blueprint is created and are set per
+service afterwards. GOING-LIVE.md is the order to do
 it in.
 
 ## GitHub Actions
@@ -1287,7 +1295,7 @@ person. An email or a phone, and a name (or `first_name` / `last_name`):
 | `email` | text | how a sign-up is matched first |
 | `phone` | text | any format |
 | `address`, `unit`, `city`, `postal` | text | the street line as typed (`13450 104 Ave`); it's placed on the map |
-| `tags` | up to 20 words | kept as sent (`Petition: Transit`) |
+| `tags` | up to 20 words | kept as sent (`Petition: Transit`). For a campaign whose set-up brings a membership (today Imagine Surrey), the tag `Member (joined online)` also starts a year's membership, unless one is running; for any other campaign it is only a tag |
 | `source` | a word for where they came from (`petition-transit`) | added as a tag; default `website` |
 | `newsletter` | `true` | a new email goes on the newsletter list; someone who unsubscribed or is do-not-email is never put back on from here (typing an address into a form doesn't prove it's yours) |
 | `volunteer` | `true` | a *Wants to volunteer* request under Today → *Needs you*, with `note` |
@@ -1319,7 +1327,7 @@ minute on one key. Everything accepted is on the event log, as the
 manager who made the key. A key stops working when it is revoked, and when the manager who made it leaves the campaign.
 
 ```sh
-curl https://starbase.imaginesurrey.ca/in/v1/people \
+curl https://imaginesurrey.base.win/in/v1/people \
   -H "Authorization: Bearer $STARBASE_KEY" -H "Content-Type: application/json" \
   -H "Idempotency-Key: form-2026-10-12-0193" \
   -d '{"first_name":"Asha","last_name":"Example","email":"asha@example.org",
@@ -1336,6 +1344,112 @@ un-marks anyone; Settings → Services gives its address:
 `…/desk/people/import` on base.win, `…/admin/people/import` at the server's
 own address); **pages out** — the website can link to base.win's public
 lessons (`/learn/…`); every email carries its own unsubscribe page.
+
+### Unsubscribes, both ways
+
+When the website is hosted apart and keeps its own list, a no in one place
+is a no in both: someone who unsubscribes or texts STOP on the website is
+taken off here, and someone who does it here is taken off there. **Only a
+no crosses.** A yes never does: after a no has crossed, saying yes again on
+one side leaves the other side off until the person says yes there too.
+
+**From the website to base.win.** The website's server sends each no with
+the same website key as its sign-ups:
+
+```
+POST https://<public address>/in/v1/consent      → 200 { "ok": true }
+Authorization: Bearer sbk_…
+Content-Type: application/json
+Idempotency-Key: <the website's own id for this change>
+
+{ "email": "pat@example.org", "channel": "email", "action": "withdraw",
+  "reason": "unsubscribe", "at": "2026-11-07T18:30:00.000Z" }
+```
+
+| Field | | |
+|---|---|---|
+| `email`, `phone` | one or both | the phone in any format |
+| `channel` | `email` or `sms` | |
+| `action` | `withdraw` | `grant` is answered and not applied |
+| `reason` | `unsubscribe`, `stop`, `preference` or `deletion` | kept on the event log with the call |
+| `at` | when it happened, with its time zone | a time later than now is read as now |
+
+What base.win does with it:
+
+- **Email:** the address comes off the newsletter list. If it was never on
+  the list, everyone on file with it is tagged `do-not-email`.
+- **Texts:** a STOP for the number, and `do-not-text` on everyone with it.
+  With only an email, texts are turned off for each person with that address.
+- **An address or number nobody has yet is held.** A later sign-up, an
+  import or the desk's Add does not put it back; only the person can.
+- **A deletion on the website** is taken as a no on that channel. base.win
+  deletes nobody by itself.
+- **Their own later yes stands.** A no that happened before someone said yes
+  here themselves changes nothing.
+
+The answer is `200 { "ok": true }` whether or not anyone matched: it never
+says who is on file. The same `Idempotency-Key` and body again answers
+`{ "ok": true, "replayed": true }` and changes nothing; the same key with
+another body is `409`. The other errors are the same as for `/in/v1/people`,
+and the 120 requests a minute are shared with it. Every call is on the event
+log as the manager who made the key, without the address.
+
+**From base.win to the website.** Two settings, on that client's Render
+service only (Render → the service → Environment):
+
+| Setting | Value |
+|---|---|
+| `STARBASE_WEBSITE_URL` | the website's address, starting `https://`, with no path (`https://www.example.org`) |
+| `STARBASE_WEBSITE_KEY` | the same secret the website holds as `STARBASE_INBOUND_KEY` |
+
+With both set, and a website key made for the campaign, base.win sends each
+no to `<website address>/api/in/consent`:
+
+- an unsubscribe by any of its links, the desk's Remove, a spam complaint,
+  and a no that came back from Mailchimp;
+- a text STOP, the carrier's own stop, and the Inbox's one-tap stop;
+- a `do-not-email`, `do-not-text` or `do-not-contact` tag newly put on, by
+  the desk, an import or a merge.
+
+It sends the address or number, the channel, the reason and the time, and
+nothing else: never a name, a tag, a rating or a note. It never sends a yes,
+a START, a bounce, a press release's own unsubscribe or `do-not-call`. What
+the website itself said is never sent back to it.
+
+Each no waits in a queue until the website has taken it, 60 a minute at
+most. If the website is down, or refuses the key, everything waits and is
+tried again after 1 minute, 5 minutes, 30 minutes, 2 hours, then every
+6 hours: a no is never given up for that. A no the website refuses for
+itself (five tries) is kept, with the website's words.
+
+**Settings → Services → The website — unsubscribes** shows whether it is
+on, how many are waiting and why, and how many the website refused.
+
+- **Check** makes one call that changes nothing on the website, and says
+  whether the address and the key are right.
+- **Send again** tries everything waiting or refused, now.
+- **Send the ones already off here.** What was off before the two settings
+  were set is not sent by itself. The row counts everyone who is off here
+  now; one tap sends them all, once. (Anyone the website already heard
+  about is taken as the same no.)
+
+Setting it up:
+
+1. Deploy base.win. Nothing is sent yet. The website's waiting unsubscribes
+   start arriving on its next try.
+2. On the website, check that its base.win address and website key are
+   right, and send what is waiting once.
+3. Make a long random secret (`openssl rand -base64 32`). Set it on the
+   website as `STARBASE_INBOUND_KEY`, and on base.win as
+   `STARBASE_WEBSITE_KEY`, with `STARBASE_WEBSITE_URL`.
+4. Settings → Services → The website — unsubscribes → **Check**. Then send
+   the ones already off here.
+5. If the website later moves onto base.win itself, take both settings
+   away. Check says so if they are forgotten.
+
+Nothing is ever sent from staging, to a base.win address, or to an address
+that does not start with `https://`. The two settings are in no Blueprint:
+a new client never inherits another's.
 
 ## Connect anything
 

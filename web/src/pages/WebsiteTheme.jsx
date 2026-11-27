@@ -1,5 +1,6 @@
 // Website → Theme (/website/theme): the site's look (shared/site/theme.js).
-//   Start from a look (the skins: Base, Imagine Surrey), then the colours —
+//   Start from a look (Base, and the campaign's own where its server sends
+//   one: GET /api/site skins), then the colours —
 //   each pair that must stay readable (theme.js PAIRS) shows its contrast as
 //   it changes, and one under 4.5:1 blocks saving, with "Fix it" (the
 //   nearest readable colour for its text). Then the fonts (drawn in their
@@ -21,8 +22,12 @@
 // site.microsite.save { theme }.
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useOutletContext, useParams } from 'react-router-dom';
-import { COLOR_KEYS, FONT_BY_VALUE, RADII, SKINS } from '@starbase/shared/site/theme';
-import { fontFor, isAdded, profileFor } from '@starbase/shared/site/fonts';
+import { COLOR_KEYS, FONT_BY_VALUE, RADII, SKINS, lookOf } from '@starbase/shared/site/theme';
+import { full } from './themeDraft.js';
+import { defaultsFor } from '@starbase/shared/site/catalogue';
+import { siteLooks } from '../components/site/builder.js';
+import { ex } from '../brand.js';
+import { fontFor, profileFor } from '@starbase/shared/site/fonts';
 import FontSheet, { useAddedFonts } from '../components/site/FontSheet.jsx';
 import { stackOf, useFaces } from '../components/site/fontFaces.js';
 import { useSitePage } from '../components/site/useSite.js';
@@ -39,23 +44,6 @@ import '../editor.css';
 import './website.css';
 import './website-follow.css';
 
-// A theme as the server keeps it, with every key there (a skin's for any missing).
-const full = (t) => {
-  const skin = SKINS[t?.skin] || SKINS.base;
-  const out = {
-    skin: skin.key,
-    colors: Object.fromEntries(COLOR_KEYS.map((k) => [k, hexOf(t?.colors?.[k]) || skin.colors[k]])),
-    fonts: {
-      heading: FONT_BY_VALUE[t?.fonts?.heading] || isAdded(t?.fonts?.heading) ? t.fonts.heading : skin.fonts.heading,
-      body: FONT_BY_VALUE[t?.fonts?.body] || isAdded(t?.fonts?.body) ? t.fonts.body : skin.fonts.body,
-    },
-    radius: RADII.some((r) => r.value === t?.radius) ? t.radius : skin.radius,
-    logo: { url: t?.logo?.url || '', alt: t?.logo?.alt || '' },
-  };
-  // A look with its own switches (the heading shadow, where theme.js has it) keeps them.
-  if (typeof t?.pop === 'boolean' || typeof skin.pop === 'boolean') out.pop = typeof t?.pop === 'boolean' ? t.pop : Boolean(skin.pop);
-  return out;
-};
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 function ColorRow({ k, value, onChange }) {
@@ -73,7 +61,7 @@ function ColorRow({ k, value, onChange }) {
           aria-invalid={bad ? 'true' : undefined} aria-describedby={bad ? `${id}-err` : undefined}
           onChange={(e) => { setTyped(e.target.value); const h = hexOf(e.target.value); if (h) onChange(h); }}
           onBlur={() => setTyped(null)} />
-        {bad && <p className="wb-field__err" id={`${id}-err`}>A colour like #003979</p>}
+        {bad && <p className="wb-field__err" id={`${id}-err`}>A colour like {ex('colour', '#4f46e5')}</p>}
       </div>
     </div>
   );
@@ -81,6 +69,11 @@ function ColorRow({ k, value, onChange }) {
 
 function Sample({ t, org, added }) {
   const c = t.colors;
+  // The sample's band and first button read as a new section would here:
+  // the catalogue's own starting words, or the campaign's (useSite).
+  const band = defaultsFor('band');
+  const cta = defaultsFor('hero').primaryCta?.label;
+  const first = cta && cta !== 'Volunteer' ? cta : 'Sign up';
   const r = RADII.find((x) => x.value === t.radius)?.px ?? 10;
   const style = {
     '--s-brand': c.brand, '--s-brand-ink': c.brandInk, '--s-accent': c.accent, '--s-accent-ink': c.accentInk,
@@ -99,14 +92,14 @@ function Sample({ t, org, added }) {
         <p className="wb-sample__h">A headline in this type</p>
         <p className="wb-sample__p">Words people read, on the page, with <span className="wb-sample__a">a link</span> in them.</p>
         <div className="wb-sample__btns">
-          <span className="wb-sample__btn">Join us</span>
+          <span className="wb-sample__btn">{first}</span>
           <span className="wb-sample__btn wb-sample__btn--accent">Volunteer</span>
         </div>
         <div className="wb-sample__panel"><b>A soft panel</b> — newsletters and forms sit on these.</div>
       </div>
       <div className="wb-sample__band">
-        <span className="wb-sample__bandh">When we organize, <mark>we win</mark></span>
-        <span className="wb-sample__btn wb-sample__btn--brand">Join us</span>
+        <span className="wb-sample__bandh">{band.title} <mark>{band.highlight}</mark></span>
+        <span className="wb-sample__btn wb-sample__btn--brand">{band.cta?.label || first}</span>
       </div>
     </div>
   );
@@ -142,7 +135,8 @@ function FontsCard({ t, added, org, words, onChange }) {
 export default function WebsiteTheme() {
   const { me } = useOutletContext() || {};
   const { siteId } = useParams();
-  const mainQ = useSite(!siteId);
+  // Always read: it also says which looks this campaign has (useSite).
+  const mainQ = useSite();
   const msQ = useMicrosite(siteId);
   const q = siteId ? msQ : mainQ;
   // What it wears as saved: the main site's settings, or the other website's own.
@@ -180,7 +174,7 @@ export default function WebsiteTheme() {
 
   const setColor = (k, v) => setT((x) => ({ ...x, colors: { ...x.colors, [k]: v } }));
   const pickSkin = (key) => {
-    const s = SKINS[key];
+    const s = lookOf(key) || SKINS.base;
     setT((x) => full({ ...s, skin: key, logo: x.logo, pop: s.pop }));
   };
   const fix = (p) => setColor(p.fg, readableInk(t.colors[p.fg], t.colors[p.bg]));
@@ -297,7 +291,7 @@ export default function WebsiteTheme() {
               <section className="card" aria-labelledby="wb-th-skin">
                 <h2 id="wb-th-skin" className="wb-card-h">Start from a look</h2>
                 <div className="wb-skins" role="radiogroup" aria-labelledby="wb-th-skin">
-                  {Object.values(SKINS).map((s) => (
+                  {siteLooks().map((s) => (
                     <label key={s.key} className="wb-skin" data-on={t.skin === s.key ? '' : undefined}>
                       <input type="radio" name="wb-skin" checked={t.skin === s.key} onChange={() => pickSkin(s.key)} />
                       <span className="wb-skin__name">{s.label}</span>
@@ -363,7 +357,7 @@ export default function WebsiteTheme() {
                     </label>
                   ))}
                 </div>
-                {typeof t.pop === 'boolean' && (
+                {typeof t.pop === 'boolean' && siteLooks().some((l) => l.pop === true) && (
                   <div className="wb-toggle">
                     <input id="wb-pop" type="checkbox" className="wb-toggle__box" checked={t.pop} onChange={(e) => setT((x) => ({ ...x, pop: e.target.checked }))} />
                     <label htmlFor="wb-pop">A shadow under big headings</label>

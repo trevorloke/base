@@ -15,6 +15,7 @@ test('unreachable: health says "not reachable" with a 503', async () => {
   assert.equal(r.status, 503);
   const body = await r.json();
   assert.deepEqual([body.ok, body.database], [false, 'not reachable']);
+  assert.equal(body.store, 'postgres', 'which database it is asking, reachable or not');
 });
 
 test('a failed connection is not remembered: the next call tries again', async () => {

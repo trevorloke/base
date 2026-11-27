@@ -3,17 +3,8 @@
 //
 // The rating scale is the campaign's own (shared/scale.js: the steps' words
 // and the "Voting for?" list come from workspace settings.scale, edited on
-// the manager's Rating scale screen). RATINGS here is the DEFAULT scale —
-// what a campaign has until it changes anything, and what seeds and tests
-// use. Validate and display through scale.js with the campaign's scale.
-import { DEFAULT_SCALE } from './scale.js';
-
-export const RATINGS = [
-  ...DEFAULT_SCALE.steps.map((s) => ({ code: s.code, label: s.label, short: s.code, band: s.band })),
-  ...DEFAULT_SCALE.candidates.map((c) => ({ code: c.code, label: c.label, short: c.code, band: 'opposed' })),
-];
-export const RATING_CODES = RATINGS.map((r) => r.code);
-export const ratingByCode = (c) => RATINGS.find((r) => r.code === c) || null;
+// the manager's Rating scale screen). Validate and display through scale.js
+// with the campaign's scale.
 
 // in_person: a talk with someone you know, away from their door ("My people").
 // left_lit: literature left at a door — a visit, not a conversation; the
@@ -56,7 +47,7 @@ export const VOLUNTEER_ROLES = [
   { code: 'food',                label: 'Food' },
   { code: 'translation',         label: 'Translation', detail: 'Language' },
   { code: 'burmashave',          label: 'Burmashave' },
-  { code: 'community_committee', label: 'Community committee', detail: 'Community (Newton, Whalley, …)' },
+  { code: 'community_committee', label: 'Community committee', detail: 'Community (a neighbourhood or group)' },
   { code: 'policy',              label: 'Policy' },
   { code: 'administration',      label: 'Administration' },
   { code: 'candidate_aide',      label: 'Candidate aide' },
@@ -87,16 +78,12 @@ export const noCalls = (p) => p?.no_call === true || lowTags(p).includes('do-not
 export const noCallsWord = (p) => (lowTags(p).includes('do-not-contact') ? 'Do not contact' : 'Do not call');
 
 // Donor tiers, derived from real gifts — never self-declared.
-//   star:      $1,000+ in the calendar year, or $100+/mo recurring
-//   superstar: $3,000+ in the calendar year, or $250+/mo recurring
-export const DONOR_TIERS = {
-  star:      { yearCents: 100000, monthlyCents: 10000, label: 'Star' },
-  superstar: { yearCents: 300000, monthlyCents: 25000, label: 'Superstar' },
-};
-
-export const donorTier = ({ yearCents = 0, monthlyCents = 0 }) => {
-  if (yearCents >= DONOR_TIERS.superstar.yearCents || monthlyCents >= DONOR_TIERS.superstar.monthlyCents) return 'superstar';
-  if (yearCents >= DONOR_TIERS.star.yearCents || monthlyCents >= DONOR_TIERS.star.monthlyCents) return 'star';
+// Named tiers are a campaign's own: the server passes its list (the highest
+// first, each { key, yearCents, monthlyCents }: so much in the calendar
+// year, or so much a month) and this file holds none. With no list a donor
+// is 'monthly' or 'one-time'.
+export const donorTier = ({ yearCents = 0, monthlyCents = 0 }, tiers = []) => {
+  for (const t of tiers) if (yearCents >= t.yearCents || monthlyCents >= t.monthlyCents) return t.key;
   if (monthlyCents > 0) return 'monthly';
   if (yearCents > 0) return 'one-time';
   return null;

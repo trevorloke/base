@@ -117,7 +117,8 @@ export default function WebsitePages() {
   const [params, setParams] = useSearchParams();
   const showNew = params.get('new') === '1';
   const { siteId } = useParams();
-  const mainQ = useSite(!siteId);
+  // Always read: it also says what a new section starts with here (useSite).
+  const mainQ = useSite();
   const siteQ = useMicrosite(siteId);
   const q = siteId ? siteQ : mainQ;
   const key = siteId ? ['microsite', siteId] : ['site'];

@@ -1,8 +1,9 @@
 // The brand a campaign wears (lib/brand.js). Before a manager saves one
-// (Settings → Brand, ext/brand), it is the preset STARBASE_BRAND names —
-// Imagine Surrey's own in production, base.win's on staging and for any
-// other campaign, worked out as it always was when unset — and its page is
-// exactly what it was. Once saved, the saved brand is the look whatever
+// (Settings → Brand, ext/brand), it is the look STARBASE_BRAND names —
+// Imagine Surrey's own in its production, base.win's for staging and any
+// other campaign, and base.win's when unset (but for a server named exactly
+// Imagine Surrey, which keeps its own and is told to set the brand). Once
+// saved, the saved brand is the look whatever
 // STARBASE_BRAND says: its shades go into the app's page before the
 // stylesheets (signed out too: sign-in wears it), with its data for script,
 // its pictures asked for early, its icons, the browser's bar colours, the
@@ -20,7 +21,10 @@ import { Hono } from 'hono';
 import { freshDb, Client } from './helpers.js';
 import { brandKey, brandFor, brandHtml, brandManifest, brandPages, campaignBrand, forgetBrand, learnName } from '../lib/brand.js';
 import { emailBody, blastHtml } from '../ext/abtests/send.js';
-import { BRANDS } from '@starbase/shared/brand';
+import { presetFor } from '../lib/preset.js';
+// base.win's own look, and Imagine Surrey's from its preset.
+import { BRANDS as OWN } from '@starbase/shared/brand';
+const BRANDS = { ...OWN, 'imagine-surrey': presetFor('imagine-surrey').brand };
 import { lookCss } from '@starbase/shared/brand-look';
 import { contrast } from '@starbase/shared/site/theme';
 import { rewriters } from '../lib/mount.js';
@@ -46,15 +50,15 @@ const SAVED = {
   icons: { i192: ID(4), i512: ID(5), maskable: ID(6), touch: ID(7) },
 };
 
-test('unset, the look is worked out: production keeps Imagine Surrey’s; staging and other campaigns get Base’s', () => {
+test('unset, the look is base.win’s: only a server named exactly Imagine Surrey keeps its own; staging and other campaigns get Base’s', () => {
   setEnv({ STARBASE_ENV: 'production', STARBASE_ORG_NAME: 'Imagine Surrey' });
-  assert.equal(brandKey(), 'imagine-surrey', 'production as it is on Render today');
+  assert.equal(brandKey(), 'imagine-surrey', 'production as it is on Render today, should its brand line go missing');
   setEnv({ STARBASE_ENV: 'production', STARBASE_ORG_NAME: '  imagine   SURREY ' });
-  assert.equal(brandKey(), 'imagine-surrey', 'any spacing or case');
+  assert.equal(brandKey(), 'base', 'another spelling of the name is not the name');
   setEnv({ STARBASE_ENV: 'production' });
-  assert.equal(brandKey(), 'imagine-surrey', 'no name at all: as before');
+  assert.equal(brandKey(), 'base', 'no name at all: nobody’s');
   setEnv({});
-  assert.equal(brandKey(), 'imagine-surrey', 'local and tests: as before');
+  assert.equal(brandKey(), 'base', 'local, nothing set: nobody’s');
   setEnv({ STARBASE_ENV: 'staging', STARBASE_ORG_NAME: 'Imagine Surrey' });
   assert.equal(brandKey(), 'base', 'staging is generic even before its new settings arrive');
   setEnv({ STARBASE_ENV: 'production', STARBASE_ORG_NAME: 'Another Campaign' });
@@ -64,10 +68,10 @@ test('unset, the look is worked out: production keeps Imagine Surrey’s; stagin
   setEnv({ STARBASE_BRAND: 'Imagine-Surrey', STARBASE_ENV: 'staging' });
   assert.equal(brandKey(), 'imagine-surrey');
   setEnv({ STARBASE_BRAND: 'purple', STARBASE_ENV: 'staging' });
-  assert.equal(brandKey(), 'base', 'a bad value is worked out as unset');
+  assert.equal(brandKey(), 'base', 'a bad value is read as unset');
 });
 
-test('unset: the preset’s page, as before — base.win’s is the page as built; Imagine Surrey’s carries its shades and wordmark', () => {
+test('nothing saved: base.win’s page is the page as built; Imagine Surrey’s carries its shades, its wordmark and its own words', () => {
   // Settings with no brand: the preset, whatever else they hold.
   assert.equal(brandFor({ permissions: {} }, 'base'), brandFor(undefined, 'base'));
   const base = brandHtml(INDEX, brandFor({}, 'base'));
@@ -77,7 +81,16 @@ test('unset: the preset’s page, as before — base.win’s is the page as buil
   assert.match(is, /<html lang="en" data-brand="imagine-surrey">/);
   assert.match(blockOf(is), /--accent:#003979;[^]*--second:#ffc72c;[^]*@media \(prefers-color-scheme:dark\)/);
   assert.ok(is.indexOf('<style id="brand">') < is.indexOf('<link rel="stylesheet"'), 'before the first stylesheet');
-  assert.equal(dataOf(is), null, 'a preset is known to the app by its mark alone');
+  // What is Imagine Surrey's own reaches the app in its page, never in the
+  // built files every campaign shares.
+  const sent = dataOf(is);
+  assert.deepEqual([sent.key, sent.saved, sent.color, sent.second, sent.learn, sent.shortName, sent.logo, sent.logoDark],
+    ['imagine-surrey', false, '#003979', '#ffc72c', 'ImagineU', 'base.win', '/site-assets/imagine-surrey/logo.webp', '/site-assets/imagine-surrey/logo-light.png']);
+  assert.deepEqual([sent.sitePlaceholder, sent.sampleLede, sent.startWord, sent.flag, sent.learnAliases, sent.features],
+    ['https://imaginesurrey.ca', 'Try it with 52 made-up Surrey voters.', 'Imagine Surrey’s look', '#ffc72c', ['/imagineu'], ['membership', 'sample']]);
+  assert.deepEqual(sent.map, { centre: [49.1913, -122.849], zoom: 12, bounds: [[49.0, -122.93], [49.22, -122.68]] });
+  assert.equal(sent.examples['turf.name'], 'e.g. Fleetwood East');
+  assert.ok(is.indexOf('<script id="brand-data">') < is.indexOf('<script type="module"'), 'before the app’s script');
   assert.match(is, /<link rel="icon" href="\/star.png" type="image\/png" \/>/);
   assert.match(is, /<link rel="preload" as="image" href="\/site-assets\/imagine-surrey\/logo\.webp" data-brand media="\(prefers-color-scheme: light\)" \/>/);
   assert.match(is, /<link rel="preload" as="image" href="\/site-assets\/imagine-surrey\/logo-light\.png" data-brand media="\(prefers-color-scheme: dark\)" \/>/);
@@ -267,7 +280,7 @@ test('on the way out, signed out: the preset until a manager saves; the saved br
   const back = await (await app.request('/')).text();
   assert.match(back, /data-brand="imagine-surrey"/);
   assert.match(blockOf(back), /--accent:#003979;/);
-  assert.equal(dataOf(back), null);
+  assert.deepEqual([dataOf(back).saved, dataOf(back).logo], [false, '/site-assets/imagine-surrey/logo.webp'], 'nothing saved: the look it started in, with its own logo');
 
   // Only the app's own page and the manifest are touched.
   assert.deepEqual(await (await app.request('/api/x')).json(), { html: '<html lang="en">' });

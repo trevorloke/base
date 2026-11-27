@@ -49,6 +49,10 @@ const serverDir = fileURLToPath(new URL('./server/', import.meta.url));
 writeFileSync(STUB, `
 import { createServer } from 'node:http';
 import { appendFileSync } from 'node:fs';
+// The fixtures here are Imagine Surrey's, so the server runs as its production
+// does (render.yaml sets this brand); a brand set by hand is left as set.
+if (process.env.STARBASE_BRAND === undefined) process.env.STARBASE_BRAND = 'imagine-surrey';
+
 const real = globalThis.fetch;
 let slowMs = 0;
 globalThis.fetch = async (url, init) => {

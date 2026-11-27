@@ -6,9 +6,10 @@
 // request to *.google.com, *.googleapis.com or *.gov.bc.ca is aborted, and at
 // the end no request has left 127.0.0.1 but those.
 //
-// GOOGLE_MAPS_SERVER_KEY=e2e-not-a-key and no GOOGLE_MAPS_TILES throughout.
+// GOOGLE_MAPS_SERVER_KEY=e2e-not-a-key and GOOGLE_MAPS_TILES=on throughout
+// (a key alone keeps the free map: server/test/gtiles.test.js).
 // The server is started afresh (in memory) for each setting it needs:
-//   A  only the key: Google is the map; Show → Map is Streets · Satellite ·
+//   A  the key and =on: Google is the map; Show → Map is Streets · Satellite ·
 //      Terrain (no Muted, no Dark, no filter); the phone keeps no /tiles/;
 //      offline with Google's tiles failing, "No signal — the street map is
 //      back when you are…"; New door offers own doors then B.C.'s rows and
@@ -34,6 +35,10 @@ import http from 'node:http';
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+// The fixtures here are Imagine Surrey's, so the server runs as its production
+// does (render.yaml sets this brand); a brand set by hand is left as set.
+if (process.env.STARBASE_BRAND === undefined) process.env.STARBASE_BRAND = 'imagine-surrey';
 
 const ROOT = fileURLToPath(new URL('.', import.meta.url));
 const PORT = Number(process.env.PORT) || 5340;
@@ -165,7 +170,7 @@ const startServer = async (extra = {}) => {
       ...process.env, STARBASE_OPEN_SIGNUP: '1', STARBASE_DATA: 'memory', PORT: String(PORT), STARBASE_JOBS: 'off',
       GEOCODER: 'bc', BC_GEOCODER_URL: `http://127.0.0.1:${BC_PORT}`, GEOCODE_ON_SAVE: 'on',
       GOOGLE_MAPS_SERVER_KEY: 'e2e-not-a-key', GOOGLE_MAPS_TILES_URL: `http://127.0.0.1:${G_PORT}/v1`, GOOGLE_PLACES_URL: `http://127.0.0.1:${G_PORT}/v1`,
-      GOOGLE_MAPS_TILES: '', ADDRESS_SUGGEST: '', ...extra,
+      GOOGLE_MAPS_TILES: 'on', ADDRESS_SUGGEST: '', ...extra,
     },
     stdio: ['ignore', 'pipe', 'inherit'],
   });
@@ -345,7 +350,7 @@ const directionsTour = async (c, label, s, { app, phone }) => {
   return out;
 };
 
-// ═══ A: only the key ═══
+// ═══ A: the key and GOOGLE_MAPS_TILES=on ═══
 await startServer();
 let s = await seed();
 {
@@ -360,7 +365,7 @@ let s = await seed();
       await openMap(p, app === 'admin' ? '/admin/map' : '/map');
       const srcs = await tileSrcs(p);
       const filter = await p.evaluate(() => getComputedStyle(document.querySelector('.leaflet-tile-pane')).filter);
-      check(`A1 ${who} ${size}: with only the key the map draws /tiles/ (a saved Muted drawn as Streets, no filter), nothing from the free map`,
+      check(`A1 ${who} ${size}: with the key and =on the map draws /tiles/ (a saved Muted drawn as Streets, no filter), nothing from the free map`,
         srcs.length > 0 && srcs.every((u) => /\/tiles\/\d+\/\d+\/\d+/.test(u)) && free.asked === freeBefore && filter === 'none',
         JSON.stringify({ srcs: srcs.slice(0, 2), free: free.asked - freeBefore, filter }));
       await openShow(p);

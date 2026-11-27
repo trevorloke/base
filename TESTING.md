@@ -15,8 +15,14 @@ git clone https://github.com/trevorloke/starbase.git
 cd starbase
 npm install
 npm run build
-npm start                 # → http://localhost:3200
+STARBASE_BRAND=imagine-surrey npm start     # → http://localhost:3200
 ```
+
+This guide walks through Imagine Surrey's own set-up, so the server is
+started with its brand line. Started with plain `npm start`, the server is
+any other campaign's: no sample data, ten profile fields, no membership
+form, nobody on the rating scale, training called *Training* (*Another
+campaign*, at the end of this section).
 
 1. Open **http://localhost:3200/signup** and set up base.win for Imagine
    Surrey: your name, email and password. You become its manager (the
@@ -31,6 +37,62 @@ npm start                 # → http://localhost:3200
 Your data lives in `data/`. Stop with Ctrl-C; it's still there next
 time. Delete the folder to start over.
 
+### Another campaign
+
+Stop the server, delete `data/` and start it with plain `npm start`. Sign
+up as *Kamloops Forward*. Then check that nothing of Imagine Surrey's is
+there:
+
+- **Today** has no *Load sample data* card.
+- **People → More → Profile fields** lists ten fields, and *Add the
+  standard fields* adds none. There is no Campus and no Interests.
+- **People → More** has no *Enter a membership form*, and a donor's
+  profile says *Donor*, never *Star*.
+- **Rating scale** (your initials → *Rating scale*) lists only *Not sure*
+  under *Voting for?*.
+- The fifth tab is **Training**, at `/training`. `/imagineu` is not an
+  address here: the app goes back to Today.
+- **Website** opens on a finished generic site in the Base look. Theme
+  offers one look. *Add a section* has no *Become a member*.
+- `/star.png` and `/site-assets/imagine-surrey/logo.webp` answer 404.
+- The map opens wide with *Ask base.win to set your map area* until
+  `STARBASE_GEO_BOUNDS` is set.
+
+The same is checked by machine, on every change:
+
+- `npm run build && npm run test:bundle` searches the built app, the files
+  served as written and every file name for the words in
+  `server/test/neutral-words/` (one word or phrase a line). It ends 1 on
+  the first find and says where. No list is excused: a word found is a
+  failure.
+- `server/test/neutral-boot.test.js` (in `npm test`) starts another
+  campaign's server with the control centre's own settings and searches
+  what it answers (the same reads the dump below makes) for the same words.
+- `server/test/neutral-*.test.js` test each part as another campaign and
+  then as Imagine Surrey. A new one follows `neutral-membership.test.js`:
+  import the helper, set `STARBASE_BRAND` to `base`, call `forgetBrand()`,
+  and put the brand back at the end.
+
+The rest of `npm test`, and every `e2e-*.mjs` script, runs as Imagine
+Surrey's own server (the helper and each script set the brand), so they
+test Imagine Surrey as it is deployed.
+
+**Proving a change leaves Imagine Surrey as it was.** Take a dump before
+and after, on the same side of midnight in Vancouver (07:00 UTC), and
+compare:
+
+```sh
+scripts/preset-dump.sh /tmp/before 4190        # on the old code
+scripts/preset-dump.sh /tmp/after 4190         # on the new code
+diff -r /tmp/before/norm /tmp/after/norm
+node scripts/preset-screens.mjs /tmp/screens-before 4191   # the same for ten screens
+```
+
+The dump is what a server started with Imagine Surrey's production
+settings answers: its reads and pages, signed in and signed out, plus its
+sample, one membership, its icons and its website's pictures. `e2e-map.mjs` can fail on a busy machine; run it
+again on a quiet one before reading anything into it.
+
 > Testing on your phone on the same Wi-Fi: open `http://<your-computer's-IP>:3200`.
 > Location ("Locate me") and "Add to Home Screen" need **https** — use the
 > deployed version for those.
@@ -39,27 +101,38 @@ time. Delete the folder to start over.
 
 ## 2 · Deploy for the team (Render)
 
-The repo's `render.yaml` is a Blueprint for one client's two environments
-(GOING-LIVE.md): **base-win-staging** from `main` and **base-win** from
-`production`, each with its own managed Postgres database (backups
-included). Every setting below, and where its key comes from:
+The repo's `render.yaml` is a Blueprint for the three environments
+(GOING-LIVE.md, section 0): **base-win-staging** from `main`, the one
+shared staging at `https://staging.base.win`; **base-win** from
+`production`, Imagine Surrey's production at
+`https://imaginesurrey.base.win`; and **base-platform**, the control
+centre at `https://ops.base.win`. Each has its own managed Postgres
+database (what Render keeps as backups depends on the plan: GOING-LIVE.md,
+*Getting data back*). Every setting below, and where its key comes from:
 INTEGRATIONS.md.
 
-1. Render → **New → Blueprint** → pick this repo (`main` branch)
-   → it creates `base-win-staging` + `base-win-staging-db` and `base-win` +
-   `base-win-db` (paid plans — check Render’s current pricing).
+1. Render → **Blueprints**: see whether this repository is listed, which
+   branch it follows and whether Auto Sync is on (GOING-LIVE.md section 0,
+   *Before a Blueprint sync*). If it is listed, a change to `render.yaml`
+   is applied by a sync: by itself at the merge when Auto Sync is on,
+   otherwise with the Blueprint → **Manual Sync**; either way after the
+   name check there. A sync applies the whole file. If none is listed, the
+   services were made by hand: do not make a new Blueprint over them
+   without that name check. `render.yaml` holds `base-win-staging` +
+   `base-win-staging-db`, `base-win` + `base-win-db` and `base-platform` +
+   `base-platform-db` (paid plans — check Render’s current pricing).
 2. In the `base-win` service → **Environment**, set:
 
 | Variable | What for | Needed to test? |
 |---|---|---|
-| `STARBASE_PUBLIC_URL` | your address, e.g. `https://starbase.imaginesurrey.ca` — used in invite and unsubscribe links | **yes** |
+| `STARBASE_PUBLIC_URL` | your address, e.g. `https://imaginesurrey.base.win` — used in invite and unsubscribe links | **yes** |
 | `STARBASE_ORG_NAME`, `STARBASE_JURISDICTION`, `STARBASE_TZ`, `STARBASE_CITY`, `STARBASE_SLATES` | the campaign this deployment runs for (README → *One deployment per client*) | set them before the first sign-in |
 | `STARBASE_ENV` | `staging` on the test environment: a *Staging* badge on every screen | **yes**, on staging |
 | `RESEND_API_KEY`, `MAIL_FROM` | real email (invites, newsletters, press, shift alerts) | optional — without it, sends are saved as *queued* and invite links are shown to copy |
 | `RESEND_WEBHOOK_SECRET` | bounces, spam complaints and "delivered" back from Resend (INTEGRATIONS.md; SendGrid: `MAIL_PROVIDER`, `SENDGRID_API_KEY`, `SENDGRID_WEBHOOK_PUBLIC_KEY`) | optional — without it a send says *sent* and a dead address is tried again next time |
 | `MAILCHIMP_API_KEY` | *Send to Mailchimp* on a list, unsubscribes kept in step both ways (INTEGRATIONS.md; `MAILCHIMP_AUDIENCE_ID` for an account with several audiences, `MAILCHIMP_WEBHOOK_SECRET` to check its webhook's signature) | optional — without it the button is not there |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` | SMS shift alerts; texting and calling from the app through the campaign's number | optional — without it, Calls opens the phone's own Messages and dialer |
-| `GOOGLE_MAPS_SERVER_KEY` | Google Maps tiles (on whenever it is set, unless `GOOGLE_MAPS_TILES=off`) and, with `ADDRESS_SUGGEST=google`, Google's address suggestions; pins always come from the B.C. service | optional — the free BC geocoder and OpenStreetMap tiles work without it |
+| `GOOGLE_MAPS_SERVER_KEY` | Google Maps tiles (with `GOOGLE_MAPS_TILES=on`) and, with `ADDRESS_SUGGEST=google`, Google's address suggestions; pins always come from the B.C. service | optional — the free BC geocoder and OpenStreetMap tiles work without it |
 | `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_TOKEN_KEY` | Sign in with Google, and the one Google connection Gmail, Drive and Calendar use (INTEGRATIONS.md); in tests a stand-in Google (`server/test/fake-google.js`, pointed at with `GOOGLE_ACCOUNTS_BASE` and `GOOGLE_OAUTH_BASE`) — never real Google | optional — without them no Google button shows, and passwords work as always |
 | `GMAIL_DAILY_MAX` | emails a person may send from their own Gmail in 24 hours (INTEGRATIONS.md, *Gmail*); in tests Gmail is the stand-in Google too (`GMAIL_API_BASE`) | optional — 100 |
 | `GOOGLE_PICKER_KEY`, `GOOGLE_CLOUD_PROJECT_NUMBER` | Google Drive and Sheets, on top of the Google client (INTEGRATIONS.md); in tests the same stand-in Google answers Drive and Sheets (`server/test/fake-google-drive.js`, pointed at with `GOOGLE_DRIVE_API_BASE` and `GOOGLE_SHEETS_API_BASE`) | optional — without them no Drive button shows; Download CSV works as always |
@@ -67,6 +140,49 @@ INTEGRATIONS.md.
 
 The whole order of things, from deploy to the public link, is in
 [GOING-LIVE.md](GOING-LIVE.md).
+
+Staging is the public demo: its email, texting and payment keys are test
+keys or unset, never a client's, and it never holds a real list
+(GOING-LIVE.md, section 0). Import only made-up files there. Where a check below is run with `BASE_PATH`
+(under a client's path, `/imaginesurrey` or `/x`), it covers the door
+(`apps/door`), an option nobody uses today: every service runs at its
+address's root.
+
+### Staging's sample
+
+Everyone and everything in staging's sample is made up
+(`server/lib/samplecast.js`); only the street map is real.
+
+- **It makes itself again.** A release that raises `SAMPLE_VERSION`
+  (`server/lib/samplecampaign.js`) drops the old sample at staging's next
+  start and makes the new one. Raise it whenever what the sample holds
+  changes; `server/test/samplecampaign.test.js` fails until you do
+  (*the sample changed: raise SAMPLE_VERSION*), and the walk test fails when
+  what a new campaign starts with changes.
+- **How long it takes.** 320 people: about 7 seconds in memory on a
+  laptop. On Render's database: not timed yet. Time the first one (the
+  server's log says *sample: made* when it is done) and write it here.
+  Meanwhile the demo shows *The demo is being refreshed* and tries again
+  every 10 seconds; a visitor is signed back in when it is done.
+- **When it won't.** Staging drops nothing unless its database holds one
+  campaign whose first manager is the demo account. If its log says *this
+  database's first campaign is not the demo account's*, or *could not be
+  made in 3 tries*, set `STARBASE_SAMPLE_RESET` in Render (base-win-staging
+  → Environment) to a new word of your own (GOING-LIVE.md, section 0).
+- **Your own account on staging.** The sign-in page sends everyone into the
+  demo. Open `/login?stay=1` to sign in with your own email and password.
+- **The daily check.** GitHub → Actions → *Staging check* walks the demo
+  every day, and by hand with **Run workflow**. It fails, and opens one
+  issue, when it finds a real name, phone, email or link, an old sample,
+  or a live email or texting key. By hand, against any address:
+  `node scripts/staging-check.mjs https://staging.base.win`.
+- **On your computer.** The same server as staging, in memory:
+  `STARBASE_ENV=staging STARBASE_BRAND=base STARBASE_SAMPLE=vancouver
+  STARBASE_DEMO_EMAIL=demo@base.win STARBASE_ORG_NAME="Sample Campaign"
+  STARBASE_DATA=memory npm start`, then open `http://localhost:3200/` (the
+  sample takes a few seconds). `node --test
+  server/test/staging-walk.test.js` reads every screen's data the way the
+  daily check does, with render.yaml's own staging settings.
 
 For Twilio, set the number's incoming messages webhook to
 `https://<your address>/api/public/twilio/sms` (HTTP POST). Calls through the
@@ -91,7 +207,8 @@ one tap away under **More**.
 - **Two apps.** Sign in at `/login` and you land in the **admin** at
   `/admin/` (the header reads *base.win*, your campaign under it): every screen below. Your
   account menu has *Field app ↗* — open it and you see exactly what a
-  volunteer sees (Today · Map · Calls · Shifts · ImagineU), with *Admin ↗*
+  volunteer sees (Today · Map · Calls · Shifts · ImagineU, which another
+  campaign reads as Training), with *Admin ↗*
   to come back. A volunteer who opens `/admin/` is told it isn't theirs.
 - **Today → Dashboard → In the field** — tap a dot: who, the outcome, who
   logged it and when, with *Profile* and *On the map* links; tap a person's
@@ -336,6 +453,12 @@ one tap away under **More**.
   `BASE_PATH=/x`, A's controls on PORT+1) walks it in a browser with tokens
   signed by `server/test/entry-sign.js`. The control centre's own tests:
   `npm run test:platform` and `e2e-ops.mjs` (`apps/platform/README.md`).
+  Its Render pages (only with `RENDER_API_KEY` set) run against a stand-in
+  for Render, `apps/platform/test/fake-render.mjs`: `render-api`,
+  `render-routes`, `isolation` and `render-structural`. `nokey.test.mjs`
+  checks that without the key five pages are the same bytes as before and
+  every `/render` address is Not found; `e2e-ops.mjs` runs first without
+  the key, then with it.
 - **Sign in with Google** (once the Google client is set; INTEGRATIONS.md) —
   *Sign in with Google* sits under *Sign in*. Pressed before linking, it
   says the Google account isn’t linked. Sign in with your password, then
@@ -568,6 +691,17 @@ one tap away under **More**.
   another here: Mailchimp has it unsubscribed. It has not been run against
   a real Mailchimp account yet — this is that test. `node e2e-mailchimp.mjs`
   (PORT, SHOTS) runs all of it in a browser against a stand-in Mailchimp.
+- **Unsubscribes with the campaign's website** — on a client's base.win with
+  the two settings set: Settings → Services → *The website — unsubscribes*
+  → **Check** says *The website answers and takes this key*. Unsubscribe a
+  test address here: in a minute it is off on the website. Unsubscribe
+  another on the website: it is off the newsletter here, and the desk's Add
+  answers *only they can rejoin*. Turn the website off for a moment and
+  unsubscribe here: the row says *1 waiting* and why; **Send again**
+  delivers it. It has not been run against the real website yet — this is
+  that test. `node --test server/test/website-consent.test.js` covers both
+  ways against a stand-in website; `node e2e-consent.mjs` (PORT, SHOTS)
+  walks the row in a browser on a laptop and a phone.
 - **Settings → Services** (managers) — every outside service: what it's
   for, *Set up* / *Not set up* (naming the settings missing) / *Using the
   free default*. **Check** on each makes one real call: Email says whether
@@ -1093,7 +1227,7 @@ comes back, or asks if words were typed meanwhile).
   no shop icons or house numbers); *Muted* greys the standard streets (the
   doors keep their colours), *Dark* is for night; it stays on that browser.
   With Google as the map (a `GOOGLE_MAPS_SERVER_KEY` set, `GOOGLE_MAPS_TILES`
-  not `off`), the list is *Streets · Satellite · Terrain*: no *Muted* or
+  `on`), the list is *Streets · Satellite · Terrain*: no *Muted* or
   *Dark* over Google's map, and a saved one draws *Streets*.
 - **Map, zooming in** — from the whole city to a street: every door is a
   dot in its rating's colour (grey: not asked yet), no number bubbles; a
@@ -1116,19 +1250,21 @@ comes back, or asks if words were typed meanwhile).
 - **Google Maps, the server's part** (`node --test server/test/gtiles.test.js
   server/test/places.test.js server/test/gusage.test.js
   server/test/maps-links.test.js`, against stand-in Google and B.C.
-  services, never the real ones): a key alone makes Google the map and
-  `GOOGLE_MAPS_TILES=off` keeps the free one; tiles carry Google's own cache
+  services, never the real ones): a key alone keeps the free map and
+  `GOOGLE_MAPS_TILES=on` makes Google the map; tiles carry Google's own cache
   header and the service worker never keeps them; a slow Google tile is a
   504 with no pause; `GOOGLE_TILES_DAILY_MAX` stops tiles until midnight;
   Google's address rows only with `ADDRESS_SUGGEST=google` and the logo, a
   pick placed by B.C. within 4 s, one Google call for 50 asks after a
   refusal; today's counts survive a restart; Directions links never carry
-  an origin. On staging with a real key, also record one tile's
-  `Cache-Control` and how many tiles a phone walking a turf for an hour
-  used (Settings → Services → Map background shows today's count).
+  an origin. With a real key, also record one tile's `Cache-Control` and
+  how many tiles a phone walking a turf for an hour used (Settings →
+  Services → Map background shows today's count). A client's key is on its
+  production only; staging is public, so there only base.win's own key,
+  with `GOOGLE_TILES_DAILY_MAX` set (GOING-LIVE.md, section 0).
 - **Google Maps, the screens** (`node e2e-gmaps.mjs`: base.win on :5340, a
   stand-in B.C. service on :5341 and a stand-in Google on :5342; every real
-  Google and B.C. address is blocked) — with only the key, Show → Map is
+  Google and B.C. address is blocked) — with the key and `GOOGLE_MAPS_TILES=on`, Show → Map is
   *Streets · Satellite · Terrain*, the phone keeps no Google tiles, and with
   no signal the map says *No signal — the street map is back when you are.
   Your doors are all here.*; New door offers the campaign's doors and then
@@ -1140,7 +1276,8 @@ comes back, or asks if words were typed meanwhile).
   with or without Google; the *Maps by Google* line ends the Show sheet
   and Your profile. On a phone: a door's More → *Directions* opens Google
   Maps walking to the door; a sign's *Directions* opens it driving.
-- **Map, Google Maps refusing** (staging with `GOOGLE_MAPS_SERVER_KEY` set) — a
+- **Map, Google Maps refusing** (a service with `GOOGLE_MAPS_SERVER_KEY`
+  set; on staging that is base.win's own key, never a client's) — a
   key with billing off, or block `/tiles/` in the browser's network tools
   and reload: the map turns to the free map and says *Google Maps isn’t
   loading — showing the free map*; a manager's *Why?* beside it opens the
@@ -1537,7 +1674,8 @@ comes back, or asks if words were typed meanwhile).
   a date three weeks out, **Save dates**: Donations counts the days down
   under the big number, and Today lists it under *Coming up*. Nothing is
   there until you type it.
-- **People → More → Enter a membership form** — type a paper form for a
+- **People → More → Enter a membership form** (Imagine Surrey's set-up
+  only; another campaign has no such link) — type a paper form for a
   made-up person: a birth date 25 years ago (*the $5 youth rate applies*),
   *Canadian citizen*, a union local, a campus, *I'd like to volunteer*, *A
   sign → Window*, two languages and *Other: Tamil*, two interests, *1 year*,

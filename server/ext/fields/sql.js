@@ -18,7 +18,20 @@
 //
 // sample marks what the sample campaign made, so clearing it removes exactly
 // that (a value you change stops being sample).
-export const sql = `
+//
+// sql() is asked at every start-up (db/schema.js), never kept: what it adds
+// to a campaign from before depends on this server's own set-up
+// (lib/preset.js fields.bootBackfill).
+//   every server   the tables, and the fifteen markers (fields_seeded) for
+//                  every campaign — so no start-up, job or change of brand
+//                  can ever give a campaign a field it was not set up with
+//   a server whose set-up says so
+//                  also what a campaign from before a field existed is
+//                  given: the fields below with their lists, once each, and
+//                  the lists job. Their text is as it has always been.
+import { preset } from '../../lib/preset.js';
+
+const TABLES = `
 create table if not exists person_fields (
   id uuid primary key,
   workspace_id uuid not null references workspaces(id) on delete cascade,
@@ -82,15 +95,22 @@ begin
   end if;
 end $$;
 
--- Voter eligibility, Language and Notes (people.js STANDARD_FIELDS) for
--- campaigns set up before they were standard: added once each, at the end
--- of the list. fields_seeded remembers, so a campaign that renames or takes
--- one off never has it put back.
+-- What a campaign has been given already (or never needs): a name here is
+-- never added at start-up, so a field renamed or taken off is not put back.
 create table if not exists fields_seeded (
   workspace_id uuid not null references workspaces(id) on delete cascade,
   name text not null,
   primary key (workspace_id, name)
 );
+`;
+
+// A campaign from before these were standard is given them once each, at
+// the end of its list.
+const BACKFILL_ONE = `
+-- Voter eligibility, Language and Notes (this set-up's standard fields) for
+-- campaigns set up before they were standard: added once each, at the end
+-- of the list. fields_seeded remembers, so a campaign that renames or takes
+-- one off never has it put back.
 insert into person_fields (id, workspace_id, name, kind, choices, volunteers, position)
 select gen_random_uuid(), w.id, s.name, s.kind, s.choices::jsonb, s.vol,
        coalesce((select max(f.position) from person_fields f where f.workspace_id = w.id and f.retired_at is null), -1) + s.ord
@@ -103,11 +123,14 @@ select gen_random_uuid(), w.id, s.name, s.kind, s.choices::jsonb, s.vol,
  where not exists (select 1 from person_fields f where f.workspace_id = w.id and lower(f.name) = lower(s.name))
    and not exists (select 1 from fields_seeded x where x.workspace_id = w.id and x.name = s.name)
    and (select count(*) from person_fields f where f.workspace_id = w.id and f.retired_at is null) < 38;
+`;
+const MARK_ONE = `
 insert into fields_seeded (workspace_id, name)
 select w.id, s.name from workspaces w cross join (values ('Voter eligibility'), ('Language'), ('Notes')) as s(name)
 on conflict do nothing;
-
--- The membership form's fields (people.js STANDARD_FIELDS), the same way:
+`;
+const BACKFILL_TWO = `
+-- The membership form's fields (this set-up's standard fields), the same way:
 -- once each, at the end of the list, never put back after a rename.
 insert into person_fields (id, workspace_id, name, kind, choices, volunteers, position)
 select gen_random_uuid(), w.id, s.name, s.kind, s.choices::jsonb, s.vol,
@@ -127,10 +150,13 @@ select gen_random_uuid(), w.id, s.name, s.kind, s.choices::jsonb, s.vol,
  where not exists (select 1 from person_fields f where f.workspace_id = w.id and lower(f.name) = lower(s.name))
    and not exists (select 1 from fields_seeded x where x.workspace_id = w.id and x.name = s.name)
    and (select count(*) from person_fields f where f.workspace_id = w.id and f.retired_at is null) < 38;
+`;
+const MARK_TWO = `
 insert into fields_seeded (workspace_id, name)
 select w.id, s.name from workspaces w cross join (values ('Gender'), ('Birth date'), ('Citizenship'), ('Union member'), ('Union local'), ('Campus'), ('Other language'), ('Interests'), ('Interested in being a candidate')) as s(name)
 on conflict do nothing;
-
+`;
+const BACKFILL_LISTS = `
 -- Language as first added (a starting list) → the membership form's list,
 -- in its order: Tagalog is Filipino there; Farsi, French and Other join.
 -- Only where the desk hasn't changed the list; what people have is kept.
@@ -152,3 +178,13 @@ select gen_random_uuid(), w.id, 'fields.lists', 'fields-lists-1' from workspaces
  where not exists (select 1 from fields_seeded x where x.workspace_id = w.id and x.name = 'Faith')
 on conflict (workspace_id, key) where key is not null do nothing;
 `;
+// Where nothing is back-filled, the lists job's three markers too.
+const MARK_LISTS = `
+insert into fields_seeded (workspace_id, name)
+select w.id, s.name from workspaces w cross join (values ('Faith'), ('Dwelling type list'), ('Campus list')) as s(name)
+on conflict do nothing;
+`;
+
+export const sql = () => (preset().fields.bootBackfill
+  ? TABLES + BACKFILL_ONE + MARK_ONE + BACKFILL_TWO + MARK_TWO + BACKFILL_LISTS
+  : TABLES + MARK_ONE + MARK_TWO + MARK_LISTS);

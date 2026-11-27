@@ -133,8 +133,8 @@ function Rsvp({ uid, item, action, hidden, privacy, me, setMe, state, setState, 
 // ({ field, message }, context.js errorFor) — above the openings.
 // sentItem: after a plain sign-up, the opening it was for (when named).
 // privacy: { href, keeper } for the small print under each form (form.js FormSmall).
-export function Openings({ uid, variant = 'shifts', action, hidden = {}, privacy = null, items = [], sent = false, sentItem = '', error = null, w }) {
-  const W = wordsIn(w);
+export function Openings({ uid, variant = 'shifts', action, hidden = {}, privacy = null, items = [], sent = false, sentItem = '', error = null, w, own }) {
+  const W = wordsIn(w, own);
   const [me, setMe] = useState(undefined);
   const [states, setStates] = useState({});
   // Who signed up before in this visit, read once the page is live

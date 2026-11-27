@@ -28,6 +28,7 @@ import './shifts.css';
 import './outreach.css';
 import '../editor.css';
 import './admin.css';
+import { ex } from '../brand.js';
 
 const TABS = [['members', 'Members'], ['candidates', 'Candidates'], ['teams', 'Teams'], ['permissions', 'Permissions'], ['services', 'Services'], ['campaign', 'Campaign'], ['brand', 'Brand']];
 const ROLE_WORD = { manager: 'Manager', treasurer: 'Treasurer', staff: 'Staff', volunteer: 'Volunteer', candidate: 'Candidate' };
@@ -90,7 +91,7 @@ function Teams({ me }) {
     <>
       <form className="ot-invite" onSubmit={create}>
         <label htmlFor="team-name" className="ot-sr">Team name</label>
-        <input id="team-name" className="input ot-invite__email" maxLength={80} placeholder="New team, e.g. Newton canvass crew"
+        <input id="team-name" className="input ot-invite__email" maxLength={80} placeholder={ex('team.name', 'New team, e.g. Saturday canvass crew')}
           value={name} onChange={(e) => setName(e.target.value)} />
         <button type="submit" className="btn btn-primary ot-btn-tap" disabled={busy || !online || !name.trim()}>Add team</button>
       </form>

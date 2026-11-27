@@ -12,7 +12,7 @@
 // found", with no signal too; the report itself is not theirs. Every claim on
 // a screen is checked against the API.
 //
-//   STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4460 node server/index.js &
+//   STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4460 node server/index.js &
 //   BASE=http://127.0.0.1:4460 SHOTS=/tmp/fieldreport node e2e-fieldreport.mjs
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';

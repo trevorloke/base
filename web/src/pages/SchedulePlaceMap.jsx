@@ -11,7 +11,7 @@
 import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { SURREY_BOUNDS, safeAttribution } from '../components/tiles.js';
+import { openHome, safeAttribution, useHomeView } from '../components/tiles.js';
 
 export default function PlaceMap({ tiles, around = [], point, onPoint, label = 'Map — tap where the shift is' }) {
   const boxRef = useRef(null);
@@ -19,6 +19,9 @@ export default function PlaceMap({ tiles, around = [], point, onPoint, label = '
   const pinRef = useRef(null);
   const pickRef = useRef(onPoint);
   pickRef.current = onPoint;
+  // Where the campaign's maps open (tiles.js), for the effects below.
+  const homeRef = useRef(null);
+  homeRef.current = useHomeView();
 
   useEffect(() => {
     const el = boxRef.current;
@@ -26,7 +29,7 @@ export default function PlaceMap({ tiles, around = [], point, onPoint, label = '
     const map = L.map(el, { zoomControl: true, attributionControl: true, zoomSnap: 0.25 });
     if (around.length > 1) map.fitBounds(around, { padding: [24, 24], maxZoom: 15, animate: false });
     else if (around.length === 1) map.setView(around[0], 15, { animate: false });
-    else map.fitBounds(SURREY_BOUNDS, { padding: [8, 8], animate: false });
+    else openHome(map, homeRef.current, { fit: true });
     map.on('click', (e) => pickRef.current({ lat: e.latlng.lat, lng: e.latlng.lng }));
     mapRef.current = map;
     // The sheet slides in and the map's box settles after it is made.

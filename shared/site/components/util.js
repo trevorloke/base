@@ -105,7 +105,7 @@ export function trackFrom(search) {
 // ── Sharing ──
 // Each channel's link carries ?source=share-<channel>, so a sign-up that
 // comes from it is credited to where it was shared. WhatsApp first: it is
-// what relational organizing in Surrey runs on.
+// what a lot of person-to-person organizing runs on.
 export const SHARE_CHANNELS = [
   { key: 'whatsapp', label: 'WhatsApp' },
   { key: 'sms', label: 'Text' },

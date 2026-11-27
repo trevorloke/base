@@ -1,5 +1,21 @@
 # The door — the front door at base.win
 
+## Not in use today
+
+Each client is served at its own address, `https://<name>.base.win`, by its
+own service ([GOING-LIVE.md](../../GOING-LIVE.md), section 0). The door is
+not deployed, and nothing needs it.
+
+It is kept for a setup that wants every client under one address,
+`base.win/<name>`. base.win itself is the front page today, so the door
+cannot hold base.win unless the front page moves. And with the door,
+`<name>.base.win` would only send people on to `base.win/<name>`; today it
+is the client's own service.
+
+Everything below describes that unused option.
+
+## What it does
+
 One address for every client; each client's base.win on its own server and
 database.
 
@@ -61,9 +77,9 @@ use up everyone's.
 
    Some names are kept for base.win itself and the door won’t start with
    them in the list: `ops, hub, api, admin, platform, _ops, _hooks, www,
-   door, status, help, mail, app, desk, field, site, login, assets, sample`
-   (`RESERVED` in door.mjs; the control centre at ops.base.win refuses the
-   same names, and builds this whole value for you on New campaign).
+   door, status, help, mail, app, desk, field, site, login, assets, sample,
+   staging, demo` (`RESERVED` in door.mjs; the control centre at ops.base.win refuses the
+   same names). This value is written by hand, one entry per client.
 
    `server` is an origin (no path). A config from before may say `ground`
    for it, and may still have `web` or `air` entries: `ground` is read as

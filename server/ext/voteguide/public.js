@@ -12,7 +12,7 @@ import { now } from '../../lib/clock.js';
 import { clientIp, makeLimiter } from '../../lib/guard.js';
 import { city as orgCity } from '../../lib/org.js';
 import { geocodeAddress } from '../../lib/geocode.js';
-import { UI_WORDS } from '../../../shared/site/ui-words.js';
+import { siteWords } from '../site/from-preset.js';
 import { guideFor } from './read.js';
 import { inFence } from './api.js';
 
@@ -27,7 +27,7 @@ export const clockRoute = (c) => {
 };
 
 // The words go back in the page's language (w: the site's rc.w-like lookup).
-export const findRoute = async (c, site, w = (k) => UI_WORDS[k]) => {
+export const findRoute = async (c, site, w = (k) => siteWords()[k]) => {
   c.header('Cache-Control', 'no-store');
   const guide = await guideFor(site.db, site.ws);
   if (guide.status !== 'published') return c.json({ error: w('vg.notOut') }, 404);

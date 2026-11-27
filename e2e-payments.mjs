@@ -35,6 +35,10 @@ import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
 import http from 'node:http';
 
+// The fixtures here are Imagine Surrey's, so the server runs as its production
+// does (render.yaml sets this brand); a brand set by hand is left as set.
+if (process.env.STARBASE_BRAND === undefined) process.env.STARBASE_BRAND = 'imagine-surrey';
+
 const PORT = Number(process.env.PORT) || 5310;
 const BASE = `http://127.0.0.1:${PORT}`;
 const SITE = `http://127.0.0.1:${PORT + 2}`;

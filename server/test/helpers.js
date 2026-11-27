@@ -3,10 +3,15 @@
 import { _resetDbForTest, getDb } from '../db/client.js';
 import { app } from '../index.js';
 
-// Sign-up is one-time setup in the product (Imagine Surrey only); tests make
-// many workspaces to check they stay apart, so keep it open here.
-// setup.test.js turns it off to test the real thing.
+// Sign-up is one-time setup in the product; tests make many workspaces to
+// check they stay apart, so keep it open here. setup.test.js turns it off
+// to test the real thing.
 process.env.STARBASE_OPEN_SIGNUP = '1';
+// The suite's fixtures are Imagine Surrey's, so it runs as Imagine Surrey's
+// production does (render.yaml sets this brand). A test of any other
+// campaign sets STARBASE_BRAND=base after importing this file: every read of
+// the brand is made when it is needed, never kept (lib/preset.js).
+if (process.env.STARBASE_BRAND === undefined) process.env.STARBASE_BRAND = 'imagine-surrey';
 // No address lookups on save (ext/addresses) unless a test asks: nothing
 // here reaches a real geocoder.
 if (process.env.GEOCODE_ON_SAVE === undefined) process.env.GEOCODE_ON_SAVE = 'off';

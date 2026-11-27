@@ -20,7 +20,8 @@ const here = (p) => fileURLToPath(new URL(p, import.meta.url));
 const web = (p) => readFileSync(here(`../../apps/web/src/${p}`), 'utf8');
 
 before(async () => {
-  delete process.env.STARBASE_BRAND;
+  // Imagine Surrey's own server: the brand its production sets.
+  process.env.STARBASE_BRAND = 'imagine-surrey';
   ({ db, mgr, ws } = await campaign('Imagine Surrey'));
 });
 
@@ -97,15 +98,16 @@ test('Imagine Surrey: the pages, the petitions, the menu and details as the webs
 });
 
 test('the pictures the seed uses are on the site, and only those', async () => {
-  const content = readFileSync(here('../ext/site/seeds/imagine-surrey-content.js'), 'utf8') + readFileSync(here('../ext/site/seeds/imagine-surrey.js'), 'utf8');
+  const content = readFileSync(here('../presets/imagine-surrey/site-content.js'), 'utf8') + readFileSync(here('../presets/imagine-surrey/site-seed.js'), 'utf8');
   const used = [...new Set([...content.matchAll(/\/site-assets\/imagine-surrey\/([\w.-]+)/g)].map((m) => m[1]))].sort();
   assert.deepEqual(used, ['hero-park.jpg', 'logo-light.png', 'logo.webp', 'members-rally.jpg']);
   for (const f of used) {
-    assert.ok(existsSync(here(`../../shared/site/assets/imagine-surrey/${f}`)), f);
+    assert.ok(existsSync(here(`../presets/imagine-surrey/assets/site/${f}`)), f);
     assert.equal((await hit(`/site-assets/imagine-surrey/${f}`)).status, 200, f);
   }
   const { readdirSync } = await import('node:fs');
-  assert.deepEqual(readdirSync(here('../../shared/site/assets/imagine-surrey')).sort(), used, 'nothing the seed doesn’t use');
+  // Beside them, its own stylesheet (linked by every page, not named by the seed).
+  assert.deepEqual(readdirSync(here('../presets/imagine-surrey/assets/site')).filter((f) => f !== 'look.css').sort(), used, 'nothing the seed doesn’t use');
 });
 
 test('made once: a campaign that deletes a page doesn’t get it back', async () => {
@@ -140,7 +142,7 @@ test('any other campaign: a clean generic site, with its own name and nothing ma
       else assert.doesNotThrow(() => checkModules(p.modules, { strict: true }), p.slug);
     }
   } finally {
-    delete process.env.STARBASE_BRAND;
+    process.env.STARBASE_BRAND = 'imagine-surrey';
   }
 });
 

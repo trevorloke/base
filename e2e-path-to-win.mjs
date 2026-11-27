@@ -18,7 +18,7 @@
 // tap target is ≥ 48px. A staffer reads it but can't change the numbers; a
 // volunteer can't read it. Every claim on screen is checked against the API.
 //
-//   STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=5610 node server/index.js &
+//   STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=5610 node server/index.js &
 //   BASE=http://127.0.0.1:5610 SHOTS=/tmp/path-to-win node e2e-path-to-win.mjs
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';

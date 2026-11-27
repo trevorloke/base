@@ -56,7 +56,7 @@ after(() => {
 
 const get = (path, cookie) => app.request(path, { headers: cookie ? { cookie } : {} });
 
-test('no key: OpenStreetMap, quietly, and /tiles is not a thing; a key alone makes Google the map', async () => {
+test('no key: OpenStreetMap, quietly, and /tiles is not a thing; a key alone keeps the free map, GOOGLE_MAPS_TILES=on makes Google the map', async () => {
   delete process.env.GOOGLE_MAPS_TILES;
   delete process.env.GOOGLE_MAPS_SERVER_KEY;
   const cfg = await (await get('/api/map/config', mgr.cookie)).json();
@@ -64,13 +64,22 @@ test('no key: OpenStreetMap, quietly, and /tiles is not a thing; a key alone mak
   assert.deepEqual(cfg.setup.ignored, [], 'nothing set up, nothing wrong');
   assert.deepEqual(cfg.google, { tiles: false, places: false });
   assert.equal((await get('/tiles/14/2611/5636.png', mgr.cookie)).status, 404);
-  // Only the key: Google (GOOGLE_MAPS_TILES unset reads 'auto').
+  // Only the key: still the free map, quietly. A key set for address
+  // lookup never turns Google's map on (phones keep the free map offline;
+  // the owner chooses Google with GOOGLE_MAPS_TILES=on).
   process.env.GOOGLE_MAPS_SERVER_KEY = 'tiles-key';
-  const auto = await (await get('/api/map/config', mgr.cookie)).json();
-  assert.equal(auto.tiles.url, '/tiles/{z}/{x}/{y}.png');
-  assert.deepEqual(auto.setup.ignored, []);
-  assert.equal(auto.standardLabel, 'Streets');
-  assert.deepEqual(auto.google, { tiles: true, places: false }, 'Google’s address rows stay off with only a key');
+  const keyOnly = await (await get('/api/map/config', mgr.cookie)).json();
+  assert.match(keyOnly.tiles.url, /openstreetmap/);
+  assert.deepEqual(keyOnly.setup.ignored, [], 'nothing wrong');
+  assert.deepEqual(keyOnly.google, { tiles: false, places: false });
+  assert.equal((await get('/tiles/14/2611/5636.png', mgr.cookie)).status, 404);
+  // The key and =on: Google.
+  process.env.GOOGLE_MAPS_TILES = 'on';
+  const on = await (await get('/api/map/config', mgr.cookie)).json();
+  assert.equal(on.tiles.url, '/tiles/{z}/{x}/{y}.png');
+  assert.deepEqual(on.setup.ignored, []);
+  assert.equal(on.standardLabel, 'Streets');
+  assert.deepEqual(on.google, { tiles: true, places: false }, 'Google’s address rows stay off with only the map on');
   // =off and =0 with a key: the free map, and not said as a mistake.
   for (const off of ['off', '0']) {
     process.env.GOOGLE_MAPS_TILES = off;
@@ -206,9 +215,9 @@ test('one reading of the settings: a key or a 1 pasted with a newline works, on 
     process.env.GOOGLE_MAPS_TILES = on;
     assert.equal((await (await get('/api/map/config', mgr.cookie)).json()).tiles.url, '/tiles/{z}/{x}/{y}.png', on);
   }
-  // Unset with a key: on, the same everywhere.
+  // Unset with a key: the free map, the same everywhere.
   process.env.GOOGLE_MAPS_TILES = '';
-  assert.equal((await (await get('/api/map/config', mgr.cookie)).json()).tiles.url, '/tiles/{z}/{x}/{y}.png', 'unset');
+  assert.match((await (await get('/api/map/config', mgr.cookie)).json()).tiles.url, /openstreetmap/, 'unset');
   // A deliberate off is quietly off; a value that isn't a yes or a no is said.
   for (const off of ['0', 'off', 'false']) {
     process.env.GOOGLE_MAPS_TILES = off;

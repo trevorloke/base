@@ -187,12 +187,12 @@ test('shared/qr.js encodes the longest guide link; lib/qr.js re-exports it', () 
 });
 
 test('no facts shipped: no dates, places, names or claims in the product’s own files; empty defaults', () => {
-  const files = ['../../shared/voteguide.js', '../../shared/site/catalogue.js', '../../shared/site/ui-words.js', '../ext/voteguide/sql.js', '../ext/site/seeds/imagine-surrey.js', '../ext/site/seeds/base.js'];
+  const files = ['../../shared/voteguide.js', '../../shared/site/catalogue.js', '../../shared/site/ui-words.js', '../ext/voteguide/sql.js', '../presets/imagine-surrey/site-seed.js', '../presets/imagine-surrey/site-content.js', '../ext/site/seeds/base.js'];
   for (const f of files) {
-    let src;
-    try { src = readFileSync(new URL(f, import.meta.url), 'utf8'); } catch { continue; }
+    // A file that is not there fails here: none of these may be skipped.
+    const src = readFileSync(new URL(f, import.meta.url), 'utf8');
     const guide = f.includes('catalogue') ? src.slice(src.indexOf("kind: 'voterguide'"), src.indexOf("kind: 'voterguide'") + 1200)
-      : f.includes('seeds') ? (src.includes('voterguide') ? src : '') : src;
+      : /seeds|site-seed|site-content/.test(f) ? (src.includes('voterguide') ? src : '') : src;
     if (!guide) continue;
     assert.doesNotMatch(guide, /\b20\d\d-\d\d-\d\d\b/, `${f}: a date`);
     assert.doesNotMatch(guide, /surrey/i, `${f}: Surrey`);

@@ -12,8 +12,16 @@
 import { useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiGet } from '../../api.js';
+import { takeSite } from './builder.js';
 
-export const useSite = (enabled = true) => useQuery({ queryKey: ['site'], queryFn: () => apiGet('/site'), enabled });
+// Every reader of ['site'] also tells the shared code what the campaign's
+// own website set-up is (builder.js takeSite): its looks beyond Base and its
+// own starting words, where its server sends any.
+export const useSite = (enabled = true) => {
+  const q = useQuery({ queryKey: ['site'], queryFn: () => apiGet('/site'), enabled });
+  takeSite(q.data);
+  return q;
+};
 export const useSitePage = (id) => useQuery({ queryKey: ['site-page', id], queryFn: () => apiGet(`/site/pages/${id}`), enabled: Boolean(id) });
 export const useSitePosts = () => useQuery({ queryKey: ['site-posts'], queryFn: () => apiGet('/site/posts') });
 export const useSitePost = (id) => useQuery({ queryKey: ['site-post', id], queryFn: () => apiGet(`/site/posts/${id}`), enabled: Boolean(id) });

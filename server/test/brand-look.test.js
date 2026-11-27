@@ -8,7 +8,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { contrast } from '@starbase/shared/site/theme';
-import { BRANDS } from '@starbase/shared/brand';
+import { BRANDS as OWN } from '@starbase/shared/brand';
+import { presetFor } from '../lib/preset.js';
+// base.win's own look, and Imagine Surrey's from its preset.
+const BRANDS = { 'imagine-surrey': presetFor('imagine-surrey').brand, ...OWN };
 import { deriveLook, lookTokens, lookCss, SIDEBARS, CORNERS } from '@starbase/shared/brand-look';
 
 const SCHEMES = ['light', 'dark'];

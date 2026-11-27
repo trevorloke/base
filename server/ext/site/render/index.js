@@ -27,7 +27,21 @@ import { propsFor } from '../../../../shared/site/components/modules.js';
 import { moduleSegments } from '../../../../shared/site/segments.js';
 import { LANG_BY_CODE } from '../../../../shared/site/languages.js';
 import { markSections, waInputs } from '../../../../shared/site/components/preview.js';
-import { assetUrl, islandsBuilt, previewBuilt } from './assets.js';
+import { assetUrl, islandsBuilt, previewBuilt, fileVersion } from './assets.js';
+// The campaign's own look, words and starting sections, where its set-up
+// brings any (and the registration of them with the shared code).
+import { lookCss, ownAsset, previewExtras, wordsForRender } from '../from-preset.js';
+import { preset } from '../../../lib/preset.js';
+
+// The campaign's own stylesheet, linked after site.css on every page of its
+// website (its heading shadow): '' for a campaign with none.
+const ownStylesheet = (assets) => {
+  const css = lookCss();
+  if (!css) return '';
+  const rel = `${preset().site.assets.prefix}${css}`;
+  const v = fileVersion(ownAsset(rel));
+  return `<link rel="stylesheet" href="${esc(`${assets}${rel}${v ? `?v=${v}` : ''}`)}">`;
+};
 
 // The switch's slide from one language to the next (TR): cross-document
 // view transitions, only on a website that draws the switch, and never for
@@ -60,7 +74,9 @@ function pageOf(page, preview) {
   return { ...page, title: content.title ?? page.title, description: content.description ?? page.description, image: content.image ?? page.image, modules: content.modules };
 }
 
-export function renderSite({ kind = 'page', site, page: rawPage, post, campaign, data, ctx = {} } = {}) {
+export function renderSite({ kind = 'page', site, page: rawPage, post, campaign, data, ctx: given = {} } = {}) {
+  // The campaign's own words, when it has any, unless the caller sent some.
+  const ctx = { ...wordsForRender(), ...(given || {}) };
   const page = pageOf(rawPage, Boolean(ctx?.preview));
   let k = KINDS.has(kind) ? kind : 'notFound';
   if ((k === 'page' && !page) || (k === 'post' && !post) || (k === 'campaign' && !campaign)) k = 'notFound';
@@ -104,7 +120,7 @@ export function renderSite({ kind = 'page', site, page: rawPage, post, campaign,
   const edit = live && ctx?.edit === true;
   if (edit) body = markSections(body);
   const wa = live
-    ? `<script type="application/json" id="wa-rc">${jsonForScript(waInputs({ kind: k, site, page, data, ctx }))}</script>${previewBuilt() ? `<script type="module" src="${esc(assetUrl(rc.loc.assets, 'site-preview.js'))}"></script>` : ''}`
+    ? `<script type="application/json" id="wa-rc">${jsonForScript({ ...waInputs({ kind: k, site, page, data, ctx }), ...previewExtras() })}</script>${previewBuilt() ? `<script type="module" src="${esc(assetUrl(rc.loc.assets, 'site-preview.js'))}"></script>` : ''}`
     : '';
   const meta = (name, content) => (content ? `<meta name="${name}" content="${esc(content)}">` : '');
   const prop = (name, content) => (content ? `<meta property="${name}" content="${esc(content)}">` : '');
@@ -130,6 +146,7 @@ export function renderSite({ kind = 'page', site, page: rawPage, post, campaign,
     + (rc.site.icon ? `<link rel="icon" href="${esc(rc.img(rc.site.icon.icon))}" type="image/png"><link rel="apple-touch-icon" href="${esc(rc.img(rc.site.icon.touch))}">` : '')
     + head.fonts.map((f) => `<link rel="preload" href="${esc(f)}" as="font" type="font/woff2" crossorigin>`).join('')
     + `<link rel="stylesheet" href="${esc(assetUrl(rc.loc.assets, 'site.css'))}">`
+    + ownStylesheet(rc.loc.assets)
     + (/ class="(?:vote-banner|vg-embed)"| data-module="voterguide"/.test(body) ? `<link rel="stylesheet" href="${esc(assetUrl(rc.loc.assets, 'voteguide.css'))}">` : '')
     + `<style>${faceCss([fontFor(t.fonts.heading, rc.site.fonts), fontFor(t.fonts.body, rc.site.fonts)], rc.loc.fontAssets)}${themeCss(t, rc.site.fonts)}${rc.langs.offered.length ? VIEW_TRANSITION : ''}</style>`
     + hints

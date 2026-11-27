@@ -17,6 +17,9 @@
 //   - a code the scale never had — never.
 import { normalizeScale, ratingByCode, makeCode, cleanWord, DEFAULT_STEPS, LIMITS, UNSURE_WORD } from '@starbase/shared/scale';
 import { httpError } from '../../actions/util.js';
+// The scale's starting list is the server's preset's: lib/preset.js tells
+// shared/scale.js who says it, so it is loaded wherever the scale is read.
+import '../../lib/preset.js';
 
 export const REPLAY_DAYS = 7;
 const DAY = 86400000;

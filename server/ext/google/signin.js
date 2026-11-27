@@ -14,6 +14,7 @@ import { signinRules } from '../../lib/google/config.js';
 import { PENDING_COOKIE, startPending, twoStepRow } from '../../lib/twostep.js';
 import { cookieOpts, pendingCookie } from '../../routes/auth.js';
 import { appPaths, withCode } from './routes.js';
+import { isDemoUser } from '../../lib/demo.js';
 
 // Google refusals for one linked account: 10 in 15 minutes, its own count —
 // never password sign-in's, so Google can't lock anyone out of their password.
@@ -62,6 +63,8 @@ export const linkBack = async (c, db, flow, who) => {
     [flow.session_hash, flow.user_id],
   )).rows[0];
   if (!live) return { code: 'expired' };
+  // Never on the public demo's one account (routes.js, step 5).
+  if (await isDemoUser(db, flow.user_id)) return { code: 'not-allowed' };
   const rules = signinRules(await settingsOf(db, flow.workspace_id));
   if (!rules.signin) return { code: 'off' };
   if (rules.domain && who.hd !== rules.domain) return { code: 'domain' };

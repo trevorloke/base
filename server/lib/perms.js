@@ -24,7 +24,7 @@ export const AREAS = [
   { key: 'media', label: 'Media', what: 'press releases, media contacts, outlets and letters' },
   { key: 'data', label: 'Data', what: 'the full export, the event log, records' },
   { key: 'admin', label: 'Admin', what: 'members, teams, permissions, the rating scale' },
-  { key: 'learn', label: 'ImagineU', what: 'training: the lessons, their files, who has done what' },
+  { key: 'learn', label: 'Training', what: 'training: the lessons, their files, who has done what' },
   { key: 'site', label: 'Website', what: 'the public website: its pages, news, petitions and look' },
   // The website in other languages (TR): read the Languages screen, suggest
   // and check sentences, keep names. Whoever has Website has it too.

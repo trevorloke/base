@@ -16,6 +16,7 @@ import { OUTCOMES } from '@starbase/shared/canvass';
 import { apiGet } from '../api.js';
 import { OUTCOME_LABEL } from './RatingButtons.jsx';
 import { webLabel } from './WebDid.js';
+import { ex } from '../brand.js';
 
 export const CUT_KEYS = ['knocked', 'outcome', 'turf', 'postal', 'notag', 'voted', 'web'];
 export const VOTED_CUT = [['no', 'Not voted yet'], ['yes', 'Voted']];
@@ -98,7 +99,7 @@ export function CutGroups({ chip, f, update, turfs }) {
       )}
       <div className="field pp-postal">
         <label htmlFor="pp-postal">Postal code starts with</label>
-        <input id="pp-postal" className="input mono" maxLength={7} placeholder="V3W" autoComplete="off"
+        <input id="pp-postal" className="input mono" maxLength={7} placeholder={ex('postal.short', 'A1A')} autoComplete="off"
           value={f.postal || ''} onChange={(e) => update({ postal: e.target.value.trim() || null })} />
       </div>
     </>
@@ -144,7 +145,7 @@ export function CutFields({ value, onChange, turfs }) {
       </div>
       <div className="field">
         <label htmlFor="ls-postal">Postal code starts with</label>
-        <input id="ls-postal" className="input mono" maxLength={7} placeholder="V3W" value={value.postal || ''} onChange={set('postal')} />
+        <input id="ls-postal" className="input mono" maxLength={7} placeholder={ex('postal.short', 'A1A')} value={value.postal || ''} onChange={set('postal')} />
       </div>
       <div className="field">
         <label htmlFor="ls-voted">Voted</label>

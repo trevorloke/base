@@ -15,7 +15,7 @@
 // is checked against the API; each new screen is measured (yellow buttons,
 // sideways scroll, 48px targets).
 //
-//   STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4410 node server/index.js &
+//   STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4410 node server/index.js &
 //   BASE=http://127.0.0.1:4410 SHOTS=/tmp/passes node e2e-passes.mjs
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';

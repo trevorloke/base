@@ -18,6 +18,7 @@ import { queuedText } from '../components/queued.js';
 import './shifts.css';
 import './mainstreet.css';
 import { NS } from '../base.js';
+import { ex } from '../brand.js';
 
 const PLACE_KEY = `${NS}mainstreet:place`;
 const MET_KEY = `${NS}mainstreet:met`;
@@ -101,7 +102,7 @@ export default function Mainstreet() {
         <form className="card ms-place" onSubmit={savePlace} aria-label="Where you are">
           <div className="field">
             <label htmlFor="ms-place">Where are you?</label>
-            <input id="ms-place" className="input" autoFocus maxLength={120} placeholder="Newton bus loop · Cloverdale market · the rally"
+            <input id="ms-place" className="input" autoFocus maxLength={120} placeholder={ex('mainstreet.place', 'The bus loop · the farmers’ market · the rally')}
               value={place} onChange={(e) => setPlace(e.target.value)} />
             <span className="ops-meta">Kept on this phone for everyone you meet here.</span>
           </div>

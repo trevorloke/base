@@ -24,6 +24,10 @@ import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 
+// The fixtures here are Imagine Surrey's, so the server runs as its production
+// does (render.yaml sets this brand); a brand set by hand is left as set.
+if (process.env.STARBASE_BRAND === undefined) process.env.STARBASE_BRAND = 'imagine-surrey';
+
 const PORT = Number(process.env.PORT) || 5460;
 const BASE_PATH = (process.env.BASE_PATH || '').replace(/\/$/, '');
 const SHOTS = process.env.SHOTS || '/tmp/starbase-quickreports';

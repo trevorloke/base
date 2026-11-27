@@ -1,8 +1,9 @@
-// A campaign's first website: its brand's seed (seeds/<brandKey()>.js —
-// imagine-surrey: imaginesurrey.ca as it is today; base: a clean generic
-// site), written once when the campaign has no website settings yet
-// (store.js ensureSiteTx). Pages and petitions only when it has no pages at
-// all, so a campaign that deleted every page never has them put back.
+// A campaign's first website, written once when the campaign has no website
+// settings yet (store.js ensureSiteTx): base.js, a clean generic site —
+// or, for a campaign whose set-up brings its own website, that one
+// (server/lib/preset.js: preset().site.seed, loaded only on that campaign's
+// server). Pages and petitions only when it has no pages at all, so a
+// campaign that deleted every page never has them put back.
 //
 // A seed module's default export is (workspace) → {
 //   theme, settings: { nav, footer, announcement, seo, org, social },
@@ -18,10 +19,15 @@ import { newId } from '../../../lib/events.js';
 import { checkModules } from '@starbase/shared/site/catalogue';
 import { checkTheme } from '@starbase/shared/site/theme';
 import { SECTIONS } from '../shape.js';
+import { preset } from '../../../lib/preset.js';
+import '../from-preset.js';
 
+// The set-up's own seed only when `brand` names this server's set-up; any
+// other name (and every other server) gets base.js.
 const load = async (brand) => {
-  const name = brand === 'imagine-surrey' ? 'imagine-surrey' : 'base';
-  return (await import(`./${name}.js`)).default;
+  const p = preset();
+  const own = brand === p.key ? p.site.seed : null;
+  return own ? (await own()).default : (await import('./base.js')).default;
 };
 
 const resolveRefs = (v, ids) => {

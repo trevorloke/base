@@ -16,7 +16,7 @@
 // way once it has sent; a list an open bank
 // calls can't be deleted, and a closed bank whose list was deleted stays closed.
 //
-//   STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4132 node server/index.js &
+//   STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4132 node server/index.js &
 //   BASE=http://127.0.0.1:4132 SHOTS=/tmp/banks node e2e-banks.mjs
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';

@@ -1,8 +1,7 @@
 // Around every page: the skip link, the preview banner, the announcement
 // bar, the header (logo, the donate button, the Menu) and the footer (the
 // land acknowledgement, links, social, the authorization line — on another
-// website of the campaign, only the bottom lines and "A website by …"). As on
-// imaginesurrey.ca (apps/web Header.tsx, Footer.tsx, AnnouncementBar.tsx).
+// website of the campaign, only the bottom lines and "A website by …").
 import { html } from './h.js';
 import { Island } from './islands.js';
 import { Md } from './modules.js';

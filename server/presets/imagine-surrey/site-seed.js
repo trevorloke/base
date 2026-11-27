@@ -5,11 +5,12 @@
 // the shop is left out), its donate, volunteer, events, news, tracker,
 // privacy and accessibility pages, the pledge and the SkyTrain petition,
 // and the menu, footer, search and organization details. The words are in
-// imagine-surrey-content.js, copied from the website's own files.
-import { SKINS } from '@starbase/shared/site/theme';
-import content from './imagine-surrey-content.js';
+// site-content.js, copied from the website's own files. Loaded only through
+// index.js (site.seed), and only on Imagine Surrey's own server.
+import preset from './index.js';
+import content from './site-content.js';
 
 export default () => ({
-  theme: { ...SKINS['imagine-surrey'], logo: { url: '/site-assets/imagine-surrey/logo.webp', alt: 'Imagine Surrey' } },
+  theme: { ...preset.site.skin, logo: { url: '/site-assets/imagine-surrey/logo.webp', alt: 'Imagine Surrey' } },
   ...JSON.parse(JSON.stringify(content)),
 });

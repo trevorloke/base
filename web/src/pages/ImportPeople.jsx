@@ -25,6 +25,7 @@ import { RatingChip, useScale } from '../components/RatingButtons.jsx';
 import { invalidatePersonData, tagWord } from './People.jsx';
 import { FIELD_KEY, FIELDS_QUERY, fieldCell, useImportFields } from '../components/FieldsBits.jsx';
 import { choiceKey, guessChoice } from '@starbase/shared/fieldlists';
+import { ex } from '../brand.js';
 import './import.css';
 import '../components/voter-number.css';
 
@@ -855,7 +856,7 @@ function ImportFlow() {
     if (own !== undefined && shown) return own;
     const exact = f.choices.find((c) => choiceKey(c) === k);
     if (exact) return exact;
-    return (shown && guessChoice(f.name, word, f.choices)) || LIST_KEEP;
+    return (shown && guessChoice(f.name, word, f.choices, fieldsQ.data?.guesses)) || LIST_KEEP;
   };
   const lists = useMemo(() => new Map(listCols.map(({ f, words }) => {
     const shown = new Set(words.slice(0, LIST_ROWS).map((w) => w.key));
@@ -1161,7 +1162,7 @@ function ImportFlow() {
                     className="input mono imp-paste__text"
                     rows={7}
                     spellCheck={false}
-                    placeholder={'Jane Doe, jane@example.com, 604-555-0101\nSam Lee, sam@example.com, 604-555-0102'}
+                    placeholder={`Jane Doe, jane@example.com, ${ex('phone.2', '555-555-0101')}\nSam Lee, sam@example.com, ${ex('phone.3', '555-555-0102')}`}
                     value={pasteText}
                     onChange={(e) => setPasteText(e.target.value)}
                   />
@@ -1462,7 +1463,7 @@ function ImportFlow() {
               </label>
               <p className="imp-hint imp-hint--sm">
                 {past
-                  ? <>Nothing here becomes today’s. Ratings, signs, voted, volunteer and donor, roles and conversations come in as tags with the year — <em>Strong support {pastOk ? pastY : '…'}</em>, <em>Voting Locke {pastOk ? pastY : '…'}</em>, <em>Lawn sign {pastOk ? pastY : '…'}</em>, <em>Voted {pastOk ? pastY : '…'}</em> — and someone already on file keeps their rating. Names, phones, emails and addresses come in as usual.</>
+                  ? <>Nothing here becomes today’s. Ratings, signs, voted, volunteer and donor, roles and conversations come in as tags with the year — <em>Strong support {pastOk ? pastY : '…'}</em>, <em>{ex('import.pastTag', 'Voting Avendrel')} {pastOk ? pastY : '…'}</em>, <em>Lawn sign {pastOk ? pastY : '…'}</em>, <em>Voted {pastOk ? pastY : '…'}</em> — and someone already on file keeps their rating. Names, phones, emails and addresses come in as usual.</>
                   : <>An old list (a past campaign’s)? Tick this and its ratings, signs and voted marks come in as tags with that year, not as today’s.</>}
               </p>
               {past && pastFieldCols.length > 0 && (

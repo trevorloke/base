@@ -196,7 +196,7 @@ test('brand.save: unsaid, training keeps its name and the home-screen name is ba
   assert.deepEqual(r.json.brand, {
     v: 1, color: '#0f766e', second: null, sidebar: 'light', corners: 'soft', heading: 'inter',
     learn: 'ImagineU', shortName: 'base.win', emailHeader: false, logo: null, logoDark: null, mark: null, icons: null,
-  }, 'tests run as Imagine Surrey’s deployment would (STARBASE_BRAND unset): its training name');
+  }, 'tests run as Imagine Surrey’s deployment does (helpers.js sets its brand): its training name');
 });
 
 test('any colour a manager could pick is saved, each sidebar: its shades are worked out readable', async () => {

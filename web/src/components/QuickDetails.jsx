@@ -9,6 +9,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { queueAction } from '../offline.js';
 import { queuedText } from './queued.js';
 import './quick-details.css';
+import { ex } from '../brand.js';
 
 const isVol = (me) => me?.role === 'volunteer';
 
@@ -62,7 +63,7 @@ export default function QuickDetails({ person, me, onSaved, toast, label = 'Fix 
       </div>
       <div className="qd__row">
         <label htmlFor={`${id}-p`} className="qd__label">Phone</label>
-        <input id={`${id}-p`} className="input mono" type="tel" inputMode="tel" value={f.phone} maxLength={40} placeholder="604-555-0100" autoComplete="off" autoFocus={!person.phone}
+        <input id={`${id}-p`} className="input mono" type="tel" inputMode="tel" value={f.phone} maxLength={40} placeholder={ex('phone', '555-555-0100')} autoComplete="off" autoFocus={!person.phone}
           onChange={(e) => setF({ ...f, phone: e.target.value })} />
       </div>
       <div className="qd__row">

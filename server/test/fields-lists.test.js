@@ -13,10 +13,14 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { freshDb, Client } from './helpers.js';
 import { app } from '../index.js';
-import { FAITHS, DWELLING_TYPES, CAMPUSES, splits, choiceKey, guessChoice, groupsOf } from '@starbase/shared/fieldlists';
+import { DWELLING_TYPES, splits, choiceKey, guessChoice, groupsOf } from '@starbase/shared/fieldlists';
 import { CHOICE_KEY_SQL } from '../ext/fields/kinds.js';
-import { STANDARD_FIELDS } from '../ext/fields/people.js';
+import { presetFor } from '../lib/preset.js';
 import { runDueJobs } from '../lib/jobs.js';
+
+// Imagine Surrey's own lists and fields (the suite runs as its server does:
+// helpers.js). Its Campus guesses reach a screen by GET /api/fields.
+const { standard: STANDARD_FIELDS, faiths: FAITHS, campuses: CAMPUSES } = presetFor('imagine-surrey').fields;
 
 let db, mgr, staff, treas, vol, volData, volPeople, ws;
 const ok = (r, msg = '') => { assert.equal(r.status, 200, `${msg} ${JSON.stringify(r.json)}`); return r.json; };
@@ -102,8 +106,9 @@ test('choice words match a little more loosely, and CHOICE_KEY_SQL agrees with c
   assert.deepEqual(sql, tricky.map(choiceKey));
   assert.equal(guessChoice('Dwelling type', 'Basement suite', DWELLING_TYPES), 'Suite in a house (basement or upper)');
   assert.equal(guessChoice('Dwelling type', 'apartment', DWELLING_TYPES), null, 'a bare apartment waits for a person');
-  assert.equal(guessChoice('Campus', 'kwantlen', CAMPUSES), null);
-  assert.equal(guessChoice('Campus', 'KPU Newton', CAMPUSES), 'Kwantlen Polytechnic University – Surrey');
+  const { guesses } = ok(await mgr.get('/api/fields'));
+  assert.equal(guessChoice('Campus', 'kwantlen', CAMPUSES, guesses), null);
+  assert.equal(guessChoice('Campus', 'KPU Newton', CAMPUSES, guesses), 'Kwantlen Polytechnic University – Surrey');
 });
 
 test('People can filter Faith by a group: “Christian – *”', async () => {
@@ -281,8 +286,8 @@ test('a campaign from before: the upgrade job adds Faith once, makes an empty Dw
   F = await fieldsBy();
   const p = await mgr.createPerson('Old Example');
   ok(await setOne(mgr, p.id, F['Dwelling type'].id, 'Basement suite'));
-  await db.exec(sql);
-  await db.exec(sql);
+  await db.exec(sql());
+  await db.exec(sql());
   assert.equal((await db.query("select count(*)::int as n from jobs where workspace_id = $1 and kind = 'fields.lists'", [ws])).rows[0].n, 1, 'one job');
   await runJobs();
   F = await fieldsBy();
@@ -296,7 +301,7 @@ test('a campaign from before: the upgrade job adds Faith once, makes an empty Dw
   // Twice changes nothing; a renamed or taken-off field is left alone.
   const before = (await db.query('select count(*)::int as n from events where workspace_id = $1', [ws])).rows[0].n;
   await db.query("delete from jobs where workspace_id = $1 and key = 'fields-lists-1'", [ws]);
-  await db.exec(sql);
+  await db.exec(sql());
   await runJobs();
   assert.equal((await db.query('select count(*)::int as n from events where workspace_id = $1', [ws])).rows[0].n, before, 'nothing again');
   const evs = (await db.query("select payload from events where workspace_id = $1 and action = 'field.standard.lists'", [ws])).rows.map((r) => r.payload);

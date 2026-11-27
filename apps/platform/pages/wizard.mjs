@@ -1,11 +1,11 @@
-// New campaign (its values), Set it up (four cards), and Add a campaign
-// that’s already running.
+// New campaign (its values), Set it up (four cards; two for a campaign
+// that was already running), and Add a campaign that’s already running.
 import { html, raw } from './html.mjs';
 import { page, field, status, codeField } from './layout.mjs';
-import { inviteForm } from './desk.mjs';
+import { inviteForm, NO_KEY_WORDS } from './desk.mjs';
+import { NAME_HELP, publicHost } from '../campaigns.mjs';
 import { PROVINCES, TIME_ZONES, RACES, JURISDICTIONS, RULE_WORDS, envLines } from '../snippets.mjs';
 
-const NAME_HELP = 'Use letters, numbers and dashes. It’s the address: <name>.base.win.';
 // "America/St_Johns" reads "St. John’s"; the rest lose "America/" and "_".
 const zoneWords = (z) => (z === 'America/St_Johns' ? 'St. John’s' : z.replace('America/', '').replace(/_/g, ' '));
 const select = ({ label, name, options, value, help = '' }) => html`<div class="field">
@@ -29,7 +29,12 @@ export const newPage = ({ v = {}, stale = false, message = '' } = {}) => page({
     <fieldset class="oc-fieldset"><legend>Races</legend>
       ${RACES.map(([code, words]) => html`<label class="oc-check-label"><input type="checkbox" name="races" value="${code}"${(v.races || ['council', 'school_board']).includes(code) ? raw(' checked') : ''}> ${words}</label>`)}
     </fieldset>
-    <p class="oc-help">The map opens on the city. Candidates are added in the app later.</p>
+    <fieldset class="oc-fieldset"><legend>Map area</legend>
+      <p class="oc-help">A box around the city: the map opens on it and addresses are looked for inside it.</p>
+      ${field({ label: 'South-west corner', name: 'sw', value: v.sw || '', required: true, autocomplete: 'off', help: 'In Google Maps, right-click the bottom-left corner of the city, then click the two numbers at the top of the menu to copy them. Paste them here.' })}
+      ${field({ label: 'North-east corner', name: 'ne', value: v.ne || '', required: true, autocomplete: 'off', help: 'The same for the top-right corner of the city.' })}
+    </fieldset>
+    <p class="oc-help">Candidates are added in the app later.</p>
     ${codeField(stale)}
     ${status(message, message ? 'warn' : '')}
     <button class="btn btn-primary oc-wide" type="submit">Next</button>
@@ -42,28 +47,62 @@ const envBlock = (opts) => html`<pre class="oc-pre" id="env-block">${envLines(op
 // The address card's answer, next to the field.
 const ADDRESS_WORDS = {
   'not-checked': 'Not checked yet.',
-  'not-answering': 'Not answering yet. Wait for ‘Live’ in Render, then press Save address again.',
+  'not-answering': 'Not answering yet. Wait for ‘Live’ in Render, then press Save address again. If it never goes ‘Live’, its Render log says why: with DATABASE_URL empty the server won’t start.',
   elsewhere: 'This server says it is somewhere else: check the address.',
+  'old-release': 'Answering, but on a release from before base.win sign-in. Run Promote to production (GitHub → Actions), wait for ‘Live’ in Render, then press Save address again.',
 };
 
-// addressState: how the saved Render address answers; ownAnswering: whether
-// <name>.base.win reaches the same server.
-export const setupPage = ({ v, values, publicKey, serverUrl, addressState, ownAnswering, invited, snippet, stale = false, typed = null, message = '' }) => {
+// No usable signing key: the warning the key page shows, where the key would be.
+const noKey = html`${status(NO_KEY_WORDS, 'warn')}
+  <p class="oc-help">That setting is on the control centre’s own service in Render (base-platform). What to paste shows here once it is set.</p>`;
+
+// "Give it its address": <name>.base.win, a custom domain on the campaign's
+// own service. state: what the last check of that address said
+// (campaigns.mjs publicState). old: the campaign is on a release from
+// before base.win sign-in, which never says which server it is.
+const PUBLIC_WORDS = {
+  'not-answering': (host) => `Not answering at ${host} yet. It is checked every 5 minutes.`,
+  elsewhere: (host) => `${host} answers, but from another server: check the CNAME record.`,
+  unknown: (host, old) => (old ? `${host} answers. Whether it is this campaign’s server shows after Promote to production.`
+    : `${host} answers. Whether it is this campaign’s server isn’t known yet: see the campaign’s page.`),
+  answering: (host) => `Answering at ${host}`,
+};
+const publicCard = ({ name, serverUrl, state, old = false }) => {
+  const host = publicHost(name);
+  let target = '';
+  try { target = serverUrl ? new URL(serverUrl).host : ''; } catch { target = ''; }
+  const words = PUBLIC_WORDS[state]?.(host, old) || '';
+  return html`<li class="card"><h2>Give it its address</h2>
+    <ol class="oc-howto">
+      <li>Render → this campaign’s service → <b>Settings → Custom Domains</b> → add <code>${host}</code>.</li>
+      <li>Where base.win’s domain is registered, add a <b>CNAME</b> record named <code>${name}</code> pointing at ${target ? html`<code>${target}</code>` : 'the service’s onrender.com address (at the top of its Render page)'}.</li>
+      <li>Wait until Render shows the domain as verified and its certificate as issued.</li>
+    </ol>
+    ${status(words, words ? (state === 'answering' ? 'ok' : 'warn') : '')}
+    <p class="oc-help">“Answers at ${host}” on the campaign’s checklist ticks by itself.</p>
+  </li>`;
+};
+
+// The first manager's invite link is made from the campaign's own address
+// (its STARBASE_PUBLIC_URL), so it opens only once that address is ready.
+const inviteNotReady = (name) => `Their invite link goes to ${publicHost(name)}, which isn’t ready yet. The link opens once it is: do “Give it its address” first.`;
+
+export const setupPage = ({ v, values, publicKey, serverUrl, addressState, publicState, invited, snippet, stale = false, typed = null, message = '' }) => {
   const name = v.campaign.name;
   const answering = addressState === 'answering';
-  const renderHost = serverUrl ? serverUrl.replace(/^https?:\/\//, '') : `base-win-${name}.onrender.com`;
+  const invite = publicState === 'answering' ? { primary: true } : { primary: true, help: inviteNotReady(name) };
   return page({
     title: `Set up ${v.campaign.display}`, nav: true, here: 'campaigns',
     body: html`<h1>Set up ${v.campaign.display}</h1>
     <ol class="oc-steps">
       <li class="card"><h2>Make its database and service in Render</h2>
         <ol class="oc-howto">
-          <li>Render → <b>New → Postgres</b>. Name <code>base-win-${name}-db</code>, region Oregon, PostgreSQL 16, the same plan as Imagine Surrey’s database.</li>
+          <li>Render → <b>New → Postgres</b>. Name <code>base-win-${name}-db</code>, region Oregon, PostgreSQL 16, the plan named in <code>render.yaml</code> (<code>basic-1gb</code>).</li>
           <li>Render → <b>New → Web Service</b> → this repository. Name <code>base-win-${name}</code>, language Docker, branch <code>production</code>, region Oregon, instance Starter. Under Advanced, health check path <code>/api/health</code>.</li>
           <li>On that page, <b>Environment → Add from .env</b> → paste this block:
-            ${envBlock({ name, display: v.campaign.display, values, publicKey })}
+            ${publicKey ? html`${envBlock({ name, display: v.campaign.display, values, publicKey })}
             <button class="btn btn-quiet oc-copy-btn" type="button" data-copy="env-block">Copy</button>
-            <p class="oc-help" data-when-empty>STARBASE_TWO_STEP_KEY and GOOGLE_TOKEN_KEY are empty: press Generate next to each of these two in Render.</p>
+            <p class="oc-help" data-when-empty>STARBASE_TWO_STEP_KEY and GOOGLE_TOKEN_KEY are empty: press Generate next to each of these two in Render.</p>` : noKey}
           </li>
           <li>Add <code>DATABASE_URL</code> = the database page’s <b>Internal Database URL</b> (copy it across).</li>
           <li>Press <b>Create Web Service</b> (or <b>Save and deploy</b>). Wait for “Live”.</li>
@@ -78,24 +117,46 @@ export const setupPage = ({ v, values, publicKey, serverUrl, addressState, ownAn
           <button class="btn ${answering ? 'btn-quiet' : 'btn-primary'}" type="submit">Save address</button>
         </form>
       </li>
-      ${answering ? html`<li class="card"><h2>Give it its address</h2>
-        <ol class="oc-howto">
-          <li>Render → <code>base-win-${name}</code> → <b>Settings → Custom Domains → Add Custom Domain</b>: <code id="own-address">${name}.base.win</code></li>
-          <li>Where base.win’s DNS is kept, add a <b>CNAME</b> record: name <code>${name}</code>, value <code>${renderHost}</code>.</li>
-          <li>Back in Render, press <b>Verify</b>. The certificate follows in a few minutes.</li>
-        </ol>
-        ${status(ownAnswering ? `Answering at ${name}.base.win` : `${name}.base.win isn’t answering yet. A new record can take a while; press Save address above to check again.`, ownAnswering ? 'ok' : 'warn')}
-      </li>
+      ${answering ? html`${publicCard({ name, serverUrl, state: publicState })}
       <li class="card"><h2>Invite the first manager</h2>
         ${invited ? html`<p>First manager invited. <a href="/c/${name}">Go to ${v.campaign.display}</a></p>`
-    : v.block ? html`<p class="oc-block">Not ready to open the desk yet: see <a href="/c/${name}">${v.campaign.display}</a>.</p>` : inviteForm(v, { primary: true })}
+    : v.block ? html`<p class="oc-block">Not ready to open the desk yet: see <a href="/c/${name}">${v.campaign.display}</a>.</p>` : inviteForm(v, invite)}
       </li>` : ''}
     </ol>
     <details class="oc-more"><summary class="btn btn-quiet">More</summary>
       <h2>Or ask us to add it to render.yaml</h2>
+      <p>Each of the campaign's own settings is <code>sync: false</code>. Set it on the new service in Render, to the value after its <code>#</code>.</p>
       <pre class="oc-pre" id="yaml-snippet">${snippet}</pre>
       <button class="btn btn-quiet oc-copy-btn" type="button" data-copy="yaml-snippet">Copy</button>
     </details>`,
+  });
+};
+
+// Set-up steps for a campaign added when it was already running. Nothing
+// was typed here to make its settings from, so this page shows none: only
+// the one line every campaign gets (base.win’s public key) and its address.
+// On a release from before base.win sign-in the line isn't read yet, so
+// Promote comes first; adding the line early does no harm.
+const OLD_RELEASE_WORDS = 'This campaign is on a release from before base.win sign-in, which doesn’t read the line below. Run Promote to production (GitHub → Actions) first, wait for ‘Live’ in Render, then press Check now on its page.';
+export const runningSetupPage = ({ v, publicKey, serverUrl, publicState, entry = null, message = '' }) => {
+  const name = v.campaign.name;
+  const old = entry === 'old-release';
+  return page({
+    title: `Set up ${v.campaign.display}`, nav: true, here: 'campaigns',
+    body: html`<h1>Set up ${v.campaign.display}</h1>
+    <p>This campaign was already running when it was added here, so its settings live in Render (its service → <b>Environment</b>). Two things are set from here.</p>
+    ${status(message, message ? 'warn' : '')}
+    <ol class="oc-steps">
+      <li class="card"><h2>Let base.win sign in</h2>
+        ${old ? status(OLD_RELEASE_WORDS, 'warn') : ''}
+        ${publicKey ? html`<p>Render → this campaign’s service → <b>Environment</b> → add this line, then <b>Save and deploy</b>.</p>
+        <pre class="oc-pre" id="key-line">BASE_PLATFORM_PUBKEY=${publicKey}</pre>
+        <button class="btn btn-quiet oc-copy-btn" type="button" data-copy="key-line">Copy</button>
+        ${status(entry === 'ready' ? 'base.win sign-in is ready there' : '', entry === 'ready' ? 'ok' : '')}` : noKey}
+      </li>
+      ${publicCard({ name, serverUrl, state: publicState, old })}
+    </ol>
+    <p><a class="btn btn-quiet" href="/c/${name}">Back to ${v.campaign.display}</a></p>`,
   });
 };
 

@@ -77,6 +77,10 @@ const STUB = `${SHOTS}/drive-stub.mjs`;
 // The server's own export limits, set from here (a "too big" Sheet without 10 million cells).
 writeFileSync(STUB, `
 import { createServer } from 'node:http';
+// The fixtures here are Imagine Surrey's, so the server runs as its production
+// does (render.yaml sets this brand); a brand set by hand is left as set.
+if (process.env.STARBASE_BRAND === undefined) process.env.STARBASE_BRAND = 'imagine-surrey';
+
 const { _setLimitsForTest } = await import(${href('ext/drive/export.js')});
 const { _setPaceForTest } = await import(${href('ext/drive/sheets.js')});
 _setPaceForTest(50);

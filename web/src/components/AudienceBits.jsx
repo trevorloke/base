@@ -27,6 +27,7 @@ import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { action, apiGet } from '../api.js';
 import { useOnline } from './NoSignal.jsx';
 import { hasArea } from '../Shell.jsx';
+import { hasFeature } from '../brand.js';
 import '../pages/shifts.css';
 import './audience.css';
 
@@ -130,6 +131,12 @@ export function useKnowsName(v) {
 const knowsWord = (v, name) => (knowsPerson(v) ? (name ? `Knows ${name}` : 'Knows someone') : KNOWS.find(([k]) => k === v)?.[1] || 'Knows someone');
 const GAVE = [['year', 'Gave this year'], ['lapsed', 'Gave before, not this year'], ['never', 'Never gave']];
 const MEMBER = [['now', 'Member now'], ['lapsed', 'Lapsed member']];
+// The Membership rule is there only for a campaign that has a membership:
+// its sign-in says so, and so do the choices (membership: false).
+const useMembership = (choices) => {
+  const me = useOutletContext()?.me;
+  return hasFeature(me, 'membership') && choices?.membership !== false;
+};
 const SHIFTS = [['came:30', 'Came to a shift · 30 days'], ['came:90', 'Came to a shift · 90 days'], ['missed:30', 'Missed a shift · 30 days'], ['missed:90', 'Missed a shift · 90 days']];
 // gave=min:500 is "gave at least $500 in one calendar year" (whole dollars).
 const minOf = (v) => /^min:(\d+)$/.exec(v || '')?.[1] || '';
@@ -172,7 +179,7 @@ const listName = (id, lists) => (lists || []).find((l) => l.id === id)?.name;
 
 export const ruleChips = (f, lists = [], choices = null, knowsName = null) => [
   f.gave && { key: 'gave', label: gaveWord(f.gave) },
-  f.member && { key: 'member', label: MEMBER.find(([k]) => k === f.member)?.[1] || 'Member' },
+  f.member && choices?.membership !== false && { key: 'member', label: MEMBER.find(([k]) => k === f.member)?.[1] || 'Member' },
   f.shift && { key: 'shift', label: shiftWord(f.shift) },
   f.answer && { key: 'answer', label: answerWord(f.answer, choices?.questions) },
   f.list && { key: 'list', label: `On “${listName(f.list, lists) || 'a list'}”` },
@@ -188,6 +195,7 @@ export function RuleGroups({ chip, f, update }) {
   const knows = useKnowsChoices();
   const lists = useListNames().data?.lists ?? [];
   const choices = useAudienceChoices().data;
+  const membership = useMembership(choices);
   const questions = choices?.questions ?? [];
   const [qid, want] = splitAnswer(f.answer);
   const q = questions.find((x) => x.id === qid);
@@ -206,10 +214,12 @@ export function RuleGroups({ chip, f, update }) {
             value={shownMin} onChange={(e) => setGaveMin(e.target.value)} />
         </div>
       </fieldset>
-      <fieldset className="pp-group">
-        <legend className="eyebrow">Membership</legend>
-        <div className="pp-group__opts">{MEMBER.map(([k, l]) => chip('member', k, l))}</div>
-      </fieldset>
+      {membership && (
+        <fieldset className="pp-group">
+          <legend className="eyebrow">Membership</legend>
+          <div className="pp-group__opts">{MEMBER.map(([k, l]) => chip('member', k, l))}</div>
+        </fieldset>
+      )}
       <fieldset className="pp-group">
         <legend className="eyebrow">Shifts</legend>
         <div className="pp-group__opts">{SHIFTS.map(([k, l]) => chip('shift', k, l))}</div>
@@ -282,7 +292,9 @@ export function RuleFields({ value, onChange, exclude = null }) {
   const picked = rulesPicked(value);
   const [open, setOpen] = useState(picked > 0);
   const lists = useListNames().data?.lists ?? [];
-  const questions = useAudienceChoices().data?.questions ?? [];
+  const choices = useAudienceChoices().data;
+  const membership = useMembership(choices);
+  const questions = choices?.questions ?? [];
   const set = (k) => (v) => onChange({ ...value, [k]: v || '' });
   const [qid, want] = splitAnswer(value.answer);
   const q = questions.find((x) => x.id === qid);
@@ -318,13 +330,15 @@ export function RuleFields({ value, onChange, exclude = null }) {
               <input id={`${id}-min`} className="input mono" inputMode="numeric" autoComplete="off" placeholder="500" value={min} onChange={(e) => typeMin(e.target.value)} />
             </div>
           )}
-          <div className="field">
-            <label htmlFor={`${id}-member`}>Membership</label>
-            <select id={`${id}-member`} className="input" value={value.member || ''} onChange={(e) => set('member')(e.target.value)}>
-              <option value="">Anyone</option>
-              {MEMBER.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-            </select>
-          </div>
+          {membership && (
+            <div className="field">
+              <label htmlFor={`${id}-member`}>Membership</label>
+              <select id={`${id}-member`} className="input" value={value.member || ''} onChange={(e) => set('member')(e.target.value)}>
+                <option value="">Anyone</option>
+                {MEMBER.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+              </select>
+            </div>
+          )}
           <div className="field">
             <label htmlFor={`${id}-shift`}>Shifts</label>
             <select id={`${id}-shift`} className="input" value={value.shift || ''} onChange={(e) => set('shift')(e.target.value)}>

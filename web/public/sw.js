@@ -49,7 +49,7 @@
  *
  * Bump VERSION to throw every cache away on the next activate.
  *
- * Under a client's path on a shared domain (base.win/imaginesurrey — the
+ * Under a client's path on a shared domain (base.win/yourcampaign — the
  * worker's scope), every address below is under that path and the caches
  * carry its name: another campaign's base.win on the same domain has its own,
  * and this worker never touches them. At a site's root, BASE is '' and the

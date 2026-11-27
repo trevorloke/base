@@ -17,6 +17,10 @@ import { chromium } from 'playwright-core';
 import { spawn } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 
+// The fixtures here are Imagine Surrey's, so the server runs as its production
+// does (render.yaml sets this brand); a brand set by hand is left as set.
+if (process.env.STARBASE_BRAND === undefined) process.env.STARBASE_BRAND = 'imagine-surrey';
+
 const PORT = Number(process.env.PORT) || 4121;
 const SHOTS = process.env.SHOTS || '/tmp/starbase-services';
 mkdirSync(SHOTS, { recursive: true });
@@ -61,7 +65,7 @@ await page.waitForURL(/\/admin\/?$/, { timeout: 15000 });
 await page.goto(`${ADMIN}/settings/services`, { waitUntil: 'domcontentloaded' });
 await page.waitForSelector('.sv2-row', { timeout: 10000 }).catch(() => {});
 const names = await page.$$eval('.sv2-list:not(.sv2-in) .sv2-name', (els) => els.map((e) => e.innerText.trim()));
-check('every service listed', names.join(' | ') === 'Database | Public address | Email (Resend) | Texting and calls (Twilio) | Map pins (BC Address Geocoder) | Map background (OpenStreetMap) | Background work | Mailchimp | Online payments (Stripe) | Phone dialer (CallHub) | Google (sign-in and connections) | Gmail (send as yourself) | Google Drive and Sheets | Translation (Google) | Two-step sign-in key | Address suggestions (Google Places)', names.join(' | '));
+check('every service listed', names.join(' | ') === 'Database | Public address | Email (Resend) | Texting and calls (Twilio) | Map pins (BC Address Geocoder) | Map background (OpenStreetMap) | Background work | Mailchimp | The website — unsubscribes | Online payments (Stripe) | Phone dialer (CallHub) | Google (sign-in and connections) | Gmail (send as yourself) | Google Drive and Sheets | Translation (Google) | Two-step sign-in key | Address suggestions (Google Places)', names.join(' | '));
 // Online payments (ext/payments): not set up, its two keys, and the webhook to give Stripe.
 const stripeRow = (await text(page, '.sv2-row:has(.sv2-name:text-is("Online payments (Stripe)"))')) || '';
 check('Stripe: not set up, both keys named, the webhook address and its events', /Not set up/.test(stripeRow) && /STRIPE_SECRET_KEY · STRIPE_WEBHOOK_SECRET/.test(stripeRow)

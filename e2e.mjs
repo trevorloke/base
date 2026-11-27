@@ -5,7 +5,7 @@
 // pages → Today → team invite → volunteer on a phone (map, shifts, signs,
 // what they can't reach) → audit chain.
 //
-//   node server/index.js   (in-memory DB, serves web/dist)  then  node e2e.mjs
+//   STARBASE_BRAND=imagine-surrey node server/index.js   (in-memory DB, serves web/dist)  then  node e2e.mjs
 import { chromium } from 'playwright-core';
 
 const BASE = process.env.BASE || 'http://localhost:3200';

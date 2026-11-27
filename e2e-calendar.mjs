@@ -28,6 +28,10 @@ import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { startFakeMail } from './server/test/fake-mail.js';
 
+// The fixtures here are Imagine Surrey's, so the server runs as its production
+// does (render.yaml sets this brand); a brand set by hand is left as set.
+if (process.env.STARBASE_BRAND === undefined) process.env.STARBASE_BRAND = 'imagine-surrey';
+
 const PORT = Number(process.env.PORT || 5160);
 const BASE = `http://127.0.0.1:${PORT}`;
 const ADMIN = `${BASE}/admin`;

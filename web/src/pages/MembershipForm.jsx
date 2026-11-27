@@ -7,27 +7,28 @@
 // (membership.enter, ext/membership) and says what was done, what to check,
 // and who entered it (the form's "Office use" line). Card numbers are never
 // typed here.
+//
+// The form is the campaign's own: its terms, amounts, clubs, dues, city and
+// the lists it falls back on all come from its server (GET /membership/form,
+// `form`), and none of them is written here. So there is no form to draw
+// until the server has answered; a campaign with no membership has no such
+// answer, and no link to this screen.
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { action, apiGet } from '../api.js';
 import { useFieldsList } from '../components/FieldsBits.jsx';
-import { CAMPUSES } from '@starbase/shared/fieldlists';
-import { useOnline } from '../components/NoSignal.jsx';
+import { NoSignal, noSignal, useOnline } from '../components/NoSignal.jsx';
 import './shifts.css'; // the ops-* pieces (the page column, the back link)
 import './membership.css';
 
-const FORM_LANGS = ['English', 'Punjabi', 'Hindi', 'Urdu', 'Mandarin', 'Cantonese', 'Filipino', 'Korean', 'Vietnamese', 'Arabic', 'Farsi', 'Gujarati', 'Spanish', 'French'];
-const FORM_INTERESTS = ['Safer streets', 'Faster commutes', 'Smarter investments', 'Lower costs', 'Stronger services', 'Homes I can afford', 'Support for small business', 'Healthier communities', 'Better schools / school board issues', 'Climate / parks', 'Metro Vancouver / regional issues'];
 const SIGNS = [['lawn', 'Lawn'], ['window', 'Window'], ['large', 'Large 4×4'], ['billboard', 'Billboard 8×4']];
-const ONCE = [25000, 10000, 5000, 1000];
-const MONTHLY = [5000, 2500, 1000, 500];
 const METHODS = [['cash', 'Cash'], ['cheque', 'Cheque'], ['card', 'Credit card'], ['etransfer', 'E-transfer'], ['pad', 'Pre-authorized debit']];
 const today = () => new Date().toISOString().slice(0, 10);
 const dollars = (c) => `$${(c / 100).toLocaleString('en-CA', { minimumFractionDigits: c % 100 ? 2 : 0, maximumFractionDigits: 2 })}`;
 const cents = (s) => { const n = Number(String(s).replace(/[$,\s]/g, '')); return Number.isFinite(n) && n > 0 ? Math.round(n * 100) : null; };
 const BLANK = {
-  first: '', last: '', gender: '', birth: '', email: '', phone: '', address: '', city: 'Surrey', postal: '',
+  first: '', last: '', gender: '', birth: '', email: '', phone: '', address: '', city: '', postal: '',
   citizenship: '', union: false, local: '', campus: '', campusOther: '',
   volunteer: false, candidate: false, sign: '', languages: [], otherLang: '', interests: [],
   term: '', once: '', onceOther: '', monthly: '', monthlyOther: '', schoolBoard: false, method: '',
@@ -42,11 +43,38 @@ const Radio = ({ name, value, on, onPick, children }) => (
   <label className={`mf-check${on ? ' is-on' : ''}`}><input type="radio" name={name} checked={on} onChange={() => onPick(value)} /> {children}</label>
 );
 
+const formQuery = (day) => ({ queryKey: ['membership', 'form', day], queryFn: () => apiGet(`/membership/form?date=${day || today()}`) });
+const Head = () => (
+  <>
+    <Link to="/people" className="ops-back">← People</Link>
+    <h1>Enter a membership form</h1>
+  </>
+);
+
+// The form as the server sent it, then the screen: a blank form is made
+// only once there is one to make it from.
 export default function MembershipForm() {
+  const first = useQuery(formQuery(BLANK.signedOn));
+  const form = first.data?.form;
+  if (!form) {
+    return (
+      <div className="ops-page mf-page">
+        <Head />
+        {noSignal(first) ? <NoSignal />
+          : first.isError ? <p className="error" role="alert">Couldn’t load the form — {first.error.message}</p>
+            : <p className="muted" role="status">Loading…</p>}
+      </div>
+    );
+  }
+  return <FormScreen first={form} />;
+}
+
+function FormScreen({ first }) {
   const { me } = useOutletContext() ?? {};
   const qc = useQueryClient();
   const online = useOnline();
-  const [f, setF] = useState(BLANK);
+  const blank = { ...BLANK, city: first.city || '' };
+  const [f, setF] = useState(blank);
   const [personId, setPersonId] = useState(null); // one already on file, picked
   const [notThem, setNotThem] = useState(new Set()); // matches the desk said aren't this person
   const [busy, setBusy] = useState(false);
@@ -55,15 +83,22 @@ export default function MembershipForm() {
   const set = (k) => (v) => setF((x) => ({ ...x, [k]: v && v.target ? v.target.value : v }));
   const flip = (k, item) => (on) => setF((x) => ({ ...x, [k]: on ? [...x[k], item] : x[k].filter((y) => y !== item) }));
 
+  // The day signed sets the year, and the year the club amounts: asked again
+  // when the date changes, the form on screen kept until the answer is in.
+  const asked = useQuery({ ...formQuery(f.signedOn), placeholderData: keepPreviousData });
+  const form = asked.data?.form || first;
+  const clubs = form.clubs || [];
+  const clubOf = (pick) => clubs.find((c) => c.key === pick) || null;
+  const dues = form.dues;
+  const [youthFrom, youthTo] = dues.youth_ages;
+
   const fields = useFieldsList();
-  const choicesOf = (name, fallback) => (fields.data?.fields || []).find((x) => x.name === name && !x.retired)?.choices?.filter((c) => c !== 'Other') || fallback;
-  const langs = choicesOf('Language', FORM_LANGS);
-  const interests = choicesOf('Interests', FORM_INTERESTS);
+  const choicesOf = (name, fallback) => (fields.data?.fields || []).find((x) => x.name === name && !x.retired)?.choices?.filter((c) => c !== 'Other') || fallback || [];
+  const langs = choicesOf('Language', form.fallback?.languages);
+  const interests = choicesOf('Interests', form.fallback?.interests);
   // Campus: the Campus field's choices (school and campus together), then "Another campus".
   const campusField = (fields.data?.fields || []).find((x) => x.name === 'Campus' && !x.retired);
-  const campuses = campusField?.kind === 'choice' ? campusField.choices : CAMPUSES;
-  const form = useQuery({ queryKey: ['membership', 'form', f.signedOn], queryFn: () => apiGet(`/membership/form?date=${f.signedOn || today()}`) });
-  const clubs = form.data?.clubs;
+  const campuses = campusField?.kind === 'choice' ? campusField.choices : form.fallback?.campuses || [];
 
   // Already on file? Asked as the email, phone or name is typed.
   const [lookup, setLookup] = useState('');
@@ -82,12 +117,16 @@ export default function MembershipForm() {
     const [y, m, d] = (f.signedOn || today()).split('-').map(Number);
     return y - by - (m < bm || (m === bm && d < bd) ? 1 : 0);
   }, [f.birth, f.signedOn]);
-  const youth = age != null && age >= 14 && age <= 30;
-  const minimum = f.term ? Number(f.term) * (youth ? 500 : 1000) : 0;
+  const youth = age != null && age >= youthFrom && age <= youthTo;
+  const rate = youth ? dues.youth_cents : dues.adult_cents;
+  const minimum = f.term ? Number(f.term) * rate : 0;
 
+  // A club, by the key the server gave it: one of them can go to the school
+  // board's slate instead (the tick under the amounts).
   const gift = (pick, other) => {
     if (!pick) return null;
-    if (pick === 'superstar' || pick === 'star') return { kind: pick, slate: pick === 'star' && f.schoolBoard ? 'school_board' : null };
+    const club = clubOf(pick);
+    if (club) return { kind: club.key, slate: club.schoolBoard && f.schoolBoard ? 'school_board' : null };
     if (pick === 'other') return cents(other) ? { kind: 'amount', amount_cents: cents(other) } : null;
     return { kind: 'amount', amount_cents: Number(pick) };
   };
@@ -116,14 +155,9 @@ export default function MembershipForm() {
       window.scrollTo?.({ top: 0 });
     } catch (err) { setError(err.message); } finally { setBusy(false); }
   };
-  const another = () => { setF({ ...BLANK, signedOn: f.signedOn }); setPersonId(null); setNotThem(new Set()); setDone(null); setError(null); };
+  const another = () => { setF({ ...blank, signedOn: f.signedOn }); setPersonId(null); setNotThem(new Set()); setDone(null); setError(null); };
 
-  const head = (
-    <>
-      <Link to="/people" className="ops-back">← People</Link>
-      <h1>Enter a membership form</h1>
-    </>
-  );
+  const head = <Head />;
   if (done) {
     const m = done.membership;
     return (
@@ -132,7 +166,7 @@ export default function MembershipForm() {
         <section className="card mf-done" aria-live="polite">
           <h2>✓ Saved — <Link to={`/people/${done.person.id}`}>{done.person.name}</Link></h2>
           <ul>
-            {m && <li>Member {m.youth ? '(aged 14 to 30) ' : ''}from {m.starts_on} to {m.ends_on} — {m.term_years} year{m.term_years > 1 ? 's' : ''}</li>}
+            {m && <li>Member {m.youth ? `(aged ${youthFrom} to ${youthTo}) ` : ''}from {m.starts_on} to {m.ends_on} — {m.term_years} year{m.term_years > 1 ? 's' : ''}</li>}
             {done.gifts.map((g) => <li key={g.id}>{dollars(g.amount_cents)} {g.cadence === 'monthly' ? 'this month (monthly)' : 'once'} to the {g.slate === 'school_board' ? 'school board' : 'council'} slate</li>)}
             {done.pledges.length > 0 && <li>Monthly pledge on file — log each month at Donations as it comes in</li>}
             {done.sign && <li>A {done.sign.kind} sign to put up</li>}
@@ -164,7 +198,7 @@ export default function MembershipForm() {
             <label className="field">Email<input className="input" type="email" value={f.email} onChange={set('email')} maxLength={320} /></label>
             <label className="field mf-narrow">Mobile phone<input className="input" type="tel" value={f.phone} onChange={set('phone')} maxLength={40} /></label>
           </div>
-          {age != null && <p className="mf-hint">{age} on the day signed{youth ? ' — the $5 youth rate applies (14 to 30)' : age < 14 ? ' — members are 14 or older' : ''}</p>}
+          {age != null && <p className="mf-hint">{age} on the day signed{youth ? ` — the ${dollars(dues.youth_cents)} youth rate applies (${youthFrom} to ${youthTo})` : age < dues.min_age ? ` — members are ${dues.min_age} or older` : ''}</p>}
           <div className="mf-row">
             <label className="field">Residential address<input className="input" value={f.address} onChange={set('address')} maxLength={400} /></label>
             <label className="field mf-narrow">City<input className="input" value={f.city} onChange={set('city')} maxLength={120} /></label>
@@ -230,17 +264,18 @@ export default function MembershipForm() {
           <legend>Membership contribution</legend>
           <div className="mf-line" role="radiogroup" aria-label="Membership">
             <span className="mf-label">Membership</span>
-            <Radio name="term" value="1" on={f.term === '1'} onPick={set('term')}>1 year</Radio>
-            <Radio name="term" value="4" on={f.term === '4'} onPick={set('term')}>4 years</Radio>
+            {form.terms.map((t) => <Radio key={t} name="term" value={String(t)} on={f.term === String(t)} onPick={set('term')}>{t} year{t > 1 ? 's' : ''}</Radio>)}
             {f.term && <button type="button" className="btn-link" onClick={() => set('term')('')}>Clear</button>}
-            {f.term && <span className="mf-hint">At least {dollars(minimum)} ({youth ? '$5 a year, aged 14 to 30' : '$10 a year'})</span>}
+            {f.term && <span className="mf-hint">At least {dollars(minimum)} ({dollars(rate)} a year{youth ? `, aged ${youthFrom} to ${youthTo}` : ''})</span>}
           </div>
           <div className="mf-give">
-            {[['once', 'Give once', ONCE, 'onceOther', clubs?.superstar_once, clubs?.star_once], ['monthly', 'Give monthly', MONTHLY, 'monthlyOther', clubs?.superstar_monthly, clubs?.star_monthly]].map(([k, title, amounts, other, sup, star]) => (
+            {[['once', 'Give once', form.once, 'onceOther'], ['monthly', 'Give monthly', form.monthly, 'monthlyOther']].map(([k, title, amounts, other]) => (
               <div key={k} className="mf-col" role="radiogroup" aria-label={title}>
                 <h3>{title}</h3>
-                {clubs && <Radio name={k} value="superstar" on={f[k] === 'superstar'} onPick={set(k)}>Superstar Club {dollars(sup)}</Radio>}
-                {clubs && <Radio name={k} value="star" on={f[k] === 'star'} onPick={set(k)}>Star Club {dollars(star)}</Radio>}
+                {/* A club has an amount only when the year's limit is known. */}
+                {clubs.filter((c) => c[`${k}_cents`] != null).map((c) => (
+                  <Radio key={c.key} name={k} value={c.key} on={f[k] === c.key} onPick={set(k)}>{c.label} {dollars(c[`${k}_cents`])}</Radio>
+                ))}
                 <div className="mf-amounts">{amounts.map((a) => <Radio key={a} name={k} value={String(a)} on={f[k] === String(a)} onPick={set(k)}>{dollars(a)}</Radio>)}</div>
                 <label className="mf-check mf-other"><input type="radio" name={k} checked={f[k] === 'other'} onChange={() => set(k)('other')} /> Other: $
                   <input className="input mf-inline mf-money" inputMode="decimal" aria-label={`${title}: other amount`} value={f[other]} onFocus={() => set(k)('other')} onChange={set(other)} />{k === 'monthly' ? ' a month' : ''}</label>
@@ -248,8 +283,8 @@ export default function MembershipForm() {
               </div>
             ))}
           </div>
-          {(f.once === 'star' || f.monthly === 'star') && <Check on={f.schoolBoard} onChange={set('schoolBoard')}>Star Club to the school board slate (not council)</Check>}
-          {!clubs && form.isSuccess && <p className="mf-hint">No contribution limit is on file for this year, so the club amounts can’t be shown — use Other.</p>}
+          {(clubOf(f.once)?.schoolBoard || clubOf(f.monthly)?.schoolBoard) && <Check on={f.schoolBoard} onChange={set('schoolBoard')}>{form.schoolBoardLine}</Check>}
+          {clubs.length > 0 && !asked.data?.clubs && asked.isSuccess && <p className="mf-hint">No contribution limit is on file for this year, so the club amounts can’t be shown — use Other.</p>}
           <div className="mf-line" role="radiogroup" aria-label="How they paid">
             <span className="mf-label">Paid by</span>
             {METHODS.map(([k, l]) => <Radio key={k} name="method" value={k} on={f.method === k} onPick={set('method')}>{l}</Radio>)}

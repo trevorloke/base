@@ -31,7 +31,7 @@
 // targets are 48px, and the full-screen preview opens a tapped section's
 // form in a sheet.
 //
-//   STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=5210 node server/index.js &
+//   STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=5210 node server/index.js &
 //   BASE=http://127.0.0.1:5210 SHOTS=/tmp/site-admin node e2e-site-admin.mjs
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';

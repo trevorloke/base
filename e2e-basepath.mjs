@@ -4,7 +4,7 @@
 // kept on the phone are the client's own; the sign-in cookie is kept to the
 // client's path; an old /admin link and the bare path go where they should.
 //
-//   STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory BASE_PATH=/imaginesurrey PORT=4141 node server/index.js &
+//   STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory BASE_PATH=/imaginesurrey PORT=4141 node server/index.js &
 //   BASE=http://127.0.0.1:4141 SHOTS=/tmp/bp node e2e-basepath.mjs
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';

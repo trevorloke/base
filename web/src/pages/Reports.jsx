@@ -17,6 +17,7 @@ import './shifts.css'; // the ops-* pieces (the head, the page column, the butto
 import './reports.css';
 import './quick.css';
 import { at } from '../base.js';
+import { hasFeature } from '../brand.js';
 
 const TITLES = {
   rating: 'People by rating', tags: 'Tags', cities: 'Cities', 'people-by-week': 'People added, by week',
@@ -36,6 +37,9 @@ const CONTACT_COLS = {
 // Money's tables, as a download or a Sheet, only for those who hold
 // Donations as well (the server refuses the rest: ext/reports/rows.js).
 const MONEY = ['gifts', 'members'];
+// A table only some campaigns have: Members, where there is a membership
+// (the server has no such download for the rest).
+const FEATURE = { members: 'membership' };
 
 // One table in the exports: its CSV, and a quiet "Google Sheets" beside it when Sheets may be sent.
 // People, for a manager: one tick under it adds the Private fields (Faith)
@@ -50,6 +54,7 @@ export function ExportItem({ k, label, me, csvClass = 'btn ops-tap', download = 
   const withPriv = priv && secret.length > 0;
   const href = at(`/api/export/${k}.csv${withPriv ? '?private=1' : ''}`);
   if (MONEY.includes(k) && !hasArea(me, 'money')) return null;
+  if (FEATURE[k] && !hasFeature(me, FEATURE[k])) return null;
   return (
     <li className={`drv-export${secret.length ? ' drv-export--private' : ''}`}>
       <a className={csvClass} href={href} download={download || undefined}>{label}</a>

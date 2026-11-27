@@ -5,6 +5,7 @@ import { areasFor } from '../../lib/perms.js';
 import { here } from '../../lib/mount.js';
 import { ensureSite, readSettings, pageOut, postOut, campaignOut, SIGNATURES_SQL, envHosts, siteWorkspace, appHosts, usedHosts, themeFromBrand } from './store.js';
 import { brandFor } from '../../lib/brand.js';
+import { siteExtras } from './from-preset.js';
 import { sign, PREVIEW_TTL } from './tokens.js';
 import { paymentsReady } from './payments.js';
 import { mountMicrositeReads } from './microsite-reads.js';
@@ -97,6 +98,10 @@ api.get('/site', async (c) => {
     },
     // Online giving (donate and join): set up or not (ext/payments).
     payments: { ready: await paymentsReady() },
+    // The looks Website → Theme offers (Base, and the campaign's own where
+    // its set-up brings one), and its own starting words for a new section
+    // and for a field's label (none for most campaigns).
+    ...siteExtras(),
   });
 });
 

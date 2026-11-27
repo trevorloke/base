@@ -23,6 +23,7 @@ import { accountsBase, AUTH_PATH, clientId, googleSetup, redirectUri, signinRule
 import { readIdToken, tokenCall, tokenPaused } from '../../lib/google/flow.js';
 import { mayUse, purposeOf } from '../../lib/google/purposes.js';
 import { cookieOpts } from '../../routes/auth.js';
+import { isDemoAccount } from '../../lib/demo.js';
 import { signinBack, linkBack } from './signin.js';
 import { connectBack } from './connect.js';
 
@@ -114,6 +115,9 @@ publicRoutes.get('/api/auth/google/start', async (c) => {
     if (!ctx) return fail('expired');
     // Never the operator's own Google, linked or connected as base.win support.
     if (ctx.entry) return fail('not-allowed');
+    // Never on the public demo's one account: every later visitor would
+    // use what was connected or linked (send from its Gmail, read its Drive).
+    if (isDemoAccount(ctx.user?.email)) return fail('not-allowed');
     if (ctx.twoStep?.mustSetUp) return fail('two-step-first');
   }
   let hd = null;

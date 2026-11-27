@@ -19,6 +19,11 @@ import { fakeTranslate } from './fake-translate.js';
 import { renderSite } from '../ext/site/render/index.js';
 import { convertToTraditional } from '../ext/site/translate.js';
 import { imagineSurrey, baseSample, samplePost, sampleData } from './site-samples.js';
+import { presetFor } from '../lib/preset.js';
+
+// Imagine Surrey's own server (this file does not load the test helper):
+// its sample page has a Join form, whose words are its set-up's.
+process.env.STARBASE_BRAND = 'imagine-surrey';
 
 // Every string the seeds hold.
 const seedStrings = async () => {
@@ -26,6 +31,10 @@ const seedStrings = async () => {
   const out = new Set();
   const walk = (v) => { if (typeof v === 'string') out.add(v); else if (v && typeof v === 'object') Object.values(v).forEach(walk); };
   for (const f of readdirSync(dir)) if (f.endsWith('.js')) walk(await import(new URL(f, dir).href));
+  // Imagine Surrey's own website as first made (its set-up's, loaded
+  // through lib/preset.js as its server loads it): where the long words are.
+  walk((await presetFor('imagine-surrey').site.seed()).default({ name: 'Imagine Surrey' }));
+  walk((await import(new URL('base.js', dir).href)).default({ name: 'Example Campaign' }));
   return [...out];
 };
 

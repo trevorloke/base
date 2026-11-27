@@ -133,10 +133,11 @@ function countMe(form) {
 export function SiteForm(props) {
   const {
     uid, kind, action, layout = 'card', title, hidden = {}, fields = [], amount, impliedConsent,
-    needsContact = true, submit: submitGiven, small, thanks = {}, sent = false, error: given = null, w,
+    needsContact = true, submit: submitGiven, small, thanks = {}, sent = false, error: given = null, w, own,
   } = props;
-  // The page's words (translated pages), else the English.
-  const W = wordsIn(w);
+  // The page's words (translated pages), else the campaign's own English
+  // where the page sent any (own), else the English.
+  const W = wordsIn(w, own);
   const submit = submitGiven ?? W('form.send');
   const [done, setDone] = useState(Boolean(sent));
   const [errors, setErrors] = useState(given?.field ? { [given.field]: given.message } : {});

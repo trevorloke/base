@@ -586,3 +586,34 @@ test('payloads pinned; access tokens in no table, job or event', async () => {
   assert.ok(!/sub|scope/i.test(Object.keys(list.me.grant || {}).join()));
   for (const a of A) assert.ok(!text.includes(a.sub));
 });
+
+// The public demo signs every visitor in as one account. A Google account
+// connected or linked there would be every later visitor's to use (send
+// from its Gmail, read its Drive), so the demo account can do neither.
+test('the demo account: connecting or linking Google is refused before Google, and on the way back', async () => {
+  const D = await join(M.b, `demo.${tag}@example.org`, 'staff', 'Demo Visitor');
+  const was = process.env.STARBASE_DEMO_EMAIL;
+  try {
+    process.env.STARBASE_DEMO_EMAIL = `demo.${tag}@example.org`;
+    fake.resetCounts();
+    assert.equal((await connect(D.b, 'test.other', A[20].sub)).google, 'not-allowed', 'connect');
+    assert.equal((await D.b.google(fake, { do: 'link', back: '/profile' }, A[20].sub)).google, 'not-allowed', 'link');
+    assert.equal(fake.counts.token, 0, 'nothing asked of Google');
+    assert.equal(await grantRow(D.id), null);
+    // Anyone else on the same server still connects.
+    assert.equal((await connect(S.b, 'test.other', A[0].sub)).google, 'connected');
+    // A flow started before the demo was set: refused when it comes back,
+    // and what Google handed over is revoked.
+    delete process.env.STARBASE_DEMO_EMAIL;
+    const r = await connect(D.b, 'test.other', A[21].sub, {});
+    assert.equal(r.google, 'connected', 'not the demo then');
+    await D.b.action('google.disconnect', { purpose: 'test.other' });
+    const late = await D.b.google(fake, { do: 'connect', for: 'test.other', app: 'field', back: '/profile' }, A[21].sub, {
+      mangle: (u) => { process.env.STARBASE_DEMO_EMAIL = `demo.${tag}@example.org`; return u; },
+    });
+    assert.equal(late.google, 'not-allowed', 'on the way back');
+    assert.equal(await grantRow(D.id), null);
+  } finally {
+    if (was === undefined) delete process.env.STARBASE_DEMO_EMAIL; else process.env.STARBASE_DEMO_EMAIL = was;
+  }
+});

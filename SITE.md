@@ -7,7 +7,8 @@ The contract the website work is built against. Read with ROADMAP.md.
 | Where | What | Owner |
 |---|---|---|
 | `shared/site/catalogue.js` | the module catalogue: kinds, fields, defaults, `checkProps`, `checkModules` | shared |
-| `shared/site/theme.js` | skins (`base`, `imagine-surrey`), fonts, contrast checks, `themeCss` | shared |
+| `shared/site/theme.js` | the Base look, fonts, contrast checks, `themeCss`; a campaign's own look is added at run time (`presetLooks`) | shared |
+| `server/ext/site/from-preset.js` | what one campaign's set-up brings to its own website and no other: its look, `look.css`, pictures, first site, words and starting sections (`server/presets/`) | site server |
 | `shared/site/components/` | the page components (React + `htm`, no JSX, no build needed on the server) — used by the server renderer and by the browser islands | renderer |
 | `shared/site/site.css` | the public site's stylesheet (CSS variables from `themeCss`) | renderer |
 | `shared/site/fonts/` | the site's faces, self-hosted: Montserrat, Inter (variable), Barlow Condensed | renderer |
@@ -24,11 +25,12 @@ The contract the website work is built against. Read with ROADMAP.md.
   A host with a final dot is the same host (`imaginesurrey.ca.` is
   `imaginesurrey.ca`): in a request, in these lists, and where the app's
   own addresses are noted (`store.js hostOfRequest`).
-- Everywhere else (the app's own address, base.win/<client>), the site is at
-  `/site/…` (so `base.win/imaginesurrey/site/` works before DNS moves).
-  The front door (`apps/door`) sends `base.win/<client>` itself to
-  `/<client>/site/`, and an old `base.win/<client>/web…` link to
-  `/<client>/desk/website` — the admin's Website area is at `/website`.
+- Everywhere else (the app's own address, `<client>.base.win`), the site is
+  at `/site/…` (so `https://imaginesurrey.base.win/site/` works before DNS
+  moves). Not in use today: the front door (`apps/door`), which would send
+  `base.win/<client>` itself to `/<client>/site/`, and an old
+  `base.win/<client>/web…` link to `/<client>/desk/website` — the admin's
+  Website area is at `/website`.
 - App routes (`/api`, `/field`, `/desk`, `/admin`, `/media`, `/u`, `/r/…` receipts …) are
   never shadowed on the app host. On a site host, only the site's routes and
   `/media/:id`, `/site-assets/*` are answered, and what services and emails
@@ -708,8 +710,10 @@ Routes added to "Where the site is served": `/act` (every open petition and
 pledge, each a `petition` module, as a page); `/news` is the page with slug
 `news` when there is one (else the posts). `news` and `home` are the
 site's own pages: their addresses never change. `/site-assets/*` serves
-`shared/site/assets/*` (pictures — Imagine Surrey's under
-`imagine-surrey/`), `shared/site/*.css` and fonts, and the islands' build —
+`shared/site/*.css` and fonts, and — only on the server of a campaign whose
+set-up brings its own (Imagine Surrey's pictures and `look.css` under
+`imagine-surrey/`, from `server/presets/imagine-surrey/assets/site/`; 404
+on every other server) — that campaign's pictures; and the islands' build —
 `web/dist/site-assets/*`, then `web/dist/*` (`site-islands.js`) — by file
 type; on the app's own address it is at `/site-assets/*` too. On the
 campaign's own domain nothing else of `web/dist` answers (not `/assets/*`):
@@ -837,8 +841,14 @@ what it shared (its phone, address or postal code) with a link to it.
 
 Signed in, the `site` area ("Website": managers by default; a manager may
 grant it under Admin → Permissions); everyone else gets 403 on every read
-and write. Reads (the first one makes the campaign's site from its brand's
-seed):
+and write. Reads (the first one makes the campaign's first site: the
+generic one in `seeds/base.js`, or its own where its set-up brings one).
+`GET /api/site` also sends `skins` (the looks Theme offers: Base, and the
+campaign's own if it has one), `moduleDefaults` (its own starting words for
+a new section) and `fieldLabels`; for most campaigns these are Base alone
+and two empty objects. The *Become a member* section and its `join` form
+are only for a campaign with a membership: for any other the section is
+not offered and draws nothing, and the form answers 404:
 
 | | |
 |---|---|

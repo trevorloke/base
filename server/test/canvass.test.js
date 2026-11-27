@@ -3,7 +3,8 @@
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { freshDb, Client } from './helpers.js';
-import { RATING_CODES, noCalls, noCallsWord } from '@starbase/shared/canvass';
+import { noCalls, noCallsWord } from '@starbase/shared/canvass';
+import { ratingCodes } from '@starbase/shared/scale';
 
 let c;
 
@@ -28,7 +29,7 @@ before(async () => {
 
 test('every rating code on the scale is accepted; off-scale codes are rejected', async () => {
   const p = await c.createPerson('Rating Tester');
-  for (const code of RATING_CODES) {
+  for (const code of ratingCodes()) {
     const r = await c.action('contact.log', { person_id: p.id, channel: 'door', outcome: 'contacted', rating: code });
     assert.equal(r.status, 200, `rating ${code}`);
   }
@@ -36,7 +37,7 @@ test('every rating code on the scale is accepted; off-scale codes are rejected',
   assert.equal(bad.status, 400);
   const prof = await c.get(`/api/persons/${p.id}`);
   assert.equal(prof.json.person.rating, '4C', 'latest rating sticks on the person');
-  assert.equal(prof.json.contacts.length, RATING_CODES.length);
+  assert.equal(prof.json.contacts.length, ratingCodes().length);
 });
 
 test('a no-answer knock logs without touching the rating', async () => {

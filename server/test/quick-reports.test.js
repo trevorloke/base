@@ -12,7 +12,8 @@ import { app } from '../index.js';
 import { RECIPES, WALK_DOORS_MAX } from '../ext/reports/quick.js';
 import { movedCounts, movedOpenIds } from '../ext/moves/index.js';
 import { csvStream } from '../lib/csv.js';
-import { SURREY_CANDIDATES } from '@starbase/shared/scale';
+import { presetFor } from '../lib/preset.js';
+const SURREY_CANDIDATES = presetFor('imagine-surrey').candidates;
 
 const tag = Math.random().toString(36).slice(2, 8);
 const lat = 49.1327; const lng = -122.855;

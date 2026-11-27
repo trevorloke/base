@@ -8,6 +8,7 @@ import { sealToken, tokenKeyReady } from '../../lib/google/seal.js';
 import { domainFor, mayUse, purposeOf } from '../../lib/google/purposes.js';
 import { grantPayload, grantRowOf, revokeIfUnshared, forgetAccess } from '../../lib/google/tokens.js';
 import { withCode } from './routes.js';
+import { isDemoUser } from '../../lib/demo.js';
 
 class OtherAccount extends Error {}
 
@@ -24,6 +25,8 @@ export const connectBack = async (c, db, flow, who, tokens) => {
     return { code };
   };
   if (!purpose || !(await mayUse(db, { userId: flow.user_id, workspaceId: flow.workspace_id }, purpose))) return refuse('not-allowed');
+  // Never on the public demo's one account (routes.js, step 5).
+  if (await isDemoUser(db, flow.user_id)) return refuse('not-allowed');
   if (purpose.scopes.some((s) => !scopes.includes(s))) return refuse('missing-scope');
   const settings = (await db.query('select settings from workspaces where id = $1', [flow.workspace_id])).rows[0]?.settings;
   const domain = domainFor(purpose, settings);

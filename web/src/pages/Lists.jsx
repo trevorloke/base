@@ -37,6 +37,7 @@ import {
 import './shifts.css';
 import './lists.css';
 import { at } from '../base.js';
+import { ex } from '../brand.js';
 
 // The list CSV's columns (server ext/lists/rows.js), for the Sheets confirm's do-not-contact line.
 const LIST_HEAD = ['Name', 'Email', 'Phone', 'Address', 'Unit', 'City', 'Postal code', 'Rating', 'Tags', 'Added'];
@@ -193,7 +194,7 @@ function NewList() {
       <div className="ops-head"><h1>New list</h1></div>
       <div className="field">
         <label htmlFor="ls-name">Name</label>
-        <input id="ls-name" className="input" required maxLength={120} value={name} autoFocus onChange={(e) => setName(e.target.value)} placeholder="Members in Newton" />
+        <input id="ls-name" className="input" required maxLength={120} value={name} autoFocus onChange={(e) => setName(e.target.value)} placeholder={ex('list.name', 'Members in the north end')} />
       </div>
       <div className="ls-kinds" role="radiogroup" aria-label="Kind of list">
         <label className={`ls-kind${kind === 'filter' ? ' is-on' : ''}`}><input type="radio" name="kind" checked={kind === 'filter'} onChange={() => setKind('filter')} /> <span><strong>A saved filter</strong><br /><span className="muted">Whoever matches it, today and as people change.</span></span></label>

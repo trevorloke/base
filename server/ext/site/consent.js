@@ -49,6 +49,17 @@ export const recordConsent = async (tx, ws, { personId = null, channel, granted,
   return id;
 };
 
+// Whether they said yes THEMSELVES after a moment: a yes on the record with
+// the words they saw (a box they ticked, their own link) for this address or
+// number, later than `at`. A no that happened before it (one that was slow
+// to arrive from the campaign's website, ext/intake/consent.js) never undoes
+// it. An address the team typed in is the team's word, not theirs.
+export const ownYesAfter = async (tx, ws, channel, address, at) => (address ? (await tx.query(
+  `select 1 from consent_events
+    where workspace_id = $1 and channel = $2 and granted and wording is not null and address = $3 and created_at > $4::timestamptz limit 1`,
+  [ws, channel, address, at],
+)).rows.length > 0 : false);
+
 // The last yes or no on record for a person (or, with no person, an address).
 export const latestConsent = async (q, ws, { personId = null, address = null, channel }) => (await q.query(
   personId
@@ -191,9 +202,11 @@ export const emailOn = async (tx, ws, { personId, name, email, source, wording, 
 
 // Texts off is a STOP for their number (the texting rules hold every text
 // to it, whoever sends); on is a START, and their own do-not-text goes.
-export const smsOff = async (tx, ws, { personId, phone, source }, emit) => {
+// keyword: what the number's STOP row says it came by (the website hosted
+// apart says its own, ext/intake/consent.js).
+export const smsOff = async (tx, ws, { personId, phone, source, keyword = 'WEBSITE' }, emit) => {
   const num = e164(phone);
-  if (num) await applyOptOut(tx, emit, ws, num, { out: true, keyword: 'WEBSITE' });
+  if (num) await applyOptOut(tx, emit, ws, num, { out: true, keyword });
   const p = (await tx.query('select id, tags from persons where id = $1 and workspace_id = $2 and deleted_at is null', [personId, ws])).rows[0];
   if (p && !tagsOf(p).includes(NO_TEXT)) {
     const next = [...tagsOf(p), NO_TEXT];
@@ -284,7 +297,9 @@ export const consentFromEvents = async (tx, meta, events) => {
     const p = e.payload || {};
     if (e.entityType === 'subscription') {
       let granted = null;
-      if (e.op === 'create') granted = true;
+      // A new row is a yes — unless it was made to hold a no (an address the
+      // campaign's website said had unsubscribed, ext/intake/consent.js).
+      if (e.op === 'create') granted = p.status !== 'unsubscribed';
       else if (e.op === 'void' || p.status === 'unsubscribed') granted = false;
       else if (p.status === 'subscribed') granted = true;
       if (granted === null) continue;

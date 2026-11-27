@@ -3,8 +3,8 @@
 // (apps/web/src/content: site.ts, tracker.ts, tracker-seed.ts,
 // campaigns-seed.ts, seeds/pages.ts; apps/web/src/lib/settings.ts defaults),
 // never written anew. Generated once from those files; edit the site in
-// Website, not here. The pictures it names are in
-// shared/site/assets/imagine-surrey/ (served at /site-assets/imagine-surrey/).
+// Website, not here. The pictures it names are in assets/site/ beside this
+// file (served at /site-assets/imagine-surrey/, on its own server only).
 // Left out on purpose: the shop (not part of base.win), and links to the
 // website's pages base.win doesn't have (/shop, /neighbourhoods,
 // /tracker/methodology, /me).

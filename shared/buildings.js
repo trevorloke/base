@@ -7,9 +7,9 @@
 // outbox): a building is only a way of grouping doors for the eye and for
 // walking them floor by floor. A unit is a door in every count.
 //
-//   splitUnit(address)       "1203-13450 104 Ave" → { unit: '1203', civic: '13450 104 Ave' };
+//   splitUnit(address)       "1203-123 Main St" → { unit: '1203', civic: '123 Main St' };
 //                            null for anything else. Read only: nothing writes it back.
-//   normAddr(s)              one spelling for a civic address ("104 Avenue." → "104 ave")
+//   normAddr(s)              one spelling for a civic address ("1st Avenue." → "1st ave")
 //   civicOf(door) / unitOf(door)
 //   groupBuildings(doors)    { buildings, loose }
 //   buildingOf(doors, anchor) the building that holds a person (or null)
@@ -58,7 +58,7 @@ export const normAddr = (s) => String(s ?? '').toLowerCase().replace(/[.,#]/g, '
 
 export const normUnit = (u) => String(u ?? '').trim().toUpperCase().replace(/^#\s*/, '').trim();
 
-// City is not part of it: "Surrey" and "Whalley" on one tower are one tower.
+// City is not part of it: a city’s name and a neighbourhood’s on one tower are one tower.
 export const civicOf = (door) => normAddr(splitUnit(door?.address)?.civic ?? door?.address ?? '');
 export const unitOf = (door) => normUnit(door?.unit || splitUnit(door?.address)?.unit || '');
 

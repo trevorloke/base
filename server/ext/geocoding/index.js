@@ -39,6 +39,7 @@ import { Hono } from 'hono';
 import { runAction } from '../../lib/events.js';
 import { enqueueJob, jobRunnerOn, runJobsSoon } from '../../lib/jobs.js';
 import { geocodeAddress } from '../../lib/geocode.js';
+import { city as orgCity } from '../../lib/org.js';
 
 const KIND = 'geocode.run';
 const ROUND = 120;               // people looked at per round
@@ -96,7 +97,7 @@ const PENDING = `workspace_id = $1 and deleted_at is null and address is not nul
   and coalesce(attrs->'geocode'->>'status', '') not in ('nomatch', 'weak', 'failed')`;
 
 // One household = one lookup: same street address in the same city.
-const keyOf = (p) => `${String(p.address).trim().toLowerCase().replace(/\s+/g, ' ')}|${String(p.city || 'surrey').trim().toLowerCase()}`;
+const keyOf = (p) => `${String(p.address).trim().toLowerCase().replace(/\s+/g, ' ')}|${String(p.city || orgCity()).trim().toLowerCase()}`;
 
 const getRun = async (db, workspaceId) =>
   (await db.query('select * from geocode_runs where workspace_id = $1', [workspaceId])).rows[0] || null;

@@ -9,24 +9,29 @@
 //   STARBASE_JURISDICTION  bc-municipal (default) | bc-provincial | federal —
 //                          which contribution-limit rules apply
 //   STARBASE_TZ            the campaign's time zone (default America/Vancouver)
-//   STARBASE_CITY          the city addresses default to (default Surrey)
+//   STARBASE_CITY          the city addresses default to. Unset: none
 //   STARBASE_PROVINCE      two letters, for geocoding (default BC)
-//   STARBASE_GEO_BOUNDS    "lat,lng|lat,lng", the box geocoding is biased to
+//   STARBASE_GEO_BOUNDS    "lat,lng|lat,lng", the campaign's map area: where
+//                          maps open and what address lookups lean to.
+//                          Unset: no area — maps open wide, lookups lean nowhere
 //   STARBASE_SLATES        "code:Label,code:Label" — the slates a gift can go
 //                          to, each its own annual limit (shared/canvass.js)
-//   STARBASE_CANDIDATES    "4D:McCallum:Opposed — Doug McCallum supporter;…"
+//   STARBASE_CANDIDATES    "4A:Hartwell:Opposed — Hartwell supporter;…"
 //                          — the opposed candidates a new rating scale starts
-//                          with (shared/scale.js); the desk edits them after
+//                          with (shared/scale.js); the desk edits them after.
+//                          "none" or unset: nobody
 //   STARBASE_ENV           production | staging — said on screen and at
 //                          /api/health, so nobody mistakes one for the other
-//   STARBASE_BRAND         imagine-surrey | base — the look (lib/brand.js);
-//                          unset: base on staging or for any other campaign,
-//                          Imagine Surrey's otherwise
+//   STARBASE_BRAND         base, or a preset's name — what the campaign
+//                          starts from (lib/preset.js). Unset: base
+// Where a setting above says "unset: none", a server with a preset
+// (lib/preset.js) has the preset's own city, map area and starting list.
 //
 // The first sign-up sets up the one workspace; everyone after joins by
 // invite. (Workspaces are still scoped by id underneath — tests and dev can
 // open sign-up again with STARBASE_OPEN_SIGNUP=1.)
 import { SLATES } from '@starbase/shared/canvass';
+import { preset, brandHas } from './preset.js';
 
 const str = (k) => String(process.env[k] || '').trim();
 
@@ -42,18 +47,44 @@ export const timeZone = () => {
 // one way a Google pause's end time is said (ext/google, gmail, drive).
 export const clockAt = (t) => new Date(t).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', timeZone: timeZone() })
   .replace(/\./g, '').replace(/\s+/g, ' ');
-export const city = () => str('STARBASE_CITY') || 'Surrey';
+// '' when no city is set (and the server's preset names none).
+export const city = () => str('STARBASE_CITY') || preset().org.city;
 export const province = () => (str('STARBASE_PROVINCE') || 'BC').toUpperCase().slice(0, 2);
+// The map area as typed in STARBASE_GEO_BOUNDS, or null when it is unset or
+// can't be read.
 export const geoBounds = () => (/^-?\d+(\.\d+)?,-?\d+(\.\d+)?\|-?\d+(\.\d+)?,-?\d+(\.\d+)?$/.test(str('STARBASE_GEO_BOUNDS'))
-  ? str('STARBASE_GEO_BOUNDS') : '49.002,-122.92|49.222,-122.67');
-// The same box as numbers, [south, west, north, east], whichever corner was
-// typed first: the campaign's own area (where the map opens; its check).
+  ? str('STARBASE_GEO_BOUNDS') : null);
+// The campaign's own area as numbers, [south, west, north, east], whichever
+// corner was typed first (where the map opens; its check): the typed one,
+// else the preset's, else null — a campaign with no area. Every caller
+// takes null.
 export const geoBox = () => {
-  const [a, b] = geoBounds().split('|').map((pt) => pt.split(',').map(Number));
+  const typed = geoBounds();
+  if (!typed) return preset().org.box ? [...preset().org.box] : null;
+  const [a, b] = typed.split('|').map((pt) => pt.split(',').map(Number));
   return [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1])];
 };
-export const envName = () => (['production', 'staging'].includes(str('STARBASE_ENV')) ? str('STARBASE_ENV')
-  : process.env.NODE_ENV === 'production' ? 'production' : 'local');
+// Where the app's maps open: { centre: [lat, lng], zoom, bounds: [[south,
+// west], [north, east]] } — worked out from a typed area, else the preset's
+// own, else null (the app opens wide and asks for the area to be set).
+export const mapHome = () => {
+  if (geoBounds()) {
+    const [s, w, n, e] = geoBox();
+    const mid = (a, b) => Number(((a + b) / 2).toFixed(5));
+    return { centre: [mid(s, n), mid(w, e)], zoom: 12, bounds: [[s, w], [n, e]] };
+  }
+  return preset().map || null;
+};
+// The name is read exactly ("production" or "staging"; spaces around it are
+// dropped). Unset or misspelled, a hosted server is production — NODE_ENV is
+// production (the Dockerfile sets it), or it runs on Render (RENDER is set on
+// every service there) — so staging's powers (the demo sign-in, the sample
+// campaign and its reset) stay off. Only a developer's machine is "local".
+export const envName = (env = process.env) => {
+  const named = String(env.STARBASE_ENV || '').trim();
+  if (named === 'production' || named === 'staging') return named;
+  return env.NODE_ENV === 'production' || env.RENDER ? 'production' : 'local';
+};
 
 // Sign-up past first run: only when this is set (tests, local dev).
 export const openSignupForced = () => process.env.STARBASE_OPEN_SIGNUP === '1';
@@ -63,7 +94,10 @@ export const openSignupForced = () => process.env.STARBASE_OPEN_SIGNUP === '1';
 export const setupClosedMessage = (name) => `base.win is already set up for ${name || orgName() || 'this campaign'} — ask a manager to invite you.`;
 
 // What the app is told about this deployment (GET /api/auth/setup and /me).
+// features: what this server's preset brings (the membership form, the
+// sample data) — none for most campaigns. map: where maps open, or null.
+const FEATURES = ['membership', 'sample'];
 export const orgOut = () => ({
   name: orgName(), jurisdiction: jurisdiction(), tz: timeZone(), city: city(), province: province(),
-  slates: SLATES, env: envName(),
+  slates: SLATES, env: envName(), features: FEATURES.filter((f) => brandHas(f)), map: mapHome(),
 });

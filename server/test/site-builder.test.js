@@ -98,9 +98,12 @@ test('a section’s row words, the catalogue by category, links and addresses', 
   assert.equal(B.summaryOf({ kind: 'petition', props: { campaign: 'c1' } }, { campaigns: [{ id: 'c1', title: 'Get SkyTrain to South Surrey' }] }), 'Get SkyTrain to South Surrey');
   assert.equal(B.summaryOf({ kind: 'petition', props: { campaign: '' } }), 'No petition picked yet');
   assert.equal(B.summaryOf({ kind: 'hero', props: { titlePrefix: 'Fighting for', words: ['Surrey', 'transit'] } }), 'Fighting for Surrey');
-  const g = B.groups();
+  // Imagine Surrey's builder (a campaign with a membership): every section.
+  const g = B.groups({ membership: true });
   assert.deepEqual(g.map((x) => x.key), ['basics', 'actions', 'live', 'org']);
   assert.equal(g.reduce((n, x) => n + x.modules.length, 0), MODULES.length, 'every module in one group');
+  // Any other campaign's: the same, without "Become a member".
+  assert.deepEqual(B.groups({ membership: false }).flatMap((x) => x.modules).map((m) => m.kind), MODULES.map((m) => m.kind).filter((k) => k !== 'join'));
   assert.equal(B.tidyLink('imaginesurrey.ca/donate'), 'https://imaginesurrey.ca/donate');
   assert.equal(B.tidyLink('www.example.org'), 'https://www.example.org');
   assert.equal(B.tidyLink('donate'), '/donate');

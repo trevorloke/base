@@ -15,7 +15,7 @@
 // Outreach → Sharing and "New post to share". Both screens are measured at
 // 390 and 1440.
 //
-//   STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=5110 node server/index.js &
+//   STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=5110 node server/index.js &
 //   BASE=http://127.0.0.1:5110 SHOTS=/tmp/sharing node e2e-sharing.mjs
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';

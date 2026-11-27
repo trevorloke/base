@@ -84,6 +84,12 @@ BC campaign will need in 2030.
 - **Events and attendance.** Supporter-hosted events, QR check-in, calendar
   invites with the reminders (the reminder the evening before a shift goes
   out today), attendance feeding ladders.
+- **A group calendar.** One calendar for the campaign, where each person
+  sees what is on it for them, by role: a candidate sees their call time
+  and their own events; a volunteer sees their shifts and the events open
+  to them. Each item has a direct link to add it to Google Calendar. Not built
+  yet: today each person's own shifts go to their calendar (README,
+  *Calendars*).
 - **Between elections.** Write-to-council letters and batched petition
   deliveries; election cycles (2026 ratings carried into 2030 filters).
 - **Supporter portal.** My actions, my referrals, renew my membership.

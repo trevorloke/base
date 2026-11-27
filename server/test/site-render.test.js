@@ -16,6 +16,12 @@ import { linkFor, safeUrl, locFrom, imageFor } from '../../shared/site/component
 import { shareLinks, withSource, money, parseDollars, jsonForScript, when } from '../../shared/site/components/util.js';
 import { videoEmbed } from '../../shared/site/components/modules.js';
 import { imagineSurrey, baseSample, samplePost, sampleData } from './site-samples.js';
+import { presetFor } from '../lib/preset.js';
+
+// Imagine Surrey's own server (this file does not load the test helper):
+// its look is there by name, as its production's is.
+process.env.STARBASE_BRAND = 'imagine-surrey';
+const IS_SKIN = presetFor('imagine-surrey').site.skin;
 
 const SKIN_NAMES = ['base', 'imagine-surrey'];
 const site = (skin = 'base', extra = {}) => ({ theme: { skin }, org: { name: 'Example Campaign', email: 'hello@example.org' }, ...extra });
@@ -552,7 +558,7 @@ test('theme: the action colour and the heading shadow are additive; derived colo
   assert.equal(checkTheme({ skin: 'base' }).theme.pop, false);
   // A theme saved before the action colour existed: it follows a changed brand.
   assert.equal(checkTheme({ skin: 'base', colors: { brand: '#0a7d55' } }).theme.colors.action, '#0a7d55');
-  assert.equal(checkTheme({ skin: 'imagine-surrey', colors: { ...SKINS['imagine-surrey'].colors, action: undefined } }).theme.colors.action, '#d81b1e');
+  assert.equal(checkTheme({ skin: 'imagine-surrey', colors: { ...IS_SKIN.colors, action: undefined } }).theme.colors.action, '#d81b1e');
   // A dark page: the derived colours flip and still read.
   const dark = themeColors({ skin: 'base', colors: { paper: '#111318', ink: '#f5f5f5', surface: '#1c1f26', link: '#9db4ff' } });
   assert.ok(contrast(dark.muted, '#111318') >= 4.5 && contrast(dark.danger, '#111318') >= 4.5);
@@ -582,7 +588,7 @@ test('the site’s own files: site.css, the fonts, the island script; nothing el
 
 test('odd shapes never stop a page: objects for text, strings for lists, junk data and settings', () => {
   const odd = MODULES.map((m) => ({ id: `odd-${m.kind}`, kind: m.kind, props: Object.fromEntries(m.fields.map((f) => [f.key, f.type === 'list' || f.type === 'words' ? 'not a list' : { not: 'text' }])) }));
-  const junkData = { posts: [{ slug: {}, title: [] }, 'x'], events: 'x', shifts: [{ id: 1, title: { a: 1 } }], counts: 'x', campaigns: { a: 'x', b: { title: { x: 1 }, slug: 2 } }, payments: 'x', roles: [1, {}, 'Driver'] };
+  const junkData = { posts: [{ slug: {}, title: [] }, 'x'], events: 'x', shifts: [{ id: 1, title: { a: 1 } }], counts: 'x', campaigns: { a: 'x', b: { title: { x: 1 }, slug: 2 } }, payments: 'x', roles: [1, {}, 'Driver'], membership: true };
   const junkSite = { theme: 'x', nav: 'x', footer: [], announcement: 5, seo: 5, org: [], social: 'x' };
   for (const kind of ['page', 'post', 'campaign', 'notFound']) {
     const r = renderSite({ kind, site: junkSite, page: { id: {}, slug: [], title: {}, description: 5, modules: odd }, post: { title: {}, body: [], image: 'x' }, campaign: { title: [], kind: 'x', statement: {}, goal: 'x' }, data: junkData, ctx: { root: 5, path: {}, sent: 7, error: [] } });

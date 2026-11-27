@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en-CA">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<!-- The header says no-referrer; a browser then sends "Origin: null" on this
+     page's own forms, which the Origin check refuses. same-origin still
+     sends no Referer to any other site. -->
+<meta name="referrer" content="same-origin">
+<title>Example X · base.win control centre</title>
+<link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/ops.css">
+<script src="/ops.js" defer></script>
+</head>
+<body class="oc-body">
+<header class="oc-top">
+  <a class="oc-brand" href="/">base.win control centre</a>
+  <nav class="oc-nav" aria-label="Control centre">
+    <a href="/" aria-current="page">Campaigns</a>
+    <a href="/log">Log</a>
+    <a href="/key">base.win’s key</a>
+    <form method="post" action="/signout" class="oc-inline"><button class="btn btn-quiet" type="submit">Sign out</button></form>
+  </nav>
+</header>
+<main class="oc-main">
+<h1>Example X</h1>
+    
+    <p class="oc-status" role="status" aria-live="polite"></p>
+    <p class="oc-block">No Render address saved yet — add it under More → Edit.</p>
+    
+    <section class="card"><h2>Health</h2>
+      <dl class="oc-dl"><div><dt>Answering</dt><dd>Not checked yet</dd></div><div><dt>Version</dt><dd>—</dd></div><div><dt>Database</dt><dd>—</dd></div><div><dt>Time zone data</dt><dd>—</dd></div><div><dt>base.win sign-in</dt><dd>—</dd></div><div><dt>Render address</dt><dd>Not saved</dd></div><div><dt>base.win address</dt><dd>—</dd></div><div><dt>x.base.win</dt><dd>Not checked yet</dd></div><div><dt>Last checked</dt><dd>Not yet</dd></div></dl>
+      <div class="oc-strip" role="img" aria-label="The last 24 hours, hour by hour"><span class="oc-hour oc-hour-none"></span><span class="oc-hour oc-hour-none"></span><span class="oc-hour oc-hour-none"></span><span class="oc-hour oc-hour-none"></span><span class="oc-hour oc-hour-none"></span><span class="oc-hour oc-hour-none"></span><span class="oc-hour oc-hour-none"></span><span class="oc-hour oc-hour-none"></span><span class="oc-hour oc-hour-none"></span><span class="oc-hour oc-hour-none"></span><span class="oc-hour oc-hour-none"></span><span class="oc-hour oc-hour-none"></span><span class="oc-hour oc-hour-none"></span><span class="oc-hour oc-hour-none"></span><span class="oc-hour oc-hour-none"></span><span class="oc-hour oc-hour-none"></span><span class="oc-hour oc-hour-none"></span><span class="oc-hour oc-hour-none"></span><span class="oc-hour oc-hour-none"></span><span class="oc-hour oc-hour-none"></span><span class="oc-hour oc-hour-none"></span><span class="oc-hour oc-hour-none"></span><span class="oc-hour oc-hour-none"></span><span class="oc-hour oc-hour-none"></span></div>
+  <p class="oc-help">No checks yet today</p>
+      <form method="post" action="/c/x/check-now" data-busy="Checking…"><button class="btn btn-quiet" type="submit">Check now</button></form>
+    </section>
+    <section class="card"><h2>Checklist</h2><ol class="oc-check"><li class="oc-check-item">
+    <span class="oc-check-words">Database and service made in Render</span>
+    <span class="oc-check-state">Not yet</span>
+    <form method="post" action="/c/x/tick" class="oc-inline-form">
+      <input type="hidden" name="item" value="service"><input type="hidden" name="done" value="1">
+      
+      <button class="btn btn-quiet" type="submit" aria-label="Tick: Database and service made in Render">Tick</button>
+    </form>
+  </li><li class="oc-check-item">
+    <span class="oc-check-words">Answers, database fine</span>
+    <span class="oc-check-state">Not yet</span>
+    
+  </li><li class="oc-check-item">
+    <span class="oc-check-words">Time zone data current</span>
+    <span class="oc-check-state">Not yet</span>
+    
+  </li><li class="oc-check-item">
+    <span class="oc-check-words">base.win sign-in ready</span>
+    <span class="oc-check-state">Not yet</span>
+    
+  </li><li class="oc-check-item">
+    <span class="oc-check-words">Answers at x.base.win</span>
+    <span class="oc-check-state">Not yet</span>
+    
+  </li><li class="oc-check-item">
+    <span class="oc-check-words">Campaign made</span>
+    <span class="oc-check-state">Not yet</span>
+    
+  </li><li class="oc-check-item">
+    <span class="oc-check-words">First manager invited</span>
+    <span class="oc-check-state">Not yet</span>
+    <form method="post" action="/c/x/tick" class="oc-inline-form">
+      <input type="hidden" name="item" value="first-manager-invited"><input type="hidden" name="done" value="1">
+      
+      <button class="btn btn-quiet" type="submit" aria-label="Tick: First manager invited">Tick</button>
+    </form>
+  </li><li class="oc-check-item">
+    <span class="oc-check-words">Email set up (Settings → Services in the app)</span>
+    <span class="oc-check-state">Not yet</span>
+    <form method="post" action="/c/x/tick" class="oc-inline-form">
+      <input type="hidden" name="item" value="email"><input type="hidden" name="done" value="1">
+      
+      <button class="btn btn-quiet" type="submit" aria-label="Tick: Email set up (Settings → Services in the app)">Tick</button>
+    </form>
+  </li><li class="oc-check-item">
+    <span class="oc-check-words">First manager signed in</span>
+    <span class="oc-check-state">Not yet</span>
+    <form method="post" action="/c/x/tick" class="oc-inline-form">
+      <input type="hidden" name="item" value="first-manager-in"><input type="hidden" name="done" value="1">
+      
+      <button class="btn btn-quiet" type="submit" aria-label="Tick: First manager signed in">Tick</button>
+    </form>
+  </li></ol></section>
+    <details class="oc-more"><summary class="btn btn-quiet">More</summary>
+      <p><a class="btn btn-quiet" href="/c/x/edit">Edit</a> <a class="btn btn-quiet" href="/c/x/setup">Set-up steps</a></p>
+      
+      <form method="post" action="/c/x/archive" class="oc-form">
+        
+        <button class="btn btn-quiet" type="submit">Archive</button>
+      </form>
+      <h2>Its values</h2><dl class="oc-dl"><div><dt>Time zone</dt><dd>America/Vancouver</dd></div><div><dt>City</dt><dd>Exampleton</dd></div><div><dt>Races</dt><dd>City council</dd></div><div><dt>Rules</dt><dd>B.C. municipal</dd></div><div><dt>Map area</dt><dd>50.6, -120.5 to 50.8, -120.2</dd></div><div><dt>Province</dt><dd>BC</dd></div></dl>
+      <h2>Its log</h2>
+      <ol class="oc-log"><li class="oc-logline"><span class="oc-when">WHEN</span> · Made the campaign · Example X</li></ol>
+    </details>
+</main>
+</body>
+</html>

@@ -22,7 +22,7 @@
 // once, sent once; one refused and dismissed still says "Not saved" — while
 // her browser never gets a desk tie read.
 //
-//   STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=5100 node server/index.js &
+//   STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=5100 node server/index.js &
 //   BASE=http://127.0.0.1:5100 SHOTS=/tmp/relationships node e2e-relationships.mjs
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';

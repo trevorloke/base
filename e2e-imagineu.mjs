@@ -5,7 +5,7 @@
 // sees its materials in order, marks it done, and the course reads
 // "1 of 1 module done". Measured at 390.
 //
-//   STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4134 node server/index.js &
+//   STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4134 node server/index.js &
 //   BASE=http://127.0.0.1:4134 SHOTS=/tmp/imagineu node e2e-imagineu.mjs
 import { chromium } from 'playwright-core';
 import { mkdirSync, writeFileSync } from 'node:fs';

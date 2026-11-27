@@ -85,7 +85,7 @@ const NAV_DESK = [
   { to: '/signs',    label: 'Signs',    icon: 'signs', area: 'signs' },
   { to: '/outreach', label: 'Outreach', icon: 'outreach', area: 'outreach' },
   { to: '/media',    label: 'Media',    icon: 'media', area: 'media' },
-  { to: '/imagineu', label: BRAND.learn, icon: 'learn', area: 'learn' },
+  { to: '/training', label: BRAND.learn, icon: 'learn', area: 'learn' },
   { to: '/website',  label: 'Website',  icon: 'website', area: 'site' },
   // Website translations alone (TR): straight to its one screen.
   // Its words are the search's "Website languages" (commands.js), which this tab stands in for.
@@ -100,7 +100,7 @@ const NAV_VOLUNTEER = [
   { to: '/map',    label: 'Map',    icon: 'map' },
   { to: '/calls',  label: 'Calls',  icon: 'calls' },
   { to: '/shifts', label: 'Shifts', icon: 'shifts' },
-  { to: '/imagineu', label: BRAND.learn, icon: 'learn' },
+  { to: '/training', label: BRAND.learn, icon: 'learn' },
 ];
 
 // A phone's tab bar holds five. More places than that: the first four, then
