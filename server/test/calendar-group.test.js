@@ -267,3 +267,60 @@ test('a member taken off the campaign sees nothing; their link is empty', async 
   assert.deepEqual(uids((await fetchPath(feed)).body), []);
 });
 
+
+// ── Review fixes ──
+
+test('an item past midnight: the day it ends is the next day; it is listed on the day it starts', async () => {
+  // Election night, 8 pm to 1 am in Vancouver (UTC-7 in October): 03:00 to 08:00 UTC the next day.
+  const night = await add({ title: 'Election night', day: '2030-10-19', end_day: '2030-10-20', start: '20:00', end: '01:00', who: 'everyone' });
+  assert.equal(new Date(night.starts_at).toISOString(), '2030-10-20T03:00:00.000Z');
+  assert.equal(new Date(night.ends_at).toISOString(), '2030-10-20T08:00:00.000Z');
+  const e = (await month(vol, '2030-10')).entries.find((x) => x.title === 'Election night');
+  assert.deepEqual([e.day, e.allDay, e.start, e.end], ['2030-10-19', false, '2030-10-20T03:00:00.000Z', '2030-10-20T08:00:00.000Z']);
+  assert.match(e.google, /&dates=20301020T030000Z\/20301020T080000Z(&|$)/);
+  // Ending at midnight is the next day's 00:00.
+  const late = await add({ title: 'Count watch', day: '2030-10-19', end_day: '2030-10-20', start: '20:00', end: '00:00', who: 'managers' });
+  assert.equal(new Date(late.ends_at).toISOString(), '2030-10-20T07:00:00.000Z');
+  // Edit keeps it overnight.
+  const moved = ok(await mgr.action('calendar.item.edit', { id: night.id, title: 'Election night', all_day: false, day: '2030-10-19', end_day: '2030-10-20', start: '21:00', end: '02:00', who: 'everyone' })).item;
+  assert.equal(new Date(moved.ends_at).toISOString(), '2030-10-20T09:00:00.000Z');
+  const bad = async (input, error) => {
+    const r = await mgr.action('calendar.item.add', { title: 'Bad', all_day: false, day: '2030-10-19', start: '20:00', end: '01:00', who: 'everyone', ...input });
+    assert.deepEqual([r.status, r.json.error], [400, error], JSON.stringify(input));
+  };
+  await bad({ end_day: '2030-10-18' }, 'It ends before it starts');
+  await bad({ end_day: '2030-10-19' }, 'It ends before it starts');
+  await bad({ end_day: '2030-13-01' }, 'Pick the day it ends');
+  for (const id of [night.id, late.id]) ok(await mgr.action('calendar.item.remove', { id }));
+});
+
+test('an item for a team since deleted or a seat since removed: it says so, and Edit keeps who it was for', async () => {
+  const doomed = ok(await mgr.action('team.create', { name: 'Doomed' })).team.id;
+  const other0 = ok(await mgr.action('team.create', { name: 'Also gone' })).team.id;
+  const gone = ok(await mgr.action('candidate.save', { name: 'Gone Example', office: 'Council' })).candidate.id;
+  const t = await add({ title: 'Doomed huddle', day: '2030-07-02', start: '10:00', end: '11:00', who: `team:${doomed}` });
+  const c = await add({ title: 'Gone’s interview', day: '2030-07-03', start: '10:00', end: '11:00', who: `candidate:${gone}` });
+  ok(await mgr.action('team.delete', { id: doomed }));
+  ok(await mgr.action('team.delete', { id: other0 }));
+  ok(await mgr.action('candidate.remove', { id: gone }));
+  const m = await month(mgr, '2030-07');
+  const et = m.entries.find((e) => e.title === 'Doomed huddle');
+  const ec = m.entries.find((e) => e.title === 'Gone’s interview');
+  assert.deepEqual([et.who, et.value], ['Doomed (removed)', `team:${doomed}`]);
+  assert.deepEqual([ec.who, ec.value], ['Gone Example (removed)', `candidate:${gone}`]);
+  assert.ok(!m.who.some((w) => [et.value, ec.value].includes(w.value)), 'not offered for new items');
+  // Edit: a new time, the same who — saved.
+  const et2 = ok(await mgr.action('calendar.item.edit', { id: t.id, title: 'Doomed huddle', all_day: false, day: '2030-07-02', start: '12:00', end: '13:00', who: `team:${doomed}` })).item;
+  assert.deepEqual([et2.who, et2.team_id], ['team', doomed]);
+  const ec2 = ok(await mgr.action('calendar.item.edit', { id: c.id, title: 'Gone’s interview', all_day: false, day: '2030-07-03', start: '12:00', end: '13:00', who: `candidate:${gone}` })).item;
+  assert.deepEqual([ec2.who, ec2.candidate_id], ['candidate', gone]);
+  // Another gone team, or a gone team on a new item: still refused.
+  for (const r of [
+    await mgr.action('calendar.item.edit', { id: t.id, title: 'Doomed huddle', all_day: false, day: '2030-07-02', start: '12:00', end: '13:00', who: `team:${other0}` }),
+    await mgr.action('calendar.item.add', { title: 'New', all_day: false, day: '2030-07-02', start: '12:00', end: '13:00', who: `team:${doomed}` }),
+    await mgr.action('calendar.item.add', { title: 'New', all_day: false, day: '2030-07-02', start: '12:00', end: '13:00', who: `candidate:${gone}` }),
+  ]) assert.deepEqual([r.status, r.json.error], [400, 'Pick who sees it from the list']);
+  // Nobody else sees them.
+  for (const x of [vol, staff, cand]) assert.deepEqual(titles(await month(x, '2030-07')), []);
+  for (const id of [t.id, c.id]) ok(await mgr.action('calendar.item.remove', { id }));
+});

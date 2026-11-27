@@ -33,6 +33,7 @@
 .gc-row { display: flex; flex-wrap: wrap; gap: var(--s-3); }
 .gc-row .field { flex: 1 1 140px; }
 .gc-zone { margin: 0 0 var(--s-3); }
+.gc-next-day { margin: 0 0 var(--s-1); font-weight: 600; }
 .gc-page .cal-card { margin-top: var(--s-5); }
 @media (max-width: 600px) {
   .gc-entry { grid-template-columns: minmax(0, 1fr); gap: var(--s-1); }

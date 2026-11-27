@@ -8,10 +8,13 @@
 // Your profile), which keeps all of it in their calendar app.
 // On the desk, managers add items and say who sees each (Edit / Remove on
 // each); whoever has the Shifts board can show every shift that month.
+// An end earlier than the start is the next day ("Ends the next day"), for
+// an evening past midnight. An item for a team since deleted (or a seat
+// since removed) keeps that choice on Edit, marked "(removed)".
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useOutletContext, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { clockOf } from '@starbase/shared/dayparts';
+import { addDays, clockOf } from '@starbase/shared/dayparts';
 import { action, apiGet } from '../api.js';
 import { appMode } from '../mode.js';
 import { timeRange, zoneOf } from '../components/shiftTime.js';
@@ -52,13 +55,20 @@ const fromEntry = (e, tz) => ({
   details: e.details || '',
   who: e.value || 'everyone',
 });
+// Who the item is for now, when that is no longer a choice (a deleted team).
+const whoLabelOf = (e) => e.who || '';
+// An end earlier than the start: the next morning.
+const endsNextDay = (f) => !f.all_day && Boolean(f.start && f.end) && f.end < f.start;
 
-function ItemForm({ start, who, tz, onDone, onCancel }) {
+function ItemForm({ start, who: offered, tz, onDone, onCancel }) {
   const online = useOnline();
   const [f, setF] = useState(start.values);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const id = useId();
+  const kept = start.values.who;
+  const who = !kept || offered.some((w) => w.value === kept) ? offered : [...offered, { value: kept, label: start.whoLabel || kept }];
+  const nextDay = endsNextDay(f);
   const firstRef = useRef(null);
   useEffect(() => { firstRef.current?.focus(); }, []);
   const set = (k) => (ev) => { setError(null); setF((x) => ({ ...x, [k]: ev.target.type === 'checkbox' ? ev.target.checked : ev.target.value })); };
@@ -68,7 +78,7 @@ function ItemForm({ start, who, tz, onDone, onCancel }) {
     const input = {
       title: f.title, all_day: f.all_day, day: f.day, who: f.who,
       place: f.place || null, details: f.details || null,
-      ...(f.all_day ? { last_day: f.last_day || f.day } : { start: f.start || null, end: f.end || null }),
+      ...(f.all_day ? { last_day: f.last_day || f.day } : { start: f.start || null, end: f.end || null, end_day: nextDay && f.day ? addDays(f.day, 1) : null }),
     };
     try {
       await action(start.id ? 'calendar.item.edit' : 'calendar.item.add', start.id ? { id: start.id, ...input } : input);
@@ -107,11 +117,12 @@ function ItemForm({ start, who, tz, onDone, onCancel }) {
             </div>
             <div className="field">
               <label htmlFor={`${id}-end`}>Ends</label>
-              <input id={`${id}-end`} className="input" type="time" value={f.end} onChange={set('end')} />
+              <input id={`${id}-end`} className="input" type="time" value={f.end} onChange={set('end')} aria-describedby={nextDay ? `${id}-next` : undefined} />
             </div>
           </>
         )}
       </div>
+      {nextDay && <p id={`${id}-next`} className="cal-help gc-next-day">Ends the next day.</p>}
       {!f.all_day && <p className="cal-help gc-zone">Times are the campaign’s ({tz.replace(/_/g, ' ')}).</p>}
       <div className="field">
         <label htmlFor={`${id}-place`}>Where (optional)</label>
@@ -280,7 +291,7 @@ export default function Calendar() {
             <ul className="gc-list">
               {d.entries.map((e) => (
                 <Entry key={e.key} e={e} tz={data.tz || tz} tools={tools}
-                  onEdit={(x) => { setForm({ id: x.id, values: fromEntry(x, data.tz || tz) }); window.scrollTo({ top: 0 }); }}
+                  onEdit={(x) => { setForm({ id: x.id, values: fromEntry(x, data.tz || tz), whoLabel: whoLabelOf(x) }); window.scrollTo({ top: 0 }); }}
                   onRemoved={() => refresh('Removed')} />
               ))}
             </ul>

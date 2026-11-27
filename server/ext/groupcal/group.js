@@ -52,10 +52,12 @@ const teamsOf = async (db, v) => (await db.query(
   [v.workspaceId, v.userId],
 )).rows.map((r) => r.team_id);
 
-// The words for who an item is for, and the form's value for it.
+// The words for who an item is for, and the form's value for it. A team
+// since deleted, or a seat since removed, says so: "Sign crew (removed)".
+const gone = (name, fallback, isGone) => `${name || fallback}${isGone ? ' (removed)' : ''}`;
 const whoOf = (r) => {
-  if (r.who === 'team') return { label: r.team_name || 'A team', value: `team:${r.team_id}` };
-  if (r.who === 'candidate') return { label: r.candidate_name || 'A candidate', value: `candidate:${r.candidate_id}` };
+  if (r.who === 'team') return { label: gone(r.team_name, 'A team', r.team_gone), value: `team:${r.team_id}` };
+  if (r.who === 'candidate') return { label: gone(r.candidate_name, 'A candidate', r.candidate_gone), value: `candidate:${r.candidate_id}` };
   return { label: { everyone: 'Everyone', candidates: 'Candidates', managers: 'Managers' }[r.who] || 'Everyone', value: r.who };
 };
 
@@ -71,7 +73,8 @@ export const itemEvent = (r) => {
 // The span read: moments (from, to) and the campaign's days (fromDay,
 // toDay — both included). to / toDay null: no end.
 const ITEM_SQL = `
-  select i.*, t.name as team_name, c.name as candidate_name
+  select i.*, t.name as team_name, c.name as candidate_name,
+         t.deleted_at is not null as team_gone, c.removed_at is not null as candidate_gone
     from calendar_items i
     left join teams t on t.id = i.team_id and t.workspace_id = i.workspace_id
     left join candidates c on c.id = i.candidate_id and c.workspace_id = i.workspace_id

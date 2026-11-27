@@ -3,11 +3,15 @@
 // the field app and the desk, and in their own calendar link (ext/calendar).
 //
 //   calendar.item.add     managers (or anyone given Admin): an item and who
-//       { title, all_day, day, last_day?, start?, end?, place?, details?, who }
+//       { title, all_day, day, last_day?, start?, end?, end_day?, place?, details?, who }
 //       day / last_day 'YYYY-MM-DD'; start / end 'HH:MM' on the campaign's
-//       clock; who: everyone · candidates · candidate:<seat> · managers ·
-//       team:<team>. The log has the title and who, never the notes.
-//   calendar.item.edit    { id, …the same }
+//       clock; end_day: the day a timed item ends, when not its first (an
+//       evening past midnight: the form sends the next day when the end is
+//       earlier than the start); who: everyone · candidates ·
+//       candidate:<seat> · managers · team:<team>. The log has the title and
+//       who, never the notes.
+//   calendar.item.edit    { id, …the same } — an item keeps who it is for
+//                         even once that team is deleted or that seat removed
 //   calendar.item.remove  { id }   gone for everyone, and from their calendars
 //                         the next time those check
 //
@@ -39,17 +43,22 @@ const fields = {
   last_day: z.string().nullish(),
   start: z.string().nullish(),
   end: z.string().nullish(),
+  end_day: z.string().nullish(),
   place: z.string().trim().max(200).nullish(),
   details: z.string().trim().max(2000).nullish(),
   who: z.string().max(60),
 };
 
 // "team:<id>" → { who: 'team', team_id }, checked against this campaign.
-const whoFrom = async (tx, ws, raw) => {
+// cur: the item being changed — its own team or seat stays allowed after
+// that team is deleted or that seat removed (nothing else gone is).
+const whoFrom = async (tx, ws, raw, cur = null) => {
   const [kind, id] = String(raw || '').split(':');
   const no = () => httpError(400, 'Pick who sees it from the list');
   if (['everyone', 'candidates', 'managers'].includes(kind) && id === undefined) return { who: kind, team_id: null, candidate_id: null };
   if (!UUID.test(id || '')) throw no();
+  if (cur && kind === 'team' && cur.who === 'team' && cur.team_id === id) return { who: 'team', team_id: id, candidate_id: null };
+  if (cur && kind === 'candidate' && cur.who === 'candidate' && cur.candidate_id === id) return { who: 'candidate', team_id: null, candidate_id: id };
   if (kind === 'team') {
     const t = (await tx.query('select 1 from teams where id = $1 and workspace_id = $2 and deleted_at is null', [id, ws])).rows[0];
     if (!t) throw no();
@@ -74,11 +83,15 @@ const timesFrom = (input, tz) => {
   }
   if (!isClock(input.start)) throw httpError(400, 'Add a start time, or make it all day');
   if (input.end && !isClock(input.end)) throw httpError(400, 'Pick an end time');
-  if (input.end && input.end <= input.start) throw httpError(400, 'It ends before it starts');
+  const endDay = input.end && input.end_day ? input.end_day : input.day;
+  if (!isDay(endDay)) throw httpError(400, 'Pick the day it ends');
+  const starts = instantOf(input.day, input.start, tz);
+  const ends = input.end ? instantOf(endDay, input.end, tz) : null;
+  if (ends && Date.parse(ends) <= Date.parse(starts)) throw httpError(400, 'It ends before it starts');
   return {
     all_day: false,
-    starts_at: instantOf(input.day, input.start, tz),
-    ends_at: input.end ? instantOf(input.day, input.end, tz) : null,
+    starts_at: starts,
+    ends_at: ends,
     first_day: null,
     last_day: null,
   };
@@ -95,9 +108,9 @@ const loadItem = async (tx, ws, id) => {
   if (!r) throw httpError(404, 'not found');
   return r;
 };
-const saveRow = async (tx, ctx, input) => {
+const saveRow = async (tx, ctx, input, cur = null) => {
   const times = timesFrom(input, tzOf(ctx));
-  const who = await whoFrom(tx, ctx.workspaceId, input.who);
+  const who = await whoFrom(tx, ctx.workspaceId, input.who, cur);
   return { ...times, ...who, title: input.title, place: input.place || null, details: input.details || null };
 };
 
@@ -122,7 +135,7 @@ export const actions = {
     input: z.object({ id: z.uuid(), ...fields }),
     handler: async (tx, ctx, input, emit) => {
       const cur = await loadItem(tx, ctx.workspaceId, input.id);
-      const row = await saveRow(tx, ctx, input);
+      const row = await saveRow(tx, ctx, input, cur);
       const saved = (await tx.query(
         `update calendar_items set title = $3, all_day = $4, starts_at = $5, ends_at = $6, first_day = $7, last_day = $8,
                 place = $9, details = $10, who = $11, team_id = $12, candidate_id = $13, updated_at = now()
