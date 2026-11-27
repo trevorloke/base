@@ -335,3 +335,41 @@ test('an election day set only in Path to win is on the calendar and in the link
   assert.deepEqual((await month(vol, '2030-10')).entries.filter((e) => e.kind === 'vote').map((e) => [e.title, e.day]),
     [['Advance voting', '2030-10-09'], ['Election day', '2030-10-19']]);
 });
+
+test('the data export: notes and place of items someone would not see are left blank for them; a manager’s has all', async () => {
+  const items = {
+    open: await add({ title: 'Open house', day: '2030-08-01', start: '10:00', end: '11:00', who: 'everyone', place: 'Open hall', details: 'Open note' }),
+    mgrs: await add({ title: 'Strategy', day: '2030-08-02', start: '10:00', end: '11:00', who: 'managers', place: 'Back room', details: 'Secret note' }),
+    seat: await add({ title: 'Cleo prep', day: '2030-08-03', start: '10:00', end: '11:00', who: `candidate:${candSeat}`, place: 'Cleo place', details: 'Cleo note' }),
+    cands: await add({ title: 'Cands prep', day: '2030-08-04', start: '10:00', end: '11:00', who: 'candidates', place: 'Cands place', details: 'Cands note' }),
+    team: await add({ title: 'Crew prep', day: '2030-08-05', start: '10:00', end: '11:00', who: `team:${teamId}`, place: 'Crew place', details: 'Crew note' }),
+  };
+  const rowsOf = async (c) => {
+    const out = ok(await c.get('/api/export'));
+    return Object.fromEntries(Object.entries(items).map(([k, it]) => [k, out.calendar_items.find((r) => r.id === it.id)]));
+  };
+  const seen = (rows) => Object.fromEntries(Object.entries(rows).map(([k, r]) => [k, [r.title, r.details, r.place]]));
+  // The treasurer: the item for everyone whole; the rest by title only (as the log has them).
+  assert.deepEqual(seen(await rowsOf(treas)), {
+    open: ['Open house', 'Open note', 'Open hall'],
+    mgrs: ['Strategy', null, null],
+    seat: ['Cleo prep', null, null],
+    cands: ['Cands prep', null, null],
+    team: ['Crew prep', null, null],
+  });
+  // Staff on the team: their team's item too.
+  const solId = (await db.query('select id from users where lower(email) = $1', [`grp-sol+${tag}@example.org`])).rows[0].id;
+  ok(await mgr.action('team.member.add', { team_id: teamId, user_id: solId }));
+  const s = seen(await rowsOf(staff));
+  assert.deepEqual([s.team, s.mgrs, s.seat], [['Crew prep', 'Crew note', 'Crew place'], ['Strategy', null, null], ['Cleo prep', null, null]]);
+  const whole = Object.fromEntries(Object.entries(items).map(([k, it]) => [k, [it.title, it.details, it.place]]));
+  assert.deepEqual(seen(await rowsOf(mgr)), whole, 'a manager’s export has every item whole');
+  // Given Admin: every item whole too.
+  await db.query(`update memberships m set permissions = '{"grant":["admin"]}' from users u where u.id = m.user_id and m.workspace_id = $1 and lower(u.email) = $2`, [ws, `grp-tess+${tag}@example.org`]);
+  try {
+    assert.deepEqual(seen(await rowsOf(treas)), whole);
+  } finally {
+    await db.query(`update memberships m set permissions = '{}' from users u where u.id = m.user_id and m.workspace_id = $1 and lower(u.email) = $2`, [ws, `grp-tess+${tag}@example.org`]);
+  }
+  ok(await mgr.action('team.member.remove', { team_id: teamId, user_id: solId }));
+});

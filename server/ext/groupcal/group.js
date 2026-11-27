@@ -90,6 +90,17 @@ const ITEM_SQL = `
    order by coalesce(i.starts_at, i.first_day::timestamptz), i.created_at
    limit ${MAX_ITEMS}`;
 
+// The same rule as one test, for rows read some other way (the data
+// export): does this person see this item on their calendar?
+export const seesItem = async (db, v) => {
+  if (seesAll(v)) return () => true;
+  const teams = new Set(await teamsOf(db, v));
+  return (r) => r.who === 'everyone'
+    || (r.who === 'candidates' && v.candidateId != null)
+    || (r.who === 'candidate' && r.candidate_id === v.candidateId)
+    || (r.who === 'team' && teams.has(r.team_id));
+};
+
 export const itemsFor = async (db, v, span) => {
   const all = seesAll(v);
   const teams = all ? [] : await teamsOf(db, v);

@@ -20,6 +20,9 @@
 //       month: the campaign's own (its days and clock); none asked: this one.
 //       every=1: every shift, for whoever has the Shifts board (else ignored).
 //       who: the form's choices, for those who may add.
+//
+//   GET /api/export carries calendar_items; notes and place only of the
+//   items the exporter sees (exportTables below).
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { addDays, instantOf, isClock, isDay, zonedISO } from '@starbase/shared/dayparts';
@@ -27,7 +30,7 @@ import { httpError } from '../../actions/util.js';
 import { newId } from '../../lib/events.js';
 import { mayRun } from '../../lib/perms.js';
 import { todayOf } from '../audience/index.js';
-import { calendarFor, seesEvery, viewerOf } from './group.js';
+import { calendarFor, seesEvery, seesItem, viewerOf } from './group.js';
 
 export { sql } from './sql.js';
 
@@ -192,4 +195,14 @@ api.get('/calendar', async (c) => {
   return c.json({ month, today, tz, entries, canAdd, canEvery, ...(canAdd ? { who: await whoChoices(db, ctx.workspaceId) } : {}) });
 });
 
-export const exportTables = ['calendar_items'];
+// The data export: every item's row. Someone who does not see every item
+// (not a manager, no Admin) gets the items they would not see on their own
+// calendar by title, times and who only — as the event log has them — with
+// the notes and place left blank.
+export const exportTables = [{
+  table: 'calendar_items',
+  rows: async (rows, { db, ctx }) => {
+    const sees = await seesItem(db, viewerOf(ctx));
+    return rows.map((r) => (sees(r) ? r : { ...r, details: null, place: null }));
+  },
+}];
