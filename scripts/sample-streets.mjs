@@ -45,11 +45,13 @@ const offLine = (p, a, b) => {
 };
 const key = ([x, y]) => `${x.toFixed(6)},${y.toFixed(6)}`;
 
-// A block's number and street: "2500 MAIN ST" is the 2500 block of MAIN ST.
+// A block's numbers and street, as the City writes them: "2500 MAIN ST" is
+// the 2500 block of MAIN ST, and "1500-1600 E 10TH AV" one piece that runs
+// from the 1500 block to the 1600 (about 1 in 7 of the City's rows).
 // null when it has no number.
 export const parseBlock = (hblock) => {
-  const m = /^(\d+) (.*)$/.exec(hblock);
-  return m ? { low: Number(m[1]), high: Number(m[1]), name: m[2] } : null;
+  const m = /^(\d+)(?:-(\d+))? (.*)$/.exec(hblock);
+  return m ? { low: Number(m[1]), high: Number(m[2] ?? m[1]), name: m[3] } : null;
 };
 
 // Every block of every street, fetched once.
@@ -57,7 +59,8 @@ let blocksOnce;
 const streets = () => (blocksOnce ||= all('public-streets', '', 'hblock,geom').then((rows) => rows.filter((r) => r.hblock)));
 
 // The longest straight run of this street's blocks inside the box, from
-// the City's rows ({ hblock, geom }).
+// the City's rows ({ hblock, geom }), range blocks too. A corner's number
+// is its block's low number, so the low-numbered end comes first.
 export const segmentFor = (rows, street, box) => {
   const [s, w, n, e] = box;
   const inBox = ([x, y]) => y >= s && y <= n && x >= w && x <= e;
@@ -112,7 +115,8 @@ export const segmentFor = (rows, street, box) => {
   return { segment: [ll(a), ll(b)], metres: Math.round(best.len), blocks: [Math.min(best.na, best.nb), Math.max(best.na, best.nb)] };
 };
 
-// The highest block number on any street, and every block from `from` up.
+// The highest block number on any street, and every block from `from` up:
+// a range counts by its high number, so "9800-9900 X ST" reaches 9900.
 export const blockCheck = (rows, from) => {
   const blocks = rows.map((r) => ({ hblock: r.hblock, block: parseBlock(r.hblock || '') })).filter((b) => b.block);
   return {
