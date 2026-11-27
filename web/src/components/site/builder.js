@@ -27,7 +27,7 @@
 //
 // "Module" is the catalogue's word; the screens say "section".
 import { CATEGORIES, MODULES, MODULE_BY_KIND, checkProps, newModule, presetModuleDefaults } from '@starbase/shared/site/catalogue';
-import { allLooks, presetLooks } from '@starbase/shared/site/theme';
+import { everyLook, presetLooks } from '@starbase/shared/site/theme';
 import { hasFeature } from '../../brand.js';
 
 // ── The campaign's own website set-up, from its server ──
@@ -48,7 +48,8 @@ export const takeSite = (site) => {
   presetModuleDefaults(() => defaults);
   labels = plain(site.fieldLabels);
 };
-export const siteLooks = () => allLooks();
+// Every look the Theme screen offers: Base, the campaign's own, the ready ones.
+export const siteLooks = () => everyLook();
 export const ownLabel = (kind, f) => {
   const own = labels[`${kind}.${f?.key}`];
   return typeof own === 'string' && own ? { ...f, label: own } : f;
