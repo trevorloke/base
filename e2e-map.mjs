@@ -668,16 +668,21 @@ try {
     check('…tapped: its streets come, and that look is their choice from now on', ts.look === 'muted' && ts.tiles === 'ok' && ts.loaded > 0 && !ts.note && ts.pick === 'muted', JSON.stringify(ts));
     // A look tapped whose streets then don't come (a flicker let the map's
     // one tile through, and one of the view's) is not their choice: back to the pick.
+    // In again, to streets Clean never drew here: back out at the zoom where
+    // its streets came before, the browser can hand the page those same
+    // pictures again without asking (more often on a busy machine, whose
+    // clean-up runs later), and Clean's streets did come — 30 of them with
+    // one let through.
     t.net.up.base = false;
     t.net.up.clean = 'asked';
-    await t.pg.click('.leaflet-control-zoom-out');
+    await t.pg.click('.leaflet-control-zoom-in');
     ts = await tilesUntil(t.pg, (s) => /Try Clean/.test(s.note || ''));
     t.net.through.clean = 1;
     await t.pg.click('.map-tilenote button:not(.map-tilenote__why)');
     await sleep(1500);
     ts = await tilesUntil(t.pg, (s) => s.look === 'muted' && /isn’t loading/.test(s.note || ''), 15000);
     check('a look tapped whose streets don’t come after all: back to their pick, which stays their choice',
-      ts.look === 'muted' && ts.pick === 'muted' && /isn’t loading/.test(ts.note || ''), JSON.stringify(ts));
+      ts.look === 'muted' && ts.pick === 'muted' && /isn’t loading/.test(ts.note || ''), JSON.stringify({ ...ts, asked: t.net.asked.clean }));
     await t.tctx.close();
 
     // Nothing at all after six seconds (a host that never answers): the same switch.
