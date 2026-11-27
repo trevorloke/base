@@ -169,7 +169,8 @@ api.get('/calendar', async (c) => {
   if (asked && !MONTH.test(asked)) return c.json({ error: 'month: YYYY-MM' }, 400);
   const month = asked || today.slice(0, 7);
   const fromDay = `${month}-01`;
-  const next = addDays(addDays(fromDay, 31).slice(0, 7) + '-01', 0);
+  // The next month's first day: 31 days on from any first is in the next month.
+  const next = `${addDays(fromDay, 31).slice(0, 7)}-01`;
   const span = { from: zonedISO(fromDay, 0, tz), to: zonedISO(next, 0, tz), fromDay, toDay: addDays(next, -1) };
   const v = viewerOf(ctx);
   const canEvery = seesEvery(v);
