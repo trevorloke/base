@@ -758,6 +758,31 @@ check('saved, with Undo in the toast', await page.locator('.wb-toast').getByRole
 await page.reload({ waitUntil: 'domcontentloaded' });
 await page.locator('.wb-panel').first().waitFor();
 check('reloaded: still there', await page.inputValue('#wb-s-agent') === 'Sam Example' && /Authorized by Sam Example/.test(await page.locator('#org .wb-panel__line').innerText()));
+// Undo on one panel keeps what is being typed in another: the Title bar and
+// the Menu keep their settings together, and an Undo puts back only its own.
+{
+  const nav0 = (await api('/site')).json.settings.nav;
+  await page.locator('#bar .wb-panel__toggle').click();
+  await page.fill('#wb-s-cta-label', `Give ${tag}`);
+  await page.locator('#bar').getByRole('button', { name: 'Save', exact: true }).click();
+  await page.locator('.wb-toast', { hasText: 'Saved' }).waitFor({ timeout: 10000 });
+  const savedCta = (await api('/site')).json.settings.nav.cta?.label;
+  await page.locator('#menu .wb-panel__toggle').click();
+  if (!(await page.locator('#wb-s-menu-list-0-label').isVisible().catch(() => false))) await links.locator('.wb-list__toggle').first().click();
+  const typed = `Typed, not saved ${tag}`;
+  await page.fill('#wb-s-menu-list-0-label', typed);
+  await page.locator('.wb-toast').getByRole('button', { name: 'Undo' }).click();
+  await page.locator('.wb-toast', { hasText: 'Undone' }).waitFor({ timeout: 10000 });
+  const nav1 = (await api('/site')).json.settings.nav;
+  const menuNow = await page.inputValue('#wb-s-menu-list-0-label').catch(() => '');
+  check('Undo of a Title bar save: the button is back, and what was being typed in Menu is still there, not saved',
+    savedCta === `Give ${tag}` && (nav1.cta?.label || '') === (nav0.cta?.label || '') && await page.inputValue('#wb-s-cta-label') === (nav0.cta?.label || '')
+      && menuNow === typed && nav1.menu[0].label === nav0.menu[0].label
+      && await page.locator('#menu').getByRole('button', { name: 'Save', exact: true }).isEnabled(),
+    JSON.stringify({ savedCta, was: nav0.cta?.label, now: nav1.cta?.label, menuNow, menu0: nav1.menu[0].label }));
+  // Put the Menu back as it is saved (nothing left unsaved on the way out).
+  await page.fill('#wb-s-menu-list-0-label', nav0.menu[0].label);
+}
 await page.goto(`${BASE}/admin/website`, { waitUntil: 'domcontentloaded' });
 await page.locator('.wb-live').waitFor();
 check('Overview’s line is gone', (await page.locator('.wb-todo [data-todo="auth"]').count()) === 0);

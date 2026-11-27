@@ -344,7 +344,9 @@ export default function WebsiteSettings() {
         undo: async () => {
           try {
             const back = await send(panel, was, panel === 'menu' ? wasPages : null);
-            setS((x) => ({ ...x, [sec]: back }));
+            // On screen, only this panel's own part goes back: another panel
+            // sharing the section (Menu and Title bar) keeps what is typed in it.
+            setS((x) => ({ ...x, [sec]: PARTS[panel][1] ? { ...x[sec], ...was } : back }));
             setSaved((x) => ({ ...x, [sec]: back }));
             if (panel === 'menu') { setPages(wasPages); setSavedPages(wasPages); }
             say('Undone');
