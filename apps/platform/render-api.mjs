@@ -341,7 +341,8 @@ export const makeRender = ({ key = renderKey(), base = cfg().renderApi, send, ti
     // An id that isn't an id never reaches the wire.
     if (bad) return { failed: fail('error') };
     // The two creating calls get longer: Render may take a while to answer them.
-    const ms = name === 'makeDatabase' || name === 'makeService' ? Math.max(timeoutMs, Math.min(MAKE_MS, timeoutMs * 3)) : timeoutMs;
+    const creating = name === 'makeDatabase' || name === 'makeService';
+    const ms = creating ? Math.max(timeoutMs, Math.min(MAKE_MS, timeoutMs * 3)) : timeoutMs;
     const once = async () => {
       let timer;
       try {
@@ -360,11 +361,13 @@ export const makeRender = ({ key = renderKey(), base = cfg().renderApi, send, ti
       await new Promise((r) => { setTimeout(r, wait); });
       res = await once();
     }
-    // No answer: a change may or may not have happened.
-    if (res.thrown) return { failed: fail(res.thrown, { unsure: write && res.thrown !== 'unexpected-answer' }) };
+    // No answer: a change may or may not have happened. An answer too big
+    // to read, or a yes that isn't JSON, to a creating call: it may well
+    // have been made, so the next look finds it.
+    if (res.thrown) return { failed: fail(res.thrown, { unsure: write && (res.thrown !== 'unexpected-answer' || creating) }) };
     const status = Number(res.status);
     if (!(status >= 200 && status < 300)) return { failed: fail(problemOf(status), { status, unsure: write && status >= 500 }) };
-    if (res.unreadable) return { failed: fail('unexpected-answer', { status }) };
+    if (res.unreadable) return { failed: fail('unexpected-answer', { status, unsure: creating }) };
     return { status, json: res.json };
   };
 
