@@ -732,12 +732,26 @@ try {
     await t.tctx.close();
 
     // The map's own keys (Shift+arrow, 240 px a press): exact both ways.
+    // Each press moves the map exactly once. Leaflet ignores an arrow key
+    // while its last pan is still moving, so a press waits for the map to be
+    // still, then for the press to move it; a press that moved nothing is
+    // pressed again. (A dropped press left the map 240 px from where it
+    // should be: "back" was then not the streets kept.)
+    const bounds = (pg) => pg.evaluate(() => document.querySelector('.map-canvas').dataset.bounds);
+    const still = (pg) => pg.waitForFunction(() => !document.querySelector('.map-canvas .leaflet-pan-anim, .map-canvas .leaflet-zoom-anim'), null, { timeout: 10000 }).catch(() => {});
     const pan = async (pg, key, times) => {
       await pg.focus('.map-canvas');
       for (let i = 0; i < times; i += 1) {
-        const was = await pg.evaluate(() => document.querySelector('.map-canvas').dataset.bounds);
-        await pg.keyboard.press(`Shift+${key}`);
-        await pg.waitForFunction((b) => document.querySelector('.map-canvas').dataset.bounds !== b, was, { timeout: 3000 }).catch(() => {});
+        await still(pg);
+        const was = await bounds(pg);
+        for (let tries = 0; tries < 3; tries += 1) {
+          await pg.keyboard.press(`Shift+${key}`);
+          const moved = await pg.waitForFunction((b) => document.querySelector('.map-canvas').dataset.bounds !== b, was, { timeout: 10000 }).then(() => true, () => false);
+          if (moved) break;
+          await still(pg);
+          if ((await bounds(pg)) !== was) break;
+        }
+        await still(pg);
         await sleep(350);
       }
     };
@@ -752,7 +766,11 @@ try {
         else { navigator.serviceWorker.addEventListener('controllerchange', () => resolve(true)); setTimeout(() => resolve(Boolean(navigator.serviceWorker.controller)), 8000); }
       }))).catch(() => false);
       await k.pg.goto(`${BASE}/admin/map`, { waitUntil: 'domcontentloaded' });
-      // The street map's tiles on screen: how many, how many drawn, from where.
+      // The street map's tiles on screen: how many, how many drawn, from where;
+      // and where the map is (at), whether it has opened on the list (view),
+      // how many zoom levels' tiles are on screen (Leaflet keeps the last
+      // level's until the new one is in), how many have finished (drawn, or
+      // failed) and whether the map is moving.
       k.onScreen = () => k.pg.evaluate(() => {
         const el = document.querySelector('.map-canvas');
         const box = el.getBoundingClientRect();
@@ -761,17 +779,35 @@ try {
           return r.right > box.left + 1 && r.left < box.right - 1 && r.bottom > box.top + 1 && r.top < box.bottom - 1;
         });
         const drawn = vis.filter((i) => i.classList.contains('leaflet-tile-loaded') && i.complete && i.naturalWidth > 0);
-        return { n: vis.length, drawn: drawn.length, hosts: [...new Set(vis.map((i) => new URL(i.src).hostname.replace(/^[a-d]\./, '')))] };
+        return {
+          n: vis.length, drawn: drawn.length, hosts: [...new Set(vis.map((i) => new URL(i.src).hostname.replace(/^[a-d]\./, '')))],
+          at: el.dataset.bounds || '', view: el.dataset.view || '', levels: new Set(vis.map((i) => i.parentElement)).size,
+          done: vis.filter((i) => i.complete).length, moving: Boolean(el.querySelector('.leaflet-pan-anim, .leaflet-zoom-anim')),
+        };
       }).catch(() => ({}));
+      // The tiles on screen once they have settled: one level, the map still,
+      // every tile finished (and fn) — or, after ms, as they are.
+      k.settled = async (fn = () => true, ms = 10000) => {
+        const end = Date.now() + ms;
+        for (;;) {
+          const s = await k.onScreen();
+          if ((s.n > 0 && s.levels === 1 && !s.moving && s.done === s.n && fn(s)) || Date.now() > end) return s;
+          await sleep(150);
+        }
+      };
       // Screens away, into streets this browser never looked at, and back.
       k.pan = (key, times) => pan(k.pg, key, times);
-      k.kept = {};
-      for (let i = 0; i < 40 && !(k.kept.n >= 4 && k.kept.drawn === k.kept.n); i += 1) { await sleep(250); k.kept = await k.onScreen(); }
+      // The streets kept are the list's view: the map has opened on the list
+      // (its first fit), and every tile of that view is drawn. (Taken at the
+      // first 4 drawn tiles, this was at times the map's starting view, zoom
+      // 12, before the fit to the list at 13: "kept 30 against 25 back".)
+      k.kept = await k.settled((s) => Boolean(s.view) && s.n >= 4 && s.drawn === s.n, 15000);
       await sleep(2500); // (the worker keeps what came)
       return k;
     };
-    // Every street kept on screen drawn, from the kept look's provider.
-    const allKept = (kept, now) => kept.n >= 4 && now.n === kept.n && now.drawn === now.n && now.hosts.join() === 'basemaps.cartocdn.com';
+    // Every street kept on screen drawn, from the kept look's provider, with
+    // the map back where they were kept.
+    const allKept = (kept, now) => kept.n >= 4 && now.at === kept.at && now.n === kept.n && now.drawn === now.n && now.hosts.join() === 'basemaps.cartocdn.com';
 
     // Weak signal: the phone says it is online, but the tile hosts don't
     // answer. The street map the worker kept is the one to keep drawing — no
@@ -794,7 +830,7 @@ try {
     check('…the tap asks this street map again: still Clean, and nothing saved as their look', ts.look === 'clean' && ts.pick === null && /Try again/.test(ts.note || ''), JSON.stringify(ts));
     await t.pan('ArrowLeft', 15);
     await sleep(3000);
-    const back = await t.onScreen();
+    const back = await t.settled();
     ts = await tileState(t.pg);
     await t.pg.screenshot({ path: `${SHOTS}/8-weak-signal-back.png` });
     check('…back over the streets this browser kept, every tile on screen draws (the switch had thrown them away)',
@@ -803,7 +839,7 @@ try {
     await t.pan('ArrowRight', 1);
     await t.pan('ArrowLeft', 1);
     await sleep(2000);
-    const off = await t.onScreen();
+    const off = await t.settled();
     await t.pg.screenshot({ path: `${SHOTS}/8-weak-signal-offline.png` });
     check('…and with no signal at all, still every one', allKept(kept, off), JSON.stringify(off));
     await t.tctx.close();
@@ -825,7 +861,7 @@ try {
     await t.tctx.setOffline(true);
     await t.pan('ArrowLeft', 15);
     await sleep(2500);
-    const offF = await t.onScreen();
+    const offF = await t.settled();
     ts = await tileState(t.pg);
     await t.pg.screenshot({ path: `${SHOTS}/8-flicker-offline.png` });
     check('…no signal: their own pick is drawn, and every street this browser kept with it', ts.look === 'clean' && allKept(keptF, offF), JSON.stringify({ look: ts.look, kept: keptF, off: offF }));
@@ -839,7 +875,7 @@ try {
       ts.look === 'clean' && /Try again/.test(ts.note || '') && ts.pick === null, JSON.stringify(ts));
     await t.pan('ArrowDown', 15);
     await sleep(3000);
-    const backF = await t.onScreen();
+    const backF = await t.settled();
     await t.pg.screenshot({ path: `${SHOTS}/8-flicker-back.png` });
     check('…back over the streets this browser kept, every tile draws', allKept(keptF, backF), JSON.stringify({ kept: keptF, back: backF }));
     await t.tctx.close();
@@ -867,7 +903,7 @@ try {
       JSON.stringify({ part: { tiles: part.tiles, note: part.note }, ...ts, asked: t.net.asked }));
     await t.pan('ArrowLeft', 16);
     ts = await tilesUntil(t.pg, (s) => !s.note && s.tiles === 'ok', 15000);
-    const backG = await t.onScreen();
+    const backG = await t.settled();
     await t.pg.screenshot({ path: `${SHOTS}/8-never-answers-kept.png` });
     check('…back over the streets this browser kept (nothing answering still): every one drawn, and the note goes by itself',
       allKept(keptG, backG) && ts.look === 'clean' && ts.tiles === 'ok' && !ts.note && ts.pick === null, JSON.stringify({ kept: keptG, back: backG, look: ts.look, tiles: ts.tiles, note: ts.note }));
@@ -893,7 +929,7 @@ try {
     await t.pan('ArrowUp', 6);
     ts = await tilesUntil(t.pg, (s) => s.look === 'clean', 20000);
     await sleep(3000);
-    const backH = await t.onScreen();
+    const backH = await t.settled();
     ts = { ...ts, ...(await tileState(t.pg)) };
     await t.pg.screenshot({ path: `${SHOTS}/8-never-answers-back.png` });
     check('…after a switch by itself, the same there (a few tiles come, then nothing answers): back over the streets this browser kept, their pick again by itself, every tile drawn and no note',
