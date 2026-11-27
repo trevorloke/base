@@ -81,6 +81,10 @@ The checklist ticks itself as things start answering; “Answers at
 `<name>.base.win`” ticks once the new address reaches the campaign’s server.
 Under More there is a render.yaml block if you would rather we add it.
 
+With a Render key, once **Check Render’s answers** has opened it, card 1 is
+**Make it in Render** instead, and cards 1 and 2 by hand move under More
+(see “Making a new campaign here”, below).
+
 A campaign added with **Add a campaign that’s already running** has a shorter
 set-up page: its settings already live in Render, so the page shows only the
 `BASE_PLATFORM_PUBKEY` line to add and the address step.
@@ -120,6 +124,48 @@ changes a setting that has a value, except base.win's own public key; it
 takes no typed value; and Render is never asked anything on a timer, only
 when you open one of these pages. It keeps Render's ids for a campaign's
 service and database, and nothing Render answered.
+
+### Making a new campaign here
+
+Off until **Check Render’s answers** has run with Sample (staging)
+connected and every line, including “Staging’s service / database, as a new
+one is made”, came back as expected. That check reads staging's service and
+database, which render.yaml made with the same words a new campaign is made
+with (plan, region, PostgreSQL 16, Docker, the health check), and keeps
+what it saw on **Log**. The newest check decides: a failing one, a release
+that changes what is sent, or a key for another workspace turns it off
+again. Off, the set-up page is as before and the two routes below are Not
+found.
+
+On, a new campaign's set-up page has **Make it in Render**. It says what it
+makes (two paid things), asks for a code, then:
+
+1. makes the database `base-win-<name>-db`, closed to the internet;
+2. waits for Render to say it is ready (or stops: press **Carry on** later);
+3. makes the service `base-win-<name>` from the production branch, with
+   every setting from the campaign's own row in the creating call, so it
+   never starts on the code's defaults. Render makes `STARBASE_TWO_STEP_KEY`
+   and `GOOGLE_TOKEN_KEY` itself; the new database's address goes from
+   Render to Render inside that one call and is kept nowhere here;
+4. saves the service's Render address, as if pasted, and checks it;
+5. adds `<name>.base.win` to the service.
+
+Six lines say where it is: Database made, Database ready, Service made,
+Address added, First build live, Answering. Each thing is looked for
+before it is made, and its id saved and logged once made. If Render doesn't
+answer a make, wait two minutes and press Carry on: it finds what Render
+made and uses it; anything else under the name stops it, and nothing is
+ever deleted. Two new campaigns a day at most. Campaigns added as already
+running, campaigns set up by hand and the sample are never offered it.
+
+A campaign made here can also have a missing setting of its own added
+(**Add STARBASE_TZ** and so on, on its Render page), to the value from its
+own row, then a deploy. A setting that has a value is never changed.
+
+Not known until the first real one: how Render answers the two making
+calls, whether it accepts `generateValue` there, and what a second thing
+under a taken name does. Do the first one with a throwaway campaign and
+made-up values.
 
 **How sure are we of Render's API?** It is written from memory in one file,
 `render-api.mjs`, and was built against a stand-in, not the real thing.
@@ -277,6 +323,10 @@ Every Render change ends with **Save and deploy**, then wait for “Live”.
   that list empty. `test/nokey.test.mjs` holds five pages as they were
   before the key existed: when one of them changes on purpose, make the
   copies again (the command is at the top of that file).
+  `test/render-make.test.mjs` is Make it in Render: the gate, then every
+  step against every failure (refused, made but said it failed, made with
+  no answer, listed late, the save failing, a new console), each ending
+  with at most one database and one service under the name.
 - `e2e-ops.mjs` at the repo root (ports 5600–5609; system node, under the
   browser lock; `npm run build` first). Campaign “b” is a real campaign
   server (`node server/index.js`, in memory, holding base.win’s key): New
@@ -284,4 +334,6 @@ Every Render change ends with **Save and deploy**, then wait for “Live”.
   `test/fake-client.mjs`, which checks each token by the campaign side’s
   rules. One port stands in for every `<name>.base.win`
   (`OPS_PUBLIC_TEMPLATE`). The run's first part has no Render key; then
-  the key is set and the stand-in for Render listens on 5608.
+  the key is set and the stand-in for Render listens on 5608. Last, it makes
+  campaign “d” with Make it in Render; its server answers on 5609 once its
+  first build is live.

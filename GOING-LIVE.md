@@ -1049,6 +1049,21 @@ line should say *As expected*; tell us any that does not. Connect **Sample
 made-up data. Then connect Imagine Surrey. On any campaign that says “Open
 to anyone on the internet”: **Close the database to the internet**.
 
+**Making a new campaign from here.** Once **Check Render’s answers** has
+run with Sample (staging) connected and every line matches, a new
+campaign's set-up page offers **Make it in Render**: it makes the campaign's
+database and service in Render (Render bills for both from that day), with
+that campaign's own settings, then adds `<name>.base.win`. Each press asks
+for a code; it may ask you to press **Carry on** once while Render gets the
+database ready. It never makes two of anything: if Render doesn't answer,
+wait two minutes and press Carry on, and it looks before it makes. Until
+that check, the set-up page walks you through Render by hand, as before; a
+later check that fails, or a release that changes what is sent, puts it
+back by hand until you check again. Do the first one with a throwaway
+campaign and made-up values, then delete it by hand in Render (its DNS
+record first). The CNAME record where base.win's domain is registered is
+still yours to add.
+
 **Change it** every six months, after a lost laptop or phone, when anyone
 who could push code leaves, and on any doubt: make a new key, replace the
 value, Save and deploy, see Connected, then delete the old key in Render.
