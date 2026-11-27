@@ -194,10 +194,21 @@ function heroWords(rc, p) {
   return { title: '', words: rows.map((r) => r.text.replace(/<\/?b>/g, '').replace(/\s+/g, ' ').trim()) };
 }
 
+// Where the hero's picture goes (WEB decision 31): beside the words (every
+// hero before; in the modern sizes a 7:5 grid, the picture 4:5) or behind
+// them (the words on a panel of the brand colour). No picture: the words
+// alone — but the builder's preview of a modern hero shows a plain box
+// saying where a picture would go. Its `sizes` follow the place it takes.
+const HERO_SIZES = { classic: '(min-width: 900px) 50vw, 100vw', modern: '(min-width: 1200px) 480px, (min-width: 900px) 40vw, 100vw', behind: '100vw' };
 function Hero({ m, p, rc, level, first }) {
   const { title, words, lang } = heroWords(rc, p);
   const wl = rc.lang !== 'en' ? { ...(lang ? { lang } : {}), ...rc.islandWords('words') } : {};
-  return html`<${Section} m=${m} tone="brand" className="hero" labelled=${false}>
+  const has = Boolean(rc.img(obj(p.image).url));
+  const behind = has && p.layout === 'behind';
+  const modern = rc.site.theme.scale === 'modern';
+  const sizes = behind ? HERO_SIZES.behind : modern ? HERO_SIZES.modern : HERO_SIZES.classic;
+  const ph = !has && modern && Boolean(rc.preview);
+  return html`<${Section} m=${m} tone="brand" className=${cx('hero', has && 'has-picture', ph && 'has-ph', behind && 'hero--behind')} labelled=${false}>
     <div className="container hero-inner">
       <div className="hero-copy">
         ${words.length
@@ -209,7 +220,8 @@ function Hero({ m, p, rc, level, first }) {
           ${arr(p.secondaryCtas).map((c, i) => html`<${Button} key=${i} rc=${rc} link=${c} className="btn btn--ghost btn--lg" />`)}
         </div>
       </div>
-      <${Img} rc=${rc} image=${p.image} className="hero-image" width=${1600} height=${1200} sizes="(min-width: 900px) 50vw, 100vw" eager=${first} />
+      <${Img} rc=${rc} image=${p.image} className="hero-image" width=${1600} height=${1200} sizes=${sizes} eager=${first} />
+      ${ph ? html`<div className="hero-ph" role="img" aria-label=${rc.w('mod.yourPicture')}>${rc.w('mod.yourPicture')}</div>` : null}
     </div>
   <//>`;
 }
@@ -279,13 +291,13 @@ function Columns({ m, p, rc, level }) {
         <${Heading} level=${level} id=${titleId(m)}>${p.title}<//>
         <${Paras} text=${p.intro} className="lede" />
       </div>
-      ${items.length ? html`<div className="pillars">
+      ${items.length ? html`<div className="pillars" style=${{ '--cols-n': String(Math.min(items.length, 3)) }}>
         ${items.map((it, i) => html`<div key=${i} className="pillar">
           <div className="pillar-head">
             <div className="pillar-icon"><${Icon} name=${ICON_NAMES.includes(it.icon) ? it.icon : 'civic'} size=${26} stroke=${2} /></div>
             <h3>${str(it.title)}</h3>
           </div>
-          <p>${str(it.body)}</p>
+          ${str(it.body).trim() ? html`<p>${str(it.body)}</p>` : null}
         </div>`)}
       </div>` : null}
       ${str(p.ctaText).trim() || rc.link(obj(p.cta).href) ? html`<div className="pillars-foot">
@@ -768,12 +780,11 @@ function News({ m, p, rc, level }) {
         <a className="text-link" href=${rc.link('/news')}>${rc.w('news.all')}</a>
       </div>
       ${posts.length ? html`<div className="card-grid">
-        ${posts.map((post) => html`<article key=${post.slug} className="card">
-          <${Img} rc=${rc} image=${post.image} className="news-card-image" width=${1200} height=${675} sizes="(min-width: 720px) 33vw, 100vw" alt="" />
+        ${posts.map((post) => html`<article key=${post.slug} className=${cx('card', rc.img(obj(post.image).url) && 'has-picture')}>
+          <${Img} rc=${rc} image=${post.image} className="news-card-image" width=${1200} height=${675} sizes="(min-width: 1200px) 384px, (min-width: 600px) 50vw, 100vw" alt="" />
           <p className="eyebrow">${dateOnly(post.published_at, rc.timeZone, rc.locale)}</p>
-          <h3 className="h3">${post.title}</h3>
+          <h3 className="h3"><a href=${rc.link(`/news/${post.slug}`)}>${post.title}</a></h3>
           ${str(post.excerpt).trim() ? html`<p>${post.excerpt}</p>` : null}
-          <a className="text-link card-link" href=${rc.link(`/news/${post.slug}`)}>${rc.w('news.readMore')}<span className="visually-hidden">: ${post.title}</span></a>
         </article>`)}
       </div>` : html`<p className="empty-state">${rc.w('news.empty')}</p>`}
     </div>

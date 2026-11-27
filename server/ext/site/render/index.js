@@ -126,7 +126,9 @@ export function renderSite({ kind = 'page', site, page: rawPage, post, campaign,
   const prop = (name, content) => (content ? `<meta property="${name}" content="${esc(content)}">` : '');
   const ogTitle = head.title.replace(/ · [^·]*$/, '') || head.title;
   const html = '<!doctype html>'
-    + `<html lang="${esc(rc.lang)}"${edit ? ' data-wa-edit=""' : ''} data-skin="${esc(t.skin)}" data-heading="${esc(t.fonts.heading)}" data-body="${esc(t.fonts.body)}">`
+    // data-scale: a modern theme's heading sizes (site.css); a classic
+    // page's markup is as it always was.
+    + `<html lang="${esc(rc.lang)}"${edit ? ' data-wa-edit=""' : ''}${t.scale === 'modern' ? ' data-scale="modern"' : ''} data-skin="${esc(t.skin)}" data-heading="${esc(t.fonts.heading)}" data-body="${esc(t.fonts.body)}">`
     + '<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
     + `<title>${esc(head.title)}</title>`
     // The voter guide in another website's frame: its links open in the

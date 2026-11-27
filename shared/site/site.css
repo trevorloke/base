@@ -397,6 +397,14 @@ html.js .no-js-only {
 .section {
   width: 100%;
   padding: 80px var(--gutter);
+  /* No empty gaps (WEB decision 32): every section breathes the same, from
+     a phone to a wide screen — the hero, bands and title bands too. */
+  padding-top: clamp(48px, 7vw, 96px);
+  padding-bottom: clamp(48px, 7vw, 96px);
+}
+/* Two plain sections in a row share one gap. */
+.section.tone-paper + .section.tone-paper {
+  padding-top: clamp(24px, 3vw, 40px);
 }
 .section.is-empty {
   display: none;
@@ -454,10 +462,6 @@ html.js .no-js-only {
   :root {
     --gutter: 20px;
     --header-h: 76px;
-  }
-  .section {
-    padding-top: 64px;
-    padding-bottom: 64px;
   }
 }
 
@@ -900,10 +904,6 @@ html.js .no-js-only {
 }
 
 /* ── Page head (pages without a hero, news, petitions, not found) ─────── */
-.page-head {
-  padding-top: 64px;
-  padding-bottom: 56px;
-}
 .page-head .display {
   font-size: clamp(32px, 6vw, 72px);
 }
@@ -912,10 +912,6 @@ html.js .no-js-only {
 }
 
 /* ── Hero ─────────────────────────────────────────────────────────────── */
-.hero {
-  padding-top: 72px;
-  padding-bottom: 80px;
-}
 .hero-inner {
   display: flex;
   flex-wrap: wrap;
@@ -938,8 +934,13 @@ html.js .no-js-only {
 }
 .hero-title {
   font-size: clamp(34px, 4.4vw, 56px);
-  min-height: 2.2em;
+  min-height: 0;
   color: var(--heading);
+}
+/* Only rotating words keep room for their second line (a still headline
+   leaves no blank band under it). */
+.hero-title--words {
+  min-height: 2.2em;
 }
 .hero-word {
   display: inline-block;
@@ -996,10 +997,6 @@ html.js .no-js-only {
   display: block;
 }
 @media (max-width: 640px) {
-  .hero {
-    padding-top: 48px;
-    padding-bottom: 56px;
-  }
   .hero-text {
     font-size: 18px;
   }
@@ -1008,28 +1005,134 @@ html.js .no-js-only {
   }
 }
 
-/* ── What we stand for (columns) ──────────────────────────────────────── */
-.pillars {
+/* The picture behind the words (WEB decision 31): it fills the hero, and
+   the words sit on a panel of the brand colour — never straight on the
+   photo, so they read as the theme's checked brand pair does. */
+.hero--behind {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.hero--behind .hero-inner {
+  min-height: clamp(360px, 60vh, 640px);
+}
+.hero--behind .hero-image {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  aspect-ratio: auto;
+  border-radius: 0;
+  object-fit: cover;
+}
+.hero--behind .hero-copy {
+  flex: 0 1 680px;
+  padding: clamp(24px, 4vw, 48px);
+  border-radius: var(--radius);
+  background: var(--brand);
+}
+/* The builder's preview of a modern hero with no picture: where one goes. */
+.hero-ph {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius);
+  border: 2px dashed color-mix(in srgb, var(--brand-ink) 45%, transparent);
+  background: color-mix(in srgb, var(--brand-ink) 10%, transparent);
+  color: var(--brand-ink);
+  font: 600 18px/1.3 var(--font-body);
+}
+
+/* ── The modern heading sizes (WEB decision 30): only on a theme that asks
+   for them (the renderer marks <html data-scale="modern">). The hero is the
+   biggest thing on the page; the heavy shadow stays on the hero and bands. */
+html[data-scale="modern"] .hero-title {
+  font-size: clamp(40px, 6vw, 72px);
+}
+html[data-scale="modern"] .section:not(.hero):not(.band):not(.page-head) .display {
+  font-size: clamp(28px, 3.6vw, 44px);
+  --pop-c: transparent;
+}
+html[data-scale="modern"] .band .display {
+  font-size: clamp(32px, 4.8vw, 56px);
+}
+html[data-scale="modern"] .page-head .display {
+  font-size: clamp(34px, 5vw, 60px);
+  --pop-c: transparent;
+}
+html[data-scale="modern"] .pillar h3 {
+  font-size: 21px;
+}
+/* The picture beside the words (WEB decision 31): 7:5, the picture 4:5 at
+   900 px and wider; above the words at 16:9 on smaller screens. */
+html[data-scale="modern"] .hero:is(.has-picture, .has-ph):not(.hero--behind) .hero-inner {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 32px;
+  align-items: center;
+}
+html[data-scale="modern"] .hero:not(.hero--behind) .hero-image,
+html[data-scale="modern"] .hero-ph {
+  order: -1;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+@media (min-width: 900px) {
+  html[data-scale="modern"] .hero:is(.has-picture, .has-ph):not(.hero--behind) .hero-inner {
+    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+    gap: 56px;
+  }
+  html[data-scale="modern"] .hero:not(.hero--behind) .hero-image,
+  html[data-scale="modern"] .hero-ph {
+    order: 0;
+    aspect-ratio: 4 / 5;
+    max-height: 600px;
+  }
+}
+
+/* ── What we stand for (columns) ──────────────────────────────────────── */
+/* The points fill the row (WEB decision 32): 3 across at most (fewer when
+   there are fewer: --cols-n, set by the section), 2 on a tablet, 1 on a
+   phone, each a card. */
+.pillars {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (min-width: 600px) {
+  .pillars {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (min-width: 900px) {
+  .pillars {
+    grid-template-columns: repeat(var(--cols-n, 3), minmax(0, 1fr));
+  }
 }
 .pillar {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 48px;
-  padding: 24px 20px;
-  margin: 0 -20px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 24px;
+  margin: 0;
+  border: 1px solid var(--line);
   border-radius: var(--radius);
+  background: var(--paper);
   transition: background-color 0.2s ease;
+}
+.pillar > * {
+  flex: none;
 }
 .pillar:hover {
   background: var(--accent);
   color: var(--accent-ink);
 }
 .pillar-head {
-  flex: 0 0 260px;
   display: flex;
   align-items: center;
   gap: 14px;
@@ -1067,7 +1170,7 @@ html.js .no-js-only {
   color: var(--heading-on-accent, var(--accent-ink));
 }
 .pillar p {
-  flex: 1 1 380px;
+  margin: 0;
   min-width: 0;
   font-size: 17px;
   line-height: 1.55;
@@ -1082,21 +1185,7 @@ html.js .no-js-only {
   font-size: 17px;
   font-weight: 700;
 }
-@media (max-width: 640px) {
-  .pillar {
-    padding: 18px 12px;
-    margin: 0 -12px;
-  }
-  .pillar-head {
-    flex-basis: 100%;
-  }
-}
-
 /* ── Call to action band ──────────────────────────────────────────────── */
-.band {
-  padding-top: 88px;
-  padding-bottom: 88px;
-}
 .band-inner {
   display: flex;
   flex-wrap: wrap;
@@ -1150,6 +1239,65 @@ html.js .no-js-only {
   aspect-ratio: 16 / 9;
   object-fit: cover;
   border-radius: calc(var(--radius) * 0.8);
+}
+/* News as cards (WEB decision 34): the picture fills the top, the title is
+   the card's one link (the whole card answers a tap, named by the title),
+   the summary is cut at two lines. */
+.news .card-grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
+}
+.news .card {
+  position: relative;
+  gap: 8px;
+  padding: 24px;
+  transition: border-color 0.2s ease;
+}
+.news .card:hover {
+  border-color: var(--link);
+}
+.news .card.has-picture {
+  background: var(--paper);
+}
+.news .card .news-card-image {
+  margin: -24px -24px 8px;
+  width: calc(100% + 48px);
+  max-width: none;
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+.news .card .eyebrow {
+  font-size: 14px;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.news .card .h3 {
+  margin: 0;
+  font-size: 21px;
+  line-height: 1.3;
+}
+.news .card .h3 a {
+  color: inherit;
+  text-decoration: none;
+}
+.news .card .h3 a::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius);
+}
+.news .card .h3 a:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+.news .card:focus-within {
+  outline: 3px solid var(--link);
+  outline-offset: 2px;
+}
+.news .card p:not(.eyebrow) {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .empty-state {
   padding: 28px;
@@ -1381,8 +1529,8 @@ select.input {
   line-height: 1.45;
 }
 .form-small {
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: 15px;
+  line-height: 1.6;
   color: var(--muted);
 }
 .form-small a {
@@ -1533,10 +1681,6 @@ select.input {
 }
 
 /* ── Newsletter ───────────────────────────────────────────────────────── */
-.newsletter {
-  padding-top: 56px;
-  padding-bottom: 56px;
-}
 .newsletter-bar {
   display: flex;
   flex-wrap: wrap;
@@ -2076,8 +2220,6 @@ select.input {
 
 /* ── Act now ──────────────────────────────────────────────────────────── */
 .act-rail {
-  padding-top: 48px;
-  padding-bottom: 56px;
   border-bottom: 1px solid var(--line);
 }
 .rail-head {
@@ -2738,20 +2880,35 @@ select.input {
   font-size: 14px;
   line-height: 1.6;
 }
+/* The legal lines (WEB decision 35): ©, Authorized by (again in the page's
+   language), the privacy link and "A website by …", each on its own line,
+   readable, in the body face — and fixed: no look's stylesheet or theme
+   can hide, shrink, move or recolour them. */
 .footer-bottom {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px 24px;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start;
+  gap: 2px;
   padding-top: 24px;
   border-top: 1px solid color-mix(in srgb, var(--brand-ink) 18%, transparent);
-  font-size: 13px;
-  line-height: 1.55;
+  visibility: visible !important;
+  opacity: 1 !important;
+  position: static !important;
+  transform: none !important;
+  clip-path: none !important;
+  font-size: 15px !important;
+  line-height: 1.6 !important;
 }
-.footer-authorization {
-  display: block;
-  margin-top: 4px;
+.footer-bottom p,
+.footer-bottom .footer-authorization {
+  display: block !important;
+  margin: 0;
+  visibility: visible !important;
+  opacity: 1 !important;
+  position: static !important;
+  font-size: 15px !important;
+  line-height: 1.6 !important;
+  color: var(--brand-soft) !important;
 }
 /* The legal lines (©, Authorized by, the privacy link, the consent and
    privacy line under a form) are always in the body font, as written: no
@@ -2889,7 +3046,7 @@ html:lang(zh) .campaign-title, html:lang(zh) .rail-title { font-family: var(--fo
 html:lang(pa) { --heading-tracking: normal; --heading-case: none; --heading-leading: 1.35; --wordmark-tracking: normal; --wordmark-case: none; --title-tracking: normal; --rail-tracking: normal; }
 html:lang(zh) { --heading-tracking: normal; --heading-case: none; --heading-leading: 1.3; --wordmark-tracking: normal; --wordmark-case: none; --title-tracking: normal; --rail-tracking: normal; }
 :lang(pa) .hero-word-wrap, :lang(zh) .hero-word-wrap { overflow: visible; }
-:lang(pa) .hero-title { min-height: 2.8em; }
+:lang(pa) .hero-title--words { min-height: 2.8em; }
 /* Back in English inside a translated page (a sentence not translated yet). */
 :lang(pa) [lang="en"], :lang(zh) [lang="en"] { hyphens: manual; }
 

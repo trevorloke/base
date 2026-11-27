@@ -1,13 +1,25 @@
 // The website's look: a handful of tokens an admin edits in Website → Theme,
-// turned into CSS variables on every public page. One look ships, Base; a
-// campaign whose set-up brings its own look has it added when the program
-// starts (presetLooks below), and no other campaign is ever offered it.
+// turned into CSS variables on every public page. Base ships, with the
+// ready looks every campaign gets (looks.js); a campaign whose set-up
+// brings its own look has it added when the program starts (presetLooks
+// below), and no other campaign is ever offered it.
 // Contrast is checked here — a pair that fails WCAG 2.2 AA (4.5:1 for
 // text) can't be saved — so no admin can skin the site into unreadable.
 
 // The faces (built-in and a campaign's added Google fonts) live in fonts.js.
 import { FONTS, FONT_BY_VALUE, FONT_WORDS, fontFor, firstVisitKb, profileFor, profileCss } from './fonts.js';
+import { LOOKS } from './looks.js';
 export { FONTS, FONT_BY_VALUE };
+
+// The heading sizes (WEB decision 30): 'modern' — a calmer scale, the hero
+// the biggest thing on the page, the heavy shadow on the hero and bands
+// only — or, left out, as every website was drawn before (classic). Only a
+// theme that says 'modern' gets it: a look's own scale is laid over a
+// theme only when the look is picked (the Theme screen), never on a save.
+export const SCALES = [
+  { value: 'classic', label: 'As today' },
+  { value: 'modern', label: 'Modern' },
+];
 
 export const RADII = [
   { value: 'square', label: 'Square', px: 2 },
@@ -65,8 +77,14 @@ export const allLooks = () => {
   try { more = extraLooks(); } catch { more = []; }
   return [SKINS.base, ...(Array.isArray(more) ? more.filter(isLook) : [])];
 };
+// Every look a website can pick: those, then the ready looks every campaign
+// gets (looks.js), which are the product's, not any campaign's.
+export const everyLook = () => {
+  const mine = allLooks();
+  return [...mine, ...LOOKS.filter((l) => !mine.some((o) => o.key === l.key))];
+};
 // A look by its name, or null: a name this campaign doesn't have is no look.
-export const lookOf = (name) => (typeof name === 'string' && name ? allLooks().find((l) => l.key === name) || null : null);
+export const lookOf = (name) => (typeof name === 'string' && name ? everyLook().find((l) => l.key === name) || null : null);
 
 // ── Contrast (WCAG 2.2) ──
 const hex = (s) => {
@@ -127,6 +145,7 @@ export function checkTheme(input, skin = 'base', { added, punjabi = false, keepB
   // it keeps its own look.
   const follow = input?.follow === true;
   const theme = { skin: base.key, colors, fonts, radius, logo, pop, follow };
+  if (input?.scale === 'modern') theme.scale = 'modern';
   // kept: a website that had its own look when it began to follow keeps it
   // here underneath, to go back to (the server says so: site.settings.save).
   if (follow && input?.kept === true) theme.kept = true;

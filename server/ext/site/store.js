@@ -225,6 +225,9 @@ export const readSettings = async (q, workspaceId) => {
   const r = (await q.query('select * from site_settings where workspace_id = $1', [workspaceId])).rows[0];
   if (!r) return null;
   const out = { theme: parseJ(r.theme, {}), domains: parseJ(r.domains, []), updated_at: iso(r.updated_at) };
+  // The look before the last change (Theme's way back), or null.
+  const before = parseJ(r.look_before, null);
+  out.look_before = before && typeof before === 'object' && r.look_before_at ? { theme: before, at: iso(r.look_before_at) } : null;
   for (const k of SECTION_KEYS) out[k] = sectionOf(k, parseJ(r[k], {}));
   // The campaign's added Google fonts (WA, fonts.js), for its themes.
   out.fonts = (await q.query(

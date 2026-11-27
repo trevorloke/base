@@ -6,7 +6,7 @@ import { Fragment } from 'react';
 import { markdownText } from '../../markdown.js';
 import { html } from './h.js';
 import { Island } from './islands.js';
-import { GoalBar, Img, Md, Module, MODULE_COMPONENTS, Paras, campaignForm } from './modules.js';
+import { GoalBar, Img, Md, Module, MODULE_COMPONENTS, Paras, campaignForm, propsFor, translateProps } from './modules.js';
 import { Announcement, Footer, Header, LanguageSwitch, PageHead, PreviewBanner, SkipLink } from './shell.js';
 import { VoteBanner, EmbedView } from './voteguide.js';
 import { arr, dateOnly, obj, str } from './util.js';
@@ -23,9 +23,16 @@ function PageView({ rc, page }) {
   const heroFirst = modules[0]?.kind === 'hero' || modules[0]?.kind === 'voterguide';
   const name = rc.site.site?.name || rc.site.org.name;
   const title = str(p.slug) === 'home' ? name || str(p.title) : str(p.title) || name;
+  // One page heading (WEB decision 33): a first section whose heading is the
+  // page's title, on a page with no words under its title, is the page's
+  // heading itself — no title band above it saying the same thing (News).
+  const norm = (x) => str(x).replace(/\s+/g, ' ').trim().toLowerCase();
+  const firstTitle = !heroFirst && modules[0] ? (rc.lang === 'en' ? propsFor(modules[0]).title : translateProps(modules[0].kind, propsFor(modules[0]), rc).title) : '';
+  const titled = !heroFirst && !str(p.description).trim() && Boolean(norm(firstTitle)) && norm(firstTitle) === norm(title);
+  const top = heroFirst || titled;
   return html`<${Fragment}>
-    ${heroFirst ? null : html`<${PageHead} title=${title} lede=${p.description} />`}
-    ${modules.map((m, i) => html`<${Module} key=${`${m.id}-${i}`} m=${m} rc=${rc} level=${heroFirst && i === 0 ? 1 : 2} first=${i === 0} />`)}
+    ${top ? null : html`<${PageHead} title=${title} lede=${p.description} />`}
+    ${modules.map((m, i) => html`<${Module} key=${`${m.id}-${i}`} m=${m} rc=${rc} level=${top && i === 0 ? 1 : 2} first=${i === 0} />`)}
   <//>`;
 }
 

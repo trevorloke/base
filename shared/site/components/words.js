@@ -32,7 +32,7 @@ export function RotatingWords({ prefix = '', words = [], level = 1, interval = 2
   }, [moving, interval]);
 
   const word = words.length ? words[index % words.length] : '';
-  const heading = createElement(`h${level === 1 ? 1 : 2}`, { className: 'hero-title display', lang },
+  const heading = createElement(`h${level === 1 ? 1 : 2}`, { className: 'hero-title display hero-title--words', lang },
     prefix,
     prefix && word ? html`<br />` : null,
     word ? html`<span className="hero-word-wrap" aria-live="off"><span key=${index} className="hero-word">${word}</span></span>` : null);

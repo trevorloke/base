@@ -77,6 +77,10 @@ export const MODULES = [
       button('primaryCta', 'Main button'),
       { key: 'secondaryCtas', type: 'list', label: 'Other buttons', max: 3, of: [{ key: 'label', type: 'text', label: 'Label', max: 40 }, { key: 'href', type: 'url', label: 'Link' }] },
       { key: 'image', type: 'image', label: 'Picture' },
+      // Where the picture goes (WEB decision 31): beside the words, as every
+      // hero was drawn before, or behind them, the words on a panel of the
+      // brand colour.
+      { key: 'layout', type: 'select', label: 'Where the picture goes', translate: false, options: [{ value: 'beside', label: 'Beside the words' }, { value: 'behind', label: 'Behind the words' }] },
     ],
     defaults: {
       titlePrefix: 'Your campaign headline',
@@ -85,6 +89,7 @@ export const MODULES = [
       primaryCta: { label: 'Volunteer', href: '/volunteer' },
       secondaryCtas: [{ label: 'Donate', href: '/donate' }],
       image: { url: '', alt: '' },
+      layout: 'beside',
     },
   },
   {

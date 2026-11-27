@@ -68,6 +68,7 @@ export const UI_WORDS = {
   'mod.watchVideo': 'Watch the video',
   'mod.video': '{provider} video',
   'mod.noPicture': 'No picture chosen yet',
+  'mod.yourPicture': 'Your picture',
   'mod.followAlong': 'Follow along',
   'mod.followOn': 'Follow on {network}',
   'mod.seatOpen': 'Seat open',
