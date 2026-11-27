@@ -324,3 +324,14 @@ test('an item for a team since deleted or a seat since removed: it says so, and 
   for (const x of [vol, staff, cand]) assert.deepEqual(titles(await month(x, '2030-07')), []);
   for (const id of [t.id, c.id]) ok(await mgr.action('calendar.item.remove', { id }));
 });
+
+test('an election day set only in Path to win is on the calendar and in the link; GOTV’s day wins', async () => {
+  ok(await other.action('pathtowin.save', { election_day: '2031-10-18' }));
+  const r = await month(other, '2031-10');
+  assert.deepEqual(r.entries.map((e) => [e.kind, e.title, e.day, e.allDay]), [['vote', 'Election day', '2031-10-18', true]]);
+  assert.ok(uids((await fetchPath(await feedOf(other))).body).includes('vote-2031-10-18@base.win'));
+  // This campaign has GOTV's election day (2030-10-19): Path to win's does not move it.
+  ok(await mgr.action('pathtowin.save', { election_day: '2030-10-26' }));
+  assert.deepEqual((await month(vol, '2030-10')).entries.filter((e) => e.kind === 'vote').map((e) => [e.title, e.day]),
+    [['Advance voting', '2030-10-09'], ['Election day', '2030-10-19']]);
+});
