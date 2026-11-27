@@ -934,7 +934,15 @@ with it filled in), and the person's calendar link (the same one as on
 their profile) carries their items and the website's events too, so a
 change or a removal reaches their calendar the next time it checks. The
 link never carries a shift's instructions, or other people's names or
-addresses. Still nothing to set up: no Google key or sign-in.
+addresses. An item can run past midnight: an end earlier than the start is
+the next morning (*Ends the next day*), and it is listed on the day it
+starts. An item for a team since deleted, or a candidate since removed,
+says *(removed)* and keeps that choice when changed. Election day is
+GOTV's, or until GOTV has one, the day typed in Path to win. The data
+export lists every item, but someone who is not a manager (and not given
+Admin) gets the notes and place only of the items they see; the others come
+with their title, times and who, as the event log has them. Still nothing
+to set up: no Google key or sign-in.
 
 ## Public pages
 

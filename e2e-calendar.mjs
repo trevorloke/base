@@ -19,9 +19,12 @@
 //     Events list's "Get our events in your calendar" serves events.ics;
 //   · the group calendar: a manager adds an item on the Calendar page (the
 //     campaign's clock; its Google link in UTC), sees every item and who it
-//     is for, edits it, shows every shift; the volunteer on her phone sees
-//     the item for everyone, her team's and her shift — not the candidates'
-//     or the managers' — each with Add to Google Calendar, and her calendar
+//     is for, edits it, adds one from 8 pm to 1 am ("Ends the next day",
+//     listed on its first day), changes an item for a team since deleted
+//     (it says "(removed)" and keeps it), shows every shift; the volunteer
+//     on her phone sees the item for everyone, her team's and her shift —
+//     not the candidates' or the managers' — each with Add to Google
+//     Calendar, and her calendar
 //     link carries the same; Calendar rows on both Todays;
 //   · words (no feed, iCal, ICS, token, webcal, subscribe), at most one
 //     yellow button, no sideways scroll at 390, 48px targets on phones.
@@ -482,6 +485,49 @@ try {
   await edit.getByRole('button', { name: 'Save' }).click();
   await page.locator('.gc-entry', { hasText: 'Phone bank kickoff night' }).waitFor({ timeout: 10000 });
   check('saved under its new name', (await words(page.locator('.cal-said'))) === 'Saved');
+  // An evening past midnight: 8 pm to 1 am, on the day it starts.
+  await addBtn.click();
+  const nForm = page.getByRole('form', { name: 'Add to the calendar' });
+  await nForm.getByLabel('What').fill('Election night watch');
+  await nForm.getByLabel('Day', { exact: true }).fill(gDay);
+  await nForm.getByLabel('Starts').fill('20:00');
+  check('no “next day” while the end is after the start', await nForm.locator('.gc-next-day').count() === 0);
+  await nForm.getByLabel('Ends').fill('01:00');
+  check('an end earlier than the start: “Ends the next day.”', (await words(nForm.locator('.gc-next-day'))) === 'Ends the next day.');
+  await shot(page, '18b-group-calendar-past-midnight-1440');
+  await nForm.getByRole('button', { name: 'Add', exact: true }).click();
+  const night = page.locator('.gc-entry', { hasText: 'Election night watch' });
+  await night.waitFor({ timeout: 10000 });
+  const dayOfEntry = (loc) => loc.locator('xpath=ancestor::section[1]').getAttribute('aria-label');
+  check('past midnight: added, “8 pm–1 am next day”, under the day it starts', (await words(page.locator('.cal-said'))) === 'Added'
+    && (await words(night)).includes('8 pm–1 am next day') && await dayOfEntry(night) === await dayOfEntry(kickoff), await words(night));
+  const datesOf = (href) => new URL(href).searchParams.get('dates').split('/').map((x) => Date.parse(x.replace(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/, '$1-$2-$3T$4:$5:$6Z')));
+  const [nFrom, nTo] = datesOf(await night.getByRole('link', { name: 'Add to Google Calendar' }).getAttribute('href'));
+  const [kFrom] = datesOf(kGoogle);
+  check('past midnight: its Google link runs five hours, from 8 pm', nFrom - kFrom === 1.5 * 3600e3 && nTo - nFrom === 5 * 3600e3, `${nFrom} ${nTo} ${kFrom}`);
+  await night.getByRole('button', { name: 'Edit' }).click();
+  const nEdit = page.getByRole('form', { name: 'Change this item' });
+  check('Edit: still “Ends the next day.”', await nEdit.getByLabel('Ends').inputValue() === '01:00' && (await words(nEdit.locator('.gc-next-day'))) === 'Ends the next day.');
+  await nEdit.getByRole('button', { name: 'Cancel' }).click();
+  // An item for a team since deleted: it says so, and Edit keeps it.
+  const oldTeam = (await api('/actions/team.create', { name: 'Old crew' })).json?.team;
+  check('an item for a team, then the team deleted', oldTeam?.id
+    && (await addItem({ title: 'Old crew drive', start: '09:00', end: '10:00', who: `team:${oldTeam.id}` })).status === 200
+    && (await api('/actions/team.delete', { id: oldTeam.id })).status === 200);
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  const oldItem = page.locator('.gc-entry', { hasText: 'Old crew drive' });
+  await oldItem.waitFor({ timeout: 10000 });
+  check('the item says its team was removed', (await words(oldItem)).includes('For Old crew (removed)'), await words(oldItem));
+  await oldItem.getByRole('button', { name: 'Edit' }).click();
+  const oEdit = page.getByRole('form', { name: 'Change this item' });
+  const oWho = oEdit.getByLabel('Who sees it');
+  check('Edit shows who it is for: the removed team', await oWho.inputValue() === `team:${oldTeam.id}`
+    && (await oWho.locator('option:checked').innerText()) === 'Old crew (removed)', await oWho.inputValue());
+  await oEdit.getByLabel('Starts').fill('09:30');
+  await oEdit.getByRole('button', { name: 'Save' }).click();
+  await page.locator('.gc-entry', { hasText: 'Old crew drive' }).filter({ hasText: '9:30' }).waitFor({ timeout: 10000 });
+  check('saved with a new time, still for the removed team', (await words(page.locator('.cal-said'))) === 'Saved'
+    && (await words(page.locator('.gc-entry', { hasText: 'Old crew drive' }))).includes('For Old crew (removed)'));
   const every = page.getByLabel('Every shift');
   check('the desk can show every shift', await every.count() === 1);
   await every.check();

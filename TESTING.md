@@ -366,11 +366,16 @@ one tap away under **More**.
   *Remove* on each item; *Every shift* adds the shift board's. A volunteer
   sees the items for everyone and their teams, a candidate also the
   candidates' and their own; each entry's *Add to Google Calendar* opens
-  Google with it filled in. Server tests: `server/test/calendar-group.test.js`
-  (who sees what by role, seat and team; the form's refusals; the
-  campaign's clock and another time zone; all-day items; the calendar
-  link's items, Make a new link, a member taken off). Browser: section 8
-  of `e2e-calendar.mjs`.
+  Google with it filled in. Type 8 pm to 1 am: the form says *Ends the next
+  day*, and the item is listed on its first day as *8 pm–1 am next day*.
+  Delete a team that has an item: the item says *For <team> (removed)*,
+  and *Edit* shows that choice and saves. Server tests:
+  `server/test/calendar-group.test.js` (who sees what by role, seat and
+  team; the form's refusals; the campaign's clock and another time zone;
+  all-day items; past midnight; a deleted team and a removed seat; Path to
+  win's election day; the data export's notes by who sees the item; the
+  calendar link's items, Make a new link, a member taken off). Browser:
+  section 8 of `e2e-calendar.mjs`.
   `server/test/gcal.test.js`: *Shifts in Google Calendar* against the
   stand-in Google's Calendar (`fake-google.js`, `GOOGLE_CALENDAR_API_BASE`)
   — the switch, the first link made by connecting, the content (the
