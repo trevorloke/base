@@ -9,8 +9,11 @@
 // It is on only when both are set, the address is https (http only for this
 // machine itself, for tests), it is not this server's own address and not a
 // base.win address (one client's unsubscribes are never pointed at another
-// client's base.win), and this is not staging: staging never sends.
+// client's base.win), not the campaign's own website now that base.win
+// serves it (STARBASE_SITE_DOMAIN, SITE_HOSTS: the two settings come off
+// after the move), and this is not staging: staging never sends.
 import { envName } from '../../lib/org.js';
+import { siteEnvHosts } from '../site/domain.js';
 
 export const URL_ENV = 'STARBASE_WEBSITE_URL';
 export const KEY_ENV = 'STARBASE_WEBSITE_KEY';
@@ -28,7 +31,7 @@ const hostOf = (v) => { try { return new URL(v).host.toLowerCase(); } catch { re
 const ownHosts = () => ['STARBASE_PUBLIC_URL', 'STARBASE_OWN_URL', 'RENDER_EXTERNAL_URL'].map((k) => hostOf(env(k))).filter(Boolean);
 
 // → { on, host, target, missing: [setting…], problem }
-//   problem: null | 'staging' | 'not-set' | 'half-set' | 'not-address' | 'not-https' | 'own' | 'base-win'
+//   problem: null | 'staging' | 'not-set' | 'half-set' | 'not-address' | 'not-https' | 'own' | 'base-win' | 'moved'
 export const websiteState = () => {
   const url = env(URL_ENV);
   const missing = [URL_ENV, KEY_ENV].filter((k) => !env(k));
@@ -43,6 +46,7 @@ export const websiteState = () => {
     const name = u.hostname.toLowerCase();
     if (u.protocol !== 'https:' && !(u.protocol === 'http:' && LOCAL.includes(name))) return off('not-https', host);
     if (name === 'base.win' || name.endsWith('.base.win')) return off('base-win', host);
+    if (siteEnvHosts().includes(name.replace(/\.+$/, ''))) return off('moved', host);
     if (ownHosts().includes(host)) return off('own', host);
     if (missing.length) return off('half-set', host);
     // The address as given, without a last slash (or the path itself, pasted whole).

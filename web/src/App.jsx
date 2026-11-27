@@ -100,6 +100,8 @@ import Join from './pages/Join.jsx';
 import { TwoStepRequired } from './components/TwoStep.jsx';
 import AuthPage from './components/AuthPage.jsx';
 const Profile = lazy(() => import('./pages/Profile.jsx'));
+// The group calendar (ext/groupcal): every role, in both apps.
+const Calendar = lazy(() => import('./pages/Calendar.jsx'));
 
 // No answer from the server (wifi with no internet, a restart) is not a
 // sign-out: the app opens as who signed in here (main.jsx), on the copies
@@ -249,6 +251,7 @@ export default function App({ mode = 'field' }) {
           <Route path="/share" element={<Share />} />
           <Route path="/call-time" element={<CallTime />} />
           <Route path="/profile" element={<Profile />} />
+          <Route path="/calendar" element={<Calendar />} />
           {/* Letters to the editor and op-eds: the writer's own. */}
           <Route path="/letters" element={<Letters />} />
           <Route path="/letters/new" element={<Letters view="new" />} />
@@ -296,6 +299,7 @@ export default function App({ mode = 'field' }) {
         <Route path="/share" element={<Share />} />
         <Route path="/call-time" element={<CallTime />} />
         <Route path="/profile" element={<Profile />} />
+        <Route path="/calendar" element={<Calendar />} />
         <Route path="/letters" element={<Letters />} />
         <Route path="/letters/new" element={<Letters view="new" />} />
         <Route path="/letters/:id" element={<Letters view="one" />} />

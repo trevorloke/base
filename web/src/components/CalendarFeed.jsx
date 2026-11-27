@@ -47,7 +47,9 @@ const copyText = async (text) => {
   }
 };
 
-export default function CalendarFeedCard({ me }) {
+// title, line: the Calendar page's words for the same link (it carries the
+// calendar's items too); Your profile keeps its own.
+export default function CalendarFeedCard({ me, title = 'Your shifts in your calendar', line = 'Your shifts appear in your calendar and stay up to date.' }) {
   const qc = useQueryClient();
   const online = useOnline();
   const q = useQuery({ queryKey: ['calendar-feed'], queryFn: () => apiGet('/calendar/feed'), retry: false });
@@ -86,10 +88,10 @@ export default function CalendarFeedCard({ me }) {
   // An older server has no calendar links: say nothing.
   if (q.isError && q.error instanceof ApiError && q.error.status === 404) return null;
 
-  const head = <h2 className="ts-h">Your shifts in your calendar</h2>;
+  const head = <h2 className="ts-h">{title}</h2>;
   if (!q.data) {
     return (
-      <section className="ts-card cal-card" id="calendar" ref={cardRef} aria-label="Your shifts in your calendar">
+      <section className="ts-card cal-card" id="calendar" ref={cardRef} aria-label={title}>
         <div className="ts-head">{head}</div>
         {q.isError ? (
           <p className="ts-line">Unavailable — <button type="button" className="btn btn-quiet ts-btn" onClick={() => q.refetch()}>Try again</button></p>
@@ -102,9 +104,9 @@ export default function CalendarFeedCard({ me }) {
   const off = busy || !online;
   if (!feed) {
     return (
-      <section className="ts-card cal-card" id="calendar" ref={cardRef} aria-label="Your shifts in your calendar">
+      <section className="ts-card cal-card" id="calendar" ref={cardRef} aria-label={title}>
         <div className="ts-head">{head}</div>
-        <p className="ts-line">Your shifts appear in your calendar and stay up to date.</p>
+        <p className="ts-line">{line}</p>
         {note && <p className="ts-line ts-note" role="status">{note}</p>}
         {error && <p className="error" role="alert">{error}</p>}
         <button type="button" className="btn ts-main" disabled={off}
@@ -121,7 +123,7 @@ export default function CalendarFeedCard({ me }) {
   const canEmail = q.data.canEmail !== false;
   const email = me?.user?.email || 'your email';
   return (
-    <section className="ts-card cal-card" id="calendar" ref={cardRef} aria-label="Your shifts in your calendar">
+    <section className="ts-card cal-card" id="calendar" ref={cardRef} aria-label={title}>
       <div className="ts-head">{head}</div>
       <div className="ts-row">
         {device.apple && (online

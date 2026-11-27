@@ -4,6 +4,7 @@ import { Hono } from 'hono';
 import { areasFor } from '../../lib/perms.js';
 import { here } from '../../lib/mount.js';
 import { ensureSite, readSettings, pageOut, postOut, campaignOut, SIGNATURES_SQL, envHosts, siteWorkspace, appHosts, usedHosts, themeFromBrand } from './store.js';
+import { siteDomain } from './domain.js';
 import { brandFor } from '../../lib/brand.js';
 import { siteExtras } from './from-preset.js';
 import { sign, PREVIEW_TTL } from './tokens.js';
@@ -84,6 +85,9 @@ api.get('/site', async (c) => {
     // Website: domains; or the server's SITE_HOSTS: hosts).
     urls: {
       site: here(c, '/site/'),
+      // The website's own domain (STARBASE_SITE_DOMAIN), when this campaign
+      // is the site's: where it answers now, and where /site/ sends people.
+      domain: siteDomain() && hosts.length ? `https://${siteDomain()}/` : null,
       domains: (settings.domains || []).map((d) => `https://${d}/`),
       hosts: hosts.filter((h) => !(settings.domains || []).includes(h)).map((h) => `https://${h}/`),
       // Where the app itself answers (this request's host, the server's

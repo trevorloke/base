@@ -24,6 +24,7 @@ import { appRedirect, basePath, mountAt } from './lib/mount.js';
 import { doorKeySet } from './lib/guard.js';
 import { brandPages } from './lib/brand.js';
 import { siteGate } from './ext/site/public.js';
+import { siteDomainState, siteEnvHosts } from './ext/site/domain.js';
 import { currentBuild } from './lib/build.js';
 import { entryReadiness, ownOrigin, parseKeys } from './lib/entry.js';
 import { setupOpen, noWorkspace } from './lib/setup.js';
@@ -139,7 +140,9 @@ app.get('*', serveStatic({ root: WEB_ROOT, path: 'index.html' }));
 //   - on Render, a STARBASE_ENV that is neither "production" nor "staging"
 //     (unset, or misspelled): what it is treated as (lib/org.js envName);
 //   - no STARBASE_BRAND on a server named as a preset's campaign: it is
-//     given that preset because of its name (lib/preset.js brandNote).
+//     given that preset because of its name (lib/preset.js brandNote);
+//   - a STARBASE_SITE_DOMAIN that isn't taken, and the unsubscribe sync
+//     still pointed at the website once base.win serves it.
 export const bootNotes = (env = process.env) => {
   const out = [];
   const brand = brandNote(env);
@@ -149,6 +152,17 @@ export const bootNotes = (env = process.env) => {
   if (env.RENDER && typed !== name) {
     out.push(`starbase: WARNING — STARBASE_ENV is ${typed ? `“${typed}”, which is neither “production” nor “staging”` : 'not set'}: this server is treated as ${name}`
       + ' (the demo sign-in, the sample campaign and its reset stay off). Set STARBASE_ENV to production or staging: Render → this service → Environment.');
+  }
+  // The website's own domain (STARBASE_SITE_DOMAIN): one that isn't a
+  // domain, or is where the app answers, is not taken (SITE.md).
+  const domain = siteDomainState(env);
+  if (domain.problem === 'not-domain') out.push(`starbase: WARNING — STARBASE_SITE_DOMAIN is “${domain.raw}”, which isn’t a domain (like yourcampaign.ca): the website stays at /site/.`);
+  if (domain.problem === 'app') out.push(`starbase: WARNING — STARBASE_SITE_DOMAIN is ${domain.raw}, where the app itself answers, so it is not taken: the website stays at /site/. Set it to the website’s own domain (like yourcampaign.ca).`);
+  // The unsubscribe sync still pointed at the website once base.win serves it.
+  let synced = '';
+  try { synced = new URL(String(env.STARBASE_WEBSITE_URL || '').trim()).hostname.toLowerCase().replace(/\.+$/, ''); } catch { /* not set */ }
+  if (synced && siteEnvHosts(env).includes(synced)) {
+    out.push(`starbase: WARNING — STARBASE_WEBSITE_URL is ${synced}, this campaign’s own website, now on base.win: nothing is sent there. Take both settings away (STARBASE_WEBSITE_URL, STARBASE_WEBSITE_KEY): Render → this service → Environment.`);
   }
   if (name === 'production' && !String(env.STARBASE_PUBLIC_URL || '').trim()) {
     out.push('starbase: WARNING — STARBASE_PUBLIC_URL is not set on a production server: emails can’t link back here (password resets, shift reminders) and Sign in with Google stays off.'

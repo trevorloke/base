@@ -56,11 +56,15 @@ export const myShifts = async (db, workspaceId, email) => {
 
 // The voting days, all-day, soonest first: advance voting, then election
 // day. No places or hours are stored, so the entry says only whose it is.
+// Election day is GOTV's, else the one typed in Path to win (as Path to win
+// and the brief count down to).
 export const votingDays = async (db, workspaceId, campaignName) => {
   const s = (await db.query('select election_day, advance_days from voted_settings where workspace_id = $1', [workspaceId])).rows[0];
-  if (!s) return [];
-  const raw = typeof s.advance_days === 'string' ? JSON.parse(s.advance_days) : (s.advance_days || []);
-  const election = s.election_day ? dateOnly(s.election_day) : null;
+  const ptw = s?.election_day ? null
+    : (await db.query('select election_day from path_to_win where workspace_id = $1', [workspaceId]).catch(() => ({ rows: [] }))).rows[0];
+  const election = dateOnly(s?.election_day || ptw?.election_day) || null;
+  if (!s && !election) return [];
+  const raw = typeof s?.advance_days === 'string' ? JSON.parse(s.advance_days) : (s?.advance_days || []);
   const advance = [...new Set((Array.isArray(raw) ? raw : []).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d) && d !== election))].sort();
   return [
     ...advance.map((day) => ({ day, title: 'Advance voting' })),

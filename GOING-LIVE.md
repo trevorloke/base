@@ -62,7 +62,10 @@ files there.
 Everyone and everything in the sample is made up: the people's surnames,
 their house numbers (9900 to 9999, which no street in the sample has), the
 opponents on the rating scale and their elector organizations
-(`server/lib/samplecast.js`). The street map is real. A check runs every
+(`server/lib/samplecast.js`). The street map is real: each person's dot sits
+in the middle of their street, on a piece of the City of Vancouver's street
+centreline (open data, under the Open Government Licence – Vancouver), never
+on a house. A check runs every
 day (GitHub → Actions → *Staging check*): it walks the demo as a visitor
 does, and opens an issue when it finds a real name, phone number, email
 address or link, or a live email or texting key.
@@ -196,7 +199,7 @@ fixed value, which a Blueprint sync would write over
 | `imaginesurrey.base.win` | `base-win` | Imagine Surrey: the staff and volunteer app, the public forms, and the website under `/site/` |
 | `ops.base.win` | `base-platform` | the control centre |
 | `base.win` (and `www.base.win`, which sends people on to it) | the front page (a static site) | the page people see first, with staging's demo in it |
-| `imaginesurrey.ca`, `www.imaginesurrey.ca`, once the campaign moves its website onto base.win | `base-win`, then `SITE_HOSTS` (below) | the website made under **Website** in the admin, at `/`; nothing of the app answers there |
+| `imaginesurrey.ca`, `www.imaginesurrey.ca`, once the campaign moves its website onto base.win | `base-win`, with `STARBASE_SITE_DOMAIN` (below) | the website made under **Website** in the admin, at `/`; nothing of the app answers there |
 
 Each one is added under that service's **Settings → Custom Domains**, with
 a CNAME at the registrar pointing at the address Render shows (for bare
@@ -212,15 +215,80 @@ that it answers before giving it to anyone.
 
 The website made under **Website** is live from the first deploy at the
 app's own address, under `/site/` (`https://imaginesurrey.base.win/site/`),
-so it can be checked before any DNS moves (SITE.md). To put it on the
-campaign's own domain, in this order:
+so it can be checked before any DNS moves (SITE.md).
 
-1. Add the domain, and its `www.` name, to the service in Render.
-2. Set `SITE_HOSTS=imaginesurrey.ca,www.imaginesurrey.ca` (or a manager
-   adds both under Website → Settings → *Your own domain*).
-3. Only then point their DNS at Render. Done the other way round, the app
-   answers there until step 2, and an address someone signed in at can't
-   be made the website's from the screen (SITE.md).
+### Moving the campaign's domain onto base.win
+
+Today `imaginesurrey.ca` is the present website (its own Render service).
+On the day it moves, base.win's website answers there at `/` and
+`imaginesurrey.base.win/site/` sends people to it. The desk stays at
+`imaginesurrey.base.win`. The same steps work for any client. In this order:
+
+1. **The website is ready** at `https://imaginesurrey.base.win/site/`: its
+   pages, Authorized by and the privacy link. Make the present website's
+   petitions again with the same address (`/act/<the same slug>`), so their
+   links keep working.
+2. **If the present website keeps running for a while** (its members' pages,
+   its monthly gifts, the emails it already sent): on its own service set
+   `NEXT_PUBLIC_SITE_URL` to its Render address (`https://<its
+   service>.onrender.com`) and redeploy; point its Stripe webhook and its
+   Twilio number at that address. Stripe and Twilio don't follow a redirect.
+   Its two Render Cron Jobs (reminders and email, `apps/web/SETUP.md` §2b)
+   call `https://imaginesurrey.ca/api/cron/…`: in each job's command, change
+   `https://imaginesurrey.ca` to that address too. **If the present website
+   stops instead,** delete those two jobs: after the move they would reach
+   base.win, fail every day and hand it their key.
+3. **Render → the present website's service → Settings → Custom Domains:**
+   remove `imaginesurrey.ca` and `www.imaginesurrey.ca`. The domain is down
+   from here until step 6 is done, so do steps 3 to 6 together.
+4. **Render → `base-win` → Environment**, in one save, before the domain
+   points here (without it the app's sign-in page would answer there):
+   - `STARBASE_SITE_DOMAIN` = `imaginesurrey.ca`
+   - `STARBASE_SITE_FORMER_URL` = the present website's Render address, only
+     if step 2 (its own links in emails already sent go there)
+   - remove `STARBASE_WEBSITE_URL` and `STARBASE_WEBSITE_KEY`: the
+     unsubscribe sync is for a website hosted apart, and this one isn't any
+     more. If they are left, nothing is sent and Settings → Services says to
+     take them away.
+5. **Render → `base-win` → Settings → Custom Domains:** add
+   `imaginesurrey.ca` and `www.imaginesurrey.ca`.
+6. **At the registrar:** the records Render shows for `base-win`.
+7. **Check:**
+   - `https://imaginesurrey.ca/` is the website; so is `/donate`.
+   - `https://www.imaginesurrey.ca/` and
+     `https://imaginesurrey.base.win/site/` go to `https://imaginesurrey.ca/`.
+   - `https://imaginesurrey.ca/api/health` is the website's "Page not found".
+   - An old link goes to the page that does the same thing:
+     `https://imaginesurrey.ca/stats` goes home.
+   - The desk works at `https://imaginesurrey.base.win`.
+   - Settings → Services → *The website — unsubscribes* says Not set.
+   - A test sign-up on the website lands in People.
+   - If the present website keeps running: its two cron jobs pass on their
+     next run.
+
+`SITE_HOSTS` isn't needed with `STARBASE_SITE_DOMAIN`. Never put either in
+`render.yaml`: a value there is written over at every sync.
+
+**The way back**, if something is wrong:
+
+1. First the domain leaves `base-win`: Render → `base-win` → Settings →
+   Custom Domains: remove `imaginesurrey.ca` and `www.imaginesurrey.ca`; add
+   them back on the present website's service, and the registrar's records
+   with them. Keep `STARBASE_SITE_DOMAIN` set until this is done: without it
+   the app's sign-in page would answer on the domain.
+2. Once `https://imaginesurrey.ca/` is the present website again: Render →
+   `base-win` → Environment: remove `STARBASE_SITE_DOMAIN` (and
+   `STARBASE_SITE_FORMER_URL`). The website is at `/site/` again at once. A
+   browser that saw the move may for up to an hour still send `/site/` on to
+   the domain, which by then is the present website.
+3. On the present website: `NEXT_PUBLIC_SITE_URL` back to
+   `https://imaginesurrey.ca`, redeploy, and its Stripe and Twilio webhooks
+   back; its two cron jobs back to `https://imaginesurrey.ca` (or made again
+   from `apps/web/SETUP.md` §2b, if they were deleted).
+4. On `base-win`: set `STARBASE_WEBSITE_URL` and `STARBASE_WEBSITE_KEY`
+   again. Then Settings → Services → *The website — unsubscribes* →
+   **Check**, and **Send the ones already off here**, so the unsubscribes
+   made in between reach the present website.
 
 **Another website** (a petition or contrast site such as dougdidnt.ca,
 SITE.md "Other websites") takes one more custom domain on the service —
@@ -245,7 +313,7 @@ this client's Render service as `STARBASE_WEBSITE_KEY`, with
 `STARBASE_WEBSITE_URL` (the website's `https://` address, no path). Then
 Settings → Services → *The website — unsubscribes* → **Check**, and send
 the ones already off here. Take both settings away the day the website
-moves onto base.win. (INTEGRATIONS.md, *Unsubscribes, both ways*.)
+moves onto base.win (*Moving the campaign's domain onto base.win*, step 4). (INTEGRATIONS.md, *Unsubscribes, both ways*.)
 
 ## 3 · Settings (Render → the service → Environment)
 
@@ -309,7 +377,9 @@ Then, as each one is ready:
 | `BASE_PLATFORM_PUBKEY` | the control centre's key: **ops.base.win → base.win’s key → Copy**, pasted here (never in `render.yaml` or git), then **Save and deploy** | **Open desk** from the control centre (section 8); while it's set and the campaign isn't made yet, sign-up here is closed — the control centre's first visit makes it |
 | `STARBASE_OWN_URL` | only if Render's own address is missing: `https://<service>.onrender.com` | the address the control centre's sign-in must name (Render sets `RENDER_EXTERNAL_URL` itself) |
 | `BASE_DOOR_KEY` | leave unset: it is only for the door (apps/door/README.md), which is not in use today. With the door, the same 32 or more random characters (`openssl rand -base64 32`) as the door's own | with the door only: each visitor keeping their own address for the sign-in and form limits |
-| `SITE_HOSTS` | the campaign's own domains, once the website moves onto base.win (`imaginesurrey.ca,www.imaginesurrey.ca`; §2) | the website at `/` there, nothing of the app (SITE.md) |
+| `STARBASE_SITE_DOMAIN` | the website's own domain, on the day it moves onto base.win (`imaginesurrey.ca`; §2, *Moving the campaign's domain onto base.win*). Never in `render.yaml` | the website at `/` there and on its `www.`, nothing of the app; `/site/` sends people there (SITE.md) |
+| `STARBASE_SITE_FORMER_URL` | only while the present website keeps running at its own address: that address, `https://…` (§2) | its own links in emails it already sent, and its members' pages, still reach it |
+| `SITE_HOSTS` | other domains of the campaign's website, if any; not needed with `STARBASE_SITE_DOMAIN` | the website at `/` there, nothing of the app (SITE.md) |
 | `APP_HOSTS` | the app's other addresses on this server, comma-separated: an older address people still use, if there is one (`starbase.imaginesurrey.ca`, section 2); never the website's own domain | the app keeps answering there: none of them can be made the website's domain |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | from Stripe: **test** keys on staging first, and never live ones there; **live** keys on production only once a test gift has gone all the way through | gifts and membership dues paid online on the website (INTEGRATIONS.md, *Online payments — Stripe*) |
 | `CALLHUB_API_KEY`, `CALLHUB_API_BASE` | from CallHub: the account's API key; the second only when the account's API is on another host than `https://api.callhub.io` | only if the campaign calls through CallHub's dialer: *Send to CallHub* on a list or a phone bank, each call's result back on the person (INTEGRATIONS.md, *Phone dialer — CallHub*) |
@@ -512,6 +582,17 @@ manager**), which makes the campaign and signs you in as *base.win support*.
    the office.* Bring them back, and type the results in on the turf's
    walk list. A turf with more than 6,000 people in its box must be split
    on the map before it prints.
+8. **Hi-rises: three numbers, once**, after the voters list is in. In
+   Render → **base-win** → **Shell**, run `node scripts/hr-counts.mjs`. It
+   only reads (the database refuses any change while it runs) and prints
+   three lines, with no names or addresses:
+   - *Located doors*: addresses with a pin, one per unit.
+   - *Addresses with 4 or more units*: the ones the map shows as a building.
+   - *People with the unit inside the address* (like `1203-13450 104 Ave`).
+
+   Send the three lines to the team. If the second number is under 50, the
+   building layer will rarely appear on your map: say so before more
+   hi-rise work is done.
 
 ### The street map: choose a provider before election week
 
@@ -1048,6 +1129,23 @@ line should say *As expected*; tell us any that does not. Connect **Sample
 (staging)** and press each button there first, since staging holds only
 made-up data. Then connect Imagine Surrey. On any campaign that says “Open
 to anyone on the internet”: **Close the database to the internet**.
+
+**Making a new campaign from here.** Once **Check Render’s answers** has
+run with Sample (staging) connected and every line matches, a new
+campaign's set-up page offers **Make it in Render**: it makes the campaign's
+database and service in Render (Render bills for both from that day), with
+that campaign's own settings, then adds `<name>.base.win`. Each press asks
+for a code; it may ask you to press **Carry on** once while Render gets the
+database ready. It never makes two of anything: if Render doesn't answer,
+wait two minutes and press Carry on, and it looks before it makes. Until
+that check, the set-up page walks you through Render by hand, as before; a
+later check that fails, or a release that changes what is sent, turns it
+off for new campaigns until you check again. A campaign already part made
+keeps its card, paused: press Check Render’s answers again, then Carry on.
+Don't make its database or service by hand. Do the first one with a throwaway
+campaign and made-up values, then delete it by hand in Render (its DNS
+record first). The CNAME record where base.win's domain is registered is
+still yours to add.
 
 **Change it** every six months, after a lost laptop or phone, when anyone
 who could push code leaves, and on any doubt: make a new key, replace the

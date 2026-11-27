@@ -1,0 +1,42 @@
+/* Calendar (pages/Calendar.jsx): a month as a list by day. One column at
+   every width; each entry's time on the left on a computer, above it on a
+   phone. */
+.gc-page { max-width: 760px; }
+.gc-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-3); }
+.gc-head h1 { margin: 0; }
+.gc-head h1:focus { outline: none; }
+.gc-add { min-height: var(--ctl); }
+.gc-lede { margin: var(--s-2) 0 var(--s-4); }
+.gc-month { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); margin: var(--s-4) 0 var(--s-2); }
+.gc-month__name { margin: 0; font-size: 20px; text-align: center; flex: 1 1 auto; }
+.gc-btn { min-height: var(--ctl); text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
+.gc-check { display: inline-flex; align-items: center; gap: var(--s-2); min-height: var(--ctl); font-weight: 600; cursor: pointer; }
+.gc-check input { width: 20px; height: 20px; }
+.gc-every { margin-bottom: var(--s-2); }
+.gc-empty { margin: var(--s-5) 0; color: var(--text-3); }
+.gc-day { margin: var(--s-4) 0; }
+.gc-day__h { font-family: var(--font-sans); font-size: 15px; font-weight: 700; margin: 0 0 var(--s-2); padding-bottom: var(--s-1); border-bottom: var(--border); }
+.gc-day.is-today .gc-day__h { color: var(--mark); }
+.gc-day.is-past { opacity: 0.75; }
+.gc-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-3); }
+.gc-entry { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: var(--s-3); padding: var(--s-2) 0; }
+.gc-when { font-weight: 600; font-variant-numeric: tabular-nums; }
+.gc-title { margin: 0; font-weight: 700; font-size: 16px; overflow-wrap: anywhere; }
+.gc-title a { display: inline-flex; align-items: center; min-height: 32px; }
+.gc-meta { margin: var(--s-1) 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
+.gc-where { color: var(--text-3); overflow-wrap: anywhere; }
+.gc-details { margin: var(--s-2) 0 0; white-space: pre-line; overflow-wrap: anywhere; }
+.gc-acts { display: flex; flex-wrap: wrap; gap: var(--s-2); margin-top: var(--s-2); }
+.gc-next { margin: var(--s-4) 0; text-align: right; }
+.gc-form { margin-top: var(--s-4); }
+.gc-form .ts-h { margin-bottom: var(--s-3); }
+.gc-row { display: flex; flex-wrap: wrap; gap: var(--s-3); }
+.gc-row .field { flex: 1 1 140px; }
+.gc-zone { margin: 0 0 var(--s-3); }
+.gc-next-day { margin: 0 0 var(--s-1); font-weight: 600; }
+.gc-page .cal-card { margin-top: var(--s-5); }
+@media (max-width: 600px) {
+  .gc-entry { grid-template-columns: minmax(0, 1fr); gap: var(--s-1); }
+  .gc-acts .gc-btn { flex: 1 1 100%; }
+  .gc-month .gc-btn { padding-left: var(--s-2); padding-right: var(--s-2); }
+}

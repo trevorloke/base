@@ -25,7 +25,7 @@
 //     follow-ups, letters, requests from the doors, new texts, people who
 //     moved, and "Connect email" for managers while email isn't set up) —
 //     name first, the amount on the right, every row a tap to where it's
-//     fixed — then Coming up (the next shift, filing dates), then Go to: six
+//     fixed — then Coming up (the next shift, filing dates, Calendar), then Go to: six
 //     everyday places one tap each (components/commands.js quickFor) and
 //     "All places and people", which opens the search. Under a closed
 //     "More": the week's and all-time lines, their walk lists, and "Clear
@@ -937,6 +937,8 @@ function VolunteerToday({ b, me }) {
       <ul className="today-rows today-next">
         <VoteInfoRow b={b} />
         <VolunteerShiftRow shifts={b.shifts ?? []} me={me} turfs={b.shiftTurfs} />
+        {/* The group calendar: their shifts, events, voting days and what the campaign adds for them. */}
+        <LinkRow to="/calendar" main="Calendar" />
         {signs > 0 && (
           <LinkRow to="/signs" main={<><strong className="mono">{signs}</strong> {plural(signs, 'sign')} to put up</>} />
         )}
@@ -1101,6 +1103,8 @@ function CandidateToday({ b, me }) {
         {week > 0 && (
           <LinkRow to="/shifts" main={<>Your week · <strong className="mono">{num(week)}</strong></>} />
         )}
+        {/* The group calendar: their own schedule and what the campaign adds for candidates. */}
+        <LinkRow to="/calendar" main="Your calendar" />
         {Number(b.myPeople) > 0 && (
           <LinkRow to="/my-people" state={FROM_TODAY}
             main={<>My people · <strong className="mono">{num(b.myPeople)}</strong></>} />
@@ -1174,8 +1178,7 @@ function DeskToday({ b, me, nav, toast }) {
 
       <NeedsYou b={b} me={me} />
 
-      {/* Nothing of theirs to come (no Shifts, no filing dates): no heading over an empty list. */}
-      {(hasArea(me, 'shifts') || (b.filing ?? []).length > 0) && (
+      {/* Always something under it: the Calendar row, then the next shift and the filing dates. */}
       <section className="today-section" aria-labelledby="today-next-h">
         <h2 className="today-h" id="today-next-h">Coming up</h2>
         <ul className="today-rows">
@@ -1187,9 +1190,10 @@ function DeskToday({ b, me, nav, toast }) {
               main={<><span className="today-row__title">{d.name}</span><span className="today-row__when">{filingDay(d.due_on)}</span></>}
               chip={daysLeft(d.days)} chipCls={filingSoon(d.days) ? 'chip chip-warn' : 'chip'} />
           ))}
+          {/* The group calendar (pages/Calendar.jsx): everything dated, and the items managers add. */}
+          <LinkRow to="/calendar" main="Calendar" />
         </ul>
       </section>
-      )}
 
       <GoTo me={me} nav={nav} b={b} />
 

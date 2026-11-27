@@ -63,6 +63,102 @@ or people — and ends with the campaign's name, the site's address and the
 authorization line when one is set (`server/ext/site/calendar.js`). The
 app's own calendar links (`/cal/…`) never answer on a site's domain.
 
+### On its own domain (`STARBASE_SITE_DOMAIN`)
+
+When the campaign's own domain moves onto base.win (imaginesurrey.ca, from
+the present website), one setting on that client's Render service says so:
+`STARBASE_SITE_DOMAIN=imaginesurrey.ca`. Set in Render only, never in
+`render.yaml`. It works the same for any client.
+
+- **There** the site is at `/`: pages, news, forms, files, `sitemap.xml`,
+  `robots.txt`. Canonical, `og:url`, `og:image`, share links, the sitemap and
+  robots name `https://imaginesurrey.ca`. Its pair, `www.imaginesurrey.ca`
+  (or the bare name, if the setting starts with `www.`), answers too: a page
+  asked for there is sent on to the domain (301, same path and query); a form
+  sent there is answered there. The desk and the API never answer on either
+  (only what services and emails call back, as above).
+- **`/site` on `<name>.base.win`** sends people on to the domain (301, the
+  same path and query, kept for an hour so the way back is quick). These stay
+  on the app's address: anything but a GET (a form or an unsubscribe sent
+  from a page opened before), a draft's preview (`/site/__preview/…`, framed
+  by the builder) and what a preview loads (`/site/api/…`,
+  `/site/site-assets/…`); other websites (`/site/sites/<key>/…`) and
+  `/site-assets/*` too.
+- **Links base.win hands out** name the domain: the share kits, call time's
+  donate link, the voter guide's, another website's link back
+  (`mainAddress`). Website → Overview's **View site** opens it (`GET
+  /api/site` → `urls.domain`). Unsubscribe links in emails (`/u`, `/bu`,
+  `/lu`) stay on `<name>.base.win`; the domain answers them too.
+- **The unsubscribe sync** (INTEGRATIONS.md, *Unsubscribes, both ways*)
+  stops itself when `STARBASE_WEBSITE_URL` names the domain, its pair or a
+  `SITE_HOSTS` host, and Settings → Services, Check and the start-up log say
+  "Take both settings away". Take `STARBASE_WEBSITE_URL` and
+  `STARBASE_WEBSITE_KEY` off at the move.
+- **Never the app's address.** A domain where the app answers (base.win or
+  one of its addresses, `STARBASE_PUBLIC_URL`'s, `RENDER_EXTERNAL_HOSTNAME`,
+  `APP_HOSTS`), or one that isn't a domain, is not taken, and the start-up
+  log says so: the website stays at `/site/`.
+- **Old links** (`server/ext/site/old-paths.js`). Where the site has no page
+  for an address on the domain, the campaign's set-up may name the page here
+  that does the same thing (`preset().site.oldPaths`; Imagine Surrey's
+  preset holds the present website's addresses; no other campaign has any).
+  It is sent on for good (301, query kept) only when that page is live. For
+  Imagine Surrey: `/stats`, `/join/welcome`, `/shop`, `/shop/thanks`,
+  `/neighbourhoods`, `/neighbourhoods/<x>` → home; `/donate/thanks` →
+  `/donate`; `/act/<slug>/print` → `/act/<slug>`; `/tracker/<x>` →
+  `/tracker`; `/volunteer/openings/…` → `/volunteer`; `/events/<x>` →
+  `/events`. Addresses both sites have (`/`, `/donate`, `/act`,
+  `/act/<slug>` for a petition made here with the same slug, `/news`,
+  `/news/<slug>`, `/tracker`, `/volunteer`, `/events`, `/privacy`,
+  `/accessibility`, `/preferences`, `/r/<code>`) are base.win's own pages.
+  The present website's own machinery — its links in emails it already sent
+  (`/newsletter/…`, `/api/newsletter/…`, `/api/tracker/…`), members' pages
+  (`/me…`) and its admin (`/admin…`) — goes to the present website at its own
+  address when `STARBASE_SITE_FORMER_URL` names it (https; 302, or 307 for a
+  POST, so a mail app's one-click unsubscribe still works); unset, they are
+  the 404. Not covered: `/#join` (the part after `#` never reaches a
+  server), `/events/<x>/calendar.ics`, `/tracker/feed.xml`, `/shop`'s
+  orders and the present website's webhooks (Stripe and Twilio don't follow
+  a redirect: point them at its own address first).
+
+**The move, in this order** (GOING-LIVE.md §2 has the same, for the owner):
+
+1. The website under Website is ready at `https://<name>.base.win/site/`:
+   pages, petitions (the present website's petitions made again with the
+   same slugs keep their links), Authorized by, the privacy link.
+2. If the present website keeps running for a while (its members' pages,
+   monthly gifts, its emails already sent): its `NEXT_PUBLIC_SITE_URL` set to
+   its own Render address and redeployed; its Stripe webhook and its Twilio
+   number's webhook pointed at that address; its two Render Cron Jobs
+   (`apps/web/SETUP.md` §2b, which call `<domain>/api/cron/…`) changed to that
+   address. If it stops instead, its cron jobs are deleted: after the move
+   they would reach base.win, fail every day and hand it their key.
+3. Render → the present website's service → Custom Domains: remove the
+   domain and its `www.`.
+4. Render → the client's base.win service → Environment, in one save:
+   `STARBASE_SITE_DOMAIN=<domain>`, `STARBASE_SITE_FORMER_URL=<the present
+   website's own address>` (if step 2), and remove `STARBASE_WEBSITE_URL` and
+   `STARBASE_WEBSITE_KEY`.
+5. Same service → Settings → Custom Domains: add the domain (and its `www.`).
+6. At the registrar: the records Render shows for that service.
+7. Check: the domain shows the website, its `www.` and `<name>.base.win/site/`
+   go to it, `<domain>/api/health` is the website's "Page not found", the
+   desk works at `<name>.base.win`, Settings → Services → *The website —
+   unsubscribes* says Not set, a test sign-up lands in People, and (if the
+   present website keeps running) its cron jobs pass on their next run.
+
+**The way back, in this order:** first move the custom domain (and its
+`www.`) off the base.win service and back to the present website's service,
+its registrar records with it — `STARBASE_SITE_DOMAIN` stays set until then,
+or the app's sign-in page would answer on the domain; once the domain shows
+the present website again, remove `STARBASE_SITE_DOMAIN` (and
+`STARBASE_SITE_FORMER_URL`) — `/site/` answers again at once (a browser that
+saw the move may for up to an hour still send it on to the domain, by then
+the present website); set its `NEXT_PUBLIC_SITE_URL` back, its webhooks and
+its cron jobs; set `STARBASE_WEBSITE_URL` and `STARBASE_WEBSITE_KEY` again,
+then **Check** and **Send the ones already off here**, so the nos made in
+between reach it.
+
 ## Other websites (`server/ext/site/microsites.js`)
 
 A campaign may have up to five other websites (`microsites`): a petition or
@@ -886,7 +982,9 @@ website settings, a live page by its address), so a kept page costs the
 database nothing; a page drawn across a Website write is never kept, and
 visitors after the write wait for a fresh draw, not the older one.
 
-Environment: `SITE_HOSTS` (the campaign's own domains), `APP_HOSTS` (the
+Environment: `STARBASE_SITE_DOMAIN` (the website's own domain, "On its own
+domain" above), `STARBASE_SITE_FORMER_URL` (the present website at its own
+address), `SITE_HOSTS` (the campaign's own domains), `APP_HOSTS` (the
 app's other addresses on this server, never a website domain: one people
 used before base.win, say), `SITE_WORKSPACE`
 (which campaign the site is, by slug; default the first set up),

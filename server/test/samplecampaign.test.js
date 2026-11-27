@@ -100,7 +100,22 @@ test('each pin is inside its neighbourhood, and one address is one pin', () => {
   }
 });
 
-test('each pin is on its street’s piece of centreline', { todo: 'the street segments are not looked up yet (no network in the build session): STAGING.md section 3' }, () => {
+test('every street has one straight piece of its centreline inside its neighbourhood', () => {
+  const streets = AREAS.flatMap((a) => a.streets);
+  assert.deepEqual(Object.keys(CAST.SEGMENTS).sort(), [...streets].sort(), 'one piece for each of the 20 streets, and no other');
+  const metres = ([y1, x1], [y2, x2]) => Math.hypot((x2 - x1) * 111320 * Math.cos((y1 * Math.PI) / 180), (y2 - y1) * 110540);
+  for (const a of AREAS) {
+    const [s, w, n, e] = a.box;
+    for (const street of a.streets) {
+      const seg = CAST.SEGMENTS[street];
+      assert.equal(seg.length, 2, street);
+      for (const [lat, lng] of seg) assert.ok(lat >= s && lat <= n && lng >= w && lng <= e, `${street}: an end outside ${a.name}`);
+      assert.ok(metres(...seg) >= 300, `${street}: at least 300 m, so the dots spread out`);
+    }
+  }
+});
+
+test('each pin is on its street’s piece of centreline', () => {
   for (const a of AREAS) for (const street of a.streets) assert.ok(CAST.SEGMENTS[street], `${street}: no segment`);
   for (const p of samplePeople(320)) {
     const [[y1, x1], [y2, x2]] = CAST.SEGMENTS[p.address.slice(5)];
@@ -108,6 +123,11 @@ test('each pin is on its street’s piece of centreline', { todo: 'the street se
     assert.ok(Math.abs(p.lat - (y1 + f * (y2 - y1))) < 1e-6 && Math.abs(p.lng - (x1 + f * (x2 - x1))) < 1e-6, p.address);
   }
   assert.deepEqual(pinFor(AREAS[0], 9900, AREAS[0].streets[0]), pinFor(AREAS[0], 9900, AREAS[0].streets[0]));
+  // The ends of the range: 9900 is the piece's first end, 9999 just short of its other.
+  const [[a, b], [c, d]] = CAST.SEGMENTS['Main St'];
+  assert.deepEqual(pinFor(AREAS[0], 9900, 'Main St'), { lat: a, lng: b });
+  const last = pinFor(AREAS[0], 9999, 'Main St');
+  assert.ok(Math.abs(last.lat - (a + 0.99 * (c - a))) < 1e-6 && Math.abs(last.lng - (b + 0.99 * (d - b))) < 1e-6);
 });
 
 test('nothing seeded is a real name: the people, the cast, the shifts', () => {
@@ -120,7 +140,7 @@ test('the print: a change to the sample raises SAMPLE_VERSION', async () => {
   const why = 'the sample changed: raise SAMPLE_VERSION and record the new print with it (server/test/sample-prints.js)';
   assert.equal(await printNow(), SAMPLE_PRINT.print, why);
   assert.ok(SAMPLE_VERSION >= SAMPLE_PRINT.version, why);
-  assert.equal(SAMPLE_VERSION, 2);
+  assert.equal(SAMPLE_VERSION, 3);
 });
 
 // ── Made, and made again ──

@@ -12,6 +12,9 @@
 // listener did receive the key; nothing else did. And nothing Render holds
 // that must not be read (an email key, a database address, a commit's
 // message, the owner's email, Render's own words) is anywhere either.
+// Stage 2: the run makes a campaign in Render too, and the new database's
+// address goes to Render once, in the creating call for its own service,
+// and is nowhere here.
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { baseEnv, setUp, codeNow, browser } from './helpers.mjs';
@@ -53,11 +56,12 @@ tap(process.stderr);
 const A = 'https://base-win-leak.onrender.com';
 const S = 'https://starbase-staging.onrender.com';
 const INST = 'EBESExQVFhcYGRobHB0eHw';
+const MADE = 'https://base-win-made.onrender.com';
 const fetcher = async (url) => {
-  const origin = url.startsWith(S) ? S : A;
+  const origin = url.startsWith(S) ? S : url.startsWith(MADE) ? MADE : A;
   return { status: 200, ms: 3, body: JSON.stringify({
     ok: true, database: 'ok', env: url.startsWith(S) ? 'staging' : 'production', commit: 'd9130ae', tzdataCurrent: true, ownOrigin: origin,
-    instance: url.startsWith(S) ? 'SSSSSSSSSSSSSSSSSSSSSS' : INST, address: 'https://leak.base.win', entry: 'ready', platformKids: [currentKid()], setupOpen: false, campaignMade: true, store: 'postgres',
+    instance: url.startsWith(S) ? 'SSSSSSSSSSSSSSSSSSSSSS' : url.startsWith(MADE) ? 'MMMMMMMMMMMMMMMMMMMMMM' : INST, address: 'https://leak.base.win', entry: 'ready', platformKids: [currentKid()], setupOpen: false, campaignMade: true, store: 'postgres',
   }) };
 };
 
@@ -67,7 +71,7 @@ if (process.env.DATABASE_URL) {
   await db.query('delete from render_jobs');
   await db.query("delete from checklist; delete from checks; delete from environments where campaign <> 'sample'; delete from campaigns where name <> 'sample'; update environments set server_url = null, instance = null, render_service = null, render_db = null");
 }
-const app = makeApp({ db, fetcher });
+const app = makeApp({ db, fetcher, waits: { readyEveryMs: 0, readyTries: 3, lookEveryMs: 0 } });
 const seen = [];
 const recorded = { request: async (...args) => {
   const res = await app.request(...args);
@@ -112,12 +116,12 @@ test('a full run leaks no secret anywhere', async () => {
 
   // The Render pages, against the listener, with the key set.
   const code = () => codeNow(db, totpSecret);
-  const change = async (name, what, { wrong = false } = {}) => {
-    const asked = await again.post(`/c/${name}/render/${what}`, {});
+  const change = async (name, what, { wrong = false, who = again } = {}) => {
+    const asked = await who.post(`/c/${name}/render/${what}`, {});
     const job = /name="job" value="([0-9a-f]{32})"/.exec(await asked.text())?.[1];
     assert.ok(job, `${name} ${what}: the page that says what will happen (${asked.status})`);
-    if (wrong) assert.equal((await again.post(`/c/${name}/render/${what}`, { job, code: '000000' })).status, 401);
-    const done = await again.post(`/c/${name}/render/${what}`, { job, code: await code() });
+    if (wrong) assert.equal((await who.post(`/c/${name}/render/${what}`, { job, code: '000000' })).status, 401);
+    const done = await who.post(`/c/${name}/render/${what}`, { job, code: await code() });
     assert.equal(done.status, 303, `${name} ${what}`);
   };
   assert.equal((await again.get('/render')).status, 200);
@@ -130,6 +134,21 @@ test('a full run leaks no secret anywhere', async () => {
   world.finishDeploys(leakIds.id);
   for (const what of ['restart', 'domain', 'close-db', 'deploy']) await change('leak', what);
   for (const path of ['/c/leak/render', '/c/sample/render', '/render', '/log', '/key', '/c/leak']) assert.equal((await again.get(path)).status, 200, path);
+  // Stage 2: a whole make (Check Render’s answers above, with the sample connected, opened the gate),
+  // from a second sign-in (each session may type ten codes in 15 minutes).
+  const maker = browser(recorded, { ip: '203.0.113.10' });
+  assert.equal((await maker.post('/signin', { email: op.email, password: op.password, code: await code() })).status, 303);
+  assert.equal((await maker.post('/new', { name: 'made', display: 'Made Example', city: 'Exampleton', province: 'BC', rules: 'bc-municipal', tz: 'America/Vancouver', races: 'council', sw: '50.6, -120.5', ne: '50.8, -120.2' })).status, 303);
+  assert.equal((await maker.get('/c/made/setup')).status, 200);
+  world.never('available');
+  await change('made', 'make', { who: maker });
+  world.lift('available');
+  await change('made', 'make', { who: maker });
+  assert.equal((await maker.get('/c/made/setup')).status, 200);
+  const madeSvc = world.service('base-win-made');
+  assert.ok(madeSvc && world.database('base-win-made-db'), 'the run made a database and a service');
+  const carried = world.received.filter((x) => JSON.stringify(x.body ?? null).includes(RENDER_HOLDS.newDb));
+  assert.deepEqual(carried.map((x) => `${x.method} ${x.path} ${x.body.name}`), ['POST /services base-win-made'], 'the new database’s address went to Render once, in its own service’s creating call');
   // A change that fails; then (what was read is forgotten after any change) a key Render refuses.
   world.refuse(500, { on: /\/restart$/ });
   await change('sample', 'restart');

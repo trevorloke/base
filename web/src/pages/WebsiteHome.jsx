@@ -55,7 +55,10 @@ export default function WebsiteHome() {
   const waiting = (d?.pages || []).filter((p) => p.changed && p.status === 'published');
   const drafts = (d?.pages || []).filter((p) => p.status !== 'published');
   const own = [...(d?.urls?.domains || []), ...(d?.urls?.hosts || [])];
-  const here = typeof window !== 'undefined' ? `${window.location.host}${d?.urls?.site || '/site/'}` : d?.urls?.site;
+  // Its own domain, once the server names it (STARBASE_SITE_DOMAIN): /site/ sends people there.
+  const domain = d?.urls?.domain || null;
+  const view = domain || d?.urls?.site;
+  const here = domain ? hostOf(domain) : typeof window !== 'undefined' ? `${window.location.host}${d?.urls?.site || '/site/'}` : d?.urls?.site;
   const c = d?.counts || {};
   const org = d?.settings?.org || {};
   const missing = [
@@ -69,7 +72,7 @@ export default function WebsiteHome() {
       <div className="ops-head">
         <h1>Website</h1>
         {d && (
-          <a className="btn btn-primary ops-tap" href={d.urls.site} target="_blank" rel="noopener">
+          <a className="btn btn-primary ops-tap" href={view} target="_blank" rel="noopener">
             View site<span aria-hidden="true"> ↗</span><span className="ws-sr"> (opens a new tab)</span>
           </a>
         )}
@@ -89,10 +92,10 @@ export default function WebsiteHome() {
             </h2>
             <p className="wb-live__line">
               {live ? 'Anyone can see it at ' : 'When its home page is published, it shows at '}
-              <a href={d.urls.site} target="_blank" rel="noopener" className="wb-addr">{here}<span className="ws-sr"> (opens a new tab)</span></a>
-              {own.length > 0 ? ' — base.win’s own address for it.' : '.'}
+              <a href={view} target="_blank" rel="noopener" className="wb-addr">{here}<span className="ws-sr"> (opens a new tab)</span></a>
+              {domain ? ', its own domain.' : own.length > 0 ? ' — base.win’s own address for it.' : '.'}
             </p>
-            {own.length > 0 ? (
+            {domain ? null : own.length > 0 ? (
               <p className="wb-live__line">
                 Your own domain: {own.map((u, i) => (
                   <span key={u}>{i > 0 && ', '}<a className="wb-addr" href={u} target="_blank" rel="noopener">{hostOf(u)}<span className="ws-sr"> (opens a new tab)</span></a></span>

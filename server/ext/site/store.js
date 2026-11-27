@@ -17,6 +17,7 @@ import { checkTheme } from '@starbase/shared/site/theme';
 import './from-preset.js';
 import { SECTION_KEYS, sectionOf, hostOf, consentWording, tagOf } from './shape.js';
 import { seedSite } from './seeds/index.js';
+import { isAppHost, siteEnvHosts, siteDomain } from './domain.js';
 
 export const parseJ = (v, d) => {
   if (v == null) return d;
@@ -26,36 +27,14 @@ export const parseJ = (v, d) => {
 const iso = (d) => (d instanceof Date ? d.toISOString() : d ? new Date(d).toISOString() : null);
 
 // ── Hosts ──
-// SITE_HOSTS and APP_HOSTS are the operator's: host names or addresses,
-// comma-separated (127.0.0.1 for a test), a final dot or not.
-const hostList = (raw) => String(raw || '').split(',')
-  .map((h) => h.trim().toLowerCase().replace(/^[a-z]+:\/\//, '').replace(/[/?#].*$/, '').replace(/:\d+$/, '').replace(/\.+$/, ''))
-  .filter((h) => /^[a-z0-9.-]{1,253}$/.test(h));
-export const envHosts = () => hostList(process.env.SITE_HOSTS);
-
-// Where the app itself answers — never a website domain (on one of those
-// only the site answers: no sign-in, no app): base.win and its subdomains
-// (the front door), this server's public address (STARBASE_PUBLIC_URL), its
-// host's own name (RENDER_EXTERNAL_HOSTNAME) and its other addresses
-// (APP_HOSTS: one people used before base.win, say). site.settings.save
-// refuses these and the host the save came in on; a domain saved as one
-// before is ignored below, so the app can't be locked out of its address.
-const DOOR = 'base.win';
-export const appHosts = () => {
-  const out = [DOOR];
-  try {
-    const h = new URL(String(process.env.STARBASE_PUBLIC_URL || '').trim()).hostname.toLowerCase().replace(/\.+$/, '');
-    if (h && !out.includes(h)) out.push(h);
-  } catch { /* not set */ }
-  const r = hostOf(process.env.RENDER_EXTERNAL_HOSTNAME);
-  if (r && !out.includes(r)) out.push(r);
-  for (const h of hostList(process.env.APP_HOSTS)) if (!out.includes(h)) out.push(h);
-  return out;
-};
-export const isAppHost = (host, also = []) => {
-  const h = String(host || '').toLowerCase().replace(/\.$/, '');
-  return Boolean(h) && (h === DOOR || h.endsWith(`.${DOOR}`) || appHosts().includes(h) || also.includes(h));
-};
+// SITE_HOSTS and APP_HOSTS are the operator's, and so is the website's own
+// domain (STARBASE_SITE_DOMAIN, and its pair): domain.js reads them. Where
+// the app itself answers (appHosts) is never a website domain:
+// site.settings.save refuses those and the host the save came in on; a
+// domain saved as one before is ignored below, so the app can't be locked
+// out of its address.
+export { appHosts, isAppHost } from './domain.js';
+export const envHosts = () => siteEnvHosts();
 
 // Every address people use the app at, as the API sees them signed in
 // (routes/api.js, and /api/auth/me as the app opens), kept in app_hosts:
@@ -178,10 +157,13 @@ export const siteHost = async (c) => {
 };
 
 // The main site's public address, for another website's link back, its
-// privacy link and a petition's canonical address: its first saved domain,
+// privacy link and a petition's canonical address: its own domain
+// (STARBASE_SITE_DOMAIN), else its first saved domain,
 // else the first SITE_HOSTS, else the app's own /site (fallback: the
 // request's origin and the client's path, when STARBASE_PUBLIC_URL isn't set).
 export const mainAddress = (settings, fallback = '') => {
+  const own = siteDomain();
+  if (own) return `https://${own}`;
   const saved = (Array.isArray(settings?.domains) ? settings.domains : []).map(hostOf).find(Boolean);
   if (saved) return `https://${saved}`;
   const env = envHosts().find((h) => hostOf(h));

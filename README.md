@@ -920,6 +920,30 @@ the profile ends the old one, for a leaked link or a lost backup alike. The
 data export leaves the links out. The website serves its Events list as
 `<site>/events.ics` (SITE.md). Nothing to set up: no keys or accounts.
 
+**The group calendar.** *Calendar* (from Today, or the search) shows one
+month of what is on for that person, on the campaign's clock: their booked
+shifts, the website's events, the voting days, the filing dates for the
+people who handle money, and the items managers add. A manager adds an
+item on the desk's Calendar — a time or whole days, a place, notes — and
+says who sees it: everyone, all candidates, one candidate, managers, or a
+team. Managers see every item and who it is for; a candidate sees the
+items for candidates and for their own seat; anyone else sees the items
+for everyone and for their teams. Whoever has the Shifts board can also
+show every shift. Each entry has *Add to Google Calendar* (Google opens
+with it filled in), and the person's calendar link (the same one as on
+their profile) carries their items and the website's events too, so a
+change or a removal reaches their calendar the next time it checks. The
+link never carries a shift's instructions, or other people's names or
+addresses. An item can run past midnight: an end earlier than the start is
+the next morning (*Ends the next day*), and it is listed on the day it
+starts. An item for a team since deleted, or a candidate since removed,
+says *(removed)* and keeps that choice when changed. Election day is
+GOTV's, or until GOTV has one, the day typed in Path to win. The data
+export lists every item, but someone who is not a manager (and not given
+Admin) gets the notes and place only of the items they see; the others come
+with their title, times and who, as the event log has them. Still nothing
+to set up: no Google key or sign-in.
+
 ## Public pages
 
 The campaign's website is base.win's own (the **Website** area; SITE.md):
@@ -1808,6 +1832,8 @@ environment (`server/lib/org.js`); the code names no client.
 | `STARBASE_CANDIDATES` | `4D:Name:Label;4B:Name` — the opposed candidates a new rating scale starts with (the desk edits them after), or `none` for no opponents | nobody (Imagine Surrey's set-up: its five) |
 | `STARBASE_ENV` | `production` or `staging` — said on screen and at `/api/health` | `production` when hosted (`NODE_ENV=production`, or on Render), else `local` |
 | `STARBASE_BRAND` | `base`, or `imagine-surrey` to turn on Imagine Surrey's own set-up (*One campaign's own set-up*, above). The look is the one a campaign starts from, until a manager saves its own in Settings → Brand | `base` (a server named exactly `Imagine Surrey` that is not staging: `imagine-surrey`, with a line in its log) |
+| `STARBASE_SITE_DOMAIN` | the website's own domain once it moves onto base.win (`imaginesurrey.ca`): the website at `/` there and on its `www.`, nothing of the app; `<name>.base.win/site/` sends people there; set in Render, never in `render.yaml` (SITE.md, GOING-LIVE.md §2) | blank: the website is at `/site/` |
+| `STARBASE_SITE_FORMER_URL` | the present website at its own address (`https://…`), while it keeps running after the move: its own links in emails it sent go there (SITE.md) | blank: those links are the website's "Page not found" |
 | `SITE_HOSTS` | the campaign's own domains (`imaginesurrey.ca,www.imaginesurrey.ca`): the website at `/` there, nothing of the app — written with a final dot too (`imaginesurrey.ca.`), it's the same domain (SITE.md) | blank: the website is at `/site/` only |
 | `APP_HOSTS` | the app's other addresses on this server (an older one people still use, such as `starbase.imaginesurrey.ca`, beside the public `imaginesurrey.base.win`): never made a website domain, so the app keeps answering there (SITE.md) | blank |
 | `BASE_PLATFORM_PUBKEY` | the control centre's public key (ops.base.win → base.win’s key; 43 characters; two, comma-separated, while it changes its key): lets base.win support open this desk, and closes first-run sign-up until the first visit makes the campaign. Pasted in Render, never in git (`sync: false`); emptied, all entry stops and open visits end | blank: no entry (`/api/health` says `no-key`) |
