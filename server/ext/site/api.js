@@ -170,7 +170,8 @@ api.get('/site/pictures', async (c) => {
 });
 
 // A link that shows a page's draft for half an hour (the admin's preview
-// frame; anyone holding it can look, so it is short-lived and noindex).
+// frame; anyone holding it can look, so it is short-lived and noindex) —
+// or, with live: true, the page as it is published.
 api.post('/site/preview-token', async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const pageId = String(body?.pageId || body?.page_id || '');
@@ -181,7 +182,11 @@ api.post('/site/preview-token', async (c) => {
       where p.id = $1 and p.workspace_id = $2 and p.deleted_at is null and (p.site_id is null or m.id is not null)`, [pageId, ws],
   )).rows[0];
   if (!r) return c.json({ error: 'not found' }, 404);
-  const t = await sign('preview', { w: ws, p: pageId }, PREVIEW_TTL);
+  // live: the published page, not the draft (Theme's preview of a look on
+  // the site as visitors see it); a page never published has none to show.
+  const live = body?.live === true;
+  if (live && !(await c.get('db').query("select 1 from site_pages where id = $1 and status = 'published'", [pageId])).rows[0]) return c.json({ error: 'That page isn’t published yet' }, 409);
+  const t = await sign('preview', { w: ws, p: pageId, ...(live ? { live: true } : {}) }, PREVIEW_TTL);
   // A page of another website is previewed at that website's address.
   const root = r.key ? `/site/sites/${r.key}` : '/site';
   return c.json({ url: here(c, `${root}/__preview/${pageId}?t=${encodeURIComponent(t)}`), expires_at: new Date(Date.now() + PREVIEW_TTL * 1000).toISOString() });

@@ -279,6 +279,17 @@ export const actions = {
       params.push(JSON.stringify(theme));
       sets.push(`theme = $${params.length}`);
       changed.theme = theme;
+      // The look it had is kept to go back to (Theme: "Back to the look from
+      // …"), when the look itself changes — not for a save of the same look,
+      // nor for starting or stopping following the brand (that has its own
+      // way back).
+      // (Compared key by key in one order: the database keeps a theme's keys in its own.)
+      const sorted = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, sorted(v[k])])) : v);
+      const look = (t) => JSON.stringify(sorted({ ...t, follow: undefined, kept: undefined }));
+      if (was && typeof was === 'object' && Object.keys(was).length && (was.follow === true) === follow && look(was) !== look(theme)) {
+        params.push(JSON.stringify(was));
+        sets.push(`look_before = $${params.length}`, 'look_before_at = now()');
+      }
     }
     if (input.domains !== undefined) {
       const hosts = [];

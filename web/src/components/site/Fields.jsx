@@ -364,7 +364,7 @@ function WordsField({ id, label, value, onChange, max, itemMax, error }) {
 // ── A list of groups (points, questions, people…) ──
 const ONE = {
   Points: 'point', Questions: 'question', People: 'person', Groups: 'group', Accounts: 'account', Promises: 'promise',
-  'Other buttons': 'button', 'Why join': 'reason', 'Menu': 'link', 'Links': 'link', 'Title bar links': 'link',
+  'Other buttons': 'button', 'Why join': 'reason', 'Menu': 'link', 'Your links': 'link', 'Links': 'link', 'Title bar links': 'link',
 };
 const itemSummary = (f, item, i) => {
   for (const sub of f.of) {

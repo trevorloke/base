@@ -1,13 +1,20 @@
 // Website → Theme (/website/theme): the site's look (shared/site/theme.js).
-//   Start from a look (Base, and the campaign's own where its server sends
-//   one: GET /api/site skins), then the colours —
+//   It opens on the looks (WEB 3b): Base, the campaign's own where its server
+//   sends one (GET /api/site skins) and the ready looks every campaign gets
+//   (shared/site/looks.js), the one in use marked; beside them, a live
+//   preview of the published home page in the look being tried
+//   (LookPreview: a preview link of the published page, the look posted to
+//   it — web/src/site-preview.js). Nothing is live until "Use this look".
+//   After a change, "Back to the look from <date>" (the server keeps the
+//   look before: settings.look_before). Then the details: heading sizes
+//   (As today · Modern) and shadow, the colours —
 //   each pair that must stay readable (theme.js PAIRS) shows its contrast as
 //   it changes, and one under 4.5:1 blocks saving, with "Fix it" (the
 //   nearest readable colour for its text). Then the fonts (drawn in their
 //   own letters; Change fonts opens the sheet: FontSheet.jsx, WA), the
 //   corners, the logo. A live sample beside it: the title bar,
 //   text and a link, the buttons, a soft panel and a band, in these colours.
-//   One primary, "Save the look" (live on the site at once — there's no draft
+//   One primary, "Use this look" (live on the site at once — there's no draft
 //   of the theme); the server checks the contrast again (site.settings.save).
 //   A website can instead follow the campaign's brand (Settings → Brand;
 //   theme.follow — a new website does until it is given its own look): then
@@ -20,9 +27,9 @@
 // with its site: always its own (no following the brand — "Start from the
 // campaign's brand" copies the brand's look once), saved with
 // site.microsite.save { theme }.
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useOutletContext, useParams } from 'react-router-dom';
-import { COLOR_KEYS, FONT_BY_VALUE, RADII, SKINS, lookOf } from '@starbase/shared/site/theme';
+import { COLOR_KEYS, FONT_BY_VALUE, RADII, SCALES, SKINS, lookOf } from '@starbase/shared/site/theme';
 import { full } from './themeDraft.js';
 import { defaultsFor } from '@starbase/shared/site/catalogue';
 import { siteLooks } from '../components/site/builder.js';
@@ -31,7 +38,7 @@ import { fontFor, profileFor } from '@starbase/shared/site/fonts';
 import FontSheet, { useAddedFonts } from '../components/site/FontSheet.jsx';
 import { stackOf, useFaces } from '../components/site/fontFaces.js';
 import { useSitePage } from '../components/site/useSite.js';
-import { action } from '../api.js';
+import { action, apiPost } from '../api.js';
 import { at } from '../base.js';
 import { NoSignal, noSignal, useOnline } from '../components/NoSignal.jsx';
 import { SaveState, Toast, WebsiteTabs, useToast } from '../components/site/Bits.jsx';
@@ -132,6 +139,76 @@ function FontsCard({ t, added, org, words, onChange }) {
   );
 }
 
+// The published home page in the look being tried: a preview link of the
+// page as it is published (never a newer draft), into which every change
+// is posted (wa:look) and drawn at once, before anything is saved.
+function LookPreview({ pageId, theme }) {
+  const frame = useRef(null);
+  const ready = useRef(false);
+  const [url, setUrl] = useState(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let gone = false;
+    setUrl(null);
+    apiPost('/site/preview-token', { pageId, live: true })
+      .then((r) => { if (!gone) setUrl(r.url); })
+      .catch(() => { if (!gone) setFailed(true); });
+    return () => { gone = true; };
+  }, [pageId]);
+  const post = () => {
+    const w = frame.current?.contentWindow;
+    if (w && ready.current) w.postMessage({ type: 'wa:look', theme }, window.location.origin);
+  };
+  useEffect(() => {
+    const on = (e) => {
+      if (e.source !== frame.current?.contentWindow || e.origin !== window.location.origin) return;
+      if (e.data?.type === 'wa:ready') { ready.current = true; post(); }
+    };
+    window.addEventListener('message', on);
+    return () => window.removeEventListener('message', on);
+  }); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(post, [theme]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (failed) return null;
+  return (
+    <figure className="wb-look-pv">
+      <div className="wb-look-pv__box">
+        {url ? <iframe ref={frame} src={url} title="Your published home page in this look" className="wb-look-pv__frame" tabIndex={-1} />
+          : <p className="muted wb-look-pv__wait">Loading the preview…</p>}
+      </div>
+      <figcaption className="wb-field__hint">Your published home page in this look. Visitors see it once you use it.</figcaption>
+    </figure>
+  );
+}
+
+// The looks to start from, each with its colours and fonts; the one the site
+// wears says so.
+function LooksCard({ t, inUse, onPick, children }) {
+  return (
+    <section className="card" aria-labelledby="wb-th-skin">
+      <h2 id="wb-th-skin" className="wb-card-h">Looks</h2>
+      <div className="wb-skins" role="radiogroup" aria-labelledby="wb-th-skin">
+        {siteLooks().map((s) => (
+          <label key={s.key} className="wb-skin" data-on={t.skin === s.key ? '' : undefined}>
+            <input type="radio" name="wb-skin" checked={t.skin === s.key} onChange={() => onPick(s.key)} />
+            <span className="wb-skin__words">
+              <span className="wb-skin__name">{s.label}</span>
+              <span className="wb-skin__fonts">{(FONT_BY_VALUE[s.fonts.heading] || FONT_BY_VALUE.inter).label} · {(FONT_BY_VALUE[s.fonts.body] || FONT_BY_VALUE.inter).label}</span>
+              {inUse === s.key && <span className="wb-skin__use">In use</span>}
+            </span>
+            <span className="wb-skin__dots" aria-hidden="true">
+              {['brand', 'accent', 'ink', 'surface'].map((k) => <span key={k} style={{ background: s.colors[k] }} />)}
+            </span>
+          </label>
+        ))}
+      </div>
+      <p className="wb-field__hint">Picking one shows it in the preview; your logo stays. Nothing changes on the site until you use it.</p>
+      {children}
+    </section>
+  );
+}
+
+const day = (iso) => new Date(iso).toLocaleDateString('en-CA', { month: 'long', day: 'numeric' });
+
 export default function WebsiteTheme() {
   const { me } = useOutletContext() || {};
   const { siteId } = useParams();
@@ -191,6 +268,22 @@ export default function WebsiteTheme() {
       setState({ state: 'error', text: e.message });
     }
   };
+  // Back to the look it had before the last change (the main site's).
+  const before = !siteId ? q.data?.settings?.look_before : null;
+  const goBack = async () => {
+    const back = full(before.theme);
+    setState({ state: 'saving' });
+    try {
+      await action('site.settings.save', { theme: back });
+      setT(back);
+      setSaved(back);
+      setState({ state: 'saved', at: Date.now() });
+      say(`The site has the look from ${day(before.at)} again`);
+      refresh(['site']);
+    } catch (e) {
+      setState({ state: 'error', text: e.message });
+    }
+  };
 
   // To the campaign's brand and back. Both are live on the site at once.
   // back: 'kept' — to the look it had before it followed; else its own look
@@ -221,6 +314,9 @@ export default function WebsiteTheme() {
   const home = useSitePage(homeId).data?.page;
   const words = heroWords(home);
   const org = siteId ? q.data?.microsite?.name || '' : q.data?.settings?.org?.shortName || q.data?.settings?.org?.name || '';
+  // The live preview: the main site's published home page (else the sample).
+  const homeLive = !siteId && (q.data?.pages || []).find((p) => p.slug === 'home' && p.status === 'published');
+  const inUse = saved?.skin;
   return (
     <div className="wb-page wb-page--wide">
       {siteId && <SiteBack d={q.data} id={siteId} />}
@@ -231,7 +327,7 @@ export default function WebsiteTheme() {
             <SaveState state={state} />
             <button type="button" className="btn btn-primary ops-tap" onClick={save}
               disabled={!online || !dirty || failing.length > 0 || state?.state === 'saving'}>
-              {state?.state === 'saving' ? 'Saving…' : 'Save the look'}
+              {state?.state === 'saving' ? 'Saving…' : 'Use this look'}
             </button>
           </div>
         )}
@@ -285,23 +381,15 @@ export default function WebsiteTheme() {
               ))}
             </div>
           )}
-          <p className="wb-help">Changes show on the site as soon as you save — there’s no draft of the look.</p>
+          <p className="wb-help">Try a look here: nothing on the site changes until you use it.</p>
           <div className="wb-theme">
             <div className="wb-theme__controls">
-              <section className="card" aria-labelledby="wb-th-skin">
-                <h2 id="wb-th-skin" className="wb-card-h">Start from a look</h2>
-                <div className="wb-skins" role="radiogroup" aria-labelledby="wb-th-skin">
-                  {siteLooks().map((s) => (
-                    <label key={s.key} className="wb-skin" data-on={t.skin === s.key ? '' : undefined}>
-                      <input type="radio" name="wb-skin" checked={t.skin === s.key} onChange={() => pickSkin(s.key)} />
-                      <span className="wb-skin__name">{s.label}</span>
-                      <span className="wb-skin__dots" aria-hidden="true">
-                        {['brand', 'accent', 'ink', 'surface'].map((k) => <span key={k} style={{ background: s.colors[k] }} />)}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-                <p className="wb-field__hint">Picking one sets its colours, type and corners; your logo stays.</p>
+              <LooksCard t={t} inUse={inUse} onPick={pickSkin}>
+                {before && (
+                  <button type="button" className="btn btn-quiet wb-tap wb-back" disabled={!online || state?.state === 'saving'} onClick={goBack}>
+                    Back to the look from {day(before.at)}
+                  </button>
+                )}
                 {siteId && q.data?.brand_theme && (
                   <button type="button" className="btn wb-tap wb-follow__use" onClick={() => setT((x) => full({ ...q.data.brand_theme, logo: x.logo }))}>Start from the campaign’s brand</button>
                 )}
@@ -313,6 +401,28 @@ export default function WebsiteTheme() {
                     <span>The website takes the logo, colours, type and corners from Settings → Brand at once. {dirty ? 'The look you last saved is kept to go back to; what you changed here since is not.' : 'Its own look is kept to go back to.'}</span>
                     <button type="button" className="btn wb-tap" disabled={!online || Boolean(switching)} onClick={() => switchTo(true)}>{switching ? 'Working…' : 'Yes, use it'}</button>
                     <button type="button" className="btn btn-quiet wb-tap" disabled={Boolean(switching)} onClick={() => setAsking(false)}>No</button>
+                  </div>
+                )}
+              </LooksCard>
+
+              <h2 className="wb-theme__more">Change the details</h2>
+              <section className="card" aria-labelledby="wb-th-heads">
+                <h2 id="wb-th-heads" className="wb-card-h">Headings</h2>
+                <p className="wb-field__label" id="wb-th-scale">Heading sizes</p>
+                <div className="wb-radii" role="radiogroup" aria-labelledby="wb-th-scale">
+                  {SCALES.map((x) => (
+                    <label key={x.value} className="wb-radius" data-on={(t.scale || 'classic') === x.value ? '' : undefined}>
+                      <input type="radio" name="wb-scale" checked={(t.scale || 'classic') === x.value}
+                        onChange={() => setT((cur) => { const { scale, ...rest } = cur; return x.value === 'modern' ? { ...rest, scale: 'modern' } : rest; })} />
+                      <span>{x.label}</span>
+                    </label>
+                  ))}
+                </div>
+                <p className="wb-field__hint">Modern: calmer headings, with the top of each page the biggest thing on it.</p>
+                {typeof t.pop === 'boolean' && siteLooks().some((l) => l.pop === true) && (
+                  <div className="wb-toggle">
+                    <input id="wb-pop" type="checkbox" className="wb-toggle__box" checked={t.pop} onChange={(e) => setT((x) => ({ ...x, pop: e.target.checked }))} />
+                    <label htmlFor="wb-pop">A shadow under big headings</label>
                   </div>
                 )}
               </section>
@@ -357,12 +467,6 @@ export default function WebsiteTheme() {
                     </label>
                   ))}
                 </div>
-                {typeof t.pop === 'boolean' && siteLooks().some((l) => l.pop === true) && (
-                  <div className="wb-toggle">
-                    <input id="wb-pop" type="checkbox" className="wb-toggle__box" checked={t.pop} onChange={(e) => setT((x) => ({ ...x, pop: e.target.checked }))} />
-                    <label htmlFor="wb-pop">A shadow under big headings</label>
-                  </div>
-                )}
               </section>
 
               <section className="card" aria-labelledby="wb-th-logo">
@@ -373,7 +477,7 @@ export default function WebsiteTheme() {
               </section>
             </div>
             <div className="wb-theme__sample">
-              <Sample t={t} org={org} added={added} />
+              {homeLive ? <LookPreview pageId={homeLive.id} theme={t} /> : <Sample t={t} org={org} added={added} />}
             </div>
           </div>
         </>

@@ -246,6 +246,9 @@ export function renderContext({ kind = 'page', site, page, post, campaign, data,
     data: d,
     timeZone: tz,
     preview: Boolean(c.preview),
+    // The builder's own frame of a draft (?edit=1): the only place that shows
+    // what a section still lacks as a stand-in (a modern hero's "Your picture").
+    edit: Boolean(c.preview && c.edit),
     // The voter guide alone for another website's frame, and its filters
     // from the address (?area=, ?day=, ?q=) as the server checked them.
     embed: Boolean(c.embed),

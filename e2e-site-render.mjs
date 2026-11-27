@@ -37,7 +37,7 @@ import { renderSite, readSiteAsset, islandsBuilt } from './server/ext/site/rende
 import { rewriters } from './server/lib/mount.js';
 import { ownAsset } from './server/ext/site/from-preset.js';
 import { imagineSurrey, baseSample, samplePost, sampleData } from './server/test/site-samples.js';
-import { checkTheme, contrast, mix, PAIRS, SKINS, lookOf } from './shared/site/theme.js';
+import { checkTheme, contrast, mix, PAIRS, SKINS, lookOf, everyLook } from './shared/site/theme.js';
 import { buildGuide, publicGuide } from './server/ext/voteguide/read.js';
 
 // The renderer runs here as Imagine Surrey's own server does: its look is
@@ -279,6 +279,24 @@ const server = createServer(async (req, res) => {
     const r = url.pathname === '/'
       ? renderSite({ kind: 'page', site: imagineSurrey.site, page: imagineSurrey.page, data: imagineSurrey.data, ctx })
       : renderSite({ kind: 'notFound', site: imagineSurrey.site, data: imagineSurrey.data, ctx });
+    return send(r.status, 'text/html; charset=utf-8', r.html);
+  }
+  // Every look a website can pick: /looks/<key>/, a page with one point
+  // ("What we stand for") in that look, on this server (Imagine Surrey's:
+  // its own stylesheet is linked on every page, whatever the look).
+  const lk = /^\/looks\/([a-z0-9-]+)(\/.*)?$/.exec(url.pathname);
+  const look = lk && everyLook().find((l) => l.key === lk[1]);
+  if (look) {
+    const rest = lk[2] || '/';
+    if (rest.startsWith('/site-assets/')) {
+      const a = siteFile(rest.slice('/site-assets/'.length) + url.search);
+      return a ? send(200, a.type, a.body, { 'cache-control': a.cache }) : send(404, 'text/plain', 'no such file');
+    }
+    const site = { ...baseSample.site, theme: { ...look, skin: look.key } };
+    const page = { id: 'page-look', slug: 'about', title: 'About', description: '', modules: [
+      { id: 'one-point', kind: 'columns', props: { title: 'What we stand for', intro: '', items: [{ icon: 'civic', title: 'One point', body: 'Only one so far.' }], ctaText: '', cta: { label: '', href: '' } } },
+    ] };
+    const r = renderSite({ kind: 'page', site, page, data: baseSample.data, ctx: { root: `/looks/${look.key}/`, path: '/about', origin: ORIGIN, islands: true } });
     return send(r.status, 'text/html; charset=utf-8', r.html);
   }
   const m = /^\/(is|base)(\/.*)?$/.exec(url.pathname);
@@ -816,6 +834,53 @@ for (const state of Object.keys(VG_SHIFT)) {
     if (state === 'over' || state === 'not_out') check(`voter guide ${state} at ${width}: no place or name`, !/Example Community Hall|Ann Example/.test(words));
     if (width === 390) await shot(page, `vg-${state}-390`);
     await page.context().close();
+  }
+}
+
+// ── Every look: one point fills its row; the legal lines can't be hidden ──
+// On a tablet the points are two across: a single one takes the whole row,
+// not half of it. The Authorized-by line under each look's stylesheets (the
+// campaign's own too) is shown, on its own line, 15px, opaque, on the page.
+{
+  const keys = everyLook().map((l) => l.key);
+  check('every look is drawn, the campaign’s own among them', keys.includes('imagine-surrey') && keys.includes('civic-blue') && keys.includes('evergreen') && keys[0] === 'base', keys.join(', '));
+  for (const key of keys) {
+    for (const width of [700, 1360]) {
+      const page = await newPage({ width, height: 900 });
+      await page.goto(`${ORIGIN}/looks/${key}/`, { waitUntil: 'load' });
+      const got = await page.evaluate(() => {
+        const grid = document.querySelector('.pillars')?.getBoundingClientRect();
+        const one = document.querySelector('.pillar')?.getBoundingClientRect();
+        const line = document.querySelector('.footer-authorization');
+        const cs = line && getComputedStyle(line);
+        const r = line?.getBoundingClientRect();
+        const bottom = document.querySelector('.footer-bottom');
+        const bs = bottom && getComputedStyle(bottom);
+        const sheets = [...document.querySelectorAll('link[rel="stylesheet"]')].map((l) => l.getAttribute('href'));
+        // Shown: drawn, not hidden by any ancestor, with text on the page.
+        let shown = Boolean(line);
+        for (let n = line; n && n !== document.documentElement; n = n.parentElement) {
+          const s = getComputedStyle(n);
+          if (s.display === 'none' || s.visibility !== 'visible' || Number(s.opacity) < 1) shown = false;
+        }
+        return {
+          gridW: grid?.width || 0, oneW: one?.width || 0,
+          text: line?.textContent || '', shown, w: r?.width || 0, h: r?.height || 0,
+          left: r?.left ?? -1, right: r?.right ?? 1e9, vw: document.documentElement.clientWidth,
+          display: cs?.display, size: parseFloat(cs?.fontSize || '0'), clip: cs?.clipPath, indent: cs?.textIndent,
+          col: bs?.flexDirection, sheets,
+        };
+      });
+      check(`${key} at ${width}: one point fills its row`, got.gridW > 0 && Math.abs(got.oneW - got.gridW) < 2, JSON.stringify({ gridW: got.gridW, oneW: got.oneW }));
+      if (width === 1360) {
+        check(`${key}: the Authorized-by line is shown, on its own line, 15px, on the page${key === 'imagine-surrey' || got.sheets.some((h) => /look\.css/.test(h)) ? ' (with the campaign’s own stylesheet)' : ''}`,
+          /Authorized by Ada Example/.test(got.text) && got.shown && got.display === 'block' && got.size >= 15 && got.w > 50 && got.h >= 15
+            && got.left >= 0 && got.right <= got.vw && got.col === 'column' && (got.clip === 'none' || !got.clip) && (got.indent === '0px' || !got.indent)
+            && got.sheets.some((h) => /imagine-surrey\/look\.css/.test(h)),
+          JSON.stringify({ ...got, text: got.text.slice(0, 60) }));
+      }
+      await page.context().close();
+    }
   }
 }
 

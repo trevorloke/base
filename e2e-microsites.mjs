@@ -155,7 +155,7 @@ await page.locator('#wb-s-agent').waitFor();
 await page.fill('#wb-s-name', ORG);
 await page.fill('#wb-s-agent', 'Ada Example');
 await page.fill('#wb-s-agentc', '604-555-0100');
-await page.getByRole('button', { name: 'Save settings' }).click();
+await page.locator('#org').getByRole('button', { name: 'Save', exact: true }).click();
 await page.waitForFunction(() => document.querySelector('.wb-saved')?.dataset.state === 'saved', null, { timeout: 10000 }).catch(() => {});
 
 // ── 4. go live; Domain ──
@@ -294,7 +294,7 @@ await go('/website/sites', sp);
 check('staff: no New website', (await primaries(sp)).length === 0);
 await both('9-staff-sites', sp);
 await go(`/website/sites/${siteId}/look`, sp);
-check('staff: the Look opens, with “Start from the campaign’s brand” and Save the look', await sp.getByRole('button', { name: 'Start from the campaign’s brand' }).count() === 1 && JSON.stringify(await primaries(sp)) === '["Save the look"]');
+check('staff: the Look opens, with “Start from the campaign’s brand” and Use this look', await sp.getByRole('button', { name: 'Start from the campaign’s brand' }).count() === 1 && JSON.stringify(await primaries(sp)) === '["Use this look"]');
 await both('9-staff-look', sp);
 await sctx.close();
 

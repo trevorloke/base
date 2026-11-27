@@ -23,5 +23,8 @@ export const full = (t) => {
   };
   // A look with its own switches (the heading shadow, where theme.js has it) keeps them.
   if (typeof t?.pop === 'boolean' || typeof skin.pop === 'boolean') out.pop = typeof t?.pop === 'boolean' ? t.pop : Boolean(skin.pop);
+  // The heading sizes: only a theme that says 'modern' (a saved theme
+  // without it stays as it was: the form saves what it shows).
+  if (t?.scale === 'modern') out.scale = 'modern';
   return out;
 };

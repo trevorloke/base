@@ -7,13 +7,20 @@
 //                                     same components the server uses, and
 //                                     swapped in place
 //   { type: 'wa:focus', section }     scroll to a section and outline it
+//   { type: 'wa:look', theme }        Website → Theme's preview of the
+//                                     published home page: the page drawn
+//                                     in that look (its colours, faces,
+//                                     heading sizes and logo), unsaved; the
+//                                     page then goes nowhere when tapped
 // On the builder's own preview (?edit=1) a tap on a headline, a paragraph,
 // a button or a picture posts { type: 'wa:pick', section, field } back.
 // Only messages from the page that framed this one, from this origin, and
 // only these types; it never navigates and never writes anything.
 import { MODULE_BY_KIND, presetModuleDefaults } from '../../shared/site/catalogue.js';
-import { presetLooks } from '../../shared/site/theme.js';
+import { presetLooks, checkTheme, themeCss } from '../../shared/site/theme.js';
+import { faceCss, fontFor } from '../../shared/site/fonts.js';
 import { drawBody, markSections } from '../../shared/site/components/preview.js';
+import { renderContext } from '../../shared/site/components/context.js';
 import { markdownText } from '../../shared/markdown.js';
 
 const el = document.getElementById('wa-rc');
@@ -107,6 +114,50 @@ function redraw(next) {
   window.parent.postMessage({ type: 'wa:drawn', n: drawn }, location.origin);
 }
 
+// ── A look tried on the page (Website → Theme) ──
+let trying = false;
+function tryLook(given) {
+  const added = Array.isArray(wa.site?.fonts) ? wa.site.fonts : [];
+  const { theme } = checkTheme(given);
+  wa.site = { ...wa.site, theme };
+  const rc = renderContext({ kind: wa.kind, site: wa.site, page: wa.page, data: wa.data, ctx: wa.ctx });
+  let css = document.getElementById('wa-look');
+  if (!css) {
+    css = document.createElement('style');
+    css.id = 'wa-look';
+    document.head.append(css);
+  }
+  css.textContent = faceCss([fontFor(theme.fonts.heading, added), fontFor(theme.fonts.body, added)], rc.loc.fontAssets) + themeCss(theme, added);
+  const root = document.documentElement;
+  if (theme.scale === 'modern') root.setAttribute('data-scale', 'modern');
+  else root.removeAttribute('data-scale');
+  root.setAttribute('data-skin', theme.skin);
+  root.setAttribute('data-heading', theme.fonts.heading);
+  root.setAttribute('data-body', theme.fonts.body);
+  // The header (its logo), the sections (the hero's picture follows the
+  // heading sizes) and the footer, drawn again in this look.
+  const tpl = document.createElement('template');
+  tpl.innerHTML = drawBody(wa, modules);
+  for (const sel of ['header.site-header', 'footer.site-footer']) {
+    const fresh = tpl.content.querySelector(sel);
+    const cur = document.querySelector(sel);
+    if (fresh && cur) cur.replaceWith(document.importNode(fresh, true));
+  }
+  const fresh = tpl.content.querySelector('main');
+  if (fresh && main()) main().replaceChildren(...[...fresh.children].map((n) => document.importNode(n, true)));
+  if (!trying) {
+    trying = true;
+    // The published page, not a draft: the draft's banner doesn't belong.
+    document.querySelector('.preview-banner')?.remove();
+    // A preview of a look: nothing in it goes anywhere or sends anything.
+    document.addEventListener('click', (e) => { if (e.target.closest?.('a, button, summary')) e.preventDefault(); }, true);
+    document.addEventListener('submit', (e) => e.preventDefault(), true);
+  }
+  drawn += 1;
+  root.setAttribute('data-wa-drawn', String(drawn));
+  window.parent.postMessage({ type: 'wa:drawn', n: drawn }, location.origin);
+}
+
 function focusSection(id) {
   const s = document.getElementById(`m-${id}`);
   if (!s) return;
@@ -180,6 +231,7 @@ if (wa) {
     if (!d || typeof d !== 'object' || typeof d.type !== 'string' || !d.type.startsWith('wa:')) return;
     if (d.type === 'wa:modules' && Array.isArray(d.modules)) redraw(d.modules);
     else if (d.type === 'wa:focus' && typeof d.section === 'string') focusSection(d.section);
+    else if (d.type === 'wa:look' && d.theme && typeof d.theme === 'object') tryLook(d.theme);
   });
   // Which petitions and pledges this page's data holds (needsReload).
   window.parent.postMessage({ type: 'wa:ready', campaigns: Object.keys(wa.data?.campaigns || {}) }, location.origin);

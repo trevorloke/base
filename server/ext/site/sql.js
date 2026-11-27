@@ -308,4 +308,8 @@ create table if not exists site_font_files (
 -- A website picture's smaller copies (WA decision 26) are media rows of
 -- their own, pointing at the picture; the picture list leaves them out.
 alter table media add column if not exists size_of uuid;
+-- The look the main website had before its last change, and when (WEB:
+-- Website → Theme's "Back to the look from …"). Null until a look changes.
+alter table site_settings add column if not exists look_before jsonb;
+alter table site_settings add column if not exists look_before_at timestamptz;
 `;

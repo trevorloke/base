@@ -208,7 +208,7 @@ try {
   await page.locator('#wb-s-agent').waitFor();
   await page.fill('#wb-s-agent', 'Ada Example');
   await page.fill('#wb-s-agentc', '604-555-0100');
-  await page.getByRole('button', { name: 'Save settings' }).click();
+  await page.locator('#org').getByRole('button', { name: 'Save', exact: true }).click();
   await page.locator('text=Saved').first().waitFor({ timeout: 10000 });
   // The machine's drafts arrive with the first sweep.
   await waitFor(async () => (await api('/site/languages/pa/legal')).json?.draft_from === 'machine');

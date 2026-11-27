@@ -342,6 +342,7 @@
 .wb-page--wide { max-width: 1180px; }
 .wb-card-h { font-size: 18px; margin: 0 0 var(--s-3); }
 .wb-theme { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: var(--s-5); align-items: start; }
+@media (min-width: 1001px) { .wb-theme:has(.wb-look-pv) { grid-template-columns: minmax(0, 1fr) minmax(380px, 520px); } }
 .wb-theme__sample { position: sticky; top: var(--s-4); }
 @media (max-width: 1000px) {
   .wb-theme { grid-template-columns: minmax(0, 1fr); }
@@ -354,7 +355,19 @@
 }
 .wb-skin[data-on] { border-color: var(--mark); box-shadow: inset 0 0 0 1px var(--mark); background: var(--mark-soft); }
 .wb-skin input { width: 22px; height: 22px; margin: 0; accent-color: var(--mark); }
-.wb-skin__name { font-weight: 700; flex: 1 1 auto; }
+.wb-skin__name { font-weight: 700; }
+.wb-skin__words { flex: 1 1 auto; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.wb-skin__fonts { font-size: 14px; color: var(--muted); }
+.wb-skin__use { align-self: flex-start; font-size: 13px; font-weight: 700; padding: 1px 8px; border-radius: 999px; background: var(--mark-soft); color: var(--ink); border: 1px solid var(--mark); }
+.wb-back { margin-top: var(--s-3); }
+.wb-theme__more { margin: var(--s-4) 0 0; font-size: 18px; }
+.wb-field__label { margin: 0 0 var(--s-2); font-size: 14px; font-weight: 600; color: var(--text-2); }
+/* The live preview of the published home page in the look being tried. */
+.wb-look-pv { margin: 0; display: flex; flex-direction: column; gap: var(--s-2); }
+.wb-look-pv__box { border: 1px solid var(--line-strong); border-radius: 12px; overflow: hidden; background: var(--surface); height: min(70vh, 720px); }
+@media (max-width: 1000px) { .wb-look-pv__box { height: 55vh; } }
+.wb-look-pv__frame { display: block; width: 100%; height: 100%; border: 0; }
+.wb-look-pv__wait { padding: var(--s-4); }
 .wb-skin__dots { display: inline-flex; gap: 4px; }
 .wb-skin__dots span { width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--line-strong); }
 .wb-skin:has(input:focus-visible) { outline: 2px solid var(--mark); outline-offset: 2px; }
@@ -434,6 +447,31 @@
 .wb-savebar > .wb-field__err { flex: 1 1 100%; margin: 0; }
 .wb-savebar__what { color: var(--text-3); font-size: 14px; margin-right: auto; }
 @media (max-width: 720px) { .wb-savebar { bottom: calc(80px + env(safe-area-inset-bottom)); } }
+/* Overview: what the site still lacks before it's shared (WEB 3b). */
+.wb-todo { border-left: 4px solid var(--warn, #b54708); }
+.wb-todo__h { margin: 0 0 var(--s-2); font-size: 17px; }
+.wb-todo__list { margin: 0 0 var(--s-2); padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--s-2); }
+.wb-todo__item a { font-weight: 600; }
+
+/* Settings as small panels (WEB 3b): a heading and a line; opened, the fields and Save. */
+.wb-settings .wb-panel { margin-bottom: var(--s-3); padding: 0; overflow: hidden; }
+.wb-panel__h { margin: 0; font-size: inherit; }
+.wb-panel__toggle {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; min-height: 64px; padding: var(--s-3) calc(var(--s-4) + 28px) var(--s-3) var(--s-4);
+  border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; position: relative;
+}
+.wb-panel__toggle::after {
+  content: ''; position: absolute; right: var(--s-4); top: 50%; width: 9px; height: 9px; margin-top: -7px;
+  border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); transition: transform 0.15s;
+}
+.wb-panel__toggle[aria-expanded='true']::after { transform: rotate(-135deg); margin-top: -2px; }
+.wb-panel__toggle:focus-visible { outline: 2px solid var(--mark); outline-offset: -2px; }
+.wb-panel__title { font-size: 17px; font-weight: 700; }
+.wb-panel__line { font-size: 14px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.wb-panel__body { padding: 0 var(--s-4) var(--s-4); border-top: 1px solid var(--rule-2); padding-top: var(--s-3); }
+.wb-panel__acts { display: flex; align-items: center; gap: var(--s-3); margin-top: var(--s-3); }
+.wb-panel__note { font-size: 14px; color: var(--text-3); }
+.wb-list__page { padding: 10px 6px; }
 
 /* ── News and petitions ── */
 .wb-row--post, .wb-row--camp { padding-left: var(--s-3); }
