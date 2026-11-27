@@ -16,11 +16,19 @@
 // CALLS and SHAPES and in the readers just below them, so a wrong guess is
 // fixed in this file alone. "Check Render’s answers" on the Render page
 // (check() here) says which answers are as expected.
+//
+// Stage 2 (making a new campaign's database and service) is off until that
+// check has also seen, in Render's own answer about staging's service and
+// database, every word the two creating calls send (checkMake() here); the
+// routes keep that on the log and hand it to makeTarget(), which refuses
+// without it. A new database's address passes from Render to Render inside
+// makeService() and nowhere else.
 import http from 'node:http';
 import https from 'node:https';
+import { createHash } from 'node:crypto';
 import { cfg, renderKey, RENDER_ID_RE } from './config.mjs';
 import { normalizeOrigin } from './campaigns.mjs';
-import { READABLE, CANARY, guard, valueFor, domainFor, databaseNameFor, REFUSALS } from './render-guard.mjs';
+import { READABLE, CANARY, guard, valueFor, domainFor, databaseNameFor, REFUSALS, settingsFor, makeNames, makeRefusal, madeHere } from './render-guard.mjs';
 
 const API_HOST = 'api.render.com';
 const API_PATH = '/v1';
@@ -28,6 +36,7 @@ const MAX_BYTES = 512 * 1024;
 const CALL_MS = 8000;
 const CACHE_MS = 60_000;
 const MAX_PAGES = 5;
+const MAKE_MS = 20_000;
 
 // ── The whole surface: every request this file can make ──
 // {id} a Render id · {owner} the workspace's id · {key} a setting on READABLE
@@ -49,16 +58,22 @@ export const CALLS = Object.freeze({
   addDomain: ['POST', '/services/{id}/custom-domains'],
   checkDomain: ['POST', '/services/{id}/custom-domains/{host}/verify'],
   closeDatabase: ['PATCH', '/postgres/{id}'],
+  // Stage 2: a new campaign's database and service.
+  makeDatabase: ['POST', '/postgres'],
+  connectionInfo: ['GET', '/postgres/{id}/connection-info'],
+  makeService: ['POST', '/services'],
 });
 
 // ── Every word of Render's this file relies on (all unverified) ──
 export const SHAPES = Object.freeze({
   // What a new campaign's service and database are made as (the same words
   // as snippets.mjs renderSnippet and render.yaml's production block; a
-  // test keeps the three equal). Nothing is made by this file yet.
+  // test keeps the three equal). ready: a database's status once it can be
+  // used; failed: the ones that mean Render couldn't make it.
   make: Object.freeze({
     servicePlan: 'starter', databasePlan: 'basic-1gb', databasePlanApi: 'basic_1gb', region: 'oregon', postgres: '16',
     branch: 'production', runtime: 'docker', dockerfilePath: './Dockerfile', dockerContext: '.', healthCheckPath: '/api/health', autoDeploy: 'yes',
+    ready: 'available', failed: Object.freeze(['unavailable', 'suspended', 'recovery_failed']),
   }),
   // The build command the control centre's own service should have.
   platformBuild: 'npm ci --omit=dev --ignore-scripts',
@@ -199,6 +214,37 @@ const blueprintOf = (raw) => {
   });
 };
 
+// ── Stage 2: what Check Render’s answers compares before anything is made ──
+// Render's own answer about staging's service and database (made from
+// render.yaml with the same words) must use each word the creating calls
+// send. → the names of the fields that don't match ([] when all do).
+const differs = (list) => list.filter(([, got, want]) => (typeof want === 'function' ? !want(got) : got !== want)).map(([field]) => field);
+const madeLikeService = (raw, self) => {
+  const s = obj(raw);
+  const d = obj(s.serviceDetails);
+  const e = obj(d.envSpecificDetails);
+  const m = SHAPES.make;
+  return differs([
+    ['type', s.type, SHAPES.webService], ['repo', T.repo(s.repo), self?.repo || ''], ['autoDeploy', s.autoDeploy, m.autoDeploy], ['createdAt', T.time(s.createdAt), (v) => v != null],
+    ['serviceDetails.url', T.origin(d.url), (v) => v != null], ['serviceDetails.runtime', d.runtime, m.runtime], ['serviceDetails.plan', d.plan, m.servicePlan],
+    ['serviceDetails.region', d.region, m.region], ['serviceDetails.healthCheckPath', d.healthCheckPath, m.healthCheckPath],
+    ['serviceDetails.envSpecificDetails.dockerfilePath', e.dockerfilePath, m.dockerfilePath], ['serviceDetails.envSpecificDetails.dockerContext', e.dockerContext, m.dockerContext],
+  ]);
+};
+const madeLikeDatabase = (raw, self) => {
+  const p = obj(raw);
+  const m = SHAPES.make;
+  return differs([
+    ['name', T.name(p.name), (v) => v != null], ['owner.id', obj(p.owner).id, self?.ownerId || ''], ['plan', p.plan, m.databasePlanApi], ['version', T.version(p.version), m.postgres],
+    ['region', p.region, m.region], ['status', p.status, m.ready], ['createdAt', T.time(p.createdAt), (v) => v != null], ['ipAllowList', p.ipAllowList, Array.isArray],
+  ]);
+};
+// Which version of the words above and of the creating calls a check saw:
+// a release that changes any of them needs Check Render’s answers again.
+const MAKE_SHAPES = createHash('sha256')
+  .update(JSON.stringify([SHAPES.make, CALLS.makeDatabase, CALLS.connectionInfo, CALLS.makeService, madeLikeService.toString(), madeLikeDatabase.toString()]))
+  .digest('hex').slice(0, 16);
+
 // ── Problems, by name ──
 const problemOf = (status) => {
   if (status === 401 || status === 403) return 'refused-key';
@@ -294,12 +340,14 @@ export const makeRender = ({ key = renderKey(), base = cfg().renderApi, send, ti
     });
     // An id that isn't an id never reaches the wire.
     if (bad) return { failed: fail('error') };
+    // The two creating calls get longer: Render may take a while to answer them.
+    const ms = name === 'makeDatabase' || name === 'makeService' ? Math.max(timeoutMs, Math.min(MAKE_MS, timeoutMs * 3)) : timeoutMs;
     const once = async () => {
       let timer;
       try {
         return await Promise.race([
-          wire(method, path, body, { timeoutMs }),
-          new Promise((_, no) => { timer = setTimeout(() => no(named('timeout')), timeoutMs + 250); timer.unref?.(); }),
+          wire(method, path, body, { timeoutMs: ms }),
+          new Promise((_, no) => { timer = setTimeout(() => no(named('timeout')), ms + 250); timer.unref?.(); }),
         ]);
       } catch (e) {
         return { thrown: e?.name === 'timeout' ? 'timeout' : e?.name === 'too-big' ? 'unexpected-answer' : 'error' };
@@ -434,7 +482,10 @@ export const makeRender = ({ key = renderKey(), base = cfg().renderApi, send, ti
 
   // The service saved for this campaign, read again now and checked.
   // health: the newest check of the campaign's saved Render address.
-  const target = async (campaign, envRow, health, { database: wantDb = false } = {}) => {
+  // stage2: the gate is open (a campaign made here may have its missing
+  // settings added); made: the service was made by this campaign's own make
+  // job and hasn't answered yet, so there is no pin to check.
+  const target = async (campaign, envRow, health, { database: wantDb = false, stage2 = false, made = false } = {}) => {
     if (!envRow?.render_service || !T.id(envRow.render_service)) return refused('changed');
     const me = await self({ fresh: true });
     if (!me.ok) return me;
@@ -446,14 +497,14 @@ export const makeRender = ({ key = renderKey(), base = cfg().renderApi, send, ti
       db = await database(envRow.render_db, { fresh: true });
       if (!db.ok) return db.problem === 'not-found' ? refused('database') : db;
     }
-    const no = guard({ campaign, envRow, health, self: me, svc, db, ownId: cfg().ownService, phase: 'use' });
+    const no = guard({ campaign, envRow, health, self: me, svc, db, ownId: cfg().ownService, phase: 'use', made });
     if (no) return refused(no);
     const t = Object.freeze({
       kind: wantDb ? 'database' : 'service', id: wantDb ? db.id : svc.id, service: svc.id,
       name: wantDb ? db.name : svc.name, label: svc.name, url: svc.url, branch: svc.branch, campaign: campaign.name,
     });
     targets.add(t);
-    about.set(t, { campaign });
+    about.set(t, { campaign, stage2 });
     return { ok: true, target: t, svc, db: db || null };
   };
 
@@ -491,7 +542,7 @@ export const makeRender = ({ key = renderKey(), base = cfg().renderApi, send, ti
   // render-guard.mjs from base.win's own key. No caller can hand a value in.
   const setOne = async (t, key) => {
     if (!fits(t, 'service')) return NOT_ALLOWED;
-    const value = valueFor(about.get(t).campaign, key);
+    const value = valueFor(about.get(t).campaign, key, { stage2: about.get(t).stage2 });
     if (value == null) return NOT_ALLOWED;
     return done(await call('setOne', { id: t.id, key }, { value }));
   };
@@ -530,6 +581,89 @@ export const makeRender = ({ key = renderKey(), base = cfg().renderApi, send, ti
     return done(await call('closeDatabase', { id: t.id }, { ipAllowList: keep }));
   };
 
+  // ── Stage 2: making a new campaign's database and service ──
+  // A make target: this campaign, its two names, our workspace and
+  // repository, read now. gate: what the newest Check Render’s answers on
+  // the log saw ({ shapes, owner }); without a match nothing is made.
+  const makeTarget = async (campaign, envRow, gate) => {
+    if (!gate || gate.shapes !== MAKE_SHAPES) return refused('unread');
+    if (!madeHere(campaign) || campaign.archived_at || makeRefusal(campaign.name) || !settingsFor(campaign)) return refused('not-client');
+    const me = await self({ fresh: true });
+    if (!me.ok) return me;
+    if (me.ownerId !== gate.owner) return fail('other-workspace');
+    const n = makeNames(campaign.name);
+    const t = Object.freeze({ kind: 'make', campaign: campaign.name, serviceName: n.service, dbName: n.database, ownerId: me.ownerId, repo: me.repo });
+    targets.add(t);
+    about.set(t, { campaign, envRow });
+    return { ok: true, target: t };
+  };
+  // Every page of a list read again now, the names asked for only.
+  const byName = async (kind, name) => {
+    const got = kind === 'service' ? await services({ fresh: true }) : await databases({ fresh: true });
+    return got.ok ? { ok: true, list: got.list.filter((x) => x.name === name) } : got;
+  };
+  // The database: closed to the internet, made with the words above. → { ok, id }
+  const makeDatabase = async (t) => {
+    if (!fits(t, 'make')) return NOT_ALLOWED;
+    const m = SHAPES.make;
+    const res = await call('makeDatabase', {}, { name: t.dbName, ownerId: t.ownerId, plan: m.databasePlanApi, region: m.region, version: m.postgres, ipAllowList: [] });
+    if (res.failed) return res.failed;
+    const id = T.id(obj(res.json).id);
+    // Made, but its id can't be read: the next look finds it by name.
+    return id && T.name(obj(res.json).name) === t.dbName ? { ok: true, id } : fail('unexpected-answer', { status: res.status, unsure: true, field: 'id' });
+  };
+  // The service, with every setting in the creating call (so it never
+  // starts once on the code's defaults) and the new database's address.
+  // proof: { database, since } from this campaign's make job: the database
+  // it made (or found after a make with no answer) and when that began.
+  // Refused, before the database's details are read, unless that database
+  // is the one named for this campaign, in our workspace, made since then,
+  // and no service has the name yet.
+  const makeService = async (t, proof) => {
+    if (!fits(t, 'make') || !proof || !T.id(proof.database)) return NOT_ALLOWED;
+    const since = Date.parse(proof.since);
+    const d = await database(proof.database, { fresh: true });
+    if (!d.ok) return d;
+    if (d.name !== t.dbName || d.ownerId !== t.ownerId || !Number.isFinite(since) || !d.createdAt || Date.parse(d.createdAt) < since - 120_000) return NOT_ALLOWED;
+    const there = await byName('service', t.serviceName);
+    if (!there.ok) return there;
+    if (there.list.length) return NOT_ALLOWED;
+    const settings = settingsFor(about.get(t).campaign);
+    if (!settings) return NOT_ALLOWED;
+    const info = await call('connectionInfo', { id: d.id });
+    // Its address passes straight into the creating call; only a status leaves here.
+    if (info.failed) return fail(info.failed.problem === 'not-found' ? 'not-found' : 'wire', { status: info.failed.status });
+    const address = str(obj(info.json).internalConnectionString, 1000);
+    if (!address || !/^postgres(ql)?:\/\//.test(address)) return fail('wire', { status: info.status });
+    const m = SHAPES.make;
+    const res = await call('makeService', {}, {
+      type: SHAPES.webService, name: t.serviceName, ownerId: t.ownerId, repo: t.repo, branch: m.branch, autoDeploy: m.autoDeploy,
+      envVars: [...settings, { key: 'DATABASE_URL', value: address }],
+      serviceDetails: { runtime: m.runtime, plan: m.servicePlan, region: m.region, healthCheckPath: m.healthCheckPath, envSpecificDetails: { dockerfilePath: m.dockerfilePath, dockerContext: m.dockerContext } },
+    });
+    if (res.failed) return res.failed;
+    const made = serviceOf(obj(res.json).service).value;
+    return made && made.id && made.name === t.serviceName ? { ok: true, id: made.id, url: made.url } : fail('unexpected-answer', { status: res.status, unsure: true, field: 'service' });
+  };
+
+  // What Check Render’s answers compares for making, against staging's own
+  // service and database (made-up data only). Reads only: rows 4 and 9.
+  // → { ready, lines: [{ call, ok, problem, status, fields }], shapes, owner }
+  const checkMake = async ({ service: sid = null, database: did = null } = {}) => {
+    const me = await self({ fresh: true });
+    const lines = [];
+    const compare = async (callName, id, reader) => {
+      if (!id || !T.id(id)) return null;
+      const res = await call(callName, { id });
+      if (res.failed) return { call: `make-${callName}`, ok: false, problem: res.failed.problem, status: res.failed.status, fields: [] };
+      const fields = reader(res.json, me.ok ? me : null);
+      return { call: `make-${callName}`, ok: !fields.length, problem: null, status: null, fields };
+    };
+    for (const l of [await compare('service', sid, madeLikeService), await compare('database', did, madeLikeDatabase)]) if (l) lines.push(l);
+    const ready = Boolean(me.ok && lines.length === 2 && lines.every((l) => l.ok));
+    return { ready, lines, shapes: MAKE_SHAPES, owner: me.ok ? me.ownerId : null };
+  };
+
   // ── Check Render’s answers: every read, and whether it came back as expected ──
   // ids: the sample's saved service and database (staging holds only made-up
   // data), or neither before the sample is connected.
@@ -565,6 +699,7 @@ export const makeRender = ({ key = renderKey(), base = cfg().renderApi, send, ti
   return Object.freeze({
     self, workspaces, services, service, lastDeploy, domains, isSet, databases, database, blueprints,
     target, candidate, deploy, restart, setOne, addDomain, checkDomain, closeDatabase, check, forget,
+    makeTarget, byName, makeDatabase, makeService, checkMake, makeShapes: MAKE_SHAPES,
   });
 };
 

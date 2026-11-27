@@ -70,6 +70,13 @@ export const envLines = ({ name, display, values, publicKey = '' }) => [
   { key: 'GOOGLE_TOKEN_KEY', value: '', random: true },
 ];
 export const envText = (opts) => envLines(opts).map((l) => `${l.key}=${l.value}`).join('\n');
+// The same settings for Render's creating call (stage 2, Make it in
+// Render): each value as it is, without the .env block's quotes; the two
+// random keys made by Render itself (generateValue), so their values never
+// reach the control centre. No database address here: render-api.mjs adds
+// the new database's own, and nothing else is ever added.
+// → [{ key, value } | { key, generateValue: true }]
+export const serviceSettings = (opts) => envLines(opts).map((l) => (l.random ? { key: l.key, generateValue: true } : { key: l.key, value: String(l.value ?? '').replace(/^"(.*)"$/, '$1') }));
 
 // Never in a block made here: staging's sample, demo and frame settings.
 // (The map area and the opponents are written above from the campaign's

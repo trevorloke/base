@@ -87,15 +87,24 @@ const publicCard = ({ name, serverUrl, state, old = false }) => {
 // (its STARBASE_PUBLIC_URL), so it opens only once that address is ready.
 const inviteNotReady = (name) => `Their invite link goes to ${publicHost(name)}, which isn’t ready yet. The link opens once it is: do “Give it its address” first.`;
 
-export const setupPage = ({ v, values, publicKey, serverUrl, addressState, publicState, invited, snippet, stale = false, typed = null, message = '' }) => {
+// Stage 2, with a Render key and Check Render’s answers done: card 1 is
+// Make it in Render. make: { lines: [[words, 'Done' | 'Not yet' | 'Failed']],
+// words, button ('Make it in Render' | 'Carry on' | null), began, refresh }.
+const makeCard = ({ name, make, answering }) => html`<li class="card"><h2>Make it in Render</h2>
+        ${make.began ? '' : html`<p>Makes its database and service in Render from here, with this campaign’s own settings, then adds ${publicHost(name)}. It asks for a code first.</p>`}
+        <dl class="oc-dl oc-make">${make.lines.map(([k, w]) => html`<div><dt>${k}</dt><dd>${w}</dd></div>`)}</dl>
+        ${status(make.words, make.words ? (make.done ? 'ok' : 'warn') : '')}
+        ${make.button ? html`<form method="post" action="/c/${name}/render/make" class="oc-form" data-busy="Asking Render…">
+          <button class="btn ${answering ? 'btn-quiet' : 'btn-primary'} oc-wide" type="submit">${make.button}</button>
+        </form>` : ''}
+        <p class="oc-help">Email, texting and Google come later, from the app’s Settings → Services. Or do it by hand: More, below.</p>
+      </li>`;
+
+export const setupPage = ({ v, values, publicKey, serverUrl, addressState, publicState, invited, snippet, stale = false, typed = null, message = '', make = null }) => {
   const name = v.campaign.name;
   const answering = addressState === 'answering';
   const invite = publicState === 'answering' ? { primary: true } : { primary: true, help: inviteNotReady(name) };
-  return page({
-    title: `Set up ${v.campaign.display}`, nav: true, here: 'campaigns',
-    body: html`<h1>Set up ${v.campaign.display}</h1>
-    <ol class="oc-steps">
-      <li class="card"><h2>Make its database and service in Render</h2>
+  const handCard = html`<li class="card"><h2>Make its database and service in Render</h2>
         <ol class="oc-howto">
           <li>Render → <b>New → Postgres</b>. Name <code>base-win-${name}-db</code>, region Oregon, PostgreSQL 16, the plan named in <code>render.yaml</code> (<code>basic-1gb</code>).</li>
           <li>Render → <b>New → Web Service</b> → this repository. Name <code>base-win-${name}</code>, language Docker, branch <code>production</code>, region Oregon, instance Starter. Under Advanced, health check path <code>/api/health</code>.</li>
@@ -108,15 +117,21 @@ export const setupPage = ({ v, values, publicKey, serverUrl, addressState, publi
           <li>Press <b>Create Web Service</b> (or <b>Save and deploy</b>). Wait for “Live”.</li>
         </ol>
         <p class="oc-help">Email, texting and Google come later, from the app’s Settings → Services.</p>
-      </li>
-      <li class="card"><h2>Paste its address</h2>
+      </li>`;
+  const pasteCard = (quiet) => html`<li class="card"><h2>Paste its address</h2>
         <form method="post" action="/c/${name}/setup" class="oc-form" data-busy="Checking…">
           ${field({ label: 'Render address', name: 'server_url', type: 'url', inputmode: 'url', required: true, value: typed ?? serverUrl ?? '', help: `The address at the top of its Render page, like https://base-win-${name}.onrender.com` })}
           ${codeField(stale)}
           ${status(message || (serverUrl ? (answering ? 'Answering' : ADDRESS_WORDS[addressState] || '') : ''), message || (serverUrl && !answering) ? 'warn' : (answering ? 'ok' : ''))}
-          <button class="btn ${answering ? 'btn-quiet' : 'btn-primary'}" type="submit">Save address</button>
+          <button class="btn ${answering || quiet ? 'btn-quiet' : 'btn-primary'}" type="submit">Save address</button>
         </form>
-      </li>
+      </li>`;
+  return page({
+    title: `Set up ${v.campaign.display}`, nav: true, here: 'campaigns', refresh: make?.refresh ? 15 : 0,
+    body: html`<h1>Set up ${v.campaign.display}</h1>
+    <ol class="oc-steps">
+      ${make ? makeCard({ name, make, answering }) : handCard}
+      ${make ? '' : pasteCard(false)}
       ${answering ? html`${publicCard({ name, serverUrl, state: publicState })}
       <li class="card"><h2>Invite the first manager</h2>
         ${invited ? html`<p>First manager invited. <a href="/c/${name}">Go to ${v.campaign.display}</a></p>`
@@ -124,10 +139,12 @@ export const setupPage = ({ v, values, publicKey, serverUrl, addressState, publi
       </li>` : ''}
     </ol>
     <details class="oc-more"><summary class="btn btn-quiet">More</summary>
-      <h2>Or ask us to add it to render.yaml</h2>
+      ${make ? html`<h2>Or do it by hand</h2>
+      <ol class="oc-steps">${handCard}${pasteCard(true)}</ol>
+      ` : ''}${make?.began ? '' : html`<h2>Or ask us to add it to render.yaml</h2>
       <p>Each of the campaign's own settings is <code>sync: false</code>. Set it on the new service in Render, to the value after its <code>#</code>.</p>
       <pre class="oc-pre" id="yaml-snippet">${snippet}</pre>
-      <button class="btn btn-quiet oc-copy-btn" type="button" data-copy="yaml-snippet">Copy</button>
+      <button class="btn btn-quiet oc-copy-btn" type="button" data-copy="yaml-snippet">Copy</button>`}
     </details>`,
   });
 };
