@@ -6,7 +6,7 @@ import { Fragment } from 'react';
 import { markdownText } from '../../markdown.js';
 import { html } from './h.js';
 import { Island } from './islands.js';
-import { GoalBar, Img, Md, Module, MODULE_COMPONENTS, Paras, campaignForm, propsFor, translateProps } from './modules.js';
+import { GoalBar, Img, Md, Module, MODULE_COMPONENTS, Paras, campaignForm, drawsHeading, propsFor, translateProps } from './modules.js';
 import { Announcement, Footer, Header, LanguageSwitch, PageHead, PreviewBanner, SkipLink } from './shell.js';
 import { VoteBanner, EmbedView } from './voteguide.js';
 import { arr, dateOnly, obj, str } from './util.js';
@@ -26,10 +26,12 @@ function PageView({ rc, page }) {
   // One page heading (WEB decision 33): a first section whose heading is the
   // page's title is the page's heading itself — no title band above it
   // saying the same thing (News). The page's description still goes to
-  // search engines and shares (headFor).
+  // search engines and shares (headFor). Only a section that draws its
+  // heading: an empty list of questions keeps the title band.
   const norm = (x) => str(x).replace(/\s+/g, ' ').trim().toLowerCase();
-  const firstTitle = !heroFirst && modules[0] ? (rc.lang === 'en' ? propsFor(modules[0]).title : translateProps(modules[0].kind, propsFor(modules[0]), rc).title) : '';
-  const titled = !heroFirst && Boolean(norm(firstTitle)) && norm(firstTitle) === norm(title);
+  const firstProps = !heroFirst && modules[0] ? (rc.lang === 'en' ? propsFor(modules[0]) : translateProps(modules[0].kind, propsFor(modules[0]), rc)) : {};
+  const firstTitle = firstProps.title;
+  const titled = !heroFirst && Boolean(norm(firstTitle)) && norm(firstTitle) === norm(title) && drawsHeading(modules[0].kind, firstProps, rc);
   const top = heroFirst || titled;
   return html`<${Fragment}>
     ${top ? null : html`<${PageHead} title=${title} lede=${p.description} />`}

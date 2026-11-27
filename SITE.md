@@ -1060,21 +1060,28 @@ does.
   Beside, in the modern sizes: a 7:5 grid, the picture 4:5 at 900px and
   wider, above the words at 16:9 under that; as before otherwise. Behind:
   the picture fills the hero and the words sit on a panel of the brand
-  colour. No picture: the words alone; the builder's preview of a modern
-  hero shows a dashed "Your picture" box. `sizes` follow the place.
+  colour. No picture: the words alone; the builder's own preview frame
+  (`?edit=1`) of a modern hero shows a dashed "Your picture" box, and no
+  other preview does (Theme's preview of the published page is as visitors
+  see it). `sizes` follow the place.
 - **For every theme:** one gap for every section (`clamp(48px, 7vw,
   96px)`, two plain sections in a row share a smaller one); a still hero
   headline keeps no room for a second line (rotating words do:
   `.hero-title--words`); "What we stand for" points are cards in a grid,
-  3 across at most (`--cols-n`), 2 on a tablet, 1 on a phone; a page whose
-  first section's heading is its title has no title band — that heading is
-  the `h1`, the page's description still goes to search and shares (so
-  `/news` has one heading); news
+  3 across at most (`--cols-n`), 2 on a tablet, 1 on a phone, and a single
+  point takes the whole row; a page whose first section draws a heading
+  that is its title has no title band — that heading is the `h1`, the
+  page's description still goes to search and shares (so `/news` has one
+  heading); a first section that draws no heading (a list of questions
+  with none written yet, a membership section with no membership) keeps
+  the title band; news
   cards: the picture on top, the title is the card's one link, the summary
   cut at two lines; the legal lines at the foot (©, Authorized by, privacy,
   "A website by …") each on its own line at 15px in the body face, drawn
-  with `!important` rules no look's stylesheet can undo; the small print
-  under forms is 15px.
+  with `!important` rules; e2e-site-render reads them in a browser under
+  every look, a campaign's own stylesheet included (a stylesheet's own
+  `!important` rule could still beat site.css's, so a new look stylesheet
+  must pass that check); the small print under forms is 15px.
 - **Theme's preview.** `POST /api/site/preview-token { pageId, live: true }`
   signs a link to the page as published (409 if it never was). The Theme
   screen frames it and posts `{ type: 'wa:look', theme }`;

@@ -197,8 +197,8 @@ function heroWords(rc, p) {
 // Where the hero's picture goes (WEB decision 31): beside the words (every
 // hero before; in the modern sizes a 7:5 grid, the picture 4:5) or behind
 // them (the words on a panel of the brand colour). No picture: the words
-// alone — but the builder's preview of a modern hero shows a plain box
-// saying where a picture would go. Its `sizes` follow the place it takes.
+// alone — but the builder's own frame (?edit=1, rc.edit) of a modern hero
+// shows a plain box saying where a picture would go; no other preview does. Its `sizes` follow the place it takes.
 const HERO_SIZES = { classic: '(min-width: 900px) 50vw, 100vw', modern: '(min-width: 1200px) 480px, (min-width: 900px) 40vw, 100vw', behind: '100vw' };
 function Hero({ m, p, rc, level, first }) {
   const { title, words, lang } = heroWords(rc, p);
@@ -207,7 +207,7 @@ function Hero({ m, p, rc, level, first }) {
   const behind = has && p.layout === 'behind';
   const modern = rc.site.theme.scale === 'modern';
   const sizes = behind ? HERO_SIZES.behind : modern ? HERO_SIZES.modern : HERO_SIZES.classic;
-  const ph = !has && modern && Boolean(rc.preview);
+  const ph = !has && modern && Boolean(rc.edit);
   return html`<${Section} m=${m} tone="brand" className=${cx('hero', has && 'has-picture', ph && 'has-ph', behind && 'hero--behind')} labelled=${false}>
     <div className="container hero-inner">
       <div className="hero-copy">
@@ -943,6 +943,17 @@ export const MODULE_COMPONENTS = {
   social: Social,
   voterguide: VoterGuide,
 };
+
+// Whether a section draws its own heading (its title) — for the page's one
+// heading (templates.js): a section that draws nothing, or nothing but its
+// box, can't be the page's title. Each rule is the one its component above
+// draws by: a list of questions with none written, a membership section on
+// a website with no membership, a section with no title at all.
+const HEADLESS = {
+  faq: (p) => !arr(p.items).some((it) => str(it?.q).trim()),
+  join: (p, rc) => !rc.data.membership,
+};
+export const drawsHeading = (kind, p, rc) => Boolean(str(obj(p).title).trim()) && !(HEADLESS[kind]?.(obj(p), rc));
 
 // One module instance on a page. Unknown kinds draw nothing.
 export function Module({ m, rc, level = 2, first = false }) {

@@ -1097,7 +1097,7 @@ html[data-scale="modern"] .hero-ph {
 /* ── What we stand for (columns) ──────────────────────────────────────── */
 /* The points fill the row (WEB decision 32): 3 across at most (fewer when
    there are fewer: --cols-n, set by the section), 2 on a tablet, 1 on a
-   phone, each a card. */
+   phone, each a card. A single point takes the whole row at every width. */
 .pillars {
   display: grid;
   gap: 20px;
@@ -1112,6 +1112,9 @@ html[data-scale="modern"] .hero-ph {
   .pillars {
     grid-template-columns: repeat(var(--cols-n, 3), minmax(0, 1fr));
   }
+}
+.pillars > .pillar:only-child {
+  grid-column: 1 / -1;
 }
 .pillar {
   display: flex;

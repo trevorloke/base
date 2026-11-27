@@ -9,6 +9,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { renderSite, readSiteAsset } from '../ext/site/render/index.js';
+import { drawBody } from '../../shared/site/components/preview.js';
 import { MODULE_BY_KIND, newModule, checkProps } from '../../shared/site/catalogue.js';
 import * as theme from '../../shared/site/theme.js';
 import { baseSample } from './site-samples.js';
@@ -96,8 +97,10 @@ test('the hero: its picture beside the words (as today) or behind them; no pictu
   const none = draw({ modules: [mod('hero', 'h1', { layout: 'behind' })] });
   assert.match(none, /class="section tone-brand on-dark hero"/, 'no picture: nothing behind the words');
   assert.doesNotMatch(none, /Your picture/, 'the public site never shows a stand-in picture');
-  // The builder's preview of a modern hero with no picture: a plain box saying so.
-  assert.match(draw({ modules: [mod('hero', 'h1')], theme: { skin: 'base', scale: 'modern' }, ctx: { preview: true } }), /<div class="hero-ph" role="img" aria-label="Your picture">Your picture<\/div>/);
+  // The builder's preview (its own frame, ?edit=1) of a modern hero with no picture: a plain box saying so.
+  assert.match(draw({ modules: [mod('hero', 'h1')], theme: { skin: 'base', scale: 'modern' }, ctx: { preview: true, edit: true } }), /<div class="hero-ph" role="img" aria-label="Your picture">Your picture<\/div>/);
+  // Any other preview (Theme's preview of the published page): as visitors see it, no box.
+  assert.doesNotMatch(draw({ modules: [mod('hero', 'h1')], theme: { skin: 'base', scale: 'modern' }, ctx: { preview: true } }), /hero-ph|Your picture/, 'a preview outside the builder: no stand-in picture');
   // Behind: the words sit on a solid panel of the brand colour, never on the photo.
   assert.match(rule('.hero--behind .hero-copy'), /background: var\(--brand\)/);
 });
@@ -115,6 +118,8 @@ test('no empty gaps: a still headline keeps no room for a second line; points fi
   const five = draw({ modules: [mod('columns', 'c1', { items: Array.from({ length: 5 }, (_, i) => ({ icon: 'civic', title: `Point ${i}`, body: 'Words.' })) })] });
   assert.match(five, /<div class="pillars" style="--cols-n:3">/);
   assert.doesNotMatch(two, /<p><\/p>/, 'an empty point paragraph takes no room');
+  // One point fills the row at every width (a tablet's two columns too).
+  assert.match(css(), /\.pillars > \.pillar:only-child \{[^}]*grid-column: 1 \/ -1/);
   assert.match(rule('.section'), /padding-top: clamp\(48px, 7vw, 96px\)/);
   assert.match(css(), /\.section\.tone-paper \+ \.section\.tone-paper \{[^}]*padding-top: clamp\(24px, 3vw, 40px\)/);
 });
@@ -136,6 +141,26 @@ test('one page heading: a first section titled as the page is the page’s headi
   assert.match(described, /<meta name="description" content="What we’ve been up to\.">/);
   // A page whose first heading is something else keeps its title band.
   assert.match(draw({ page: { title: 'About' }, modules: [mod('text', 't1', { title: 'Our story', body: 'Words.' })] }), /page-head[\s\S]*<h1 class="display">About<\/h1>/);
+});
+
+test('one page heading: a first section that draws no heading leaves the page its title band', () => {
+  const one = (html) => (html.match(/<h1\b/g) || []).length;
+  // A page "Questions" opening with a list of questions not written yet (a FAQ draws nothing then).
+  const faq = draw({ page: { slug: 'faq', title: 'Questions' }, modules: [mod('faq', 'q1', { title: 'Questions', items: [] }), mod('text', 't1', { title: 'More', body: 'Words.' })] });
+  assert.equal(one(faq), 1, 'one h1');
+  assert.match(faq, /page-head[\s\S]*<h1 class="display">Questions<\/h1>/, 'the title band says the page’s title');
+  // Questions with no words in them are no questions either.
+  const blank = draw({ page: { slug: 'faq', title: 'Questions' }, modules: [mod('faq', 'q1', { title: 'Questions', items: [{ q: '  ', a: 'An answer.' }] })] });
+  assert.match(blank, /page-head[\s\S]*<h1 class="display">Questions<\/h1>/);
+  // A membership section on a site with no membership draws nothing.
+  const join = draw({ page: { slug: 'join', title: 'Become a member' }, modules: [mod('join', 'j1', { title: 'Become a member' })], data: { ...baseSample.data, membership: false } });
+  assert.equal(one(join), 1);
+  assert.match(join, /page-head[\s\S]*<h1 class="display">Become a member<\/h1>/);
+  // Once there is a question, the FAQ's own heading is the page's.
+  const asked = draw({ page: { slug: 'faq', title: 'Questions' }, modules: [mod('faq', 'q1', { title: 'Questions', items: [{ q: 'When?', a: 'Soon.' }] })] });
+  assert.equal(one(asked), 1);
+  assert.doesNotMatch(asked, /page-head/);
+  assert.match(asked, /<h1 id="m-q1-title" class="display">Questions<\/h1>/);
 });
 
 // ── News cards ──
@@ -210,4 +235,28 @@ test('a preview link for the published page shows the published words, not a new
   assert.equal(r.status, 200);
   assert.doesNotMatch(r.text, /Words only in the draft/, 'the published page');
   assert.match(r.text, /id="wa-rc"/, 'with the inputs the preview script redraws a look from');
+});
+
+test('Theme’s preview of the published page draws no stand-in picture; the builder’s own frame does', async () => {
+  const pages = ok(await mgr.get('/api/site')).pages;
+  const home = pages.find((p) => p.slug === 'home');
+  // A published home page whose hero has no picture.
+  ok(await mgr.action('site.page.save', { id: home.id, modules: [{ id: 'hero-bare', kind: 'hero', props: { ...newModule('hero', 'hero-bare').props, titlePrefix: 'Riverside, together', text: 'A sample campaign.', image: { url: '', alt: '' } } }] }));
+  const pub = await mgr.action('site.page.publish', { id: home.id });
+  assert.equal(pub.status, 200, JSON.stringify(pub.json));
+  const civic = { ...LOOKS[0], skin: 'civic-blue' };
+  // What Website → Theme's preview does with a look (site-preview.js tryLook):
+  // the page drawn again from its own inputs, in that look.
+  const inputs = (text) => JSON.parse(/<script type="application\/json" id="wa-rc">([\s\S]*?)<\/script>/.exec(text)[1]);
+  const tried = (wa) => drawBody({ ...wa, site: { ...wa.site, theme: checkTheme(civic).theme } }, wa.page.modules);
+  const live = ok(await mgr.post('/api/site/preview-token', { pageId: home.id, live: true }));
+  const lr = await hit(live.url);
+  assert.equal(lr.status, 200);
+  assert.match(lr.text, /data-module="hero"/);
+  assert.doesNotMatch(tried(inputs(lr.text)), /hero-ph|Your picture/, 'Theme’s preview: as visitors see it');
+  // The builder's own frame (?edit=1) of the same page in a modern look: the box.
+  const draft = ok(await mgr.post('/api/site/preview-token', { pageId: home.id }));
+  const er = await hit(`${draft.url}${draft.url.includes('?') ? '&' : '?'}edit=1`);
+  assert.equal(er.status, 200);
+  assert.match(tried(inputs(er.text)), /<div class="hero-ph" role="img" aria-label="Your picture">/);
 });
