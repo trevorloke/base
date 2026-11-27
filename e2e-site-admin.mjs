@@ -678,7 +678,8 @@ check('Settings: the announcement bar is saved', ann.enabled === true && ann.tex
   check('picking Evergreen: the preview wears it before anything is saved; the public home page is unchanged',
     tried && !pubWhile.html.includes('--brand:#1e5a3c') && pubWhile.html.includes(`--brand:${was.colors.brand}`) && !/data-scale="modern"/.test(pubWhile.html));
   const pvText = await f.locator('main').innerText();
-  check('the preview shows the published words, not the home page’s newer draft', !pvText.includes(`Draft words ${tag}`) && pvText.length > 40 && liveBefore.html.length > 0);
+  check('the preview shows the published words, not the home page’s newer draft — and no “This is a draft” banner', !pvText.includes(`Draft words ${tag}`) && pvText.length > 40 && liveBefore.html.length > 0
+    && (await f.locator('.preview-banner').count()) === 0);
   await shot('16-theme-looks', false);
   await page.getByRole('button', { name: 'Use this look' }).click();
   await page.locator('.wb-toast', { hasText: 'new look' }).waitFor({ timeout: 10000 });

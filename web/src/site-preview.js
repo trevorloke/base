@@ -147,6 +147,8 @@ function tryLook(given) {
   if (fresh && main()) main().replaceChildren(...[...fresh.children].map((n) => document.importNode(n, true)));
   if (!trying) {
     trying = true;
+    // The published page, not a draft: the draft's banner doesn't belong.
+    document.querySelector('.preview-banner')?.remove();
     // A preview of a look: nothing in it goes anywhere or sends anything.
     document.addEventListener('click', (e) => { if (e.target.closest?.('a, button, summary')) e.preventDefault(); }, true);
     document.addEventListener('submit', (e) => e.preventDefault(), true);
