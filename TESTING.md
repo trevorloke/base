@@ -785,8 +785,9 @@ one tap away under **More**.
   `npm run test:pg -- server/test/site-domain.test.js`) — the site at `/`
   naming the domain (canonical, `og:url`, `og:image`, sitemap, robots),
   `www.` sent on to it, nothing of the desk there, `/site` sent on with the
-  preview and forms left where they are, a domain where the app answers
-  never taken, the present website's old addresses, the links base.win
+  preview and forms left where they are (a link in another alphabet goes
+  on still encoded), a domain where the app answers never taken, the
+  present website's old addresses and its own links, the links base.win
   hands out and the unsubscribe sync saying its settings come off. In a
   browser, the server started with `STARBASE_SITE_DOMAIN=campaign.example`
   (no `SITE_HOSTS`) and the suite run with `DOMAIN=campaign.example`: the
