@@ -19,6 +19,7 @@
 //     every block number on every street, and at the addresses in the
 //     "Business licences" list.
 // It prints; it changes nothing. Nothing here is real people's data.
+import { pathToFileURL } from 'node:url';
 import { AREAS, HOUSE_FIRST, HOUSE_LAST } from '../server/lib/samplecast.js';
 
 const BASE = 'https://opendata.vancouver.ca/api/explore/v2.1/catalog/datasets';
@@ -44,18 +45,27 @@ const offLine = (p, a, b) => {
 };
 const key = ([x, y]) => `${x.toFixed(6)},${y.toFixed(6)}`;
 
+// A block's number and street: "2500 MAIN ST" is the 2500 block of MAIN ST.
+// null when it has no number.
+export const parseBlock = (hblock) => {
+  const m = /^(\d+) (.*)$/.exec(hblock);
+  return m ? { low: Number(m[1]), high: Number(m[1]), name: m[2] } : null;
+};
+
 // Every block of every street, fetched once.
 let blocksOnce;
 const streets = () => (blocksOnce ||= all('public-streets', '', 'hblock,geom').then((rows) => rows.filter((r) => r.hblock)));
 
-// The longest straight run of this street's blocks inside the box.
-const segmentFor = async (street, box) => {
+// The longest straight run of this street's blocks inside the box, from
+// the City's rows ({ hblock, geom }).
+export const segmentFor = (rows, street, box) => {
   const [s, w, n, e] = box;
   const inBox = ([x, y]) => y >= s && y <= n && x >= w && x <= e;
   const name = cityName(street);
-  const rows = (await streets())
-    .filter((r) => r.hblock.replace(/^\d+ /, '') === name && r.geom?.geometry?.type === 'LineString');
-  const blocks = rows.map((r) => ({ number: Number(r.hblock.split(' ')[0]), line: r.geom.geometry.coordinates }))
+  const blocks = rows
+    .map((r) => ({ block: parseBlock(r.hblock || ''), geometry: r.geom?.geometry }))
+    .filter(({ block, geometry }) => block?.name === name && geometry?.type === 'LineString')
+    .map(({ block, geometry }) => ({ number: block.low, line: geometry.coordinates }))
     .filter((b) => b.line.every(inBox));
   // Join blocks end to end into lines (a street is broken at every corner).
   const ends = new Map();
@@ -102,35 +112,46 @@ const segmentFor = async (street, box) => {
   return { segment: [ll(a), ll(b)], metres: Math.round(best.len), blocks: [Math.min(best.na, best.nb), Math.max(best.na, best.nb)] };
 };
 
+// The highest block number on any street, and every block from `from` up.
+export const blockCheck = (rows, from) => {
+  const blocks = rows.map((r) => ({ hblock: r.hblock, block: parseBlock(r.hblock || '') })).filter((b) => b.block);
+  return {
+    highest: Math.max(...blocks.map((b) => b.block.high)),
+    from: blocks.filter((b) => b.block.high >= from).map((b) => b.hblock),
+  };
+};
+
 // Every civic number on the street in the City's address list.
 const numbersOn = async (street) => {
   const rows = await all('property-addresses', `std_street = "${cityName(street)}"`, 'civic_number');
   return rows.map((r) => Number(String(r.civic_number).replace(/\D.*$/, ''))).filter(Number.isFinite);
 };
 
-const segments = {};
-let clash = 0;
-for (const area of AREAS) {
-  for (const street of area.streets) {
-    const { segment, metres: m, blocks } = await segmentFor(street, area.box);
-    segments[street] = segment;
-    const nums = await numbersOn(street);
-    const ours = nums.filter((x) => x >= HOUSE_FIRST && x <= HOUSE_LAST);
-    clash += ours.length;
-    console.log(`${street}: ${m} m (the ${blocks[0]} to ${blocks[1]} blocks); ${nums.length} addresses, highest ${Math.max(...nums)}, ${ours.length} from ${HOUSE_FIRST} to ${HOUSE_LAST}${ours.length ? `: ${ours.join(', ')}` : ''}`);
+// Run as a script (not when a test imports it).
+if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
+  const segments = {};
+  let clash = 0;
+  for (const area of AREAS) {
+    for (const street of area.streets) {
+      const { segment, metres: m, blocks } = segmentFor(await streets(), street, area.box);
+      segments[street] = segment;
+      const nums = await numbersOn(street);
+      const ours = nums.filter((x) => x >= HOUSE_FIRST && x <= HOUSE_LAST);
+      clash += ours.length;
+      console.log(`${street}: ${m} m (the ${blocks[0]} to ${blocks[1]} blocks); ${nums.length} addresses, highest ${Math.max(...nums)}, ${ours.length} from ${HOUSE_FIRST} to ${HOUSE_LAST}${ours.length ? `: ${ours.join(', ')}` : ''}`);
+    }
   }
+  // No street in the city has a block numbered 9900 or more.
+  const { highest, from: blocks99 } = blockCheck(await streets(), HOUSE_FIRST);
+  console.log(`The highest block number on any street in the city: ${highest}${blocks99.length ? `; from ${HOUSE_FIRST} up: ${blocks99.join(', ')}` : ''}`);
+  // Business licences (same licence) give addresses too: none at 9900-9999 on these streets.
+  const ours = new Set(AREAS.flatMap((a) => a.streets.map(cityName)));
+  const onOurs = (await all('business-licences', '', 'house,street')).filter((r) => ours.has(cityName(String(r.street || '').trim())));
+  const licences = onOurs.filter((r) => Number(r.house) >= HOUSE_FIRST && Number(r.house) <= HOUSE_LAST);
+  clash += licences.length;
+  console.log(`Business licences on these streets: ${onOurs.length}, highest ${Math.max(...onOurs.map((r) => Number(r.house)).filter(Number.isFinite))}; from ${HOUSE_FIRST} to ${HOUSE_LAST}: ${licences.length ? licences.map((r) => `${r.house} ${r.street}`).join(', ') : 'none'}`);
+  console.log('\nSEGMENTS = {');
+  for (const [street, seg] of Object.entries(segments)) console.log(`  '${street}': ${JSON.stringify(seg).replace(/,/g, ', ')},`);
+  console.log('}');
+  process.exit(clash || blocks99.length ? 1 : 0);
 }
-// No street in the city has a block numbered 9900 or more.
-const highest = Math.max(...(await streets()).map((r) => Number(r.hblock.split(' ')[0])).filter(Number.isFinite));
-const blocks99 = (await streets()).filter((r) => Number(r.hblock.split(' ')[0]) >= HOUSE_FIRST);
-console.log(`The highest block number on any street in the city: ${highest}`);
-// Business licences (same licence) give addresses too: none at 9900-9999 on these streets.
-const ours = new Set(AREAS.flatMap((a) => a.streets.map(cityName)));
-const onOurs = (await all('business-licences', '', 'house,street')).filter((r) => ours.has(cityName(String(r.street || '').trim())));
-const licences = onOurs.filter((r) => Number(r.house) >= HOUSE_FIRST && Number(r.house) <= HOUSE_LAST);
-clash += licences.length;
-console.log(`Business licences on these streets: ${onOurs.length}, highest ${Math.max(...onOurs.map((r) => Number(r.house)).filter(Number.isFinite))}; from ${HOUSE_FIRST} to ${HOUSE_LAST}: ${licences.length ? licences.map((r) => `${r.house} ${r.street}`).join(', ') : 'none'}`);
-console.log('\nSEGMENTS = {');
-for (const [street, seg] of Object.entries(segments)) console.log(`  '${street}': ${JSON.stringify(seg).replace(/,/g, ', ')},`);
-console.log('}');
-process.exit(clash || blocks99.length ? 1 : 0);
