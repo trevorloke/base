@@ -1444,8 +1444,13 @@ Setting it up:
    `STARBASE_WEBSITE_KEY`, with `STARBASE_WEBSITE_URL`.
 4. Settings → Services → The website — unsubscribes → **Check**. Then send
    the ones already off here.
-5. If the website later moves onto base.win itself, take both settings
-   away. Check says so if they are forgotten.
+5. If the website later moves onto base.win itself
+   (`STARBASE_SITE_DOMAIN`, GOING-LIVE.md §2), take both settings away in
+   the same save. Left on, they send nothing: once `STARBASE_WEBSITE_URL`
+   names the website's own domain here (or its `www.`, or a `SITE_HOSTS`
+   host), Settings → Services, Check and the start-up log say "Take both
+   settings away". Going back to the website hosted apart, set them again,
+   then Check and **Send the ones already off here**.
 
 Nothing is ever sent from staging, to a base.win address, or to an address
 that does not start with `https://`. The two settings are in no Blueprint:

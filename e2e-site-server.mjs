@@ -16,12 +16,25 @@
 //
 //   SITE_HOSTS=127.0.0.1 SITE_SECRET=e2e-site-secret-0123456789 STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=5010 node server/index.js &
 //   BASE=http://127.0.0.1:5010 SITE_SECRET=e2e-site-secret-0123456789 SHOTS=/tmp/site-server node e2e-site-server.mjs
+//
+// The same on the website's own domain (STARBASE_SITE_DOMAIN, SITE.md "On
+// its own domain"): the browser reaches campaign.example and its www. at
+// this machine (--host-resolver-rules), so every request carries the
+// domain as its Host. Then also: canonical and og:url on the domain, www.
+// sent on to it, /site on the app's address sent on to it, the present
+// website's old addresses, and nothing of the app there by a Host header.
+//   STARBASE_SITE_DOMAIN=campaign.example SITE_SECRET=… STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=5010 node server/index.js &
+//   BASE=http://127.0.0.1:5010 DOMAIN=campaign.example SITE_SECRET=… node e2e-site-server.mjs
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
+import { request as httpRequest } from 'node:http';
 
 const BASE = (process.env.BASE || 'http://127.0.0.1:3200').replace(/\/$/, '');
-const SITE = BASE.replace('localhost', '127.0.0.1'); // the campaign's own domain (SITE_HOSTS)
-const APP = SITE.replace('127.0.0.1', 'localhost'); // the app's own address
+const DOMAIN = String(process.env.DOMAIN || '').trim().toLowerCase();
+const PORT = new URL(BASE).port;
+// The campaign's own domain: SITE_HOSTS=127.0.0.1, or STARBASE_SITE_DOMAIN.
+const SITE = DOMAIN ? `http://${DOMAIN}${PORT ? `:${PORT}` : ''}` : BASE.replace('localhost', '127.0.0.1');
+const APP = BASE.replace('127.0.0.1', 'localhost'); // the app's own address
 const SHOTS = process.env.SHOTS || '/tmp/starbase-site-server';
 process.env.SITE_SECRET = process.env.SITE_SECRET || 'e2e-site-secret-0123456789';
 const { sign } = await import('./server/ext/site/tokens.js');
@@ -36,7 +49,7 @@ const tag = Date.now().toString(36);
 
 const browser = await chromium.launch({
   executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
-  args: ['--no-sandbox', '--disable-dev-shm-usage'],
+  args: ['--no-sandbox', '--disable-dev-shm-usage', ...(DOMAIN ? [`--host-resolver-rules=MAP ${DOMAIN} 127.0.0.1, MAP www.${DOMAIN} 127.0.0.1`, '--no-proxy-server'] : [])],
 });
 const errors = [];
 const desk = await browser.newContext({ viewport: { width: 1360, height: 900 }, timezoneId: 'America/Vancouver' });
@@ -259,6 +272,50 @@ check('the preview shows the draft', /Draft words for the preview/.test(await pa
 check('…not indexed, framed by the app only', /noindex/.test(pr.headers()['x-robots-tag'] || '') && /frame-ancestors 'self'/.test(pr.headers()['content-security-policy'] || ''));
 const live = await v.goto(`${SITE}/donate`, { waitUntil: 'domcontentloaded' });
 check('…while the site still shows what is published', live.status() === 200 && !/Draft words for the preview/.test(await v.content()));
+
+// ── on the website's own domain (STARBASE_SITE_DOMAIN) ──
+if (DOMAIN) {
+  // A request to this machine with the Host header it names: → { status, location }.
+  const byHost = (path, host, method = 'GET') => new Promise((resolve, reject) => {
+    const r = httpRequest({ host: '127.0.0.1', port: PORT, path, method, headers: { host: `${host}:${PORT}` } }, (res) => {
+      res.resume();
+      res.on('end', () => resolve({ status: res.statusCode, location: res.headers.location || null }));
+    });
+    r.on('error', reject);
+    r.end();
+  });
+  await v.goto(`${SITE}/donate`, { waitUntil: 'domcontentloaded' });
+  const headOf = () => v.evaluate(() => ({
+    canonical: document.querySelector('link[rel="canonical"]')?.href || null,
+    url: document.querySelector('meta[property="og:url"]')?.content || null,
+    image: document.querySelector('meta[property="og:image"]')?.content || null,
+  }));
+  let h = await headOf();
+  check('the domain: canonical and og:url name it', h.canonical === `${SITE}/donate` && h.url === `${SITE}/donate`, JSON.stringify(h));
+  check('…and og:image is on it', String(h.image).startsWith(`${SITE}/`), h.image);
+  const www = await v.goto(`http://www.${DOMAIN}:${PORT}/donate?ref=abc123`, { waitUntil: 'domcontentloaded' });
+  check('www. sends a page on to the domain', www.status() === 200 && v.url() === `${SITE}/donate?ref=abc123`, v.url());
+  h = await headOf();
+  check('…with the domain’s own canonical', h.canonical === `${SITE}/donate`, h.canonical);
+  const moved = await v.goto(`${APP}/site/volunteer`, { waitUntil: 'domcontentloaded' });
+  check('/site on the app’s address goes on to the domain', moved.status() === 200 && v.url() === `${SITE}/volunteer`, v.url());
+  const first = await byHost('/site/volunteer', 'localhost');
+  check('…for good (301)', first.status === 301 && first.location === `${SITE}/volunteer`, JSON.stringify(first));
+  const old = await v.goto(`${SITE}/act/skytrain-south-surrey/print`, { waitUntil: 'domcontentloaded' });
+  check('an old address of the present website: the page here that does the same', old.status() === 200 && v.url() === `${SITE}/act/skytrain-south-surrey`, v.url());
+  await shot(v, '11-domain-old-address');
+  const gone = await v.goto(`${SITE}/neighbourhoods/somewhere`, { waitUntil: 'domcontentloaded' });
+  check('…a retired one goes home', gone.status() === 200 && v.url() === `${SITE}/`, v.url());
+  for (const path of ['/api/health', '/api/auth/me', '/desk', '/admin', '/in/v1/ping']) {
+    const r = await byHost(path, DOMAIN);
+    check(`Host ${DOMAIN}: ${path} is the site’s 404, not the app`, r.status === 404, JSON.stringify(r));
+  }
+  const pair = await byHost('/api/health', `www.${DOMAIN}`);
+  check(`Host www.${DOMAIN}: on to the domain, never the app`, pair.status === 301 && pair.location === `${SITE}/api/health`, JSON.stringify(pair));
+  const appHere = await byHost('/api/health', 'localhost');
+  check('the app’s own address is still the app', appHere.status === 200);
+  check('no sign-in cookie on the domain', !(await visitor.cookies(SITE)).some((c) => c.name === 'mv2_session'));
+}
 
 check('no page errors', errors.length === 0, errors.join(' | '));
 await browser.close();

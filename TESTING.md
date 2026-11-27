@@ -808,6 +808,20 @@ one tap away under **More**.
   `/preferences` link turns email and texts off or on in base.win itself.
   Server tests: `server/test/site-*.test.js`; in a browser:
   `e2e-site-server.mjs`.
+  **On its own domain** (`STARBASE_SITE_DOMAIN`, SITE.md):
+  `server/test/site-domain.test.js` (also through Postgres:
+  `npm run test:pg -- server/test/site-domain.test.js`) — the site at `/`
+  naming the domain (canonical, `og:url`, `og:image`, sitemap, robots),
+  `www.` sent on to it, nothing of the desk there, `/site` sent on with the
+  preview and forms left where they are (a link in another alphabet goes
+  on still encoded), a domain where the app answers never taken, the
+  present website's old addresses and its own links, the links base.win
+  hands out and the unsubscribe sync saying its settings come off. In a
+  browser, the server started with `STARBASE_SITE_DOMAIN=campaign.example`
+  (no `SITE_HOSTS`) and the suite run with `DOMAIN=campaign.example`: the
+  browser reaches the domain at this machine, so every request carries it as
+  the Host (`e2e-site-server.mjs`, its head says how). `e2e-site-render.mjs`
+  ends with the page drawn for that Host.
 
 - **Letters and Media's lists** — `server/test/letters.test.js`: a letter
   from New to Published, the desk's suggestion beside the writer's text,

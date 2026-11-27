@@ -30,6 +30,7 @@ import { roomFor, campaignNow } from '../payments/limits.js';
 import { stillOn } from '../banks/numbers.js';
 import { whyNotSql, person } from '../../lib/reach.js';
 import { roomsFor, pledgedFor, openPledge, giftIn } from './room.js';
+import { siteDomain } from '../site/domain.js';
 
 const MONEY_ROLES = ['manager', 'treasurer', 'staff'];
 const RESULTS = ['pledged', 'no', 'no_answer', 'left_message'];
@@ -155,13 +156,14 @@ export const callTimeOf = async (db, ctx) => {
 };
 
 // The site's donate page, as its links name it: its own domain once there
-// is one, else the app's /site/donate — null while there's no live page.
+// is one (STARBASE_SITE_DOMAIN, else the first saved), else the app's /site/donate — null while there's no live page.
 const donateUrl = async (db, ctx) => {
   const page = (await db.query(
     "select 1 from site_pages where workspace_id = $1 and slug = 'donate' and status = 'published' and deleted_at is null",
     [ctx.workspaceId],
   ).catch(() => ({ rows: [] }))).rows[0];
   if (!page) return null;
+  if (siteDomain()) return `https://${siteDomain()}/donate`;
   const s = (await db.query('select domains from site_settings where workspace_id = $1', [ctx.workspaceId]).catch(() => ({ rows: [] }))).rows[0];
   const domains = typeof s?.domains === 'string' ? JSON.parse(s.domains) : s?.domains || [];
   return domains.length ? `https://${domains[0]}/donate` : `${ctx.publicUrl || ''}/site/donate`;
