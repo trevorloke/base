@@ -360,6 +360,17 @@ one tap away under **More**.
   `server/test/calendar.test.js` (a person's calendar link, Make a new link,
   Email me the link, the one-item files, the website's events) and
   `server/test/schedule-tell.test.js` (the emails' files).
+  **The group calendar**: *Calendar* (Today's row, or the search) — on the
+  desk a manager taps *Add to the calendar*, fills in what, the day, the
+  times (the campaign's) or *All day*, and *Who sees it*; *Edit* and
+  *Remove* on each item; *Every shift* adds the shift board's. A volunteer
+  sees the items for everyone and their teams, a candidate also the
+  candidates' and their own; each entry's *Add to Google Calendar* opens
+  Google with it filled in. Server tests: `server/test/calendar-group.test.js`
+  (who sees what by role, seat and team; the form's refusals; the
+  campaign's clock and another time zone; all-day items; the calendar
+  link's items, Make a new link, a member taken off). Browser: section 8
+  of `e2e-calendar.mjs`.
   `server/test/gcal.test.js`: *Shifts in Google Calendar* against the
   stand-in Google's Calendar (`fake-google.js`, `GOOGLE_CALENDAR_API_BASE`)
   — the switch, the first link made by connecting, the content (the

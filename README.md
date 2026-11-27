@@ -920,6 +920,22 @@ the profile ends the old one, for a leaked link or a lost backup alike. The
 data export leaves the links out. The website serves its Events list as
 `<site>/events.ics` (SITE.md). Nothing to set up: no keys or accounts.
 
+**The group calendar.** *Calendar* (from Today, or the search) shows one
+month of what is on for that person, on the campaign's clock: their booked
+shifts, the website's events, the voting days, the filing dates for the
+people who handle money, and the items managers add. A manager adds an
+item on the desk's Calendar — a time or whole days, a place, notes — and
+says who sees it: everyone, all candidates, one candidate, managers, or a
+team. Managers see every item and who it is for; a candidate sees the
+items for candidates and for their own seat; anyone else sees the items
+for everyone and for their teams. Whoever has the Shifts board can also
+show every shift. Each entry has *Add to Google Calendar* (Google opens
+with it filled in), and the person's calendar link (the same one as on
+their profile) carries their items and the website's events too, so a
+change or a removal reaches their calendar the next time it checks. The
+link never carries a shift's instructions, or other people's names or
+addresses. Still nothing to set up: no Google key or sign-in.
+
 ## Public pages
 
 The campaign's website is base.win's own (the **Website** area; SITE.md):
