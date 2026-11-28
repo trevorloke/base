@@ -17,7 +17,7 @@ import { useScripts } from '../components/ScriptLine.jsx';
 import { useVotedMode } from '../components/Voted.jsx';
 import { azSort } from '@base-win/shared/names';
 import { floorLabel, floorOf, floorsShown } from '@base-win/shared/buildings';
-import { doorParts } from '../../../shared/units.js';
+import { doorParts, unitWords } from '../../../shared/units.js';
 import { hasArea, isDesk } from '../Shell.jsx';
 import { todayWords } from './QuickReport.jsx';
 import './shifts.css';
@@ -99,6 +99,8 @@ function Sheet({ s, script, me }) {
     if (grouped && last?.group === d.group) last.doors.push(d);
     else blocks.push({ group: grouped ? d.group : null, place: grouped ? d.place : 'door', doors: [d] });
   }
+  // (The server's words for the door's unit; worked out here when it sends none.)
+  const wordsOf = (d) => d.unit_words ?? unitWords(doorParts(d).unit, 'door');
   let street = null;
   const body = [];
   const stateTag = (d) => (d.state === 'done' ? <span className="ws-door__state">Done</span>
@@ -130,7 +132,7 @@ function Sheet({ s, script, me }) {
         <tbody key={`d${i}`} className={`ws-door${done ? ' is-done' : ''}`}>
           <tr className="ws-door__addr">
             <td colSpan={cols}>
-              {d0.unit_words ? `${d0.unit_words} · ` : ''}{where}
+              {wordsOf(d0) ? `${wordsOf(d0)} · ` : ''}{where}
               {stateTag(d0)}
             </td>
           </tr>
@@ -151,7 +153,7 @@ function Sheet({ s, script, me }) {
       }
       rows.push(
         <tr key={`u${j}`} className={`ws-unit${d.state === 'done' ? ' is-done' : ''}`}>
-          <td colSpan={cols}><b>{d.unit_words || keys[j]}</b>{stateTag(d)}</td>
+          <td colSpan={cols}><b>{d.unit_words || unitWords(keys[j], b.place)}</b>{stateTag(d)}</td>
         </tr>,
         ...peopleRows(d),
       );

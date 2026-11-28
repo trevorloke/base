@@ -25,7 +25,7 @@ import { bandOf } from '@base-win/shared/scale';
 import {
   buildingOf, floorLabel, floorsShown, nextDoor, unitOf, unitRows, unitStops,
 } from '@base-win/shared/buildings';
-import { doorKey, unitKind, unitWords } from '../../../shared/units.js';
+import { doorKey, doorParts, unitKind, unitWords } from '../../../shared/units.js';
 import { overlayPass, waitingTries } from './PassBits.jsx';
 import { pendingVoted } from './Voted.jsx';
 import { usePracticeOverlay } from './GotvLive.js';
@@ -49,6 +49,17 @@ const placed = (d) => d.persons.map((p) => ({
   address: d.address, unit: d.unit, city: d.city ?? null, lat: d.lat, lng: d.lng, ...p,
 }));
 
+// A building as the walk list's server worked it out: its doors on the
+// list (those its round wants) and its whole count of units.
+const keptBuilding = (list, door) => {
+  const doors = list.filter((d) => d.group === door.group);
+  return {
+    key: door.group, address: doorParts(door).shown || door.address, city: door.city ?? null,
+    lat: door.lat, lng: door.lng, units: door.units ?? doors.length, doors,
+    people: doors.reduce((n, d) => n + (d.persons?.length || 0), 0),
+  };
+};
+
 // The building out of a walk list kept on this phone: the one holding the
 // anchor, its doors as the list had them (every one on the round).
 const fromKeptWalkLists = (me, anchorId) => {
@@ -57,7 +68,10 @@ const fromKeptWalkLists = (me, anchorId) => {
     const list = kept?.data?.doors || [];
     const door = list.find((d) => d.persons?.some((p) => p.id === anchorId));
     if (!door) continue;
-    const b = buildingOf(list, door);
+    // The server said which building each door is in, before its round left
+    // any unit out (a tower the round thinned to two units is still one);
+    // a list kept by an older version is grouped here.
+    const b = door.place === 'building' && door.group != null ? keptBuilding(list, door) : buildingOf(list, door);
     if (!b) return null;
     return { b, pass: kept.data.pass || null, at: kept.at };
   }
