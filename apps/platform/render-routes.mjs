@@ -247,7 +247,7 @@ export const renderRoutes = (app, ctx) => {
     const read = await pool(views.map((v) => async () => {
       if (!v.envRow.render_service) return { v, linked: false };
       const one = await readOne(client, v);
-      return { v, ...one, settings: one.svc.ok ? await readSettings(client, v) : { read: false, missing: [], older: [] }, job: await lastJob(db, v.campaign.name) };
+      return { v, ...one, settings: one.svc.ok && !one.refusal ? await readSettings(client, v) : { read: false, missing: [], older: [] }, job: await lastJob(db, v.campaign.name) };
     }), 1);
     b.rows = read;
     for (const r of read.filter((x) => x.linked)) for (const words of looksFor(r.v, r, r.job)) b.looks.push([r.v.campaign.display, words]);
