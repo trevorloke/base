@@ -352,7 +352,7 @@ export const requeueSuites = async (db, workspaceId) => {
   const ids = (await suitesAside(db, workspaceId)).map((p) => p.id);
   for (let i = 0; i < ids.length; i += 2000) {
     await db.query(
-      `update persons set attrs = jsonb_set(attrs, '{geocode}', coalesce(attrs->'geocode', '{}'::jsonb) || '{"status": "", "suite_retry": true}'::jsonb)
+      `update persons set attrs = jsonb_set(attrs, '{geocode}', (coalesce(attrs->'geocode', '{}'::jsonb) - 'tries' - 'error') || '{"status": "", "suite_retry": true}'::jsonb)
         where workspace_id = $1 and id = any($2::uuid[]) and lat is null`,
       [workspaceId, ids.slice(i, i + 2000)],
     );

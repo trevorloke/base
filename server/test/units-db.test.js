@@ -50,6 +50,7 @@ before(async () => {
     const q = u.searchParams.get('addressString');
     asked.push(q);
     if (/nomatch/i.test(q)) return new Response(JSON.stringify({ features: [] }));
+    if (/errone/i.test(q)) return new Response('busy', { status: 503 });
     const n = Number(q.match(/^\d+/)?.[0] || 0);
     return new Response(JSON.stringify({ features: [{ geometry: { coordinates: [-122.5 + n / 1e7, 49.5 + n / 1e7] },
       properties: { score: 97, matchPrecision: 'CIVIC_NUMBER', fullAddress: q } }] }));
@@ -291,6 +292,21 @@ test('geocoding: a suite tried again and still not found is not asked again on t
   assert.equal(g.status, 'nomatch');
   assert.equal(g.suite_retry, true, 'the round keeps the mark');
   assert.equal(await requeueSuites(db, other), 0, 'second press: not asked again');
+});
+
+test('geocoding: a suite set aside after too many errors gets its full tries back when tried again', async () => {
+  const other = (await new Client().signup({ workspaceName: 'Retry Errors Example', jurisdiction: 'bc-municipal' })).json.workspace.id;
+  const id = await insert({ ws: other, name: 'Retry Error Example', address: 'Bsmt 10802 Errone St' });
+  await insert({ ws: other, name: 'Retry Fine Example', address: '10803 Fine St' });
+  await db.query(`update persons set attrs = attrs || $2::jsonb where id = $1`, [id, JSON.stringify({ geocode: { status: 'failed', tries: 3, error: 'geocoder 503' } })]);
+  if (doorsMod) await doorsMod.fillDoorParts(db, { workspaceId: other });
+  const { requeueSuites, geocodeRound } = await import('../ext/geocoding/index.js');
+  assert.equal(await requeueSuites(db, other), 1);
+  const g0 = (await db.query(`select attrs->'geocode' as g from persons where id = $1`, [id])).rows[0].g;
+  assert.ok(!g0.tries, `tries start again: ${JSON.stringify(g0)}`);
+  await geocodeRound(db, other, null);
+  const g1 = (await db.query(`select attrs->'geocode' as g from persons where id = $1`, [id])).rows[0].g;
+  assert.equal(g1.status, '', `one error is not the last try: ${JSON.stringify(g1)}`);
 });
 
 // ── 2b. The walk list decides house or building before the round thins it ──
