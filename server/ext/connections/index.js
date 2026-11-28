@@ -263,7 +263,9 @@ export const services = (base = publicUrl()) => {
       detail: [k.source === 'env' ? 'Set: authenticator keys are sealed with it'
         : k.problem === 'short' ? `Too short (${KEY_MIN} characters or more): base.win keeps a key in its database meanwhile`
           : `Not set: base.win keeps a key in its database, so a copy of the database could open them — ${KEY_MIN}+ random characters`,
-      ...(k.source === 'env' ? (k.short || []).map((name) => `${name} is too short (${KEY_MIN} characters or more) and is not used${name === KEY_ENV ? ` — copy ${OLD_SETTINGS[KEY_ENV]}’s value into it exactly before deleting ${OLD_SETTINGS[KEY_ENV]}` : ''}`) : [])].join('\n'),
+      ...(k.source === 'env' ? (k.short || []).map((name) => `${name} is too short (${KEY_MIN} characters or more) and is not used${name === KEY_ENV
+        ? ` — copy ${OLD_SETTINGS[KEY_ENV]}’s value into it exactly before deleting ${OLD_SETTINGS[KEY_ENV]}`
+        : ` — ${KEY_ENV} holds the key in use; ${name} can be deleted`}`) : [])].join('\n'),
       state: k.source === 'env' ? 'ready' : 'missing',
       missing: k.source === 'env' ? [] : [KEY_ENV],
       checkable: false,

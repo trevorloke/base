@@ -6,7 +6,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { hkdfSync } from 'node:crypto';
 import { freshDb } from './helpers.js';
-import { sealSecret, openSecret, keyStatus } from '../lib/twostep.js';
+import { sealSecret, openSecret, keyStatus, KEY_MIN } from '../lib/twostep.js';
 import { OLD_SETTINGS } from '../../shared/old-names.js';
 
 const NEW = 'BASE_TWO_STEP_KEY';
@@ -79,6 +79,7 @@ test('a value under either name that is too short to use is reported, even while
   assert.deepEqual(keyStatus(), { source: 'env', problem: 'short', short: [NEW] });
   only({ [NEW]: K1, [OLD]: K1 });
   assert.deepEqual(keyStatus(), { source: 'env' });
+  assert.equal(KEY_MIN, 32, 'the same length shared/old-names.js counts as usable');
   // Neither long enough: the database's key, as before.
   only({ [NEW]: 'too-short' });
   assert.deepEqual(keyStatus(), { source: 'database', problem: 'short' });

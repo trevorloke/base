@@ -73,9 +73,11 @@ test('the two-step row flags a value too short to use under either name', () => 
   assert.match(row.detail, new RegExp(`${TWO} is too short`));
   noValues(row, K1);
   only({ [OLD_TWO]: 'too-short', [TWO]: K1 });
+  assert.deepEqual(olderNames(), [{ old: OLD_TWO, now: TWO, copied: true }], 'a key too short to use opens nothing: the older name may go');
   row = rowOf('twostep');
   assert.equal(row.flagged, true);
   assert.match(row.detail, new RegExp(`${OLD_TWO} is too short`));
+  assert.match(row.detail, new RegExp(`${TWO} holds the key in use; ${OLD_TWO} can be deleted`), 'with the new name to use');
   only({ [TWO]: K1 });
   row = rowOf('twostep');
   assert.equal(row.state, 'ready');

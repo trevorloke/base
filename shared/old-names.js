@@ -40,6 +40,8 @@ const blank = (v) => v == null || String(v).trim() === '';
 const envOf = (env) => env ?? globalThis.process?.env ?? {};
 // A joined key's value as a list: commas or spaces between keys, as server/lib/twostep.js reads it.
 const listOf = (v) => (blank(v) ? [] : String(v).split(/[\s,]+/).filter(Boolean));
+// A key long enough to be used (server/lib/twostep.js KEY_MIN): a shorter one opens nothing.
+const usable = (k) => k.length >= 32;
 
 // Any spelling -> the new name (for saved job rows in the control centre).
 // A new name stays new; an old name maps to its new one; any other name is unchanged.
@@ -86,7 +88,7 @@ export const setting = (name, env) => {
 // values: { stillOld: ['BASE_TZ', …], differ: ['BASE_TZ', …] }.
 // stillOld: every setting whose old name holds a value. differ: both names hold
 // different values, so the new one is used; for a joined key, the new name is set
-// but lacks a key the old name holds, so deleting the old name would lose that key.
+// but lacks a usable key the old name holds, so deleting the old name would lose that key.
 export const adoptOldNames = (env) => {
   const e = envOf(env);
   const stillOld = [];
@@ -96,7 +98,7 @@ export const adoptOldNames = (env) => {
     if (blank(e[old])) continue;
     stillOld.push(now);
     if (JOINED.includes(now)) {
-      if (!blank(e[now]) && !listOf(e[old]).every((k) => listOf(e[now]).includes(k))) differ.push(now);
+      if (!blank(e[now]) && !listOf(e[old]).filter(usable).every((k) => listOf(e[now]).includes(k))) differ.push(now);
     } else if (blank(e[now])) e[now] = e[old];
     else if (String(e[now]) !== String(e[old])) differ.push(now);
   }
