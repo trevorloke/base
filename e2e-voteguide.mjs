@@ -69,9 +69,11 @@ const DESK = `${ORIGIN}${P ? `${P}/desk` : '/admin'}`;
 const FIELD = `${ORIGIN}${P ? `${P}/field` : ''}`;
 const SITE = `${ORIGIN}${P}/site`;
 const API = `${ORIGIN}${P}/api`;
-const GEO_PORT = 5513;
-const FRAME_PORT = 5514;
-const TRANSLATE_PORT = 5512; // the stand-in Google Translation (TR), for the Punjabi page
+// The stand-ins next to the server's port (5510: 5512–5514 as before), so a
+// run on another port uses none outside its own range.
+const GEO_PORT = PORT + 3;
+const FRAME_PORT = PORT + 4;
+const TRANSLATE_PORT = PORT + 2; // the stand-in Google Translation (TR), for the Punjabi page
 const SHOTS = process.env.SHOTS || '/tmp/base-win-voteguide';
 mkdirSync(SHOTS, { recursive: true });
 const DATA = mkdtempSync(join(tmpdir(), 'vg-e2e-'));

@@ -3,7 +3,9 @@
 // "14 sign-ups · 6 sharers", Open or Stopped, and "Page not live" when the
 // page it opens is gone from the website. A tap opens it in place (?kit=):
 // the name, the words (counted with the Authorized by line, "Under 280 fits
-// X"), the page, the line and whether to add it; under More details the
+// X"), the page and the line (on every post once it is filled in:
+// shared/site/authorized.js; a post saved before then that is now over 500
+// with it is said, its words never changed); under More details the
 // picture and Stop sharing / Share again; then its top sharers. Under the
 // list: Top sharers (all links), and a quiet "Your own link" (/share).
 // "New post to share" (the header's one yellow button) is ?new=1.
@@ -16,6 +18,7 @@ import { NeedsSignal, useOnline } from '../components/NoSignal.jsx';
 import { Unavailable } from '../components/AudienceBits.jsx';
 import { uploadImage } from '../components/MarkdownField.jsx';
 import { hasArea } from '../Shell.jsx';
+import { AuthorizedBanner, needsAsk, useAuthorized } from '../components/Authorized.jsx';
 import './shifts.css';
 import './share.css';
 
@@ -48,7 +51,6 @@ function KitEditor({ kit, line, pages, people, onClose, onSaved }) {
   const [title, setTitle] = useState(kit?.title || '');
   const [body, setBody] = useState(kit?.body || '');
   const [path, setPath] = useState(kit?.path || pages[0]?.path || '/');
-  const [authorized, setAuthorized] = useState(kit ? kit.authorized : true);
   const [media, setMedia] = useState(kit?.media_id ? { id: kit.media_id, url: kit.picture_url } : null);
   const [more, setMore] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -56,18 +58,25 @@ function KitEditor({ kit, line, pages, people, onClose, onSaved }) {
   const [said, setSaid] = useState('');
   const top = useQuery({ queryKey: ['share', 'kit', kit?.id], queryFn: () => apiGet(`/share/kits/${kit.id}`), enabled: Boolean(kit?.id) });
 
-  const words = authorized && line ? `${body.trim()}\n${line}` : body.trim();
+  // After the line's "needed from" date with none set: saving asks first.
+  const auth = useAuthorized().data;
+  const ask = needsAsk(auth);
+  const [asked, setAsked] = useState(false);
+  const words = line ? `${body.trim()}\n${line}` : body.trim();
   const n = words.length;
   const known = pages.some((p) => p.path === path);
   const live = kit && kit.path === path ? kit.live : known;
 
   const save = async (e) => {
     e.preventDefault();
+    if (ask && !asked) { setAsked(true); return; }
     setBusy(true);
     setError(null);
     try {
+      // The post's own saved choice (authorized) is never sent: it is kept.
       const r = await action('share.kit.save', {
-        ...(kit ? { id: kit.id } : {}), title, body, path, media_id: media?.id || null, authorized,
+        ...(kit ? { id: kit.id } : {}), title, body, path, media_id: media?.id || null,
+        ...(ask ? { withoutAuthorized: true } : {}),
       });
       await qc.invalidateQueries({ queryKey: ['share'] });
       onSaved(r.kit, kit ? 'Saved' : 'Ready to share');
@@ -117,7 +126,7 @@ function KitEditor({ kit, line, pages, people, onClose, onSaved }) {
         <label htmlFor={`${id}-b`}>Words to share</label>
         <textarea id={`${id}-b`} className="input" value={body} maxLength={BODY_MAX} required onChange={(e) => setBody(e.target.value)} />
         <span className="sk-count" data-over={n > BODY_MAX ? 'true' : 'false'}>
-          {fmt(n)} of {fmt(BODY_MAX)}{authorized && line ? ' with the Authorized by line' : ''}{n <= X_MAX ? ' · Under 280 fits X' : ''}
+          {fmt(n)} of {fmt(BODY_MAX)}{line ? ' with the Authorized by line' : ''}{n <= X_MAX ? ' · Under 280 fits X' : ''}
         </span>
       </div>
       <div className="sk-field">
@@ -132,11 +141,7 @@ function KitEditor({ kit, line, pages, people, onClose, onSaved }) {
         {line ? (
           <>
             <p className="sk-line">{line}</p>
-            <p className="ops-meta">Pictures should carry this line</p>
-            <label className="sk-check">
-              <input type="checkbox" checked={authorized} onChange={(e) => setAuthorized(e.target.checked)} />
-              Add “Authorized by …” to the words
-            </label>
+            <p className="ops-meta">base.win adds this line to every post. Pictures should carry it too.</p>
           </>
         ) : (
           <p className="sk-line"><Link to="/website/settings">Add your authorization line in Website → Settings</Link></p>
@@ -163,9 +168,11 @@ function KitEditor({ kit, line, pages, people, onClose, onSaved }) {
         </div>
       )}
 
+      <AuthorizedBanner a={auth} />
       {error && <p className="error" role="alert">{error}</p>}
       <div className="sk-actions">
-        <button type="submit" className="btn btn-primary ops-tap" disabled={!online || busy || n > BODY_MAX}>{busy ? 'Saving…' : kit ? 'Save' : 'Save post'}</button>
+        <button type="submit" className="btn btn-primary ops-tap" disabled={!online || busy || n > BODY_MAX}>{busy ? 'Saving…' : ask && asked ? 'Save without it' : kit ? 'Save' : 'Save post'}</button>
+        {ask && asked && <Link className="btn btn-quiet ops-tap" to="/website/settings#wb-s-agent">Add it first</Link>}
         <button type="button" className="btn btn-quiet ops-tap" onClick={onClose}>{kit ? 'Close' : 'Cancel'}</button>
         {!online && <NeedsSignal />}
       </div>
@@ -215,6 +222,11 @@ export default function SharingTab({ me, creating, onClose }) {
 
   return (
     <div className="sk-page">
+      {d.over > 0 && (
+        <p className="banner sk-over" role="status">
+          {d.over === 1 ? '1 saved post is' : `${fmt(d.over)} saved posts are`} now over {fmt(BODY_MAX)} characters with the Authorized by line. Open {d.over === 1 ? 'it' : 'each'} and shorten the words.
+        </p>
+      )}
       {creating && <KitEditor key="new" line={d.line} pages={d.pages} people={people} onClose={close} onSaved={onSaved} />}
       {d.kits.length === 0 && !creating && <p className="muted">Nothing to share yet.</p>}
       <ul className="sk-list">
@@ -228,6 +240,7 @@ export default function SharingTab({ me, creating, onClose }) {
                 <Nums k={k} />
                 <span className={`chip${k.open ? '' : ' muted'}`}>{k.open ? 'Open' : 'Stopped'}</span>
                 {!k.live && <span className="chip sk-warn">Page not live</span>}
+                {k.over && <span className="chip sk-warn">Over {fmt(BODY_MAX)} with the line</span>}
               </button>
             )}
           </li>

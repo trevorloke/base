@@ -26,6 +26,8 @@ import './shifts.css';
 import '../editor.css';
 import './website.css';
 import { PLATFORM_WORD, parseSocial } from '@base-win/shared/socials';
+import { authorizedLine, authorizedSet, neededFrom } from '@base-win/shared/site/authorized';
+import { AUTHORIZED_KEY, dayWords, useAuthorized } from '../components/Authorized.jsx';
 
 const SECTIONS = ['nav', 'announcement', 'footer', 'org', 'social', 'seo', 'domains'];
 const LINK = [{ key: 'label', type: 'text', label: 'Words', max: 60 }, { key: 'href', type: 'url', label: 'Goes to' }];
@@ -184,6 +186,66 @@ function MenuPages({ value, onChange, toast }) {
   );
 }
 
+// "Authorized by …" as it will read (shared/site/authorized.js), the date
+// it is needed from, the receipts' agent when it differs, and the words to
+// paste where base.win can't reach (ads, print, Mailchimp).
+function AuthorizedPart({ org, onFrom, onCopied }) {
+  const a = useAuthorized().data;
+  const [note, setNote] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const en = authorizedLine(org, { channel: 'site' }).en;
+  const need = neededFrom(org, new Date(), a?.tz);
+  const copy = async (text) => {
+    try { await navigator.clipboard.writeText(text); setNote('Copied'); } catch { setNote('Select the words and copy them'); }
+  };
+  const fromReceipts = async () => {
+    setBusy(true);
+    setNote(null);
+    try {
+      const r = await action('site.authorized.fromReceipts', {});
+      onCopied(r.org);
+    } catch (e) { setNote(e.message); } finally { setBusy(false); }
+  };
+  const rec = a?.receipts;
+  return (
+    <div className="wb-auth">
+      <p className="wb-auth-read" data-auth-read="">
+        {en ? <>On every page, email and text: <strong>{en}</strong></> : 'Nothing shows while these are empty.'}
+      </p>
+      {a?.receiptsDiffer && rec?.name && (
+        <p className="wb-field__hint" data-receipts="">
+          Your receipts name a different financial agent: {[rec.name, rec.contact].filter(Boolean).join(', ')}.{' '}
+          {rec.tooLong
+            ? 'It is too long to copy here — shorten it in the boxes above.'
+            : <button type="button" className="btn btn-quiet ops-tap" disabled={busy} onClick={fromReceipts}>Use that here</button>}
+        </p>
+      )}
+      <div className="field">
+        <label htmlFor="wb-s-authfrom">Needed from (optional)</label>
+        <input id="wb-s-authfrom" className="input" type="date" value={org.authorizedFrom || ''} onChange={(e) => onFrom(e.target.value)} />
+        <p className="wb-field__hint">
+          {need.level === 'due' ? `Needed now (from ${dayWords(need.from)}).`
+            : need.from ? `Needed from ${dayWords(need.from)}.` : 'Not needed yet.'}{' '}
+          The line goes on whenever it is filled in. This date only decides when base.win warns, on Today and on every send screen, if it is still missing.
+        </p>
+      </div>
+      {en && (
+        <div className="wb-auth-paste">
+          <p className="wb-field__hint"><strong>For ads, print and Mailchimp.</strong> base.win can’t add it there: paste it in.</p>
+          {[['en', en], ...Object.entries(a?.byLang || {})].map(([lang, text]) => (
+            <p key={lang} className="wb-auth-copy">
+              <span lang={lang}>{text}</span>
+              <button type="button" className="btn btn-quiet ops-tap" onClick={() => copy(text)}>Copy</button>
+            </p>
+          ))}
+          {note && <p className="wb-field__hint" role="status">{note}</p>}
+        </div>
+      )}
+      {!en && note && <p className="wb-field__hint" role="status">{note}</p>}
+    </div>
+  );
+}
+
 // One small panel: its heading and a line saying what is set; opened, its
 // fields and its own Save.
 function Panel({ id, title, line, open, onToggle, dirty, busy, online, onSave, children }) {
@@ -231,7 +293,7 @@ const sumLine = (s, pages, panel) => {
     case 'bar': return [s.nav.cta?.label ? `Button: ${s.nav.cta.label}` : 'No button', n(s.nav.links.length, 'link', 'links')].join(' · ');
     case 'announcement': return s.announcement.enabled && s.announcement.text ? s.announcement.text : 'Off';
     case 'footer': return [s.footer.acknowledgement ? 'Land acknowledgement' : 'No land acknowledgement', n(s.footer.links.length, 'link', 'links')].join(' · ');
-    case 'org': return s.org.agentName && s.org.agentContact ? `Authorized by ${s.org.agentName}` : 'No one is named on the Authorized by line yet';
+    case 'org': return authorizedSet(s.org) === 'set' ? authorizedLine(s.org, { channel: 'site' }).en : 'No one is named on the Authorized by line yet';
     case 'social': return s.social.accounts.length ? s.social.accounts.map((a) => a.name || a.handle).filter(Boolean).join(' · ') || n(s.social.accounts.length, 'account', 'accounts') : 'None yet';
     case 'seo': return s.seo.title || 'The site’s name';
     case 'domains': return s.domains.length ? s.domains.join(' · ') : 'None yet';
@@ -340,6 +402,7 @@ export default function WebsiteSettings() {
       setSaved((x) => ({ ...x, [sec]: section }));
       if (panel === 'menu') setSavedPages(pages);
       // Undo: the panel as it was saved before, saved again.
+      if (panel === 'org') refresh(AUTHORIZED_KEY);
       say('Saved — every page of the site has it now', {
         undo: async () => {
           try {
@@ -405,16 +468,18 @@ export default function WebsiteSettings() {
             <ImageField plain id="wb-s-flogo" label="Footer logo" value={s.footer.logo} onChange={(v) => set('footer', 'logo', v)} />
           </>)}
           {panel('org', 'org', 'Who’s behind the site', <>
-            <p className="wb-field__hint">Election rules ask every page to say who authorized it: “Authorized by” your financial agent, and how to reach them.</p>
-            {/* "Authorized by <name>, <contact>" on every page of every website
-                (shared/site/wording.js authorizedBy); the old free line stays
-                saved, drawn only while no agent is named. */}
+            <p className="wb-field__hint">“Authorized by” your financial agent, and how to reach them. Once it is filled in, base.win adds it to every page, email, text and share post. Nothing shows while it is empty.</p>
+            {/* "Authorized by <name>, <contact>": the one rule for every channel
+                (shared/site/authorized.js); the old free line stays saved,
+                drawn only while no agent is named. */}
             <div className="form-row">
               <TextField id="wb-s-agent" label="Authorized by (your financial agent’s name)" max={80} value={s.org.agentName || ''}
                 onChange={(v) => set('org', 'agentName', v)} />
               <TextField id="wb-s-agentc" label="How to reach them (a B.C. phone number, mailing address or email)" max={120} value={s.org.agentContact || ''}
                 onChange={(v) => set('org', 'agentContact', v)} />
             </div>
+            <AuthorizedPart org={s.org} onFrom={(v) => set('org', 'authorizedFrom', v)}
+              onCopied={(o) => { setS((x) => ({ ...x, org: { ...x.org, ...o } })); setSaved((x) => ({ ...x, org: { ...x.org, ...o } })); refresh(['site'], AUTHORIZED_KEY); say('Copied from your receipts — every page of the site has it now'); }} />
             <UrlField id="wb-s-priv" label="Privacy policy link" value={s.org.privacyUrl} pages={ctx.pages} onChange={(v) => set('org', 'privacyUrl', v)} />
             <div className="form-row">
               <TextField id="wb-s-name" label="Name" max={80} value={s.org.name} onChange={(v) => set('org', 'name', v)} />

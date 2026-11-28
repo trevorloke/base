@@ -17,6 +17,7 @@ import { apiGet, action, ApiError } from '../api.js';
 import { isDesk } from '../Shell.jsx';
 import { fmtWhen, noSignal } from './People.jsx';
 import { FOOTER, namesCampaign, TextingOff } from '../components/TextingCard.jsx';
+import { authLine, useAuthorized } from '../components/Authorized.jsx';
 import { useOnline } from '../components/NoSignal.jsx';
 import './people.css';
 import '../components/texting-card.css';
@@ -57,6 +58,8 @@ function OptOut({ conv, onDone }) {
 function ReplyBox({ data, desk, onSent }) {
   const id = useId();
   const [body, setBody] = useState('');
+  // A first text gains "Authorized by …" once it is filled in (components/Authorized.jsx).
+  const authText = authLine(useAuthorized().data);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const online = useOnline();
@@ -95,6 +98,7 @@ function ReplyBox({ data, desk, onSent }) {
         <label className="pp-sr" htmlFor={id}>Reply</label>
         <textarea id={id} className="tx-body" rows={3} maxLength={1000} placeholder="Write a reply"
           value={body} onChange={(e) => { setBody(e.target.value); setError(null); }} />
+        {conv.first && authText && !body.includes(authText) && <p className="tx-foot">{authText}</p>}
         {conv.first && <p className="tx-foot">{FOOTER}</p>}
       </div>
       {missing && <p className="tx-line tx-line--warn">Say it’s {campaign} in the first text</p>}
