@@ -262,7 +262,7 @@ app.get('/persons', async (c) => {
   );
   // A door at a house carries place 'house' (lib/doors.js markHouses): the
   // row reads "Suite B · 10500 134 St" as the map, walk list and profile do.
-  const out = await markHouses(c.get('db'), ctx.workspaceId, rows.slice(0, limit).map(personRow));
+  const out = await markHouses(c.get('db'), ctx.workspaceId, rows.slice(0, limit).map(personRow), { reach: REACH });
   return c.json({ persons: out.map(forViewer(ctx)), more: rows.length > limit });
 });
 

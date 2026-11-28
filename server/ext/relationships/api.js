@@ -37,6 +37,7 @@ import { rankTies } from '@base-win/shared/ties';
 import { NO_CONTACT } from '../../lib/reach.js';
 import { azKey } from '../../lib/az.js';
 import { markHouses } from '../../lib/doors.js';
+import { REACH } from '@base-win/shared/buildings';
 import { selfPerson } from './match.js';
 import { PERSON_COLS, personOut } from './actions.js';
 import { TIE_READERS } from './index.js';
@@ -114,7 +115,7 @@ api.get('/persons/:id/knows', async (c) => {
     [ws, id],
   )).rows;
   // A door at a house carries place 'house' (lib/doors.js): "Suite B · 10500 134 St".
-  const doors = await markHouses(db, ws, rows.map((r) => ({ id: r.pid, address: r.address, unit: r.unit, lat: r.lat, lng: r.lng })));
+  const doors = await markHouses(db, ws, rows.map((r) => ({ id: r.pid, address: r.address, unit: r.unit, lat: r.lat, lng: r.lng })), { reach: REACH });
   const knows = rows.map((r, i) => ({
     id: r.id, kind: r.kind, note: r.note ?? null, close: Boolean(r.close), linked_at: r.linked_at,
     // Street and city: the desk tells two people of the same name apart.
