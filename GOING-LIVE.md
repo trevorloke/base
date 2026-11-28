@@ -1308,7 +1308,11 @@ The owner's to-do:
       `BASE_TWO_STEP_KEY`, "does not hold the same key"), and that its
       start-up log has no "both set and differ" line for that setting.
    3. Delete the older name. Save, and deploy. Settings → Services no
-      longer lists it.
+      longer lists it. **Only once you will not roll back** to a build from
+      before this release (Render → the service → Events → Rollback): such
+      a build reads only the older names, so after a Rollback it would run
+      without the settings you deleted. Until then, keeping both names costs
+      nothing.
 
    If a later sync ever shows an older name again with no value, leave it:
    a blank setting counts as not set. Three settings need extra care:

@@ -153,7 +153,7 @@ const failed = (r) => r && !r.ok;
 // Settings still set under their older names (render-routes.mjs readSettings):
 // names only, each with the name to use instead.
 const olderWords = (older = []) => older.map((o) => `${o.old} → ${o.now}`).join(', ');
-const OLDER_HELP = 'Each still works. When it suits you, in Render (this service → Environment): add the new name with exactly the same value, Save, then delete the older name. If both are set, the new name is used.';
+const OLDER_HELP = 'Each still works. When it suits you, in Render (this service → Environment): add the new name with exactly the same value, Save, then delete the older name. If both are set, the new name is used. Keep the older name while you might still roll this service back to a build from before the rename: such a build reads only the older name.';
 const row = (k, v, help = '') => html`<div><dt>${k}</dt><dd>${v}${help ? html`<p class="oc-help">${help}</p>` : ''}</dd></div>`;
 
 // s: what render-routes.mjs read for this campaign (each read may have failed alone).

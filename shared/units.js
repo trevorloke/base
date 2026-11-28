@@ -188,10 +188,12 @@ export const splitUnit = (address) => {
   if (m) return null;
   // A suite word before: "Bsmt 10388 134 St", "Basement suite, 10388 …", "Upper 10388 …".
   // (What follows must be a house, not a numbered street: "Upper 104 Ave" stays.)
+  // ("Bsmt 1 12345 64 Ave" stays as typed: the 1 could be the suite's number or the house's.)
   m = s.match(RE.suiteBefore);
-  if (m && isSuiteWord(m[1])) return out(m[1], m[2]);
+  if (m && isSuiteWord(m[1]) && !/^\d{1,4}[a-z]?\s+\d{4,}\s/i.test(m[2])) return out(m[1], m[2]);
   // '#' or a word after: "13450 104 Ave #1203", "… Unit 12A", "… Ste 210", "… Unit B", "… #Bsmt".
-  m = s.match(RE.hashAfter) || s.match(RE.wordAfter);
+  // (The word first, so "… Unit #205" leaves the word out of the house.)
+  m = s.match(RE.wordAfter) || s.match(RE.hashAfter);
   if (m && (/\d/.test(m[2]) || m[2].length === 1 || isSuiteWord(m[2]))) return out(m[2], m[1]);
   // A suite word after the street: after a comma, in brackets, after " - ",
   // or bare after a short street type (and an optional direction).

@@ -205,8 +205,11 @@ export const geocodeRound = async (db, workspaceId, actorId) => {
       for (const r of rows) emit('person', r.id, 'update', { lat, lng, geocoded: geo.matched || null });
       return rows.length;
     };
+    // A suite already tried again as its house keeps that mark, so the next
+    // Place on map press does not ask for it once more.
     const mark = (g, geo) => tx.query(
-      `update persons set attrs = jsonb_set(attrs, '{geocode}', $3::jsonb)
+      `update persons set attrs = jsonb_set(attrs, '{geocode}',
+         $3::jsonb || jsonb_strip_nulls(jsonb_build_object('suite_retry', attrs->'geocode'->'suite_retry')))
        where workspace_id = $1 and id = any($2::uuid[]) and lat is null`,
       [workspaceId, [...g.ids], JSON.stringify(geo)],
     );

@@ -137,7 +137,7 @@ export const BATCH = 2000;
 // Fill the parts of stale rows: the ids given, or one campaign, or every
 // campaign; BATCH at a time, at most max. Writes only the four door
 // columns. Each batch is one short transaction that takes the rows it
-// reads with "for update skip locked": a row another write holds (an
+// reads with "for no key update skip locked": a row another write holds (an
 // import's) is left for the next sweep, never waited for, so the two can
 // never deadlock; and a short lock_timeout covers the rest. A row edited
 // between the read and the write can't be: it is locked.
@@ -154,7 +154,7 @@ export const fillDoorParts = async (db, { workspaceId = null, ids = null, max = 
     const n = await db.transaction(async (tx) => {
       if (db.kind === 'postgres') await tx.query("set local lock_timeout = '2s'");
       const rows = (await tx.query(
-        `select id, address, unit from persons where ${where} and ${STALE_PRED} limit ${limit} for update skip locked`,
+        `select id, address, unit from persons where ${where} and ${STALE_PRED} limit ${limit} for no key update skip locked`,
         list ? [chunk] : workspaceId ? [workspaceId] : [],
       )).rows;
       if (!rows.length) return 0;

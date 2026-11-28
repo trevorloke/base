@@ -7,6 +7,7 @@
 // (TESTING.md).
 import { setting } from '@base-win/shared/old-names';
 import { randomBytes } from 'node:crypto';
+import { unitKey, unitKind, unitWords } from '../../../shared/units.js';
 import { newId } from '../../lib/events.js';
 import { enqueueJob, cancelJobs } from '../../lib/jobs.js';
 import { emailConfigured, sendEmail } from '../../lib/notify.js';
@@ -88,8 +89,12 @@ export const addressOf = (p) => {
   if (!p) return null;
   const street = trimmed(p.address);
   if (!street) return null;
+  // A suite reads by its name ("Basement suite, …"), a main door as the
+  // street alone, anything else as typed after "Unit".
   const unit = trimmed(p.unit);
-  return [unit ? `Unit ${unit}, ${street}` : street, trimmed(p.city), trimmed(p.postal)].filter(Boolean).join(', ');
+  const kind = unit ? unitKind(unitKey(unit)) : 'main';
+  const words = kind === 'main' ? '' : kind === 'suite' ? unitWords(unitKey(unit)) : `Unit ${unit}`;
+  return [words ? `${words}, ${street}` : street, trimmed(p.city), trimmed(p.postal)].filter(Boolean).join(', ');
 };
 
 const pad = (n) => String(n).padStart(4, '0');

@@ -132,6 +132,10 @@ test('splitUnit: every form a unit or suite is written inside the address', () =
     ['13450 104 Avenue Upper', 'Upper', '13450 104 Avenue'],
     ['10388 King George Blvd N Coach house', 'Coach house', '10388 King George Blvd N'],
     ['5520 Example Way Garden suite', 'Garden suite', '5520 Example Way'],
+    // a unit word and '#' together after the street
+    ['10533 University Dr Unit #205', '205', '10533 University Dr'],
+    ['10533 University Dr Suite #205', '205', '10533 University Dr'],
+    ['12345 64 Ave Apt. #2', '2', '12345 64 Ave'],
   ];
   for (const [s, unit, civic] of cases) assert.deepEqual(splitUnit(s), { unit, civic }, s);
 });
@@ -154,6 +158,8 @@ test('splitUnit never splits the forms with another reading', () => {
     'No. 10388 134 St', 'No 10388 134 St', '#5 104 Ave', '#10388 134 St', 'Apt 10388 134 St N',
     // …and after it: the street alone is no house
     '104 Ave #5', '134 St Unit 12', '104 Ave, Suite 101',
+    // a suite word then a number then a house: which is the unit is not clear, so it stays as typed
+    'Bsmt 1 12345 64 Ave', 'Upper 2 10388 134 St',
   ]) assert.equal(splitUnit(s), null, String(s));
 });
 

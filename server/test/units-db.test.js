@@ -49,6 +49,7 @@ before(async () => {
     if (u.hostname !== 'geocoder.api.gov.bc.ca') return realFetch(url, opts);
     const q = u.searchParams.get('addressString');
     asked.push(q);
+    if (/nomatch/i.test(q)) return new Response(JSON.stringify({ features: [] }));
     const n = Number(q.match(/^\d+/)?.[0] || 0);
     return new Response(JSON.stringify({ features: [{ geometry: { coordinates: [-122.5 + n / 1e7, 49.5 + n / 1e7] },
       properties: { score: 97, matchPrecision: 'CIVIC_NUMBER', fullAddress: q } }] }));
@@ -274,6 +275,22 @@ test('geocoding: suites set aside before are tried again once, as their house, w
   assert.equal((await st(plain)).g.status, 'nomatch', 'an address with no suite in it stays set aside');
   await db.query(`update persons set attrs = attrs || $2::jsonb where id = $1`, [aside, JSON.stringify({ geocode: { status: 'nomatch', suite_retry: true } })]);
   assert.equal(await requeueSuites(db, other), 0, 'once only');
+});
+
+test('geocoding: a suite tried again and still not found is not asked again on the next press', async () => {
+  const other = (await new Client().signup({ workspaceName: 'Retry Twice Example', jurisdiction: 'bc-municipal' })).json.workspace.id;
+  const id = await insert({ ws: other, name: 'Retry Bsmt Example', address: 'Bsmt 10801 Nomatch St' });
+  await db.query(`update persons set attrs = attrs || $2::jsonb where id = $1`, [id, JSON.stringify({ geocode: { status: 'nomatch', at: '2026-01-01T00:00:00Z' } })]);
+  if (doorsMod) await doorsMod.fillDoorParts(db, { workspaceId: other });
+  const { requeueSuites, geocodeRound } = await import('../ext/geocoding/index.js');
+  assert.equal(await requeueSuites(db, other), 1, 'first press: tried again');
+  asked.length = 0;
+  for (let i = 0; i < 5; i += 1) if ((await geocodeRound(db, other, null)).done) break;
+  assert.ok(asked.some((q) => /^10801 Nomatch St/i.test(q)), `looked up as its house: ${asked.join(' · ')}`);
+  const g = (await db.query(`select attrs->'geocode' as g from persons where id = $1`, [id])).rows[0].g;
+  assert.equal(g.status, 'nomatch');
+  assert.equal(g.suite_retry, true, 'the round keeps the mark');
+  assert.equal(await requeueSuites(db, other), 0, 'second press: not asked again');
 });
 
 // ── 2b. The walk list decides house or building before the round thins it ──

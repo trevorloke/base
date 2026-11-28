@@ -712,3 +712,17 @@ test('the books still verify across everything in this file', async () => {
     assert.ok(kinds.includes(a), a);
   }
 });
+
+// The donor's address line words a suite the way every other screen does,
+// and a main door is the street alone (made-up addresses).
+test('addressOf: a suite reads by its name, a main door as the street, a number as a unit', async () => {
+  const { addressOf } = await import('../ext/receipts/core.js');
+  const at = (unit) => addressOf({ address: '10388 134 St', unit, city: 'Surrey', postal: 'V3T 0A1' });
+  assert.equal(at('4'), 'Unit 4, 10388 134 St, Surrey, V3T 0A1');
+  assert.equal(at('Main'), '10388 134 St, Surrey, V3T 0A1');
+  assert.equal(at('Basement suite'), 'Basement suite, 10388 134 St, Surrey, V3T 0A1');
+  assert.equal(at('Bsmt'), 'Basement suite, 10388 134 St, Surrey, V3T 0A1');
+  assert.equal(at('Coach house'), 'Coach house, 10388 134 St, Surrey, V3T 0A1');
+  assert.equal(at('B'), 'Unit B, 10388 134 St, Surrey, V3T 0A1');
+  assert.equal(at(null), '10388 134 St, Surrey, V3T 0A1');
+});
