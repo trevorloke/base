@@ -425,25 +425,29 @@ function buildingIcon(b, selected, caption = false) {
 
 // "10388 134 St, house with 2 doors: Main, Basement suite"
 const houseLabel = (h) => `${h.address}, house with ${h.doors.length} doors: ${h.doors.map((d) => unitWords(doorParts(d).unit, 'house')).join(', ')}`;
-// A house with suites: one pin, in its main door's colour (or its first
-// door's, with no main door), with a small door mark at its lower right in
-// the other doors' colours (split three ways for 3 or more doors). No text
-// on the pin itself (its people badge is already a number); the words
-// ("+ Basement suite") hang under it only from close in, where they cover
-// no other mark, and always on the house that is open (Map draws them).
+// A house with suites: one pin for the doors the map's filter shows, in
+// the first one's colour (Main's when it is shown), with a small door mark
+// at its lower right in the other shown doors' colours (split three ways
+// for 3 or more). One door shown: that door's own pin, no mark. No text on
+// the pin itself (its people badge is already a number); the words ("+
+// Basement suite", for the shown doors only) hang under it only from close
+// in, where they cover no other mark, and always on the house that is open
+// (Map draws them). Its label still names every door of the house.
 function houseIcon(h, selected, tag = null, signOk = () => true) {
-  const main = h.doors[0];
-  const n = h.doors.reduce((k, d) => k + d.persons.length, 0);
+  const shown = h.shownDoors?.length ? h.shownDoors : h.doors;
+  const main = shown[0];
+  const n = shown.reduce((k, d) => k + d.persons.length, 0);
   const cls = ['map-pin', `map-pin--${main.band}`, n > 1 ? 'map-pin--multi' : '', selected ? 'map-pin--selected' : ''].filter(Boolean).join(' ');
   const household = n > 1 ? `<span class="map-pin__hh">${PEOPLE_SVG}${n}</span>` : '';
-  const others = h.doors.slice(1, 4).map((d) => `var(--house-${d.band})`);
+  const others = shown.slice(1, 4).map((d) => `var(--house-${d.band})`);
   const split = others.length === 1 ? others[0]
     : `conic-gradient(${others.map((c, i) => `${c} ${(i * 100) / others.length}% ${((i + 1) * 100) / others.length}%`).join(', ')})`;
-  const flags = h.doors.flatMap((d) => d.signs).filter(signOk).slice(0, 3).map((sg, i) =>
+  const more = others.length ? `<span class="map-house__more" style="background:${split}">${DOOR_SVG}</span>` : '';
+  const flags = shown.flatMap((d) => d.signs).filter(signOk).slice(0, 3).map((sg, i) =>
     `<i class="map-flag map-flag--${esc(sg.status)} map-flag--k-${esc(sg.kind)}" style="left:${34 + i * 10}px;top:-6px"><i class="map-flag__face"></i><i class="map-flag__post"></i></i>`).join('');
   return L.divIcon({
     className: 'map-pin-wrap map-house-wrap',
-    html: `<div class="${cls}" aria-label="${esc(houseLabel(h))}" role="img">${main.band === 'unrated' ? '' : '<span class="map-pin__dot"></span>'}${household}<span class="map-house__more" style="background:${split}">${DOOR_SVG}</span></div>${flags}${tag ? `<span class="map-tag" aria-hidden="true">${esc(tag)}</span>` : ''}`,
+    html: `<div class="${cls}" aria-label="${esc(houseLabel(h))}" role="img">${main.band === 'unrated' ? '' : '<span class="map-pin__dot"></span>'}${household}${more}</div>${flags}${tag ? `<span class="map-tag" aria-hidden="true">${esc(tag)}</span>` : ''}`,
     iconSize: [48, 48],
     iconAnchor: [24, 42],
   });
@@ -1701,7 +1705,8 @@ export default function MapPage() {
     }).filter((b) => b.shown > 0 && b.anchor);
   }, [buildings, visible, filter]);
   // A house with suites: one pin for its doors the filter shows (the open
-  // door's always), in its main door's colour; at 0 it isn't drawn.
+  // door's always), drawn from those doors alone (colour, head count, door
+  // mark, tag: houseIcon); at 0 it isn't drawn.
   const houseItems = useMemo(() => {
     if (!houses.length) return EMPTY_LIST;
     const keys = new Set(visible.map((d) => d.key));
@@ -1709,8 +1714,8 @@ export default function MapPage() {
       const shownDoors = h.doors.filter((d) => keys.has(d.key));
       return {
         isHouse: true, key: `house:${h.key}`, lat: h.lat, lng: h.lng, offset: [0, 0], address: h.address,
-        doors: h.doors, shownDoors, band: h.doors[0].band, persons: shownDoors.flatMap((d) => d.persons),
-        signs: shownDoors.flatMap((d) => d.signs), tag: houseTag(h.doors),
+        doors: h.doors, shownDoors, band: shownDoors[0]?.band || h.doors[0].band, persons: shownDoors.flatMap((d) => d.persons),
+        signs: shownDoors.flatMap((d) => d.signs), tag: houseTag(shownDoors),
       };
     }).filter((h) => h.shownDoors.length > 0);
   }, [houses, visible]);
@@ -1788,7 +1793,8 @@ export default function MapPage() {
     const from = await houseFrom(h.doors[0]?.persons[0]?.id);
     // Another pin was tapped meanwhile, or this house is open already.
     if (mine !== houseSeqRef.current || h.key === selectedMarkRef.current) return;
-    const first = firstToKnock(h.doors, (d) => houseState(d, from));
+    // (Of the doors the filter shows: a tap on a supporters-only pin opens the supporter's door.)
+    const first = firstToKnock(h.shownDoors?.length ? h.shownDoors : h.doors, (d) => houseState(d, from));
     if (first?.persons[0]) select(first.persons[0].id);
   };
   const houseCard = useMemo(() => {

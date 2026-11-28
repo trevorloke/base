@@ -39,6 +39,9 @@
 //      the house's pin opens it.
 //   9  (review 1) The volunteer, on the map's default "Mine", opens the
 //      mid-rise: all 24 units, and Next unit moves on after a knock.
+//  10  The house pin follows the filter: with Main Opposed and the basement
+//      suite a Yes, "Yes (1–2)" draws the suite's pin alone (its colour, no
+//      head count, no mark or tag for the hidden door), and "Opposed" Main's.
 //
 // BIG=1 (review 6): the same list on a server that treats it as a big one
 // (BASE_MAP_ALL=20 BASE_MAP_VIEW=20 BASE_MAP_DOTS=200: this list has 41
@@ -675,6 +678,41 @@ if (want(7) && !BIG && !RED) {
     check(`7: People search "${q}" finds the doors written with a unit or suite`, want7(t), t.slice(0, 240));
   }
   await H.shot('07-search-phone');
+  await ctx.close();
+}
+
+// ── Step 10: the house pin follows the map's filter ──
+if (want(10) && !BIG && !RED) {
+  // Ana's main door Opposed, Ben's basement suite a Strong yes.
+  const r1 = await D.api('/actions/contact.log', { person_id: ana.id, channel: 'phone', outcome: 'contacted', rating: '4' });
+  const r2 = await D.api('/actions/contact.log', { person_id: ben.id, channel: 'phone', outcome: 'contacted', rating: '1' });
+  const { ctx, H } = await asManager('desk', 'light');
+  await mapAt(H, P.h10388, 19);
+  const pinOf = () => H.page.evaluate((addr) => {
+    const m = [...document.querySelectorAll('.leaflet-marker-icon')].find((x) => (x.getAttribute('title') || '').startsWith(addr));
+    if (!m) return null;
+    const pin = m.querySelector('.map-pin');
+    const band = (/map-pin--(support|opposed|undecided|unrated)/.exec(pin?.className || '') || [])[1] || '';
+    return { band, hh: m.querySelector('.map-pin__hh')?.innerText.trim() || '', more: Boolean(m.querySelector('.map-house__more')), tag: m.querySelector('.map-tag')?.innerText.trim() || '' };
+  }, P.h10388.addr);
+  const pick = async (label) => {
+    await H.page.click('.map-filter-btn');
+    await H.page.waitForSelector('.map-fsheet', { timeout: 5000 }).catch(() => {});
+    await H.page.click(`.map-fsheet .map-fopt:has-text("${label}")`, { timeout: 5000 }).catch(() => {});
+    await sleep(900);
+  };
+  const all = await pinOf();
+  check('10: on All, 10388 is one pin in Main\'s colour (Opposed), 2 people, the door mark and "+ Basement suite"',
+    r1.status === 200 && r2.status === 200 && all?.band === 'opposed' && all.hh === '2' && all.more && all.tag === '+ Basement suite', JSON.stringify(all));
+  await pick('Yes (1–2)');
+  const yes = await pinOf();
+  check('10: on "Yes (1–2)" the pin is the basement suite\'s alone: Yes colour, no head count, no mark or tag for the hidden Main',
+    yes?.band === 'support' && yes.hh === '' && !yes.more && yes.tag === '', JSON.stringify(yes));
+  await H.shot('10-house-pin-filter-yes-desk');
+  await pick('Opposed');
+  const no = await pinOf();
+  check('10: on "Opposed" the pin is Main\'s alone: Opposed colour, no mark or tag for the hidden suite',
+    no?.band === 'opposed' && no.hh === '' && !no.more && no.tag === '', JSON.stringify(no));
   await ctx.close();
 }
 
