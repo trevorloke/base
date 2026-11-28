@@ -16,7 +16,8 @@
 // (server/test/authorized-channels.test.js) hold every sender and every
 // page drawer in the code to a row here: `senders` are the files that send
 // a message or draw a public page for that row, `hooks` the files that ask
-// this rule for the line.
+// this rule for the line, and `via`, for a sender that is not a hook, the
+// hook its words go through (it imports that hook, or is drawn by it).
 //
 // Pure: no database. The website's renderer (browser and server) and the
 // server both import it. One way only: this file reads wording.js
@@ -40,6 +41,10 @@ export const CHANNELS = Object.freeze({
     kind: 'advertising', include: 'when-set', form: 'html-footer',
     senders: ['server/ext/site/render/index.js', 'server/ext/site/public.js'],
     hooks: ['shared/site/components/shell.js', 'shared/site/components/context.js'],
+    via: {
+      'server/ext/site/render/index.js': 'shared/site/components/context.js',
+      'server/ext/site/public.js': 'shared/site/components/context.js',
+    },
   }),
   'site-plain-public': row({
     what: 'The plain public pages: coming soon, a closed website',
@@ -58,6 +63,7 @@ export const CHANNELS = Object.freeze({
     kind: 'advertising', include: 'when-set', form: 'html-footer',
     senders: ['shared/site/components/voteguide.js', 'shared/site/components/templates.js'],
     hooks: ['shared/site/components/voteguide.js'],
+    via: { 'shared/site/components/templates.js': 'shared/site/components/voteguide.js' },
   }),
   ics: row({
     what: 'Calendar files: events.ics and one event’s .ics',
@@ -76,6 +82,11 @@ export const CHANNELS = Object.freeze({
     kind: 'unclear', owner: true, include: 'when-set', form: 'share-text',
     senders: ['shared/site/components/share.js', 'shared/site/components/form.js', 'shared/site/components/islands.js'],
     hooks: ['shared/site/components/modules.js', 'shared/site/components/templates.js'],
+    via: {
+      'shared/site/components/share.js': 'shared/site/components/modules.js',
+      'shared/site/components/form.js': 'shared/site/components/modules.js',
+      'shared/site/components/islands.js': 'shared/site/components/modules.js',
+    },
   }),
   'share-kit': row({
     what: 'Share kits: the campaign’s posts for staff and volunteers to share',
@@ -113,6 +124,7 @@ export const CHANNELS = Object.freeze({
     kind: 'advertising', include: 'when-set', form: 'sms',
     senders: ['server/ext/texting/blast.js', 'server/ext/abtests/send.js'],
     hooks: ['server/ext/texting/blast.js'],
+    via: { 'server/ext/abtests/send.js': 'server/ext/texting/blast.js' },
   }),
   'sms-ladder': row({
     what: 'Automatic follow-up texts (ladders)',
@@ -131,6 +143,7 @@ export const CHANNELS = Object.freeze({
     kind: 'unclear', owner: true, include: 'when-set', form: 'email-footer',
     senders: ['server/ext/gmail/send.js'],
     hooks: ['server/ext/gmail/actions.js'],
+    via: { 'server/ext/gmail/send.js': 'server/ext/gmail/actions.js' },
   }),
   mailchimp: row({
     what: 'Emails built inside Mailchimp',

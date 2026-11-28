@@ -61,14 +61,135 @@ test('T1. every senders file in CHANNELS really sends (or draws), and the delive
   for (const f of DELIVERY) assert.ok(sources[f] !== undefined, `${f} (DELIVERY) is not there`);
 });
 
+// A file asks the rule for a channel's line by name.
+const asksFor = (f, id) => {
+  const q = id.replace(/[-]/g, '\\-');
+  const re = new RegExp(`authorized(?:Line|Of)\\([^)]*channel:[^,}]*'${q}'|footOf\\([^)]*'${q}'`);
+  return sources[f] !== undefined && re.test(noComments(sources[f]));
+};
+const carries = (c) => c.include === 'when-set' || c.include === 'first-text';
+
 test('T2. every row that carries the line asks the rule for it in one of its hooks', () => {
   for (const id of CHANNEL_IDS) {
     const c = CHANNELS[id];
-    if (c.include !== 'when-set' && c.include !== 'first-text') continue;
-    const q = id.replace(/[-]/g, '\\-');
-    const re = new RegExp(`authorized(?:Line|Of)\\([^)]*channel:[^,}]*'${q}'|footOf\\([^)]*'${q}'`);
-    const hits = c.hooks.filter((f) => sources[f] !== undefined && re.test(noComments(sources[f])));
+    if (!carries(c)) continue;
+    const hits = c.hooks.filter((f) => asksFor(f, id));
     assert.ok(hits.length > 0, `${id}: none of ${c.hooks.join(', ')} calls authorizedLine/authorizedOf({ channel: '${id}' }) or footOf(…, '${id}')`);
+  }
+});
+
+// The relative imports of each file (server, shared and the control centre),
+// read from the lines that start with import/export (a comment's '/*' can't
+// hide one).
+const importsOf = (f) => {
+  const out = [];
+  for (const m of (sources[f] || '').matchAll(/^[ \t]*(?:import|export)\b[^;'"]*?from\s*['"](\.[^'"]+)['"]/gm)) {
+    out.push(join(f, '..', m[1]).replace(/\\/g, '/'));
+  }
+  return out;
+};
+const reaches = (from, to) => {
+  const seen = new Set();
+  const go = (f) => {
+    if (f === to) return true;
+    if (seen.has(f) || sources[f] === undefined) return false;
+    seen.add(f);
+    return importsOf(f).some(go);
+  };
+  return go(from);
+};
+
+test('T2. every sender of a row that carries the line is tied to the rule: it is a hook that asks, or its `via` names one it imports or is drawn by', () => {
+  for (const id of CHANNEL_IDS) {
+    const c = CHANNELS[id];
+    if (!carries(c)) continue;
+    for (const f of c.hooks) {
+      // Each hook asks itself, or takes the answer from a hook of the row that does.
+      const ok = asksFor(f, id) || c.hooks.some((h) => h !== f && asksFor(h, id) && importsOf(f).includes(h));
+      assert.ok(ok, `${id}: the hook ${f} neither asks the rule for '${id}' nor imports a hook that does`);
+    }
+    for (const f of c.senders) {
+      if (c.hooks.includes(f)) continue;
+      const via = c.via?.[f];
+      assert.ok(via, `${id}: ${f} sends for '${id}' but is not one of its hooks. Ask the rule there (authorizedOf(…, { channel: '${id}' })) and add it to hooks, or name in the row's via the hook its words go through`);
+      assert.ok(c.hooks.includes(via), `${id}: via ${f} → ${via}, which is not one of the row's hooks`);
+      assert.ok(reaches(f, via) || reaches(via, f), `${id}: ${f} and ${via} (its via) never import one another, so its words can't go through that hook`);
+    }
+    for (const f of Object.keys(c.via || {})) assert.ok(c.senders.includes(f) && !c.hooks.includes(f), `${id}: via names ${f}, which is not one of its senders (or is a hook already)`);
+  }
+});
+
+// How many sends and page draws each file makes (each use of a sender or
+// drawer above, imports aside). A new send in a file already in a row
+// fails here until it is classified: check its row in CHANNELS (and, if
+// that row carries the line, that the new send gets it), then set the
+// count. The delivery code is not counted.
+const SEND_SITES = {
+  'server/actions/field.js': 4, // shift (email, text), email-test, account
+  'server/ext/abtests/send.js': 2, // email-list/email-press, sms-list (via deliverTexts)
+  'server/ext/abtests/winner.js': 1,
+  'server/ext/calendar/index.js': 1,
+  'server/ext/candidates/actions.js': 1,
+  'server/ext/gmail/send.js': 2,
+  'server/ext/ladders/engine.js': 5, // email-ladder, sms-ladder, and their notices
+  'server/ext/letters/actions.js': 1,
+  'server/ext/passwords/reset.js': 1,
+  'server/ext/payments/refunds.js': 1,
+  'server/ext/receipts/core.js': 2,
+  'server/ext/receipts/engine.js': 1,
+  'server/ext/schedule/tell.js': 2,
+  'server/ext/site/calendar.js': 1,
+  'server/ext/site/public.js': 4,
+  'server/ext/site/render/index.js': 1,
+  'server/ext/texting/actions.js': 1,
+  'server/ext/texting/blast.js': 2,
+  'server/ext/twostep/locked.js': 2,
+  'shared/site/components/form.js': 1,
+  'shared/site/components/islands.js': 1,
+  'shared/site/components/share.js': 1,
+  'shared/site/components/templates.js': 1,
+  'shared/site/components/voteguide.js': 1,
+};
+const SENDER_ALL = new RegExp(SENDER_RE.source, 'g');
+const noImports = (code) => code
+  .replace(/(^|\n)\s*(?:import|export)\s[^;]*?\sfrom\s*''\s*;?/g, '$1')
+  .replace(/(^|\n)\s*export\s*\{[^}]*\}\s*;?/g, '$1');
+const sendSites = (f) => (noImports(codeOf(sources[f])).match(SENDER_ALL) || []).length;
+
+test('T1. every send in a file is counted: a new one in a file already listed fails until it is classified', () => {
+  const found = Object.fromEntries(files.filter(usesSender).filter((f) => !DELIVERY.includes(f)).map((f) => [f, sendSites(f)]));
+  const wrong = Object.keys({ ...found, ...SEND_SITES }).filter((f) => found[f] !== SEND_SITES[f]);
+  assert.deepEqual(wrong, [], wrong.map((f) => `${f}: ${found[f] ?? 0} sends or page draws, SEND_SITES says ${SEND_SITES[f] ?? 0}. Classify the new one (its row in shared/site/authorized.js, and the line if that row carries it), then set the count in server/test/authorized-channels.test.js`).join('\n'));
+});
+
+// Every row that carries the line is checked by what really goes out: the
+// test that sends (or draws) through it with the line set and reads it back.
+const BEHAVIOUR = {
+  site: ['authorized.test.js', 'the website, plain pages'],
+  'site-plain-public': ['site-microsites.test.js', 'a draft says "Coming soon" on its domain, with the authorization line'],
+  'site-plain-own': ['authorized.test.js', 'the website, plain pages'],
+  embed: ['authorized.test.js', 'T10. the vote guide embed'],
+  ics: ['authorized.test.js', 'the calendar file carries it'],
+  'share-card': ['authorized.test.js', 'the website, plain pages'],
+  'share-sheet': ['authorized.test.js', 'a supporter’s share words carry it'],
+  'share-kit': ['authorized.test.js', 'T9. a share kit'],
+  'email-list': ['authorized.test.js', 'T12. newsletter, email blast'],
+  'email-press': ['authorized.test.js', 'T12. newsletter, email blast, press release'],
+  'email-test': ['authorized.test.js', 'T12. newsletter, email blast, press release and the test copy'],
+  'email-ladder': ['authorized.test.js', 'T8. a ladder email'],
+  'sms-list': ['authorized.test.js', 'T7. a text blast'],
+  'sms-ladder': ['authorized.test.js', 'T8. a ladder email: the line, the mailing address and the contact, text only; a ladder text'],
+  'sms-one': ['authorized.test.js', 'T11. the first Inbox text'],
+  'email-one': ['authorized.test.js', 'Gmail: a staffer’s own email'],
+};
+
+test('T2. every row that carries the line has a test that reads it back from what goes out', async () => {
+  const carrying = CHANNEL_IDS.filter((id) => carries(CHANNELS[id]));
+  assert.deepEqual(carrying.filter((id) => !BEHAVIOUR[id]), [], 'a row that carries the line with no behaviour test: add one (server/test/authorized.test.js) and name it in BEHAVIOUR');
+  for (const [id, [file, title]] of Object.entries(BEHAVIOUR)) {
+    assert.ok(carrying.includes(id), `BEHAVIOUR names ${id}, which does not carry the line`);
+    const src = await readFile(join(ROOT, 'server/test', file), 'utf8');
+    assert.ok(src.includes(`test('${title}`), `${id}: server/test/${file} has no test starting '${title}'`);
   }
 });
 

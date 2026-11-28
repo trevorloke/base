@@ -335,6 +335,30 @@ test('the website, plain pages, the calendar file, the link preview and the shar
   assert.match(bad.text, new RegExp(`<p class="auth">${LINE}</p>`));
 });
 
+test('the calendar file carries it: each public event’s description ends with the line', async () => {
+  await setOrg(SET);
+  okA(await mgr.get('/api/site'));
+  okA(await mgr.action('shift.createMany', { kind: 'event', location: 'Example Hall', days: ['2030-06-01'], start: '11:00', end: '14:00', name: 'Example picnic', public: true }));
+  cacheClear();
+  const r = await hit('/site/events.ics');
+  assert.equal(r.status, 200);
+  const body = r.text.replace(/\r\n[ \t]/g, '');
+  assert.ok(body.includes(LINE.replace(/,/g, '\\,')), 'the line, as the calendar writes a comma');
+  await setOrg(EMPTY);
+  assert.doesNotMatch((await hit('/site/events.ics')).text.replace(/\r\n[ \t]/g, ''), /Authorized by/);
+  await setOrg(SET);
+});
+
+test('a supporter’s share words carry it: the "I signed …" words a petition offers', () => {
+  const camp = { id: 'c1', slug: 'fix-it', kind: 'petition', title: 'Fix it', status: 'open' };
+  const draw = (org) => renderSite({ kind: 'campaign', site: { org: { name: 'Example Campaign', ...org } }, campaign: camp, data: { campaigns: { c1: camp } }, ctx: { root: '/', path: '/act/fix-it', origin: 'https://example-campaign.example' } }).html;
+  const shares = (h) => [...h.matchAll(/"share":\{[^}]*"text":"((?:[^"\\]|\\.)*)"/g)].map((m) => JSON.parse(`"${m[1]}"`));
+  const set = shares(draw({ agentName: AGENT, agentContact: CONTACT }));
+  assert.ok(set.length >= 1, 'the petition offers its share words');
+  for (const t of set) assert.equal(t, `I signed “Fix it”. Add your name:\n${LINE}`);
+  for (const t of shares(draw({}))) assert.equal(t, 'I signed “Fix it”. Add your name:');
+});
+
 test('Gmail: a staffer’s own email gets the line as a signature', async () => {
   const { gmailSignature } = await import('../ext/gmail/actions.js');
   assert.equal(gmailSignature('Hi Ana', authorizedLine({ agentName: AGENT, agentContact: CONTACT }, { channel: 'email-one' })), `Hi Ana\n\n${LINE}`);
