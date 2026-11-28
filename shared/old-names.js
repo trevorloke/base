@@ -79,12 +79,14 @@ export const setting = (name, env) => {
   return a ?? b;
 };
 
-// At start-up: copies each old value into its new name where the new one is blank (joins JOINED),
-// mutating env. Never removes or changes an old name. Returns names only, never values:
-// { stillOld: ['BASE_TZ', …], differ: ['BASE_TZ', …] }.
+// At start-up: copies each old value into its new name where the new one is blank,
+// mutating env. A joined key is left as it is under both names (setting() joins
+// them on every read), so what the owner put under its new name can still be
+// checked later. Never removes or changes an old name. Returns names only, never
+// values: { stillOld: ['BASE_TZ', …], differ: ['BASE_TZ', …] }.
 // stillOld: every setting whose old name holds a value. differ: both names hold
-// different values, so the new one is used (a joined key is never a conflict:
-// both of its values are used).
+// different values, so the new one is used; for a joined key, the new name is set
+// but lacks a key the old name holds, so deleting the old name would lose that key.
 export const adoptOldNames = (env) => {
   const e = envOf(env);
   const stillOld = [];
@@ -93,8 +95,9 @@ export const adoptOldNames = (env) => {
     const old = OLD_SETTINGS[now];
     if (blank(e[old])) continue;
     stillOld.push(now);
-    if (JOINED.includes(now)) e[now] = setting(now, e);
-    else if (blank(e[now])) e[now] = e[old];
+    if (JOINED.includes(now)) {
+      if (!blank(e[now]) && !listOf(e[old]).every((k) => listOf(e[now]).includes(k))) differ.push(now);
+    } else if (blank(e[now])) e[now] = e[old];
     else if (String(e[now]) !== String(e[old])) differ.push(now);
   }
   return { stillOld, differ };

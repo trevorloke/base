@@ -150,22 +150,27 @@ test('adoptOldNames copies an older value only where the newer one is blank, and
   assert.deepEqual(out.differ, ['BASE_CITY']);
 });
 
-test('adoptOldNames joins the two-step key and does not call a second key a conflict', () => {
+test('adoptOldNames leaves the two-step key under both names and reports it while the new name lacks a key the older one holds', () => {
   const a = 'a'.repeat(40);
   const b = 'b'.repeat(40);
+  // Both read together all the same (setting() joins them), so nothing is copied.
   const env = { BASE_TWO_STEP_KEY: a, STARBASE_TWO_STEP_KEY: b };
   const out = adoptOldNames(env);
-  assert.equal(env.BASE_TWO_STEP_KEY, `${a},${b}`);
+  assert.equal(env.BASE_TWO_STEP_KEY, a, 'what the owner set under the new name stays as it is');
   assert.equal(env.STARBASE_TWO_STEP_KEY, b);
-  assert.deepEqual(out.stillOld, ['BASE_TWO_STEP_KEY']);
-  assert.deepEqual(out.differ, []);
-  // Running it again changes nothing.
-  const again = adoptOldNames(env);
-  assert.equal(env.BASE_TWO_STEP_KEY, `${a},${b}`);
-  assert.deepEqual(again, out);
+  assert.equal(setting('BASE_TWO_STEP_KEY', env), `${a},${b}`);
+  assert.deepEqual(out, { stillOld: ['BASE_TWO_STEP_KEY'], differ: ['BASE_TWO_STEP_KEY'] }, 'a generated value is reported');
+  // Running it again says the same.
+  assert.deepEqual(adoptOldNames(env), out);
+  // A copy missing its last character is reported too.
+  assert.deepEqual(adoptOldNames({ BASE_TWO_STEP_KEY: b.slice(0, -1), STARBASE_TWO_STEP_KEY: b }).differ, ['BASE_TWO_STEP_KEY']);
+  // The same value, or the new name holding every older key as well: not reported.
+  assert.deepEqual(adoptOldNames({ BASE_TWO_STEP_KEY: b, STARBASE_TWO_STEP_KEY: b }), { stillOld: ['BASE_TWO_STEP_KEY'], differ: [] });
+  assert.deepEqual(adoptOldNames({ BASE_TWO_STEP_KEY: `${a}, ${b}`, STARBASE_TWO_STEP_KEY: b }).differ, []);
+  // Only the older name: still used, nothing to compare.
   const onlyOld = { STARBASE_TWO_STEP_KEY: b };
-  adoptOldNames(onlyOld);
-  assert.equal(onlyOld.BASE_TWO_STEP_KEY, b);
+  assert.deepEqual(adoptOldNames(onlyOld), { stillOld: ['BASE_TWO_STEP_KEY'], differ: [] });
+  assert.equal(setting('BASE_TWO_STEP_KEY', onlyOld), b);
 });
 
 test('adoptOldNames returns names only, never a value', () => {

@@ -67,3 +67,21 @@ test('a blank new name hides nothing: the older value still seals and opens', as
   assert.equal((await openSecret(db, sealed))?.plain, 'NBSWY3DPO5XXE3DE');
   assert.deepEqual(keyStatus(), { source: 'env' });
 });
+
+test('a value under either name that is too short to use is reported, even while the other name holds a good one', async () => {
+  // The copy is missing its last character: the older name still seals, so it works for now.
+  only({ [NEW]: K1.slice(0, K1.length - 13), [OLD]: K1 });
+  assert.ok(K1.slice(0, K1.length - 13).length < 32);
+  assert.deepEqual(keyStatus(), { source: 'env', problem: 'short', short: [NEW] });
+  only({ [NEW]: K1, [OLD]: 'too-short' });
+  assert.deepEqual(keyStatus(), { source: 'env', problem: 'short', short: [OLD] });
+  only({ [NEW]: `${K2}, too-short`, [OLD]: K1 });
+  assert.deepEqual(keyStatus(), { source: 'env', problem: 'short', short: [NEW] });
+  only({ [NEW]: K1, [OLD]: K1 });
+  assert.deepEqual(keyStatus(), { source: 'env' });
+  // Neither long enough: the database's key, as before.
+  only({ [NEW]: 'too-short' });
+  assert.deepEqual(keyStatus(), { source: 'database', problem: 'short' });
+  only({});
+  assert.deepEqual(keyStatus(), { source: 'database', problem: 'unset' });
+});

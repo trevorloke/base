@@ -1233,10 +1233,12 @@ if any of it waits.
 
 - the campaign's **Settings → Services**, first row, *Older setting names
   still on this server*: each older name, with the new name to copy its
-  value to;
+  value to, and, once the new name is set too, whether the two differ
+  (the new one is used, so check it before deleting the older one);
 - the server's start-up log: one line per older name ("the setting … still
   works; rename it to … in Render"), and one line when both names are set
-  and differ ("… is used": always the new one). The log never shows a value;
+  and differ ("… is used": always the new one; for `BASE_TWO_STEP_KEY`,
+  "both are used for now"). The log never shows a value;
 - the control centre's **Render** board and each campaign's Render page:
   the older names still set on that service, names only, each with its new
   name. That is your checklist. `base-platform` (the control centre itself)
@@ -1271,16 +1273,27 @@ The owner's to-do:
       name its value (staging's sample settings, `BASE_ENV`), there is
       nothing to add: check the new one is there.
    2. Check the campaign still shows the same brand, name, time zone and
-      map area in Settings → Services, and that its start-up log has no
-      "both set and differ" line for that setting.
+      map area in Settings → Services, that its *Older setting names* row
+      does not say the setting "is set and differs" (or, for
+      `BASE_TWO_STEP_KEY`, "does not hold the same key"), and that its
+      start-up log has no "both set and differ" line for that setting.
    3. Delete the older name. Save, and deploy. Settings → Services no
       longer lists it.
 
    If a later sync ever shows an older name again with no value, leave it:
    a blank setting counts as not set. Three settings need extra care:
    - **`BASE_TWO_STEP_KEY`:** copy the exact value. **Never press
-     Generate.** A new value would lock everyone out of two-step sign-in.
-     (If that happens, putting the old value back fixes it.)
+     Generate.** Delete the older name only once Settings → Services says
+     `BASE_TWO_STEP_KEY` "holds every key" the older name holds; the
+     *Two-step sign-in key* row also says if a value under either name is
+     too short to use. While both names are set, both keys work, and
+     everyone who signs in is moved onto the new name's key. So if the new
+     name was given a different value (Generate, or a character missing),
+     **keep both**: do not delete the older name, and do not take the new
+     value away either (that would lock out whoever signed in since). Put
+     the older name's value into the new name as well, after a comma
+     (`<what it holds>,<the older value>`), deploy, check the row says it
+     holds every key, and only then delete the older name.
    - **`BASE_WEBSITE_KEY` (`base-win` only, while the website is hosted
      apart):** copy it exactly. It must still match the key the website
      holds, or unsubscribes stop reaching the website.

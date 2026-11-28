@@ -14,7 +14,7 @@
 //                                    must do at the service, said apart.
 //
 // Keys and tokens are never in an answer: only which settings are present.
-import { setting, OLD_HEALTH_SERVICE } from '@base-win/shared/old-names';
+import { setting, JOINED, OLD_SETTINGS, OLD_HEALTH_SERVICE } from '@base-win/shared/old-names';
 import { olderNames } from '../../lib/adopt-old-names.js';
 import { Hono } from 'hono';
 import { probeLookup, retiredGoogle, RETIRED_WORDS } from '../../lib/geocode.js';
@@ -179,13 +179,26 @@ const freeTilesRow = () => {
 // Settings on this server still under their older names in Render
 // (lib/adopt-old-names.js): they keep working; each line says what to rename
 // it to. Not shown at all once there are none. Names only, never a value.
+// One line per setting. Set under both names and different: the new one is
+// used, so it is checked before the older one goes. The two-step key is read
+// under both names together (every key still opens), so the older name may go
+// only once the new one holds every key it holds.
+const olderLine = ({ old, now, differs, copied }) => {
+  if (JOINED.includes(now)) {
+    if (differs) return `${old} → ${now}: ${now} does not hold the same key as ${old}; both are used for now. Do not delete ${old}: make ${now} hold ${old}'s value too (after a comma, keeping what ${now} has), until this line says it holds every key`;
+    if (copied) return `${old} → ${now}: ${now} holds every key ${old} holds: you can delete ${old} now`;
+    return `${old} → ${now}: add ${now} with exactly the same value, copied (never press Generate); keep ${old} until this line says ${now} holds every key`;
+  }
+  if (differs) return `${old} → ${now}: ${now} is set and differs from ${old}; ${now} is used. Check ${now} before deleting ${old}`;
+  return `${old} → ${now}: add ${now}, copy the value exactly, then delete ${old}`;
+};
 const olderNamesRow = () => {
   const older = olderNames();
   if (!older.length) return null;
   return {
     key: 'older-names', name: 'Older setting names still on this server', for: 'Render → this service → Environment: rename each one, then this goes away',
     launch: false, missing: [], set: [], state: 'ready', checkable: false, flagged: true, flagWord: 'rename in Render',
-    detail: older.map(({ old, now }) => `${old} → ${now}: add ${now}, copy the value exactly, then delete ${old}`).join('\n'),
+    detail: older.map(olderLine).join('\n'),
     older,
   };
 };
@@ -243,13 +256,18 @@ export const services = (base = publicUrl()) => {
     // Two-step sign-in's key (lib/twostep.js): without it base.win keeps
     // one in the database — it works, but a copy of the database would
     // give the authenticator keys away.
+    // A value too short to use under either name is said even while the
+    // other holds a good one (a copy missing a character works only until
+    // the older name is deleted).
     ((k) => row('twostep', 'Two-step sign-in key', 'Seals everyone’s authenticator key (two-step sign-in)', false, [KEY_ENV], {
-      detail: k.source === 'env' ? 'Set: authenticator keys are sealed with it'
+      detail: [k.source === 'env' ? 'Set: authenticator keys are sealed with it'
         : k.problem === 'short' ? `Too short (${KEY_MIN} characters or more): base.win keeps a key in its database meanwhile`
           : `Not set: base.win keeps a key in its database, so a copy of the database could open them — ${KEY_MIN}+ random characters`,
+      ...(k.source === 'env' ? (k.short || []).map((name) => `${name} is too short (${KEY_MIN} characters or more) and is not used${name === KEY_ENV ? ` — copy ${OLD_SETTINGS[KEY_ENV]}’s value into it exactly before deleting ${OLD_SETTINGS[KEY_ENV]}` : ''}`) : [])].join('\n'),
       state: k.source === 'env' ? 'ready' : 'missing',
       missing: k.source === 'env' ? [] : [KEY_ENV],
       checkable: false,
+      ...(k.source === 'env' && k.short ? { flagged: true, flagWord: 'needs a change' } : {}),
     }))(keyStatus()),
     placesRow(),
   ];

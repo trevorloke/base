@@ -22,7 +22,7 @@
 // (workspace settings.twoStepRequired) — the desk roles (manager, treasurer,
 // staff) and a volunteer given an area under Admin → Permissions. Other
 // volunteers' sign-in is unchanged unless they turn it on themselves.
-import { setting } from '@base-win/shared/old-names';
+import { setting, OLD_SETTINGS } from '@base-win/shared/old-names';
 import {
   createCipheriv, createDecipheriv, createHash, createHmac, hkdfSync, randomBytes, randomInt, scrypt, timingSafeEqual,
 } from 'node:crypto';
@@ -158,9 +158,13 @@ const envKeys = () => String(setting(KEY_ENV) || '').split(/[\s,]+/).filter((k) 
   .map((raw) => ({ kid: `e${derive(raw, 'base.win/two-step-kid/v1').toString('hex').slice(0, 10)}`, key: derive(raw) }));
 
 // Where the sealing key comes from, for Settings → Services (no key in it).
+// With a key in use, short lists each name (the new one, then the older one)
+// holding a value too short to use: a copy missing a character works only
+// until the other name is deleted.
 export const keyStatus = () => {
   const raw = String(setting(KEY_ENV) || '').trim();
-  if (envKeys().length) return { source: 'env' };
+  const short = [KEY_ENV, OLD_SETTINGS[KEY_ENV]].filter((name) => String(process.env[name] || '').split(/[\s,]+/).some((k) => k && k.length < KEY_MIN));
+  if (envKeys().length) return short.length ? { source: 'env', problem: 'short', short } : { source: 'env' };
   return { source: 'database', problem: raw ? 'short' : 'unset' };
 };
 
