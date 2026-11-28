@@ -162,8 +162,10 @@ export const pickWinner = async (db, job) => {
       await act('blast.ab_rest', async (tx, emit) => {
         const n = await recordOutcome(tx, workspaceId, r.id, res, { from: 'sending' });
         // An automatic send can't ask "Send without it": it goes, and says so
-        // (the line missing after its "needed from" date).
-        if (n.affectedRows) emit('blast_recipient', r.id, 'update', { blast_id: blastId, status, ...(autoMissing(foot.line) ? { auth_missing: true } : {}) });
+        // (the line missing after its "needed from" date) on each email the
+        // provider took, never on a refused or unsure one.
+        const flag = status === 'sent' && autoMissing(foot.line) ? { auth_missing: true } : {};
+        if (n.affectedRows) emit('blast_recipient', r.id, 'update', { blast_id: blastId, status, ...flag });
       });
     }
   }

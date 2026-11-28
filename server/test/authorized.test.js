@@ -132,6 +132,13 @@ const savedEnv = Object.fromEntries(ENV.map((k) => [k, process.env[k]]));
 const realFetch = globalThis.fetch;
 const mails = [];
 const texts = [];
+// Addresses and numbers the stubbed providers refuse, and how many times.
+const refuse = new Map();
+const refused = (who) => {
+  const n = refuse.get(who) || 0;
+  if (n > 0) refuse.set(who, n - 1);
+  return n > 0;
+};
 let db, mgr, ws, vol;
 const P = {};
 const okA = (r, msg = '') => { assert.equal(r.status, 200, `${msg} ${JSON.stringify(r.json)}`); return r.json; };
@@ -157,11 +164,15 @@ before(async () => {
   globalThis.fetch = async (url, init = {}) => {
     const u = String(url);
     if (u.startsWith('https://api.resend.com')) {
-      mails.push(JSON.parse(init.body));
+      const m = JSON.parse(init.body);
+      if ([m.to].flat().some(refused)) return new Response(JSON.stringify({ message: 'refused' }), { status: 422 });
+      mails.push(m);
       return new Response(JSON.stringify({ id: `msg-${mails.length}` }), { status: 200 });
     }
     if (u.startsWith('https://api.twilio.com/')) {
-      texts.push(Object.fromEntries(new URLSearchParams(String(init.body || ''))));
+      const t = Object.fromEntries(new URLSearchParams(String(init.body || '')));
+      if (refused(t.To)) return new Response(JSON.stringify({ code: 21211, message: 'refused' }), { status: 400, headers: { 'content-type': 'application/json' } });
+      texts.push(t);
       return new Response(JSON.stringify({ sid: `SM${tag}${++sid}`, status: 'queued' }), { status: 201, headers: { 'content-type': 'application/json' } });
     }
     return realFetch(url, init);
@@ -493,6 +504,45 @@ test('T15. on the day with the line missing: a send asks first (409), "Send with
   await setOrg({ ...EMPTY, authorizedFrom: isoDay(10) });
   assert.equal(okA(await mgr.get('/api/site/authorized')).warn?.level, 'soon');
   okA(await mgr.action('blast.send', { kind: 'eblast', subject: 'Soon', body: 'Hi there', audience }));
+  await setOrg({ ...SET, authorizedFrom: '' });
+});
+
+test('T15. Today counts each automatic email or text that went without the line once: never a retry, never a refused send', async () => {
+  await setOrg({ ...EMPTY, authorizedFrom: isoDay(0) });
+  const count = async () => okA(await mgr.get('/api/site/authorized')).automaticMissing;
+  // A ladder email the provider refuses twice and then takes, and its text.
+  const hal = await mgr.createPerson('Hal Example', { email: mail('hal'), phone: '604-555-0107' });
+  okA(await mgr.action('subscription.add', { email: mail('hal'), name: 'Hal Example' }));
+  const l = await ladderFor('retry', STEPS);
+  okA(await mgr.action('ladder.setActive', { id: l.id, active: true, withoutAuthorized: true }));
+  const n0 = await count();
+  refuse.set(mail('hal'), 2);
+  clearOut();
+  okA(await mgr.action('person.update', { id: hal.id, tags: [`ladretry${tag}`] }));
+  await runLadders();
+  assert.equal(mails.filter((m) => [m.to].flat().includes(mail('hal'))).length, 1, 'the email went on its third try');
+  assert.ok(texts.some((t) => t.To === '+16045550107'), 'the text went');
+  assert.equal(await count(), n0 + 2, 'one email and one text, not three tries');
+  // A ladder text Twilio refuses: nothing went, nothing counted.
+  const ivy = await mgr.createPerson('Ivy Example', { phone: '604-555-0108' });
+  const lt = await ladderFor('refused', [STEPS[1]]);
+  okA(await mgr.action('ladder.setActive', { id: lt.id, active: true, withoutAuthorized: true }));
+  refuse.set('+16045550108', 1);
+  okA(await mgr.action('person.update', { id: ivy.id, tags: [`ladrefused${tag}`] }));
+  await runLadders();
+  assert.equal(await count(), n0 + 2, 'a refused text is not counted');
+  // The A/B test's rest: only the emails the provider took.
+  const n1 = await count();
+  const s = okA(await mgr.action('blast.send', { kind: 'newsletter', subject: 'Subject A', body: 'Hi', ab: { subject_b: 'Subject B', pct: 10, wait_hours: 1, metric: 'opens' }, withoutAuthorized: true }));
+  for (let i = 0; i < 5; i += 1) refuse.set(mail(`ab${i}`), 9);
+  const before = mails.length;
+  await db.query(`update jobs set run_at = now() - interval '1 second' where workspace_id = $1 and kind = 'abtests.winner' and status = 'pending'`, [ws]);
+  await runDueJobs(db, { workspaceId: ws });
+  const went = mails.length - before;
+  const failed = (await db.query("select count(*)::int as n from blast_recipients where blast_id = $1 and status = 'failed'", [s.blast.id])).rows[0].n;
+  assert.ok(went > 30 && failed >= 1, `the rest went (${went}), some refused (${failed})`);
+  assert.equal(await count(), n1 + went, 'each email that went, and no refused one');
+  refuse.clear();
   await setOrg({ ...SET, authorizedFrom: '' });
 });
 
