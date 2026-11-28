@@ -16,7 +16,7 @@ process.env.OPS_ALLOW_LOCAL = '1';
 process.env.OPS_PUBLIC_TEMPLATE = `${fake.ORIGIN}/{name}`;
 const INST = 'EBESExQVFhcYGRobHB0eHw';
 const health = (over = {}) => ({
-  ok: true, database: 'ok', service: 'starbase', env: 'production', organization: 'Example Campaign', commit: 'd9130ae', build: 'index-abc.js',
+  ok: true, database: 'ok', service: 'base.win', env: 'production', organization: 'Example Campaign', commit: 'd9130ae', build: 'index-abc.js',
   tzdataCurrent: true, ownOrigin: fake.ORIGIN, instance: INST, address: 'https://a.base.win', entry: 'ready', platformKids: [currentKid()],
   setupOpen: false, campaignMade: true, store: 'postgres', ...over,
 });
@@ -195,9 +195,9 @@ test('a client’s public address is https://<name>.base.win; only a stand-in wi
   const asked = [];
   const fetcher = async (url) => { asked.push(url); return { status: 200, body: JSON.stringify(health({ ownOrigin: new URL(url).origin })), ms: 3 }; };
   await d.transaction((tx) => createCampaign(tx, { name: 'riverton', display: 'Riverton Forward', serverUrl: 'https://base-win-riverton.onrender.com' }));
-  await d.query("update environments set server_url = 'https://starbase-staging.onrender.com' where campaign = 'sample'");
+  await d.query("update environments set server_url = 'https://base-win-staging.onrender.com' where campaign = 'sample'");
   await pollOnce(d, { fetcher });
-  assert.deepEqual(asked.sort(), ['https://base-win-riverton.onrender.com/api/health', 'https://riverton.base.win/api/health', 'https://starbase-staging.onrender.com/api/health']);
+  assert.deepEqual(asked.sort(), ['https://base-win-riverton.onrender.com/api/health', 'https://base-win-staging.onrender.com/api/health', 'https://riverton.base.win/api/health']);
   assert.deepEqual((await d.query('select campaign, via from checks order by campaign, via')).rows,
     [{ campaign: 'riverton', via: 'public' }, { campaign: 'riverton', via: 'server' }, { campaign: 'sample', via: 'server' }]);
   process.env.OPS_PUBLIC_TEMPLATE = was;

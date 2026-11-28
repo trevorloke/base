@@ -150,6 +150,10 @@ export const jobWords = (job) => {
 };
 
 const failed = (r) => r && !r.ok;
+// Settings still set under their older names (render-routes.mjs readSettings):
+// names only, each with the name to use instead.
+const olderWords = (older = []) => older.map((o) => `${o.old} → ${o.now}`).join(', ');
+const OLDER_HELP = 'Each still works. When it suits you, in Render (this service → Environment): add the new name with exactly the same value, Save, then delete the older name. If both are set, the new name is used.';
 const row = (k, v, help = '') => html`<div><dt>${k}</dt><dd>${v}${help ? html`<p class="oc-help">${help}</p>` : ''}</dd></div>`;
 
 // s: what render-routes.mjs read for this campaign (each read may have failed alone).
@@ -188,6 +192,7 @@ export const campaignRenderPage = ({ v, s, message = '', kind = 'warn' }) => {
     row('Settings', !settings?.read ? 'Not read' : settings.missing.length ? `Missing: ${settings.missing.join(', ')}` : 'Nothing missing',
       settings?.read ? 'Email, texting and Google keys are not read here: the campaign’s Settings → Services says which are set.'
         : 'Render didn’t say which settings are set, so this page can’t tell what is missing: look in Render. Email, texting and Google keys are never read here.'),
+    ...(settings?.read && settings.older?.length ? [row('Older setting names', olderWords(settings.older), OLDER_HELP)] : []),
     row('Database', !v.envRow.render_db ? 'No database found' : failed(db) ? NO_ANSWER
       : html`${[db.name, planWords(db.plan), db.version ? `PostgreSQL ${db.version}` : null,
         db.open === true ? 'Open to anyone on the internet' : db.open === false ? 'Closed to the internet' : 'who may connect: not read'].filter(Boolean).join(' · ')}`,
@@ -256,6 +261,7 @@ export const renderPage = ({ b, message = '' }) => page({
   <ul class="oc-cards">${b.rows.map((r) => html`<li class="card oc-card">
     <a class="oc-name" href="/c/${r.v.campaign.name}/render">${r.v.campaign.display}</a>
     <span class="oc-line">${boardLine(r)}</span>
+    ${r.settings?.read && r.settings.older?.length ? html`<p class="oc-help">Older setting names still set: ${olderWords(r.settings.older)}. ${OLDER_HELP}</p>` : ''}
     ${r.linked ? html`<p><a class="btn btn-quiet" href="/c/${r.v.campaign.name}/render">Open</a></p>`
     : (r.v.envRow.server_url ? ask(r.v.campaign.name, 'link', 'Connect') : '')}
   </li>`)}</ul>
@@ -271,7 +277,7 @@ export const renderPage = ({ b, message = '' }) => page({
 const CALL_WORDS = {
   self: 'The control centre’s own service', workspaces: 'The workspaces this key sees', services: 'The list of services', databases: 'The list of databases',
   blueprints: 'Blueprints', service: 'Staging’s service', lastDeploy: 'Staging’s last deploy', domains: 'Staging’s addresses',
-  isSet: 'One setting read alone (STARBASE_ENV, set or not)', database: 'Staging’s database',
+  isSet: 'One setting read alone (BASE_ENV or its older name, set or not)', database: 'Staging’s database',
 };
 const checkWords = (l) => {
   if (l.ok) return 'As expected';

@@ -31,6 +31,7 @@ import { platformKeys } from './keys.mjs';
 import { guard, neededFor, domainFor, CANARY, REFUSALS, madeHere, makeRefusal, makeNames, WRITABLE_MADE, valueFor } from './render-guard.mjs';
 import { makeGate, makeState, runMake, byHand, finished, MAKES_A_DAY, MAKE_WORDS, WAITS } from './render-make.mjs';
 import { NO_KEY_WORDS } from './pages/desk.mjs';
+import { newNameOf, OLD_SETTINGS } from '../../shared/old-names.js';
 import { renderPage, campaignRenderPage, confirmPage, refusedPage, checkPage, problemWords, CODE_WORDS } from './pages/render.mjs';
 
 export const WHATS = ['link', 'deploy', 'restart', 'key', 'domain', 'close-db', 'set', 'make'];
@@ -72,17 +73,21 @@ const readOne = async (client, v) => {
   const code = me.ok && svc.ok ? guard({ campaign: v.campaign, envRow: v.envRow, health: v.server, self: me, svc, ownId: cfg().ownService }) : null;
   return { linked: true, me, svc, deploy, doms, db, refusal: code ? REFUSALS[code] : null, code };
 };
-// Which of the settings this campaign should have are set. Names only; a
-// value is never read. If Render can't say that the one setting every
-// campaign has is set, nothing was read ("Not read").
+// Which of the settings this campaign should have are set, each by its name
+// today or its older name (set when either is). Names only; a value is
+// never read. If Render can't say that the one setting every campaign has
+// is set, nothing was read ("Not read").
+// → { read, missing: [new name], older: [{ old, now }] }: older lists each
+// setting still set under its older name, with the name to use instead.
 const readSettings = async (client, v) => {
   const id = v.envRow.render_service;
   const canary = await client.isSet(id, CANARY);
-  if (!canary.ok || !canary.set) return { read: false, missing: [] };
+  if (!canary.ok || !canary.set) return { read: false, missing: [], older: [] };
   const needed = neededFor(v.campaign).filter((k) => k !== CANARY);
   const got = await pool(needed.map((k) => () => client.isSet(id, k)), 4);
-  if (got.some((r) => !r.ok)) return { read: false, missing: [] };
-  return { read: true, missing: needed.filter((_, i) => !got[i].set) };
+  if (got.some((r) => !r.ok)) return { read: false, missing: [], older: [] };
+  const older = [[CANARY, canary], ...needed.map((k, i) => [k, got[i]])].filter(([, r]) => r.older).map(([now]) => ({ old: OLD_SETTINGS[now], now }));
+  return { read: true, missing: needed.filter((_, i) => !got[i].set), older };
 };
 
 // What needs a look on one campaign, in a few words each.
@@ -194,7 +199,7 @@ export const renderRoutes = (app, ctx) => {
     let s = { linked: false };
     if (v.envRow.render_service) {
       s = await readOne(client, v);
-      s.settings = s.svc.ok ? await readSettings(client, v) : { read: false, missing: [] };
+      s.settings = s.svc.ok ? await readSettings(client, v) : { read: false, missing: [], older: [] };
       s.job = await lastJob(db, v.campaign.name);
       s.buttons = buttonsFor(v, s, { stage2: (await makeGate(db, client)).open });
     }
@@ -238,7 +243,12 @@ export const renderRoutes = (app, ctx) => {
     const views = (await listCampaigns(db)).filter((v) => !v.campaign.archived_at);
     for (const v of views) await sweep(db, v.campaign.name);
     // One campaign after another, its four reads at once: never more than four requests to Render at a time.
-    const read = await pool(views.map((v) => async () => (v.envRow.render_service ? { v, ...(await readOne(client, v)), job: await lastJob(db, v.campaign.name) } : { v, linked: false })), 1);
+    // Each connected campaign's settings too (names only), for the older names still set on it.
+    const read = await pool(views.map((v) => async () => {
+      if (!v.envRow.render_service) return { v, linked: false };
+      const one = await readOne(client, v);
+      return { v, ...one, settings: one.svc.ok && !one.refusal ? await readSettings(client, v) : { read: false, missing: [], older: [] }, job: await lastJob(db, v.campaign.name) };
+    }), 1);
     b.rows = read;
     for (const r of read.filter((x) => x.linked)) for (const words of looksFor(r.v, r, r.job)) b.looks.push([r.v.campaign.display, words]);
     // Production: which version each connected client's last deploy put live.
@@ -315,7 +325,10 @@ export const renderRoutes = (app, ctx) => {
     if (what === 'close-db' && !v.envRow.render_db) return notFound(c);
     // set: one setting of this campaign's own, missing, and never base.win's key (it has its own button).
     const settingOk = (k) => WRITABLE_MADE.includes(k) && k !== KEY_SETTING && Boolean(valueFor(camp, k, { stage2: true }));
-    if (what === 'set' && !f.job && !settingOk(String(f.setting || ''))) return notFound(c);
+    // A setting is always named by its name today: one from a page or a job
+    // row saved under its older name is read as the new one.
+    const asked = what === 'set' && !f.job ? newNameOf(String(f.setting || '')) : null;
+    if (what === 'set' && !f.job && !settingOk(asked)) return notFound(c);
     const session = c.get('session');
     const operatorId = session.operator.id;
     const host = domainFor(camp);
@@ -370,7 +383,7 @@ export const renderRoutes = (app, ctx) => {
       // ── Ask ──
       const got = await find();
       if (!got.ok) return refuse(wordsOf(got));
-      const setting = what === 'set' ? String(f.setting) : null;
+      const setting = what === 'set' ? asked : null;
       const wait = what === 'link' ? null : await notNow(what, client, got, setting);
       if (wait) return refuse(wait);
       const t = { ...(await named(got)), ...(setting ? { setting, value: valueFor(camp, setting, { stage2: true }) } : {}) };
@@ -390,6 +403,7 @@ export const renderRoutes = (app, ctx) => {
     const short = jobId.slice(0, 12);
     const denied = (problem, extra = {}) => db.transaction((tx) => appendLog(tx, { operatorId, action: 'render.denied', campaign: name, payload: { env, what, job: short, problem, ...extra } }));
     const row = /^[0-9a-f]{32}$/.test(jobId) ? (await db.query("select *, (asked_at > now() - interval '5 minutes') as young from render_jobs where id = $1", [jobId])).rows[0] : null;
+    if (row?.detail?.setting) row.detail.setting = newNameOf(String(row.detail.setting));
     if (!row || row.campaign !== name || row.what !== what || row.state !== 'asked' || !row.young || row.asked_in !== sha256(session.tokenHash + row.id)) {
       await denied('old');
       return refuse(OLD_PAGE);

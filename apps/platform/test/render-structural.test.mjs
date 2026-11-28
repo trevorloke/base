@@ -147,31 +147,31 @@ test('every Render change goes through a code typed for it and the log; the 10-m
 
 // S5
 test('the settings that may be read or written are exactly these: no secret, nothing of staging’s', () => {
-  assert.deepEqual(READABLE, ['NODE_ENV', 'STARBASE_ENV', 'STARBASE_PUBLIC_URL', 'STARBASE_BRAND', 'STARBASE_ORG_NAME', 'STARBASE_JURISDICTION', 'STARBASE_TZ',
-    'STARBASE_CITY', 'STARBASE_SLATES', 'STARBASE_PROVINCE', 'STARBASE_GEO_BOUNDS', 'STARBASE_CANDIDATES', 'BASE_PLATFORM_PUBKEY']);
+  assert.deepEqual(READABLE, ['NODE_ENV', 'BASE_ENV', 'BASE_PUBLIC_URL', 'BASE_BRAND', 'BASE_ORG_NAME', 'BASE_JURISDICTION', 'BASE_TZ',
+    'BASE_CITY', 'BASE_SLATES', 'BASE_PROVINCE', 'BASE_GEO_BOUNDS', 'BASE_CANDIDATES', 'BASE_PLATFORM_PUBKEY']);
   assert.deepEqual(WRITABLE, ['BASE_PLATFORM_PUBKEY']);
   const snippets = file('snippets.mjs');
   const LATER = /const LATER = \[([\s\S]*?)\];/.exec(snippets)[1].match(/[A-Z][A-Z0-9_]+/g);
   assert.ok(LATER.length >= 10);
-  const never = ['DATABASE_URL', 'STARBASE_TWO_STEP_KEY', 'GOOGLE_TOKEN_KEY', 'RENDER_API_KEY', 'OPS_SECRET', 'OPS_SETUP_CODE', 'PLATFORM_SIGNING_KEY', ...DENY, ...LATER];
+  const never = ['DATABASE_URL', 'BASE_TWO_STEP_KEY', 'GOOGLE_TOKEN_KEY', 'RENDER_API_KEY', 'OPS_SECRET', 'OPS_SETUP_CODE', 'PLATFORM_SIGNING_KEY', ...DENY, ...LATER];
   for (const name of never) {
     assert.ok(!READABLE.includes(name), `${name} can be read`);
     assert.ok(!WRITABLE.includes(name), `${name} can be written`);
   }
-  for (const name of ['NODE_ENV', 'STARBASE_ENV', 'STARBASE_OWN_URL', 'APP_HOSTS', 'GOOGLE_MAPS_TILES', 'STARBASE_PUBLIC_URL']) assert.ok(!WRITABLE.includes(name), `${name} can be written`);
+  for (const name of ['NODE_ENV', 'BASE_ENV', 'BASE_OWN_URL', 'APP_HOSTS', 'GOOGLE_MAPS_TILES', 'BASE_PUBLIC_URL']) assert.ok(!WRITABLE.includes(name), `${name} can be written`);
   for (const name of READABLE) assert.doesNotMatch(name, /SECRET|TOKEN|PASSWORD|DATABASE/, name);
   const running = { kind: 'client', values: {} };
   const made = { kind: 'client', values: { city: 'X', province: 'BC', rules: 'bc-municipal', tz: 'America/Vancouver', races: ['council'], bounds: '1,2|3,4' } };
-  assert.deepEqual(neededFor({ kind: 'sample', values: {} }), ['STARBASE_ENV', 'BASE_PLATFORM_PUBKEY']);
-  assert.deepEqual(neededFor(running), ['NODE_ENV', 'STARBASE_ENV', 'STARBASE_PUBLIC_URL', 'STARBASE_BRAND', 'STARBASE_ORG_NAME', 'STARBASE_JURISDICTION', 'STARBASE_TZ',
-    'STARBASE_CITY', 'STARBASE_SLATES', 'BASE_PLATFORM_PUBKEY'], 'a campaign added as already running: the three it never had are its own configuration');
+  assert.deepEqual(neededFor({ kind: 'sample', values: {} }), ['BASE_ENV', 'BASE_PLATFORM_PUBKEY']);
+  assert.deepEqual(neededFor(running), ['NODE_ENV', 'BASE_ENV', 'BASE_PUBLIC_URL', 'BASE_BRAND', 'BASE_ORG_NAME', 'BASE_JURISDICTION', 'BASE_TZ',
+    'BASE_CITY', 'BASE_SLATES', 'BASE_PLATFORM_PUBKEY'], 'a campaign added as already running: the three it never had are its own configuration');
   assert.deepEqual(neededFor(made), READABLE);
   for (const c of [running, made, { kind: 'sample', values: {} }]) assert.deepEqual(writableFor(c), ['BASE_PLATFORM_PUBKEY']);
   // Stage 2, with the gate open: a campaign made with New campaign may have
   // its missing settings added, each to its own value. Never the others.
-  assert.deepEqual(WRITABLE_MADE, ['BASE_PLATFORM_PUBKEY', 'STARBASE_PUBLIC_URL', 'STARBASE_BRAND', 'STARBASE_ORG_NAME', 'STARBASE_CITY', 'STARBASE_JURISDICTION',
-    'STARBASE_PROVINCE', 'STARBASE_TZ', 'STARBASE_SLATES', 'STARBASE_GEO_BOUNDS', 'STARBASE_CANDIDATES']);
-  for (const name of [...never, 'NODE_ENV', 'STARBASE_ENV', 'STARBASE_OWN_URL', 'APP_HOSTS', 'GOOGLE_MAPS_TILES']) assert.ok(!WRITABLE_MADE.includes(name), `${name} can be written`);
+  assert.deepEqual(WRITABLE_MADE, ['BASE_PLATFORM_PUBKEY', 'BASE_PUBLIC_URL', 'BASE_BRAND', 'BASE_ORG_NAME', 'BASE_CITY', 'BASE_JURISDICTION',
+    'BASE_PROVINCE', 'BASE_TZ', 'BASE_SLATES', 'BASE_GEO_BOUNDS', 'BASE_CANDIDATES']);
+  for (const name of [...never, 'NODE_ENV', 'BASE_ENV', 'BASE_OWN_URL', 'APP_HOSTS', 'GOOGLE_MAPS_TILES']) assert.ok(!WRITABLE_MADE.includes(name), `${name} can be written`);
   assert.deepEqual(writableFor(made, { stage2: true }), WRITABLE_MADE);
   for (const c of [running, { kind: 'sample', values: {} }, { ...made, kind: 'sample' }]) assert.deepEqual(writableFor(c, { stage2: true }), ['BASE_PLATFORM_PUBKEY']);
 });

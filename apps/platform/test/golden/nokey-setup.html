@@ -32,22 +32,22 @@
           <li>Render → <b>New → Web Service</b> → this repository. Name <code>base-win-x</code>, language Docker, branch <code>production</code>, region Oregon, instance Starter. Under Advanced, health check path <code>/api/health</code>.</li>
           <li>On that page, <b>Environment → Add from .env</b> → paste this block:
             <pre class="oc-pre" id="env-block">NODE_ENV=production
-STARBASE_ENV=production
-STARBASE_PUBLIC_URL=https://x.base.win
-STARBASE_BRAND=base
-STARBASE_ORG_NAME=&quot;Example X&quot;
-STARBASE_JURISDICTION=bc-municipal
-STARBASE_PROVINCE=BC
-STARBASE_TZ=America/Vancouver
-STARBASE_CITY=&quot;Exampleton&quot;
-STARBASE_SLATES=&quot;council:City council&quot;
-STARBASE_GEO_BOUNDS=50.6,-120.5|50.8,-120.2
-STARBASE_CANDIDATES=none
+BASE_ENV=production
+BASE_PUBLIC_URL=https://x.base.win
+BASE_BRAND=base
+BASE_ORG_NAME=&quot;Example X&quot;
+BASE_JURISDICTION=bc-municipal
+BASE_PROVINCE=BC
+BASE_TZ=America/Vancouver
+BASE_CITY=&quot;Exampleton&quot;
+BASE_SLATES=&quot;council:City council&quot;
+BASE_GEO_BOUNDS=50.6,-120.5|50.8,-120.2
+BASE_CANDIDATES=none
 BASE_PLATFORM_PUBKEY=mkRxeAO03eN7KrA3GBLERx3eKJOHcBJVSdPoSj8hKiU
-STARBASE_TWO_STEP_KEY=<span data-random></span>
+BASE_TWO_STEP_KEY=<span data-random></span>
 GOOGLE_TOKEN_KEY=<span data-random></span></pre>
             <button class="btn btn-quiet oc-copy-btn" type="button" data-copy="env-block">Copy</button>
-            <p class="oc-help" data-when-empty>STARBASE_TWO_STEP_KEY and GOOGLE_TOKEN_KEY are empty: press Generate next to each of these two in Render.</p>
+            <p class="oc-help" data-when-empty>BASE_TWO_STEP_KEY and GOOGLE_TOKEN_KEY are empty: press Generate next to each of these two in Render.</p>
           </li>
           <li>Add <code>DATABASE_URL</code> = the database page’s <b>Internal Database URL</b> (copy it across).</li>
           <li>Press <b>Create Web Service</b> (or <b>Save and deploy</b>). Wait for “Live”.</li>
@@ -86,35 +86,35 @@ GOOGLE_TOKEN_KEY=<span data-random></span></pre>
     envVars:
       - key: NODE_ENV
         value: production
-      - key: STARBASE_ENV
+      - key: BASE_ENV
         value: production
       - key: DATABASE_URL
         fromDatabase:
           name: base-win-x-db
           property: connectionString
-      - key: STARBASE_PUBLIC_URL     # https://x.base.win
+      - key: BASE_PUBLIC_URL         # https://x.base.win
         sync: false
-      - key: STARBASE_BRAND          # base
+      - key: BASE_BRAND              # base
         sync: false
-      - key: STARBASE_ORG_NAME       # Example X
+      - key: BASE_ORG_NAME           # Example X
         sync: false
-      - key: STARBASE_JURISDICTION   # bc-municipal
+      - key: BASE_JURISDICTION       # bc-municipal
         sync: false
-      - key: STARBASE_PROVINCE       # BC
+      - key: BASE_PROVINCE           # BC
         sync: false
-      - key: STARBASE_TZ             # America/Vancouver
+      - key: BASE_TZ                 # America/Vancouver
         sync: false
-      - key: STARBASE_CITY           # Exampleton
+      - key: BASE_CITY               # Exampleton
         sync: false
-      - key: STARBASE_SLATES         # council:City council
+      - key: BASE_SLATES             # council:City council
         sync: false
-      - key: STARBASE_GEO_BOUNDS     # 50.6,-120.5|50.8,-120.2
+      - key: BASE_GEO_BOUNDS         # 50.6,-120.5|50.8,-120.2
         sync: false
-      - key: STARBASE_CANDIDATES     # none
+      - key: BASE_CANDIDATES         # none
         sync: false
       - key: BASE_PLATFORM_PUBKEY
         sync: false
-      - key: STARBASE_TWO_STEP_KEY
+      - key: BASE_TWO_STEP_KEY
         generateValue: true
       - key: GOOGLE_TOKEN_KEY
         generateValue: true

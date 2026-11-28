@@ -3,6 +3,8 @@
 // block. Built from the campaign's own values only: never staging's sample,
 // demo or frame settings, its made-up opponents or its map area, and never
 // a secret (the two random values are made in the browser).
+import { settingNames } from '../../shared/old-names.js';
+
 // The campaign server's own rules (server/lib/org.js JURISDICTIONS; a test
 // keeps the two lists the same).
 export const JURISDICTIONS = ['bc-municipal', 'bc-provincial', 'federal'];
@@ -34,7 +36,7 @@ export const parseCorner = (text) => {
   return Math.abs(lat) <= 90 && Math.abs(lng) <= 180 ? [lat, lng] : null;
 };
 // The map area from its two corners → { bounds } (the campaign server's
-// STARBASE_GEO_BOUNDS, server/lib/org.js geoBounds) or { problem }.
+// BASE_GEO_BOUNDS, server/lib/org.js geoBounds) or { problem }.
 export const mapBounds = (swText, neText) => {
   const sw = parseCorner(swText);
   if (!sw) return { problem: 'Type the south-west corner as two numbers with a comma between, like 50.6, -120.5.' };
@@ -53,20 +55,20 @@ const slates = (races = []) => RACES.filter(([code]) => races.includes(code)).ma
 // → [{ key, value, random? }]
 export const envLines = ({ name, display, values, publicKey = '' }) => [
   { key: 'NODE_ENV', value: 'production' },
-  { key: 'STARBASE_ENV', value: 'production' },
-  { key: 'STARBASE_PUBLIC_URL', value: `https://${name}.base.win` },
-  { key: 'STARBASE_BRAND', value: 'base' },
-  { key: 'STARBASE_ORG_NAME', value: `"${flat(display)}"` },
-  { key: 'STARBASE_JURISDICTION', value: values.rules },
-  { key: 'STARBASE_PROVINCE', value: values.province },
-  { key: 'STARBASE_TZ', value: values.tz },
-  { key: 'STARBASE_CITY', value: `"${flat(values.city)}"` },
-  { key: 'STARBASE_SLATES', value: `"${slates(values.races)}"` },
-  { key: 'STARBASE_GEO_BOUNDS', value: values.bounds },
+  { key: 'BASE_ENV', value: 'production' },
+  { key: 'BASE_PUBLIC_URL', value: `https://${name}.base.win` },
+  { key: 'BASE_BRAND', value: 'base' },
+  { key: 'BASE_ORG_NAME', value: `"${flat(display)}"` },
+  { key: 'BASE_JURISDICTION', value: values.rules },
+  { key: 'BASE_PROVINCE', value: values.province },
+  { key: 'BASE_TZ', value: values.tz },
+  { key: 'BASE_CITY', value: `"${flat(values.city)}"` },
+  { key: 'BASE_SLATES', value: `"${slates(values.races)}"` },
+  { key: 'BASE_GEO_BOUNDS', value: values.bounds },
   // No opponents on the rating scale until the campaign adds its own.
-  { key: 'STARBASE_CANDIDATES', value: 'none' },
+  { key: 'BASE_CANDIDATES', value: 'none' },
   { key: 'BASE_PLATFORM_PUBKEY', value: publicKey },
-  { key: 'STARBASE_TWO_STEP_KEY', value: '', random: true },
+  { key: 'BASE_TWO_STEP_KEY', value: '', random: true },
   { key: 'GOOGLE_TOKEN_KEY', value: '', random: true },
 ];
 export const envText = (opts) => envLines(opts).map((l) => `${l.key}=${l.value}`).join('\n');
@@ -81,10 +83,14 @@ export const serviceSettings = (opts) => envLines(opts).map((l) => (l.random ? {
 // Never in a block made here: staging's sample, demo and frame settings.
 // (The map area and the opponents are written above from the campaign's
 // own values, never from the sample's: its Vancouver box and its made-up
-// names appear nowhere in this file.)
-export const DENY = ['STARBASE_SAMPLE', 'STARBASE_SAMPLE_RESET', 'STARBASE_DEMO_EMAIL', 'STARBASE_FRAME_HOSTS'];
-// Pasted or made by Render, never written here with a value.
-const SECRET = { BASE_PLATFORM_PUBKEY: 'sync', STARBASE_TWO_STEP_KEY: 'generate', GOOGLE_TOKEN_KEY: 'generate' };
+// names appear nowhere in this file.) Each by its name today and its older
+// name (shared/old-names.js).
+export const DENY = ['BASE_SAMPLE', 'BASE_SAMPLE_RESET', 'BASE_DEMO_EMAIL', 'BASE_FRAME_HOSTS'].flatMap(settingNames);
+// Pasted or made by Render, never written here with a value. Blocks made
+// here name them by their names today; either spelling is kept out of the
+// value lines.
+const SECRET = { BASE_PLATFORM_PUBKEY: 'sync', BASE_TWO_STEP_KEY: 'generate', GOOGLE_TOKEN_KEY: 'generate' };
+const SECRET_NAMES = Object.keys(SECRET).flatMap(settingNames);
 // The production block's services, asked for later in the app's Settings.
 const LATER = ['RESEND_API_KEY', 'MAIL_FROM', 'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM', 'GOOGLE_MAPS_SERVER_KEY', 'GOOGLE_TRANSLATE_KEY',
   'GOOGLE_OAUTH_CLIENT_ID', 'GOOGLE_OAUTH_CLIENT_SECRET', 'GOOGLE_PICKER_KEY', 'GOOGLE_CLOUD_PROJECT_NUMBER'];
@@ -94,17 +100,17 @@ const LATER = ['RESEND_API_KEY', 'MAIL_FROM', 'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH
 // own settings are sync: false, each value shown after its # to set once on
 // the service in Render: a fixed value would be written over at every
 // Blueprint sync, and the release-settings check refuses it
-// (server/test/release-safety.js FIXED_OK). Only NODE_ENV and STARBASE_ENV,
+// (server/test/release-safety.js FIXED_OK). Only NODE_ENV and BASE_ENV,
 // the same on every client, are fixed.
 export const renderSnippet = ({ name, display, values }) => {
   const env = [];
   const add = (key, body, shown) => env.push(`      - key: ${shown == null ? key : `${key.padEnd(24)}# ${shown}`}`, ...body.map((l) => `        ${l}`));
   add('NODE_ENV', ['value: production']);
-  add('STARBASE_ENV', ['value: production']);
+  add('BASE_ENV', ['value: production']);
   add('DATABASE_URL', ['fromDatabase:', `  name: base-win-${name}-db`, '  property: connectionString']);
   for (const l of envLines({ name, display, values })) {
-    if (['NODE_ENV', 'STARBASE_ENV'].includes(l.key) || DENY.includes(l.key)) continue;
-    if (SECRET[l.key]) continue;
+    if (['NODE_ENV', 'BASE_ENV'].includes(l.key) || DENY.includes(l.key)) continue;
+    if (SECRET_NAMES.includes(l.key)) continue;
     add(l.key, ['sync: false'], flat(l.value.replace(/^"|"$/g, '')));
   }
   for (const [key, how] of Object.entries(SECRET)) add(key, [how === 'sync' ? 'sync: false' : 'generateValue: true']);
