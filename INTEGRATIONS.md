@@ -7,24 +7,27 @@ never in the code, the repo or a chat. Once they are set, a manager opens
 **Settings → Services** in the admin: each service says whether it's set up,
 and **Check** makes one real call to it (nothing is sent to anyone, nothing
 is written) and says exactly what is wrong if anything is.
+Every setting base.win reads is named `BASE_…`. Servers set up before
+2026-12 may still have older names for these; they keep working, and
+Settings → Services lists any to rename (GOING-LIVE.md, section 10).
 
 | Service | For | Needed to launch? | Settings |
 |---|---|---|---|
 | [Database](#database) | everything the campaign records | yes | `DATABASE_URL` |
-| [Public address](#public-address) | links in email, texting's callbacks | yes | `STARBASE_PUBLIC_URL` |
+| [Public address](#public-address) | links in email, texting's callbacks | yes | `BASE_PUBLIC_URL` |
 | [Email — Resend or SendGrid](#email--resend-or-sendgrid) | invites, newsletters, press, ladders, shift alerts, receipts, password links; bounces and spam complaints back | yes | `RESEND_API_KEY`, `MAIL_FROM` (+ `RESEND_WEBHOOK_SECRET`); or `MAIL_PROVIDER=sendgrid`, `SENDGRID_API_KEY`, `SENDGRID_WEBHOOK_PUBLIC_KEY` |
 | [Mailchimp](#mailchimp) | a list sent to the campaign's Mailchimp audience as a tag; unsubscribes and dead addresses back, and base.win's own out | no (only if the campaign builds its emails in Mailchimp) | `MAILCHIMP_API_KEY` (+ `MAILCHIMP_AUDIENCE_ID`, `MAILCHIMP_WEBHOOK_SECRET`) |
 | [Texting and calls — Twilio](#texting-and-calls--twilio) | the campaign's number: texts, text blasts, ladder texts, calls, SMS shift alerts | no (phones' own apps until then) | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` |
 | [Address lookup](#address-lookup) | suggestions as you type, placing people on the map | yes (free default, no key) | `GEOCODER`, `GEOCODER_FALLBACK`, `BC_GEOCODER_KEY`, `GOOGLE_MAPS_SERVER_KEY` |
-| [Map background](#map-background) | the map volunteers walk | no (free default; change before election week) | `GOOGLE_MAPS_TILES`, `GOOGLE_MAPS_SERVER_KEY`, or `STARBASE_TILE_URL` |
+| [Map background](#map-background) | the map volunteers walk | no (free default; change before election week) | `GOOGLE_MAPS_TILES`, `GOOGLE_MAPS_SERVER_KEY`, or `BASE_TILE_URL` |
 | [Google sign-in and connections](#google-sign-in-and-connections) | Sign in with Google; the one Google connection Gmail, Drive and Calendar use | no (passwords always work) | `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_TOKEN_KEY` |
 | [Gmail](#gmail) | One email to one person, from a staff member's own Gmail | no (Email from a person's page opens the mail app) | none of its own (the Google row's); `GMAIL_DAILY_MAX` optional |
 | [Google Drive and Sheets](#google-drive-and-sheets) | lists, reports and tables sent to a new Google Sheet; files attached from Drive (or linked when too big); a Sheet or file read for the importer | no (Download CSV always works) | `GOOGLE_PICKER_KEY`, `GOOGLE_CLOUD_PROJECT_NUMBER` (+ Google sign-in's three) |
-| [Two-step sign-in key](#two-step-sign-in-key) | seals everyone's authenticator key | before the public link goes out (works without, with a warning) | `STARBASE_TWO_STEP_KEY` |
+| [Two-step sign-in key](#two-step-sign-in-key) | seals everyone's authenticator key | before the public link goes out (works without, with a warning) | `BASE_TWO_STEP_KEY` |
 | [Hosting — Render](#hosting--render) | the three environments (GOING-LIVE.md, section 0) | yes | `render.yaml` |
 | The control centre (ops.base.win; no vendor: base.win's own, `apps/platform/README.md`) | every campaign on one page; **Open desk** signs base.win support in to a campaign; with a Render key, what Render says about each campaign and a short list of named changes there | no (each campaign works without it) | `BASE_PLATFORM_PUBKEY` on each campaign (its public key, pasted; never a secret); optional `RENDER_API_KEY` on `base-platform` only (GOING-LIVE.md, section 8, *The Render key*) |
 | [GitHub Actions](#github-actions) | tests, and promoting staging to production | yes | none |
-| [The campaign's website](#the-campaigns-website) | sign-ups, petitions, volunteers, newsletter opt-ins in; unsubscribes both ways | when the website is ready | a website key (Settings → Services); `STARBASE_WEBSITE_URL`, `STARBASE_WEBSITE_KEY` to send unsubscribes out |
+| [The campaign's website](#the-campaigns-website) | sign-ups, petitions, volunteers, newsletter opt-ins in; unsubscribes both ways | when the website is ready | a website key (Settings → Services); `BASE_WEBSITE_URL`, `BASE_WEBSITE_KEY` to send unsubscribes out |
 | [Website translation — Google](#website-translation--google) | the campaign's website in ਪੰਜਾਬੀ, 简体 and 繁體, made ahead of time | no (the website stays English) | `GOOGLE_TRANSLATE_KEY` |
 | [Online payments — Stripe](#online-payments--stripe) | gifts once or monthly and membership dues on the website, by card, Apple Pay or Google Pay | when the website takes money (test mode first) | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` |
 | [Phone dialer — CallHub](#phone-dialer--callhub) | a list or a phone bank sent to CallHub's dialer; each call's result back on the person | no (only if the campaign calls through CallHub) | `CALLHUB_API_KEY`, `CALLHUB_API_BASE` |
@@ -37,14 +40,15 @@ The campaign's website sends people in with a key; the API is
 
 Postgres. On Render, `render.yaml` creates one per environment and fills
 `DATABASE_URL` from it. Without `DATABASE_URL` base.win keeps everything in a
-built-in database on the server's disk (`STARBASE_DATA`, default
-`./data/starbase`) — fine on a laptop, not for the team. On Render a
+built-in database on the server's disk (`BASE_DATA`, default
+`./data/base-win`; an older folder is still used if it is there, and is
+never moved) — fine on a laptop, not for the team. On Render a
 service with no `DATABASE_URL` does not start, and its log says why.
 
 | Setting | Default | Notes |
 |---|---|---|
 | `DATABASE_URL` | — | `postgres://…`; `sslmode=require` in it turns TLS on |
-| `STARBASE_EMBEDDED_DB` | off | `1`: on Render, start on the built-in database anyway. Only with a disk mounted at `STARBASE_DATA`; without one the campaign is lost at the next deploy. The control centre shows such a server as *Not on a real database* |
+| `BASE_EMBEDDED_DB` | off | `1`: on Render, start on the built-in database anyway. Only with a disk mounted at `BASE_DATA`; without one the campaign is lost at the next deploy. The control centre shows such a server as *Not on a real database* |
 | `PGSSL` / `PGSSL_STRICT` | off | `1` to force TLS / to verify the certificate |
 | `PG_POOL_MAX` | `10` | connections per server |
 | `PG_CONNECT_TIMEOUT_MS` | `30000` | how long to wait for a database connection before giving an error (a dropped connection reconnects on the next query; `/api/health` says `"database": "not reachable"` while it's down) |
@@ -53,7 +57,7 @@ service with no `DATABASE_URL` does not start, and its log says why.
 
 ## Public address
 
-`STARBASE_PUBLIC_URL` — this environment's own `https://` address
+`BASE_PUBLIC_URL` — this environment's own `https://` address
 (`https://imaginesurrey.base.win`; staging `https://staging.base.win`). Every link in an
 email (invites, unsubscribe, receipts, pictures, password links) is built from it, and so are
 the addresses Twilio is told to call back (delivery reports, calls). Without
@@ -73,7 +77,7 @@ every 8–24 hours (it can't be hurried, and it ignores the file's refresh
 hint) and adds such links only on a computer — on a phone the app offers to
 email the link. Google fetches from its own servers, so the link must be
 reachable from the internet (staging and production are). Links are built
-from `STARBASE_PUBLIC_URL`.
+from `BASE_PUBLIC_URL`.
 
 With Google set up (below) and **Settings → Services → Google → Shifts in
 Google Calendar** on, anyone can keep their shifts in a calendar base.win
@@ -105,7 +109,7 @@ the desk picks one on a send). Resend and SendGrid verify the domain, not
 each address, so nothing more is set up at the sender; an address at any
 other domain is refused before it is saved (a secondary site's domain is a
 later step). The tracked links, the open pixel and every unsubscribe link
-stay on the main site's address (`STARBASE_PUBLIC_URL`). System mail —
+stay on the main site's address (`BASE_PUBLIC_URL`). System mail —
 invites, shift notices, receipts, two-step, password links, ladders — always
 goes from MAIL_FROM. Password links (Forgot password, a manager's Password
 link) need a sender: without one Forgot says to ask a manager, and a
@@ -199,7 +203,7 @@ corrected address is a different address and is not on it.
 | `SENDGRID_API_KEY` | — | SendGrid's key |
 | `SENDGRID_WEBHOOK_PUBLIC_KEY` | — | the Event Webhook's verification key, as SendGrid shows it (or a PEM block); a comma list while it is changed |
 | `SENDGRID_API_BASE` | `https://api.sendgrid.com` | `https://api.eu.sendgrid.com` for an EU subuser |
-| `STARBASE_EMAIL_TIMEOUT_MS` | `15000` | one email's time limit |
+| `BASE_EMAIL_TIMEOUT_MS` | `15000` | one email's time limit |
 
 Opens and clicks are still counted by base.win itself (`/o`, `/c`), and
 unsubscribes are base.win's own pages.
@@ -344,7 +348,7 @@ Set it up:
    unsubscribes here yet: tap Connect*.
 4. **Connect** (the one step that changes something at Mailchimp): it adds a
    webhook on the audience to this base.win's public address
-   (`STARBASE_PUBLIC_URL` must be set) for *unsubscribes*, *cleaned* and
+   (`BASE_PUBLIC_URL` must be set) for *unsubscribes*, *cleaned* and
    *address changes*, from subscribers and admins — not from the API, so
    base.win's own changes don't echo back. If Mailchimp answers with a
    **signing secret**, it is shown once: copy it into
@@ -453,7 +457,7 @@ A call is never placed through the campaign's number to someone tagged
    **HTTP POST**. That is the only one set by hand.
 
 base.win tells Twilio where to call back with each text and call, all built
-from `STARBASE_PUBLIC_URL`, and checks Twilio's signature
+from `BASE_PUBLIC_URL`, and checks Twilio's signature
 (`X-Twilio-Signature`, with the auth token) on every one. Each answers at
 every address of the server, the campaign's website domain included:
 
@@ -555,8 +559,8 @@ browser never sees it.
 
 | Setting | Default | Notes |
 |---|---|---|
-| `STARBASE_GEO_BOUNDS` | none (Imagine Surrey's set-up: a box around Surrey) | `lat,lng\|lat,lng` — suggestions and lookups stay in it. With none they are not kept to a box, and maps open wide |
-| `STARBASE_PROVINCE` | `BC` | |
+| `BASE_GEO_BOUNDS` | none (Imagine Surrey's set-up: a box around Surrey) | `lat,lng\|lat,lng` — suggestions and lookups stay in it. With none they are not kept to a box, and maps open wide |
+| `BASE_PROVINCE` | `BC` | |
 | `GEOCODE_MIN_SCORE` | `75` | BC's match score a pin needs |
 | `GEOCODE_ON_SAVE` | on | `off`: no lookup when a person is saved (the background run still places them) |
 | `GEOCODE_CONCURRENCY`, `GEOCODE_BACKOFF_MS` | `6`, `30000` | the background run's pace |
@@ -575,13 +579,13 @@ today's asks against the ceiling.
 
 Free tiles by default, straight to each phone: OpenStreetMap's own servers
 for *Standard* (what the map opens on), *Muted* and *Dark*; and, only with
-the campaign's free CARTO key (`STARBASE_TILE_CARTO_KEY`, added to every
+the campaign's free CARTO key (`BASE_TILE_CARTO_KEY`, added to every
 CARTO address — since late August 2026 CARTO sends "API KEY REQUIRED"
 pictures to requests with none), CARTO's light map for the *Clean* look,
-which the map then opens on (`STARBASE_TILE_CLEAN=off` leaves it out, key or
-not). A `STARBASE_TILE_URL` on `basemaps.cartocdn.com` needs the key too:
+which the map then opens on (`BASE_TILE_CLEAN=off` leaves it out, key or
+not). A `BASE_TILE_URL` on `basemaps.cartocdn.com` needs the key too:
 with it the key is added; without it the map's sheet and Services say
-*CARTO needs a key now (STARBASE_TILE_CARTO_KEY)*. Neither is
+*CARTO needs a key now (BASE_TILE_CARTO_KEY)*. Neither is
 for a large team in election week — OpenStreetMap's servers are run by
 volunteers, CARTO's free basemaps are not meant for heavy or commercial use
 — and their current terms could not be read from where this was written:
@@ -605,11 +609,11 @@ service worker keeps both free providers' tiles as they are looked at
   the doors on a blank background. `GOOGLE_TILES_DAILY_MAX` (default none)
   stops tiles for the rest of the campaign's day once reached (*503*, the
   phones turn to the free map); Services shows today's tiles.
-- **Another provider:** `STARBASE_TILE_PROVIDER=stadia` (Stadia Maps,
-  everything filled in; `STARBASE_TILE_KEY` only if it can't be told the
-  campaign's web address — the phones see it), or `STARBASE_TILE_URL`
+- **Another provider:** `BASE_TILE_PROVIDER=stadia` (Stadia Maps,
+  everything filled in; `BASE_TILE_KEY` only if it can't be told the
+  campaign's web address — the phones see it), or `BASE_TILE_URL`
   (`https://…/{z}/{x}/{y}.png`, a key may ride in the query string),
-  `STARBASE_TILE_ATTRIBUTION`, `STARBASE_TILE_MAX_ZOOM`.
+  `BASE_TILE_ATTRIBUTION`, `BASE_TILE_MAX_ZOOM`.
 
 Google key: as under Address lookup — API restriction to Map Tiles (and
 Places API (New)), application restriction **None** (GOING-LIVE.md §5,
@@ -636,8 +640,8 @@ the map's middle, as this phone got it.
 - It reads "API KEY REQUIRED", or another message, on a blank background:
   the provider sends a notice, not streets (the line says *sends a notice,
   not streets*; the map says *The street map isn’t showing streets* and
-  switches by itself where it can). For CARTO, set `STARBASE_TILE_CARTO_KEY`
-  or `STARBASE_TILE_CLEAN=off`; for another provider, check its key or
+  switches by itself where it can). For CARTO, set `BASE_TILE_CARTO_KEY`
+  or `BASE_TILE_CLEAN=off`; for another provider, check its key or
   account. The page finds a notice by asking two of the provider's tiles
   for one place, far apart in zoom, once per page (never Google's).
 - *No picture came back*, and *isn’t loading*: the provider refuses or
@@ -668,7 +672,7 @@ only as slow hashes, which need no key.
 
 | Setting | Default | Notes |
 |---|---|---|
-| `STARBASE_TWO_STEP_KEY` | — | 32 or more random characters, e.g. `openssl rand -base64 32`; a different one on staging and production. Unset (or shorter), base.win makes a key of its own and keeps it in the database — it works, but anyone with a copy of the database could read the keys, so **Settings → Services** says *Not set up* until it's there |
+| `BASE_TWO_STEP_KEY` | — | 32 or more random characters, e.g. `openssl rand -base64 32`; a different one on staging and production. Unset (or shorter), base.win makes a key of its own and keeps it in the database — it works, but anyone with a copy of the database could read the keys, so **Settings → Services** says *Not set up* until it's there |
 
 Setting it later is safe: a key sealed with the database's moves to the new
 one the next time its owner signs in. To change it, put the new key first
@@ -690,10 +694,10 @@ is missing.
 | `GOOGLE_TOKEN_KEY` | — | 32 or more random characters (`openssl rand -base64 48`), a different one per environment. Seals each person's stored Google connection; sign-in needs none. There is no fallback in the database: unset, connections are refused. Lost, everyone connects again — nothing else is lost. To change it: `new,old`, then drop the old |
 | `GOOGLE_ACCOUNTS_BASE`, `GOOGLE_OAUTH_BASE`, `GOOGLE_CALENDAR_API_BASE` | Google's | tests only (`server/test/fake-google.js`); ignored in production |
 
-- **The redirect address** is always `<STARBASE_PUBLIC_URL>/api/auth/google/back`
+- **The redirect address** is always `<BASE_PUBLIC_URL>/api/auth/google/back`
   — Services shows it with a Copy button. Paste it into the client's
   *Authorized redirect URIs*. **Change it in Google first, then change
-  `STARBASE_PUBLIC_URL`.** No JavaScript origins are needed.
+  `BASE_PUBLIC_URL`.** No JavaScript origins are needed.
 - **Check** reads Google's discovery document, asks Google's sign-in page
   about the redirect address (nothing is followed), and tries an impossible
   code with the id and secret: *Working* only when all three pass.
@@ -708,7 +712,7 @@ is missing.
   30 seconds. A Gmail or Drive outage never stops anyone signing in.
 - Disconnecting tells Google (a revoke, in the background) only when the
   person has nothing else connected and nobody else here uses that Google
-  account. With `STARBASE_JOBS=off` nothing can tell Google: people remove
+  account. With `BASE_JOBS=off` nothing can tell Google: people remove
   base.win in their Google Account themselves.
 - **Google Calendar** (*Shifts in Google Calendar*, off until a manager
   turns it on): in the same Google Cloud project, *APIs & Services →
@@ -1156,7 +1160,7 @@ on staging: it is the public demo, and this key can call real people):
    `CALLHUB_API_BASE` to it.
 2. **Settings → Services → Phone dialer (CallHub)** → **Check**: the key
    works. Then **Connect**: base.win gives CallHub the address to send each
-   call's result to (it needs `STARBASE_PUBLIC_URL`). **Check** again: *The
+   call's result to (it needs `BASE_PUBLIC_URL`). **Check** again: *The
    key works · results come back here*.
 3. On a small list of your own team's numbers: **Send to CallHub**. In
    CallHub, make a call-center campaign on the phonebook base.win made, and
@@ -1328,7 +1332,7 @@ manager who made the key. A key stops working when it is revoked, and when the m
 
 ```sh
 curl https://imaginesurrey.base.win/in/v1/people \
-  -H "Authorization: Bearer $STARBASE_KEY" -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $BASE_WIN_KEY" -H "Content-Type: application/json" \
   -H "Idempotency-Key: form-2026-10-12-0193" \
   -d '{"first_name":"Asha","last_name":"Example","email":"asha@example.org",
        "postal":"V3T 1V8","newsletter":true,"source":"petition-transit"}'
@@ -1399,8 +1403,8 @@ service only (Render → the service → Environment):
 
 | Setting | Value |
 |---|---|
-| `STARBASE_WEBSITE_URL` | the website's address, starting `https://`, with no path (`https://www.example.org`) |
-| `STARBASE_WEBSITE_KEY` | the same secret the website holds as `STARBASE_INBOUND_KEY` |
+| `BASE_WEBSITE_URL` | the website's address, starting `https://`, with no path (`https://www.example.org`) |
+| `BASE_WEBSITE_KEY` | the same secret the website holds as its inbound key (`BASE_WIN_INBOUND_KEY`; a website still on older code reads the older name in `apps/web/src/lib/old-names.ts`) |
 
 With both set, and a website key made for the campaign, base.win sends each
 no to `<website address>/api/in/consent`:
@@ -1440,13 +1444,14 @@ Setting it up:
 2. On the website, check that its base.win address and website key are
    right, and send what is waiting once.
 3. Make a long random secret (`openssl rand -base64 32`). Set it on the
-   website as `STARBASE_INBOUND_KEY`, and on base.win as
-   `STARBASE_WEBSITE_KEY`, with `STARBASE_WEBSITE_URL`.
+   website as its inbound key (`BASE_WIN_INBOUND_KEY`, or its older name
+   on a website still on older code), and on base.win as
+   `BASE_WEBSITE_KEY`, with `BASE_WEBSITE_URL`.
 4. Settings → Services → The website — unsubscribes → **Check**. Then send
    the ones already off here.
 5. If the website later moves onto base.win itself
-   (`STARBASE_SITE_DOMAIN`, GOING-LIVE.md §2), take both settings away in
-   the same save. Left on, they send nothing: once `STARBASE_WEBSITE_URL`
+   (`BASE_SITE_DOMAIN`, GOING-LIVE.md §2), take both settings away in
+   the same save. Left on, they send nothing: once `BASE_WEBSITE_URL`
    names the website's own domain here (or its `www.`, or a `SITE_HOSTS`
    host), Settings → Services, Check and the start-up log say "Take both
    settings away". Going back to the website hosted apart, set them again,

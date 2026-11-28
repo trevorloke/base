@@ -11,11 +11,11 @@ team on it.
 Needs [Node.js 22](https://nodejs.org).
 
 ```sh
-git clone https://github.com/trevorloke/starbase.git
-cd starbase
+git clone https://github.com/trevorloke/base.git
+cd base
 npm install
 npm run build
-STARBASE_BRAND=imagine-surrey npm start     # → http://localhost:3200
+BASE_BRAND=imagine-surrey npm start     # → http://localhost:3200
 ```
 
 This guide walks through Imagine Surrey's own set-up, so the server is
@@ -56,7 +56,7 @@ there:
   offers one look. *Add a section* has no *Become a member*.
 - `/star.png` and `/site-assets/imagine-surrey/logo.webp` answer 404.
 - The map opens wide with *Ask base.win to set your map area* until
-  `STARBASE_GEO_BOUNDS` is set.
+  `BASE_GEO_BOUNDS` is set.
 
 The same is checked by machine, on every change:
 
@@ -70,7 +70,7 @@ The same is checked by machine, on every change:
   what it answers (the same reads the dump below makes) for the same words.
 - `server/test/neutral-*.test.js` test each part as another campaign and
   then as Imagine Surrey. A new one follows `neutral-membership.test.js`:
-  import the helper, set `STARBASE_BRAND` to `base`, call `forgetBrand()`,
+  import the helper, set `BASE_BRAND` to `base`, call `forgetBrand()`,
   and put the brand back at the end.
 
 The rest of `npm test`, and every `e2e-*.mjs` script, runs as Imagine
@@ -125,9 +125,9 @@ INTEGRATIONS.md.
 
 | Variable | What for | Needed to test? |
 |---|---|---|
-| `STARBASE_PUBLIC_URL` | your address, e.g. `https://imaginesurrey.base.win` — used in invite and unsubscribe links | **yes** |
-| `STARBASE_ORG_NAME`, `STARBASE_JURISDICTION`, `STARBASE_TZ`, `STARBASE_CITY`, `STARBASE_SLATES` | the campaign this deployment runs for (README → *One deployment per client*) | set them before the first sign-in |
-| `STARBASE_ENV` | `staging` on the test environment: a *Staging* badge on every screen | **yes**, on staging |
+| `BASE_PUBLIC_URL` | your address, e.g. `https://imaginesurrey.base.win` — used in invite and unsubscribe links | **yes** |
+| `BASE_ORG_NAME`, `BASE_JURISDICTION`, `BASE_TZ`, `BASE_CITY`, `BASE_SLATES` | the campaign this deployment runs for (README → *One deployment per client*) | set them before the first sign-in |
+| `BASE_ENV` | `staging` on the test environment: a *Staging* badge on every screen | **yes**, on staging |
 | `RESEND_API_KEY`, `MAIL_FROM` | real email (invites, newsletters, press, shift alerts) | optional — without it, sends are saved as *queued* and invite links are shown to copy |
 | `RESEND_WEBHOOK_SECRET` | bounces, spam complaints and "delivered" back from Resend (INTEGRATIONS.md; SendGrid: `MAIL_PROVIDER`, `SENDGRID_API_KEY`, `SENDGRID_WEBHOOK_PUBLIC_KEY`) | optional — without it a send says *sent* and a dead address is tried again next time |
 | `MAILCHIMP_API_KEY` | *Send to Mailchimp* on a list, unsubscribes kept in step both ways (INTEGRATIONS.md; `MAILCHIMP_AUDIENCE_ID` for an account with several audiences, `MAILCHIMP_WEBHOOK_SECRET` to check its webhook's signature) | optional — without it the button is not there |
@@ -136,7 +136,11 @@ INTEGRATIONS.md.
 | `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_TOKEN_KEY` | Sign in with Google, and the one Google connection Gmail, Drive and Calendar use (INTEGRATIONS.md); in tests a stand-in Google (`server/test/fake-google.js`, pointed at with `GOOGLE_ACCOUNTS_BASE` and `GOOGLE_OAUTH_BASE`) — never real Google | optional — without them no Google button shows, and passwords work as always |
 | `GMAIL_DAILY_MAX` | emails a person may send from their own Gmail in 24 hours (INTEGRATIONS.md, *Gmail*); in tests Gmail is the stand-in Google too (`GMAIL_API_BASE`) | optional — 100 |
 | `GOOGLE_PICKER_KEY`, `GOOGLE_CLOUD_PROJECT_NUMBER` | Google Drive and Sheets, on top of the Google client (INTEGRATIONS.md); in tests the same stand-in Google answers Drive and Sheets (`server/test/fake-google-drive.js`, pointed at with `GOOGLE_DRIVE_API_BASE` and `GOOGLE_SHEETS_API_BASE`) | optional — without them no Drive button shows; Download CSV works as always |
-| `STARBASE_TWO_STEP_KEY` | seals everyone's two-step sign-in key (INTEGRATIONS.md) | optional to test — without it a key kept in the database is used, and Settings → Services says so |
+| `BASE_TWO_STEP_KEY` | seals everyone's two-step sign-in key (INTEGRATIONS.md) | optional to test — without it a key kept in the database is used, and Settings → Services says so |
+
+Servers set up before 2026-12 may still have older names for these; they
+keep working, and Settings → Services lists any to rename (GOING-LIVE.md,
+section 10).
 
 The whole order of things, from deploy to the public link, is in
 [GOING-LIVE.md](GOING-LIVE.md).
@@ -179,7 +183,7 @@ Everyone and everything in staging's sample is made up
 - **When it won't.** Staging drops nothing unless its database holds one
   campaign whose first manager is the demo account. If its log says *this
   database's first campaign is not the demo account's*, or *could not be
-  made in 3 tries*, set `STARBASE_SAMPLE_RESET` in Render (base-win-staging
+  made in 3 tries*, set `BASE_SAMPLE_RESET` in Render (base-win-staging
   → Environment) to a new word of your own (GOING-LIVE.md, section 0).
 - **Your own account on staging.** The sign-in page sends everyone into the
   demo. Open `/login?stay=1` to sign in with your own email and password.
@@ -189,19 +193,19 @@ Everyone and everything in staging's sample is made up
   or a live email or texting key. By hand, against any address:
   `node scripts/staging-check.mjs https://staging.base.win`.
 - **On your computer.** The same server as staging, in memory:
-  `STARBASE_ENV=staging STARBASE_BRAND=base STARBASE_SAMPLE=vancouver
-  STARBASE_DEMO_EMAIL=demo@base.win STARBASE_ORG_NAME="Sample Campaign"
-  STARBASE_DATA=memory npm start`, then open `http://localhost:3200/` (the
+  `BASE_ENV=staging BASE_BRAND=base BASE_SAMPLE=vancouver
+  BASE_DEMO_EMAIL=demo@base.win BASE_ORG_NAME="Sample Campaign"
+  BASE_DATA=memory npm start`, then open `http://localhost:3200/` (the
   sample takes a few seconds). `node --test
   server/test/staging-walk.test.js` reads every screen's data the way the
   daily check does, with render.yaml's own staging settings.
 
 For Twilio, set the number's incoming messages webhook to
 `https://<your address>/api/public/twilio/sms` (HTTP POST). Calls through the
-campaign also need `STARBASE_PUBLIC_URL`; `TWILIO_VOICE=off` keeps texting
+campaign also need `BASE_PUBLIC_URL`; `TWILIO_VOICE=off` keeps texting
 and turns calling off.
 
-Any Docker host works too: `docker build -t starbase .` then run with
+Any Docker host works too: `docker build -t base-win .` then run with
 either `DATABASE_URL=postgres://…` or a volume at `/data`.
 
 ---
@@ -457,10 +461,10 @@ one tap away under **More**.
   *a link is on its way*. The email's link opens *Choose a new password*
   (the address loses its `#t=` at once); save, and you're in, signed out on
   every other device; the old password fails; with two-step on it asks the
-  code next. With no sender (or no `STARBASE_PUBLIC_URL`) Forgot says to ask
+  code next. With no sender (or no `BASE_PUBLIC_URL`) Forgot says to ask
   a manager, who taps *Password link* on the person's row in Settings →
   Members: the link with Copy, or *Emailed* when email is set up (no
-  *Password link* at all without `STARBASE_PUBLIC_URL`).
+  *Password link* at all without `BASE_PUBLIC_URL`).
   `server/test/password-reset.test.js` covers the server (limits, links that
   end, the log); `node e2e-reset.mjs` (PORT, SHOTS; the stand-in sender
   on PORT+1, its controls on PORT+4) walks it in a browser under a client's
@@ -616,10 +620,10 @@ one tap away under **More**.
   answers, undo, practice, turf scope, the sign-in code) and
   `gotv-live.test.js` (the SSE feed read raw: scope, practice, merges,
   `mode` and `guide` events, three streams a person, no pool connection
-  held; `STARBASE_GOTV_PING_MS` shortens the heartbeat). Its last test needs
+  held; `BASE_GOTV_PING_MS` shortens the heartbeat). Its last test needs
   a real Postgres: `GOTV_REAL_PG=1 DATABASE_URL=postgres://… node --test
   server/test/gotv-live.test.js` (a held campaign lock makes a mark answer
-  503 *Busy — will try again* after `STARBASE_GOTV_LOCK_MS`, 5 s by
+  503 *Busy — will try again* after `BASE_GOTV_LOCK_MS`, 5 s by
   default). The load test, `DATABASE_URL=postgres://… PORT=5507 node
   scripts/load-gotv.mjs` (`LOAD_PEOPLE`, `LOAD_MINUTES`), seeds 300,000
   people and prints its numbers against the pass lines. Measured on a
@@ -808,7 +812,7 @@ one tap away under **More**.
   `/preferences` link turns email and texts off or on in base.win itself.
   Server tests: `server/test/site-*.test.js`; in a browser:
   `e2e-site-server.mjs`.
-  **On its own domain** (`STARBASE_SITE_DOMAIN`, SITE.md):
+  **On its own domain** (`BASE_SITE_DOMAIN`, SITE.md):
   `server/test/site-domain.test.js` (also through Postgres:
   `npm run test:pg -- server/test/site-domain.test.js`) — the site at `/`
   naming the domain (canonical, `og:url`, `og:image`, sitemap, robots),
@@ -817,7 +821,7 @@ one tap away under **More**.
   on still encoded), a domain where the app answers never taken, the
   present website's old addresses and its own links, the links base.win
   hands out and the unsubscribe sync saying its settings come off. In a
-  browser, the server started with `STARBASE_SITE_DOMAIN=campaign.example`
+  browser, the server started with `BASE_SITE_DOMAIN=campaign.example`
   (no `SITE_HOSTS`) and the suite run with `DOMAIN=campaign.example`: the
   browser reaches the domain at this machine, so every request carries it as
   the Host (`e2e-site-server.mjs`, its head says how). `e2e-site-render.mjs`
@@ -1329,7 +1333,7 @@ comes back, or asks if words were typed meanwhile).
   against a stand-in Google; `GOOGLE_PORT`, `GPORT` pick its ports.)
 - **Map, a street map that shows no streets** — with no CARTO key the map
   opens on *Standard* from OpenStreetMap and nothing is asked of CARTO
-  (Show → Map has no *Clean*). With `STARBASE_TILE_CARTO_KEY` set and CARTO
+  (Show → Map has no *Clean*). With `BASE_TILE_CARTO_KEY` set and CARTO
   sending "API KEY REQUIRED" instead of streets, a line says *The street map
   wasn’t showing streets — switched to Muted*; a manager's *Why?* opens the
   Map check, whose top line is *Clean · CARTO — sends a notice, not streets*
@@ -1584,7 +1588,7 @@ comes back, or asks if words were typed meanwhile).
   | Busy-map dots over City Centre (895 spots, 118 buildings) | 224 / 309 | 211 / 292 | ≤ 10% slower |
   | Walk list, a turf with three towers (484 doors) | 36 / 59 | 37 / 85 | ≤ 10% slower |
 - **Buildings (screens)** — `e2e-highrise.mjs`: three servers, `PORT=5520`,
-  `PORT=5523 STARBASE_MAP_ALL=100 STARBASE_MAP_VIEW=100` (the busy view) and
+  `PORT=5523 BASE_MAP_ALL=100 BASE_MAP_VIEW=100` (the busy view) and
   `BASE_PATH=/imaginesurrey PORT=5521` (`BP=/imaginesurrey ONLY=1,3,4`).
   A 210-unit tower (half its rows written "1203-13450 104 Ave", unit 1203
   both ways), another 60 m away, 60 townhouses, a house with a suite and a
@@ -1851,8 +1855,8 @@ latest).
   with the campaign's free CARTO key), both free and neither for heavy use; choose a provider the
   campaign has an agreement with before election week: Google Maps
   (`GOOGLE_MAPS_TILES=1` and a `GOOGLE_MAPS_SERVER_KEY` with the Map Tiles
-  API enabled), Stadia Maps (`STARBASE_TILE_PROVIDER=stadia`) or any
-  `{z}/{x}/{y}` provider (`STARBASE_TILE_URL`) —
+  API enabled), Stadia Maps (`BASE_TILE_PROVIDER=stadia`) or any
+  `{z}/{x}/{y}` provider (`BASE_TILE_URL`) —
   GOING-LIVE.md, section 5. The browser tests run where neither host can be
   reached, on stand-in tiles: nothing here has checked the real street map.
   If it stops loading, the map says so.
@@ -1947,8 +1951,8 @@ a fake address service, the public pages in every state, the cache's
 expiry, the embed, the field read) and `server/test/voteguide-shared.test.js`
 (states, closed for one day, nearest, words in any zone, the import's
 reader, the QR's longest link) and `server/test/tzrule.test.js`.
-The clock moves only in tests: `STARBASE_CLOCK_SHIFT_MS` (milliseconds) is
-read when `NODE_ENV=test`, under `node --test`, or with `STARBASE_E2E=1`
+The clock moves only in tests: `BASE_CLOCK_SHIFT_MS` (milliseconds) is
+read when `NODE_ENV=test`, under `node --test`, or with `BASE_E2E=1`
 (a browser suite's server), and ignored anywhere else — the server says
 so when it starts.
 

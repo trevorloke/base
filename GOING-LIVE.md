@@ -33,11 +33,12 @@ so one promote updates every client and ops.base.win together. Only code
 moves this way, never data: each database stays where it is.
 
 **Before a promote, check Imagine Surrey's brand line.** Render →
-`base-win` → **Environment** must show `STARBASE_BRAND=imagine-surrey`.
+`base-win` → **Environment** must show `BASE_BRAND=imagine-surrey` (or
+the same line under its older name, until it is renamed: section 10).
 That line is what gives Imagine Surrey its own set-up: its look, opponents,
 fields, membership, website and sample. With the line missing, a server
 named exactly *Imagine Surrey* still gets it and says so once in its log
-(*STARBASE_BRAND is not set on a server named Imagine Surrey*): add the
+(*BASE_BRAND is not set on a server named Imagine Surrey*): add the
 line. After the promote, open `https://imaginesurrey.base.win/api/health`
 and read `"brand":"imagine-surrey"`. Every other client's reads
 `"brand":"base"`.
@@ -77,7 +78,7 @@ minute (TESTING.md, *Staging*); a visitor in the demo meanwhile sees *The
 demo is being refreshed* and is signed back in when it is done. Staging
 does this only while its database holds one campaign and that campaign's
 first manager is the demo account. If not, it drops nothing, and its log
-says so. Then, and only then, set `STARBASE_SAMPLE_RESET` in Render
+says so. Then, and only then, set `BASE_SAMPLE_RESET` in Render
 (base-win-staging → Environment) to a new word: any word this database
 hasn't seen, of your own invention (for example `fresh-2026-11`). Nobody
 issues it and it is not a secret. A new word drops everything in staging's
@@ -108,17 +109,22 @@ Blueprints. Each time, in this order:
    `base-platform` and `base-platform-db` if they are missing (both paid),
    sets the plan of both campaign databases, sets each service's branch,
    and sets every setting that has a value in `render.yaml`: staging's sample, `NODE_ENV`,
-   `STARBASE_ENV` and the control centre's address. A client's own
+   `BASE_ENV` and the control centre's address. A client's own
    settings are `sync: false`, so a sync leaves them as they are in Render.
+   Every setting is listed under its `BASE_` name. Each older name a
+   service may still have is listed too, as `sync: false` with no value,
+   so a sync neither removes it nor writes over its value (section 10).
 4. The name check. In Render, check the services are named exactly as
    `render.yaml` names them: `base-win-staging`, `base-win` and, once it is
    made (section 8), `base-platform`. Check the databases the same way:
    `base-win-staging-db`, `base-win-db` and, once it is made,
    `base-platform-db`.
-5. The staging service's Render address is `starbase-staging.onrender.com`,
-   from before the rename. If a service still shows an old name, rename it
-   in Render first: the service → **Settings → Name**. If a database's name
-   does not match, do not sync until it does.
+5. Staging's Render address (top of its page in Render) still carries the
+   name the service had when it was made; Render can never change that
+   address, and nothing needs it changed (section 10, item 6). If a
+   service's name still shows an old name, rename it in Render first: the
+   service → **Settings → Name**. If a database's name does not match, do
+   not sync until it does.
 6. Only then Render → **Blueprints** → the Blueprint → **Manual Sync**. A
    sync that finds nothing under a name makes a second, empty one there.
 
@@ -138,7 +144,7 @@ canvassing.** Until then the free map stays: Google is the map only with
 for address lookup does not change the map (§5, Recipe B). Google's map is
 not kept on phones for no-signal areas.
 For staging, with no synced Blueprint: set base-win-staging → Environment →
-`STARBASE_CANDIDATES` to the exact line in `render.yaml`'s staging block (the
+`BASE_CANDIDATES` to the exact line in `render.yaml`'s staging block (the
 made-up Avendrel, Brindlemoor and Castramont). The sample saves those three
 on its own Rating scale either way; the setting gives their buttons' longer
 words. Then check that staging's `/api/scale` names those three.
@@ -199,7 +205,7 @@ fixed value, which a Blueprint sync would write over
 | `imaginesurrey.base.win` | `base-win` | Imagine Surrey: the staff and volunteer app, the public forms, and the website under `/site/` |
 | `ops.base.win` | `base-platform` | the control centre |
 | `base.win` (and `www.base.win`, which sends people on to it) | the front page (a static site) | the page people see first, with staging's demo in it |
-| `imaginesurrey.ca`, `www.imaginesurrey.ca`, once the campaign moves its website onto base.win | `base-win`, with `STARBASE_SITE_DOMAIN` (below) | the website made under **Website** in the admin, at `/`; nothing of the app answers there |
+| `imaginesurrey.ca`, `www.imaginesurrey.ca`, once the campaign moves its website onto base.win | `base-win`, with `BASE_SITE_DOMAIN` (below) | the website made under **Website** in the admin, at `/`; nothing of the app answers there |
 
 Each one is added under that service's **Settings → Custom Domains**, with
 a CNAME at the registrar pointing at the address Render shows (for bare
@@ -208,10 +214,12 @@ certificates. On 2026-11-24 `staging.base.win`, `imaginesurrey.base.win`
 and `base.win` were answering; `ops.base.win` was not set up yet (section
 8, *First time*).
 
-`starbase.imaginesurrey.ca` is an older address for Imagine Surrey's app.
-We could not reach it on 2026-11-24. If people still use it, keep it as a
-custom domain on `base-win` and list it in `APP_HOSTS` (section 3); check
-that it answers before giving it to anyone.
+Imagine Surrey's app also has an older address under `imaginesurrey.ca`,
+from before the rename; it is the one listed in `base-win`'s `APP_HOSTS`
+(Render → `base-win` → Environment). We could not reach it on 2026-11-24.
+If people still use it, keep it as a custom domain on `base-win` and in
+`APP_HOSTS` (section 3); check that it answers before giving it to anyone.
+Retiring it: section 10, item 10.
 
 The website made under **Website** is live from the first deploy at the
 app's own address, under `/site/` (`https://imaginesurrey.base.win/site/`),
@@ -243,10 +251,10 @@ On the day it moves, base.win's website answers there at `/` and
    from here until step 6 is done, so do steps 3 to 6 together.
 4. **Render → `base-win` → Environment**, in one save, before the domain
    points here (without it the app's sign-in page would answer there):
-   - `STARBASE_SITE_DOMAIN` = `imaginesurrey.ca`
-   - `STARBASE_SITE_FORMER_URL` = the present website's Render address, only
+   - `BASE_SITE_DOMAIN` = `imaginesurrey.ca`
+   - `BASE_SITE_FORMER_URL` = the present website's Render address, only
      if step 2 (its own links in emails already sent go there)
-   - remove `STARBASE_WEBSITE_URL` and `STARBASE_WEBSITE_KEY`: the
+   - remove `BASE_WEBSITE_URL` and `BASE_WEBSITE_KEY`: the
      unsubscribe sync is for a website hosted apart, and this one isn't any
      more. If they are left, nothing is sent and Settings → Services says to
      take them away.
@@ -266,7 +274,7 @@ On the day it moves, base.win's website answers there at `/` and
    - If the present website keeps running: its two cron jobs pass on their
      next run.
 
-`SITE_HOSTS` isn't needed with `STARBASE_SITE_DOMAIN`. Never put either in
+`SITE_HOSTS` isn't needed with `BASE_SITE_DOMAIN`. Never put either in
 `render.yaml`: a value there is written over at every sync.
 
 **The way back**, if something is wrong:
@@ -274,18 +282,18 @@ On the day it moves, base.win's website answers there at `/` and
 1. First the domain leaves `base-win`: Render → `base-win` → Settings →
    Custom Domains: remove `imaginesurrey.ca` and `www.imaginesurrey.ca`; add
    them back on the present website's service, and the registrar's records
-   with them. Keep `STARBASE_SITE_DOMAIN` set until this is done: without it
+   with them. Keep `BASE_SITE_DOMAIN` set until this is done: without it
    the app's sign-in page would answer on the domain.
 2. Once `https://imaginesurrey.ca/` is the present website again: Render →
-   `base-win` → Environment: remove `STARBASE_SITE_DOMAIN` (and
-   `STARBASE_SITE_FORMER_URL`). The website is at `/site/` again at once. A
+   `base-win` → Environment: remove `BASE_SITE_DOMAIN` (and
+   `BASE_SITE_FORMER_URL`). The website is at `/site/` again at once. A
    browser that saw the move may for up to an hour still send `/site/` on to
    the domain, which by then is the present website.
 3. On the present website: `NEXT_PUBLIC_SITE_URL` back to
    `https://imaginesurrey.ca`, redeploy, and its Stripe and Twilio webhooks
    back; its two cron jobs back to `https://imaginesurrey.ca` (or made again
    from `apps/web/SETUP.md` §2b, if they were deleted).
-4. On `base-win`: set `STARBASE_WEBSITE_URL` and `STARBASE_WEBSITE_KEY`
+4. On `base-win`: set `BASE_WEBSITE_URL` and `BASE_WEBSITE_KEY`
    again. Then Settings → Services → *The website — unsubscribes* →
    **Check**, and **Send the ones already off here**, so the unsubscribes
    made in between reach the present website.
@@ -308,9 +316,11 @@ server can send sign-ups in with a website key from Settings → Services
 example).
 
 Its unsubscribes go both ways too. Make a long random secret (`openssl
-rand -base64 32`). Set it on the website as `STARBASE_INBOUND_KEY`, and on
-this client's Render service as `STARBASE_WEBSITE_KEY`, with
-`STARBASE_WEBSITE_URL` (the website's `https://` address, no path). Then
+rand -base64 32`). Set it on the website as its inbound key
+(`BASE_WIN_INBOUND_KEY` in this repository's copy of the website; a
+website still on older code reads the older name in
+`apps/web/src/lib/old-names.ts`), and on this client's Render service as
+`BASE_WEBSITE_KEY`, with `BASE_WEBSITE_URL` (the website's `https://` address, no path). Then
 Settings → Services → *The website — unsubscribes* → **Check**, and send
 the ones already off here. Take both settings away the day the website
 moves onto base.win (*Moving the campaign's domain onto base.win*, step 4). (INTEGRATIONS.md, *Unsubscribes, both ways*.)
@@ -318,13 +328,15 @@ moves onto base.win (*Moving the campaign's domain onto base.win*, step 4). (INT
 ## 3 · Settings (Render → the service → Environment)
 
 Set these on each campaign service before the first sign-in; the rest can wait.
+Servers set up before 2026-12 may still have older names for these; they
+keep working, and Settings → Services lists any to rename (section 10).
 Every outside service, its settings and where each key comes from is in
 [INTEGRATIONS.md](INTEGRATIONS.md). The campaign's own values
-(`STARBASE_ORG_NAME`, `_JURISDICTION`, `_TZ`, `_CITY`, `_SLATES`) are set
+(`BASE_ORG_NAME`, `_JURISDICTION`, `_TZ`, `_CITY`, `_SLATES`) are set
 on Imagine Surrey's service in Render; `render.yaml` lists them as `sync:
 false`, with the value each was first given, so a sync never changes them.
 Another client's come from the control centre's New campaign (section 6). So is the
-brand: staging is `STARBASE_BRAND=base` with the name *Sample Campaign* in Vancouver, so it
+brand: staging is `BASE_BRAND=base` with the name *Sample Campaign* in Vancouver, so it
 can be shown to anyone; Imagine Surrey's production is `imagine-surrey`,
 and every other client's is `base`. `imagine-surrey` turns on Imagine
 Surrey's own set-up (README, *One campaign's own set-up*); `base` is a
@@ -333,20 +345,20 @@ nothing, is `base`. For the look, that is only where a campaign starts:
 once a manager saves the campaign's own in **Settings → Brand**,
 that one stays, whatever the setting says. A campaign already set up keeps
 the name it was given: a manager renames it in **Settings → Campaign**.
-`STARBASE_CANDIDATES` unset means nobody on a new rating scale (on Imagine
+`BASE_CANDIDATES` unset means nobody on a new rating scale (on Imagine
 Surrey's server, its own five). New campaign writes `none` for a new
-client, which says the same thing out loud. `STARBASE_CITY` unset means no
-city, and `STARBASE_GEO_BOUNDS` unset means no map area: maps open wide and
+client, which says the same thing out loud. `BASE_CITY` unset means no
+city, and `BASE_GEO_BOUNDS` unset means no map area: maps open wide and
 the map's check says *Map area: Not set*.
 
 | Variable | Set it to | Needed for |
 |---|---|---|
-| `STARBASE_ENV` | `staging` on the staging service, `production` on production (set by `render.yaml`) | the *Staging* badge; `/api/health` |
-| `STARBASE_FRAME_HOSTS`, `STARBASE_DEMO_EMAIL`, `STARBASE_SAMPLE`, `STARBASE_SAMPLE_RESET` | staging only, and ignored on production: the sites that may frame the app; the account every demo visitor is signed in as at `/api/auth/demo`; `vancouver` to make the sample campaign on an empty database, and again by itself when a release carries a newer sample; and a new word of your own invention to drop everything in staging's database and make the sample again (only when the log asks for it: section 0) | the demo on the base.win website (`server/lib/demo.js`, `server/lib/samplecampaign.js`). Anyone who opens the demo can do whatever the demo account can, so that server holds the sample campaign and nobody real |
-| `STARBASE_ORG_NAME`, `STARBASE_JURISDICTION`, `STARBASE_TZ`, `STARBASE_CITY`, `STARBASE_SLATES`, `STARBASE_CANDIDATES` | the campaign (README → *One deployment per client*) | the name the first sign-up sets up, the contribution rules, the campaign's day, addresses, the slates a gift can go to, the rating scale's first candidates |
-| `STARBASE_PUBLIC_URL` | the service's own address from section 0: `https://imaginesurrey.base.win` (staging: `https://staging.base.win`) | every link in an email: invites, unsubscribe, receipts, password links (Forgot password is off without it); calendar links and files |
+| `BASE_ENV` | `staging` on the staging service, `production` on production (set by `render.yaml`) | the *Staging* badge; `/api/health` |
+| `BASE_FRAME_HOSTS`, `BASE_DEMO_EMAIL`, `BASE_SAMPLE`, `BASE_SAMPLE_RESET` | staging only, and ignored on production: the sites that may frame the app; the account every demo visitor is signed in as at `/api/auth/demo`; `vancouver` to make the sample campaign on an empty database, and again by itself when a release carries a newer sample; and a new word of your own invention to drop everything in staging's database and make the sample again (only when the log asks for it: section 0) | the demo on the base.win website (`server/lib/demo.js`, `server/lib/samplecampaign.js`). Anyone who opens the demo can do whatever the demo account can, so that server holds the sample campaign and nobody real |
+| `BASE_ORG_NAME`, `BASE_JURISDICTION`, `BASE_TZ`, `BASE_CITY`, `BASE_SLATES`, `BASE_CANDIDATES` | the campaign (README → *One deployment per client*) | the name the first sign-up sets up, the contribution rules, the campaign's day, addresses, the slates a gift can go to, the rating scale's first candidates |
+| `BASE_PUBLIC_URL` | the service's own address from section 0: `https://imaginesurrey.base.win` (staging: `https://staging.base.win`) | every link in an email: invites, unsubscribe, receipts, password links (Forgot password is off without it); calendar links and files |
 | `RESEND_API_KEY`, `MAIL_FROM` | from Resend; `Imagine Surrey <team@imaginesurrey.ca>` on the campaign's domain (Settings → Services → Email → *Sending domain* walks through its DNS records). Staging: a test key or unset, never a client's (section 0) | email; without it invites are shown to copy and sends wait as *queued* |
-| `STARBASE_TWO_STEP_KEY` | 32 or more random characters (`openssl rand -base64 32`), a different one per environment | two-step sign-in's keys sealed with a key the database doesn't hold (INTEGRATIONS.md) |
+| `BASE_TWO_STEP_KEY` | 32 or more random characters (`openssl rand -base64 32`), a different one per environment | two-step sign-in's keys sealed with a key the database doesn't hold (INTEGRATIONS.md) |
 
 Then, as each one is ready:
 
@@ -356,7 +368,7 @@ Then, as each one is ready:
 | `MAIL_PROVIDER`, `SENDGRID_API_KEY`, `SENDGRID_WEBHOOK_PUBLIC_KEY` | only for a campaign that sends through SendGrid instead: `sendgrid`, its key, its Event Webhook's verification key (INTEGRATIONS.md) | email through SendGrid |
 | `RESEND_REGION` | leave unset (`us-east-1`) unless the domain should be made in another Resend region | *Add domain* in Settings → Services |
 | `MAILCHIMP_API_KEY`, `MAILCHIMP_AUDIENCE_ID`, `MAILCHIMP_WEBHOOK_SECRET` | from Mailchimp: the account's key, whole (its ending names the server); the audience's id only when the account has several; the signing secret *Connect* shows, once | only if the campaign builds its emails in Mailchimp: *Send to Mailchimp* on a list, unsubscribes and dead addresses kept in step both ways (INTEGRATIONS.md, *Mailchimp*) |
-| `STARBASE_WEBSITE_URL`, `STARBASE_WEBSITE_KEY` | only while the campaign's website is hosted apart (section 2): its `https://` address, no path; the same secret the website holds as `STARBASE_INBOUND_KEY`. Set by hand on that client's service. Never on staging, never in the Blueprint | sends this client's unsubscribes and STOPs to its own website (INTEGRATIONS.md, *Unsubscribes, both ways*) |
+| `BASE_WEBSITE_URL`, `BASE_WEBSITE_KEY` | only while the campaign's website is hosted apart (section 2): its `https://` address, no path; the same secret the website holds as its inbound key (`BASE_WIN_INBOUND_KEY`, or its older name on a website still on older code). Set by hand on that client's service. Never on staging, never in the Blueprint | sends this client's unsubscribes and STOPs to its own website (INTEGRATIONS.md, *Unsubscribes, both ways*) |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` | from Twilio; for texts to a list in Canada the number should be a verified toll-free number or a short code (INTEGRATIONS.md). Staging: test credentials or unset, never a client's (section 0) | texting and calling through the campaign's number, SMS shift alerts; without them the phone's own apps are used |
 | `GEOCODER` | leave unset (`bc`, the free BC Address Geocoder). `google` is no longer used for pins (Google's terms): take `GEOCODER=google` and `GEOCODER_FALLBACK=google` away | placing people on the map |
 | `GOOGLE_MAPS_SERVER_KEY` | a Google Cloud key with application restriction **None** and API restriction to Map Tiles API and Places API (New) — not a *Websites* key, not an IP restriction on Render (§5, Recipe B). Staging: base.win's own key with a daily ceiling set, or unset, never a client's (section 0). **Tell us Google or the free map for canvassing.** The key alone does not make Google the map | Google Maps tiles with `GOOGLE_MAPS_TILES=on`; Google's address suggestions when turned on |
@@ -369,18 +381,18 @@ Then, as each one is ready:
 | `GOOGLE_TOKEN_KEY` | 32 or more random characters (`openssl rand -base64 48`), a different one per environment; keep a copy in the campaign's password manager | Gmail, Drive and Calendar connections (lost: everyone connects again) |
 | `GMAIL_DAILY_MAX` | leave unset (100), or a whole number from 1 to 400 | emails a person may send from their own Gmail in 24 hours, every campaign on this server counted |
 | `GOOGLE_PICKER_KEY`, `GOOGLE_CLOUD_PROJECT_NUMBER` | a browser API key limited to the campaign's public address and `https://docs.google.com/*` and to the Google Picker API; the project number (digits) of the project that holds the OAuth client (§7, *Google Drive and Sheets*) | Google Drive and Sheets |
-| `STARBASE_TILE_PROVIDER`, `STARBASE_TILE_KEY` | `stadia` for Stadia Maps (address, credit and zoom filled in), and its key only if it can't be told the campaign's web address (§5, Recipe A) | the map's background, instead of the free tiles |
-| `STARBASE_TILE_CARTO_KEY` | CARTO's free basemap key (§5, *The street map*) | the quiet *Clean* look; without it the map opens on OpenStreetMap's standard look |
-| `STARBASE_TILE_CLEAN` | `off` | never offer CARTO, key or not (the free map behind Google stays) |
-| `STARBASE_TILE_URL`, `STARBASE_TILE_ATTRIBUTION`, `STARBASE_TILE_MAX_ZOOM` | a tile provider the campaign has an agreement with: its `https://…/{z}/{x}/{y}.png` address, its credit line, its deepest zoom (§5, *The street map*) | the map's background, instead of the free tiles |
-| `STARBASE_TRUSTED_PROXIES` | leave unset on Render (one proxy). Set to the number of proxies in front if there is a CDN before Render | rate limits reading the right address |
+| `BASE_TILE_PROVIDER`, `BASE_TILE_KEY` | `stadia` for Stadia Maps (address, credit and zoom filled in), and its key only if it can't be told the campaign's web address (§5, Recipe A) | the map's background, instead of the free tiles |
+| `BASE_TILE_CARTO_KEY` | CARTO's free basemap key (§5, *The street map*) | the quiet *Clean* look; without it the map opens on OpenStreetMap's standard look |
+| `BASE_TILE_CLEAN` | `off` | never offer CARTO, key or not (the free map behind Google stays) |
+| `BASE_TILE_URL`, `BASE_TILE_ATTRIBUTION`, `BASE_TILE_MAX_ZOOM` | a tile provider the campaign has an agreement with: its `https://…/{z}/{x}/{y}.png` address, its credit line, its deepest zoom (§5, *The street map*) | the map's background, instead of the free tiles |
+| `BASE_TRUSTED_PROXIES` | leave unset on Render (one proxy). Set to the number of proxies in front if there is a CDN before Render | rate limits reading the right address |
 | `BASE_PLATFORM_PUBKEY` | the control centre's key: **ops.base.win → base.win’s key → Copy**, pasted here (never in `render.yaml` or git), then **Save and deploy** | **Open desk** from the control centre (section 8); while it's set and the campaign isn't made yet, sign-up here is closed — the control centre's first visit makes it |
-| `STARBASE_OWN_URL` | only if Render's own address is missing: `https://<service>.onrender.com` | the address the control centre's sign-in must name (Render sets `RENDER_EXTERNAL_URL` itself) |
+| `BASE_OWN_URL` | only if Render's own address is missing: `https://<service>.onrender.com` | the address the control centre's sign-in must name (Render sets `RENDER_EXTERNAL_URL` itself) |
 | `BASE_DOOR_KEY` | leave unset: it is only for the door (apps/door/README.md), which is not in use today. With the door, the same 32 or more random characters (`openssl rand -base64 32`) as the door's own | with the door only: each visitor keeping their own address for the sign-in and form limits |
-| `STARBASE_SITE_DOMAIN` | the website's own domain, on the day it moves onto base.win (`imaginesurrey.ca`; §2, *Moving the campaign's domain onto base.win*). Never in `render.yaml` | the website at `/` there and on its `www.`, nothing of the app; `/site/` sends people there (SITE.md) |
-| `STARBASE_SITE_FORMER_URL` | only while the present website keeps running at its own address: that address, `https://…` (§2) | its own links in emails it already sent, and its members' pages, still reach it |
-| `SITE_HOSTS` | other domains of the campaign's website, if any; not needed with `STARBASE_SITE_DOMAIN` | the website at `/` there, nothing of the app (SITE.md) |
-| `APP_HOSTS` | the app's other addresses on this server, comma-separated: an older address people still use, if there is one (`starbase.imaginesurrey.ca`, section 2); never the website's own domain | the app keeps answering there: none of them can be made the website's domain |
+| `BASE_SITE_DOMAIN` | the website's own domain, on the day it moves onto base.win (`imaginesurrey.ca`; §2, *Moving the campaign's domain onto base.win*). Never in `render.yaml` | the website at `/` there and on its `www.`, nothing of the app; `/site/` sends people there (SITE.md) |
+| `BASE_SITE_FORMER_URL` | only while the present website keeps running at its own address: that address, `https://…` (§2) | its own links in emails it already sent, and its members' pages, still reach it |
+| `SITE_HOSTS` | other domains of the campaign's website, if any; not needed with `BASE_SITE_DOMAIN` | the website at `/` there, nothing of the app (SITE.md) |
+| `APP_HOSTS` | the app's other addresses on this server, comma-separated: an older address people still use, if there is one (Imagine Surrey's older app address, section 2); never the website's own domain | the app keeps answering there: none of them can be made the website's domain |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | from Stripe: **test** keys on staging first, and never live ones there; **live** keys on production only once a test gift has gone all the way through | gifts and membership dues paid online on the website (INTEGRATIONS.md, *Online payments — Stripe*) |
 | `CALLHUB_API_KEY`, `CALLHUB_API_BASE` | from CallHub: the account's API key; the second only when the account's API is on another host than `https://api.callhub.io` | only if the campaign calls through CallHub's dialer: *Send to CallHub* on a list or a phone bank, each call's result back on the person (INTEGRATIONS.md, *Phone dialer — CallHub*) |
 
@@ -393,7 +405,7 @@ if the console lists the permission as sensitive.
 Twilio: set the number's incoming-message webhook to
 `https://imaginesurrey.base.win/api/public/twilio/sms` (HTTP POST). The
 other addresses Twilio calls back (delivery reports, calls) are sent with
-each text and call, built from `STARBASE_PUBLIC_URL`; nothing else to set.
+each text and call, built from `BASE_PUBLIC_URL`; nothing else to set.
 They answer at every address of the server, the website's own domain
 included, so no domain setting can lose a STOP.
 
@@ -406,7 +418,7 @@ the address off every later send, and a send says how many were delivered.
 Mailchimp: nothing to paste into Mailchimp by hand. With the key set,
 **Settings → Services → Mailchimp** → **Check**, then **Connect** (it gives
 Mailchimp the address unsubscribes come back to, built from
-`STARBASE_PUBLIC_URL`, and shows a signing secret once, for
+`BASE_PUBLIC_URL`, and shows a signing secret once, for
 `MAILCHIMP_WEBHOOK_SECRET`). It then asks before the first pull — the
 audience's name and how many people on file it would turn off for good
 (with nobody on file yet, it asks once the supporter file is in): make sure
@@ -427,7 +439,7 @@ are in.
 CallHub: nothing to paste into CallHub by hand. With the key set, **Settings
 → Services → Phone dialer (CallHub)** → **Check**, then **Connect** (it
 gives CallHub the address results come back to, built from
-`STARBASE_PUBLIC_URL`). It was built from CallHub's published
+`BASE_PUBLIC_URL`). It was built from CallHub's published
 documentation and has not been run against a real account: before the
 first calling night, make one test call and see its result arrive on the
 person (INTEGRATIONS.md has the steps and what is not confirmed).
@@ -441,7 +453,7 @@ Calendar (each adds its own permission and API to it afterwards):
 2. Google Auth Platform → **Branding**: the app name people see
    ("base.win" or the campaign's), a support email the campaign controls,
    and a home page and privacy policy on the domain of
-   `STARBASE_PUBLIC_URL`. Add that domain under **Authorized domains** and
+   `BASE_PUBLIC_URL`. Add that domain under **Authorized domains** and
    verify it in Google Search Console. The privacy policy is the
    campaign's to write: it says what base.win does with Google sign-in,
    Gmail, Drive, Calendar and Maps, and that its use of Google data
@@ -455,7 +467,7 @@ Calendar (each adds its own permission and API to it afterwards):
    `.../auth/userinfo.profile`.
 5. **Clients → Create client → Web application**, named "base.win", with
    the one redirect address **Settings → Services → Google** shows
-   (`<STARBASE_PUBLIC_URL>/api/auth/google/back`) and no JavaScript
+   (`<BASE_PUBLIC_URL>/api/auth/google/back`) and no JavaScript
    origins. Copy the client id and secret into Render at once
    (`GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`; Google shows
    the secret only once), and set `GOOGLE_TOKEN_KEY`.
@@ -491,12 +503,12 @@ The first sign-in lands in the **admin** (`/admin/`); the field app at `/` is
 what volunteers get, and what you see under *Field app ↗* in your account menu.
 
 1. Open `https://imaginesurrey.base.win/login` → **Set up base.win for
-   Imagine Surrey** (the name `STARBASE_ORG_NAME` gives; a deployment that
+   Imagine Surrey** (the name `BASE_ORG_NAME` gives; a deployment that
    gives none asks for it here). The first account is the manager; this
    creates the campaign's workspace (its jurisdiction's rules, the
    contribution limit seeded, its time zone) and closes sign-up. Everyone
    else joins by invite. Staging needs none of this: its sample campaign
-   makes itself (section 3, `STARBASE_SAMPLE`), and its sign-up stays closed
+   makes itself (section 3, `BASE_SAMPLE`), and its sign-up stays closed
    to everyone else.
 2. **Today** shows a banner if the server's time-zone data is stale (step 1)
    so a manager can't miss it.
@@ -603,7 +615,7 @@ look; CARTO's quieter *Clean* look needs the campaign's own free key:
 | Look | Provider |
 |---|---|
 | *Standard* (what the map opens on), *Muted*, *Dark* | OpenStreetMap's own tile servers (`tile.openstreetmap.org`) |
-| *Clean* (only with `STARBASE_TILE_CARTO_KEY`; then the map opens on it) | CARTO's light basemap (`basemaps.cartocdn.com`) |
+| *Clean* (only with `BASE_TILE_CARTO_KEY`; then the map opens on it) | CARTO's light basemap (`basemaps.cartocdn.com`) |
 
 **CARTO needs a key since late August 2026.** Without one, CARTO answers
 every tile with a picture reading "API KEY REQUIRED" on a blank background
@@ -616,14 +628,14 @@ on blank grey from 9 November. To have *Clean* back:
    owner's step; ask CARTO in writing whether a municipal elector
    organization counts as commercial use — reported caps: 1,000,000
    requests a month commercial, 5,000,000 non-commercial).
-2. Set `STARBASE_TILE_CARTO_KEY` on the campaign's production service in
+2. Set `BASE_TILE_CARTO_KEY` on the campaign's production service in
    Render. (Staging takes base.win's own key or none, never a client's:
    section 0.) Phones can see it, as CARTO's browser keys are meant to be
    used.
 3. Open Map → Show → Map check: the picture under *Street map* shows
    streets.
 
-`STARBASE_TILE_CLEAN=off` now means only "never offer CARTO"; the free map
+`BASE_TILE_CLEAN=off` now means only "never offer CARTO"; the free map
 behind Google stays. If a provider ever sends a notice instead of streets
 again, the map says *The street map isn’t showing streets*, and the Map
 check shows the picture this phone got (see INTEGRATIONS.md, *If the map is
@@ -670,11 +682,11 @@ this was written. Check them on the provider's site.
    their maps could then draw on this account. If Stadia will not take the
    full name alone, use a key instead (step 4, last line).
 4. On the campaign's production service in Render set
-   `STARBASE_TILE_PROVIDER=stadia` and save: the address, Stadia's credit
+   `BASE_TILE_PROVIDER=stadia` and save: the address, Stadia's credit
    line and zoom 20 are filled in. Not on staging: its address is not on
    this account's list (step 3), and a client's account is never used
    there (section 0). Only if domain authentication cannot be used, also
-   set `STARBASE_TILE_KEY=<key>`; phones can see that key.
+   set `BASE_TILE_KEY=<key>`; phones can see that key.
    (Stadia's credit is the one its documentation is reported to show; its
    site could not be read from where this was written.)
 5. Open **Map → Show → Map check**: the street map line names Stadia Maps
@@ -770,7 +782,7 @@ While Google refuses, volunteers keep streets: the map turns to the free
 map by itself and says *Google Maps isn’t loading — showing the free map*
 (a manager gets *Why?* beside it, which opens the Map check), and goes back
 to Google once it answers. The free map is CARTO's with
-`STARBASE_TILE_CARTO_KEY` set (and `STARBASE_TILE_CLEAN` not `off`),
+`BASE_TILE_CARTO_KEY` set (and `BASE_TILE_CLEAN` not `off`),
 otherwise OpenStreetMap's; it is always there, and no setting removes it.
 If it refuses too, the map says *The street map isn’t loading*, as before.
 
@@ -819,7 +831,7 @@ the tile hosts can't be reached, on stand-in tiles. Look at it on staging.
 ### Faith, Dwelling type and Campus
 
 This part is Imagine Surrey's (its 27 fields). A campaign on
-`STARBASE_BRAND=base` starts with ten fields, Faith and Dwelling type among
+`BASE_BRAND=base` starts with ten fields, Faith and Dwelling type among
 them as lists already, and no Campus; nothing is added to it at a later
 start. A campaign set up before that rule keeps what it was given:
 `node server/neutral-report.mjs` in the service's Shell lists it (it only
@@ -868,11 +880,11 @@ Some short names are kept for base.win itself and can't be a client's:
 
 The fallback, for us: New campaign's page also writes that client's own
 block for `render.yaml` (*Or ask us to add it to render.yaml*): its names
-(`base-win-<name>`, `base-win-<name>-db`), its `STARBASE_*` values,
-`STARBASE_BRAND=base` and `STARBASE_CANDIDATES=none`. Paste that block.
+(`base-win-<name>`, `base-win-<name>-db`), its `BASE_*` values,
+`BASE_BRAND=base` and `BASE_CANDIDATES=none`. Paste that block.
 Never copy `base-win`'s own block: it is Imagine Surrey's, and its
-`STARBASE_BRAND=imagine-surrey` setting would give the new client Imagine
-Surrey's set-up. The block gives those `STARBASE_*` lines as `sync: false`,
+`BASE_BRAND=imagine-surrey` setting would give the new client Imagine
+Surrey's set-up. The block gives those `BASE_*` lines as `sync: false`,
 each value after its `#`: set each value on the new service in Render
 (Environment) before its first sign-in. A fixed value there would be
 written over at every sync, and the release-settings check refuses it.
@@ -882,7 +894,7 @@ The change reaches Render by a Blueprint sync, so go through section 0,
 Auto Sync is on, and the name check. If none is listed, make the database
 and the service by hand, as New campaign's first card says, and do not
 make a new Blueprint over the services that are there. Then set
-`STARBASE_PUBLIC_URL` to `https://<name>.base.win` and add the custom
+`BASE_PUBLIC_URL` to `https://<name>.base.win` and add the custom
 domain as in step 1.
 
 ## 7 · Before the public link goes out
@@ -891,7 +903,7 @@ domain as in step 1.
 - Forgot password, once, on production with your own account: **Forgot your
   password?** → your email → the link in the email → a new password → you're
   in. *This campaign can’t send email yet* means production has no email key
-  or no `STARBASE_PUBLIC_URL`.
+  or no `BASE_PUBLIC_URL`.
 - A test newsletter reaches a real inbox with a working unsubscribe link.
 - Set the campaign’s mailing address, an email or phone, and the financial
   agent in **Website → Settings**: they go at the bottom of every email. Until
@@ -929,7 +941,7 @@ domain as in step 1.
   candidates, too);
 - Candidates: each one added under **Settings → Candidates** (name, office,
   race, email) and invited; a Mayor race with its own Path to win numbers
-  needs `STARBASE_SLATES` to name it (e.g. `mayor:Mayor,council:City
+  needs `BASE_SLATES` to name it (e.g. `mayor:Mayor,council:City
   council`). A candidate who must also work the desk needs a second account.
   Before anyone uses **call time**, your financial agent confirms against
   Elections BC's *Guide to Local Elections Campaign Financing* that the
@@ -938,7 +950,7 @@ domain as in step 1.
   log pledges, and the 60 days after which an unpaid pledge leaves Needs
   you. Two-step (above) matters here: candidates see donors' giving.
   **Settings → Services** shows the two-step key set up.
-- Google: `STARBASE_PUBLIC_URL` is the https address people use, the
+- Google: `BASE_PUBLIC_URL` is the https address people use, the
   redirect address from **Settings → Services → Google** is in the client's
   *Authorized redirect URIs* (when the public address changes: the new one
   in Google first, then Render), the audience is published (not Testing),
@@ -1027,7 +1039,7 @@ The control centre is not set up until these are done, in this order:
    needs the campaign to run a release that knows the control centre.
    Before this Promote, do the release check in section 0 on `base-win`
    (`DATABASE_URL` set; `GOOGLE_MAPS_TILES` unset or `off` unless the
-   owner chose Google; `STARBASE_PUBLIC_URL` is `https://imaginesurrey.base.win`) and
+   owner chose Google; `BASE_PUBLIC_URL` is `https://imaginesurrey.base.win`) and
    run it outside canvassing hours (section 1, step 3).
 5. In the control centre: **base.win’s key** → **Copy**. Paste it as
    `BASE_PLATFORM_PUBKEY` on `base-win` and on `base-win-staging` (Render →
@@ -1035,8 +1047,8 @@ The control centre is not set up until these are done, in this order:
 6. **Add a campaign that’s already running**: short name `imaginesurrey`,
    its name (Imagine Surrey), and its Render address (at the top of
    `base-win`'s page in Render, ending in `.onrender.com`). Then set the
-   **Sample (staging)** address on Campaigns:
-   `https://starbase-staging.onrender.com`.
+   **Sample (staging)** address on Campaigns: staging's Render address
+   (top of `base-win-staging`'s page in Render, ending in `.onrender.com`).
 
 ### Day to day
 
@@ -1167,7 +1179,7 @@ Render login can, from anywhere, with no line on the control centre's log.
    deploy, set up again, and put the new base.win key on every campaign.
 4. For every service the key could see: new email, texting and Google keys
    at their providers; a new database password (in Render);
-   `STARBASE_TWO_STEP_KEY` and `GOOGLE_TOKEN_KEY` changed the way their own
+   `BASE_TWO_STEP_KEY` and `GOOGLE_TOKEN_KEY` changed the way their own
    notes say (the new value first, the old one after a comma).
 5. In Render, look at each database's **Access Control** and each service's
    branch, repository, commands, addresses and **Events**. Whatever is not
@@ -1207,6 +1219,131 @@ plan keeps or for how long: open the database → **Recovery** in Render and
 read it before you rely on it. The app's own export (**Today → Export all
 data**) is for taking data out. Nothing loads an export back in, so it is
 not a restore.
+
+## 10 · The older setting names
+
+base.win's settings are all named `BASE_…` now (`BASE_TZ`, `BASE_BRAND`,
+`BASE_TWO_STEP_KEY` and so on). A server set up before 2026-12 may have
+its settings in Render under their older names, and they keep working. base.win reads the new name first and the older one while
+the new one is blank, so no campaign loses a setting and nobody is signed
+out. Nothing below is needed on the day of the release, and nothing breaks
+if any of it waits.
+
+**Where an older name shows,** and only while it is still set:
+
+- the campaign's **Settings → Services**, first row, *Older setting names
+  still on this server*: each older name, with the new name to copy its
+  value to;
+- the server's start-up log: one line per older name ("the setting … still
+  works; rename it to … in Render"), and one line when both names are set
+  and differ ("… is used": always the new one). The log never shows a value;
+- the control centre's **Render** board and each campaign's Render page:
+  the older names still set on that service, names only, each with its new
+  name. That is your checklist. `base-platform` (the control centre itself)
+  has none.
+
+**render.yaml.** Every setting is listed under its new name. A value
+`render.yaml` fixes (staging's sample settings, and `BASE_ENV` on staging
+and `base-win`) is fixed under the new name only. Each older name a service
+may still have stays listed, as `sync: false` with no value, so a Blueprint
+sync can neither remove it nor write over what Render holds under it. A new
+name a sync leaves blank counts as not set, so the older name's value is
+still the one used.
+
+The owner's to-do:
+
+1. **Before the first Blueprint sync of this release** (section 0, *Before
+   a Blueprint sync*): write down every `sync: false` value on
+   `base-win-staging` and `base-win` (Render → the service → Environment),
+   in your password manager, since some are keys; never in the repository
+   or a chat. Nothing in this release expects a sync to remove a setting.
+   This is so any one can be put back exactly if Render ever does.
+2. **GitHub, the day the rename pull request opens.** GitHub → the
+   repository → Settings → Branches: if a rule requires a check under its
+   older name, change it to `base-win`. We could not see that setting from
+   here. If there is no such rule, skip this.
+3. **Render settings, any time after the release is on production.** On
+   each campaign service (`base-win`, `base-win-staging`, and any other
+   client), for each older name its Settings → Services lists:
+   1. If the new name is not set yet: Render → the service → Environment,
+      add the new name and paste **exactly the same value**, copied, not
+      retyped. Save, and deploy. Where `render.yaml` already gives the new
+      name its value (staging's sample settings, `BASE_ENV`), there is
+      nothing to add: check the new one is there.
+   2. Check the campaign still shows the same brand, name, time zone and
+      map area in Settings → Services, and that its start-up log has no
+      "both set and differ" line for that setting.
+   3. Delete the older name. Save, and deploy. Settings → Services no
+      longer lists it.
+
+   If a later sync ever shows an older name again with no value, leave it:
+   a blank setting counts as not set. Three settings need extra care:
+   - **`BASE_TWO_STEP_KEY`:** copy the exact value. **Never press
+     Generate.** A new value would lock everyone out of two-step sign-in.
+     (If that happens, putting the old value back fixes it.)
+   - **`BASE_WEBSITE_KEY` (`base-win` only, while the website is hosted
+     apart):** copy it exactly. It must still match the key the website
+     holds, or unsubscribes stop reaching the website.
+   - **`BASE_SAMPLE_RESET` (staging only):** copy the same word. A word
+     staging hasn't seen before drops everything in staging's database and
+     makes the sample again (section 0).
+4. **The website's settings in Vercel: leave them.** The live website is
+   built from its own repository and knows only its three older names (for
+   base.win's address, its key and the inbound key;
+   `apps/web/src/lib/old-names.ts` lists them). It retires on the
+   `imaginesurrey.ca` move. Rename them only if this repository's copy of
+   the website is ever deployed there first; that copy reads both names.
+5. **Names that are not in the code.** Render already calls the services
+   `base-win`, `base-win-staging` and `base-platform`, and the databases
+   `base-win-db`, `base-win-staging-db` and `base-platform-db`. Check three
+   places we could not see, and rename any that still use the product's
+   first name: the Render Blueprint or project that groups them; any Render
+   environment group; the Google Cloud project and its OAuth app.
+6. **The `.onrender.com` addresses.** Render gives every service a
+   permanent machine address ending in `.onrender.com`, from the name the
+   service had when it was made. Staging was made under the product's first
+   name, so its machine address still carries it, and **Render can never
+   change it**: renaming the service changed only the name shown. Nobody
+   uses that address; people use `staging.base.win`. It shows at the top of
+   the service's page in Render and in the control centre, which uses it to
+   check it is talking to the right server. The only way to a clean one is
+   a fresh staging service (staging holds only made-up data): a separate
+   small job, with a new service, `staging.base.win` pointed at it, the
+   control centre updated and the old service deleted. For `base-win`,
+   look at the top of its Render page; if its machine address has the old
+   name too, the same applies, but moving production to a new service means
+   moving its database and domains. We don't recommend it.
+7. **Google's sign-in settings.** Google Cloud console → APIs & Services →
+   Credentials → your OAuth client: if Imagine Surrey's older app address
+   (item 10) is among the authorized addresses, remove it after that
+   address is retired.
+8. **Render log searches.** If you saved a Render log search or alert for
+   the older log prefix, change it to `base.win:`.
+9. **Imagine Surrey's privacy page.** The page as saved on its website
+   still names the database by the product's first name. A release never
+   changes a saved page. The new wording for the paragraph under *Who we
+   share it with* ("…copied into our own organizing database, base.win…")
+   is sent to you separately to approve; on your yes it is changed in
+   Website → Pages as a normal, recorded edit.
+10. **Imagine Surrey's older app address** (under `imaginesurrey.ca`, from
+    before the rename; it is in `base-win`'s `APP_HOSTS`, section 2). We
+    could not reach it on 2026-11-24. On the `imaginesurrey.ca` move, or
+    sooner if you confirm nobody uses it:
+    1. First, Vercel → the website → its settings: look at the setting for
+       base.win's address. If it is that older address, change it to
+       `https://imaginesurrey.base.win`, redeploy, and send one test
+       sign-up from the website; check it reaches the desk. Only then go on.
+    2. Remove it from `base-win`'s `APP_HOSTS`.
+    3. Remove it from `base-win`'s custom domains in Render.
+    4. Remove its DNS record.
+
+    Phones keep their saved work per address. If any volunteer still used
+    that address, open the app there once, online, before removing it.
+11. **Stage 2 in the control centre: nothing to do.** The rename does not
+    change how new campaigns are made in Render, so stage 2 stays as it is.
+12. **Old backups.** Exports downloaded before the rename have the older
+    file name; they are still good. New downloads are named
+    `base-win-export.json`.
 
 ## What base.win does on its own
 
