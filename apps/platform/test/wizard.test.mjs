@@ -17,6 +17,7 @@ import { ITEMS, MANUAL } from '../checklist.mjs';
 import { tzFor, renderSnippet, envText, envLines, mapBounds, parseCorner, hasValues, JURISDICTIONS, DENY } from '../snippets.mjs';
 import { JURISDICTIONS as SERVER_RULES, geoBounds } from '../../../server/lib/org.js';
 import { parseYaml, settingProblems, explainSettings } from '../../../server/test/release-safety.js';
+import { bothNames, newNameOf } from '../../../shared/old-names.js';
 
 baseEnv();
 const INST = 'EBESExQVFhcYGRobHB0eHw';
@@ -29,7 +30,7 @@ const fetcher = async (url) => {
   return { status: statuses.get(url) || 200, body: JSON.stringify(a), ms: 4 };
 };
 const health = (origin, over = {}) => ({
-  ok: true, database: 'ok', service: 'starbase', env: 'production', commit: 'd9130ae', tzdataCurrent: true, ownOrigin: origin, instance: INST,
+  ok: true, database: 'ok', service: 'base.win', env: 'production', commit: 'd9130ae', tzdataCurrent: true, ownOrigin: origin, instance: INST,
   address: 'https://x.base.win', entry: 'ready', platformKids: [currentKid()], setupOpen: false, campaignMade: true, store: 'postgres', ...over,
 });
 const { db } = await freshApp();
@@ -47,7 +48,9 @@ const envBlock = (body) => /<pre class="oc-pre" id="env-block">([\s\S]*?)<\/pre>
 const done = async (name) => new Map((await db.query('select item, done_by from checklist where campaign = $1 and done_at is not null', [name])).rows.map((r) => [r.item, r.done_by]));
 // What staging's sample is given in render.yaml: none of it may reach a client.
 const YAML = readFileSync(new URL('../../../render.yaml', import.meta.url), 'utf8');
-const sampleValue = (key) => new RegExp(`- key: ${key}\\b[^\\n]*\\n\\s+value: "([^"]+)"`).exec(YAML)?.[1] || '';
+// By the name the server reads first (shared/old-names.js): render.yaml may
+// list a setting under its older name too, with no value.
+const sampleValue = (key) => [...YAML.matchAll(/- key: ([A-Z0-9_]+)\b[^\n]*\n\s+value: "([^"]+)"/g)].find((m) => newNameOf(m[1]) === key)?.[2] || '';
 
 test('short names: the address’s own rule, the reserved list (sample, staging and demo too), no capitals, no trailing dash, not taken', async () => {
   for (const name of RESERVED) {
@@ -79,12 +82,14 @@ test('the map area: two corners as a map copies them, numbers in range, the firs
     assert.equal(mapBounds(sw, ne).problem, 'The first corner must be south-west of the second: lower on the map and further left.', `${sw} | ${ne}`);
   }
   // What it makes is what the campaign server reads (server/lib/org.js geoBounds), not its default.
-  const was = process.env.STARBASE_GEO_BOUNDS;
+  // (Under both of its names: the server reads the new one first, the older one after.)
+  const names = bothNames('BASE_GEO_BOUNDS');
+  const was = names.map((n) => process.env[n]);
   for (const [sw, ne] of [[NEW.sw, NEW.ne], ['-0.00001, -0.00001', '0.00001, 0.00001'], ['-90, -180', '90, 180'], ['0.0000001, 0', '5, 5']]) {
-    process.env.STARBASE_GEO_BOUNDS = mapBounds(sw, ne).bounds;
-    assert.equal(geoBounds(), process.env.STARBASE_GEO_BOUNDS, `${sw} | ${ne}`);
+    for (const n of names) process.env[n] = mapBounds(sw, ne).bounds;
+    assert.equal(geoBounds(), mapBounds(sw, ne).bounds, `${sw} | ${ne}`);
   }
-  if (was === undefined) delete process.env.STARBASE_GEO_BOUNDS; else process.env.STARBASE_GEO_BOUNDS = was;
+  names.forEach((n, i) => { if (was[i] === undefined) delete process.env[n]; else process.env[n] = was[i]; });
   // On the form: both are needed, with the way to find them, and what was typed is kept.
   const form = await (await b.get('/new')).text();
   assert.match(form, /<input class="input" id="sw" name="sw" type="text" value="" required/);
@@ -144,35 +149,35 @@ test('the .env block: every value asked for, its own address and map area, no op
   const body = await (await b.get('/c/riverton/setup')).text();
   const block = envBlock(body);
   const lines = block.split('\n');
-  for (const line of ['NODE_ENV=production', 'STARBASE_ENV=production', 'STARBASE_PUBLIC_URL=https://riverton.base.win', 'STARBASE_BRAND=base',
-    'STARBASE_ORG_NAME=&quot;Riverton Forward&quot;', 'STARBASE_JURISDICTION=bc-municipal', 'STARBASE_PROVINCE=ON', 'STARBASE_TZ=America/Toronto',
-    'STARBASE_CITY=&quot;Riverton&quot;', 'STARBASE_SLATES=&quot;council:City council&quot;', `STARBASE_GEO_BOUNDS=${BOUNDS}`, 'STARBASE_CANDIDATES=none',
+  for (const line of ['NODE_ENV=production', 'BASE_ENV=production', 'BASE_PUBLIC_URL=https://riverton.base.win', 'BASE_BRAND=base',
+    'BASE_ORG_NAME=&quot;Riverton Forward&quot;', 'BASE_JURISDICTION=bc-municipal', 'BASE_PROVINCE=ON', 'BASE_TZ=America/Toronto',
+    'BASE_CITY=&quot;Riverton&quot;', 'BASE_SLATES=&quot;council:City council&quot;', `BASE_GEO_BOUNDS=${BOUNDS}`, 'BASE_CANDIDATES=none',
     `BASE_PLATFORM_PUBKEY=${publicKeyOf(SIGNING).publicKey}`]) {
     assert.ok(lines.includes(line), line);
   }
-  assert.match(block, /STARBASE_TWO_STEP_KEY=<span data-random><\/span>/);
+  assert.match(block, /BASE_TWO_STEP_KEY=<span data-random><\/span>/);
   assert.match(block, /GOOGLE_TOKEN_KEY=<span data-random><\/span>/);
   // Each client is at its own address: no path under base.win, nothing of the door's.
   for (const bad of ['BASE_PATH', 'BASE_DOOR_KEY', 'BASE_CLIENTS', 'base.win/']) assert.ok(!block.includes(bad), bad);
   assert.doesNotMatch(body, /BASE_DOOR_KEY|BASE_CLIENTS|BASE_PATH|Tell the door|the door/);
   // Nothing of staging's sample: its settings, its Vancouver map box, its made-up opponents.
-  const sampleBox = sampleValue('STARBASE_GEO_BOUNDS');
-  const sampleOpponents = sampleValue('STARBASE_CANDIDATES');
+  const sampleBox = sampleValue('BASE_GEO_BOUNDS');
+  const sampleOpponents = sampleValue('BASE_CANDIDATES');
   assert.match(sampleBox, /^49\.\d+,-123\.\d+\|/, 'render.yaml still gives the sample a Vancouver box');
-  for (const bad of ['Vancouver', 'Surrey', 'Imagine', 'demo@', 'STARBASE_SAMPLE', 'FRAME_HOSTS', sampleBox, ...sampleBox.split(/[|,]/), ...sampleOpponents.split(/[;:]/).filter((part) => part.length > 3), 'Hartwell', 'Opposed']) assert.ok(!block.includes(bad), bad);
+  for (const bad of ['Vancouver', 'Surrey', 'Imagine', 'demo@', 'BASE_SAMPLE', 'FRAME_HOSTS', sampleBox, ...sampleBox.split(/[|,]/), ...sampleOpponents.split(/[;:]/).filter((part) => part.length > 3), 'Hartwell', 'Opposed']) assert.ok(!block.includes(bad), bad);
   // The map area and the opponents are one line each, and only ever these values.
-  assert.deepEqual(lines.filter((l) => l.includes('GEO_BOUNDS')), [`STARBASE_GEO_BOUNDS=${BOUNDS}`]);
-  assert.deepEqual(lines.filter((l) => l.includes('CANDIDATES')), ['STARBASE_CANDIDATES=none']);
+  assert.deepEqual(lines.filter((l) => l.includes('GEO_BOUNDS')), [`BASE_GEO_BOUNDS=${BOUNDS}`]);
+  assert.deepEqual(lines.filter((l) => l.includes('CANDIDATES')), ['BASE_CANDIDATES=none']);
   for (const k of DENY) assert.ok(!block.includes(k), k);
-  assert.ok(!DENY.includes('STARBASE_GEO_BOUNDS') && DENY.includes('STARBASE_SAMPLE') && DENY.includes('STARBASE_DEMO_EMAIL'));
-  assert.equal(envLines({ name: 'x', display: 'X', values: { races: [] } }).find((l) => l.key === 'STARBASE_CANDIDATES').value, 'none', 'never a list of names, whatever the campaign');
-  assert.match(body, /data-when-empty>STARBASE_TWO_STEP_KEY and GOOGLE_TOKEN_KEY are empty: press Generate next to each of these two in Render\./);
+  assert.ok(!DENY.includes('BASE_GEO_BOUNDS') && DENY.includes('BASE_SAMPLE') && DENY.includes('BASE_DEMO_EMAIL'));
+  assert.equal(envLines({ name: 'x', display: 'X', values: { races: [] } }).find((l) => l.key === 'BASE_CANDIDATES').value, 'none', 'never a list of names, whatever the campaign');
+  assert.match(body, /data-when-empty>BASE_TWO_STEP_KEY and GOOGLE_TOKEN_KEY are empty: press Generate next to each of these two in Render\./);
   // Before the address: no address card yet, Save address is the primary.
   assert.doesNotMatch(body, /Give it its address/);
   assert.match(body, /btn btn-primary" type="submit">Save address/);
   assert.equal([...body.matchAll(/btn-primary/g)].length, 1);
   // A quote or a line break in a name can't break the block.
-  assert.equal(envText({ name: 'x', display: 'A "B"\nC', values: { city: 'D\\E', races: [] } }).split('\n').find((l) => l.startsWith('STARBASE_ORG_NAME')), 'STARBASE_ORG_NAME="A B C"');
+  assert.equal(envText({ name: 'x', display: 'A "B"\nC', values: { city: 'D\\E', races: [] } }).split('\n').find((l) => l.startsWith('BASE_ORG_NAME')), 'BASE_ORG_NAME="A B C"');
 });
 
 test('no usable signing key: the key page’s warning in place of the block, never an empty BASE_PLATFORM_PUBKEY', async () => {
@@ -252,7 +257,7 @@ test('a new service on a release from before base.win sign-in: the address card 
   // Not up yet: wait for Live, and where to look if it never gets there.
   assert.equal((await b.post('/c/westcan/setup', { server_url: W })).status, 303);
   assert.match(await (await b.get('/c/westcan/setup')).text(), /class="oc-status oc-warn" role="status" aria-live="polite">Not answering yet\. Wait for ‘Live’ in Render, then press Save address again\. If it never goes ‘Live’, its Render log says why: with DATABASE_URL empty the server won’t start\.</);
-  answers.set(`${W}/api/health`, { ok: true, database: 'ok', service: 'starbase', env: 'production', commit: '04ab25f', tzdataCurrent: true });
+  answers.set(`${W}/api/health`, { ok: true, database: 'ok', service: 'base.win', env: 'production', commit: '04ab25f', tzdataCurrent: true });
   assert.equal((await b.post('/c/westcan/setup', { server_url: W })).status, 303);
   const body = await (await b.get('/c/westcan/setup')).text();
   assert.match(body, /Answering, but on a release from before base\.win sign-in\. Run Promote to production \(GitHub → Actions\), wait for ‘Live’ in Render, then press Save address again\./);
@@ -306,7 +311,7 @@ test('Set-up steps for a campaign that was already running: a short page, only b
   assert.match(body, /Custom Domains<\/b> → add <code>running\.base\.win<\/code>/);
   assert.match(body, /<b>CNAME<\/b> record named <code>running<\/code> pointing at <code>base-win\.onrender\.com<\/code>/);
   // Never the brand, the campaign values or the two random keys; no block, no form.
-  assert.doesNotMatch(body, /STARBASE_|NODE_ENV|GOOGLE_TOKEN_KEY|TWO_STEP|data-random|id="env-block"|yaml-snippet|undefined|<form method="post" action="\/c\/running/);
+  assert.doesNotMatch(body, /BASE_(?!PLATFORM_PUBKEY)|NODE_ENV|GOOGLE_TOKEN_KEY|TWO_STEP|data-random|id="env-block"|yaml-snippet|undefined|<form method="post" action="\/c\/running/);
   assert.equal([...body.matchAll(/[A-Z][A-Z0-9_]{3,}=/g)].map((m) => m[0]).join(), 'BASE_PLATFORM_PUBKEY=', 'one setting line on the page');
   assert.equal([...body.matchAll(/btn-primary/g)].length, 0);
   // Its page links here, and the page says when sign-in is already ready there.
@@ -332,7 +337,7 @@ test('Set-up steps for a campaign that was already running: a short page, only b
 test('a running campaign on a release from before base.win sign-in: its own address answers and is never called another server; Promote comes first', async () => {
   const O = 'https://base-win-oldrun.onrender.com';
   // What such a release answers, at its Render address and at its own address.
-  const old = { ok: true, database: 'ok', service: 'starbase', env: 'production', commit: '04ab25f', tzdataCurrent: true };
+  const old = { ok: true, database: 'ok', service: 'base.win', env: 'production', commit: '04ab25f', tzdataCurrent: true };
   answers.set(`${O}/api/health`, old);
   answers.set('https://oldrun.base.win/api/health', old);
   assert.equal((await b.post('/existing', { name: 'oldrun', display: 'Example Old', server_url: O })).headers.get('location'), '/c/oldrun');
@@ -389,9 +394,10 @@ test('auto ticks are set from the checks and never cleared by a later failure', 
 
 test('the render.yaml block for us: the production block’s keys only, nothing denied, nothing of the door, no secret with a value', () => {
   const prodBlock = YAML.slice(YAML.indexOf('name: base-win\n'), YAML.indexOf('name: base-platform\n'));
-  const prodKeys = new Set([...prodBlock.matchAll(/- key: ([A-Z0-9_]+)/g)].map((m) => m[1]));
+  // render.yaml's keys by the name the server reads first (shared/old-names.js).
+  const prodKeys = new Set([...prodBlock.matchAll(/- key: ([A-Z0-9_]+)/g)].map((m) => newNameOf(m[1])));
   // What a new client is given that Imagine Surrey's own block may not name.
-  const A_NEW_CLIENT = ['STARBASE_PROVINCE', 'STARBASE_TWO_STEP_KEY', 'STARBASE_GEO_BOUNDS', 'STARBASE_CANDIDATES'];
+  const A_NEW_CLIENT = ['BASE_PROVINCE', 'BASE_TWO_STEP_KEY', 'BASE_GEO_BOUNDS', 'BASE_CANDIDATES'];
   const snippet = renderSnippet({ name: 'riverton', display: 'Riverton Forward', values: { city: 'Riverton', province: 'ON', rules: 'bc-municipal', tz: 'America/Toronto', races: ['council'], bounds: BOUNDS } });
   const keys = [...snippet.matchAll(/- key: ([A-Z0-9_]+)/g)].map((m) => m[1]);
   for (const k of keys) assert.ok(prodKeys.has(k) || A_NEW_CLIENT.includes(k), k);
@@ -402,18 +408,18 @@ test('the render.yaml block for us: the production block’s keys only, nothing 
   const after = (k) => lines[at(k) + 1].trim();
   const shown = (k) => (/#\s*(.*)$/.exec(lines[at(k)]) || [])[1];
   assert.equal(after('BASE_PLATFORM_PUBKEY'), 'sync: false');
-  assert.equal(after('STARBASE_TWO_STEP_KEY'), 'generateValue: true');
+  assert.equal(after('BASE_TWO_STEP_KEY'), 'generateValue: true');
   assert.equal(after('GOOGLE_TOKEN_KEY'), 'generateValue: true');
   assert.equal(after('NODE_ENV'), 'value: production');
-  assert.equal(after('STARBASE_ENV'), 'value: production');
+  assert.equal(after('BASE_ENV'), 'value: production');
   // The client's own settings: sync: false, each value shown after its #.
-  for (const [k, v] of [['STARBASE_PUBLIC_URL', 'https://riverton.base.win'], ['STARBASE_BRAND', 'base'], ['STARBASE_ORG_NAME', 'Riverton Forward'],
-    ['STARBASE_JURISDICTION', 'bc-municipal'], ['STARBASE_PROVINCE', 'ON'], ['STARBASE_TZ', 'America/Toronto'], ['STARBASE_CITY', 'Riverton'],
-    ['STARBASE_SLATES', 'council:City council'], ['STARBASE_GEO_BOUNDS', BOUNDS], ['STARBASE_CANDIDATES', 'none']]) {
+  for (const [k, v] of [['BASE_PUBLIC_URL', 'https://riverton.base.win'], ['BASE_BRAND', 'base'], ['BASE_ORG_NAME', 'Riverton Forward'],
+    ['BASE_JURISDICTION', 'bc-municipal'], ['BASE_PROVINCE', 'ON'], ['BASE_TZ', 'America/Toronto'], ['BASE_CITY', 'Riverton'],
+    ['BASE_SLATES', 'council:City council'], ['BASE_GEO_BOUNDS', BOUNDS], ['BASE_CANDIDATES', 'none']]) {
     assert.equal(after(k), 'sync: false', k);
     assert.equal(shown(k), v, `${k}: its value shown as a comment`);
   }
-  assert.doesNotMatch(snippet, /^\s*value: (?!production$)/m, 'no fixed value but NODE_ENV and STARBASE_ENV');
+  assert.doesNotMatch(snippet, /^\s*value: (?!production$)/m, 'no fixed value but NODE_ENV and BASE_ENV');
   assert.ok(!snippet.includes(publicKeyOf(SIGNING).publicKey));
   assert.match(snippet, /name: base-win-riverton\n/);
   // The database: 0.5 CPU, 1 GB, by the name Render gives that plan.
@@ -430,7 +436,7 @@ test('the render.yaml block for us, pasted into render.yaml, passes the release-
   const s = doc.services.find((x) => x.name === 'base-win-riverton');
   assert.ok(s, 'the new service is read');
   assert.ok(doc.databases.find((x) => x.name === 'base-win-riverton-db'), 'the new database is read');
-  assert.equal(s.envVars.find((v) => v.key === 'STARBASE_CITY').sync, false);
+  assert.equal(s.envVars.find((v) => v.key === 'BASE_CITY').sync, false);
   const problems = settingProblems(doc);
   if (problems.length) assert.fail(explainSettings(problems));
 });

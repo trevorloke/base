@@ -1,5 +1,7 @@
 // What each line of the operator log says, in plain words. Every action the
-// console writes has words here (a test checks).
+// console writes has words here (a test checks). A setting named in a line
+// sealed by an older release is said by its name today (shared/old-names.js).
+import { newNameOf } from '../../shared/old-names.js';
 const ENV = { production: 'production', staging: 'staging' };
 const envWord = (p) => ENV[p?.env] || 'the';
 
@@ -10,7 +12,7 @@ const RENDER_ASKED = {
   key: () => 'set base.win’s key',
   domain: (p) => (p.host ? `add ${p.host}` : 'add its address'),
   'close-db': () => 'close the database to the internet',
-  set: (p) => `add ${p.setting || 'a missing setting'}`,
+  set: (p) => `add ${p.setting ? newNameOf(String(p.setting)) : 'a missing setting'}`,
   make: (p) => ({ database: `make the database${p.label ? ` ${p.label}` : ''}`, service: `make the service${p.label ? ` ${p.label}` : ''}`, domain: `add ${p.host || 'its address'}` }[p.step] || 'make the campaign'),
 };
 const RENDER_DENIED = { code: 'wrong code', old: 'old page', target: 'not this campaign’s service', caps: 'too many changes', busy: 'another change was still running', state: 'nothing to change', gate: 'Check Render’s answers hasn’t opened it', wait: 'wait two minutes after a make with no answer' };

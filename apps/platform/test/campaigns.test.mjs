@@ -13,7 +13,7 @@ baseEnv();
 const INST = 'EBESExQVFhcYGRobHB0eHw';
 const A = 'https://base-win-a.onrender.com';
 const B = 'https://base-win-b.onrender.com';
-const S = 'https://starbase-staging.onrender.com';
+const S = 'https://base-win-staging.onrender.com';
 const answers = new Map();
 const fetcher = async (url) => {
   const a = answers.get(url);
@@ -21,7 +21,7 @@ const fetcher = async (url) => {
   return { status: a.status || 200, body: JSON.stringify(a.body), ms: 4 };
 };
 const health = (origin, over = {}) => ({
-  ok: true, database: 'ok', service: 'starbase', env: 'production', commit: 'd9130ae', tzdataCurrent: true, ownOrigin: origin, instance: INST,
+  ok: true, database: 'ok', service: 'base.win', env: 'production', commit: 'd9130ae', tzdataCurrent: true, ownOrigin: origin, instance: INST,
   address: 'https://a.base.win', entry: 'ready', platformKids: [currentKid()], setupOpen: false, campaignMade: true, store: 'postgres', ...over,
 });
 const { db } = await freshApp();
@@ -99,7 +99,7 @@ test('a campaign on a release from before base.win sign-in: said so, not “some
   // On the pages: the line says what to do, and there is nothing to open.
   const O = 'https://base-win-old.onrender.com';
   await db.transaction((tx) => createCampaign(tx, { name: 'old', display: 'Example Old', serverUrl: O }));
-  answers.set(`${O}/api/health`, { body: { ok: true, database: 'ok', service: 'starbase', env: 'production', organization: 'Example Old', commit: '04ab25f', build: 'index-x.js', tzdataCurrent: true } });
+  answers.set(`${O}/api/health`, { body: { ok: true, database: 'ok', service: 'base.win', env: 'production', organization: 'Example Old', commit: '04ab25f', build: 'index-x.js', tzdataCurrent: true } });
   await b.post('/c/old/check-now', {});
   const page = await (await b.get('/c/old')).text();
   assert.match(page, /<li class="chip chip-warn">On a release from before base\.win sign-in<\/li>/);
@@ -242,7 +242,7 @@ test('two environments can’t save the same address; a changed address forgets 
   assert.equal((await pinned('sample')).server_url, null);
   assert.equal((await b.post('/c/sample/edit', { display: 'Sample (staging)', server_url: 'http://insecure.example.org' })).status, 400);
   answers.set(`${S}/api/health`, { body: health(S, { env: 'staging', instance: 'SSSSSSSSSSSSSSSSSSSSSS' }) });
-  assert.equal((await b.post('/c/sample/edit', { display: 'Sample (staging)', server_url: 'HTTPS://Starbase-Staging.onrender.com:443/' })).status, 303);
+  assert.equal((await b.post('/c/sample/edit', { display: 'Sample (staging)', server_url: 'HTTPS://Base-Win-Staging.onrender.com:443/' })).status, 303);
   assert.deepEqual(await pinned('sample'), { instance: 'SSSSSSSSSSSSSSSSSSSSSS', server_url: S }, 'saved normalized, polled and pinned at once');
   assert.equal((await b.post('/c/a/edit', { display: 'Renamed A', server_url: 'https://base-win-a2.onrender.com' })).status, 303);
   assert.deepEqual(await pinned('a'), { instance: null, server_url: 'https://base-win-a2.onrender.com' });

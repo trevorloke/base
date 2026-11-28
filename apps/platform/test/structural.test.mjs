@@ -21,7 +21,8 @@ const sources = (dir = ROOT) => readdirSync(dir, { withFileTypes: true }).flatMa
 const files = sources().map((path) => ({ path: path.slice(ROOT.length), text: readFileSync(path, 'utf8') }));
 
 test('only the server’s small shared helpers: never its database, extensions, routes or index', () => {
-  const allowed = new Set(['server/lib/auth.js', 'server/lib/twostep.js', 'server/lib/guard.js', 'server/lib/events.js']);
+  // shared/old-names.js: the table of older setting names, data and pure functions only.
+  const allowed = new Set(['server/lib/auth.js', 'server/lib/twostep.js', 'server/lib/guard.js', 'server/lib/events.js', 'shared/old-names.js']);
   for (const f of files) {
     for (const m of f.text.matchAll(/(?:\bfrom\s+|\bimport\s*\(\s*)'([^']+)'/g)) {
       const spec = m[1];

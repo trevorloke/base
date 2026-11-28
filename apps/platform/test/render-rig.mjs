@@ -16,7 +16,7 @@ import { makeRender } from '../render-api.mjs';
 import { currentKid } from '../keys.mjs';
 
 export const ADDR = {
-  sample: 'https://starbase-staging.onrender.com',
+  sample: 'https://base-win-staging.onrender.com',
   a: 'https://base-win-a.onrender.com',
   b: 'https://base-win-b.onrender.com',
   imaginesurrey: 'https://base-win.onrender.com',

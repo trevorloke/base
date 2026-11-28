@@ -24,6 +24,7 @@ import { pollOnce } from '../poller.mjs';
 import { makeApp } from '../server.mjs';
 import { WRITABLE, writableFor, neededFor } from '../render-guard.mjs';
 import { pubkeyValue } from '../keys.mjs';
+import { settingNames } from '../../../shared/old-names.js';
 
 const copy = (x) => JSON.parse(JSON.stringify(x));
 const ofOthers = (world, mine) => copy({
@@ -68,7 +69,7 @@ test('N2: a campaign added as already running: nothing is “missing”, nothing
   const camp = (await r.db.query("select * from campaigns where name = 'imaginesurrey'")).rows[0];
   assert.deepEqual(camp.values, {}, 'none of its settings are kept here');
   const mine = r.world.settingsOf(IDS.first);
-  for (const never of ['STARBASE_CANDIDATES', 'STARBASE_GEO_BOUNDS', 'STARBASE_PROVINCE']) {
+  for (const never of ['BASE_CANDIDATES', 'BASE_GEO_BOUNDS', 'BASE_PROVINCE']) {
     assert.ok(!(never in mine), `${never} was never set on its service`);
     assert.ok(!neededFor(camp).includes(never), `${never} is not “needed” there`);
   }
@@ -87,18 +88,19 @@ test('N2: a campaign added as already running: nothing is “missing”, nothing
   r.mark();
   const page = await r.page('/c/imaginesurrey/render');
   assert.match(page.body, /<dt>Settings<\/dt><dd>Nothing missing/);
-  assert.doesNotMatch(page.body, /STARBASE_|Missing:/);
+  assert.doesNotMatch(page.body, /BASE_|Missing:/);
   assert.match(page.body, /<dt>Addresses<\/dt><dd>imaginesurrey\.base\.win · Verified<br>imaginesurrey\.ca<\/dd>/, 'its own domain is listed plain: no state, no flag');
   const buttons = [...page.body.matchAll(/action="\/c\/imaginesurrey\/render\/([a-z-]+)"/g)].map((m) => m[1]);
   assert.deepEqual(buttons, ['deploy', 'restart'], 'nothing to set, add or close');
   assert.ok(!page.body.includes('/site'), 'its public address setting is never shown or judged');
   // Only "is it set?" for the settings it should have; never the three it never had, never a secret.
   const asked = r.calls().filter((c) => c.includes('/env-vars/')).map((c) => c.split('/env-vars/')[1]).sort();
-  assert.deepEqual(asked, neededFor(camp).slice().sort());
+  // Each by its name today and its older name (shared/old-names.js).
+  assert.deepEqual(asked, neededFor(camp).flatMap(settingNames).sort());
   const board = await r.page('/render');
   assert.doesNotMatch(board.body, /Imagine Surrey: /, 'nothing needs a look there');
   for (const what of ['set', 'make', 'settings', 'env']) {
-    assert.equal((await r.b.post(`/c/imaginesurrey/render/${what}`, { key: 'STARBASE_CANDIDATES', value: 'none', setting: 'STARBASE_PUBLIC_URL' })).status, 404, `no ${what} route`);
+    assert.equal((await r.b.post(`/c/imaginesurrey/render/${what}`, { key: 'BASE_CANDIDATES', value: 'none', setting: 'BASE_PUBLIC_URL' })).status, 404, `no ${what} route`);
   }
   // Its key is set and its sign-in is ready: Set base.win's key isn't offered; pressing through anyway sets only that one name.
   assert.deepEqual(touching(r.writes()), [], 'opening its page changed nothing');
@@ -144,17 +146,17 @@ test('N4: a campaign made here gets nothing of another campaign’s: its own val
   assert.ok(svc && db, 'made');
   const mine = r.world.settingsOf(svc.id);
   // Its time zone is its own (the rig's campaigns are in B.C.): the rest is looked through.
-  assert.equal(mine.STARBASE_TZ, 'America/Vancouver');
-  const text = JSON.stringify({ ...mine, STARBASE_TZ: undefined });
+  assert.equal(mine.BASE_TZ, 'America/Vancouver');
+  const text = JSON.stringify({ ...mine, BASE_TZ: undefined });
   const ofFirst = Object.values(r.world.settingsOf(IDS.first)).filter((v) => !['production', 'bc-municipal', 'America/Vancouver', 'council:City council'].includes(v));
   const ofStaging = Object.values(r.world.settingsOf(IDS.staging)).filter((v) => !['production'].includes(v));
-  // (Words of four letters or more: a one-letter setting like STARBASE_SAMPLE=1 says nothing.)
+  // (Words of four letters or more: a one-letter setting like BASE_SAMPLE=1 says nothing.)
   for (const v of [...ofFirst, ...ofStaging, SENTINELS.db, 'Surrey', 'Imagine', 'imagine', 'Vancouver', 'Hartwell', 'Opposed', 'demo@'].filter((x) => x.length >= 4)) assert.ok(!text.includes(v), `the new service holds ${v}`);
-  for (const k of ['STARBASE_SAMPLE', 'STARBASE_SAMPLE_RESET', 'STARBASE_DEMO_EMAIL', 'STARBASE_FRAME_HOSTS', 'RESEND_API_KEY', 'APP_HOSTS', 'STARBASE_OWN_URL']) assert.ok(!(k in mine), k);
-  assert.equal(mine.STARBASE_BRAND, 'base');
-  assert.equal(mine.STARBASE_CANDIDATES, 'none');
-  assert.equal(mine.STARBASE_PUBLIC_URL, 'https://x.base.win');
-  assert.equal(mine.STARBASE_ORG_NAME, 'Example X');
+  for (const k of ['BASE_SAMPLE', 'BASE_SAMPLE_RESET', 'BASE_DEMO_EMAIL', 'BASE_FRAME_HOSTS', 'RESEND_API_KEY', 'APP_HOSTS', 'BASE_OWN_URL']) assert.ok(!(k in mine), k);
+  assert.equal(mine.BASE_BRAND, 'base');
+  assert.equal(mine.BASE_CANDIDATES, 'none');
+  assert.equal(mine.BASE_PUBLIC_URL, 'https://x.base.win');
+  assert.equal(mine.BASE_ORG_NAME, 'Example X');
   assert.equal(mine.DATABASE_URL, `postgres://u:${SENTINELS.newDb}-${db.id}@${db.id}-a/db`, 'its own new database');
   const others = [IDS.a, IDS.aDb, IDS.b, IDS.bDb, IDS.first, IDS.firstDb, IDS.staging, IDS.stagingDb, IDS.other, IDS.otherDb, IDS.platformDb];
   for (const c of r.world.calls.slice(r.from)) {
@@ -167,7 +169,7 @@ test('N4: a campaign made here gets nothing of another campaign’s: its own val
 test('N5: no Render page or log line for one campaign holds another’s name, display name or address', async () => {
   const r = await rig();
   await r.connect('a', 'b', 'imaginesurrey', 'sample');
-  const others = ['Example B', 'base-win-b', 'b.base.win', ADDR.b, 'Imagine', 'Surrey', 'imaginesurrey', ADDR.imaginesurrey, 'base-win-db', 'base-win-staging', 'starbase-staging',
+  const others = ['Example B', 'base-win-b', 'b.base.win', ADDR.b, 'Imagine', 'Surrey', 'imaginesurrey', ADDR.imaginesurrey, 'base-win-db', 'base-win-staging', 'base-win-staging',
     'Sample (staging)', IDS.b, IDS.first, IDS.staging, IDS.bDb, IDS.firstDb, 'Hartwell', 'Vancouver', SENTINELS.client, SENTINELS.db];
   const pages = [];
   pages.push((await r.page('/c/a/render')).body);

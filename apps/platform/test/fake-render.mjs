@@ -21,10 +21,12 @@
 //   world.calls      every request, in order
 //   world.forbidden  every request the control centre must never make (any
 //                    delete, a whole-settings write or read, a suspend, a
-//                    change to a service, a setting off the readable list,
+//                    change to a service, a setting off the readable list
+//                    (or a write under a setting's older name),
 //                    a database change that isn't a shorter allow-list, or
 //                    a path it doesn't know). Always [].
 import { createServer } from 'node:http';
+import { settingNames } from '../../../shared/old-names.js';
 
 export const KEY = 'rnd_SENTINELRENDERKEY0123456789abcdef';
 export const OWNER = 'tea-basewin000000000001';
@@ -45,18 +47,20 @@ export const SENTINELS = {
 };
 // The names the control centre may ask about one at a time (its own copy:
 // if render-guard.mjs grows a name, this fake calls it forbidden).
-const READABLE = ['NODE_ENV', 'STARBASE_ENV', 'STARBASE_PUBLIC_URL', 'STARBASE_BRAND', 'STARBASE_ORG_NAME', 'STARBASE_JURISDICTION', 'STARBASE_TZ',
-  'STARBASE_CITY', 'STARBASE_SLATES', 'STARBASE_PROVINCE', 'STARBASE_GEO_BOUNDS', 'STARBASE_CANDIDATES', 'BASE_PLATFORM_PUBKEY'];
+const READABLE = ['NODE_ENV', 'BASE_ENV', 'BASE_PUBLIC_URL', 'BASE_BRAND', 'BASE_ORG_NAME', 'BASE_JURISDICTION', 'BASE_TZ',
+  'BASE_CITY', 'BASE_SLATES', 'BASE_PROVINCE', 'BASE_GEO_BOUNDS', 'BASE_CANDIDATES', 'BASE_PLATFORM_PUBKEY'];
+// Each may also be asked about by its older name (shared/old-names.js), never written under it.
+const READ_ANY = READABLE.flatMap(settingNames);
 
 const secrets = (id) => ({
   RESEND_API_KEY: `${SENTINELS.client}-${id}`,
   DATABASE_URL: `postgres://u:${SENTINELS.db}-${id}@dpg-x/db`,
-  STARBASE_TWO_STEP_KEY: `${SENTINELS.client}-two-step-${id}`,
+  BASE_TWO_STEP_KEY: `${SENTINELS.client}-two-step-${id}`,
 });
 const clientSettings = (name, display) => ({
-  NODE_ENV: 'production', STARBASE_ENV: 'production', STARBASE_PUBLIC_URL: `https://${name}.base.win`, STARBASE_BRAND: 'base',
-  STARBASE_ORG_NAME: display, STARBASE_JURISDICTION: 'bc-municipal', STARBASE_TZ: 'America/Vancouver', STARBASE_CITY: 'Exampleton',
-  STARBASE_SLATES: 'council:City council', STARBASE_PROVINCE: 'BC', STARBASE_GEO_BOUNDS: '50.6,-120.5|50.8,-120.2', STARBASE_CANDIDATES: 'none',
+  NODE_ENV: 'production', BASE_ENV: 'production', BASE_PUBLIC_URL: `https://${name}.base.win`, BASE_BRAND: 'base',
+  BASE_ORG_NAME: display, BASE_JURISDICTION: 'bc-municipal', BASE_TZ: 'America/Vancouver', BASE_CITY: 'Exampleton',
+  BASE_SLATES: 'council:City council', BASE_PROVINCE: 'BC', BASE_GEO_BOUNDS: '50.6,-120.5|50.8,-120.2', BASE_CANDIDATES: 'none',
 });
 
 const service = ({ id, name, ownerId = OWNER, repo = REPO, branch = 'production', url = `https://${name}.onrender.com`, plan = 'starter', docker = true, build = null, createdAt = '2026-10-01T18:00:00Z' }) => ({
@@ -80,7 +84,7 @@ export const fakeWorld = (over = {}) => {
     key: KEY,
     services: [
       service({ id: IDS.platform, name: 'base-platform', branch: over.platformBranch || 'production', docker: false, build: over.platformBuild || 'npm ci --omit=dev --ignore-scripts' }),
-      service({ id: IDS.staging, name: 'base-win-staging', branch: 'main', url: 'https://starbase-staging.onrender.com' }),
+      service({ id: IDS.staging, name: 'base-win-staging', branch: 'main', url: 'https://base-win-staging.onrender.com' }),
       service({ id: IDS.first, name: 'base-win' }),
       service({ id: IDS.a, name: 'base-win-a' }),
       service({ id: IDS.b, name: 'base-win-b' }),
@@ -97,14 +101,14 @@ export const fakeWorld = (over = {}) => {
     settings: {
       [IDS.platform]: { NODE_ENV: 'production', OPS_HOST: 'ops.example.org', RENDER_API_KEY: KEY, ...secrets('platform') },
       [IDS.staging]: {
-        NODE_ENV: 'production', STARBASE_ENV: 'staging', STARBASE_SAMPLE: '1', STARBASE_SAMPLE_RESET: 'nightly', STARBASE_DEMO_EMAIL: 'demo@example.org',
-        STARBASE_FRAME_HOSTS: 'example.org', STARBASE_ORG_NAME: 'Hartwell Sample Campaign', STARBASE_CITY: 'Vancouver', BASE_PLATFORM_PUBKEY: 'x'.repeat(43), ...secrets('staging'),
+        NODE_ENV: 'production', BASE_ENV: 'staging', BASE_SAMPLE: '1', BASE_SAMPLE_RESET: 'nightly', BASE_DEMO_EMAIL: 'demo@example.org',
+        BASE_FRAME_HOSTS: 'example.org', BASE_ORG_NAME: 'Hartwell Sample Campaign', BASE_CITY: 'Vancouver', BASE_PLATFORM_PUBKEY: 'x'.repeat(43), ...secrets('staging'),
       },
       // A hand-made client: its own brand and names, and three settings it never had.
       [IDS.first]: {
-        NODE_ENV: 'production', STARBASE_ENV: 'production', STARBASE_PUBLIC_URL: 'https://imaginesurrey.base.win/site', STARBASE_BRAND: 'imagine-surrey',
-        STARBASE_ORG_NAME: 'Imagine Surrey', STARBASE_JURISDICTION: 'bc-municipal', STARBASE_TZ: 'America/Vancouver', STARBASE_CITY: 'Surrey',
-        STARBASE_SLATES: 'council:City council', BASE_PLATFORM_PUBKEY: 'y'.repeat(43), ...secrets('first'),
+        NODE_ENV: 'production', BASE_ENV: 'production', BASE_PUBLIC_URL: 'https://imaginesurrey.base.win/site', BASE_BRAND: 'imagine-surrey',
+        BASE_ORG_NAME: 'Imagine Surrey', BASE_JURISDICTION: 'bc-municipal', BASE_TZ: 'America/Vancouver', BASE_CITY: 'Surrey',
+        BASE_SLATES: 'council:City council', BASE_PLATFORM_PUBKEY: 'y'.repeat(43), ...secrets('first'),
       },
       [IDS.a]: { ...clientSettings('a', 'Example A'), ...secrets('a') },
       [IDS.b]: { ...clientSettings('b', 'Example B'), BASE_PLATFORM_PUBKEY: 'z'.repeat(43), ...secrets('b') },
@@ -220,7 +224,7 @@ export const fakeWorld = (over = {}) => {
     return { status: 201, json: publicDb(d) };
   };
   // What a new client's service may be given, and nothing else.
-  const MAY_SET = [...READABLE, 'DATABASE_URL', 'STARBASE_TWO_STEP_KEY', 'GOOGLE_TOKEN_KEY'];
+  const MAY_SET = [...READABLE, 'DATABASE_URL', 'BASE_TWO_STEP_KEY', 'GOOGLE_TOKEN_KEY'];
   const makeService = (line, body) => {
     const no2 = () => no(`${line} ${JSON.stringify(body)}`);
     if (!keysAre(body, ['type', 'name', 'ownerId', 'repo', 'branch', 'autoDeploy', 'envVars', 'serviceDetails'])) return no2();
@@ -236,10 +240,10 @@ export const fakeWorld = (over = {}) => {
     let wires = null;
     for (const e of body.envVars) {
       if (keysAre(e, ['key', 'generateValue'])) {
-        if (e.generateValue !== true || !['STARBASE_TWO_STEP_KEY', 'GOOGLE_TOKEN_KEY'].includes(e.key)) return no2();
+        if (e.generateValue !== true || !['BASE_TWO_STEP_KEY', 'GOOGLE_TOKEN_KEY'].includes(e.key)) return no2();
         settings[e.key] = `${SENTINELS.client}-generated-${e.key}`;
       } else if (keysAre(e, ['key', 'value']) && typeof e.value === 'string') {
-        if (['STARBASE_TWO_STEP_KEY', 'GOOGLE_TOKEN_KEY'].includes(e.key)) return no2();
+        if (['BASE_TWO_STEP_KEY', 'GOOGLE_TOKEN_KEY'].includes(e.key)) return no2();
         if (e.key === 'DATABASE_URL') {
           wires = world.databases.find((d) => d.madeByApi && !d.wired && internalOf(d) === e.value && d.name === `${body.name}-db`);
           if (!wires) return no2();
@@ -297,7 +301,7 @@ export const fakeWorld = (over = {}) => {
       if (parts[2] === 'env-vars') {
         if (parts.length === 3) return no(line); // the whole list, read or written: never
         const key = decodeURIComponent(parts[3]);
-        if (parts.length !== 4 || !READABLE.includes(key)) return no(line);
+        if (parts.length !== 4 || !(method === 'GET' ? READ_ANY : READABLE).includes(key)) return no(line);
         if (method === 'GET') {
           return Object.hasOwn(world.settings[s.id], key) ? { status: 200, json: { key, value: world.settings[s.id][key] } } : { status: 404, json: { message: 'SENTINEL-RENDER-BODY: no such setting' } };
         }

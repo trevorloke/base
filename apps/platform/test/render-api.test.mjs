@@ -20,6 +20,7 @@ const { cfg } = await import('../config.mjs');
 const { makeRender, sharedRender, CALLS, SHAPES } = await import('../render-api.mjs');
 const { READABLE } = await import('../render-guard.mjs');
 const { pubkeyValue } = await import('../keys.mjs');
+const { settingNames } = await import('../../../shared/old-names.js');
 const { renderSnippet } = await import('../snippets.mjs');
 
 const world = fakeWorld();
@@ -168,11 +169,12 @@ test('a long list is read page by page, five pages at most', async () => {
 
 test('isSet says set or not, never the value, and refuses a name off the list', async () => {
   const c = client();
-  assert.deepEqual(clean(await c.isSet(IDS.a, 'STARBASE_TZ')), { ok: true, set: true });
-  assert.equal(lastCall().path, `/services/${IDS.a}/env-vars/STARBASE_TZ`);
+  assert.deepEqual(clean(await c.isSet(IDS.a, 'BASE_TZ')), { ok: true, set: true });
+  // Asked by its name today, then by its older name (shared/old-names.js).
+  assert.deepEqual(world.received.slice(-2).map((x) => x.path), settingNames('BASE_TZ').map((n) => `/services/${IDS.a}/env-vars/${n}`));
   assert.deepEqual(await c.isSet(IDS.a, 'BASE_PLATFORM_PUBKEY'), { ok: true, set: false });
   const before = world.received.length;
-  for (const name of ['DATABASE_URL', 'RESEND_API_KEY', 'STARBASE_TWO_STEP_KEY', 'GOOGLE_TOKEN_KEY', 'RENDER_API_KEY', 'STARBASE_SAMPLE', '', 'NODE_ENV/../DATABASE_URL']) {
+  for (const name of ['DATABASE_URL', 'RESEND_API_KEY', 'BASE_TWO_STEP_KEY', 'GOOGLE_TOKEN_KEY', 'RENDER_API_KEY', 'BASE_SAMPLE', '', 'NODE_ENV/../DATABASE_URL']) {
     assert.equal((await c.isSet(IDS.a, name)).problem, 'not-allowed', name);
   }
   assert.equal(world.received.length, before, 'none of them was asked for');
@@ -215,7 +217,7 @@ test('a change takes a checked target, never an id, and never a value from its c
   assert.deepEqual([lastCall().method, lastCall().path, lastCall().body], ['PUT', `/services/${IDS.a}/env-vars/BASE_PLATFORM_PUBKEY`, { value: pubkeyValue() }]);
   assert.equal(world.settingsOf(IDS.a).BASE_PLATFORM_PUBKEY, pubkeyValue());
   const sent = world.received.length;
-  for (const key of ['STARBASE_TZ', 'STARBASE_PUBLIC_URL', 'DATABASE_URL', 'NODE_ENV', 'STARBASE_ENV', 'RESEND_API_KEY', 'STARBASE_SAMPLE']) {
+  for (const key of ['BASE_TZ', 'BASE_PUBLIC_URL', 'DATABASE_URL', 'NODE_ENV', 'BASE_ENV', 'RESEND_API_KEY', 'BASE_SAMPLE']) {
     assert.equal((await c.setOne(t, key)).problem, 'not-allowed', key);
   }
   assert.equal(world.received.length, sent, 'no other setting can be written');
@@ -367,12 +369,12 @@ test('what was read is kept a minute, cut down; a failure is not kept; a change 
   for (let i = 0; i < 3; i += 1) {
     assert.equal((await c.service(IDS.a)).name, 'base-win-a');
     assert.equal((await c.lastDeploy(IDS.a)).state, 'live');
-    assert.deepEqual(await c.isSet(IDS.a, 'STARBASE_TZ'), { ok: true, set: true });
+    assert.deepEqual(await c.isSet(IDS.a, 'BASE_TZ'), { ok: true, set: true });
   }
-  assert.equal(w.calls.length, 3, 'asked once each');
+  assert.equal(w.calls.length, 4, 'asked once each (the setting by both of its names)');
   c.forget();
   await c.service(IDS.a);
-  assert.equal(w.calls.length, 4, 'forgotten after a change: asked again');
+  assert.equal(w.calls.length, 5, 'forgotten after a change: asked again');
   w.refuse(500, { on: /custom-domains/ });
   assert.equal((await c.domains(IDS.a)).ok, false);
   assert.equal((await c.domains(IDS.a)).ok, true, 'a failure is not kept');

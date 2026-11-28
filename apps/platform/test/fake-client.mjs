@@ -39,7 +39,7 @@ export const startFakeClient = ({ port, env = 'production', publicKey, address =
   const state = { nonces: new Set(), sessions: new Map(), invites: [], refused: [], made: false, over: {} };
   const own = `http://127.0.0.1:${port}`;
   const health = () => ({
-    ok: true, database: 'ok', store: 'postgres', service: 'starbase', env, organization: 'Example Campaign', commit, build: 'index-test.js', tzdataCurrent: true,
+    ok: true, database: 'ok', store: 'postgres', service: 'base.win', env, organization: 'Example Campaign', commit, build: 'index-test.js', tzdataCurrent: true,
     ownOrigin, instance, address: address || own, entry: keys.length ? 'ready' : 'no-key',
     platformKids: keys.map((k) => k.kid), setupOpen: false, campaignMade: state.made, ...state.over,
   });
@@ -117,8 +117,8 @@ export const startPublicAddresses = ({ port, clients = {} }) => {
   };
 };
 
-// node apps/platform/test/fake-client.mjs  (PORT, STARBASE_ENV, BASE_PLATFORM_PUBKEY, STARBASE_PUBLIC_URL)
+// node apps/platform/test/fake-client.mjs  (PORT, BASE_ENV, BASE_PLATFORM_PUBKEY, BASE_PUBLIC_URL)
 if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop())) {
-  const c = startFakeClient({ port: Number(process.env.PORT) || 5601, env: process.env.STARBASE_ENV || 'production', publicKey: process.env.BASE_PLATFORM_PUBKEY, address: process.env.STARBASE_PUBLIC_URL || null });
+  const c = startFakeClient({ port: Number(process.env.PORT) || 5601, env: process.env.BASE_ENV || 'production', publicKey: process.env.BASE_PLATFORM_PUBKEY, address: process.env.BASE_PUBLIC_URL || null });
   console.log(`fake campaign server on ${c.own}`);
 }
