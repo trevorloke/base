@@ -41,6 +41,8 @@ import { getDb } from '../../db/client.js';
 import { runAction } from '../../lib/events.js';
 import { geocodeAddress, suggestAddresses } from '../../lib/geocode.js';
 import { civic } from '../../lib/address.js';
+import { FRESH, doorSql } from '../../lib/doors.js';
+import { doorParts } from '../../../shared/units.js';
 import { makeLimiter } from '../../lib/guard.js';
 import { addressSuggester, placesFor, placesSuggest, placeDetails, isSession, isPlaceId, SESSION_WORDS } from '../../lib/places.js';
 
@@ -78,11 +80,12 @@ api.get('/address/suggest', async (c) => {
   const q = String(c.req.query('q') || '').trim().replace(/\s+/g, ' ').slice(0, 200);
   if (q.length < 3) return c.json({ suggestions: [], lookup: 'ok' });
   const like = `%${q.toLowerCase().replace(/[\\%_]/g, (m) => `\\${m}`)}%`;
+  // One suggestion per door (lib/doors.js: a door written two ways is one).
   const mine = (await db.query(
-    `select distinct on (lower(address), lower(coalesce(unit, ''))) address, house_number, unit, city, postal, lat, lng
-       from persons where workspace_id = $1 and deleted_at is null and lat is not null and address is not null
-        and lower(address) like $2
-      order by lower(address), lower(coalesce(unit, '')), created_at limit $3`,
+    `select distinct on (${doorSql('p')}) p.address, p.house_number, p.unit, p.city, p.postal, p.lat, p.lng
+       from persons p where p.workspace_id = $1 and p.deleted_at is null and p.lat is not null and p.address is not null
+        and lower(p.address) like $2
+      order by ${doorSql('p')}, p.created_at limit $3`,
     [ctx.workspaceId, like, LIMIT],
   )).rows.map((r) => {
     const { house_number, address } = civic({ house_number: r.house_number, address: r.address });
@@ -204,17 +207,21 @@ export const placeSoon = async (workspaceId, actorId, ids) => {
     }
     if (!p || p.lat != null || !p.address) continue;
     const [addr, city] = sameDoor(p);
+    // Someone at this address already has a pin — or at its house's civic
+    // address (a suite saved as "Bsmt 10388 134 St" takes the house's pin).
+    const parts = doorParts(p);
     const known = (await db.query(
-      `select lat, lng from persons where workspace_id = $1 and deleted_at is null and lat is not null
-         and lower(trim(address)) = $2 and lower(trim(coalesce(city, ''))) = $3 limit 1`,
-      [workspaceId, addr, city],
+      `select lat, lng from persons q where q.workspace_id = $1 and q.deleted_at is null and q.lat is not null
+         and lower(trim(coalesce(q.city, ''))) = $3
+         and (lower(trim(q.address)) = $2 or ($4 <> '' and q.door_civic = $4 and ${FRESH('q')})) limit 1`,
+      [workspaceId, addr, city, parts.civic],
     )).rows[0];
     // The geocoder is asked at most LOOKUPS_PER_MIN times a minute from
     // here (a busy website feed, say); past that the person waits for the
     // desk's background run, which paces itself.
     if (!known && lookupsBusy('save')) continue;
     const r = known ? { lat: Number(known.lat), lng: Number(known.lng), copied: true }
-      : await within(geocodeAddress({ address: p.address, city: p.city, postal: p.postal }), LOOKUP_MS * 2);
+      : await within(geocodeAddress({ address: parts.shown || p.address, city: p.city, postal: p.postal }), LOOKUP_MS * 2);
     if (r?.error || r === undefined) continue; // the service is down: the desk's run will try again
     const at = new Date().toISOString();
     await runAction(db, { workspaceId, actorId, action: 'person.geocode' }, async (tx, emit) => {

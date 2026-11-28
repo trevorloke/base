@@ -9,7 +9,8 @@ import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
 import { freshDb, Client } from './helpers.js';
 import { app } from '../index.js';
-import { RECIPES, WALK_DOORS_MAX } from '../ext/reports/quick.js';
+import * as quick from '../ext/reports/quick.js';
+const { RECIPES, WALK_DOORS_MAX } = quick;
 import { movedCounts, movedOpenIds } from '../ext/moves/index.js';
 import { csvStream } from '../lib/csv.js';
 import { presetFor } from '../lib/preset.js';
@@ -383,6 +384,48 @@ test('the walking list: the turf’s doors, names apart, no phone or email; left
   }
   assert.equal((await mgr.get(`/api/quick-reports/walk?turf=${randomUUID()}`)).status, 404);
   assert.equal((await mgr.get(`/api/quick-reports/walk?turf=${turf.id}&doors=some`)).status, 400);
+});
+
+test('the walking list reads a door one way: a unit inside the address prints house 13450 and “Unit 1203”; a house its doors under one address', async () => {
+  const L = { lat: 49.31, lng: -122.51 };
+  const mk = (first, address, unit = null, at = L) => mgr.createPerson(null, { first_name: first, last_name: 'Doorway', address, unit, lat: at.lat, lng: at.lng });
+  await mk('Ana', '10388 134 St');
+  await mk('Ben', '10388 134 St Bsmt');
+  const B = { lat: L.lat + 0.0003, lng: L.lng };
+  for (const u of ['1201', '1202', '1203']) await mk(`U${u}`, `${u}-13450 104 Ave`, null, B);
+  const turf = ok(await mgr.action('turf.create', { name: 'Suite block', polygon: [[L.lat - 0.001, L.lng - 0.001], [L.lat - 0.001, L.lng + 0.001], [L.lat + 0.001, L.lng + 0.001], [L.lat + 0.001, L.lng - 0.001]] })).turf;
+  const s = ok(await mgr.get(`/api/quick-reports/walk?turf=${turf.id}&doors=all`));
+  const pick = (d) => [d.house, d.street, d.place, d.unit_words, d.persons.map((p) => p.first_name).join()];
+  // Street by street (104 Ave, then 134 St), as the walk list goes.
+  assert.deepEqual(s.doors.map(pick), [
+    ['13450', '104 Ave', 'building', 'Unit 1201', 'U1201'],
+    ['13450', '104 Ave', 'building', 'Unit 1202', 'U1202'],
+    ['13450', '104 Ave', 'building', 'Unit 1203', 'U1203'],
+    ['10388', '134 St', 'house', 'Main', 'Ana'],
+    ['10388', '134 St', 'house', 'Basement suite', 'Ben'],
+  ]);
+  assert.equal(s.doors[3].civic, s.doors[4].civic, 'one house: one address line');
+  assert.equal(s.doors[0].units, 3);
+  const res = await raw(mgr, `/api/quick-reports/walk.csv?turf=${turf.id}&doors=all`);
+  const rows = csvRows(await res.text());
+  assert.deepEqual(rows.slice(1).map((r) => r.slice(0, 5)), [
+    ['104 Ave', '13450', 'Unit 1201', 'Doorway', 'U1201'],
+    ['104 Ave', '13450', 'Unit 1202', 'Doorway', 'U1202'],
+    ['104 Ave', '13450', 'Unit 1203', 'Doorway', 'U1203'],
+    ['134 St', '10388', 'Main', 'Doorway', 'Ana'],
+    ['134 St', '10388', 'Basement suite', 'Doorway', 'Ben'],
+  ]);
+});
+
+test('the 1,500-door cut never splits a house or a building (it stops before it, unless it is the first)', () => {
+  assert.equal(typeof quick.cutWalk, 'function', 'quick.js cutWalk');
+  const d = (group) => ({ group });
+  const doors = ['a', 'a', 'b', 'b', 'b', 'c'].map(d);
+  assert.deepEqual(quick.cutWalk(doors, 3).map((x) => x.group), ['a', 'a']);
+  assert.deepEqual(quick.cutWalk(doors, 5).map((x) => x.group), ['a', 'a', 'b', 'b', 'b']);
+  assert.deepEqual(quick.cutWalk(doors, 9).length, 6);
+  assert.deepEqual(quick.cutWalk(['t', 't', 't', 'u'].map(d), 2).map((x) => x.group), ['t', 't'], 'one building bigger than the cut: cut inside it');
+  assert.deepEqual(quick.cutWalk([d(null), d(null), d(null)], 2).length, 2, 'lone doors: the plain cut');
 });
 
 test('walk/unplaced counts people with an address and no pin', async () => {

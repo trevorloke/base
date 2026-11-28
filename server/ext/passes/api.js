@@ -12,6 +12,7 @@
 //          support_found   people a knock in this pass rated 1 or 2
 import { Hono } from 'hono';
 import { openPass } from './rule.js';
+import { doorSql } from '../../lib/doors.js';
 
 export const api = new Hono();
 const COLS = 'id, name, kind, who, list_id, tries, started_at, ended_at';
@@ -23,8 +24,7 @@ const statsFor = async (db, ws, ids) => {
   if (!ids.length) return out;
   const { rows } = await db.query(
     `select c.pass_id,
-            count(distinct case when nullif(trim(p.address), '') is null then p.id::text
-                                else lower(trim(p.address)) || '|' || lower(trim(coalesce(p.unit, ''))) end)::int as doors_knocked,
+            count(distinct ${doorSql('p')})::int as doors_knocked,
             (count(*) filter (where c.outcome = 'contacted'))::int as talked,
             (count(distinct c.person_id) filter (where c.rating in ('1', '2')))::int as support_found
        from contacts c join persons p on p.id = c.person_id

@@ -179,7 +179,8 @@ test('?dots=1: one lean row per door — [lat, lng, band, people] — with the h
   assert.deepEqual(near(d.dots, spot(0)).slice(2, 4), [2, 1], 'rated 1: support');
   assert.deepEqual(near(d.dots, spot(5)).slice(2, 4), [3, 1], 'rated 4: opposed');
   assert.deepEqual(near(d.dots, spot(7)).slice(2, 4), [0, 1], 'not asked yet');
-  assert.ok(d.dots.every((x) => x.length === 5 && String(x[0]).length <= 8 && String(x[1]).length <= 10), 'short numbers: a metre is enough');
+  // h (6th, UNITS §4.4): a house with suites' doors; one door each here, so 0.
+  assert.ok(d.dots.every((x) => x.length === 6 && x[5] === 0 && String(x[0]).length <= 8 && String(x[1]).length <= 10), 'short numbers: a metre is enough');
   // Only the doors where someone has one rating (the map's "Strong yes (1)").
   const ones = ok(await mgr.get(`/api/map/doors?bbox=${BOX}&dots=1&rating=1`));
   assert.deepEqual([ones.dots.length, ones.dots.every((x) => x[2] === 2 && x[3] === 1)], [20, true]);

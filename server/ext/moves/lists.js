@@ -12,6 +12,8 @@
 import { decide } from '../../lib/perms.js';
 import { azKey } from '../../lib/az.js';
 import { inMyTurf } from '../core/index.js';
+import { FRESH } from '../../lib/doors.js';
+import { doorParts } from '../../../shared/units.js';
 
 const LIMIT = 50;
 
@@ -19,15 +21,18 @@ export const mayMoveAnyone = (ctx) => ctx.role !== 'volunteer' || decide(ctx.per
 
 const at = async (db, ctx, moverId, address, unit, city) => {
   if (!address) return [];
+  // The same door (lib/doors.js): worked out, or as written while a row isn't yet.
+  const d = doorParts({ address, unit });
   return (await db.query(
     `select p.id, p.name, p.rating, coalesce(p.phone, '') <> '' as phone_on_file, p.lat, p.lng
        from persons p
       where p.workspace_id = $1 and p.deleted_at is null and p.id <> $2
-        and lower(p.address) = lower($3)
-        and coalesce(lower(btrim(p.unit)), '') = coalesce(lower(btrim($4::text)), '')
+        and ((${FRESH('p')} and p.door_civic = $6 and p.door_unit = $7)
+          or (not (${FRESH('p')}) and lower(p.address) = lower($3)
+            and coalesce(lower(btrim(p.unit)), '') = coalesce(lower(btrim($4::text)), '')))
         and coalesce(lower(btrim(p.city)), '') = coalesce(lower(btrim($5::text)), '')
       order by ${azKey('p')} limit ${LIMIT}`,
-    [ctx.workspaceId, moverId, address, unit || null, city || null],
+    [ctx.workspaceId, moverId, address, unit || null, city || null, d.civic, d.unit],
   )).rows;
 };
 

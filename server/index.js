@@ -21,6 +21,7 @@ import publicRoutes from './routes/public.js';
 import { getDb, dbReachable, storeOf, storeRefusal } from './db/client.js';
 import { EXTENSIONS } from './ext.js';
 import { startJobRunner, stopJobRunner } from './lib/jobs.js';
+import { startDoorSweeper, stopDoorSweeper } from './lib/doors.js';
 import { staleTimeZoneData } from './lib/tzcheck.js';
 import { clockNote } from './lib/clock.js';
 import { envName, orgName } from './lib/org.js';
@@ -223,6 +224,13 @@ if (isMain) {
     );
     startJobs();
   }
+  // Each door's parts (lib/doors.js): worked out after every write that
+  // touches an address, and swept in the background until none is left.
+  const startDoors = () => getDb().then(
+    (db) => startDoorSweeper(db),
+    () => { setTimeout(startDoors, 10_000).unref?.(); },
+  );
+  startDoors();
   // Today's Google counts (lib/gusage.js), read back from the database.
   getDb().then(() => startUsage(), () => {});
   // Deploys send SIGTERM: stop accepting requests, then close the database so
@@ -231,6 +239,7 @@ if (isMain) {
     console.log(`${sig}: shutting down`);
     server.close();
     stopJobRunner();
+    stopDoorSweeper();
     await flushUsage().catch(() => {});
     try { await (await getDb()).close(); } catch { /* already closed */ }
     process.exit(0);

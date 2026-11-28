@@ -607,17 +607,34 @@ manager**), which makes the campaign and signs you in as *base.win support*.
    the office.* Bring them back, and type the results in on the turf's
    walk list. A turf with more than 6,000 people in its box must be split
    on the map before it prints.
-8. **Hi-rises: three numbers, once**, after the voters list is in. In
-   Render → **base-win** → **Shell**, run `node scripts/hr-counts.mjs`. It
-   only reads (the database refuses any change while it runs) and prints
-   three lines, with no names or addresses:
-   - *Located doors*: addresses with a pin, one per unit.
-   - *Addresses with 4 or more units*: the ones the map shows as a building.
-   - *People with the unit inside the address* (like `1203-13450 104 Ave`).
-
-   Send the three lines to the team. If the second number is under 50, the
-   building layer will rarely appear on your map: say so before more
-   hi-rise work is done.
+8. **Buildings and suites.** Nothing to do: an address with 3 or more
+   numbered or lettered units (a tower, a walk-up, a townhouse complex, a
+   triplex) is a *Building*, and a house with a basement suite, an upper or
+   lower suite, a coach house or a laneway house is one house with its
+   doors side by side. base.win reads the suite or unit whether the list
+   writes it in the Unit column or inside the address (`1203-13450 104
+   Ave`, `#1203 13450 104 Ave`, `10388 134 St Bsmt`); what the list says
+   is never changed. It works every address out in the background, a few
+   minutes after the first start of this release (longer on a very big
+   list); until then the map and the counts read the doors as before.
+   - Door counts may drop a little once it is done, where one door was
+     written two ways (blank and *Main*, the unit in its column and inside
+     the address, *Ave* and *Avenue*). Those people are one door now, and
+     they finish together: a knock that finishes one of them finishes the
+     door.
+   - The paper walking list's CSV keeps its columns; *Unit* now says the
+     door's words (*Unit 1203*, *Basement suite*) and *Number* the house
+     number (`13450`, never `1203-13450`).
+   - Addresses set aside before as not found that have a suite or unit
+     written in them (like `Bsmt 10388 134 St`) are tried again, once, as
+     their house's address the next time someone presses **Place on map**
+     (Map → *Not on map*).
+   - Optional check: in Render → **base-win** → **Shell**, run
+     `node scripts/hr-counts.mjs`. It only reads (the database refuses any
+     change while it runs) and prints four lines, with no names or
+     addresses: *Located doors*, *Buildings*, *Houses with a suite* and
+     *Rows still being worked out* (0 when the background work is done).
+     Nothing needs doing with the numbers.
 
 ### The street map: choose a provider before election week
 

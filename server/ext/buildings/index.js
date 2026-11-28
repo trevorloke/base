@@ -1,5 +1,7 @@
-// Buildings (HR-1): an address with 4 or more units — a tower, a walk-up, a
-// townhouse complex — read as one thing, so the map can draw it as one
+// Buildings (HR-1): an address with 3 or more numbered or lettered units —
+// a tower, a walk-up, a townhouse complex, a triplex — read as one thing
+// (suite words never count: a house with a basement suite and a coach
+// house is a house, shared/units.js placeOf), so the map can draw it as one
 // square and its sheet can list its floors and units. Worked out when it is
 // read (shared/buildings.js), never stored: a door stays address + unit.
 //
@@ -11,10 +13,11 @@
 //                                     the person nearest the point, within
 //                                     the dot's own spot
 //
-// Answer: { building: { key, address, city, lat, lng, units, people, open,
-// again, done, floors }, doors, pass } — doors shaped as the walk list's
-// (routes/api.js shapeDoors), each with unit, floor and in_round, in floor
-// order. Who is in the building is decided before the pass: a door the open
+// Answer: { building: { key, place: 'building', address, city, lat, lng,
+// units, people, open, again, done, floors }, doors, pass } — doors shaped
+// as the walk list's (routes/api.js shapeDoors), each with unit, unit_label
+// (the unit's key), unit_words ("Unit 1203", "No unit number"), floor and
+// in_round, in floor order. Who is in the building is decided before the pass: a door the open
 // pass doesn't want stays, in_round false, and isn't counted in open/again/
 // done (unit rows on this round), so a pass never shrinks a building.
 // { building: null }: not a building — the map opens the door as before.
@@ -31,6 +34,7 @@ import { scopeOf } from '../voted/state.js';
 import {
   buildingOf, unitRows, unitOf, floorOf, unitCompare, floorsShown, REACH,
 } from '@base-win/shared/buildings';
+import { unitWords } from '../../../shared/units.js';
 
 // Routes import the extensions, so the walk list's own read is imported
 // when asked for, not at load (ext.js: features never import routes/*).
@@ -78,7 +82,7 @@ const readBuilding = async (db, ctx, anchor) => {
   // when it is written inside the address (unit stays as on file: the door).
   const shaped = (await shapeDoors(db, ctx, b.doors, pass)).map((d, i) => {
     const unit = unitOf(d);
-    return { ...d, unit_label: unit, floor: floorOf(unit), in_round: inPass(b.doors[i], pass) };
+    return { ...d, unit_label: unit, unit_words: unitWords(unit, 'building'), place: 'building', floor: floorOf(unit), in_round: inPass(b.doors[i], pass) };
   }).sort((x, y) => unitCompare(x.unit_label, y.unit_label));
   // A building can reach past a turf's edge: while GOTV keeps a volunteer
   // to their turfs and phone banks, its people outside them carry no voted
@@ -91,7 +95,7 @@ const readBuilding = async (db, ctx, anchor) => {
   const n = (state) => rows.filter((r) => r.state === state).length;
   return {
     building: {
-      key: b.key, address: b.address, city: b.city, lat: b.lat, lng: b.lng, units: b.units, people: b.people,
+      key: b.key, place: 'building', address: b.address, city: b.city, lat: b.lat, lng: b.lng, units: b.units, people: b.people,
       open: n('open'), again: n('again'), done: n('done'), floors: floorsShown(shaped.map((d) => d.unit_label)),
     },
     doors: shaped,

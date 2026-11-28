@@ -1,5 +1,6 @@
 // Geometry for turfs and walk lists. Polygons are [[lat, lng], ...] rings.
-import { splitUnit, normAddr, civicOf, unitOf, unitCompare } from '@base-win/shared/buildings';
+import { normAddr, civicOf, unitOf, unitCompare } from '@base-win/shared/buildings';
+import { doorParts, doorKey, houseCompare, unitKind } from '../../shared/units.js';
 
 // Ray-casting point-in-polygon on lat/lng (fine at neighbourhood scale).
 export const pointInPolygon = (lat, lng, ring) => {
@@ -16,18 +17,22 @@ export const pointInPolygon = (lat, lng, ring) => {
 
 // Split "12345 72 Ave" → { number: 12345, street: '72 ave' }. Anything that
 // doesn't start with a house number sorts after numbered addresses. A unit
-// written inside the address ("1203-13450 104 Ave") is not the house number,
-// and the street is spelled one way (shared/buildings.js normAddr), so a
-// tower written "104 Ave", "104 Avenue" and "104 Ave." is one street.
+// or suite written inside the address ("1203-13450 104 Ave", "10388 134 St
+// Bsmt") is not part of the house number or the street (shared/units.js
+// doorParts), so a suite walks right after its house; and the street is
+// spelled one way (normAddr): "104 Ave", "104 Avenue" and "104 Ave." are one.
 export const parseAddress = (address = '') => {
-  const m = String(splitUnit(address)?.civic ?? address).trim().match(/^(\d+)[A-Za-z]?\s+(.*)$/);
+  const m = String(doorParts({ address }).shown || address || '').trim().match(/^(\d+)[A-Za-z]?\s+(.*)$/);
   if (!m) return { number: Infinity, street: String(address).trim().toLowerCase() };
   return { number: Number(m[1]), street: normAddr(m[2]) };
 };
 
-// The doors of one house number: by civic address, then floor by floor
+// The doors of one house number: by civic address, then a house's doors in
+// house order (Main, then its suites) or a building's floor by floor
 // (shared/buildings.js unitCompare), never in the order the database gave.
-const sameNumber = (a, b) => a._c.localeCompare(b._c) || unitCompare(a._u, b._u);
+const houseKind = (u) => ['main', 'suite'].includes(unitKind(u));
+const sameNumber = (a, b) => a._c.localeCompare(b._c)
+  || (houseKind(a._u) && houseKind(b._u) ? houseCompare(a._u, b._u) : unitCompare(a._u, b._u));
 
 // Walk order: street by street; along each street, one side up (odd) then the
 // other side back (even) — how canvassers actually work a block.
@@ -53,13 +58,17 @@ export const walkOrder = (doors) => {
   return out;
 };
 
-// Group located persons into doors by address + unit.
+// Group located persons into doors, by the one door key (shared/units.js
+// doorKey: "Main" and blank are one door, "1203-13450 104 Ave" and 13450
+// 104 Ave unit 1203 are one, the main door and a suite are two); someone
+// with no address is a door of their own. A door keeps its first person's
+// address and unit (as on file) and carries its parts.
 export const groupDoors = (persons) => {
   const doors = new Map();
   for (const p of persons) {
     if (p.lat == null || p.lng == null) continue;
-    const key = `${String(p.address || '').trim().toLowerCase()}|${String(p.unit || '').trim().toLowerCase()}|${p.address ? '' : p.id}`;
-    if (!doors.has(key)) doors.set(key, { address: p.address, unit: p.unit, lat: p.lat, lng: p.lng, persons: [] });
+    const key = doorKey(p, { none: (x) => `person:${x.id}` });
+    if (!doors.has(key)) doors.set(key, { address: p.address, unit: p.unit, lat: p.lat, lng: p.lng, persons: [], parts: doorParts(p) });
     doors.get(key).persons.push(p);
   }
   return [...doors.values()];

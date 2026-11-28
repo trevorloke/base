@@ -24,11 +24,12 @@
 // list's door); it is knocked once anyone there has a door contact, any
 // outcome (the walk list's rule with no pass open).
 import { toLocal } from '../../lib/tzsql.js';
+import { doorSql } from '../../lib/doors.js';
 import { now, clockShift } from '../../lib/clock.js';
 import { WEEKS } from './rules.js';
 
-const DOOR = `case when nullif(trim(p.address), '') is null then p.id::text
-                   else lower(trim(p.address)) || '|' || lower(trim(coalesce(p.unit, ''))) end`;
+// The one door key (server/lib/doors.js).
+const DOOR = doorSql('p');
 const BAND = `case when r.rating in ('1', '2') then 'support' when r.rating = '3' then 'undecided'
                    when r.rating ~ '^4[A-Z]{0,2}$' then 'opposed' end`;
 

@@ -28,6 +28,8 @@ import { pointInPolygon, groupDoors } from '../../lib/geo.js';
 import { httpError } from '../../actions/util.js';
 import { DEFAULT_TZ } from '../../lib/org.js';
 import { fromLocal, toLocal } from '../../lib/tzsql.js';
+import { doorSql } from '../../lib/doors.js';
+import { doorKey } from '../../../shared/units.js';
 
 // left_lit: a lit drop (ext/litdrop) — its own column, never a talk.
 export const KNOWN = ['contacted', 'no_answer', 'refused', 'moved', 'inaccessible', 'left_lit'];
@@ -77,10 +79,9 @@ export const boundsOf = async (db, range, tz) => {
   return { start: r.start ? new Date(r.start).toISOString() : null, end: new Date(r.stop).toISOString() };
 };
 
-export const doorKeyOf = (r) => {
-  const a = String(r.address ?? '').trim().toLowerCase();
-  return a ? `${a}|${String(r.unit ?? '').trim().toLowerCase()}` : `person:${r.person_id}`;
-};
+// A knock's door: the one door key (shared/units.js doorKey), the walk
+// list's; with no address, the person.
+export const doorKeyOf = (r) => doorKey(r, { none: (x) => `person:${x.person_id}` });
 const iso = (v) => (v == null ? null : new Date(v).toISOString());
 const later = (a, b) => (!a || new Date(b) > new Date(a) ? b : a);
 const supportive = (rating) => rating != null && bandOf(rating) === 'support';
@@ -226,8 +227,7 @@ export const fieldReport = async (db, ws, query, tz) => {
 // door or on the phone), and the days they were out knocking.
 export const mineAll = async (db, ws, userId, tz) => {
   const r = (await db.query(
-    `select count(distinct case when nullif(trim(p.address), '') is null then p.id::text
-                                else lower(trim(p.address)) || '|' || lower(trim(coalesce(p.unit, ''))) end)::int as doors,
+    `select count(distinct ${doorSql('p')})::int as doors,
             count(*) filter (where c.outcome = 'contacted')::int as talked,
             count(distinct to_char(${toLocal('c.created_at', '$3::text')}, 'YYYY-MM-DD'))::int as days_out
        from contacts c join persons p on p.id = c.person_id

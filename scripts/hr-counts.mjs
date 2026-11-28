@@ -1,28 +1,33 @@
-// Three numbers for hi-rises (HR-1), from this service's own database, read
-// only. Run once in Render's Shell for the service (GOING-LIVE.md):
+// Buildings and suites: four numbers, from this service's own database, read
+// only. An optional check (GOING-LIVE.md section 5): after the voters list
+// is in, in Render's Shell for the service,
 //
 //   node scripts/hr-counts.mjs
 //
-// It prints three lines and nothing else: no name, address or campaign.
-//   1. Located doors: people with a pin, one door per address and unit, as
-//      the map groups them (server/lib/geo.js groupDoors).
-//   2. Addresses with BUILDING_MIN or more units: what the map draws as a
-//      building (shared/buildings.js groupBuildings, the map's own code).
-//   3. People with the unit inside the address ("1203-13450 104 Ave"): the
-//      rows that need splitUnit to be read.
+// It prints four lines and nothing else: no name, address or campaign.
+//   1. Located doors: people with a pin, one door per door key (the server's
+//      one key, server/lib/doors.js: "Main" and blank are one door, a unit
+//      written in the address or in its column is one door), as the map
+//      groups them (server/lib/geo.js groupDoors).
+//   2. Buildings: 3 or more numbered or lettered units at one address, what
+//      the map draws as a building (shared/buildings.js groupPlaces, the
+//      map's own code).
+//   3. Houses with a suite: any other address with 2 or more doors (a main
+//      door and a basement suite, a coach house…).
+//   4. Rows still being worked out: people whose door the server has not
+//      worked out since their address or unit last changed. It goes to 0 a
+//      few minutes after a start; until then 1–3 can read a little high.
 // Every campaign in the database is counted; doors are each campaign's own.
 //
 // Everything runs in one read-only transaction (the database itself refuses
 // any write in it), ended with a rollback. It connects on its own with
 // DATABASE_URL and never starts the server's database set-up.
 import { pathToFileURL } from 'node:url';
-import { groupBuildings, splitUnit, BUILDING_MIN } from '../shared/buildings.js';
+import { groupPlaces } from '../shared/buildings.js';
+import { doorSql, FRESH } from '../server/lib/doors.js';
 
-// A door's key, as groupDoors makes it: address and unit, trimmed and in
-// small letters; a person with no address is a door of their own.
-const DOOR_KEY = `lower(btrim(coalesce(address, ''), E' \\t\\r\\n')),
-  lower(btrim(coalesce(unit, ''), E' \\t\\r\\n')),
-  case when coalesce(address, '') = '' then id::text else '' end`;
+// A door's key, as the server counts doors.
+const DOOR_KEY = doorSql('persons');
 const LIVE = 'deleted_at is null';
 const LOCATED = `${LIVE} and lat is not null and lng is not null`;
 
@@ -45,19 +50,21 @@ export const hrCounts = async (q) => {
       order by workspace_id`,
   )).rows;
   let buildings = 0;
+  let houses = 0;
   for (let i = 0; i < rows.length;) {
     let j = i;
     while (j < rows.length && rows[j].ws === rows[i].ws) j += 1;
-    buildings += groupBuildings(rows.slice(i, j).map(({ ws, ...door }) => ({ ...door, persons: [] }))).buildings.length;
+    const places = groupPlaces(rows.slice(i, j).map(({ ws, ...door }) => ({ ...door, persons: [] })));
+    buildings += places.buildings.length;
+    houses += places.houses.length;
     i = j;
   }
 
-  const addresses = (await q(
-    `select address, count(*)::int as n from persons where ${LIVE} and coalesce(address, '') <> '' group by address`,
-  )).rows;
-  const inside = addresses.reduce((n, a) => n + (splitUnit(a.address) ? a.n : 0), 0);
+  const stale = (await q(
+    `select count(*)::int as n from persons where ${LIVE} and not (${FRESH('persons')})`,
+  )).rows[0].n;
 
-  return { doors, buildings, inside };
+  return { doors, buildings, houses, stale };
 };
 
 // fn(q) inside one read-only transaction, always rolled back.
@@ -88,8 +95,9 @@ export const main = async ({ url = process.env.DATABASE_URL, out = console.log, 
   try {
     const n = await readOnly((sql, params) => client.query(sql, params), hrCounts);
     out(`Located doors: ${n.doors}`);
-    out(`Addresses with ${BUILDING_MIN} or more units: ${n.buildings}`);
-    out(`People with the unit inside the address: ${n.inside}`);
+    out(`Buildings: ${n.buildings}`);
+    out(`Houses with a suite: ${n.houses}`);
+    out(`Rows still being worked out: ${n.stale}`);
   } finally {
     await client.end();
   }

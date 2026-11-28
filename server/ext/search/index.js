@@ -43,6 +43,8 @@ import { azKey, azAfter } from '../../lib/az.js';
 // The very expression texting uses (no database, no network in that file),
 // so the two can't drift apart and both read this index.
 import { PHONE_DIGITS_SQL } from '../texting/rules.js';
+import { FRESH } from '../../lib/doors.js';
+import { normAddr } from '../../../shared/units.js';
 
 const PHONE10 = PHONE_DIGITS_SQL('phone');
 const LIVE = 'where deleted_at is null';
@@ -109,6 +111,11 @@ const nameWays = (w) => {
   ];
 };
 const startOf = (col, low) => way(col, `${escLike(low)}%`, (n) => `lower(${col}) like $${n} and ${col} is not null`);
+// An address's start, read the way the server reads a door (lib/doors.js
+// door_civic, persons_ws_door_civic_prefix_idx): "10388 134" finds the
+// suite written "Bsmt 10388 134 St", "13450 104" the unit "#1203 13450 104
+// Ave". Rows not worked out yet are found by the address as written.
+const civicStart = (raw) => way('civic', `${escLike(normAddr(raw))}%`, (n) => `door_civic like $${n} and door_civic is not null and ${FRESH('p')}`);
 
 // What was typed → the words of a name (and, for one word on the desk, an
 // email's start too), or the ways a number, an address or an email comes in.
@@ -126,10 +133,10 @@ const readTerm = (raw, vol) => {
       if (phone.length <= 7) ways.push(way('phone7', `${phone}%`, (n) => `right(${PHONE10}, 7) like $${n}`));
     }
     // A house number: three digits typed together at the start.
-    if (/^\d{3}/.test(raw)) ways.push(startOf('address', low));
+    if (/^\d{3}/.test(raw)) ways.push(startOf('address', low), civicStart(raw));
     return ways.length ? { ways } : { hint: 'digits' };
   }
-  if (/^\d/.test(raw)) return { ways: [startOf('address', low)] };
+  if (/^\d/.test(raw)) return { ways: [startOf('address', low), civicStart(raw)] };
   if (raw.includes('@')) return { ways: vol ? [] : [startOf('email', low)] };
   // A name: words on spaces, commas and hyphens; a one-letter word filters
   // but never leads.

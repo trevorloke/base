@@ -71,15 +71,17 @@ test('of/:id: 120 units in floor order with their states; the house next door is
   assert.equal(j.building.people, 121);
   assert.equal(j.building.floors, true);
   assert.deepEqual(unitsOf(j), UNITS, 'floor by floor, 201 to 1310');
-  assert.equal(j.doors.length, 121, '1203 is two doors (two spellings), one unit');
+  assert.equal(j.building.place, 'building');
+  assert.equal(j.doors.length, 120, '1203 written two ways (a Unit column, inside the address) is one door with both people');
+  assert.deepEqual(j.doors.find((d) => d.unit_label === '1203').persons.map((p) => p.name).sort(), ['Second1203 Example', 'Unit1203 Example']);
   assert.ok(!j.doors.some((d) => d.address.startsWith('13452')), 'the house next door');
   assert.deepEqual([j.building.open, j.building.again, j.building.done], [120, 0, 0]);
   assert.equal(j.pass, null);
   const d201 = j.doors[0];
-  assert.deepEqual([d201.unit, d201.unit_label, d201.floor, d201.in_round, d201.state], ['201', '201', 2, true, 'open']);
+  assert.deepEqual([d201.unit, d201.unit_label, d201.unit_words, d201.floor, d201.in_round, d201.state], ['201', '201', 'Unit 201', 2, true, 'open']);
   assert.ok(Array.isArray(d201.signs) && d201.persons[0].name === 'Unit201 Example', 'the walk list’s door shape');
   const hy = j.doors.find((d) => d.unit_label === '202');
-  assert.deepEqual([hy.address, hy.unit, hy.floor], ['202-13450 104 Ave', null, 2], 'a door stays address + unit as on file');
+  assert.deepEqual([hy.address, hy.unit, hy.floor, hy.unit_words], ['202-13450 104 Ave', null, 2, 'Unit 202'], 'a door stays address + unit as on file');
   ok(await mgr.action('contact.log', { person_id: byUnit.get('202'), channel: 'door', outcome: 'no_answer' }));
   const after = ok(await mgr.get(`/api/buildings/of/${anchor}`));
   assert.deepEqual([after.building.open, after.building.done], [119, 1], 'with no pass a knock finishes a door');
@@ -142,6 +144,20 @@ test('a person gone, or moved away, gives 404 gone', async () => {
   assert.equal((await mgr.get(`/api/buildings/of/${randomUUID()}`)).json.gone, true);
 });
 
+test('a house with three suites is not a building: of/:id says so for every door', async () => {
+  const H = { lat: 49.45, lng: -122.65 };
+  const ids = [];
+  for (const unit of [null, 'Bsmt', 'Coach house', 'Upper']) ids.push(await insert({ name: `Suites${unit || 'Main'} Example`, address: '10388 134 St', unit, ...H }));
+  for (const id of ids) assert.deepEqual(ok(await mgr.get(`/api/buildings/of/${id}`)), { building: null });
+  // Three numbered units are a building (a triplex, a small walk-up).
+  const W = { lat: 49.46, lng: -122.65 };
+  const units = [];
+  for (const unit of ['1', '2', '3']) units.push(await insert({ name: `Tri${unit} Example`, address: '10420 134 St', unit, ...W }));
+  const tri = ok(await mgr.get(`/api/buildings/of/${units[0]}`));
+  assert.deepEqual([tri.building.units, tri.building.place, tri.doors.map((d) => d.unit_words)], [3, 'building', ['Unit 1', 'Unit 2', 'Unit 3']]);
+  await db.query('delete from persons where id = any($1::uuid[])', [[...ids, ...units]]);
+});
+
 test('more than 3,000 people around one point: too big to list, no doors', async () => {
   const at = { lat: 49.40, lng: -122.60 };
   await db.query(
@@ -196,7 +212,12 @@ test('walkFor’s output for a recorded turf is byte-identical before and after 
     const now = await walkFor(db, ctx, t);
     const { stats, ...rest } = now;
     assert.ok(stats && now.doors.length > 60);
-    assert.equal(JSON.stringify(rest), JSON.stringify(await walkBefore(ctx, t)), ctx.role);
+    // The place each door belongs to is added (worked out before the round
+    // thins the turf, UNITS review 2); everything else is as it was.
+    const PLACE = ['place', 'civic', 'units', 'house_doors', 'unit_words', 'parts', 'group'];
+    for (const d of rest.doors) assert.ok(PLACE.every((k) => k in d), JSON.stringify(Object.keys(d)));
+    const plain = (w) => ({ ...w, doors: w.doors.map((d) => Object.fromEntries(Object.entries(d).filter(([k]) => !PLACE.includes(k)))) });
+    assert.equal(JSON.stringify(plain(rest)), JSON.stringify(plain(await walkBefore(ctx, t))), ctx.role);
     assert.equal(JSON.stringify(await shapeDoors(db, ctx, [], null)), '[]');
   }
   // The walk list takes the tower floor by floor.
@@ -217,8 +238,8 @@ test('doorDots: u, the most units at one address at a spot; band still the stron
     for (let i = 1; i <= 5; i += 1) await insert({ name: `Rough${i} Example`, address: `${i} Rough Rd`, ...B, rating: i === 1 ? '4' : i === 2 ? '1' : null });
     const j = ok(await mgr.get('/api/map/doors?bbox=49.29,-122.71,49.32,-122.69&dots=1'));
     const at = (p) => j.dots.find((x) => Math.abs(x[0] - p.lat) < 1e-6 && Math.abs(x[1] - p.lng) < 1e-6);
-    assert.deepEqual(at(A), [A.lat, A.lng, 0, 50, 50], 'a tower half in hyphen form: the full count');
-    assert.deepEqual(at(B), [B.lat, B.lng, 3, 5, 1], 'five houses on one rough geocode: not a building; opposed beats yes');
+    assert.deepEqual(at(A), [A.lat, A.lng, 0, 50, 50, 0], 'a tower half in hyphen form: the full count');
+    assert.deepEqual(at(B), [B.lat, B.lng, 3, 5, 1, 0], 'five houses on one rough geocode: not a building, not a house with suites; opposed beats yes');
     const tower = ok(await mgr.get(`/api/map/doors?bbox=${T.lat - 0.0002},${T.lng - 0.0002},${T.lat + 0.0002},${T.lng + 0.0002}&dots=1`));
     assert.ok(tower.dots.some((x) => x[4] >= 120), 'the tower’s spot');
   } finally {

@@ -28,6 +28,7 @@ import { movedCounts, movedOpenWhere } from '../moves/index.js';
 const walkRoute = () => import('../../routes/api.js');
 import { walkOrder } from '../../lib/geo.js';
 import { civic } from '../../lib/address.js';
+import { doorParts, doorLine } from '../../../shared/units.js';
 import { VOLUNTEER_ROLES, SIGN_KINDS, donorTier } from '@base-win/shared/canvass';
 import { preset, brandHas } from '../../lib/preset.js';
 import { azSort } from '@base-win/shared/names';
@@ -38,6 +39,18 @@ export const PAGE_MAX = 2000;
 export const WALK_BOX_MAX = 6000;
 // The most doors one sheet (and its CSV) carries.
 export const WALK_DOORS_MAX = 1500;
+// The first `max` doors, never cutting a house or a building in two: one
+// that would be cut is left for the next sheet, unless it is the first
+// (a building bigger than a whole sheet is cut inside it). Doors carry
+// their place's group key (routes/api.js withPlaces; null: a lone door).
+export const cutWalk = (doors, max = WALK_DOORS_MAX) => {
+  if (doors.length <= max) return doors;
+  const g = doors[max - 1]?.group;
+  if (g == null || doors[max]?.group !== g) return doors.slice(0, max);
+  let start = max - 1;
+  while (start > 0 && doors[start - 1].group === g) start -= 1;
+  return doors.slice(0, start > 0 ? start : max);
+};
 const SIGNS_MAX = 5000;
 const CANDIDATE_FIELD = 'interested in being a candidate';
 
@@ -259,7 +272,7 @@ const running = {
     const rows = (await db.query(withWhy(inner, AZ, members ? `${MEMBER}, ${ROLES}` : ROLES), params)).rows;
     const tz = tzOf(ctx);
     return pageOf(rows.map((r) => finish(r, {
-      phone: r.phone || '', email: r.email || '', address: r.address || '', city: r.city || '', postal: r.postal || '',
+      phone: r.phone || '', email: r.email || '', address: doorLine(r, 'door'), city: r.city || '', postal: r.postal || '',
       ...(members ? { member: r.member || '' } : {}), volunteers_as: roleWords(r.roles), said_on: dayIn(r.said_on, tz),
     })), limit);
   },
@@ -379,7 +392,7 @@ const members = {
       from ${LATEST_TERM} join persons p on p.id = t.person_id and ${live} where ${w} ${cond} order by ${AZ} limit $${params.length}`;
     const rows = (await db.query(withWhy(inner, AZ), params)).rows;
     return pageOf(rows.map((r) => finish(r, {
-      phone: r.phone || '', email: r.email || '', address: r.address || '', city: r.city || '', postal: r.postal || '',
+      phone: r.phone || '', email: r.email || '', address: doorLine(r, 'door'), city: r.city || '', postal: r.postal || '',
       ends_on: day(r.ends_on), status: r.current ? 'Current' : 'Lapsed', youth: r.youth ? 'Yes' : '',
       joined_by: r.source === 'website' ? 'Website' : r.source === 'paper' ? 'Paper' : '',
     })), limit);
@@ -464,7 +477,7 @@ const moved = {
         where c.workspace_id = $1 and c.person_id = p.id and c.outcome = 'moved' and c.source is null) as marked_at`);
     const tz = tzOf(ctx);
     return { next, rows: rows.map((r) => finish(r, {
-      address: [r.unit, r.address].filter(Boolean).join('-'), phone: r.phone || '', marked_on: dayIn(r.marked_at, tz),
+      address: doorLine(r, 'door'), phone: r.phone || '', marked_on: dayIn(r.marked_at, tz),
     })) };
   },
   head: () => [
@@ -537,14 +550,22 @@ const walkSheet = async (db, ctx, query) => {
   const scale = await loadScale(db, ctx.workspaceId).catch(() => null);
   // Still to knock is the default while a pass is open; with none, every door.
   const doors = w.pass ? (doorsOpt || 'left') : 'all';
+  // Each door's place (house, building or a door alone) was worked out by
+  // walkFor before the round and this filter left any door out: a house
+  // whose main door is done still prints its basement suite as a suite.
   const kept = w.doors.filter((d) => doors === 'all' || d.state === 'open' || d.state === 'again');
-  const shown = kept.slice(0, WALK_DOORS_MAX);
+  const shown = cutWalk(kept, WALK_DOORS_MAX);
   const out = shown.map((d) => {
-    // The stored number, else the one on the front of the address: people
+    // The house number read off the civic address (never "1203-13450"),
+    // else the stored one, else the one on the front of the address: people
     // saved before the column existed (and the sample data) have only that.
-    const number = d.persons.find((p) => p.house_number)?.house_number || civic({ address: d.address }).house_number || '';
+    const parts = d.parts || doorParts(d);
+    const number = parts.house || d.persons.find((p) => p.house_number)?.house_number || civic({ address: parts.shown }).house_number || '';
     return {
-      address: d.address || '', unit: d.unit || '', house_number: number, street: streetOf(d.address, number), state: d.state,
+      address: d.address || '', unit: d.unit || '', house_number: number, street: streetOf(parts.shown, number), state: d.state,
+      // One house or building: one address line, then a line per door.
+      house: number, place: d.place || 'door', civic: d.civic ?? parts.civic, units: d.units ?? 1, group: d.group ?? null,
+      unit_words: d.unit_words ?? '',
       // Never an email, a phone, a tag or a contact column on paper.
       persons: d.persons.map((p) => ({
         id: p.id, name: p.name, first_name: p.first_name || '', last_name: p.last_name || '',
@@ -590,7 +611,10 @@ export const mountQuick = (api) => {
     try { s = await walkSheet(c.get('db'), ctx, c.req.query()); } catch (e) { return answer(c, e); }
     const rows = s.doors.flatMap((d) => [...d.persons].sort(azSort).map((p) => {
       const [last, first] = lastFirst(p);
-      return [d.street, d.house_number, d.unit, last, first, p.rating_word || '', p.rating || '', p.voted_at ? 'Yes' : '', p.no_contact || '', DOOR_WORDS[d.state] || ''];
+      // Unit: the door's words ("Unit 1203", "Basement suite"; empty for a
+      // door on its own with no unit), whether it was typed in the Unit column
+      // or inside the address.
+      return [d.street, d.house_number, d.unit_words, last, first, p.rating_word || '', p.rating || '', p.voted_at ? 'Yes' : '', p.no_contact || '', DOOR_WORDS[d.state] || ''];
     }));
     // A cut file never looks whole.
     // The turf's name cut short, so the ending always fits csvFileName's 60.

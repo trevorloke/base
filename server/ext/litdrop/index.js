@@ -13,6 +13,7 @@
 //
 // No actions, no api, no tables of its own.
 import { sql } from './sql.js';
+import { doorSql } from '../../lib/doors.js';
 
 export { sql };
 
@@ -27,9 +28,7 @@ export const briefLit = async (db, ctx, body) => {
     `select count(distinct w.door)::int as lit,
             count(distinct w.door) filter (where w.created_by = $2)::int as mine
      from (
-       select c.created_by,
-              case when nullif(trim(p.address), '') is null then p.id::text
-                   else lower(trim(p.address)) || '|' || lower(trim(coalesce(p.unit, ''))) end as door
+       select c.created_by, ${doorSql('p')} as door
        from contacts c join persons p on p.id = c.person_id
        where c.workspace_id = $1 and c.channel = 'door' and c.outcome = 'left_lit'
          and c.created_at >= now() - interval '7 days'
