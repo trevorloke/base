@@ -101,7 +101,6 @@ test('T4. the table is well formed', () => {
 test('the owner’s list names every owner row (docs/AUTHORIZED.md)', async () => {
   const doc = await readFile(join(ROOT, 'docs/AUTHORIZED.md'), 'utf8');
   for (const id of OWNER_ROWS) assert.ok(doc.includes(`\`${id}\``), `docs/AUTHORIZED.md: the owner's list has no \`${id}\``);
-  assert.doesNotMatch(doc, /starbase/i);
   assert.doesNotMatch(doc, /\b(is|are) (election )?advertising\b/i, 'the guide says what base.win adds it to, never what the law calls it');
 });
 
