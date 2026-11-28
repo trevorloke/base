@@ -304,3 +304,9 @@ export const authorizedHtml = (a, { cls = 'footer-authorization', pageLang = 'en
 };
 // A text's line(s), each on its own line: "\n<English>[\n<translation>]".
 export const authorizedSms = (a) => (a?.include ? `\n${authorizedText(a)}` : '');
+// Words with the line under them, unless they already carry it (typed in by
+// hand): never the line twice.
+export const withLineOnce = (words, line) => {
+  const w = String(words ?? '');
+  return line && !w.includes(line) ? `${w}\n${line}` : w;
+};

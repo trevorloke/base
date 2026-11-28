@@ -341,6 +341,20 @@ test('T9. a share kit saved without the line still shows it; the 500 check count
   assert.equal(desk.over, 1);
 });
 
+test('T9. a share kit whose words already carry the line typed in: shared with it once, counted once, never refused for it', async () => {
+  await setOrg(SET);
+  const typed = okA(await mgr.action('share.kit.save', { title: 'Typed', body: `Vote!\n${LINE}`, path: '/', authorized: false })).kit;
+  assert.equal(okA(await vol.client.get('/api/share')).kits.find((x) => x.id === typed.id).text, `Vote!\n${LINE}`);
+  // Near 500 with the line in its words: it fits, and the desk doesn't call it over.
+  const body = `${'z'.repeat(500 - LINE.length - 1)}\n${LINE}`;
+  assert.equal(body.length, 500);
+  const near = okA(await mgr.action('share.kit.save', { title: 'Typed near', body, path: '/' }), 'a 500-character kit with the line typed in').kit;
+  const desk = okA(await mgr.get('/api/share/kits'));
+  assert.equal(desk.kits.find((x) => x.id === near.id).over, false);
+  assert.equal(okA(await vol.client.get('/api/share')).kits.find((x) => x.id === near.id).text, body);
+  assert.equal((await db.query('select authorized from share_kits where id = $1', [typed.id])).rows[0].authorized, false, 'the saved choice is kept');
+});
+
 test('the unsubscribe pages every email links to (/u, /bu, /lu) carry it; with it empty they don’t', async () => {
   const one = async (sql) => (await db.query(sql, [ws])).rows[0]?.id;
   const sub = await one('select id from subscriptions where workspace_id = $1 limit 1');

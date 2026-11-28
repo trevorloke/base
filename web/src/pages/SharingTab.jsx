@@ -19,6 +19,7 @@ import { Unavailable } from '../components/AudienceBits.jsx';
 import { uploadImage } from '../components/MarkdownField.jsx';
 import { hasArea } from '../Shell.jsx';
 import { AuthorizedBanner, needsAsk, useAuthorized } from '../components/Authorized.jsx';
+import { withLineOnce } from '@base-win/shared/site/authorized';
 import './shifts.css';
 import './share.css';
 
@@ -62,7 +63,7 @@ function KitEditor({ kit, line, pages, people, onClose, onSaved }) {
   const auth = useAuthorized().data;
   const ask = needsAsk(auth);
   const [asked, setAsked] = useState(false);
-  const words = line ? `${body.trim()}\n${line}` : body.trim();
+  const words = withLineOnce(body.trim(), line);
   const n = words.length;
   const known = pages.some((p) => p.path === path);
   const live = kit && kit.path === path ? kit.live : known;

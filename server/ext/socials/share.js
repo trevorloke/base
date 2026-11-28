@@ -21,7 +21,7 @@ import { httpError } from '../../actions/util.js';
 import { readUpload } from '../abtests/media.js';
 import { selfPerson } from '../relationships/match.js';
 import { refCodeFor } from '../site/people.js';
-import { authorizedLine } from '../../../shared/site/authorized.js';
+import { authorizedLine, withLineOnce } from '../../../shared/site/authorized.js';
 import { authorizedOf, askBeforeSending } from '../../lib/authorized.js';
 
 const DESK = ['manager', 'staff', 'treasurer'];
@@ -36,10 +36,12 @@ const parseJ = (v, d) => (typeof v === 'string' ? JSON.parse(v) : (v ?? d));
 // (shared/site/authorized.js): '' while it isn't filled in.
 export const authLineOf = (org = {}) => authorizedLine(org, { channel: 'share-kit' }).en;
 export const authLine = async (q, ws) => (await authorizedOf(q, ws, { channel: 'share-kit' })).en;
-// The words people post: the kit's, then the line whenever it is filled in.
+// The words people post: the kit's, then the line whenever it is filled in
+// (once: words that already carry it, typed in, are left as they are).
 // Each kit's own saved choice (authorized) is kept as it was, never
 // overwritten, and no longer read (an owner's question: docs/AUTHORIZED.md).
-export const kitText = (kit, line) => (line ? `${kit.body}\n${line}` : kit.body);
+// The 500 check and kitOver count these same words.
+export const kitText = (kit, line) => withLineOnce(kit.body, line);
 // Too long with the line (a kit saved before the line was filled in).
 export const kitOver = (kit, line) => kitText(kit, line).length > BODY_MAX;
 
