@@ -29,7 +29,8 @@
     "./voteguide": "./voteguide.js",
     "./qr": "./qr.js",
     "./email/*": "./email/*.js",
-    "./fieldlists": "./fieldlists.js"
+    "./fieldlists": "./fieldlists.js",
+    "./old-names": "./old-names.js"
   },
   "dependencies": {
     "htm": "^3.1.1",
