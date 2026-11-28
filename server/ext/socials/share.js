@@ -121,7 +121,9 @@ export const shareActions = {
       if (kitText({ body: input.body }, a.en).length > BODY_MAX) {
         throw Object.assign(httpError(400, 'Too long with the Authorized by line — shorten the words'), { field: 'body' });
       }
-      askBeforeSending(a, input);
+      // "Save without it" is written down on the kit's event.
+      const { authMissing } = askBeforeSending(a, input);
+      const without = authMissing ? { auth_missing: true } : {};
       const authorized = input.authorized ?? true;
       if (input.media_id && !(await tx.query('select 1 from media where id = $1 and workspace_id = $2', [input.media_id, ws])).rows[0]) {
         throw Object.assign(httpError(400, 'That picture is gone — upload it again'), { field: 'media_id' });
@@ -136,7 +138,7 @@ export const shareActions = {
         if (!row) throw httpError(404, 'That post is gone — reload the list');
         // The kit's own saved choice stays as it was stored.
         const { authorized: _kept, ...changed } = fields;
-        emit('share_kit', row.id, 'update', changed);
+        emit('share_kit', row.id, 'update', { ...changed, ...without });
         return { kit: kitOut(row) };
       }
       const id = newId();
@@ -146,7 +148,7 @@ export const shareActions = {
          values ($1, $2, $3, $4, $5, $6, $7, $8, $9) returning *`,
         [id, ws, code, fields.title, fields.body, fields.path, fields.media_id, fields.authorized, ctx.user?.id || null],
       )).rows[0];
-      emit('share_kit', id, 'create', { code, ...fields });
+      emit('share_kit', id, 'create', { code, ...fields, ...without });
       return { kit: kitOut(row) };
     },
   },

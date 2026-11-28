@@ -1057,11 +1057,14 @@ export const FIELD_ACTIONS = {
       placeholders_from: PLACEHOLDERS_FROM,
       withoutAuthorized: z.boolean().optional(),
     }),
-    handler: async (tx, ctx, input) => {
+    handler: async (tx, ctx, input, emit) => {
       input = emailCodes(input);
       const problem = testProblem(input.subject, input.body);
       if (problem) throw httpError(400, problem);
-      askBeforeSending(await authorizedOf(tx, ctx.workspaceId, { channel: 'email-test' }), input);
+      const { authMissing } = askBeforeSending(await authorizedOf(tx, ctx.workspaceId, { channel: 'email-test' }), input);
+      // A test copy keeps nothing on record, except the choice to send it
+      // without the Authorized by line ("Send me a test without it").
+      if (authMissing) emit('blast_test', newId(), 'create', { kind: input.kind, auth_missing: true });
       if (!emailConfigured()) throw httpError(409, 'Email isn’t connected — nothing can be sent yet');
       if (!ctx.user?.email) throw httpError(409, 'your sign-in has no email address');
       // From the address the real send would go from.

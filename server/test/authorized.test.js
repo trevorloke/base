@@ -478,6 +478,19 @@ test('T15. on the day with the line missing: a send asks first (409), "Send with
     assert.deepEqual([no.status, no.json.needsAuthorized], [409, true], name);
     okA(await mgr.action(name, { ...input, withoutAuthorized: true }), `${name} with "Send without it"`);
   }
+  // Each "… without it" is written down, with who chose it.
+  const chosen = async (type, extra = '') => (await db.query(
+    `select payload, actor_id from events where workspace_id = $1 and entity_type = $2 and actor_id is not null
+       and payload @> '{"auth_missing": true}'::jsonb ${extra} order by seq`, [ws, type],
+  )).rows;
+  assert.deepEqual((await chosen('blast_test')).map((e) => e.payload.kind), ['eblast', 'press'], 'the test copies: blast.test and media.test');
+  const kitMade = await chosen('share_kit', "and op = 'create'");
+  assert.equal(kitMade.length, 1, 'the share kit saved without it');
+  assert.equal(kitMade[0].payload.title, 'Due');
+  const kitId = (await db.query("select id from share_kits where workspace_id = $1 and title = 'Due'", [ws])).rows[0].id;
+  assert.equal((await mgr.action('share.kit.save', { id: kitId, title: 'Due', body: 'Words again', path: '/' })).status, 409, 'an edit asks too');
+  okA(await mgr.action('share.kit.save', { id: kitId, title: 'Due', body: 'Words again', path: '/', withoutAuthorized: true }));
+  assert.equal((await chosen('share_kit', "and op = 'update'")).length, 1, 'the edit saved without it');
   const sent = okA(await mgr.action('blast.send', { kind: 'eblast', subject: 'Without', body: 'Hi there', audience, withoutAuthorized: true }));
   const ev = (await db.query("select payload from events where workspace_id = $1 and entity_type = 'blast' and entity_id = $2 and op = 'create'", [ws, sent.blast.id])).rows[0];
   assert.equal(ev.payload.auth_missing, true);
@@ -486,6 +499,10 @@ test('T15. on the day with the line missing: a send asks first (409), "Send with
   const on = await mgr.action('ladder.setActive', { id: l.id, active: true });
   assert.deepEqual([on.status, on.json.needsAuthorized], [409, true]);
   okA(await mgr.action('ladder.setActive', { id: l.id, active: true, withoutAuthorized: true }));
+  const turnedOn = (await db.query(
+    `select payload, actor_id from events where workspace_id = $1 and entity_type = 'ladder' and entity_id = $2 and op = 'update' order by seq desc limit 1`, [ws, l.id],
+  )).rows[0];
+  assert.deepEqual([turnedOn.payload.active, turnedOn.payload.auth_missing, Boolean(turnedOn.actor_id)], [true, true, true], 'turned on without it, and by whom');
   clearOut();
   okA(await mgr.action('person.update', { id: P.ana.id, tags: [...P.ana.tags, `laddue${tag}`] }));
   await runLadders();

@@ -263,10 +263,12 @@ export const actions = {
       if (cur.active === input.active) return { ladder: out(cur), paused: 0, resumed: 0 };
       // Turning on a ladder that sends: asked first after the line's date
       // with none set. Once on it keeps sending, each one recorded.
+      // "Turn on without it" is written down on the ladder's event.
       const sends = parseJson(cur.steps, []).filter((x) => x.kind === 'email' || x.kind === 'text');
+      let authMissing = false;
       if (input.active && sends.length) {
         for (const channel of [...new Set(sends.map((x) => (x.kind === 'email' ? 'email-ladder' : 'sms-ladder')))]) {
-          askBeforeSending(await authorizedOf(tx, ctx.workspaceId, { channel }), input);
+          if (askBeforeSending(await authorizedOf(tx, ctx.workspaceId, { channel }), input).authMissing) authMissing = true;
         }
       }
       if (input.active && !runnable(parseJson(cur.steps, []))) {
@@ -279,7 +281,7 @@ export const actions = {
       // The order matters: resuming schedules jobs, pausing cancels them.
       const resumed = input.active ? await resumeLadder(tx, ctx.workspaceId, cur.id) : 0;
       const paused = input.active ? 0 : await pauseLadder(tx, ctx.workspaceId, cur.id);
-      emit('ladder', cur.id, 'update', { active: input.active, paused, resumed });
+      emit('ladder', cur.id, 'update', { active: input.active, paused, resumed, ...(authMissing ? { auth_missing: true } : {}) });
       return { ladder: out({ ...cur, active: input.active }), paused, resumed };
     },
   },
