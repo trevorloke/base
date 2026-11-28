@@ -23,6 +23,7 @@ import { usePersonSearch } from '../components/usePersonSearch.js';
 import PersonResults from '../components/PersonResults.jsx';
 import './shifts.css';
 import '../components/gift-import.css';
+import { doorLine } from '../../../shared/units.js';
 
 const MONEY_ROLES = ['manager', 'treasurer', 'staff'];
 const METHOD_WORD = { card: 'Card', etransfer: 'E-transfer', cheque: 'Cheque', cash: 'Cash', pad: 'Pre-authorized debit', 'in-kind': 'In-kind' };
@@ -119,7 +120,7 @@ function Waiting({ group, index, onSettled, online }) {
       {open && (
         <div className="ops-body" id={bodyId}>
           <p className="ops-meta">
-            The file says: {[donor.email, donor.phone, [donor.address, donor.unit ? `#${donor.unit}` : null].filter(Boolean).join(' '), donor.city, donor.postal].filter(Boolean).join(' · ') || 'a name only'}
+            The file says: {[donor.email, donor.phone, donor.address ? doorLine(donor, 'door') : donor.unit, donor.city, donor.postal].filter(Boolean).join(' · ') || 'a name only'}
           </p>
           <ul className="gw-gifts">
             {gifts.map((g) => (

@@ -43,7 +43,7 @@ export const VOLUNTEER_ROLES = [
   { code: 'data_entry',          label: 'Data entry' },
   { code: 'event_hosting',       label: 'Event hosting' },
   { code: 'zone_house_captain',  label: 'Zone house captain' },
-  { code: 'highrise_captain',    label: 'Hi-rise building captain', detail: 'Building (name or address)' },
+  { code: 'highrise_captain',    label: 'Building captain', detail: 'Building (name or address)' },
   { code: 'food',                label: 'Food' },
   { code: 'translation',         label: 'Translation', detail: 'Language' },
   { code: 'burmashave',          label: 'Burmashave' },

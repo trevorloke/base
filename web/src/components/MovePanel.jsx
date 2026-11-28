@@ -35,10 +35,13 @@ import PersonResults from './PersonResults.jsx';
 import { usePersonSearch } from './usePersonSearch.js';
 import { queuedSaid } from './queued.js';
 import './move.css';
+import { UnitSuggestions } from './people.js';
+import { doorLine } from '../../../shared/units.js';
 
 const firstName = (name) => String(name || '').trim().split(/\s+/)[0] || '';
-// "13450 104 Ave #4" — the street line as the door shows it.
-const lineOf = (a) => [a?.address, a?.unit ? `#${a.unit}` : null].filter(Boolean).join(' ');
+// "Unit 4 · 13450 104 Ave", "Basement suite · 10388 134 St" — the door line
+// as every screen writes it (shared/units.js doorLine).
+const lineOf = (a) => (a?.address ? doorLine(a, 'door') : '');
 const OFFICE = 'The office will finish this one — thanks';
 const OFFICE_MS = 4000;
 
@@ -93,7 +96,8 @@ function WhereForm({ who, city, onSave, onLater = null, only = null, idPrefix, a
           <div className="mv-row2">
             <div className="field">
               <label htmlFor={`${idPrefix}-unit`}>Unit</label>
-              <input id={`${idPrefix}-unit`} className="input" maxLength={20} autoComplete="off" value={form.unit} onChange={set('unit')} />
+              <input id={`${idPrefix}-unit`} className="input" maxLength={20} autoComplete="off" list={`${idPrefix}-unit-words`} value={form.unit} onChange={set('unit')} />
+              <UnitSuggestions id={`${idPrefix}-unit-words`} />
             </div>
             <div className="field">
               <label htmlFor={`${idPrefix}-city`}>City</label>

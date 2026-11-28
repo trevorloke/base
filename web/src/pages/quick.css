@@ -84,6 +84,15 @@
 .ws-door__state { margin-left: var(--s-2); font-size: 13px; font-weight: 500; color: var(--text-3); }
 .ws-door.is-done td { color: var(--text-3); }
 .ws-person { font-size: 14px; }
+/* A house or a building: its address once, then a line per door (indented,
+   its words in bold: "Main", "Basement suite", "Unit 201"), each with its
+   people; a building under floor headings. A building may run over pages. */
+.ws-door--building { break-inside: auto; page-break-inside: auto; }
+.ws-unit td { padding-top: var(--s-1); padding-left: var(--s-4); font-size: 15px; color: var(--ink); }
+.ws-unit.is-done td { color: var(--text-3); }
+.ws-door--house .ws-person, .ws-door--building .ws-person { padding-left: var(--s-5, 24px); }
+.ws-floor td { padding-top: var(--s-2); padding-left: var(--s-2); font-size: 14px; font-weight: 600; border-bottom: 1px solid var(--rule); }
+.ws-csvnote { margin: var(--s-1) 0 0; font-size: 13px; color: var(--text-2); }
 .ws-person__facts { display: block; font-size: 13px; color: var(--text-2); }
 .ws-skip { color: var(--danger); font-weight: 600; }
 .ws-foot { margin: var(--s-3) 0; color: var(--text-2); }

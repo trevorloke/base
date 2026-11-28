@@ -44,7 +44,9 @@ import { IKnowThem, KnowMeChip } from '../components/RelationshipsBits.jsx';
 import { doorState, inPass } from '@base-win/shared/passes';
 import { noCalls } from '@base-win/shared/canvass';
 import { PassChip, TryAgainChip, WalkShow, overlayPass, waitingTries } from '../components/PassBits.jsx';
-import { nextDoor } from '@base-win/shared/buildings';
+import { floorLabel, nextDoor } from '@base-win/shared/buildings';
+import { doorKey as sharedDoorKey, doorLine } from '../../../shared/units.js';
+import { placesOf, walkBlocks } from './mapView.js';
 import { VotedChip, VotedRow, pendingVoted } from '../components/Voted.jsx';
 import { usePracticeOverlay, useLiveChip } from '../components/GotvLive.js';
 import '../pages/gotv.css';
@@ -72,14 +74,17 @@ const DOOR_OUTCOMES = [{ code: NOBODY, label: OUTCOME_LABEL.no_answer }, { code:
 const KNOCK_KEYS = ['turfs', 'doors', 'person', 'persons', 'contacts', 'brief'];
 
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
-const norm = (s) => String(s || '').trim().toLowerCase();
-// A door's key on this list: its address and unit (a door with no address: its person).
-const doorKey = (d) => `${norm(d.address)}|${norm(d.unit)}|${d.address ? '' : d.persons[0]?.id}`;
+// A door's key on this list: the one door key (shared/units.js: "Main" and
+// blank are one door, the main door and a suite are two); a door with no
+// address: its person.
+const doorKey = (d) => sharedDoorKey(d, { none: (x) => `person:${x.persons?.[0]?.id ?? ''}` });
 const hashIndex = (s, n) => { let h = 0; for (const ch of String(s)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h % n; };
 const isColor = (c) => typeof c === 'string' && c.length <= 20 && typeof CSS !== 'undefined' && CSS.supports?.('color', c);
 // Same fallback as the map, so a turf is the same color on both screens.
 const turfColor = (t) => (isColor(t?.color) ? t.color : TURF_COLORS[hashIndex(t?.id || t?.name || '', TURF_COLORS.length)]);
-const doorLabel = (d) => (d.address ? (d.unit ? `${d.unit} – ${d.address}` : d.address) : 'Door with no address');
+// "Basement suite · 10388 134 St", "Unit 202 · 13450 104 Ave": one way on
+// every screen (the door's place comes with the list).
+const doorLabel = (d) => (d.address ? doorLine(d, d.place) : 'Door with no address');
 const isDnc = (p) => Array.isArray(p.tags) && p.tags.includes('do-not-contact');
 const firstName = (name) => String(name || '').trim().split(/\s+/)[0] || '';
 const dialable = (phone) => String(phone || '').replace(/\s*(?:ext\.?|x|#).*$/i, '').replace(/[^\d+]/g, '');
@@ -455,11 +460,14 @@ function WalkList({ id }) {
     const known = new Set(list.flatMap((d) => d.persons.map((p) => p.id)));
     for (const p of added) {
       if (known.has(p.id)) continue;
-      const home = p.address && list.find((d) => d.address && norm(d.address) === norm(p.address) && norm(d.unit) === norm(p.unit));
+      const home = p.address && list.find((d) => d.address && doorKey(d) === sharedDoorKey(p));
       if (home) home.persons.push(p);
       else list.push({ address: p.address, unit: p.unit, lat: p.lat, lng: p.lng, persons: [p], done: false });
     }
-    return list.map((d) => {
+    // Each door's place (a house with suites, a building, or a door on its
+    // own): as the server worked it out before the round left any door out,
+    // or — a list kept by an older version — worked out here.
+    return placesOf(list).map((d) => {
       const persons = d.persons.map((p) => {
         const mine = local[p.id];
         const vote = votes[p.id];
@@ -1033,35 +1041,66 @@ function WalkList({ id }) {
         </div>
       ) : (
         <ol className="walk-doors">
-          {doors.map((d, i) => inShow(d) && (
-            <Door
-              key={d.key}
-              door={d}
-              leaving={leaving.includes(d.key)}
-              index={i}
-              isNext={openIdx < 0 && i === targetIdx}
-              open={openKey === d.key}
-              onToggle={() => setOpenKey((k) => (k === d.key ? null : d.key))}
-              selectedId={picked[d.key]}
-              onPick={(pid) => setPicked((m) => ({ ...m, [d.key]: pid }))}
-              busy={busy}
-              notes={notes}
-              setNote={setNote}
-              onNoteFocus={hideToast}
-              onLog={(p, outcome, rating = null, answers = null, visitOf = null) => (outcome === 'moved'
-                ? moved(d, p, answers, visitOf) : log(p, outcome, rating, { door: d, answers, visitOf }))}
-              moving={moving?.key === d.key ? moving : null}
-              onMoveClose={release}
-              desk={desk}
-              onNobodyHome={() => nobodyHome(d)}
-              onLeftLit={() => leftLit(d)}
-              onVoted={() => voted(d)}
-              onSign={(p, kind) => askSign(d, p, kind)}
-              onAdded={(person) => personAdded(d, person)}
-              toast={toast}
-              pass={pass}
-            />
-          ))}
+          {/* A house or a building: its address once, then a row per door
+              (Main, Basement suite · Unit 201…), floor by floor. Its head
+              stays while any of its doors is shown (the Show pill, a GOTV
+              door leaving). */}
+          {walkBlocks(doors.map((d, i) => ({ ...d, at: i })).filter(inShow)).flatMap((b) => {
+            const row = (d, sub = null) => {
+              const i = d.at;
+              return (
+                <Door
+                  key={d.key}
+                  sub={sub}
+                  door={d}
+                  leaving={leaving.includes(d.key)}
+                  index={i}
+                  isNext={openIdx < 0 && i === targetIdx}
+                  open={openKey === d.key}
+                  onToggle={() => setOpenKey((k) => (k === d.key ? null : d.key))}
+                  selectedId={picked[d.key]}
+                  onPick={(pid) => setPicked((m) => ({ ...m, [d.key]: pid }))}
+                  busy={busy}
+                  notes={notes}
+                  setNote={setNote}
+                  onNoteFocus={hideToast}
+                  onLog={(p, outcome, rating = null, answers = null, visitOf = null) => (outcome === 'moved'
+                    ? moved(d, p, answers, visitOf) : log(p, outcome, rating, { door: d, answers, visitOf }))}
+                  moving={moving?.key === d.key ? moving : null}
+                  onMoveClose={release}
+                  desk={desk}
+                  onNobodyHome={() => nobodyHome(d)}
+                  onLeftLit={() => leftLit(d)}
+                  onVoted={() => voted(d)}
+                  onSign={(p, kind) => askSign(d, p, kind)}
+                  onAdded={(person) => personAdded(d, person)}
+                  toast={toast}
+                  pass={pass}
+                />
+              );
+            };
+            if (b.place === 'door') return [row(b.doors[0])];
+            const all = doors.filter((x) => x.group === b.group);
+            const leftHere = all.filter((x) => !x.done).length;
+            const head = (
+              <li key={`head:${b.key}:${b.doors[0].key}`} className={`walk-group walk-group--${b.place}`}>
+                <h2 className="walk-group__addr">{b.address}</h2>
+                {b.place === 'building' && (
+                  <p className="walk-group__line">Building · {plural(b.units, 'unit', 'units')} · {leftHere ? `${leftHere} left` : 'Every unit is done'}</p>
+                )}
+              </li>
+            );
+            const out = [head];
+            let floor;
+            for (const d of b.doors) {
+              if (b.place === 'building' && b.floors && d.floor !== floor) {
+                floor = d.floor;
+                out.push(<li key={`floor:${b.key}:${String(floor)}:${d.key}`} className="walk-floor">{floorLabel(floor)}</li>);
+              }
+              out.push(row(d, { words: d.unit_words || doorLabel(d), place: b.place, address: b.address }));
+            }
+            return out;
+          })}
         </ol>
       )}
 
@@ -1097,10 +1136,17 @@ function NearChip({ door }) {
   return <span className="chip vi-nearchip">{guideWords('vg.nearChip')}</span>;
 }
 
+// The state of a door at a house or in a building, on its own row.
+const SUB_STATE = { open: 'Not knocked', done: 'Done ✓' };
+
+// sub: a door of a house or a building, on a row under its address
+// ({ words: "Basement suite" | "Unit 201", place, address }): its words in
+// place of the address (said in full to a screen reader), a rule down its
+// left in its state's colour, and its state.
 function Door({
   door, index, isNext, open, onToggle, selectedId, onPick, busy, notes, setNote, onNoteFocus, onLog, onNobodyHome,
   onLeftLit, onVoted, onSign, onAdded, toast,
-  pass, moving = null, onMoveClose, desk = false, leaving = false,
+  pass, moving = null, onMoveClose, desk = false, leaving = false, sub = null,
 }) {
   const [more, setMore] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -1108,6 +1154,8 @@ function Door({
   const panelId = `walk-panel-${index}`;
   const multi = door.persons.length > 1;
   const sel = door.persons.find((p) => p.id === selectedId) || door.persons[0];
+  // (A door under its house's or building's address is a step down.)
+  const Heading = sub ? 'h3' : 'h2';
   const location = useLocation();
   const navigate = useNavigate();
   // The active survey's questions: answers go with a "talked" tap; a refused tap puts them back.
@@ -1152,19 +1200,26 @@ function Door({
       id={`walk-door-${index}`}
       tabIndex={-1}
       aria-labelledby={headId}
-      className={`walk-door${door.done ? ' is-done' : ''}${isNext ? ' is-next' : ''}${open ? ' is-open' : ''}${leaving ? ' gv-leaving' : ''}`}
+      data-door={door.key}
+      className={`walk-door${sub ? ` walk-door--sub walk-door--${door.state || 'open'}` : ''}${door.done ? ' is-done' : ''}${isNext ? ' is-next' : ''}${open ? ' is-open' : ''}${leaving ? ' gv-leaving' : ''}`}
     >
-      <h2 className="walk-door__h">
+      <Heading className="walk-door__h">
         <button type="button" className="walk-door__head" aria-expanded={open} aria-controls={panelId} onClick={toggle}>
           <span className="walk-check" data-done={door.done ? '' : undefined} data-phone={phoneOnly ? '' : undefined} aria-hidden="true">
             {phoneOnly ? <PhoneGlyph /> : '✓'}
           </span>
           <span className="walk-door__main">
-            <span className="walk-door__addr" id={headId}>{doorLabel(door)}</span>
+            {sub ? (
+              <span className="walk-door__addr walk-door__addr--sub" id={headId}>
+                <span className={`walk-door__unit${sub.place === 'building' && /^Unit /.test(sub.words) ? ' mono' : ''}`}>{sub.words}</span>
+                <span className="walk-sr"> · {sub.address}</span>
+              </span>
+            ) : <span className="walk-door__addr" id={headId}>{doorLabel(door)}</span>}
             <span className="walk-door__names">{door.persons.map((p) => p.name).join(' · ')}</span>
           </span>
           {/* One line: a household says "2 rated" (whose is whose is inside). */}
           <span className="walk-door__chips">
+            {sub && SUB_STATE[door.state] && <span className={`chip walk-state${door.state === 'done' ? ' chip-ok' : ''}`}>{SUB_STATE[door.state]}</span>}
             {door.state === 'again' && <TryAgainChip tries={door.tries} max={pass.tries} />}
             {(queued || added) && <span className="chip fk-wait">{added ? 'Not sent' : queuedChip(true)}</span>}
             {door.persons.some((p) => p.moving) && <span className="chip fk-wait">Moving — sends soon</span>}
@@ -1178,7 +1233,7 @@ function Door({
             {door.done ? (phoneOnly ? ' — called, not knocked' : ' — done') : door.state === 'again' ? ` — try again, ${door.tries} of ${pass?.tries}` : ' — not knocked yet'}{isNext ? ', next door' : ''}
           </span>
         </button>
-      </h2>
+      </Heading>
 
       {open && sel && (
         <div className="walk-panel" id={panelId}>

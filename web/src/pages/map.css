@@ -615,7 +615,43 @@
 .door-card { padding-bottom: var(--s-2); }
 .door-head { min-width: 0; display: flex; flex-direction: column; }
 .door-head__name { font-size: 22px; display: flex; align-items: center; flex-wrap: wrap; gap: 4px var(--s-2); overflow-wrap: anywhere; }
-.door-head__addr { font-size: 14px; color: var(--text-3); padding-bottom: 2px; overflow-wrap: anywhere; }
+.door-head__addr { font-size: 14px; color: var(--text-2); padding-bottom: 2px; overflow-wrap: anywhere; }
+/* A door's words ("Basement suite", "Unit 1203"): ink, never muted grey —
+   grey in sunlight is what made a suite unreadable. */
+.door-head__unit { font-size: 17px; font-weight: 600; color: var(--ink); }
+.door-head__place { font-size: 15px; font-weight: 600; color: var(--ink); }
+
+/* The doors of one house (DoorSwitch.jsx): big buttons, side by side for
+   two, 2 × 2 for three or four, one column for five or more. The selected
+   door: a 2 px ink edge on paper. */
+.door-switch { padding: var(--s-3) var(--s-4) 0; }
+.door-switch__label { margin: 0 0 var(--s-2); font-size: 14px; font-weight: 600; color: var(--text-2); }
+.door-switch__doors { display: grid; gap: var(--s-2); }
+.door-switch__doors--pair, .door-switch__doors--grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.door-switch__doors--column { grid-template-columns: 1fr; }
+.door-switch__btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  min-height: 56px;
+  padding: var(--s-2) var(--s-3);
+  background: var(--paper-1);
+  color: var(--ink);
+  border: 2px solid var(--rule-2);
+  border-radius: var(--r-ctrl);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.door-switch__btn.is-on { background: var(--paper-0); border-color: var(--ink); }
+.door-switch__btn:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.door-switch__words { font-size: 17px; font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }
+.door-switch__state { font-size: 13px; color: var(--text-2); }
+.door-switch__btn--done .door-switch__state, .door-switch__btn--voted .door-switch__state { color: var(--ok); font-weight: 600; }
+.door-switch__btn--again .door-switch__state { font-weight: 600; }
 .chip.door-dnc { font-size: 12px; }
 .door-rate { padding: var(--s-3) var(--s-4) 0; }
 .door-dnc-line { display: flex; align-items: center; gap: var(--s-2); margin: 0 0 var(--s-2); font-size: 14px; }

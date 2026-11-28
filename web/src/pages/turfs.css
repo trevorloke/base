@@ -124,6 +124,40 @@
 .walk-door.is-done { background: var(--paper); }
 .walk-door.is-open { box-shadow: inset 0 0 0 1px var(--mark); }
 .walk-door__h { margin: 0; font-size: inherit; }
+/* A house or a building (UNITS.md §5.4): its address once, then a row per
+   door under it — Main, Basement suite; Unit 201, Unit 202, floor by floor.
+   Each door's row keeps its own tap target and buttons; a rule down its
+   left says its state (not knocked · try again · done). */
+.walk-group {
+  padding: var(--s-3) var(--s-3) var(--s-1) var(--s-4);
+  border-top: 1px solid var(--rule);
+  background: var(--paper-0);
+}
+.walk-group:first-child { border-top: 0; }
+.walk-group__addr { margin: 0; font-family: var(--font-serif); font-size: 18px; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
+.walk-group__line { margin: 2px 0 0; font-size: 14px; font-weight: 600; color: var(--text-2); }
+.walk-floor {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: var(--s-1) var(--s-4);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--paper-1);
+  border-top: 1px solid var(--rule);
+}
+.walk-door--sub > .walk-door__h > .walk-door__head {
+  min-height: 56px;
+  padding-left: calc(var(--s-4) + 4px);
+  border-left: 4px solid var(--rule-2);
+}
+.walk-door--again > .walk-door__h > .walk-door__head { border-left-color: var(--warn); }
+.walk-door--done > .walk-door__h > .walk-door__head { border-left-color: var(--ok); }
+.walk-door__addr--sub { font-family: var(--font-sans); font-size: 17px; font-weight: 700; color: var(--ink); }
+.walk-door.is-done .walk-door__addr--sub { color: var(--ink); font-weight: 700; }
+.walk-door__unit.mono { font-family: var(--font-mono); }
+.walk-door__chips .chip.walk-state { font-weight: 600; }
 .walk-door__head {
   display: flex;
   width: 100%;
