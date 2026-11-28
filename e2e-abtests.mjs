@@ -52,7 +52,7 @@ import { createServer } from 'node:http';
 import { appendFileSync } from 'node:fs';
 // The fixtures here are Imagine Surrey's, so the server runs as its production
 // does (render.yaml sets this brand); a brand set by hand is left as set.
-if (bothNames('BASE_BRAND').every((k) => process.env[k] === undefined)) process.env.BASE_BRAND = 'imagine-surrey';
+if (${JSON.stringify(bothNames('BASE_BRAND'))}.every((k) => process.env[k] === undefined)) process.env.BASE_BRAND = 'imagine-surrey';
 
 const real = globalThis.fetch;
 let slowMs = 0;

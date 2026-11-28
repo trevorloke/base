@@ -80,7 +80,7 @@ writeFileSync(STUB, `
 import { createServer } from 'node:http';
 // The fixtures here are Imagine Surrey's, so the server runs as its production
 // does (render.yaml sets this brand); a brand set by hand is left as set.
-if (bothNames('BASE_BRAND').every((k) => process.env[k] === undefined)) process.env.BASE_BRAND = 'imagine-surrey';
+if (${JSON.stringify(bothNames('BASE_BRAND'))}.every((k) => process.env[k] === undefined)) process.env.BASE_BRAND = 'imagine-surrey';
 
 const { _setLimitsForTest } = await import(${href('ext/drive/export.js')});
 const { _setPaceForTest } = await import(${href('ext/drive/sheets.js')});
