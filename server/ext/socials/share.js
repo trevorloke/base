@@ -3,10 +3,12 @@
 // /r/<their code>?k=<kit code> (ext/site/public.js), and the desk sees the
 // sign-ups each post and each sharer brought in (share-api.js).
 //
-//   share.kit.save  { id?, title, body, path, media_id?, authorized? }
+//   share.kit.save  { id?, title, body, path, media_id?, authorized?, withoutAuthorized? }
 //       Outreach (manager, staff, treasurer; a grant lets anyone else).
 //       path: a page of the main website ("/", "/act/<slug>", "/<slug>").
-//       body plus, when authorized, the authorization line ≤ 500.
+//       body plus the Authorized by line (when it is filled in) ≤ 500.
+//       authorized: a new kit's saved choice (true unless said); an
+//       existing kit's is kept as stored, never overwritten.
 //   share.kit.open  { id, open }   stop or restart; a stopped kit's links
 //       keep working, it only leaves the Share screen
 //   share.picture   a picture for a kit (the site.picture shape, into media)
@@ -19,6 +21,8 @@ import { httpError } from '../../actions/util.js';
 import { readUpload } from '../abtests/media.js';
 import { selfPerson } from '../relationships/match.js';
 import { refCodeFor } from '../site/people.js';
+import { authorizedLine } from '../../../shared/site/authorized.js';
+import { authorizedOf, askBeforeSending } from '../../lib/authorized.js';
 
 const DESK = ['manager', 'staff', 'treasurer'];
 const ALL = ['manager', 'staff', 'treasurer', 'volunteer'];
@@ -28,23 +32,16 @@ export const BODY_MAX = 500;
 export const TITLE_MAX = 80;
 const parseJ = (v, d) => (typeof v === 'string' ? JSON.parse(v) : (v ?? d));
 
-// SW's authorizedBy(org) once it has shipped (shared/site/wording.js);
-// until then the line typed under Website → Settings.
-let wording = null;
-try { wording = await import('@base-win/shared/site/wording'); } catch { /* not there yet */ }
-export const authLineOf = (org = {}) => {
-  if (typeof wording?.authorizedBy === 'function') {
-    const s = String(wording.authorizedBy(org) || '').trim();
-    if (s) return s;
-  }
-  return String(org?.authorizationLine || '').trim();
-};
-export const authLine = async (q, ws) => {
-  const r = (await q.query('select org from site_settings where workspace_id = $1', [ws])).rows[0];
-  return r ? authLineOf(parseJ(r.org, {})) : '';
-};
-// The words people post: the kit's, then the line when it carries one.
-export const kitText = (kit, line) => (kit.authorized && line ? `${kit.body}\n${line}` : kit.body);
+// "Authorized by …" as the one rule gives it for share kits
+// (shared/site/authorized.js): '' while it isn't filled in.
+export const authLineOf = (org = {}) => authorizedLine(org, { channel: 'share-kit' }).en;
+export const authLine = async (q, ws) => (await authorizedOf(q, ws, { channel: 'share-kit' })).en;
+// The words people post: the kit's, then the line whenever it is filled in.
+// Each kit's own saved choice (authorized) is kept as it was, never
+// overwritten, and no longer read (an owner's question: docs/AUTHORIZED.md).
+export const kitText = (kit, line) => (line ? `${kit.body}\n${line}` : kit.body);
+// Too long with the line (a kit saved before the line was filled in).
+export const kitOver = (kit, line) => kitText(kit, line).length > BODY_MAX;
 
 // A page of the campaign's own website, never somewhere else.
 export const goodPath = (p) => typeof p === 'string' && p.length <= 300 && p.startsWith('/') && !p.startsWith('//')
@@ -111,26 +108,33 @@ export const shareActions = {
       path: z.string().trim().max(300),
       media_id: z.uuid().nullable().optional(),
       authorized: z.boolean().optional(),
+      // "Send without it": saved after the line's "needed from" date with
+      // no line set (server/lib/authorized.js).
+      withoutAuthorized: z.boolean().optional(),
     }),
     handler: async (tx, ctx, input, emit) => {
       const ws = ctx.workspaceId;
       if (!goodPath(input.path)) throw Object.assign(httpError(400, 'Pick a page of your website'), { field: 'path' });
-      const authorized = input.authorized ?? true;
-      if (kitText({ body: input.body, authorized }, await authLine(tx, ws)).length > BODY_MAX) {
+      const a = await authorizedOf(tx, ws, { channel: 'share-kit' });
+      if (kitText({ body: input.body }, a.en).length > BODY_MAX) {
         throw Object.assign(httpError(400, 'Too long with the Authorized by line — shorten the words'), { field: 'body' });
       }
+      askBeforeSending(a, input);
+      const authorized = input.authorized ?? true;
       if (input.media_id && !(await tx.query('select 1 from media where id = $1 and workspace_id = $2', [input.media_id, ws])).rows[0]) {
         throw Object.assign(httpError(400, 'That picture is gone — upload it again'), { field: 'media_id' });
       }
       const fields = { title: input.title, body: input.body, path: input.path, media_id: input.media_id ?? null, authorized };
       if (input.id) {
         const row = (await tx.query(
-          `update share_kits set title = $3, body = $4, path = $5, media_id = $6, authorized = $7, updated_at = now()
+          `update share_kits set title = $3, body = $4, path = $5, media_id = $6, updated_at = now()
             where id = $1 and workspace_id = $2 and deleted_at is null returning *`,
-          [input.id, ws, fields.title, fields.body, fields.path, fields.media_id, fields.authorized],
+          [input.id, ws, fields.title, fields.body, fields.path, fields.media_id],
         )).rows[0];
         if (!row) throw httpError(404, 'That post is gone — reload the list');
-        emit('share_kit', row.id, 'update', fields);
+        // The kit's own saved choice stays as it was stored.
+        const { authorized: _kept, ...changed } = fields;
+        emit('share_kit', row.id, 'update', changed);
         return { kit: kitOut(row) };
       }
       const id = newId();

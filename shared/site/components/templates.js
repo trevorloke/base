@@ -6,7 +6,7 @@ import { Fragment } from 'react';
 import { markdownText } from '../../markdown.js';
 import { html } from './h.js';
 import { Island } from './islands.js';
-import { GoalBar, Img, Md, Module, MODULE_COMPONENTS, Paras, campaignForm, drawsHeading, propsFor, translateProps } from './modules.js';
+import { GoalBar, Img, Md, Module, MODULE_COMPONENTS, Paras, campaignForm, drawsHeading, propsFor, signedShare, translateProps } from './modules.js';
 import { Announcement, Footer, Header, LanguageSwitch, PageHead, PreviewBanner, SkipLink } from './shell.js';
 import { VoteBanner, EmbedView } from './voteguide.js';
 import { arr, dateOnly, obj, str } from './util.js';
@@ -60,7 +60,7 @@ function CampaignView({ rc, campaign }) {
   const live = obj(rc.data.campaigns[str(c.id)]);
   const count = c.count ?? live.count ?? obj(rc.data.counts.signatures)[str(c.id)];
   const m = { kind: 'campaign', id: 'campaign' };
-  const share = { uid: 'campaign-share', url: rc.abs(pagePath(rc.loc)), here: pagePath(rc.loc), text: rc.w('act.signedShare', { title: str(c.title) }), subject: str(c.title), label: rc.w(pledge ? 'act.sharePledge' : 'act.sharePetition'), ...rc.islandWords('share') };
+  const share = { uid: 'campaign-share', url: rc.abs(pagePath(rc.loc)), here: pagePath(rc.loc), text: signedShare(rc, rc.w('act.signedShare', { title: str(c.title) })), subject: str(c.title), label: rc.w(pledge ? 'act.sharePledge' : 'act.sharePetition'), ...rc.islandWords('share') };
   return html`<${Fragment}>
     <${PageHead} title=${str(c.title)} eyebrow=${rc.w(pledge ? 'act.pledge' : 'act.petition')} lede=${c.excerpt} />
     <section className="section tone-paper campaign" id="m-campaign" data-template="campaign" aria-label=${str(c.title)}>

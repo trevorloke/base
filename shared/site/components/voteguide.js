@@ -143,11 +143,15 @@ export function VoteBanner({ rc }) {
 export function EmbedView({ rc, page, Module }) {
   const m = arr(obj(page).modules).find((x) => x && x.kind === 'voterguide');
   const org = rc.site.org;
+  // Its own "Authorized by …" (shared/site/authorized.js), and the approved
+  // words when the guide is drawn in another language.
+  const auth = rc.authorizedLine({ channel: 'embed' });
   return html`<main id="main" tabIndex="-1" className="vg-embed">
     ${m ? html`<${Module} m=${m} rc=${rc} level=${1} />` : null}
     <div className="section vg-embed-foot">
       <div className="container small">
-        ${org.authorization ? html`<p className="footer-authorization">${org.authorization}</p>` : null}
+        ${auth.include ? html`<p className="footer-authorization" lang=${auth.local || rc.lang !== 'en' ? 'en' : undefined}>${auth.en}</p>` : null}
+        ${auth.local ? html`<p className="footer-authorization" lang=${auth.local.lang}>${auth.local.text}</p>` : null}
         ${org.name ? html`<p>${rc.w('vg.by', { org: org.name })}</p>` : null}
       </div>
     </div>

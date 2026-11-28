@@ -21,6 +21,7 @@ import { googleSetup } from '../../lib/google/config.js';
 import { tokenPaused } from '../../lib/google/flow.js';
 import { grantFor } from '../../lib/google/tokens.js';
 import { REACH_WORDS, WORDS, apiOffNow, dailyMax, deliver, oneAddress } from './send.js';
+import { authorizedOf } from '../../lib/authorized.js';
 
 export const DESK = ['manager', 'treasurer', 'staff'];
 const MANAGER = ['manager'];
@@ -65,6 +66,15 @@ const ready = async (tx, ctx) => {
   if (await sentToday(tx, ctx.user.id) >= max) throw httpError(429, WORDS.cap(max));
   if (perMinute(ctx.user.id)) throw httpError(429, 'That’s ten in a minute — wait a minute, then send again');
   return grant;
+};
+
+// A staffer's own email with "Authorized by …" under it as a signature
+// line, unless it is already there or not filled in.
+export const gmailSignature = (body, a) => {
+  const words = String(body ?? '').replace(/\s+$/, '');
+  if (!a?.include || !a.en) return words;
+  const lines = [a.en, a.local?.text].filter((l) => l && !words.includes(l));
+  return lines.length ? `${words}\n\n${lines.join('\n')}` : words;
 };
 
 // The row, its settle job (in the same write), and its event.
@@ -117,8 +127,11 @@ export const actions = {
       const to = oneAddress(p.email);
       if (!to) throw httpError(409, WORDS.badAddress);
       // 9–11.
+      // "Authorized by …" as a signature line when it is filled in
+      // (shared/site/authorized.js): kept with the send, as it went.
+      const body = gmailSignature(input.body, await authorizedOf(tx, ctx.workspaceId, { channel: 'email-one' }));
       return record(tx, ctx, emit, {
-        kind: 'person', personId: p.id, clientKey: input.client_key, to, from: grant.email, subject: input.subject, body: input.body,
+        kind: 'person', personId: p.id, clientKey: input.client_key, to, from: grant.email, subject: input.subject, body,
       });
     },
     after: sendNow,

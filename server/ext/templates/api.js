@@ -72,10 +72,13 @@ api.get('/templates', async (c) => {
       order by lower(t.name) collate "C", t.id`,
     [ctx.workspaceId, use],
   )).rows;
-  const f = await footOf(db, ctx.workspaceId);
+  const { line, ...f } = await footOf(db, ctx.workspaceId, use === 'press' ? 'email-press' : 'email-list');
+  // What the law-shaped lines still lack: the mailing address; and the
+  // Authorized by line once its "needed from" date has come with none set.
+  const missing = [!f.address && 'address', line.status === 'empty' && line.required && 'authorizedBy'].filter(Boolean);
   return c.json({
     starters, mine, canSave: maySave(ctx, use), canHide: manager,
-    foot: { name: ctx.workspace?.name || '', ...f, missing: f.address ? [] : ['address'] },
+    foot: { name: ctx.workspace?.name || '', ...f, missing },
     links: await linksOf(c, db, ctx.workspaceId),
   });
 });

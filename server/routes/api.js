@@ -194,7 +194,9 @@ app.post('/actions/:name', async (c) => {
     const done = await action.after(c.get('db'), ctx, result);
     return c.json(shaped(done.result, done.lastSeq ?? lastSeq));
   } catch (e) {
-    if (e.status) return c.json({ error: e.message, ...(e.field ? { field: e.field } : {}), ...(e.link !== undefined ? { link: e.link } : {}) }, e.status);
+    // extra: what a refusal tells the screen besides its words (a send
+    // after the Authorized by line's date: { needsAuthorized, from }).
+    if (e.status) return c.json({ ...(e.extra && typeof e.extra === 'object' ? e.extra : {}), error: e.message, ...(e.field ? { field: e.field } : {}), ...(e.link !== undefined ? { link: e.link } : {}) }, e.status);
     throw e;
   }
 });

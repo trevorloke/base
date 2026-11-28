@@ -6,7 +6,8 @@
 // approved again, and "Authorized by" missing or changed takes the
 // language off the site (offeredLanguages).
 import { createHash } from 'node:crypto';
-import { LEGAL_ENGLISH, LEGAL_KEYS, consentName, fillSlots } from '../../../shared/site/wording.js';
+import { LEGAL_ENGLISH, LEGAL_KEYS, consentName } from '../../../shared/site/wording.js';
+import { keyCurrent, legalWords } from '../../../shared/site/legal-words.js';
 import { parseJ } from './store.js';
 
 // The first 12 hex characters of the sha256 of LEGAL_ENGLISH as JSON: a form
@@ -27,8 +28,10 @@ export const legalRow = async (q, workspaceId, id) => {
   return r ? { ...r, english: parseJ(r.english, {}), words: parseJ(r.words, {}) } : null;
 };
 
-// Is this key of an approval still the running code's English?
-export const keyCurrent = (row, key) => Boolean(row && String(row.words?.[key] ?? '').trim() && row.english?.[key] === LEGAL_ENGLISH[key]);
+// Is this key of an approval still the running code's English? And a
+// key's words as a page draws them. Pure, shared with the renderer and the
+// "Authorized by" rule (shared/site/legal-words.js).
+export { keyCurrent, legalWords };
 export const staleKeys = (row) => (row ? LEGAL_KEYS.filter((k) => !keyCurrent(row, k)) : [...LEGAL_KEYS]);
 
 // The slots' values, as the page fills them.
@@ -40,12 +43,4 @@ export const legalSlots = (settings, extra = {}) => {
     contact: String(org.agentContact || '').replace(/\s+/g, ' ').trim(),
     ...extra,
   };
-};
-// "Authorized by Ada, " with no contact → "Authorized by Ada".
-const tidy = (s) => s.replace(/[\s,，、]+$/u, '').replace(/\s+/g, ' ').trim();
-// A key's words as a page draws them: the approval's, filled — or the
-// English with lang 'en' when that key isn't current in it.
-export const legalWords = (row, lang, key, slots) => {
-  if (lang !== 'en' && keyCurrent(row, key)) return { text: tidy(fillSlots(row.words[key], slots)), lang };
-  return { text: tidy(fillSlots(LEGAL_ENGLISH[key], slots)), lang: 'en' };
 };

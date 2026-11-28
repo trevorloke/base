@@ -31,6 +31,7 @@ import { prepare, readBack, translateBatch, translateKey, MAX_SEGMENTS, MAX_CHAR
 import { parseJ, readSettings } from './store.js';
 import { cacheClear } from './cache.js';
 import { latestLegal, keyCurrent } from './legal.js';
+import { agentNamed } from '../../../shared/site/authorized.js';
 
 export const segHash = (text) => createHash('sha256').update(normSeg(text)).digest('hex');
 // The Simplified→Traditional dictionary is about 80 MB once built: loaded
@@ -61,7 +62,7 @@ const sentLanguages = (on) => {
 export const offeredLanguages = (settings, legal = {}, state = {}) => {
   const on = settings?.languages?.on || [];
   if (!on.length) return [];
-  if (!String(settings?.org?.agentName || '').trim()) return [];
+  if (!agentNamed(settings?.org)) return [];
   return OTHER_CODES.filter((c) => on.includes(c) && keyCurrent(legal[c], 'authorizedBy') && state[c]?.ready_at);
 };
 

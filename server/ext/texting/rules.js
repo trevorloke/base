@@ -82,6 +82,17 @@ export const namesCampaign = (body, campaign) =>
   String(body || '').toLowerCase().includes(String(campaign || '').trim().toLowerCase());
 export const endsWithFooter = (body) => /reply stop to opt out\.?\s*$/i.test(String(body || ''));
 export const withFooter = (body) => (endsWithFooter(body) ? String(body).trim() : `${String(body).trim()}\n${FOOTER}`);
+// "Authorized by …" (shared/site/authorized.js authorizedLine, a text
+// channel): on its own line(s) before the opt-out line. A STOP line already
+// typed at the end comes off first (withFooter puts it back, once), and a
+// line already in the words is never added again. Not included: as typed.
+export const withAuthorized = (body, a) => {
+  const words = String(body ?? '').trim();
+  if (!a?.include || !a.en) return words;
+  const bare = endsWithFooter(words) ? words.replace(/\s*reply stop to opt out\.?\s*$/i, '').trim() : words;
+  const lines = [a.en, a.local?.text].filter((l) => l && !bare.includes(l));
+  return lines.length ? `${bare}\n${lines.join('\n')}` : bare;
+};
 export const hasBlanks = (body) => /\{\{[^}]*\}\}/.test(String(body || ''));
 
 // Quiet hours: texts and campaign calls go only inside [from, until), in

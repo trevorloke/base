@@ -30,6 +30,7 @@
 // Without email connected nothing is claimed: the rest stay saved
 // (released, not held) and go out on Send now.
 import { setting } from '@base-win/shared/old-names';
+import { autoMissing } from '../../lib/authorized.js';
 import { runAction } from '../../lib/events.js';
 import { emailConfigured, sendEmail } from '../../lib/notify.js';
 import { enqueueJob, runJobsSoon } from '../../lib/jobs.js';
@@ -77,7 +78,7 @@ export const pickWinner = async (db, job) => {
   const ctx = { workspaceId, workspace: { name: ws?.name || '', settings: typeof ws?.settings === 'string' ? JSON.parse(ws.settings) : (ws?.settings || {}) }, publicUrl: base };
   const links = findLinks(blast.body);
   const attachments = await loadAttachments(db, workspaceId, { blastId });
-  const foot = await footOf(db, workspaceId);
+  const foot = await footOf(db, workspaceId, blast.kind === 'press' ? 'email-press' : 'email-list');
   const unsubFor = (r) => (r.subscriptionId ? `${base}/u/${r.subscriptionId}`
     : blast.kind === 'eblast' || blast.kind === 'press' ? `${base}/bu/${r.id}` : null);
   const subject = subjectFor(blast, 'rest');
@@ -160,7 +161,9 @@ export const pickWinner = async (db, job) => {
       if (!run.note && res.detail) run.note = res.detail;
       await act('blast.ab_rest', async (tx, emit) => {
         const n = await recordOutcome(tx, workspaceId, r.id, res, { from: 'sending' });
-        if (n.affectedRows) emit('blast_recipient', r.id, 'update', { blast_id: blastId, status });
+        // An automatic send can't ask "Send without it": it goes, and says so
+        // (the line missing after its "needed from" date).
+        if (n.affectedRows) emit('blast_recipient', r.id, 'update', { blast_id: blastId, status, ...(autoMissing(foot.line) ? { auth_missing: true } : {}) });
       });
     }
   }

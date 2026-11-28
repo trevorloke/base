@@ -25,6 +25,7 @@ import { sign, PREVIEW_TTL } from './tokens.js';
 import { readSettings, parseJ } from './store.js';
 import { latestLegal, staleKeys, legalSlots } from './legal.js';
 import { liveStrings, languageState, offeredLanguages, keptNames, usageMonth, segHash, convertToTraditional, MAX_NAMES } from './translate.js';
+import { agentNamed } from '../../../shared/site/authorized.js';
 
 const iso = (d) => (d instanceof Date ? d.toISOString() : d ? new Date(d).toISOString() : null);
 const PAGE = 50;
@@ -167,7 +168,7 @@ export const mountLanguageReads = (api, opened) => {
       key: Boolean(translateKey()),
       // The site's own address, for Preview (/site/pa/).
       site: here(c, '/site'),
-      agent: Boolean(String(settings.org?.agentName || '').trim()),
+      agent: agentNamed(settings.org),
       settings: lg,
       languages,
       usage: { month, chars: Number(used?.chars || 0), limit: lg.monthlyChars },

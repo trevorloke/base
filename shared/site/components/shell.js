@@ -121,6 +121,9 @@ export function Footer({ rc }) {
   // The footer's own logo (a light one, for the dark footer), else the name.
   const logo = rc.img(footer.logo.url);
   const year = new Date().getFullYear();
+  // "Authorized by …" (shared/site/authorized.js): in English, then again
+  // in the page's language as a manager approved it.
+  const auth = rc.authorizedLine({ channel: 'site' });
   return html`<footer className="site-footer">
     <div className="container stack stack--lg">
       <div className="footer-top">
@@ -147,16 +150,10 @@ export function Footer({ rc }) {
       ${footer.text && !parent ? html`<${Md} rc=${rc} text=${footer.text} className="footer-text" />` : null}
       <div className="footer-bottom">
         ${rc.lang === 'en'
-          ? html`<p>© ${year} ${org.name}${org.authorization ? html`<span className="footer-authorization">${org.authorization}</span>` : null}</p>`
+          ? html`<p>© ${year} ${org.name}${auth.include ? html`<span className="footer-authorization">${auth.en}</span>` : null}</p>`
           : html`<p>© ${year} ${org.name}</p>`}
-        ${rc.lang !== 'en' && org.authorization ? html`<p className="footer-authorization" lang="en">${org.authorization}</p>` : null}
-        ${rc.lang !== 'en' ? (() => {
-          // The line again in the page's language, as a manager approved it
-          // (B.C.'s rule for advertising in another language). One element
-          // per slot: an array here would need keys.
-          const a = rc.legal('authorizedBy');
-          return a.lang !== 'en' ? html`<p className="footer-authorization" lang=${a.lang}>${a.text}</p>` : null;
-        })() : null}
+        ${rc.lang !== 'en' && auth.include ? html`<p className="footer-authorization" lang="en">${auth.en}</p>` : null}
+        ${auth.local ? html`<p className="footer-authorization" lang=${auth.local.lang}>${auth.local.text}</p>` : null}
         ${privacy ? html`<p className="footer-legal"><a href=${privacy}>${rc.w('shell.privacy')}</a></p>` : null}
         ${parent ? (() => { const [before, after] = around(rc, 'shell.websiteBy', 'name'); return html`<p className="footer-parent">${before}<a href=${parent.url}>${parent.name}</a>${after}</p>`; })() : null}
       </div>

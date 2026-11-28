@@ -63,6 +63,7 @@ test('a volunteer gets 403 on every Website read and write; staff too, until a m
     ['site.guide.place.delete', { id: pageId }], ['site.guide.place.restore', { id: pageId }], ['site.guide.places.order', { ids: [] }],
     ['site.guide.places.import', { rows: [], token: 'x' }], ['site.guide.ballot', { contests: [] }], ['site.guide.check', { section: 'days', checked: true }],
     ['site.guide.publish', {}], ['site.guide.unpublish', {}], ['site.guide.clear', {}], ['site.guide.embed', { origins: [] }], ['site.guide.page', {}],
+    ['site.authorized.fromReceipts', {}],
     ['shift.public', { id: pageId, public: true }],
   ];
   for (const who of [vol.client, staff.client]) {
