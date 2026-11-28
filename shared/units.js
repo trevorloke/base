@@ -70,7 +70,8 @@ const SUITE_WORD = `(?:(?:${[...Object.keys(STEMS), ...Object.keys(TAIL_ONLY)].s
 // digits (splitUnit checks); after an explicit word or '#', 1–5.
 const UNIT5 = '[a-z]{0,2}\\d{1,5}[a-z]?';
 // The words that say "a unit follows" (a whole word, never "Northside" → "rthside").
-const UNIT_WORD = '(?:unit|apt|apartment|suite|ste|no|rm|room)\\.?';
+// Not "No.": in front of a number it is the house number ("No. 10388 134 St").
+const UNIT_WORD = '(?:unit|apt|apartment|suite|ste|rm|room)\\.?';
 
 const UNIT_RE = /^[A-Z]{0,2}\d{1,5}[A-Z]?$/;
 const LETTER_RE = /^[A-Z]$/;
@@ -128,9 +129,10 @@ export const unitKind = (key) => {
 
 // Each form splitUnit reads, made once.
 const TOKEN = `(${SUITE_WORD}|${UNIT5}|[a-z])`;
+const BEFORE = `^(?:#|${UNIT_WORD}(?=[\\s#\\d]))\\s*#?\\s*`;
 const RE = {
   hyphen: new RegExp(`^(#\\s*)?(${UNIT5}|[a-z]|${SUITE_WORD})\\s*-\\s*(\\d{4,})(\\s.*)$`, 'i'),
-  wordBefore: new RegExp(`^(?:#|${UNIT_WORD}(?=[\\s#\\d]))\\s*#?\\s*${TOKEN}\\s*(?:,|\\s-)?\\s+(.*)$`, 'i'),
+  wordBefore: new RegExp(`${BEFORE}${TOKEN}\\s*(?:,|\\s-)?\\s+(.*)$`, 'i'),
   suiteBefore: new RegExp(`^(${SUITE_WORD})\\s*(?:,|-)?\\s*(\\d.*)$`, 'i'),
   hashAfter: new RegExp(`^(.*?)\\s*,?\\s*#\\s*${TOKEN}$`, 'i'),
   wordAfter: new RegExp(`^(.*?)\\s*,?\\s+${UNIT_WORD}\\s*#?\\s*${TOKEN}$`, 'i'),
@@ -144,14 +146,17 @@ const isSuiteWord = (s) => unitKind(unitKey(s)) === 'suite' || unitKey(s) === ''
 // The unit written inside the address, in the forms lists and typing use.
 // Read only: nothing writes it back. Never split: "1203 13450 104 Ave" (two
 // numbers and a space), "13450A 104 Ave" (a letter after the number), a
-// range like "12345-12347" (the right part must be longer), and a suite word
-// after a name word ("123 Upper Rd").
+// range like "12345-12347" (the right part must be longer), a suite word
+// after a name word ("123 Upper Rd"), and any form that would leave a
+// numbered street with no house ("#12345 104 Ave" is house 12345, not unit
+// 12345 of "104 Ave").
 export const splitUnit = (address) => {
   const s = tidy(address);
   if (!s) return null;
+  // What is left must be a house number and its street.
   const out = (unit, civic) => {
     const c = String(civic).replace(/^[\s,\-]+|[\s,]+$/g, '');
-    return civicOk(c) ? { unit: unit.trim(), civic: c } : null;
+    return civicOk(c) && houseOf(c) ? { unit: unit.trim(), civic: c } : null;
   };
   // Hyphen: unit-CIVIC (Canada Post's own form), the civic 4 or more digits
   // and longer than the unit's digits.
@@ -171,7 +176,7 @@ export const splitUnit = (address) => {
   // A suite word before: "Bsmt 10388 134 St", "Basement suite, 10388 …", "Upper 10388 …".
   // (What follows must be a house, not a numbered street: "Upper 104 Ave" stays.)
   m = s.match(RE.suiteBefore);
-  if (m && isSuiteWord(m[1])) return houseOf(m[2].trim()) ? out(m[1], m[2]) : null;
+  if (m && isSuiteWord(m[1])) return out(m[1], m[2]);
   // '#' or a word after: "13450 104 Ave #1203", "… Unit 12A", "… Ste 210", "… Unit B", "… #Bsmt".
   m = s.match(RE.hashAfter) || s.match(RE.wordAfter);
   if (m && (/\d/.test(m[2]) || m[2].length === 1 || isSuiteWord(m[2]))) return out(m[2], m[1]);

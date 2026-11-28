@@ -140,6 +140,12 @@ test('splitUnit never splits the forms with another reading', () => {
     'Upper 104 Ave', 'Rear 1 St',
     // a lone letter before a hyphen needs a civic of 4 or more digits
     'B-123 Oak St', 'B-12 Oak St',
+    // a house number written with '#', 'No.' or a unit word in front of a numbered street:
+    // what is left would be a bare street, so it is the house number, not a unit
+    '#12345 104 Ave', '# 12345 104 Ave', 'Ste 12345 104 Ave', 'Suite 12345 104 Ave', 'Unit 12345 104 Ave',
+    'No. 10388 134 St', 'No 10388 134 St', '#5 104 Ave', '#10388 134 St', 'Apt 10388 134 St N',
+    // …and after it: the street alone is no house
+    '104 Ave #5', '134 St Unit 12', '104 Ave, Suite 101',
   ]) assert.equal(splitUnit(s), null, String(s));
 });
 

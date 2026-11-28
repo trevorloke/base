@@ -230,6 +230,27 @@ test('geocoding: 300 units in hyphen form are one lookup; a suite written after 
   assert.equal(pins.length, 1);
 });
 
+test('geocoding: a house number written "#12345" on a numbered street is looked up as that house, not as the street', async () => {
+  const { geocodeRound } = await import('../ext/geocoding/index.js');
+  const other = (await new Client().signup({ workspaceName: 'Grid Example', jurisdiction: 'bc-municipal' })).json.workspace.id;
+  // A row already on the map whose address is the bare street: its pin must not be copied to the houses.
+  await insert({ ws: other, name: 'Grid Street Example', address: '104 Ave', lat: 49.7, lng: -122.7 });
+  const a = await insert({ ws: other, name: 'Grid One Example', address: '#12345 104 Ave' });
+  const b = await insert({ ws: other, name: 'Grid Two Example', address: '#12351 104 Ave' });
+  const c = await insert({ ws: other, name: 'Grid Three Example', address: 'No. 10388 134 St' });
+  if (doorsMod) await doorsMod.fillDoorParts(db, { workspaceId: other });
+  asked.length = 0;
+  for (let i = 0; i < 5; i += 1) if ((await geocodeRound(db, other, null)).done) break;
+  assert.ok(asked.some((q) => /12345 104 Ave/.test(q)), asked.join(' · '));
+  assert.ok(asked.some((q) => /12351 104 Ave/.test(q)), asked.join(' · '));
+  assert.ok(asked.some((q) => /10388 134 St/.test(q)), asked.join(' · '));
+  assert.ok(!asked.some((q) => /^\s*(104 Ave|134 St)\b/i.test(q)), `never the bare street: ${asked.join(' · ')}`);
+  const pins = (await db.query('select id, lat from persons where id = any($1::uuid[])', [[a, b, c]])).rows;
+  assert.equal(pins.filter((r) => Number(r.lat) === 49.7).length, 0, 'the street row\'s pin is not copied to the houses');
+  const civ = (await db.query('select address, door_civic, door_unit from persons where id = any($1::uuid[]) order by address', [[a, b, c]])).rows;
+  assert.deepEqual(civ.map((r) => [r.door_civic, r.door_unit]), [['12345 104 ave', ''], ['12351 104 ave', ''], ['no 10388 134 st', '']]);
+});
+
 test('geocoding: suites set aside before are tried again once, as their house, when Place on map is pressed', async () => {
   const other = (await new Client().signup({ workspaceName: 'Retry Example', jurisdiction: 'bc-municipal' })).json.workspace.id;
   const geo = JSON.stringify({ geocode: { status: 'nomatch', at: '2026-01-01T00:00:00Z' } });
