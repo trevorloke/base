@@ -11,7 +11,7 @@
 //   GET /share/kits/:id   Outreach: one kit and its top 10 sharers.
 //   GET /share/top        Outreach: the top 10 people by people brought in,
 //       through any link of theirs, all time.
-import { setting } from '@starbase/shared/old-names';
+import { setting } from '@base-win/shared/old-names';
 import { Hono } from 'hono';
 import { here } from '../../lib/mount.js';
 import { siteDomain } from '../site/domain.js';

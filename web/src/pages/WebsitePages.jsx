@@ -15,7 +15,7 @@ import { action } from '../api.js';
 import { NoSignal, noSignal, useOnline } from '../components/NoSignal.jsx';
 import { useDragDrop } from '../components/useDragDrop.js';
 import { Dialog, MoreMenu, Toast, WebsiteTabs, useToast } from '../components/site/Bits.jsx';
-import { STARTERS, starterModules } from '@starbase/shared/site/starters';
+import { STARTERS, starterModules } from '@base-win/shared/site/starters';
 import { StarterThumb } from '../components/site/thumbs.jsx';
 import { useMicrosite, useSite, useSiteRefresh } from '../components/site/useSite.js';
 import { SiteBack, SiteGone } from './WebsiteSite.jsx';

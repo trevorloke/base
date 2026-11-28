@@ -11,7 +11,7 @@
 //   voted=no|yes               not marked as voted yet / marked (ext/voted) —
 //                              GOTV's list: supporters who still have to vote
 // A value it doesn't understand matches nobody, never everybody.
-import { OUTCOMES } from '@starbase/shared/canvass';
+import { OUTCOMES } from '@base-win/shared/canvass';
 import { pointInPolygon } from '../../lib/geo.js';
 import { isMoneyTag } from '../../lib/viewer.js';
 import { gotvFor, scopeOf, votedCol } from '../voted/state.js';

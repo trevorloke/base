@@ -31,7 +31,7 @@ import { newId, runAction } from '../../lib/events.js';
 import { makeLimiter } from '../../lib/guard.js';
 import { civic } from '../../lib/address.js';
 import { httpError } from '../../actions/util.js';
-import { splitFirst } from '@starbase/shared/names';
+import { splitFirst } from '@base-win/shared/names';
 import { websiteMemberTag, ensureWebsiteMembership } from '../membership/index.js';
 
 export const sql = `

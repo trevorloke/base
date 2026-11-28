@@ -6,7 +6,7 @@
 // candidate must never be the desk (lib/auth.js reads a seat only on a
 // volunteer, as a second guard).
 import { randomBytes, createHash } from 'node:crypto';
-import { slateLabel } from '@starbase/shared/canvass';
+import { slateLabel } from '@base-win/shared/canvass';
 import { httpError } from '../../actions/util.js';
 import { newId } from '../../lib/events.js';
 import { handCallTime } from './hand.js';

@@ -9,7 +9,7 @@ import { freshDb, Client } from './helpers.js';
 import { getDb } from '../db/client.js';
 import { app } from '../index.js';
 import { sql as litSql } from '../ext/litdrop/sql.js';
-import { OUTCOMES } from '@starbase/shared/canvass';
+import { OUTCOMES } from '@base-win/shared/canvass';
 import { itemText } from '../../web/src/offline.js';
 
 const tag = Math.random().toString(36).slice(2, 8);

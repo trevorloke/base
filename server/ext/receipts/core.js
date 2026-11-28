@@ -5,7 +5,7 @@
 // Wording: the tax line and the footer are settings, not code — the
 // financial agent confirms receipt contents and thresholds with Elections BC
 // (TESTING.md).
-import { setting } from '@starbase/shared/old-names';
+import { setting } from '@base-win/shared/old-names';
 import { randomBytes } from 'node:crypto';
 import { newId } from '../../lib/events.js';
 import { enqueueJob, cancelJobs } from '../../lib/jobs.js';

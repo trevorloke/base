@@ -11,7 +11,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { applyHunks, campaignShare, mailtoFor, mailtoMax, wordDiff } from '@starbase/shared/letters';
+import { applyHunks, campaignShare, mailtoFor, mailtoMax, wordDiff } from '@base-win/shared/letters';
 import { action, apiGet } from '../api.js';
 import { newClientId, onOutboxSent, queueAction } from '../offline.js';
 import { NeedsSignalLine, useOnline } from '../components/NoSignal.jsx';

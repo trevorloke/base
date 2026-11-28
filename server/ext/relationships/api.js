@@ -33,7 +33,7 @@
 // /key and /connected are the People area's (lib/perms.js); /mine is in no
 // area on purpose, so My people stays with anyone denied People.
 import { Hono } from 'hono';
-import { rankTies } from '@starbase/shared/ties';
+import { rankTies } from '@base-win/shared/ties';
 import { NO_CONTACT } from '../../lib/reach.js';
 import { azKey } from '../../lib/az.js';
 import { selfPerson } from './match.js';

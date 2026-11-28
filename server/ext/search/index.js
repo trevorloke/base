@@ -35,8 +35,8 @@
 // expression texting matches replies with (ext/texting/rules.js
 // PHONE_DIGITS_SQL), so those lookups use it too.
 import { Hono } from 'hono';
-import { VOLUNTEER_ROLE_CODES } from '@starbase/shared/canvass';
-import { foldTerm } from '@starbase/shared/names';
+import { VOLUNTEER_ROLE_CODES } from '@base-win/shared/canvass';
+import { foldTerm } from '@base-win/shared/names';
 import { decide } from '../../lib/perms.js';
 import { forViewer } from '../../lib/viewer.js';
 import { azKey, azAfter } from '../../lib/az.js';

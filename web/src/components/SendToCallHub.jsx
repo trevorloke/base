@@ -22,7 +22,7 @@
 import { Fragment, useEffect, useId, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { offeredCodes, ratingText } from '@starbase/shared/scale';
+import { offeredCodes, ratingText } from '@base-win/shared/scale';
 import { ApiError, action, apiGet } from '../api.js';
 import { useOnline } from './NoSignal.jsx';
 import { useScale } from './scale.js';

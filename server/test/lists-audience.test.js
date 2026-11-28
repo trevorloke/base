@@ -10,7 +10,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { freshDb, Client } from './helpers.js';
-import { azSort } from '@starbase/shared/names';
+import { azSort } from '@base-win/shared/names';
 import { app } from '../index.js';
 import { keptCounts, loadList, peopleChanged } from '../ext/lists/audience.js';
 

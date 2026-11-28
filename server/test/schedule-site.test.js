@@ -5,7 +5,7 @@
 // always was. A place picked on the map gives its card a map link.
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
-import { addDays, dayOf, instantOf } from '@starbase/shared/dayparts';
+import { addDays, dayOf, instantOf } from '@base-win/shared/dayparts';
 
 const { hit, send, ok, campaign } = await import('./site-helpers.js');
 const { when, dateOnly } = await import('../../shared/site/components/util.js');

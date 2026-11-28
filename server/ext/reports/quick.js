@@ -28,9 +28,9 @@ import { movedCounts, movedOpenWhere } from '../moves/index.js';
 const walkRoute = () => import('../../routes/api.js');
 import { walkOrder } from '../../lib/geo.js';
 import { civic } from '../../lib/address.js';
-import { VOLUNTEER_ROLES, SIGN_KINDS, donorTier } from '@starbase/shared/canvass';
+import { VOLUNTEER_ROLES, SIGN_KINDS, donorTier } from '@base-win/shared/canvass';
 import { preset, brandHas } from '../../lib/preset.js';
-import { azSort } from '@starbase/shared/names';
+import { azSort } from '@base-win/shared/names';
 
 const DESK = ['manager', 'treasurer', 'staff'];
 export const PAGE_MAX = 2000;

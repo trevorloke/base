@@ -23,7 +23,7 @@
 // c.env.base tells a route where it is (here(c, path)) for paths it hands
 // out in JSON (the map's tiles, a lesson's page).
 
-import { setting } from '@starbase/shared/old-names';
+import { setting } from '@base-win/shared/old-names';
 export const basePath = (raw = process.env.BASE_PATH) => {
   const s = String(raw || '').trim().replace(/\/+$/, '');
   if (!s) return '';

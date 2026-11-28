@@ -16,8 +16,8 @@
 // checked as a publish checks them (strict): a seed that wouldn't pass
 // fails loudly (the tests seed both brands).
 import { newId } from '../../../lib/events.js';
-import { checkModules } from '@starbase/shared/site/catalogue';
-import { checkTheme } from '@starbase/shared/site/theme';
+import { checkModules } from '@base-win/shared/site/catalogue';
+import { checkTheme } from '@base-win/shared/site/theme';
 import { SECTIONS } from '../shape.js';
 import { preset } from '../../../lib/preset.js';
 import '../from-preset.js';

@@ -116,7 +116,7 @@ test('a suffix stays with the surname (A–Z files "Kevin Smith Jr" under S); pe
 });
 
 test('splitFirst: a second word or an initial is a middle name; hyphenated or bracketed is not', async () => {
-  const { splitFirst } = await import('@starbase/shared/names');
+  const { splitFirst } = await import('@base-win/shared/names');
   assert.deepEqual(splitFirst('Mary Anne'), { first: 'Mary', middle: 'Anne' });
   assert.deepEqual(splitFirst('John A.'), { first: 'John', middle: 'A.' });
   assert.deepEqual(splitFirst('  Mary-Anne   Jo '), { first: 'Mary-Anne', middle: 'Jo' });

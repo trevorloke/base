@@ -11,8 +11,8 @@
 //                                 every shade is worked out and checked by
 //                                 rule (shared/brand-look.js), so this list
 //                                 reports and never blocks a save.
-import { contrast } from '@starbase/shared/site/theme';
-import { deriveLook } from '@starbase/shared/brand-look';
+import { contrast } from '@base-win/shared/site/theme';
+import { deriveLook } from '@base-win/shared/brand-look';
 
 export const HIDDEN_TOO_MUCH = 0.4;
 const lum = (r, g, b) => {

@@ -6,7 +6,7 @@
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { freshDb, Client } from './helpers.js';
-import { noCalls, noCallsWord } from '@starbase/shared/canvass';
+import { noCalls, noCallsWord } from '@base-win/shared/canvass';
 
 let mgr, vol;
 const ok = (r) => { assert.equal(r.status, 200, JSON.stringify(r.json)); return r.json; };

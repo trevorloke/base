@@ -5,10 +5,10 @@
 // markers only on the builder's own preview.
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
-import { MODULES, checkModules, checkProps, newModule, defaultsFor } from '@starbase/shared/site/catalogue';
-import { STARTERS, PLACEHOLDERS, starterModules, samplePath } from '@starbase/shared/site/starters';
-import { needsReload } from '@starbase/shared/site/components/context';
-import { drawBody, markSections } from '@starbase/shared/site/components/preview';
+import { MODULES, checkModules, checkProps, newModule, defaultsFor } from '@base-win/shared/site/catalogue';
+import { STARTERS, PLACEHOLDERS, starterModules, samplePath } from '@base-win/shared/site/starters';
+import { needsReload } from '@base-win/shared/site/components/context';
+import { drawBody, markSections } from '@base-win/shared/site/components/preview';
 import { problemsOf, problemWords, newModuleId } from '../../web/src/components/site/builder.js';
 import { renderSite } from '../ext/site/render/index.js';
 import { baseSample, imagineSurrey } from './site-samples.js';

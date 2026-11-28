@@ -22,8 +22,8 @@
 // the site deleted — stays closed ("This website has closed", public.js),
 // never handed back to the app, until a manager releases it.
 import { z } from 'zod';
-import { newModule, checkModules } from '@starbase/shared/site/catalogue';
-import { checkTheme } from '@starbase/shared/site/theme';
+import { newModule, checkModules } from '@base-win/shared/site/catalogue';
+import { checkTheme } from '@base-win/shared/site/theme';
 import { fontsForCheck, themeProblem } from './fonts.js';
 import { newId } from '../../lib/events.js';
 import { httpError } from '../../actions/util.js';

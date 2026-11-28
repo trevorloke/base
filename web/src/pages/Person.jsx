@@ -16,12 +16,12 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   VOLUNTEER_ROLES, SUGGESTED_TAGS,
   SIGN_KINDS, SIGN_STATUSES,
-} from '@starbase/shared/canvass';
+} from '@base-win/shared/canvass';
 import { ex } from '../brand.js';
 import { NS } from '../base.js';
-import { ratingByCode } from '@starbase/shared/scale';
-import { SLATES as FALLBACK_SLATES, slateLabel } from '@starbase/shared/canvass';
-import { placeLabel } from '@starbase/shared/shiftkinds';
+import { ratingByCode } from '@base-win/shared/scale';
+import { SLATES as FALLBACK_SLATES, slateLabel } from '@base-win/shared/canvass';
+import { placeLabel } from '@base-win/shared/shiftkinds';
 import { whenText, zoneOf } from '../components/shiftTime.js';
 import RatingButtons, { OUTCOMES, OutcomeButtons, RatingChip, focusRating, ratingSay, ratingText, useScale } from '../components/RatingButtons.jsx';
 import SurveyQuestions, { PersonAnswers, answersTail, usePersonAnswers, useSurvey } from '../components/SurveyQuestions.jsx';

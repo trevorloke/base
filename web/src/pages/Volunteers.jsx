@@ -19,9 +19,9 @@
 import { useMemo, useState } from 'react';
 import { Link, useOutletContext, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { VOLUNTEER_ROLES, noCalls } from '@starbase/shared/canvass';
-import { placeLabel } from '@starbase/shared/shiftkinds';
-import { azSort } from '@starbase/shared/names';
+import { VOLUNTEER_ROLES, noCalls } from '@base-win/shared/canvass';
+import { placeLabel } from '@base-win/shared/shiftkinds';
+import { azSort } from '@base-win/shared/names';
 import { apiGet, action } from '../api.js';
 import { NeedsSignalLine, useOnline } from '../components/NoSignal.jsx';
 import { clockText, monthDay, overlaps, shortDay, zoneOf } from '../components/shiftTime.js';

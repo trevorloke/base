@@ -17,7 +17,7 @@ import { presetFor } from '../lib/preset.js';
 import { runDueJobs } from '../lib/jobs.js';
 import * as fieldsSql from '../ext/fields/sql.js';
 import * as people from '../ext/fields/people.js';
-import * as lists from '@starbase/shared/fieldlists';
+import * as lists from '@base-win/shared/fieldlists';
 
 // Read at call time everywhere (lib/preset.js), so set after the imports.
 const brandWas = process.env.BASE_BRAND;

@@ -14,7 +14,7 @@ import assert from 'node:assert/strict';
 import { freshDb, Client } from './helpers.js';
 import { getDb } from '../db/client.js';
 import { app } from '../index.js';
-import { normalizeScale } from '@starbase/shared/scale';
+import { normalizeScale } from '@base-win/shared/scale';
 
 const tag = Math.random().toString(36).slice(2, 8);
 const DAY = 86400000;

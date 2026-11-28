@@ -18,8 +18,8 @@
 //                                    { kind, subject, body } (Outreach, desk only)
 // Subjects and bodies are as stored (codes); the screens show them in words.
 import { Hono } from 'hono';
-import { NO_ADDRESS, placeholders } from '@starbase/shared/email/words';
-import { STARTERS, starterOf } from '@starbase/shared/email/starters';
+import { NO_ADDRESS, placeholders } from '@base-win/shared/email/words';
+import { STARTERS, starterOf } from '@base-win/shared/email/starters';
 import { footOf } from '../abtests/send.js';
 import { baseOf } from '../socials/share-api.js';
 import { GONE, USES, maySave, mayStart, refusal } from './rules.js';

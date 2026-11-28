@@ -20,11 +20,11 @@ import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiGet, ApiError } from '../api.js';
 import { pendingKnocks, useOutbox } from '../offline.js';
-import { doorState, inPass } from '@starbase/shared/passes';
-import { bandOf } from '@starbase/shared/scale';
+import { doorState, inPass } from '@base-win/shared/passes';
+import { bandOf } from '@base-win/shared/scale';
 import {
   buildingOf, floorLabel, floorsShown, nextDoor, unitOf, unitRows, unitStops,
-} from '@starbase/shared/buildings';
+} from '@base-win/shared/buildings';
 import { overlayPass, waitingTries } from './PassBits.jsx';
 import { pendingVoted } from './Voted.jsx';
 import { usePracticeOverlay } from './GotvLive.js';

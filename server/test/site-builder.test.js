@@ -5,8 +5,8 @@
 // the theme's readable-colour "Fix it".
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { checkModules, MODULES } from '@starbase/shared/site/catalogue';
-import { PAIRS, SKINS, contrast, checkTheme } from '@starbase/shared/site/theme';
+import { checkModules, MODULES } from '@base-win/shared/site/catalogue';
+import { PAIRS, SKINS, contrast, checkTheme } from '@base-win/shared/site/theme';
 
 const B = await import('../../web/src/components/site/builder.js');
 const C = await import('../../web/src/components/site/colors.js');

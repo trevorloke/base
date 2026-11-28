@@ -18,7 +18,7 @@
 // container, which is thrown away at the next deploy, and the campaign with
 // it. BASE_EMBEDDED_DB=1 says a disk is mounted for it on purpose.
 import { existsSync } from 'node:fs';
-import { setting, OLD_DATA_DIRS } from '@starbase/shared/old-names';
+import { setting, OLD_DATA_DIRS } from '@base-win/shared/old-names';
 import { bootstrap } from './schema.js';
 
 let dbPromise = null;

@@ -14,7 +14,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useOutletContext, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { addDays, clockOf } from '@starbase/shared/dayparts';
+import { addDays, clockOf } from '@base-win/shared/dayparts';
 import { action, apiGet } from '../api.js';
 import { appMode } from '../mode.js';
 import { timeRange, zoneOf } from '../components/shiftTime.js';

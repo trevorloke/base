@@ -1,8 +1,8 @@
 // The calendar pieces the server's emails and reads share (shared/ics.js
 // builds the bytes): where a shift opens in the app, a file's name, and the
 // .ics a shift email carries.
-import { setting } from '@starbase/shared/old-names';
-import { icsCalendar, shiftEvent } from '@starbase/shared/ics';
+import { setting } from '@base-win/shared/old-names';
+import { icsCalendar, shiftEvent } from '@base-win/shared/ics';
 import { basePath } from './mount.js';
 
 // A shift in the app: the desk's or the field app's copy, under a client's

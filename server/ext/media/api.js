@@ -35,7 +35,7 @@ import { mayReach, person, whyNotSql } from '../../lib/reach.js';
 import { notSuppressed } from '../../lib/mail/index.js';
 import { deliveredRow, goingRow, repeatRow, retryable, sendJobOn } from '../abtests/send.js';
 import { attachmentsOf } from '../abtests/attach.js';
-import { toWords } from '@starbase/shared/email/words';
+import { toWords } from '@base-win/shared/email/words';
 import { sendStats, statsBody } from '../abtests/stats.js';
 import { emailConfigured } from '../../lib/notify.js';
 import { LISTS, isDesk, kindOf, listsOf, onLists, onMedia } from './rules.js';

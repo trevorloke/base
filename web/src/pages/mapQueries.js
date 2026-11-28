@@ -3,7 +3,7 @@
 // the reads' query keys and paths (and the name each is kept under on the
 // phone), the saved look, and the word to the service worker about tiles.
 import { useQuery } from '@tanstack/react-query';
-import { OLD_STORAGE } from '@starbase/shared/old-names';
+import { OLD_STORAGE } from '@base-win/shared/old-names';
 import { apiGet } from '../api.js';
 import { NS } from '../base.js';
 import { phoneCopy, useKeepCopy } from '../components/OfflineCache.js';

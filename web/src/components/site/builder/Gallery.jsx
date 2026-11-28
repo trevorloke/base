@@ -2,7 +2,7 @@
 // names and a search box. Most used first, then the catalogue's groups. A
 // kind a page may hold once (the voter guide) is greyed when it's there.
 import { useMemo, useState } from 'react';
-import { MODULE_BY_KIND } from '@starbase/shared/site/catalogue';
+import { MODULE_BY_KIND } from '@base-win/shared/site/catalogue';
 import { Dialog } from '../Bits.jsx';
 import { Thumb } from '../thumbs.jsx';
 import { groups, offered } from '../builder.js';

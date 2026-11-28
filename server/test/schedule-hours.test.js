@@ -15,7 +15,7 @@ import { runDueJobs } from '../lib/jobs.js';
 import { _setClockForTest } from '../ext/texting/rules.js';
 import { noticeWords } from '../ext/schedule/tell.js';
 import { shiftMessage } from '../lib/notify.js';
-import { hoursOf } from '@starbase/shared/shifthours';
+import { hoursOf } from '@base-win/shared/shifthours';
 
 const tag = Math.random().toString(36).slice(2, 8);
 const TZ = 'America/Vancouver';

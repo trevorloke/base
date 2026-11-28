@@ -49,8 +49,8 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { allCodes, bandOf, ratingByCode } from '@starbase/shared/scale';
-import { hoursOf } from '@starbase/shared/shifthours';
+import { allCodes, bandOf, ratingByCode } from '@base-win/shared/scale';
+import { hoursOf } from '@base-win/shared/shifthours';
 import { ApiError, apiGet, apiPost, fmtMoney } from '../api.js';
 import { ratingWho, useScale } from '../components/RatingButtons.jsx';
 import { useFollowupCount } from '../components/LaddersCount.js';
@@ -64,7 +64,7 @@ import { hasArea } from '../Shell.jsx';
 import { MineAllTime } from '../components/FieldReportBits.jsx';
 import { turfNames } from '../components/ShiftTurfs.jsx';
 import { clockText, whenText, zoneOf } from '../components/shiftTime.js';
-import { fmtIn } from '@starbase/shared/dayparts';
+import { fmtIn } from '@base-win/shared/dayparts';
 import '../components/operator.css';
 import { daysLeft, filingDay, filingSoon } from '../components/FilingWords.js';
 import './today.css';
@@ -78,7 +78,7 @@ import { gotvNoteCount } from '../components/gotvNotes.js';
 import './gotv.css';
 import { quickFor } from '../components/commands.js';
 import { guideNow, guideSoon, useGuide } from '../components/guide.js';
-import { guideState } from '@starbase/shared/voteguide';
+import { guideState } from '@base-win/shared/voteguide';
 import './home.css';
 
 const greeting = () => {

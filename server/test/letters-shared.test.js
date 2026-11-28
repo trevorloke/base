@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   tokens, size, wordDiff, applyHunks, campaignShare, sharedRuns, mailtoFor, mailtoMax, MAILTO_PHONE, MAILTO_OTHER,
-} from '@starbase/shared/letters';
+} from '@base-win/shared/letters';
 
 const EN = 'Surrey needs more buses on the King George corridor, and it needs them before the next school year starts in the fall.';
 const PA = 'ਸਰੀ ਨੂੰ ਕਿੰਗ ਜਾਰਜ ਸੜਕ ਉੱਤੇ ਹੋਰ ਬੱਸਾਂ ਦੀ ਲੋੜ ਹੈ। ਸਕੂਲ ਸ਼ੁਰੂ ਹੋਣ ਤੋਂ ਪਹਿਲਾਂ।';

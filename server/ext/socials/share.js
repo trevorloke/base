@@ -31,7 +31,7 @@ const parseJ = (v, d) => (typeof v === 'string' ? JSON.parse(v) : (v ?? d));
 // SW's authorizedBy(org) once it has shipped (shared/site/wording.js);
 // until then the line typed under Website → Settings.
 let wording = null;
-try { wording = await import('@starbase/shared/site/wording'); } catch { /* not there yet */ }
+try { wording = await import('@base-win/shared/site/wording'); } catch { /* not there yet */ }
 export const authLineOf = (org = {}) => {
   if (typeof wording?.authorizedBy === 'function') {
     const s = String(wording.authorizedBy(org) || '').trim();

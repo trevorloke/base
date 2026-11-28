@@ -14,7 +14,7 @@
 //                                    must do at the service, said apart.
 //
 // Keys and tokens are never in an answer: only which settings are present.
-import { setting, OLD_HEALTH_SERVICE } from '@starbase/shared/old-names';
+import { setting, OLD_HEALTH_SERVICE } from '@base-win/shared/old-names';
 import { olderNames } from '../../lib/adopt-old-names.js';
 import { Hono } from 'hono';
 import { probeLookup, retiredGoogle, RETIRED_WORDS } from '../../lib/geocode.js';

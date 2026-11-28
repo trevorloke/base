@@ -3,7 +3,7 @@
 // brings here. Pure checks only; the database work is ext/operator/enter.js.
 // The token's bytes are pinned by a test vector shared with the control
 // centre (server/test/entry-vector.json); change nothing here without it.
-import { setting } from '@starbase/shared/old-names';
+import { setting } from '@base-win/shared/old-names';
 import { createHash, createPublicKey, verify } from 'node:crypto';
 
 const SPKI = Buffer.from('302a300506032b6570032100', 'hex');

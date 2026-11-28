@@ -35,7 +35,7 @@
 //   GEOCODE_CONCURRENCY  lookups at once (default 6)
 //   GEOCODE_BACKOFF_MS   wait after a round where nothing worked (default 30 s, × rounds in a row)
 //   GEOCODE_RETRY_MS     wait before a paused run's first try (default 15 min)
-import { setting } from '@starbase/shared/old-names';
+import { setting } from '@base-win/shared/old-names';
 import { Hono } from 'hono';
 import { runAction } from '../../lib/events.js';
 import { enqueueJob, jobRunnerOn, runJobsSoon } from '../../lib/jobs.js';

@@ -27,7 +27,7 @@ import {
   KINDS, HAS_CHOICES, NAME_MAX, CHOICE_MAX, CHOICES_MAX, FIELDS_MAX,
   choicesOf, choiceKey, cleanName, nameKey, parseJ, parseValue, valueError, showValue, sameValue,
 } from './kinds.js';
-import { splits } from '@starbase/shared/fieldlists';
+import { splits } from '@base-win/shared/fieldlists';
 import { addStandardFields, convertingRefusal } from './people.js';
 import { convertActions } from './convert.js';
 

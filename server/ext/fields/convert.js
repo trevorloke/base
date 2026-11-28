@@ -19,7 +19,7 @@ import { z } from 'zod';
 import { newId, runAction } from '../../lib/events.js';
 import { httpError } from '../../actions/util.js';
 import { cancelJobs, enqueueJob, runJobsSoon } from '../../lib/jobs.js';
-import { choiceKey, suitsList, LIST_TOP, LIST_WORDS_MAX } from '@starbase/shared/fieldlists';
+import { choiceKey, suitsList, LIST_TOP, LIST_WORDS_MAX } from '@base-win/shared/fieldlists';
 import {
   CHOICE_KEY_SQL, CHOICE_MAX, CHOICES_MAX, FIELDS_MAX, NAME_MAX, TEXT_MAX, cleanName, nameKey, parseJ,
 } from './kinds.js';

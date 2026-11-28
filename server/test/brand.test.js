@@ -23,10 +23,10 @@ import { brandKey, brandFor, brandHtml, brandManifest, brandPages, campaignBrand
 import { emailBody, blastHtml } from '../ext/abtests/send.js';
 import { presetFor } from '../lib/preset.js';
 // base.win's own look, and Imagine Surrey's from its preset.
-import { BRANDS as OWN } from '@starbase/shared/brand';
+import { BRANDS as OWN } from '@base-win/shared/brand';
 const BRANDS = { ...OWN, 'imagine-surrey': presetFor('imagine-surrey').brand };
-import { lookCss } from '@starbase/shared/brand-look';
-import { contrast } from '@starbase/shared/site/theme';
+import { lookCss } from '@base-win/shared/brand-look';
+import { contrast } from '@base-win/shared/site/theme';
 import { rewriters } from '../lib/mount.js';
 import { png, webp, dataUrl } from './brand-images.js';
 

@@ -24,7 +24,7 @@
 //                           can say past midnight)
 //   whenFor(kind, shift?) → the value a sheet opens with
 import { useState } from 'react';
-import { WEEK_PARTS, spanWords, weekPartOf } from '@starbase/shared/dayparts';
+import { WEEK_PARTS, spanWords, weekPartOf } from '@base-win/shared/dayparts';
 import './schedule-hours.css';
 
 const pad = (n) => String(n).padStart(2, '0');

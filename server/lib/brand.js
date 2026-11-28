@@ -27,9 +27,9 @@
 // is stored: colours are six-digit hex, choices come from fixed lists,
 // pictures are ids, words are escaped — a saved brand can never put markup,
 // script or CSS into a page.
-import { APP_NAME, BRANDS } from '@starbase/shared/brand';
-import { deriveLook, lookCss, lookChrome, SIDEBARS, CORNERS, headingOf } from '@starbase/shared/brand-look';
-import { FONT_BY_VALUE, BUILT_FILES, LATIN, LATIN_EXT } from '@starbase/shared/site/fonts';
+import { APP_NAME, BRANDS } from '@base-win/shared/brand';
+import { deriveLook, lookCss, lookChrome, SIDEBARS, CORNERS, headingOf } from '@base-win/shared/brand-look';
+import { FONT_BY_VALUE, BUILT_FILES, LATIN, LATIN_EXT } from '@base-win/shared/site/fonts';
 import { brandKey, presetFor } from './preset.js';
 import { getDb } from '../db/client.js';
 

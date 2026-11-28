@@ -14,7 +14,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { action } from '../api.js';
 import { countdown, filingDay, filingSoon } from './FilingWords.js';
 import { useOnline } from './NoSignal.jsx';
-import { dayEvent } from '@starbase/shared/ics';
+import { dayEvent } from '@base-win/shared/ics';
 import AddToCalendar from './AddToCalendar.jsx';
 import './filing-dates.css';
 

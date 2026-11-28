@@ -16,10 +16,10 @@
 // This is the only file that may import from server/presets/ (a test checks).
 // A preset's large files (its website as first made, its sample people, its
 // pictures) are named in it and loaded only through it, only under the brand.
-import { setting } from '@starbase/shared/old-names';
+import { setting } from '@base-win/shared/old-names';
 import { Hono } from 'hono';
 import { readFile } from 'node:fs/promises';
-import { presetCandidates } from '@starbase/shared/scale';
+import { presetCandidates } from '@base-win/shared/scale';
 import IMAGINE_SURREY from '../presets/imagine-surrey/index.js';
 
 const deepFreeze = (v) => {

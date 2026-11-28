@@ -7,7 +7,7 @@
 //   GOTV_LOCKED, gotvLockMs    the writes that never wait more than 5 s for
 //                              the campaign's lock while GOTV is on or in
 //                              practice: a mark, an undo, a check, a knock
-import { setting } from '@starbase/shared/old-names';
+import { setting } from '@base-win/shared/old-names';
 import { gotvFor, scopeOf } from './state.js';
 
 export const gotvRead = (db, ctx) => gotvFor(db, ctx);

@@ -9,7 +9,7 @@
 //
 // The membership entity is shared with paid memberships (ext/membership,
 // ext/payments): only member.* and permission.* actions count.
-import { setting } from '@starbase/shared/old-names';
+import { setting } from '@base-win/shared/old-names';
 import { newId } from '../../lib/events.js';
 import { enqueueJob } from '../../lib/jobs.js';
 import { campaignOf, ensurePush, ensureSweep, PURPOSE, SAID } from './push.js';

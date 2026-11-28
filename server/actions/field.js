@@ -6,8 +6,8 @@ import { z } from 'zod';
 import {
   CHANNELS, OUTCOMES, EMAIL_OUTCOMES, SIGN_KIND_CODES, SIGN_STATUSES,
   VOLUNTEER_ROLE_CODES, SOCIAL_PLATFORMS, SHIFT_STATUSES,
-} from '@starbase/shared/canvass';
-import { RATING_CODE_RE } from '@starbase/shared/scale';
+} from '@base-win/shared/canvass';
+import { RATING_CODE_RE } from '@base-win/shared/scale';
 // The campaign's own scale (ext/scale): which codes a new rating may use.
 import { checkRating } from '../ext/scale/rules.js';
 import { createHash, randomBytes } from 'node:crypto';
@@ -28,15 +28,15 @@ import { audienceOf, recipientsOf } from '../ext/lists/audience.js';
 import { resolveFrom } from '../ext/senders/rules.js';
 // Who is on the media list (ext/media): tagged media or influencer, any capitals.
 import { LISTS, onLists, onMedia } from '../ext/media/rules.js';
-import { fillText, firstOf, toCodes } from '@starbase/shared/email/words';
-import { emailProblem, stillToFill, testProblem } from '@starbase/shared/email/check';
+import { fillText, firstOf, toCodes } from '@base-win/shared/email/words';
+import { emailProblem, stillToFill, testProblem } from '@base-win/shared/email/check';
 import { mayReach, person, address, whyNotSql } from '../lib/reach.js';
 import { e164, namesCampaign, MAX_BODY as TEXT_MAX } from '../ext/texting/rules.js';
 import { textConfigured } from '../lib/notify.js';
 import { DEFAULT_TZ } from '../lib/org.js';
 import { demoEmail } from '../lib/demo.js';
 // Kinds, saved places and the campaign's clock for shifts (ext/schedule).
-import { SHIFT_KIND_CODES, shiftKind } from '@starbase/shared/shiftkinds';
+import { SHIFT_KIND_CODES, shiftKind } from '@base-win/shared/shiftkinds';
 import {
   BOTH_ENDS, END_FIRST, LONGEST_KEPT, clockInput, dayInput, endsAfterStart, fitHours, livePlace, minutesInput, movedTimes, needInput, titleFor,
   turfWords, tzOf,

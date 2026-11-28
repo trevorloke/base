@@ -26,8 +26,8 @@
 //   ownLabel(kind, field)     the field, with the campaign's own label if any
 //
 // "Module" is the catalogue's word; the screens say "section".
-import { CATEGORIES, MODULES, MODULE_BY_KIND, checkProps, newModule, presetModuleDefaults } from '@starbase/shared/site/catalogue';
-import { everyLook, presetLooks } from '@starbase/shared/site/theme';
+import { CATEGORIES, MODULES, MODULE_BY_KIND, checkProps, newModule, presetModuleDefaults } from '@base-win/shared/site/catalogue';
+import { everyLook, presetLooks } from '@base-win/shared/site/theme';
 import { hasFeature } from '../../brand.js';
 
 // ── The campaign's own website set-up, from its server ──

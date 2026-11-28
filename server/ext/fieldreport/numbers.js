@@ -23,7 +23,7 @@
 // contact row), never the person's rating now, so re-rating someone later
 // never rewrites last week. An outcome this report doesn't know (a feature's
 // own) counts under "other".
-import { bandOf } from '@starbase/shared/scale';
+import { bandOf } from '@base-win/shared/scale';
 import { pointInPolygon, groupDoors } from '../../lib/geo.js';
 import { httpError } from '../../actions/util.js';
 import { DEFAULT_TZ } from '../../lib/org.js';

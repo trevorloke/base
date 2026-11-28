@@ -18,7 +18,7 @@
 // contact.log, the import and the sample check ratings with rules.js.
 import { z } from 'zod';
 import { Hono } from 'hono';
-import { CANDIDATE_CODE_RE, LIMITS, normalizeScale } from '@starbase/shared/scale';
+import { CANDIDATE_CODE_RE, LIMITS, normalizeScale } from '@base-win/shared/scale';
 import { applyEdit, loadScale, settingsOf } from './rules.js';
 
 const MANAGER_ONLY = ['manager'];

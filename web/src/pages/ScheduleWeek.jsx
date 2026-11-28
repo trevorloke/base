@@ -17,7 +17,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { addDays, fmtIn } from '@starbase/shared/dayparts';
+import { addDays, fmtIn } from '@base-win/shared/dayparts';
 import { apiGet, action } from '../api.js';
 import { NotifyChip } from '../components/NotifyWords.jsx';
 import { Unavailable } from './ScheduleSheet.jsx';

@@ -18,7 +18,7 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiGet } from '../api.js';
-import { guideLangOf, guideState, nearVotingPlace } from '@starbase/shared/voteguide';
+import { guideLangOf, guideState, nearVotingPlace } from '@base-win/shared/voteguide';
 
 const FIVE_MIN = 5 * 60 * 1000;
 const DAY = 24 * 3600 * 1000;

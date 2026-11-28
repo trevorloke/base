@@ -20,8 +20,8 @@
 // where this server's looks and starting words come from.
 import { fileURLToPath } from 'node:url';
 import { normalize, sep } from 'node:path';
-import { presetLooks, allLooks } from '@starbase/shared/site/theme';
-import { presetModuleDefaults } from '@starbase/shared/site/catalogue';
+import { presetLooks, allLooks } from '@base-win/shared/site/theme';
+import { presetModuleDefaults } from '@base-win/shared/site/catalogue';
 import { layWords } from '../../../shared/site/ui-words.js';
 import { preset } from '../../lib/preset.js';
 

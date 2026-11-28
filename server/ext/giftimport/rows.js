@@ -4,8 +4,8 @@
 // screen: → { row } the import works with, or { error } why it can't come
 // in, in plain words (the screen shows them beside the row's number).
 import { z } from 'zod';
-import { SLATE_CODES } from '@starbase/shared/canvass';
-import { GIFT_METHODS, giftKey } from '@starbase/shared/giftfile';
+import { SLATE_CODES } from '@base-win/shared/canvass';
+import { GIFT_METHODS, giftKey } from '@base-win/shared/giftfile';
 
 const text = (max) => z.string().max(max).nullish();
 const rowSchema = z.object({

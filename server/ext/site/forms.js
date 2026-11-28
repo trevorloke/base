@@ -54,7 +54,7 @@ import { getCookie } from 'hono/cookie';
 import { newId, runAction } from '../../lib/events.js';
 import { clientIp, makeLimiter } from '../../lib/guard.js';
 import { campaignDay } from '../../lib/gifts.js';
-import { SLATE_CODES } from '@starbase/shared/canvass';
+import { SLATE_CODES } from '@base-win/shared/canvass';
 import { DONATE_DECLARATION, JOIN_DECLARATION } from '../../../shared/site/wording.js';
 import { EMAIL_RE, sourceOf } from '../../../shared/site/components/util.js';
 import { actions as fieldActions } from '../fields/actions.js';

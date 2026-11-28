@@ -34,7 +34,7 @@
 import { Hono } from 'hono';
 import { onMedia } from '../media/rules.js';
 import { selfPerson } from '../relationships/match.js';
-import { campaignShare, sharedRuns, size } from '@starbase/shared/letters';
+import { campaignShare, sharedRuns, size } from '@base-win/shared/letters';
 import { outAt, waitDays } from './actions.js';
 
 export const api = new Hono();

@@ -22,7 +22,7 @@
 //   fetch: the browser says it came from another site, or the body isn't
 //   JSON (a plain <form> can post text/plain or form data with the cookie
 //   attached; the app never does). → the refusal to send, or null.
-import { setting } from '@starbase/shared/old-names';
+import { setting } from '@base-win/shared/old-names';
 import { createHash, timingSafeEqual } from 'node:crypto';
 
 const LIMITER_MAX = 20_000;

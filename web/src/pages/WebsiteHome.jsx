@@ -17,7 +17,7 @@ import { hasFeature } from '../brand.js';
 import { NoSignal, noSignal } from '../components/NoSignal.jsx';
 import { WebsiteTabs } from '../components/site/Bits.jsx';
 import { useSite, plural } from '../components/site/useSite.js';
-import { lookOf } from '@starbase/shared/site/theme';
+import { lookOf } from '@base-win/shared/site/theme';
 import { GUIDE_STATE, useSiteGuide } from '../components/site/useSiteGuide.js';
 import './shifts.css';
 import '../editor.css';

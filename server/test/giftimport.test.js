@@ -16,7 +16,7 @@ import { runDueJobs } from '../lib/jobs.js';
 import { campaignDay } from '../lib/gifts.js';
 import {
   readAmount, readGiftDate, dateOrderOf, readMethod, flipName, giftKey, keyRows,
-} from '@starbase/shared/giftfile';
+} from '@base-win/shared/giftfile';
 
 const tag = Math.random().toString(36).slice(2, 8);
 const mail = (who) => `${who}.gi.${tag}@example.org`;

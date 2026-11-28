@@ -31,7 +31,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { randomBytes } from 'node:crypto';
-import { icsCalendar, shiftEvent } from '@starbase/shared/ics';
+import { icsCalendar, shiftEvent } from '@base-win/shared/ics';
 import { getDb } from '../../db/client.js';
 import { httpError } from '../../actions/util.js';
 import { configuredUrl, icsFileName, ICS_TYPE, shiftAppLink } from '../../lib/calendar.js';

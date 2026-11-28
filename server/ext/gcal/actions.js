@@ -11,7 +11,7 @@
 //   gcal.stop {}           base.win deletes its calendar from your Google
 //                          account; a link it could no longer reach ('left')
 //                          is only forgotten here
-import { setting } from '@starbase/shared/old-names';
+import { setting } from '@base-win/shared/old-names';
 import { z } from 'zod';
 import { httpError } from '../../actions/util.js';
 import { newId } from '../../lib/events.js';

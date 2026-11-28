@@ -5,7 +5,7 @@
 //
 // That address ends in a key made from the API key (callhub.js): it is
 // given to CallHub and never shown, logged or put in an answer.
-import { setting } from '@starbase/shared/old-names';
+import { setting } from '@base-win/shared/old-names';
 import { callhub, callhubOn, CallHubError, hookUrl, HOOK_PREFIX, idOf, listAll } from './callhub.js';
 import { heldNumbers } from './dnc.js';
 import { whoseNumbers } from './people.js';

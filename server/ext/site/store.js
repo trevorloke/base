@@ -6,13 +6,13 @@
 // that campaign's; any other (SITE_HOSTS, or the app's own address at
 // /site/) is SITE_WORKSPACE's (a slug) or else the first campaign set up on
 // this server — one campaign per deployment (lib/org.js).
-import { setting } from '@starbase/shared/old-names';
+import { setting } from '@base-win/shared/old-names';
 import { getDb } from '../../db/client.js';
 import { runAction } from '../../lib/events.js';
 import { brandKey, brandFor } from '../../lib/brand.js';
-import { deriveLook } from '@starbase/shared/brand-look';
+import { deriveLook } from '@base-win/shared/brand-look';
 import { DEFAULT_TZ } from '../../lib/org.js';
-import { checkTheme } from '@starbase/shared/site/theme';
+import { checkTheme } from '@base-win/shared/site/theme';
 // The looks and starting words this server's set-up brings, if any (read by
 // checkTheme and the catalogue each time they are asked).
 import './from-preset.js';

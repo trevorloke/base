@@ -41,10 +41,10 @@ import RatingButtons, {
 } from '../components/RatingButtons.jsx';
 import SurveyQuestions, { answersSaid, answersTail, answersWord, useSurvey } from '../components/SurveyQuestions.jsx';
 import { IKnowThem, KnowMeChip } from '../components/RelationshipsBits.jsx';
-import { doorState, inPass } from '@starbase/shared/passes';
-import { noCalls } from '@starbase/shared/canvass';
+import { doorState, inPass } from '@base-win/shared/passes';
+import { noCalls } from '@base-win/shared/canvass';
 import { PassChip, TryAgainChip, WalkShow, overlayPass, waitingTries } from '../components/PassBits.jsx';
-import { nextDoor } from '@starbase/shared/buildings';
+import { nextDoor } from '@base-win/shared/buildings';
 import { VotedChip, VotedRow, pendingVoted } from '../components/Voted.jsx';
 import { usePracticeOverlay, useLiveChip } from '../components/GotvLive.js';
 import '../pages/gotv.css';

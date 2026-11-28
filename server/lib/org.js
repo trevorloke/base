@@ -30,8 +30,8 @@
 // The first sign-up sets up the one workspace; everyone after joins by
 // invite. (Workspaces are still scoped by id underneath — tests and dev can
 // open sign-up again with BASE_OPEN_SIGNUP=1.)
-import { setting } from '@starbase/shared/old-names';
-import { SLATES } from '@starbase/shared/canvass';
+import { setting } from '@base-win/shared/old-names';
+import { SLATES } from '@base-win/shared/canvass';
 import { preset, brandHas } from './preset.js';
 
 // A setting by its name, or its older name while that is the one set (shared/old-names.js); any other name as it is.

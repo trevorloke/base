@@ -12,7 +12,7 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { OLD_STORAGE } from '@starbase/shared/old-names';
+import { OLD_STORAGE } from '@base-win/shared/old-names';
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const SRC = (p) => pathToFileURL(join(ROOT, 'web/src', p)).href;

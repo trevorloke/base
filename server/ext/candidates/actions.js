@@ -8,7 +8,7 @@
 //   candidate.unlink { id } — the account leaves the seat; it stays a volunteer
 //   candidate.remove { id } — the seat goes (and its account leaves it); their call time closes
 import { z } from 'zod';
-import { SLATE_CODES } from '@starbase/shared/canvass';
+import { SLATE_CODES } from '@base-win/shared/canvass';
 import { httpError } from '../../actions/util.js';
 import { newId } from '../../lib/events.js';
 import { sendEmail } from '../../lib/notify.js';

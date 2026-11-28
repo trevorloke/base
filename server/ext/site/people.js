@@ -19,7 +19,7 @@
 import { randomInt } from 'node:crypto';
 import { newId } from '../../lib/events.js';
 import { civic } from '../../lib/address.js';
-import { splitFirst, joinName } from '@starbase/shared/names';
+import { splitFirst, joinName } from '@base-win/shared/names';
 import { matchWebsitePerson } from '../intake/index.js';
 import { parseJ } from './store.js';
 import { samePostal } from '../duplicates/same.js';

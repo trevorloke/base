@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import {
   splitUnit, normAddr, civicOf, unitOf, floorOf, unitCompare, floorsShown,
   groupBuildings, buildingOf, unitRows, unitStops, nextDoor, BUILDING_MIN,
-} from '@starbase/shared/buildings';
+} from '@base-win/shared/buildings';
 
 const LAT = 49.19;
 const LNG = -122.85;

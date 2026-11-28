@@ -6,7 +6,7 @@
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { freshDb, Client } from './helpers.js';
-import { addDays, dayOf, instantOf } from '@starbase/shared/dayparts';
+import { addDays, dayOf, instantOf } from '@base-win/shared/dayparts';
 
 const TZ = 'America/Vancouver';
 const tag = Math.random().toString(36).slice(2, 8);

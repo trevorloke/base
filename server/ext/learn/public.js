@@ -8,7 +8,7 @@
 // working: it is sent on to /training, the rest of the address kept.
 import { Hono } from 'hono';
 import { getDb } from '../../db/client.js';
-import { renderMarkdown, markdownText, escapeHtml as esc } from '@starbase/shared/markdown';
+import { renderMarkdown, markdownText, escapeHtml as esc } from '@base-win/shared/markdown';
 import { page as publicPage } from '../../lib/publicpage.js';
 import { kindOfType } from './files.js';
 import { serveAsset } from './api.js';

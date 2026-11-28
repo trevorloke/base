@@ -10,7 +10,7 @@ import { randomUUID } from 'node:crypto';
 import { freshDb } from './helpers.js';
 import { _resetDbForTest } from '../db/client.js';
 import { groupDoors } from '../lib/geo.js';
-import { groupBuildings, splitUnit, BUILDING_MIN } from '@starbase/shared/buildings';
+import { groupBuildings, splitUnit, BUILDING_MIN } from '@base-win/shared/buildings';
 import { hrCounts, readOnly, main, connectPg } from '../../scripts/hr-counts.mjs';
 
 let db;

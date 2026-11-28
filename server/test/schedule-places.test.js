@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import { freshDb, Client } from './helpers.js';
 import { verifyChain } from '../lib/events.js';
 import { _setNearestMsForTest } from '../lib/geocode.js';
-import { pinName } from '@starbase/shared/shiftkinds';
+import { pinName } from '@base-win/shared/shiftkinds';
 
 const tag = Math.random().toString(36).slice(2, 8);
 const realFetch = globalThis.fetch;

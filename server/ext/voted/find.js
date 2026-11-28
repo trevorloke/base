@@ -12,7 +12,7 @@
 // Limits that fit a runner's afternoon: 120 a minute and 5,000 a day per
 // person (in memory, one instance); past the day limit the desk's
 // Scrutineers tab shows a flag and a manager may allow 2,000 more.
-import { foldTerm } from '@starbase/shared/names';
+import { foldTerm } from '@base-win/shared/names';
 import { streetOf } from '../../lib/address.js';
 import { voterNumber } from '../voternumber/index.js';
 import { now } from '../../lib/clock.js';

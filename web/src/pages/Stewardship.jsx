@@ -14,7 +14,7 @@ import { action, apiGet, fmtMoney } from '../api.js';
 import { NoSignal, noSignal, useOnline } from '../components/NoSignal.jsx';
 import './shifts.css';
 import './stewardship.css';
-import { noCalls, noCallsWord } from '@starbase/shared/canvass';
+import { noCalls, noCallsWord } from '@base-win/shared/canvass';
 
 const HOWS = [['call', 'Called'], ['email', 'Emailed'], ['note', 'Note'], ['letter', 'Letter']];
 const fmtDay = (d) => (d ? new Date(`${String(d).slice(0, 10)}T12:00:00`).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }) : '');

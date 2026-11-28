@@ -25,7 +25,7 @@
 //   items the exporter sees (exportTables below).
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { addDays, instantOf, isClock, isDay, zonedISO } from '@starbase/shared/dayparts';
+import { addDays, instantOf, isClock, isDay, zonedISO } from '@base-win/shared/dayparts';
 import { httpError } from '../../actions/util.js';
 import { newId } from '../../lib/events.js';
 import { mayRun } from '../../lib/perms.js';

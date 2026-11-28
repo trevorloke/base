@@ -24,7 +24,7 @@
 // Policy: this site, the YouTube and Vimeo players, and Stripe's checkout
 // as a form's destination; never framed by another site (a draft's preview
 // may be framed by the app's own Website screen).
-import { setting } from '@starbase/shared/old-names';
+import { setting } from '@base-win/shared/old-names';
 import { Hono } from 'hono';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 import { readFile, stat } from 'node:fs/promises';
@@ -32,8 +32,8 @@ import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join, normalize, sep, extname } from 'node:path';
 import { createHash } from 'node:crypto';
-import { checkProps } from '@starbase/shared/site/catalogue';
-import { themeCss } from '@starbase/shared/site/theme';
+import { checkProps } from '@base-win/shared/site/catalogue';
+import { themeCss } from '@base-win/shared/site/theme';
 import { getDb } from '../../db/client.js';
 import { runAction } from '../../lib/events.js';
 import { envName } from '../../lib/org.js';

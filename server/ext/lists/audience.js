@@ -4,7 +4,7 @@
 // one place (lib/reach.js), the same for a list's numbers, a send's
 // recipients and a phone bank: 'email' one row per address, 'phone' (a
 // text) one row per number, 'call' everyone with a number.
-import { setting } from '@starbase/shared/old-names';
+import { setting } from '@base-win/shared/old-names';
 import { personsWhere, joinWhere } from '../../lib/audience.js';
 import { azKey, azAfter } from '../../lib/az.js';
 import { mayReach, person, emailKey, last10 } from '../../lib/reach.js';

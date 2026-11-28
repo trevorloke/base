@@ -40,7 +40,7 @@ import { httpError } from '../../actions/util.js';
 import { newId } from '../../lib/events.js';
 import { logGift } from '../../lib/gifts.js';
 import { capFor } from '../../lib/cap.js';
-import { SLATES, SLATE_CODES, SIGN_KIND_CODES } from '@starbase/shared/canvass';
+import { SLATES, SLATE_CODES, SIGN_KIND_CODES } from '@base-win/shared/canvass';
 import { addStandardFields } from '../fields/people.js';
 import { actions as fieldActions } from '../fields/actions.js';
 import { NOTE_MAX, choiceKey } from '../fields/kinds.js';

@@ -25,8 +25,8 @@
 //              campaign's city and province for Directions
 //
 // A few small indexed reads; the page cache (cache.js) keeps the drawn page.
-import { VOLUNTEER_ROLES } from '@starbase/shared/canvass';
-import { SHIFT_KIND_CODES, SITE_KINDS, pinPoint } from '@starbase/shared/shiftkinds';
+import { VOLUNTEER_ROLES } from '@base-win/shared/canvass';
+import { SHIFT_KIND_CODES, SITE_KINDS, pinPoint } from '@base-win/shared/shiftkinds';
 import { capFor } from '../../lib/cap.js';
 import { paymentsReady } from './payments.js';
 import { city, province } from '../../lib/org.js';

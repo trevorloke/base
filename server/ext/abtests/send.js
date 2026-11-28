@@ -3,7 +3,7 @@
 // (SEND_JOB) and the A/B winner job (winner.js).
 //
 // A message is written in the same Markdown as the website's pages
-// (@starbase/shared/markdown): headings, bold, lists, links, pictures from
+// (@base-win/shared/markdown): headings, bold, lists, links, pictures from
 // /media. Every recipient row carries a random, unguessable token. Each
 // email goes out with a plain-text part (the words, line for line) and an
 // HTML part: the message laid out, a 1×1 open pixel (/o/<token>.gif) and
@@ -30,21 +30,21 @@
 // the sender's id. An address on the campaign's suppression list — it
 // bounced for good or reported spam — is taken off the send at the moment
 // its email would go, as a subscriber who left the list is.
-import { setting } from '@starbase/shared/old-names';
+import { setting } from '@base-win/shared/old-names';
 import { z } from 'zod';
 import { randomBytes, randomInt } from 'node:crypto';
 import { emailConfigured, sendEmail, unsubscribeHeaders } from '../../lib/notify.js';
 import { chosenProvider, hookOn, notSuppressed } from '../../lib/mail/index.js';
 import { enqueueJob, jobRunnerOn, runJobsSoon } from '../../lib/jobs.js';
 import { runAction } from '../../lib/events.js';
-import { markdownPlain, renderMarkdown } from '@starbase/shared/markdown';
+import { markdownPlain, renderMarkdown } from '@base-win/shared/markdown';
 import { loadAttachments } from './attach.js';
 import { deliverTexts } from '../texting/blast.js';
 import { brandFor } from '../../lib/brand.js';
 import { whyNot } from '../../lib/reach.js';
 import { onMediaTags } from '../media/rules.js';
-import { authorizedBy } from '@starbase/shared/site/wording';
-import { fillHtml, fillText, firstOf } from '@starbase/shared/email/words';
+import { authorizedBy } from '@base-win/shared/site/wording';
+import { fillHtml, fillText, firstOf } from '@base-win/shared/email/words';
 
 export const AB_MIN = 50;
 export const AB_PCTS = [10, 20, 30];

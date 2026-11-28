@@ -23,7 +23,7 @@
 //
 // trouble: { code, plain, said?, until? } — code one of client,
 // unavailable, reconnect, paused, denied, not-allowed, domain.
-import { setting } from '@starbase/shared/old-names';
+import { setting } from '@base-win/shared/old-names';
 import { runAction } from '../events.js';
 import { enqueueJob } from '../jobs.js';
 import { openToken, sealToken, tokenKeyReady } from './seal.js';

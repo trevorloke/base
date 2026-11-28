@@ -11,11 +11,11 @@
 import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { nearest, nearVotingPlace, distanceWords, hoursWords, timeWords, dayWords, normWords } from '@starbase/shared/voteguide';
-import { qrSvgPath } from '@starbase/shared/qr';
-import { directionsUrl } from '@starbase/shared/maps';
-import { renderMarkdown } from '@starbase/shared/markdown';
-import { langWord } from '@starbase/shared/site/languages';
+import { nearest, nearVotingPlace, distanceWords, hoursWords, timeWords, dayWords, normWords } from '@base-win/shared/voteguide';
+import { qrSvgPath } from '@base-win/shared/qr';
+import { directionsUrl } from '@base-win/shared/maps';
+import { renderMarkdown } from '@base-win/shared/markdown';
+import { langWord } from '@base-win/shared/site/languages';
 import { noAnswer } from '../api.js';
 import { useOnline } from '../components/NoSignal.jsx';
 import { useGuide, useGuideClock } from '../components/guide.js';

@@ -13,9 +13,9 @@ import { runDueJobs } from '../lib/jobs.js';
 import { startFakeMail } from './fake-mail.js';
 import {
   EMAIL_FILLS, toCodes, toWords, unfilled, placeholders, firstOf, fillHtml, fillText,
-} from '@starbase/shared/email/words';
-import { STARTERS, STARTER_PLACEHOLDERS } from '@starbase/shared/email/starters';
-import { emailProblem } from '@starbase/shared/email/check';
+} from '@base-win/shared/email/words';
+import { STARTERS, STARTER_PLACEHOLDERS } from '@base-win/shared/email/starters';
+import { emailProblem } from '@base-win/shared/email/check';
 import { blastHtml, blastText, composeBlast } from '../ext/abtests/send.js';
 
 const L = await import('../../web/src/components/LaddersWords.js');

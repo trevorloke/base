@@ -23,7 +23,7 @@
 // The feed's order is commit order: every voted_marks / gotv_practice
 // insert (and every feed bump) happens inside runAction under the
 // campaign's row lock, held until commit (sql.js).
-import { setting } from '@starbase/shared/old-names';
+import { setting } from '@base-win/shared/old-names';
 import { onCommitted } from '../../lib/events.js';
 import { getDb } from '../../db/client.js';
 import { forgetSettings, forgetPosts, forgetScopes, gotvFor, scopeOf, isDesk, rowOf, onNow } from './state.js';

@@ -1,5 +1,5 @@
 // Email templates (server/ext/templates): the campaign's own and the
-// ready-made ones (@starbase/shared/email/starters), for newsletters and
+// ready-made ones (@base-win/shared/email/starters), for newsletters and
 // emails to a list (use 'email', Outreach) and press releases ('press', Media).
 //   useTemplates(use)   GET /templates?use=… — the lists, canSave, canHide,
 //                       foot (the lines under every email) and links (the
@@ -14,8 +14,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useOutletContext } from 'react-router-dom';
 import { onlineManager, useQuery, useQueryClient } from '@tanstack/react-query';
-import { EMAIL_FILLS, toCodes, toWords } from '@starbase/shared/email/words';
-import { renderMarkdown } from '@starbase/shared/markdown';
+import { EMAIL_FILLS, toCodes, toWords } from '@base-win/shared/email/words';
+import { renderMarkdown } from '@base-win/shared/markdown';
 import { ApiError, action, apiGet } from '../api.js';
 import { LOADING, Unavailable, fmt } from './AudienceBits.jsx';
 import { NeedsSignal, useOnline } from './NoSignal.jsx';

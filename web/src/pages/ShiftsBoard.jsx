@@ -40,7 +40,7 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import {
   WEEK_PARTS, addDays, clockOf, dayOf, instantOf, isDay, safeZone, weekBounds, weekPartOf, weekStart,
-} from '@starbase/shared/dayparts';
+} from '@base-win/shared/dayparts';
 import { apiGet, action } from '../api.js';
 import { NeedsSignalLine, useOnline } from '../components/NoSignal.jsx';
 import { KindIcon, cardWords, kindVars } from '../components/ShiftKind.jsx';

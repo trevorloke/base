@@ -22,7 +22,7 @@
 // again, with the same key, so the donor never gets a second copy by itself.
 // A provider refusal is tried again (three tries in all), then the receipt
 // says "Not sent — the email failed" and waits for Send again.
-import { setting } from '@starbase/shared/old-names';
+import { setting } from '@base-win/shared/old-names';
 import { runAction } from '../../lib/events.js';
 import { emailConfigured, sendEmail } from '../../lib/notify.js';
 import {

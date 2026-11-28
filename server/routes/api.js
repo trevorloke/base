@@ -2,7 +2,7 @@
 // go exclusively through POST /api/actions/:name. GET /api/events is the
 // sync protocol AND the public API — the same endpoint the app uses — and
 // GET /api/export is the contractual one-click full-fidelity export.
-import { setting } from '@starbase/shared/old-names';
+import { setting } from '@base-win/shared/old-names';
 import { mayRun, decide, decideArea, areaOfPath, areasFor } from '../lib/perms.js';
 import { Hono } from 'hono';
 import { getCookie } from 'hono/cookie';
@@ -14,7 +14,7 @@ import { runAction, verifyChain } from '../lib/events.js';
 import { ACTIONS, httpError } from '../actions/index.js';
 import { tierFor } from '../lib/tiers.js';
 import { emailConfigured, textConfigured } from '../lib/notify.js';
-import { RECORD_TYPES } from '@starbase/shared/registry';
+import { RECORD_TYPES } from '@base-win/shared/registry';
 import { staleTimeZoneData } from '../lib/tzcheck.js';
 import { startOfDay } from '../lib/tzsql.js';
 import { DEFAULT_TZ } from '../lib/org.js';
@@ -28,7 +28,7 @@ import { privateFieldIds } from '../ext/fields/people.js';
 import { runHooks } from '../lib/hooks.js';
 import { forViewer, loginEmail } from '../lib/viewer.js';
 import { geoBox } from '../lib/org.js';
-import { RATING_CODE_RE } from '@starbase/shared/scale';
+import { RATING_CODE_RE } from '@base-win/shared/scale';
 import { personsWhere, joinWhere } from '../lib/audience.js';
 import { azKey, azAfter } from '../lib/az.js';
 import { mayReach, address, person, person as personCols, noCallSql, whyNotSql, NO_CONTACT } from '../lib/reach.js';
@@ -37,10 +37,10 @@ import { goingRow, repeatRow, retryable, sendJobOn } from '../ext/abtests/send.j
 import { notSuppressed } from '../lib/mail/index.js';
 import { attachmentsOf } from '../ext/abtests/attach.js';
 import { onMedia } from '../ext/media/rules.js';
-import { toWords } from '@starbase/shared/email/words';
+import { toWords } from '@base-win/shared/email/words';
 // The open pass (ext/passes) and the door rule it shares with the phone.
 import { openPass, listedWhere } from '../ext/passes/rule.js';
-import { doorState, inPass } from '@starbase/shared/passes';
+import { doorState, inPass } from '@base-win/shared/passes';
 // Where people use the app: never a website domain (ext/site).
 import { hostOfRequest, noteAppHost } from '../ext/site/store.js';
 // The records a maybe one donor names, by name (ext/payments).

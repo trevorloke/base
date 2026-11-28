@@ -41,7 +41,7 @@ import { enqueueJob } from '../../lib/jobs.js';
 import { campaignDay } from '../../lib/gifts.js';
 import { DEFAULT_TZ } from '../../lib/org.js';
 import { selfPerson } from '../relationships/match.js';
-import { campaignShare } from '@starbase/shared/letters';
+import { campaignShare } from '@base-win/shared/letters';
 import { emailConfigured, sendEmail } from '../../lib/notify.js';
 import { whyNot } from '../../lib/reach.js';
 import { basePath } from '../../lib/mount.js';

@@ -1,6 +1,6 @@
 // What the email senders (resend.js, sendgrid.js) share: the settings, the
 // From address, the time limit, and the words for a call that failed.
-import { setting } from '@starbase/shared/old-names';
+import { setting } from '@base-win/shared/old-names';
 export const env = (k) => String(process.env[k] || '').trim();
 export const has = (k) => Boolean(env(k));
 // A setting that takes several values while one is rolled to the next.

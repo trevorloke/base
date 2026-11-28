@@ -31,8 +31,8 @@ import SenderPick, { fromChoices, useSenders } from '../components/SenderPick.js
 import {
   FootBlock, SaveAsTemplate, StartFrom, TemplatesRow, TemplatesScreen, loadTemplate, useOf, useTemplates,
 } from '../components/EmailTemplates.jsx';
-import { EMAIL_FILLS, NO_ADDRESS, placeholders, toCodes, toWords } from '@starbase/shared/email/words';
-import { emailProblem, stillToFill } from '@starbase/shared/email/check';
+import { EMAIL_FILLS, NO_ADDRESS, placeholders, toCodes, toWords } from '@base-win/shared/email/words';
+import { emailProblem, stillToFill } from '@base-win/shared/email/check';
 import { useSendScope } from '../components/SendScope.js';
 import './outreach.css';
 import { BRAND } from '../brand.js';

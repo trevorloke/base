@@ -4,7 +4,7 @@
 // at the end. Tapping a card opens its form. An empty page: one big
 // "Add your first section". The same order as the page, for keyboards and
 // screen readers.
-import { MODULE_BY_KIND } from '@starbase/shared/site/catalogue';
+import { MODULE_BY_KIND } from '@base-win/shared/site/catalogue';
 import { MoreMenu } from '../Bits.jsx';
 import { Thumb } from '../thumbs.jsx';
 import { summaryOf } from '../builder.js';

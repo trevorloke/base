@@ -18,13 +18,13 @@
 // is cut, so a page is never short by what a later page holds.
 import { langWord } from '../../../shared/site/languages.js';
 import { toLocal, fromLocal } from '../../lib/tzsql.js';
-import { SIGN_KINDS, DEFAULT_SLATE, slateLabel } from '@starbase/shared/canvass';
-import { fmtIn } from '@starbase/shared/dayparts';
-import { placeLabel } from '@starbase/shared/shiftkinds';
+import { SIGN_KINDS, DEFAULT_SLATE, slateLabel } from '@base-win/shared/canvass';
+import { fmtIn } from '@base-win/shared/dayparts';
+import { placeLabel } from '@base-win/shared/shiftkinds';
 import { WEB_WORDS, MONEY_KINDS, campaignWords } from '../webdid/words.js';
 import { showValue } from '../surveys/answers.js';
 import { fillIn } from '../ladders/shape.js';
-import { fillText, firstOf } from '@starbase/shared/email/words';
+import { fillText, firstOf } from '@base-win/shared/email/words';
 import { wordOf as paymentWord } from '../payments/api.js';
 import { kitCodeSql, sourceWords } from '../socials/sources.js';
 

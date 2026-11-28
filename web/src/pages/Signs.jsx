@@ -18,8 +18,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useOutletContext, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { SIGN_KINDS, SIGN_STATUSES } from '@starbase/shared/canvass';
-import { directionsUrl } from '@starbase/shared/maps';
+import { SIGN_KINDS, SIGN_STATUSES } from '@base-win/shared/canvass';
+import { directionsUrl } from '@base-win/shared/maps';
 import { apiGet, action } from '../api.js';
 import { PersonPicker } from './Shifts.jsx';
 import { NoSignal, noSignal, useOnline, NeedsSignalLine } from '../components/NoSignal.jsx';

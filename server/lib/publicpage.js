@@ -6,7 +6,7 @@
 // One column, one big button, and a link back to the campaign's website
 // (workspace settings.website) when it has one. The campaign's website
 // itself lives elsewhere.
-import { deriveLook, headingStack } from '@starbase/shared/brand-look';
+import { deriveLook, headingStack } from '@base-win/shared/brand-look';
 import { brandFor } from './brand.js';
 
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));

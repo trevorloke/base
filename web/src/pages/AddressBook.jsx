@@ -11,8 +11,8 @@
 import { useRef, useState } from 'react';
 import { Link, Navigate, useOutletContext } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { readContacts } from '@starbase/shared/contactsfile';
-import { azSort } from '@starbase/shared/names';
+import { readContacts } from '@base-win/shared/contactsfile';
+import { azSort } from '@base-win/shared/names';
 import { action, apiPost, ApiError } from '../api.js';
 import { adminHref } from '../mode.js';
 import { hasArea, isDesk } from '../Shell.jsx';

@@ -5,7 +5,7 @@
 // state, banner and cache expiry; GOTV mode's "is today a voting day" and
 // Path to win's today (todayOf) follow it too, so a moved clock moves them
 // together.
-import { setting } from '@starbase/shared/old-names';
+import { setting } from '@base-win/shared/old-names';
 const movable = () => process.env.NODE_ENV === 'test' || Boolean(process.env.NODE_TEST_CONTEXT) || setting('BASE_E2E') === '1';
 export const clockShift = () => {
   if (!movable()) return 0;

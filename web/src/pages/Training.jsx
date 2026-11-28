@@ -10,7 +10,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useOutletContext, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { renderMarkdown } from '@starbase/shared/markdown';
+import { renderMarkdown } from '@base-win/shared/markdown';
 import { ApiError, action, apiGet } from '../api.js';
 import './training.css';
 import '../editor.css';

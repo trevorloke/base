@@ -7,7 +7,7 @@ import './lib/adopt-old-names.js';
 // this server has, if any, is settled before anything else reads it
 // (lib/preset.js).
 import { brandKey, brandNote, presetRoutes } from './lib/preset.js';
-import { setting } from '@starbase/shared/old-names';
+import { setting } from '@base-win/shared/old-names';
 import { Hono } from 'hono';
 import { relative } from 'node:path';
 import { fileURLToPath } from 'node:url';

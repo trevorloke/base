@@ -35,7 +35,7 @@
 //       that say it, their words and their made names.
 //   place.remove { id }         off the list; shifts keep their words and pin.
 import { z } from 'zod';
-import { kindOf, pinName } from '@starbase/shared/shiftkinds';
+import { kindOf, pinName } from '@base-win/shared/shiftkinds';
 import { httpError } from '../../actions/util.js';
 import { newId } from '../../lib/events.js';
 import { nearestCivic, nearestCorner } from '../../lib/geocode.js';

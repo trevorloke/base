@@ -9,7 +9,7 @@
 //                          one already in the campaign. A visitor can do
 //                          whatever it can, so the campaign must be the
 //                          sample one (lib/samplecampaign.js)
-import { setting } from '@starbase/shared/old-names';
+import { setting } from '@base-win/shared/old-names';
 import { envName } from './org.js';
 
 const allowed = () => envName() !== 'production';

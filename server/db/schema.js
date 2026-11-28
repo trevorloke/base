@@ -1,7 +1,7 @@
 // Core DDL. One place, executed idempotently at boot. Record-type tables are
 // generated from the shared registry — the registry IS the migration source.
-import { ddlFor, recordTypeKeys } from '@starbase/shared/registry';
-import { FOLD_FROM, FOLD_TO } from '@starbase/shared/names';
+import { ddlFor, recordTypeKeys } from '@base-win/shared/registry';
+import { FOLD_FROM, FOLD_TO } from '@base-win/shared/names';
 
 const CORE = `
 create table if not exists workspaces (

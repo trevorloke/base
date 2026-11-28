@@ -1,6 +1,6 @@
 // Words the week screen and its sheets share. Every time here is read on
 // the campaign's clock (shared/dayparts.js), never the device's.
-import { addDays, clockOf, dayOf, spanWords, weekdayIndex } from '@starbase/shared/dayparts';
+import { addDays, clockOf, dayOf, spanWords, weekdayIndex } from '@base-win/shared/dayparts';
 
 // '2026-11-16' → { wd: 'Mon', md: 'Nov 16', num: '16', long: 'Monday, November 16' }
 // (a calendar day: no time zone in it).

@@ -1,5 +1,5 @@
 // Geometry for turfs and walk lists. Polygons are [[lat, lng], ...] rings.
-import { splitUnit, normAddr, civicOf, unitOf, unitCompare } from '@starbase/shared/buildings';
+import { splitUnit, normAddr, civicOf, unitOf, unitCompare } from '@base-win/shared/buildings';
 
 // Ray-casting point-in-polygon on lat/lng (fine at neighbourhood scale).
 export const pointInPolygon = (lat, lng, ring) => {

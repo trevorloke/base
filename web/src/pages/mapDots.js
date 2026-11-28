@@ -13,7 +13,7 @@
 // layer takes taps itself (a canvas tile can't tell what was hit): the map
 // asks nearest() / cellAt() where it was tapped.
 import L from 'leaflet';
-import { BUILDING_MIN } from '@starbase/shared/buildings';
+import { BUILDING_MIN } from '@base-win/shared/buildings';
 import { MARK, css, cellFill, CELL_ALPHA, dotRadius, ringedAt } from './mapView.js';
 import { BRAND } from '../brand.js';
 

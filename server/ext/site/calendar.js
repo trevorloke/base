@@ -9,8 +9,8 @@
 // What a public entry carries: its title, times (UTC), the place's words
 // (none for an unnamed pin), GEO when pinned, and the page it is listed on.
 // Never instructions, a link, counts or people.
-import { icsCalendar, shiftEvent } from '@starbase/shared/ics';
-import { pinPoint } from '@starbase/shared/shiftkinds';
+import { icsCalendar, shiftEvent } from '@base-win/shared/ics';
+import { pinPoint } from '@base-win/shared/shiftkinds';
 import { icsFileName, ICS_TYPE } from '../../lib/calendar.js';
 import { loadEvents } from './loaders.js';
 

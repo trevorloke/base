@@ -20,7 +20,7 @@ import { city, geoBox, geoBounds, mapHome, orgOut } from '../lib/org.js';
 import { geocodeAddress, suggestAddresses, _resetLookupForTest } from '../lib/geocode.js';
 import { inFence } from '../ext/voteguide/api.js';
 import { bootNotes } from '../index.js';
-import { defaultCandidates } from '@starbase/shared/scale';
+import { defaultCandidates } from '@base-win/shared/scale';
 import { checkLines } from '../../web/src/pages/mapView.js';
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));

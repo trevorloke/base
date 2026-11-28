@@ -16,7 +16,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useOutletContext, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { sharedRuns } from '@starbase/shared/letters';
+import { sharedRuns } from '@base-win/shared/letters';
 import { apiGet } from '../api.js';
 import { newClientId, onOutboxSent, queueAction, useOutbox } from '../offline.js';
 import { showingCopy } from '../components/OfflineCache.js';

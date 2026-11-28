@@ -19,10 +19,10 @@ import { z } from 'zod';
 import { httpError } from '../../actions/util.js';
 import { newId } from '../../lib/events.js';
 import { FIELD_ACTIONS } from '../../actions/field.js';
-import { RATING_CODE_RE } from '@starbase/shared/scale';
+import { RATING_CODE_RE } from '@base-win/shared/scale';
 import { findKnown, maybeSame, emailKey } from '../relationships/match.js';
 import { actions as requestActions } from '../requests/actions.js';
-import { splitFirst } from '@starbase/shared/names';
+import { splitFirst } from '@base-win/shared/names';
 
 export const sql = `
 alter table contacts add column if not exists place text;

@@ -22,7 +22,7 @@
 // (workspace settings.twoStepRequired) — the desk roles (manager, treasurer,
 // staff) and a volunteer given an area under Admin → Permissions. Other
 // volunteers' sign-in is unchanged unless they turn it on themselves.
-import { setting } from '@starbase/shared/old-names';
+import { setting } from '@base-win/shared/old-names';
 import {
   createCipheriv, createDecipheriv, createHash, createHmac, hkdfSync, randomBytes, randomInt, scrypt, timingSafeEqual,
 } from 'node:crypto';

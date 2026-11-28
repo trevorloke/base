@@ -7,7 +7,7 @@
 // council slate and the school board slate are each one limit). The rule
 // table is per (jurisdiction, year); a workspace may override via
 // settings.capCents.
-import { DEFAULT_SLATE } from '@starbase/shared/canvass';
+import { DEFAULT_SLATE } from '@base-win/shared/canvass';
 
 export const capFor = async (tx, jurisdiction, year, settings = {}) => {
   if (Number.isInteger(settings.capCents)) {

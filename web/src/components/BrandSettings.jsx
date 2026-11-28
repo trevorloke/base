@@ -19,9 +19,9 @@
 // and coming back finds it, said once, with "Discard them". Sign out
 // forgets it, and the next person to sign in here never reads it.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { CORNERS, HEADINGS, SIDEBARS, deriveLook, lookTokens } from '@starbase/shared/brand-look';
-import { FONT_BY_VALUE } from '@starbase/shared/site/theme';
-import { fontFor, isAdded } from '@starbase/shared/site/fonts';
+import { CORNERS, HEADINGS, SIDEBARS, deriveLook, lookTokens } from '@base-win/shared/brand-look';
+import { FONT_BY_VALUE } from '@base-win/shared/site/theme';
+import { fontFor, isAdded } from '@base-win/shared/site/fonts';
 import FontSheet, { useAddedFonts } from './site/FontSheet.jsx';
 import { stackOf, useFaces } from './site/fontFaces.js';
 import { action, initials } from '../api.js';

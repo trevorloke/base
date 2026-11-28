@@ -9,7 +9,7 @@ import { spawnSync, execFileSync } from 'node:child_process';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import * as names from '@starbase/shared/old-names';
+import * as names from '@base-win/shared/old-names';
 import * as direct from '../../shared/old-names.js';
 
 const {

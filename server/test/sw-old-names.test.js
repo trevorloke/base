@@ -10,7 +10,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
-import { OLD_STORAGE } from '@starbase/shared/old-names';
+import { OLD_STORAGE } from '@base-win/shared/old-names';
 
 const SOURCE = readFileSync(new URL('../../web/public/sw.js', import.meta.url), 'utf8');
 const ORIGIN = 'https://app.example';

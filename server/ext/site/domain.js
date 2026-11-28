@@ -12,7 +12,7 @@
 //                              address (https://…): its own links in emails
 //                              it already sent go there (old-paths.js).
 //   SITE_HOSTS, APP_HOSTS      the operator's lists (comma-separated).
-import { setting } from '@starbase/shared/old-names';
+import { setting } from '@base-win/shared/old-names';
 import { hostOf } from './shape.js';
 
 // Host names or addresses, comma-separated (127.0.0.1 for a test), a final dot or not.

@@ -9,7 +9,7 @@
 import { useEffect, useId, useMemo, useState } from 'react';
 import { Link, useNavigate, useOutletContext, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { codesInBand } from '@starbase/shared/scale';
+import { codesInBand } from '@base-win/shared/scale';
 import { ApiError, action, apiGet } from '../api.js';
 import { fmtBig } from '../components/MoneyWords.js';
 import { RatingChip, useScale } from '../components/RatingButtons.jsx';

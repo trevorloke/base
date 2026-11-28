@@ -14,8 +14,8 @@
 // theme, posts).
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { MODULE_BY_KIND } from '@starbase/shared/site/catalogue';
-import { Icon } from '@starbase/shared/site/components/icons';
+import { MODULE_BY_KIND } from '@base-win/shared/site/catalogue';
+import { Icon } from '@base-win/shared/site/components/icons';
 import { useDragDrop } from '../useDragDrop.js';
 import { MarkdownField, shrinkImage, toDataUrl, uploadImage } from '../MarkdownField.jsx';
 import { pictureCopies } from '../brand-pictures.js';

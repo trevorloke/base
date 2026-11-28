@@ -23,10 +23,10 @@
 import { useId, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { addDays, spanWords, weekdayIndex } from '@starbase/shared/dayparts';
+import { addDays, spanWords, weekdayIndex } from '@base-win/shared/dayparts';
 import {
   MAX_SHIFTS, MAX_WEEKS, SHIFT_KINDS, madeTitle, repeatDays, shiftKind,
-} from '@starbase/shared/shiftkinds';
+} from '@base-win/shared/shiftkinds';
 import { apiGet, action } from '../api.js';
 import { NeedsSignal, useOnline } from '../components/NoSignal.jsx';
 import { KindIcon, kindVars } from '../components/ShiftKind.jsx';

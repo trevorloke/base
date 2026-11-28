@@ -17,7 +17,7 @@
 //   whereName(value)         → the words the shift will show
 import { Suspense, lazy, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { PINNED_PLACE, isPinName, placeLabel } from '@starbase/shared/shiftkinds';
+import { PINNED_PLACE, isPinName, placeLabel } from '@base-win/shared/shiftkinds';
 import { apiGet, action } from '../api.js';
 import { useOnline } from '../components/NoSignal.jsx';
 import { DEFAULT_TILES } from '../components/tiles.js';

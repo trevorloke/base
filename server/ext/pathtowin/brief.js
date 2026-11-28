@@ -13,7 +13,7 @@
 // people: two saved-settings reads and the campaign's today (todayOf, the
 // same clock as Path to win and a candidate's Your race). The last four
 // weeks' pace needs the trend count, so it stays on Path to win.
-import { SLATES } from '@starbase/shared/canvass';
+import { SLATES } from '@base-win/shared/canvass';
 import { areasFor } from '../../lib/perms.js';
 import { DEFAULT_TZ } from '../../lib/org.js';
 import { readSettings } from './actions.js';

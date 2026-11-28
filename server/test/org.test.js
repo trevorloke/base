@@ -6,8 +6,8 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { freshDb, Client } from './helpers.js';
 import { app } from '../index.js';
-import { parseSlates } from '@starbase/shared/canvass';
-import { parseCandidates } from '@starbase/shared/scale';
+import { parseSlates } from '@base-win/shared/canvass';
+import { parseCandidates } from '@base-win/shared/scale';
 
 before(async () => {
   await freshDb();

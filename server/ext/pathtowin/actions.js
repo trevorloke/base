@@ -13,7 +13,7 @@
 // { settings } — what's saved now. One event, entity path_to_win (the
 // campaign's id), with what changed.
 import { z } from 'zod';
-import { SLATE_CODES } from '@starbase/shared/canvass';
+import { SLATE_CODES } from '@base-win/shared/canvass';
 import { httpError } from '../../actions/util.js';
 import { isDay, tenths } from './rules.js';
 

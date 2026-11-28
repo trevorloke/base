@@ -15,7 +15,7 @@ import assert from 'node:assert/strict';
 process.env.BASE_CANDIDATES = ' None ';
 const { freshDb, Client } = await import('./helpers.js');
 const { getDb } = await import('../db/client.js');
-const S = await import('@starbase/shared/scale');
+const S = await import('@base-win/shared/scale');
 const { presetFor } = await import('../lib/preset.js');
 // Imagine Surrey's list, from its preset (this file runs as its server does).
 const IS_LIST = presetFor('imagine-surrey').candidates;

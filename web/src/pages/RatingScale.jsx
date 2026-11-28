@@ -16,7 +16,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Navigate, useOutletContext } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { DEFAULT_STEPS, LIMITS, UNSURE_WORD, cleanWord, makeCode, normalizeScale } from '@starbase/shared/scale';
+import { DEFAULT_STEPS, LIMITS, UNSURE_WORD, cleanWord, makeCode, normalizeScale } from '@base-win/shared/scale';
 import { apiGet, action } from '../api.js';
 import RatingButtons from '../components/RatingButtons.jsx';
 import { SCALE_KEY } from '../components/scale.js';

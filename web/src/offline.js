@@ -52,8 +52,8 @@
 // this person wasn't added" — and Try again on the person brings it along.
 //   refusedText(item)  → a refused item's reason, in plain words.
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { SIGN_KINDS } from '@starbase/shared/canvass';
-import { OLD_STORAGE } from '@starbase/shared/old-names';
+import { SIGN_KINDS } from '@base-win/shared/canvass';
+import { OLD_STORAGE } from '@base-win/shared/old-names';
 import { action, ApiError } from './api.js';
 import { BASE, NS, OLD_NS } from './base.js';
 

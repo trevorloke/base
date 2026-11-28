@@ -26,8 +26,8 @@ import { liveStrings } from '../ext/site/translate.js';
 import { siteWords } from '../ext/site/from-preset.js';
 import { cacheClear } from '../ext/site/cache.js';
 import { PROBE_SENTENCE } from '../lib/translate.js';
-import { checkTheme, allLooks, SKINS } from '@starbase/shared/site/theme';
-import { MODULES, checkModules, checkProps, newModule } from '@starbase/shared/site/catalogue';
+import { checkTheme, allLooks, SKINS } from '@base-win/shared/site/theme';
+import { MODULES, checkModules, checkProps, newModule } from '@base-win/shared/site/catalogue';
 import { UI_WORDS, translateMessage, fillWords } from '../../shared/site/ui-words.js';
 import { offered, groups } from '../../web/src/components/site/builder.js';
 

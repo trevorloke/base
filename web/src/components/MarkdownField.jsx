@@ -3,7 +3,7 @@
 //   MarkdownField      a textarea with a small toolbar (bold, italic, heading,
 //                      link, list, picture, and "Link to…" for the campaign's
 //                      own pages when given `links`) and a Preview that is
-//                      exactly the email's renderer (@starbase/shared/markdown);
+//                      exactly the email's renderer (@base-win/shared/markdown);
 //                      `upload` is the picture's action (blast.picture);
 //                      `fills` ([{ word, button }]) adds "+ First name"-style
 //                      buttons that put the word at the cursor; `footer`
@@ -14,7 +14,7 @@
 //   uploadImage()      shrink, then the action; answers { id, url }
 //   toDataUrl()        a file as base64, for an attachment
 import { useId, useRef, useState } from 'react';
-import { renderMarkdown } from '@starbase/shared/markdown';
+import { renderMarkdown } from '@base-win/shared/markdown';
 import { action } from '../api.js';
 import '../editor.css';
 

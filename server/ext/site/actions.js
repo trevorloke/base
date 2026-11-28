@@ -39,9 +39,9 @@
 //                        the site's events, where anyone may sign up for it
 import { z } from 'zod';
 import { createHash } from 'node:crypto';
-import { checkImage, checkModules, MODULE_BY_KIND } from '@starbase/shared/site/catalogue';
-import { POST_FIELDS, knownPictures, newUndescribed, olderUndescribed } from '@starbase/shared/site/pictures';
-import { checkTheme } from '@starbase/shared/site/theme';
+import { checkImage, checkModules, MODULE_BY_KIND } from '@base-win/shared/site/catalogue';
+import { POST_FIELDS, knownPictures, newUndescribed, olderUndescribed } from '@base-win/shared/site/pictures';
+import { checkTheme } from '@base-win/shared/site/theme';
 import { newId, canonical } from '../../lib/events.js';
 import { httpError } from '../../actions/util.js';
 import { readUpload } from '../abtests/media.js';

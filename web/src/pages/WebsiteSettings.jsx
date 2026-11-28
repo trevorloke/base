@@ -25,7 +25,7 @@ import { isSiteLink } from '../components/site/builder.js';
 import './shifts.css';
 import '../editor.css';
 import './website.css';
-import { PLATFORM_WORD, parseSocial } from '@starbase/shared/socials';
+import { PLATFORM_WORD, parseSocial } from '@base-win/shared/socials';
 
 const SECTIONS = ['nav', 'announcement', 'footer', 'org', 'social', 'seo', 'domains'];
 const LINK = [{ key: 'label', type: 'text', label: 'Words', max: 60 }, { key: 'href', type: 'url', label: 'Goes to' }];

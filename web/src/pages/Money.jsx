@@ -43,7 +43,7 @@ import {
   useInfiniteQuery, useQuery, useQueryClient,
 } from '@tanstack/react-query';
 import { apiGet, action, fmtMoney, fmtDate, todayISO, dollarsToCents } from '../api.js';
-import { SLATES as FALLBACK_SLATES, slateLabel } from '@starbase/shared/canvass';
+import { SLATES as FALLBACK_SLATES, slateLabel } from '@base-win/shared/canvass';
 import ReceiptsGiftLine from '../components/ReceiptsGiftLine.jsx';
 import { PersonPicker } from '../components/PersonPicker.jsx';
 import { AddressRow, VoidNoticeAsk, receiptOf, receiptNote } from '../components/ReceiptsNeeds.jsx';

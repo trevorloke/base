@@ -100,7 +100,7 @@ test('a manager: every source once, newest first, in the screens’ words', asyn
 // A shift's place is said as the schedule says it (shared/shiftkinds): a
 // point on the map nobody has named is "Pinned place", never its coordinates.
 test('a shift at a pinned place reads “Pinned place” here too, on the campaign’s day', async () => {
-  const { pinName } = await import('@starbase/shared/shiftkinds');
+  const { pinName } = await import('@base-win/shared/shiftkinds');
   const pat = ok(await mgr.action('person.create', { name: 'Pat Example' })).person;
   const s = ok(await mgr.action('shift.create', { title: 'Burma Shave', location: pinName(49.1451, -122.8599), starts_at: '2031-01-15T07:30:00Z' })).shift;
   ok(await mgr.action('shift.assign', { shift_id: s.id, person_id: pat.id }));

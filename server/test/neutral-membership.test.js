@@ -18,7 +18,7 @@ import { presetFor } from '../lib/preset.js';
 import { tierFor } from '../lib/tiers.js';
 import { prepareCheckout } from '../ext/payments/index.js';
 import { sourceOf } from '../ext/drive/export.js';
-import { donorTier } from '@starbase/shared/canvass';
+import { donorTier } from '@base-win/shared/canvass';
 import { commandsFor } from '../../web/src/components/commands.js';
 import { todayOf } from '../ext/audience/index.js';
 

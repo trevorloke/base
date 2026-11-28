@@ -9,7 +9,7 @@
 //   OLD_NS       the same start under the app's older name (shared/old-names.js):
 //                what a phone kept before is read from it and carried over
 //                (oldStorage.js, offline.js), never written
-import { OLD_STORAGE } from '@starbase/shared/old-names';
+import { OLD_STORAGE } from '@base-win/shared/old-names';
 
 export const BASE = (() => {
   if (typeof window === 'undefined') return '';

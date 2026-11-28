@@ -24,13 +24,13 @@
 // kept to their turfs gets a building only inside one (a tower is one point).
 import { Hono } from 'hono';
 import { openPass, listedWhere } from '../passes/rule.js';
-import { inPass } from '@starbase/shared/passes';
+import { inPass } from '@base-win/shared/passes';
 import { groupDoors } from '../../lib/geo.js';
 import { inMyTurf } from '../core/index.js';
 import { scopeOf } from '../voted/state.js';
 import {
   buildingOf, unitRows, unitOf, floorOf, unitCompare, floorsShown, REACH,
-} from '@starbase/shared/buildings';
+} from '@base-win/shared/buildings';
 
 // Routes import the extensions, so the walk list's own read is imported
 // when asked for, not at load (ext.js: features never import routes/*).

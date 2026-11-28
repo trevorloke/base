@@ -8,7 +8,7 @@ import { Link } from 'react-router-dom';
 import { useAction } from '../pages/People.jsx';
 import {
   CHIP_ORDER, PLATFORMS, countFull, countWord, parseCount, parseSocial, platformWord, profileUrl, shownHandle,
-} from '@starbase/shared/socials';
+} from '@base-win/shared/socials';
 import '../pages/socials.css';
 
 // Only the networks base.win knows, with something in them (an old stray

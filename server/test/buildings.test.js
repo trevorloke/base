@@ -14,7 +14,7 @@ import { walkFor, loadLocated, boxOf, shapeDoors } from '../routes/api.js';
 import { openPass, listedWhere } from '../ext/passes/rule.js';
 import { pointInPolygon, groupDoors, walkOrder } from '../lib/geo.js';
 import { forViewer } from '../lib/viewer.js';
-import { doorState, inPass } from '@starbase/shared/passes';
+import { doorState, inPass } from '@base-win/shared/passes';
 
 let db, ws, mgr, vol, volId, stranger, turf, anchor;
 const ok = (r) => { assert.equal(r.status, 200, JSON.stringify(r.json)); return r.json; };

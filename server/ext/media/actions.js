@@ -27,8 +27,8 @@
 //   media.resend   blast.resend, for a press release only
 import { z } from 'zod';
 import { httpError } from '../../actions/util.js';
-import { SOCIAL_PLATFORMS } from '@starbase/shared/canvass';
-import { parseSocial, platformWord } from '@starbase/shared/socials';
+import { SOCIAL_PLATFORMS } from '@base-win/shared/canvass';
+import { parseSocial, platformWord } from '@base-win/shared/socials';
 import { actions as FILES, ATTACH_COUNT } from '../abtests/attach.js';
 import { abInput } from '../abtests/send.js';
 import { DESK_ROLES, KINDS, LISTS, isDesk, kindOf, listsOf, offMedia, onMediaTags } from './rules.js';

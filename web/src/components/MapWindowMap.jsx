@@ -17,7 +17,7 @@ import { useQuery } from '@tanstack/react-query';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { apiGet } from '../api.js';
-import { bandOf } from '@starbase/shared/scale';
+import { bandOf } from '@base-win/shared/scale';
 import { phoneCopy, useKeepCopy } from './OfflineCache.js';
 import { useOnline } from './NoSignal.jsx';
 import { DEFAULT_TILES, homeStart, homeView, openHome, safeAttribution } from './tiles.js';

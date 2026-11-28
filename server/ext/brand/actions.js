@@ -24,12 +24,12 @@ import { z } from 'zod';
 import { newId } from '../../lib/events.js';
 import { httpError } from '../../actions/util.js';
 import { readUpload } from '../abtests/media.js';
-import { SIDEBARS, CORNERS, HEADINGS, deriveLook } from '@starbase/shared/brand-look';
-import { APP_NAME } from '@starbase/shared/brand';
+import { SIDEBARS, CORNERS, HEADINGS, deriveLook } from '@base-win/shared/brand-look';
+import { APP_NAME } from '@base-win/shared/brand';
 import { forgetBrand, plainWords } from '../../lib/brand.js';
 import { preset } from '../../lib/preset.js';
 import { cacheClear } from '../site/cache.js';
-import { fontFor, profileFor } from '@starbase/shared/site/fonts';
+import { fontFor, profileFor } from '@base-win/shared/site/fonts';
 import { BRAND_PICTURES, BRAND_PICTURE_KINDS, EXT, imageSize, pictureProblem } from './pictures.js';
 
 const MANAGER = ['manager'];

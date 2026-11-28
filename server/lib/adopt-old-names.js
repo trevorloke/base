@@ -14,7 +14,7 @@
 //
 // Settings → Services lists the same older names (olderNames below), read
 // afresh each time it is asked.
-import { adoptOldNames, OLD_SETTINGS } from '@starbase/shared/old-names';
+import { adoptOldNames, OLD_SETTINGS } from '@base-win/shared/old-names';
 
 export const adopted = adoptOldNames(process.env);
 

@@ -2,7 +2,7 @@
 // the screens' key line both name the same people first.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { rankTies } from '@starbase/shared/ties';
+import { rankTies } from '@base-win/shared/ties';
 
 const tie = (id, over = {}) => ({ kind: 'other', close: false, linked_at: '2026-01-01T00:00:00Z', ...over, person: { id, name: id, rating: null, ...(over.person || {}) } });
 const order = (ties) => rankTies(ties).map((t) => t.person.id);

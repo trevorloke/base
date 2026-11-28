@@ -20,8 +20,8 @@
 // many have the old time, with "Tell them".
 import { useId, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { dayOf } from '@starbase/shared/dayparts';
-import { kindOf } from '@starbase/shared/shiftkinds';
+import { dayOf } from '@base-win/shared/dayparts';
+import { kindOf } from '@base-win/shared/shiftkinds';
 import { action } from '../api.js';
 import { NeedsSignal, useOnline } from '../components/NoSignal.jsx';
 import { NotifyChip, notifySummary } from '../components/NotifyWords.jsx';

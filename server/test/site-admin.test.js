@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 import { hit, ok, campaign, member } from './site-helpers.js';
 import { sign } from '../ext/site/tokens.js';
 import { cacheSize } from '../ext/site/cache.js';
-import { checkModules } from '@starbase/shared/site/catalogue';
+import { checkModules } from '@base-win/shared/site/catalogue';
 
 let db, mgr, ws, vol, staff;
 const page = async (slug) => (await mgr.get('/api/site')).json.pages.find((p) => p.slug === slug);

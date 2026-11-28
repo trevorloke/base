@@ -18,7 +18,7 @@
 import { useId, useState } from 'react';
 import { Link, useOutletContext, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { KINDS, WHO, TRIES_MAX, kindLabel, passLine } from '@starbase/shared/passes';
+import { KINDS, WHO, TRIES_MAX, kindLabel, passLine } from '@base-win/shared/passes';
 import { action, apiGet } from '../api.js';
 import { NeedsSignalLine, NoSignal, noSignal, useOnline } from '../components/NoSignal.jsx';
 import { LOADING, Unavailable, useHandOn, useListNames } from '../components/AudienceBits.jsx';

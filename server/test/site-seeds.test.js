@@ -11,8 +11,8 @@ import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
 import { hit, ok, campaign } from './site-helpers.js';
 import { Client } from './helpers.js';
-import { checkModules } from '@starbase/shared/site/catalogue';
-import { checkTheme } from '@starbase/shared/site/theme';
+import { checkModules } from '@base-win/shared/site/catalogue';
+import { checkTheme } from '@base-win/shared/site/theme';
 import { seedFor } from '../ext/site/seeds/index.js';
 
 let db, mgr, ws;

@@ -18,7 +18,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { wordDiff } from '@starbase/shared/letters';
+import { wordDiff } from '@base-win/shared/letters';
 import { action, apiGet } from '../api.js';
 import { NeedsSignal, useOnline } from '../components/NoSignal.jsx';
 import {

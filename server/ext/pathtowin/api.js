@@ -23,9 +23,9 @@
 // changing or removing a turf, an import and the sample drop the kept copy
 // (index.js); a saved number never needs a recount — the races are worked
 // out on every read from the kept counts.
-import { setting } from '@starbase/shared/old-names';
+import { setting } from '@base-win/shared/old-names';
 import { Hono } from 'hono';
-import { SLATES } from '@starbase/shared/canvass';
+import { SLATES } from '@base-win/shared/canvass';
 import { mayRun } from '../../lib/perms.js';
 import { DEFAULT_TZ } from '../../lib/org.js';
 import { standing, statsReady, todayOf, trendRows, turfRows } from './numbers.js';

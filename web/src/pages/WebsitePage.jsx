@@ -11,8 +11,8 @@
 //   included) and opens the first box that needs a look.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { MODULE_BY_KIND } from '@starbase/shared/site/catalogue';
-import { samplePath } from '@starbase/shared/site/starters';
+import { MODULE_BY_KIND } from '@base-win/shared/site/catalogue';
+import { samplePath } from '@base-win/shared/site/starters';
 import { action } from '../api.js';
 import { NoSignal, noSignal, useOnline } from '../components/NoSignal.jsx';
 import { useDragDrop } from '../components/useDragDrop.js';
@@ -27,8 +27,8 @@ import { SectionForm } from '../components/site/builder/SectionForm.jsx';
 import { PreviewFrame } from '../components/site/builder/PreviewFrame.jsx';
 import { Gallery } from '../components/site/builder/Gallery.jsx';
 import { PageSettings } from '../components/site/builder/PageSettings.jsx';
-import { themeColors } from '@starbase/shared/site/theme';
-import { knownPictures, olderUndescribed, picturesIn } from '@starbase/shared/site/pictures';
+import { themeColors } from '@base-win/shared/site/theme';
+import { knownPictures, olderUndescribed, picturesIn } from '@base-win/shared/site/pictures';
 import { addressOf } from './WebsitePages.jsx';
 import './shifts.css';
 import '../editor.css';

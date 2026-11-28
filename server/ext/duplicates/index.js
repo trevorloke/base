@@ -49,7 +49,7 @@ import { z } from 'zod';
 import { httpError } from '../../actions/util.js';
 import { flagIfOver, maybesAbout, recheckMaybes } from '../../lib/gifts.js';
 import { runHooks } from '../../lib/hooks.js';
-import { DEFAULT_SLATE } from '@starbase/shared/canvass';
+import { DEFAULT_SLATE } from '@base-win/shared/canvass';
 import { sameText, samePhone, samePostal, sharesOf, sharedWords } from './same.js';
 
 import { touchVotedFeed } from '../voted/live.js';

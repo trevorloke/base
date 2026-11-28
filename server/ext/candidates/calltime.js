@@ -21,7 +21,7 @@
 //   briefPledges            the brief's money Needs you: calltime_pledges { n, cents }
 import { z } from 'zod';
 import { Hono } from 'hono';
-import { DEFAULT_SLATE } from '@starbase/shared/canvass';
+import { DEFAULT_SLATE } from '@base-win/shared/canvass';
 import { httpError } from '../../actions/util.js';
 import { newId } from '../../lib/events.js';
 import { decide, areasFor } from '../../lib/perms.js';

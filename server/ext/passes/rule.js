@@ -25,4 +25,4 @@ export const listedWhere = async (db, ctx, pass) => {
   return list ? whereFor(db, readFor(asDesk(ctx)), { list }) : { where: 'false', params: [] };
 };
 
-export { doorState, inUniverse, inPass } from '@starbase/shared/passes';
+export { doorState, inUniverse, inPass } from '@base-win/shared/passes';

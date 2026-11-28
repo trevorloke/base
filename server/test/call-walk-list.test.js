@@ -17,7 +17,7 @@ import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { freshDb, Client } from './helpers.js';
-import { passLine } from '@starbase/shared/passes';
+import { passLine } from '@base-win/shared/passes';
 
 let db, mgr, vic, ws;
 const ids = {};

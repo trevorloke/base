@@ -1579,7 +1579,7 @@ comes back, or asks if words were typed meanwhile).
   tree> [people]`: it runs PGlite's Postgres server on port 5522, fills
   300,000 made-up people (110 towers of 200–700, 900 walk-ups and townhouse
   complexes, houses), and times the tree before buildings (a `git archive`
-  of it, with `node_modules/@starbase` pointing at its own folders) and this
+  of it, with its own workspace packages linked to its own folders) and this
   one by turns, 30 reads each, warm:
 
   | Read | Before (median / p95 ms) | Now (median / p95 ms) | Budget |

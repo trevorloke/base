@@ -7,7 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { dayEvent, escText, fold, googleLink, icsCalendar, icsEvent, outlookLink, shiftEvent } from '@starbase/shared/ics';
+import { dayEvent, escText, fold, googleLink, icsCalendar, icsEvent, outlookLink, shiftEvent } from '@base-win/shared/ics';
 
 const TZ = 'America/Vancouver';
 const NOW = new Date('2026-11-12T18:00:00Z');

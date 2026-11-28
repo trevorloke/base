@@ -9,7 +9,7 @@ import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { freshDb, Client } from './helpers.js';
-import { azSort, foldName } from '@starbase/shared/names';
+import { azSort, foldName } from '@base-win/shared/names';
 import { walkOrder } from '../lib/geo.js';
 
 let db, mgr, ws;

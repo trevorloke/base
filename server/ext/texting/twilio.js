@@ -11,7 +11,7 @@
 // Every inbound request (replies, delivery reports, the call's answer and
 // status) must carry a valid X-Twilio-Signature made with TWILIO_AUTH_TOKEN;
 // anything unsigned is refused.
-import { setting } from '@starbase/shared/old-names';
+import { setting } from '@base-win/shared/old-names';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { textConfigured } from '../../lib/notify.js';
 

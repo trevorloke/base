@@ -10,7 +10,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { noCalls, noCallsWord } from '@starbase/shared/canvass';
+import { noCalls, noCallsWord } from '@base-win/shared/canvass';
 import { action, apiGet } from '../api.js';
 import { NeedsSignalLine, NoSignal, noSignal, useOnline } from '../components/NoSignal.jsx';
 import { KIND_WORDS } from '../components/RequestAsk.jsx';

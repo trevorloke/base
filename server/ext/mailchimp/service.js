@@ -8,7 +8,7 @@
 // given to Mailchimp and never shown, logged or put in an answer. If
 // Mailchimp answers Connect with a signing secret, it is passed on once, to
 // set as MAILCHIMP_WEBHOOK_SECRET, and kept nowhere here.
-import { setting } from '@starbase/shared/old-names';
+import { setting } from '@base-win/shared/old-names';
 import { apiKey, AudienceError, audienceId, audiences, HOOK_PREFIX, hookUrl, keyFor, mailchimp, mailchimpOn, MailchimpError, webhookSecrets } from './mailchimp.js';
 import { deliveries } from './webhook.js';
 

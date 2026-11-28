@@ -16,7 +16,7 @@
 // cal_hash, last_ok_at) is written directly, like the runner's own jobs
 // rows: a record of what was copied, not a campaign fact. A link's own life
 // (ok, gone, reconnect) goes on the log through runAction.
-import { shiftEvent } from '@starbase/shared/ics';
+import { shiftEvent } from '@base-win/shared/ics';
 import { newId, runAction } from '../../lib/events.js';
 import { enqueueJob } from '../../lib/jobs.js';
 import { configuredUrl, shiftAppLink } from '../../lib/calendar.js';

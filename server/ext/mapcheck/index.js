@@ -34,7 +34,7 @@
 //
 // What only the browser knows (whether tiles loaded, the page's own build,
 // the map's size on screen) the page adds itself.
-import { setting } from '@starbase/shared/old-names';
+import { setting } from '@base-win/shared/old-names';
 import { Hono } from 'hono';
 import { geoBox } from '../../lib/org.js';
 import { currentBuild } from '../../lib/build.js';

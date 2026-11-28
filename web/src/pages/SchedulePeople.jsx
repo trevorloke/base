@@ -18,7 +18,7 @@
 //   onTap      (item) → a name tapped in the phone's sheet
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { VOLUNTEER_ROLES } from '@starbase/shared/canvass';
+import { VOLUNTEER_ROLES } from '@base-win/shared/canvass';
 import { usePersonSearch } from '../components/usePersonSearch.js';
 import '../components/person-search.css';
 import Sheet from './ScheduleSheet.jsx';

@@ -35,7 +35,7 @@
 //                            CARTO's browser keys are meant to be used)
 //   BASE_TILE_CLEAN=off  never offer CARTO, key or not. The free map
 //                            behind Google stays (OpenStreetMap then).
-import { setting } from '@starbase/shared/old-names';
+import { setting } from '@base-win/shared/old-names';
 import { Hono } from 'hono';
 import { getCookie } from 'hono/cookie';
 import { getDb } from '../../db/client.js';

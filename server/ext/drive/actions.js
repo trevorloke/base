@@ -10,7 +10,7 @@
 // first ("Google Drive is for the desk"): mayRun alone would let a
 // volunteer granted an area through. The desk actions list volunteer among
 // their roles only so that refusal is the one they hear.
-import { setting } from '@starbase/shared/old-names';
+import { setting } from '@base-win/shared/old-names';
 import { z } from 'zod';
 import { httpError } from '../../actions/util.js';
 import { newId } from '../../lib/events.js';

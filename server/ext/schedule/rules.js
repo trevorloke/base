@@ -1,8 +1,8 @@
 // What every way of scheduling shares — the core's shift.create and
 // shift.update (actions/field.js) and this feature's own actions: the
 // campaign's clock, a saved place, a made name. No outside calls.
-import { addDays, dayOf, instantOf, isClock, isDay, wallClock } from '@starbase/shared/dayparts';
-import { kindOf, madeTitle } from '@starbase/shared/shiftkinds';
+import { addDays, dayOf, instantOf, isClock, isDay, wallClock } from '@base-win/shared/dayparts';
+import { kindOf, madeTitle } from '@base-win/shared/shiftkinds';
 import { z } from 'zod';
 import { DEFAULT_TZ } from '../../lib/org.js';
 import { httpError } from '../../actions/util.js';

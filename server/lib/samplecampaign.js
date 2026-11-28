@@ -29,7 +29,7 @@
 //           is the recorded demo account (demoOwnsIt), checked once before
 //           and again under sign-up's lock in the write that drops
 //   G6      this process won the claim on sample_meta.made
-import { setting } from '@starbase/shared/old-names';
+import { setting } from '@base-win/shared/old-names';
 import { randomBytes } from 'node:crypto';
 import { bootstrap } from '../db/schema.js';
 import { getDb } from '../db/client.js';

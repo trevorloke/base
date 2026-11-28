@@ -15,7 +15,7 @@
 // client's base.win), not the campaign's own website now that base.win
 // serves it (BASE_SITE_DOMAIN, SITE_HOSTS: the two settings come off
 // after the move), and this is not staging: staging never sends.
-import { setting } from '@starbase/shared/old-names';
+import { setting } from '@base-win/shared/old-names';
 import { envName } from '../../lib/org.js';
 import { siteEnvHosts } from '../site/domain.js';
 

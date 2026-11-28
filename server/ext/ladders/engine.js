@@ -75,7 +75,7 @@
 // voted). The events hook takes anyone who does it off every ladder with
 // that goal at once, whatever step they are on — on or off — and each step
 // looks again before it runs.
-import { setting } from '@starbase/shared/old-names';
+import { setting } from '@base-win/shared/old-names';
 import { newId, runAction } from '../../lib/events.js';
 import { enqueueJob, cancelJobs } from '../../lib/jobs.js';
 import { emailConfigured, sendEmail, textConfigured, unsubscribeHeaders } from '../../lib/notify.js';

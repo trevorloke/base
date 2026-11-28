@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { brandHtml, brandFor } from '../lib/brand.js';
 import { rewriters } from '../lib/mount.js';
-import { BRANDS as OWN } from '@starbase/shared/brand';
+import { BRANDS as OWN } from '@base-win/shared/brand';
 import { presetFor } from '../lib/preset.js';
 // base.win's own look, and Imagine Surrey's from its preset.
 const BRANDS = { ...OWN, 'imagine-surrey': presetFor('imagine-surrey').brand };

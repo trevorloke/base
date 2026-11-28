@@ -11,7 +11,7 @@ import {
   tileHealth, TILE_WAIT_MS, checkLines, timeOfDay, placingPoll, retryLate, tileAt, streetMove, pickLook, tileHost, mapLooks,
   defaultLook, noticeTiles, sameBytes, frontTiles, NOTICE_CARTO, NOTICE_OTHER, PICTURE,
 } from '../../web/src/pages/mapView.js';
-import { bandOf } from '@starbase/shared/scale';
+import { bandOf } from '@base-win/shared/scale';
 
 // ── Which part of the map is asked for ──
 // A 1158 × 850 map (a 1440 × 900 window) and a phone's 390 × 722.

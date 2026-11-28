@@ -29,7 +29,7 @@
 // 'queued': a 'sending' or 'sent' row is never emailed again by itself.
 // Without email connected nothing is claimed: the rest stay saved
 // (released, not held) and go out on Send now.
-import { setting } from '@starbase/shared/old-names';
+import { setting } from '@base-win/shared/old-names';
 import { runAction } from '../../lib/events.js';
 import { emailConfigured, sendEmail } from '../../lib/notify.js';
 import { enqueueJob, runJobsSoon } from '../../lib/jobs.js';
@@ -40,7 +40,7 @@ import {
 import { loadAttachments } from './attach.js';
 import { whyNot } from '../../lib/reach.js';
 import { onMediaTags } from '../media/rules.js';
-import { fillText, firstOf } from '@starbase/shared/email/words';
+import { fillText, firstOf } from '@base-win/shared/email/words';
 
 const BATCH = 10;
 const perRun = () => Number(setting('BASE_AB_SEND_PER_RUN')) || 200;

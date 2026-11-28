@@ -15,7 +15,7 @@ import NameAz from '../components/NameAz.jsx';
 import { NeedsSignal, noSignal, useOnline } from '../components/NoSignal.jsx';
 import { useScripts } from '../components/ScriptLine.jsx';
 import { useVotedMode } from '../components/Voted.jsx';
-import { azSort } from '@starbase/shared/names';
+import { azSort } from '@base-win/shared/names';
 import { hasArea, isDesk } from '../Shell.jsx';
 import { todayWords } from './QuickReport.jsx';
 import './shifts.css';

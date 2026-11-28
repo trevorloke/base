@@ -28,7 +28,7 @@
 import { newId } from '../../lib/events.js';
 import { logGift, voidGift, campaignDay } from '../../lib/gifts.js';
 import { enqueueJob } from '../../lib/jobs.js';
-import { DEFAULT_SLATE } from '@starbase/shared/canvass';
+import { DEFAULT_SLATE } from '@base-win/shared/canvass';
 import { overWhenLanding, tzOf } from './limits.js';
 
 export const REFUND_JOB = 'payments.refund';

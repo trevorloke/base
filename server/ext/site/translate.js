@@ -19,12 +19,12 @@
 // Nothing is ever translated while a visitor waits: a GET never queues a
 // sweep, and a segment a page needs but doesn't have shows in English.
 import { createHash } from 'node:crypto';
-import { checkProps } from '@starbase/shared/site/catalogue';
+import { checkProps } from '@base-win/shared/site/catalogue';
 import { OTHER_CODES, LANG_BY_CODE } from '../../../shared/site/languages.js';
 import { normSeg, segmentsOf, moduleSegments } from '../../../shared/site/segments.js';
 import { siteWords } from './from-preset.js';
 import { LEGAL_ENGLISH } from '../../../shared/site/wording.js';
-import { VOLUNTEER_ROLES } from '@starbase/shared/canvass';
+import { VOLUNTEER_ROLES } from '@base-win/shared/canvass';
 import { newId, runAction } from '../../lib/events.js';
 import { enqueueJob } from '../../lib/jobs.js';
 import { prepare, readBack, translateBatch, translateKey, MAX_SEGMENTS, MAX_CHARS } from '../../lib/translate.js';

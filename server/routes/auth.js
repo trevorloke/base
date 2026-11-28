@@ -2,7 +2,7 @@
 // manager membership in one transaction; after that, sign-up is closed and
 // everyone else joins by invite (/join). Login binds the session to the
 // user's workspace membership.
-import { setting } from '@starbase/shared/old-names';
+import { setting } from '@base-win/shared/old-names';
 import { areasFor } from '../lib/perms.js';
 import { Hono } from 'hono';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
@@ -39,7 +39,7 @@ import { ownOrigin, parseKeys, verifyEntry } from '../lib/entry.js';
 import { instanceOf } from '../ext/operator/identity.js';
 import { enter, ENTRY_HOURS } from '../ext/operator/enter.js';
 import { sampleSignup, sampleWanted, sampleMaking } from '../lib/samplecampaign.js';
-import { defaultCandidates } from '@starbase/shared/scale';
+import { defaultCandidates } from '@base-win/shared/scale';
 
 const app = new Hono();
 
