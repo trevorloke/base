@@ -1332,7 +1332,10 @@ The owner's to-do:
    change it**: renaming the service changed only the name shown. Nobody
    uses that address; people use `staging.base.win`. It shows at the top of
    the service's page in Render and in the control centre, which uses it to
-   check it is talking to the right server. The only way to a clean one is
+   check it is talking to the right server. The server's public
+   `/api/health` answer names it only to a caller who asked at that very
+   address (the control centre does); asked at `staging.base.win` or any
+   other address, it says `"ownOrigin": null`. The only way to a clean one is
    a fresh staging service (staging holds only made-up data): a separate
    small job, with a new service, `staging.base.win` pointed at it, the
    control centre updated and the old service deleted. For `base-win`,

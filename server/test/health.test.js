@@ -22,6 +22,7 @@ after(() => {
   for (const k of KEYS) if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k];
 });
 const health = async () => (await app.request('/api/health')).json();
+const healthAt = async (origin) => (await app.request(`${origin}/api/health`)).json();
 
 test('the exact fields', async () => {
   const h = await health();
@@ -54,9 +55,11 @@ test('entry: no-key, bad-key, no-origin, ready; the kids held', async () => {
   process.env.RENDER_EXTERNAL_URL = 'https://Base-Win-Example.onrender.com/';
   h = await health();
   assert.equal(h.entry, 'ready');
-  assert.equal(h.ownOrigin, 'https://base-win-example.onrender.com');
+  // Its own address is said only to a caller who asked at it (the control
+  // centre asks at the Render address it saved): see the next test.
+  assert.equal((await healthAt('https://base-win-example.onrender.com')).ownOrigin, 'https://base-win-example.onrender.com');
   process.env.BASE_OWN_URL = 'http://127.0.0.1:5630';
-  assert.equal((await health()).ownOrigin, 'http://127.0.0.1:5630');
+  assert.equal((await healthAt('http://127.0.0.1:5630')).ownOrigin, 'http://127.0.0.1:5630');
   process.env.BASE_PLATFORM_PUBKEY = `${V.otherPublicKey},${V.publicKey}`;
   assert.deepEqual((await health()).platformKids, [V.otherKid, 'cd935ce9']);
   // The key closes first-run sign-up on a server with no campaign — and
@@ -66,6 +69,24 @@ test('entry: no-key, bad-key, no-origin, ready; the kids held', async () => {
   process.env.BASE_OPEN_SIGNUP = '1';
   assert.equal((await health()).setupOpen, true);
   delete process.env.BASE_OPEN_SIGNUP;
+});
+
+test('ownOrigin is said only to a caller who asked at that address, never to one at the public address', async () => {
+  delete process.env.BASE_OWN_URL;
+  process.env.RENDER_EXTERNAL_URL = 'https://riverbend-staging.onrender.com';
+  process.env.BASE_PUBLIC_URL = 'https://staging.riverbend.example.org';
+  try {
+    assert.equal((await healthAt('https://riverbend-staging.onrender.com')).ownOrigin, 'https://riverbend-staging.onrender.com', 'the control centre, at the Render address');
+    assert.equal((await healthAt('https://RIVERBEND-staging.onrender.com')).ownOrigin, 'https://riverbend-staging.onrender.com', 'in any letter case');
+    for (const at of ['https://staging.riverbend.example.org', 'http://localhost', 'https://riverbend-staging.onrender.com.example.net']) {
+      const text = await (await app.request(`${at}/api/health`)).text();
+      assert.equal(JSON.parse(text).ownOrigin, null, at);
+      assert.ok(!text.includes('onrender'), `${at}: the machine address is nowhere in the answer`);
+    }
+  } finally {
+    delete process.env.RENDER_EXTERNAL_URL;
+    delete process.env.BASE_PUBLIC_URL;
+  }
 });
 
 test('address and doorKey follow their settings; the door key never shows', async () => {

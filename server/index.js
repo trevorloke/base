@@ -107,6 +107,16 @@ const publicAddress = () => {
   const raw = configuredUrl();
   try { return raw && /^https?:$/.test(new URL(raw).protocol) ? raw : null; } catch { return null; }
 };
+// This server's own address (the audience a sign-in token names) is said
+// only to a caller who asked at it: the control centre asks at the Render
+// address it saved, and checks the answer is that address. Anyone else (the
+// public address, any other name) is not told the machine's .onrender.com
+// address, which Render can never change.
+const askedAtOwn = (c) => {
+  const own = ownOrigin();
+  if (!own) return null;
+  try { return new URL(c.req.url).host.toLowerCase() === new URL(own).host ? own : null; } catch { return null; }
+};
 app.get('/api/health', async (c) => {
   const database = await dbReachable();
   const db = database ? await getDb().catch(() => null) : null;
@@ -115,7 +125,7 @@ app.get('/api/health', async (c) => {
   const made = db ? await noWorkspace(db).then((none) => !none, () => null) : null;
   return c.json({
     ok: database, database: database ? 'ok' : 'not reachable', service: 'base.win', env: envName(), organization: orgName(), brand: brandKey(), commit: COMMIT, build: currentBuild(), tzdataCurrent: !staleTimeZoneData(),
-    ownOrigin: ownOrigin(), instance, address: publicAddress(), entry: entryReadiness(),
+    ownOrigin: askedAtOwn(c), instance, address: publicAddress(), entry: entryReadiness(),
     platformKids: parseKeys().map((k) => k.kid), setupOpen: open, campaignMade: made, doorKey: doorKeySet(), store: storeOf(db),
   }, database ? 200 : 503);
 });

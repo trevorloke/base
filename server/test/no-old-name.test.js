@@ -214,7 +214,9 @@ const NEW_ONLY = {
   BASE_JOBS: 'off',
   BASE_OPEN_SIGNUP: '1',
   BASE_SECURE_COOKIES: '0',
-  RENDER_EXTERNAL_URL: 'https://riverbend-a1b2.onrender.com',
+  // Render's machine address, which can never change, and staging's still
+  // carries the word: it must never be said to someone who did not ask there.
+  RENDER_EXTERNAL_URL: `https://${OLD_WORD}-staging.onrender.com`,
   MAIL_FROM: 'Riverbend Forward <hello@riverbend.example.org>',
   GEOCODE_ON_SAVE: 'off',
 };
@@ -249,10 +251,13 @@ const mentions = (pages) => Object.entries(pages).filter(([, text]) => WORD.test
 
 test('started with the new names only: nothing it says carries the older name', async () => {
   const r = await newOnly();
-  assert.deepEqual(Object.keys(r.pages).sort(), ['csv', 'email', 'export', 'health', 'privacy', 'services', 'startup'].sort());
+  assert.deepEqual(Object.keys(r.pages).sort(), ['csv', 'email', 'export', 'health', 'healthPublic', 'privacy', 'services', 'startup'].sort());
   // Each page is really the thing named, not an error.
   assert.equal(r.health.service, 'base.win');
   assert.equal(r.health.address, PUBLIC, 'the public address, never the machine’s .onrender.com one');
+  assert.equal(r.health.ownOrigin, null, 'nor the machine’s address under another name');
+  assert.equal(r.healthPublic.ownOrigin, null, 'asked at the public address, the same');
+  assert.equal(r.status.healthPublic, 200);
   assert.equal(r.status.privacy, 200);
   assert.match(r.pages.privacy, /Privacy policy/);
   assert.equal(r.status.csv, 200);

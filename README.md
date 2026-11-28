@@ -235,6 +235,8 @@ sign-up is closed: the control centre's first visit makes the campaign.
 `ownOrigin`, `instance`, `address`, `entry` (`ready`, `no-key`, `bad-key`,
 `no-origin`), `platformKids`, `setupOpen`, `campaignMade` (a workspace
 exists) and `store` (`postgres` or `embedded`: where the campaign is kept).
+`ownOrigin` (the server's Render address) is given only to a caller who
+asked at that address, as the control centre does; anyone else gets `null`.
 It also says `doorKey`, which only the door option reads (not in use
 today).
 

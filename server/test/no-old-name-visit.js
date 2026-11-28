@@ -42,6 +42,10 @@ const get = (path, init = {}) => app.request(path, { ...init, headers: { cookie:
 const healthRes = await get('/api/health');
 const health = await healthRes.clone().json();
 await asText('health', healthRes);
+// The same, asked at the public address (as anyone opening it would).
+const healthPublicRes = await get(new URL('/api/health', process.env.BASE_PUBLIC_URL).href);
+const healthPublic = await healthPublicRes.clone().json();
+await asText('healthPublic', healthPublicRes);
 
 const servicesRes = await get('/api/connections');
 const servicesBody = await servicesRes.clone().json();
@@ -64,5 +68,5 @@ await asText('privacy', await app.request('http://localhost/site/privacy', { hea
 
 pages.startup = startup;
 const services = Array.isArray(servicesBody) ? servicesBody : (servicesBody.services || servicesBody.list || []);
-process.stdout.write(`VISIT ${JSON.stringify({ pages, status, health, services, emails: sent.length })}\n`);
+process.stdout.write(`VISIT ${JSON.stringify({ pages, status, health, healthPublic, services, emails: sent.length })}\n`);
 process.exit(0);
