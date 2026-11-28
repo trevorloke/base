@@ -589,9 +589,12 @@ const STEPS = {
     const unsubscribe = `${base}/lu/${run.id}`;
     // The lines under every campaign email (abtests/send.js footOf): the
     // mailing address, the contact, "Authorized by …" (and its approved
-    // words for a ladder in another language). Text only, as always.
+    // words for a ladder in another language). Text only, as always. A
+    // line the step's words already carry (typed in before ladders added
+    // it) is not said again.
     const foot = await footOf(tx, run.workspace_id, 'email-ladder', { lang: c.ladder.trigger_lang || 'en' });
-    const more = [...footLines(foot), ...authLines(foot)].map((l) => `${l}.\n`).join('');
+    const body = fillIn(s.body, fill);
+    const more = [...footLines(foot), ...authLines(foot).filter((l) => !body.includes(l))].map((l) => `${l}.\n`).join('');
     // An automatic send can't ask "Send without it": it goes, and says so.
     const missing = autoMissing(foot.line);
     // 1. Claim the send: 'sending', committed before the provider is called.
@@ -606,7 +609,7 @@ const STEPS = {
         // Every ladder email says who sent it and carries the reader's own
         // unsubscribe (it takes them off the newsletter too), in the text and
         // as the mail app's own Unsubscribe button.
-        text: `${fillIn(s.body, fill)}\n\n—\nSent by ${c.ladder.campaign}.\n${more}Unsubscribe: ${unsubscribe}`,
+        text: `${body}\n\n—\nSent by ${c.ladder.campaign}.\n${more}Unsubscribe: ${unsubscribe}`,
         headers: unsubscribeHeaders(unsubscribe),
       },
     };

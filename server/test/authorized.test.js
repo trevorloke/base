@@ -305,6 +305,21 @@ test('T8. a ladder in Punjabi also carries the approved Punjabi line', async () 
   assert.equal(texts.find((x) => x.To === '+16045550106')?.Body, `Hi Fay, it’s Example Campaign.\n${LINE}\nਮਨਜ਼ੂਰ ${AGENT} ${CONTACT}\n${STOP}`);
 });
 
+test('T8. a ladder email whose words already end with the line typed in: the line once, at the foot only if it isn’t there', async () => {
+  await setOrg(SET);
+  const gil = await mgr.createPerson('Gil Example', { email: mail('gil') });
+  okA(await mgr.action('subscription.add', { email: mail('gil'), name: 'Gil Example' }));
+  const l = await ladderFor('typed', [{ kind: 'email', subject: 'Welcome', body: `Hi {{first_name}}, thanks for joining.\n\n${LINE}` }]);
+  okA(await mgr.action('ladder.setActive', { id: l.id, active: true }));
+  clearOut();
+  okA(await mgr.action('person.update', { id: gil.id, tags: [`ladtyped${tag}`] }));
+  await runLadders();
+  const m = lastMailTo(mail('gil'));
+  assert.ok(m, 'the ladder email went');
+  assert.equal(m.text.split(LINE).length - 1, 1, `the line once:\n${m.text}`);
+  assert.match(m.text, new RegExp(`^Hi Gil, thanks for joining\\.\\n\\n${LINE}\\n\\n—\\nSent by Example Campaign\\.\\nPO Box 12, Surrey BC\\.\\nhello@example\\.org\\.\\nUnsubscribe: `));
+});
+
 test('T9. a share kit saved without the line still shows it; the 500 check counts it; the saved choice is kept', async () => {
   await setOrg(SET);
   const k = okA(await mgr.action('share.kit.save', { title: 'Old choice', body: 'Have a look', path: '/', authorized: false })).kit;
