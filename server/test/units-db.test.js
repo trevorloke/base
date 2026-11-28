@@ -347,6 +347,31 @@ test('house states: each door at a house with its state on the open round, whoev
   assert.equal((await mgr.get('/api/buildings/house/not-an-id')).status, 404);
 });
 
+// ── 10. One door, one wording: a list row carries its house (review 10) ──
+test('People rows and search carry place "house" for a door at a house, so a duplex reads Suite B everywhere', async () => {
+  const D2 = { lat: 49.65, lng: -122.6 };
+  const a = await insert({ name: 'Rae Example', address: 'A-11400 134 St', ...D2 });
+  const b = await insert({ name: 'Sam Example', address: 'B-11400 134 St', ...D2 });
+  const m = await insert({ name: 'Tom Example', address: '11500 134 St', lat: D2.lat + 0.001, lng: D2.lng });
+  const s = await insert({ name: 'Uli Example', address: '11500 134 St', unit: 'Bsmt', lat: D2.lat + 0.001, lng: D2.lng });
+  const lone = await insert({ name: 'Val Example', address: '11600 134 St', lat: D2.lat + 0.002, lng: D2.lng });
+  const unit = await insert({ name: 'Wyn Example', address: '#1803 14000 104 Ave', lat: D2.lat + 0.003, lng: D2.lng });
+  // The same civic 1 km away, on its own: a lone door, not part of the duplex.
+  const far = await insert({ name: 'Xan Example', address: 'A-11400 134 St', lat: D2.lat + 0.01, lng: D2.lng });
+  await fill();
+  const rows = ok(await mgr.get('/api/persons?limit=500')).persons;
+  const placeOfRow = (id) => rows.find((r) => r.id === id)?.place ?? null;
+  assert.deepEqual([a, b, m, s].map(placeOfRow), ['house', 'house', 'house', 'house'], 'the duplex and the house with a basement suite');
+  assert.deepEqual([lone, unit, far].map(placeOfRow), [null, null, null], 'a lone door and a lone unit carry no place');
+  const found = ok(await mgr.get(`/api/persons?q=${encodeURIComponent('11400 134')}`)).persons;
+  assert.ok(found.some((r) => r.id === b && r.place === 'house'), 'search rows too');
+  const { doorLine } = await import('../../shared/units.js');
+  const row = found.find((r) => r.id === b);
+  const prof = ok(await mgr.get(`/api/persons/${b}`));
+  assert.equal(doorLine(row), 'Suite B · 11400 134 St', 'the search row');
+  assert.equal(doorLine(prof.person, prof.at_house.length ? 'house' : 'door'), 'Suite B · 11400 134 St', 'the profile');
+});
+
 // ── 16. Search finds suites and units written in the address ──
 test('search: “10388 134” finds the suite written “Bsmt 10388 134 St”; “13450 104” the unit “#1203 13450 104 Ave”', async () => {
   await insert({ name: 'Lou Example', address: 'Bsmt 11100 134 St', lat: 49.6, lng: -122.6 });

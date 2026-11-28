@@ -669,8 +669,21 @@ if (want(7) && !BIG && !RED) {
   const prof = await D.text('main');
   check('7: Ben\'s profile: "Basement suite · 10388 134 St" and "Also at this house: Main (1 person)"', /Basement suite · 10388 134 St/.test(prof) && /Also at this house: Main \(1 person\)/.test(prof), prof.slice(0, 300));
   await D.shot('07-profile-suite-desk');
+  // One door, one wording (review 10): the duplex's Suite B reads "Suite B" in search as on its profile and walk list,
+  // and Ana's main door "Main · 10388 134 St" as on her profile.
+  const ivo = person('Ivo');
+  await D.go(`/people/${ivo.id}`);
+  await D.page.waitForSelector('main', { timeout: 8000 });
+  await D.page.locator('button', { hasText: /^Details$/ }).first().click().catch(() => {});
+  await sleep(800);
+  const ivoProf = await D.text('main');
+  check('7: Ivo\'s profile reads "Suite B · 10500 134 St"', /Suite B · 10500 134 St/.test(ivoProf) && !/Unit B/.test(ivoProf), ivoProf.slice(0, 300));
   const { ctx, H } = await asManager('phone', 'light');
-  for (const [q, want7] of [['13600 104', (t) => /Unit 201 · 13600 104 Ave/.test(t) && /Ana Placeholder/.test(t)], ['10388 134', (t) => /Ben Example/.test(t) && /Ana Example/.test(t) && /Basement suite · 10388 134 St/.test(t)]]) {
+  for (const [q, want7] of [
+    ['13600 104', (t) => /Unit 201 · 13600 104 Ave/.test(t) && /Ana Placeholder/.test(t)],
+    ['10388 134', (t) => /Ben Example/.test(t) && /Ana Example/.test(t) && /Basement suite · 10388 134 St/.test(t) && /Main · 10388 134 St/.test(t)],
+    ['10500 134', (t) => /Suite B · 10500 134 St/.test(t) && /Suite A · 10500 134 St/.test(t) && !/Unit [AB] · 10500/.test(t)],
+  ]) {
     await H.go(`/people?q=${encodeURIComponent(q)}`);
     await H.page.waitForSelector('.pp-row', { timeout: 8000 }).catch(() => {});
     await sleep(800);

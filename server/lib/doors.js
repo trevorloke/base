@@ -27,7 +27,8 @@
 //
 // The parser's door key in JS is shared/units.js doorKey; FRESH/doorSql here
 // are the same key for SQL, and the only copy of it.
-import { UNIT_V, doorParts } from '../../shared/units.js';
+import { UNIT_V, doorParts, doorKey, placeOf } from '../../shared/units.js';
+import { REACH } from '../../shared/buildings.js';
 
 export { UNIT_V };
 
@@ -79,6 +80,51 @@ export const doorUnitSql = (a = 'p') => `(case when ${FRESH(a)} then ${a}.door_u
 export const doorUnitKindSql = (a = 'p') => `(case when ${FRESH(a)} then ${a}.door_kind
   when nullif(btrim(coalesce(${a}.unit, '')), '') is not null
     or ${a}.address ~ '^\\s*#?\\d{1,4}[A-Za-z]?\\s*-\\s*\\d{4,}' then 'unit' else 'main' end)`;
+
+// Which of these rows' doors is at a house with suites: the doors at the
+// same civic address within a building's reach (as the map and the walk
+// list group them; with no pin, every door at that civic address), and
+// shared/units.js placeOf over them. Those rows get place: 'house', so a
+// list words the door as every other screen does ("Suite B · 10500 134 St",
+// "Main · 10388 134 St"); others are left as they are. Read by the stored
+// civic (indexed); a row not worked out yet counts only itself. → rows.
+export const markHouses = async (db, workspaceId, rows) => {
+  const mine = new Map();
+  for (const r of rows || []) {
+    if (!String(r?.address || '').trim()) continue;
+    const { civic } = doorParts(r);
+    if (civic) mine.set(r, civic);
+  }
+  if (!mine.size) return rows;
+  const civics = [...new Set(mine.values())];
+  const others = (await db.query(
+    `select p.id, p.address, p.unit, p.lat, p.lng from persons p
+      where p.workspace_id = $1 and p.deleted_at is null and p.door_civic = any($2::text[]) and ${FRESH('p')}`,
+    [workspaceId, civics],
+  )).rows;
+  const byCivic = new Map();
+  const add = (x) => {
+    const c = doorParts(x).civic;
+    if (!c) return;
+    if (!byCivic.has(c)) byCivic.set(c, new Map());
+    byCivic.get(c).set(x.id, x);
+  };
+  for (const x of others) add(x);
+  for (const r of mine.keys()) add(r);
+  const near = (r, x) => r.lat == null || r.lng == null || (x.lat != null && x.lng != null
+    && Math.abs(Number(x.lat) - Number(r.lat)) <= REACH && Math.abs(Number(x.lng) - Number(r.lng)) <= REACH);
+  const seen = new Map();
+  for (const [r, civic] of mine) {
+    const memo = `${civic}|${r.lat ?? ''}|${r.lng ?? ''}`;
+    if (!seen.has(memo)) {
+      const doors = new Map();
+      for (const x of byCivic.get(civic).values()) if (near(r, x)) doors.set(doorKey(x), x);
+      seen.set(memo, placeOf([...doors.values()]) === 'house');
+    }
+    if (seen.get(memo)) r.place = 'house';
+  }
+  return rows;
+};
 
 // One person's parts as stored.
 export const partsRow = (p) => {

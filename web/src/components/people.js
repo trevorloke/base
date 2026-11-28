@@ -10,7 +10,10 @@
 import { createElement } from 'react';
 import { SUITE_TYPED, doorLine } from '../../../shared/units.js';
 
-export const streetLine = (p) => (p?.address ? doorLine(p, 'door') : '');
+// (A row the server sends with place 'house' — a door at a house with
+// suites — reads as the map, the walk list and the profile read it:
+// "Suite B · 10500 134 St", "Main · 10388 134 St".)
+export const streetLine = (p) => (p?.address ? doorLine(p) : '');
 
 export function UnitSuggestions({ id }) {
   return createElement('datalist', { id }, SUITE_TYPED.map((w) => createElement('option', { key: w, value: w })));

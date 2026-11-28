@@ -21,7 +21,7 @@ import { DEFAULT_TZ } from '../lib/org.js';
 import { crossSiteWrite } from '../lib/guard.js';
 import dataRoutes from './data.js';
 import { pointInPolygon, groupDoors, walkOrder } from '../lib/geo.js';
-import { doorSql, doorCivicSql, doorUnitSql, doorUnitKindSql, FRESH, doorOfParts } from '../lib/doors.js';
+import { doorSql, doorCivicSql, doorUnitSql, doorUnitKindSql, FRESH, doorOfParts, markHouses } from '../lib/doors.js';
 import { doorParts, doorKey, unitWords, houseCompare, placeOf } from '../../shared/units.js';
 import { groupPlaces, REACH } from '@base-win/shared/buildings';
 import { checkCap } from '../lib/cap.js';
@@ -260,7 +260,10 @@ app.get('/persons', async (c) => {
      order by ${azKey('p')} limit $4`,
     params,
   );
-  return c.json({ persons: rows.slice(0, limit).map(personRow).map(forViewer(ctx)), more: rows.length > limit });
+  // A door at a house carries place 'house' (lib/doors.js markHouses): the
+  // row reads "Suite B · 10500 134 St" as the map, walk list and profile do.
+  const out = await markHouses(c.get('db'), ctx.workspaceId, rows.slice(0, limit).map(personRow));
+  return c.json({ persons: out.map(forViewer(ctx)), more: rows.length > limit });
 });
 
 // How many people a People query names — the real number, however long the
