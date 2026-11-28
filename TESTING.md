@@ -1146,7 +1146,7 @@ comes back, or asks if words were typed meanwhile).
 
 ### Staff
 - **People** — search; **Filter** by rating, tag (media, VIP…), or volunteer
-  role (incl. *Hi-rise building captain*); open a profile; add tags, roles,
+  role (incl. *Building captain*); open a profile; add tags, roles,
   social handles. **More → Call list / Text list** opens Calls with the same
   filter; **More → Inbox** has every text conversation.
 - **A profile → Details → Socials** — **+ Add**, paste
@@ -1562,7 +1562,8 @@ comes back, or asks if words were typed meanwhile).
 - **Buildings (server)** — `server/test/buildings-shared.test.js`
   (`shared/buildings.js`: every way a unit is written inside an address and
   the ambiguous ones never split; one spelling of a street; floors and unit
-  order; 3 units stay plain doors, 4 make a building; the same address 1 km
+  order; 3 numbered or lettered units make a building, 2 with no main door
+  are a house with Suite A and Suite B, and suite words never count; the same address 1 km
   away is another, a 0.0003° re-geocode is not; one unit written two ways is
   one row, done only when both doors are; *Next unit* is the walk list's
   *Next door* rule, order for order). `server/test/geo.test.js`: a tower's
@@ -1593,20 +1594,63 @@ comes back, or asks if words were typed meanwhile).
   A 210-unit tower (half its rows written "1203-13450 104 Ave", unit 1203
   both ways), another 60 m away, 60 townhouses, a house with a suite and a
   4-unit conversion: at z17–z19, light and dark, desk and phone, each tower
-  is one square and the house keeps its two pins; the busy view's square dot
-  opens the sheet and a plain spot still opens its door; the sheet ("210
-  units · 210 left", only Floor 2 open, 1203 one row, ?building= and no
+  is one square and the house with a suite (a blank row and "B") is one pin
+  with *+ Suite B* under it, its card's door switch reading Main and Suite B
+  (shots `09-house-*`); the busy view's square dot
+  opens the sheet and a plain spot still opens its door; the sheet ("Building
+  · 210 units" under the address, "210 left", only Floor 2 open, 1203 one row, ?building= and no
   address, a reload); Next unit · 201 → No answer → Next unit · 202 → ‹ "209
-  left"; unit 1203's two doors one after the other (Next unit · 1203, then
-  1204), Done only after both; the phone's Back from a unit to the sheet to
+  left"; unit 1203 written two ways is one stop with all three of its
+  people (Next unit · 1204 after one knock, "208 left"); the phone's Back from a unit to the sheet to
   the map, Escape from a unit's card to its sheet, a square opened with
   Enter; townhouses in one list; the GOTV filter's "Showing: … · 10 of 210";
-  the walk list floor by floor and a GOTV pass's "Not on this round" (a
+  the walk list's one "Building · 210 units" block with rows "Unit 201",
+  "Unit 202"… floor by floor (the address not repeated) and a GOTV pass's "Not on this round" (a
   floor with nobody on the round says so, not "done");
   offline from the kept walk list and the knock synced after; a volunteer
   without the turf gets no square and a 404; the anchor merged away says
   "This building isn't here any more". `RED=1` runs steps 1, 3 and 7 against
   a tree without buildings, where they fail.
+- **Buildings and suites (screens)** — `e2e-units.mjs`, twice:
+  `BASE_BRAND=imagine-surrey BASE_OPEN_SIGNUP=1 BASE_DATA=memory PORT=5524`
+  (`BASE=http://127.0.0.1:5524 node e2e-units.mjs`), then a server that
+  treats the list as a big one, `BASE_MAP_ALL=20 BASE_MAP_VIEW=20
+  BASE_MAP_DOTS=200 PORT=5525` (`BIG=1`). A manager imports a made-up list
+  through the import page: 10388 134 St (Ana Example) and "10388 134 St
+  Bsmt" (Ben Example), 10400 134 St one lot north with a "Bsmt" unit, 10420
+  134 St with a Coach house and an Upper suite, a duplex A-/B-10500 134 St,
+  13450 and 13450A 104 Ave, a 6-unit low-rise written "Ste 101 13520 104
+  Ave" and a 24-unit mid-rise written "#201-13600 104 Ave". At 1440 and
+  390, light and dark: 10388 is one pin (*+ Basement suite* under it from
+  zoom 19), 10420 one pin (*+ 2 suites*), the duplex one house (Suite A,
+  Suite B), the low-rise and mid-rise squares "6" and "24" with *Building*
+  under them, 13450A and 13450 two pins, and no tag covers its neighbour;
+  the house's card (*Doors at this house*, Main pressed, *Basement suite ·
+  Not knocked*, the header *Ana Example / 10388 134 St*); No answer at Main
+  → the one yellow button *Next: Basement suite* → *Basement suite · 10388
+  134 St*, Ben; the volunteer's walk list (10388 one block, Main *Try
+  again* and Basement suite *Not knocked*; *Building · 24 units* with rows
+  *Unit 201*…, the address not repeated; Next door *Unit 201 · 13600 104
+  Ave*, and *Skip → Basement suite · 10388 134 St* at the main door);
+  Refused at the basement suite with no signal (Done there, Main still Try
+  again), then back online the turf reads 1 done and 1 to try again of 41
+  doors and Today's doors read 2; the printed walking list, its CSV (Number
+  13600, Unit *Unit 201*; Number 10388, Unit *Basement suite*) and its PDF
+  (read with `pdftotext`); Ben's profile (*Also at this house: Main (1
+  person)*) and People search ("13600 104", "10388 134"); the volunteer, on
+  *My turf*, opens the mid-rise (24 units, Next unit moves on); one yellow
+  button, 56 px door switch buttons and walk rows, no sideways scroll, words
+  in the aria-labels, Enter on the house's pin. `BIG=1`: from a People search
+  to Ben's card, the door switch is there with Basement suite pressed; the
+  busy view's dots carry `h` (2, 3, 2) and `u` (6, 24); a tap on 10388's dot
+  opens the house on Main; then *Next: Basement suite*. `RED=1` runs steps
+  1, 2, 4 and 6 on a tree without this work: the new checks fail and each of
+  those steps also checks the old screens (two pins at 10388, a card with
+  one door, "10388 134 St Bsmt" on a line of its own, the suite printed as
+  an address), exit 1; exit 2 if an old-screen check fails too (the red not
+  proven). Before/after pictures for the owner:
+  `ROOT=<checkout> WHEN=before|after PORT=5495 OUT=<dir> node
+  scripts/units-before-after.mjs` (in each checkout, after `npm run build`).
 - **Quick reports (screens)** — `PORT=5460 SHOTS=/tmp/qr node
   e2e-quickreports.mjs`, and again with `BASE_PATH=/imaginesurrey PORT=5461`.
   Reports opens on Quick reports (counts from *Loading…* to numbers;
