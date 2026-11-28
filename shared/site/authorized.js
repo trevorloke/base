@@ -30,9 +30,13 @@ export const KINDS = ['advertising', 'unclear', 'transactional', 'internal', 'ou
 export const INCLUDES = ['when-set', 'first-text', 'never', 'copy'];
 export const FORMS = ['html-footer', 'email-footer', 'sms', 'ics', 'share-text', 'meta', 'copy'];
 
-// The delivery code itself (it hands a message to the provider and knows
-// nothing of what is in it): every file that calls it is in a row below.
-export const DELIVERY = ['server/lib/notify.js', 'server/lib/mail/index.js', 'server/ext/texting/twilio.js'];
+// The delivery code itself (it hands a message to the provider, or draws
+// the app's public page look, and knows nothing of what is in it): every
+// file that calls it is in a row below.
+export const DELIVERY = [
+  'server/lib/notify.js', 'server/lib/mail/index.js', 'server/lib/mail/resend.js', 'server/lib/mail/sendgrid.js',
+  'server/ext/texting/twilio.js', 'server/lib/publicpage.js',
+];
 
 const row = (r) => Object.freeze({ owner: false, senders: [], hooks: [], ...r });
 export const CHANNELS = Object.freeze({
@@ -47,15 +51,15 @@ export const CHANNELS = Object.freeze({
     },
   }),
   'site-plain-public': row({
-    what: 'The plain public pages: coming soon, a closed website',
+    what: 'The plain public pages: coming soon, a closed website, a public lesson (/learn)',
     kind: 'advertising', include: 'when-set', form: 'html-footer',
-    senders: ['server/ext/site/public.js'],
-    hooks: ['server/ext/site/public.js'],
+    senders: ['server/ext/site/public.js', 'server/ext/learn/public.js'],
+    hooks: ['server/ext/site/public.js', 'server/ext/learn/public.js'],
   }),
   'site-plain-own': row({
     what: 'A supporter’s own pages: email preferences, unsubscribe (the website’s, and the one every email links to), a link that expired',
     kind: 'unclear', owner: true, include: 'when-set', form: 'html-footer',
-    senders: ['server/ext/site/public.js'],
+    senders: ['server/ext/site/public.js', 'server/routes/public.js', 'server/ext/ladders/public.js'],
     hooks: ['server/ext/site/public.js', 'server/routes/public.js', 'server/ext/ladders/public.js'],
   }),
   embed: row({
@@ -165,8 +169,9 @@ export const CHANNELS = Object.freeze({
     kind: 'outside', owner: true, include: 'never', form: null,
   }),
   calls: row({
-    what: 'Live calls (the Twilio bridge, CallHub)',
+    what: 'Live calls (the Twilio bridge, CallHub) and the empty answer to an incoming text',
     kind: 'outside', include: 'never', form: null,
+    senders: ['server/ext/texting/actions.js', 'server/ext/texting/public.js'],
   }),
   shift: row({
     what: 'Shift notices and reminders',
@@ -174,17 +179,23 @@ export const CHANNELS = Object.freeze({
     senders: ['server/actions/field.js', 'server/ext/schedule/tell.js'],
   }),
   receipts: row({
-    what: 'Receipts and refunds',
+    what: 'Receipts and refunds, and a donor’s receipt page',
     kind: 'transactional', include: 'never', form: null,
-    senders: ['server/ext/receipts/core.js', 'server/ext/receipts/engine.js', 'server/ext/payments/refunds.js'],
+    senders: ['server/ext/receipts/core.js', 'server/ext/receipts/engine.js', 'server/ext/payments/refunds.js', 'server/ext/receipts/public.js'],
   }),
   account: row({
-    what: 'Invites, passwords, two-step sign-in, the calendar-feed link, replies about a letter',
+    what: 'Invites, passwords, two-step sign-in, the calendar-feed link, replies about a letter, the election-day sign-in page',
     kind: 'internal', include: 'never', form: null,
     senders: [
       'server/actions/field.js', 'server/ext/candidates/actions.js', 'server/ext/passwords/reset.js',
       'server/ext/twostep/locked.js', 'server/ext/calendar/index.js', 'server/ext/letters/actions.js',
+      'server/ext/voted/signin.js',
     ],
+  }),
+  'link-unknown': row({
+    what: 'The page for a link that names no campaign or send (not found, not valid): no campaign is known, so there is no line to draw',
+    kind: 'internal', include: 'never', form: null,
+    senders: ['server/ext/abtests/track.js', 'server/routes/public.js', 'server/ext/ladders/public.js'],
   }),
   office: row({
     what: 'Walk lists, quick reports, exports, ladder webhooks',

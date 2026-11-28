@@ -345,6 +345,17 @@ test('the unsubscribe pages every email links to (/u, /bu, /lu) carry it; with i
   await setOrg(SET);
 });
 
+test('a public lesson page (/learn) carries it; with it empty it doesn’t', async () => {
+  const slug = (await db.query('select slug from workspaces where id = $1', [ws])).rows[0].slug;
+  await setOrg(SET);
+  const r = await hit(`/learn/${slug}`);
+  assert.equal(r.status, 200);
+  assert.ok(r.text.includes(`<p class="auth">${LINE}</p>`), 'the line');
+  await setOrg(EMPTY);
+  assert.doesNotMatch((await hit(`/learn/${slug}`)).text, /Authorized by/);
+  await setOrg(SET);
+});
+
 test('the website, plain pages, the calendar file, the link preview and the share sheet carry it', async () => {
   await setOrg(SET);
   const home = await hit('/site/');

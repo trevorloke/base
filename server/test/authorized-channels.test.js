@@ -34,13 +34,52 @@ const noComments = (src) => src
 const codeOf = (src) => noComments(src)
   .replace(/'(?:[^'\\\n]|\\.)*'|"(?:[^"\\\n]|\\.)*"/g, "''");
 
-// The low-level senders and page drawers.
-const SENDERS = ['sendEmail', 'sendSms', 'sendText', 'deliverTexts', 'sendUrl', 'plainPage', 'renderSite', 'EmbedView', 'eventsCalendar', 'ShareSheet'];
+// The low-level senders and page drawers: emails, texts, calls and their
+// spoken or texted replies (TwiML), the website and the app's own public
+// pages (lib/publicpage.js), and the email providers themselves.
+const SENDERS = [
+  'sendEmail', 'sendSms', 'sendText', 'deliverTexts', 'sendUrl', 'ringCaller', 'twiml',
+  'plainPage', 'renderSite', 'EmbedView', 'eventsCalendar', 'ShareSheet',
+];
 const SENDER_RE = new RegExp(`\\b(${SENDERS.join('|')})\\b`);
+// TwiML written by hand: a reply that says or texts something.
+const TWIML_RE = /<(?:Say|Message|Play)\b/g;
+// Modules whose imports are themselves a send or a page draw: the public
+// page look's drawers, and each email provider (only lib/mail/index.js may
+// call one).
+const DRAWERS = [
+  { from: /(?:^|\/)lib\/publicpage\.js$/, names: ['page', 'publicHead'] },
+  { from: /(?:^|\/)lib\/mail\/(?:resend|sendgrid)\.js$/, names: ['default'] },
+];
+const noImports = (code) => code
+  .replace(/(^|\n)\s*(?:import|export)\s[^;]*?\sfrom\s*''\s*;?/g, '$1')
+  .replace(/(^|\n)\s*export\s*\{[^}]*\}\s*;?/g, '$1');
+// The local names a source gives to a drawer's exports.
+const drawerNames = (src) => {
+  const out = [];
+  for (const m of src.matchAll(/^[ \t]*import\s+([^;'"]*?)\s+from\s*['"]([^'"]+)['"]/gm)) {
+    const d = DRAWERS.find((x) => x.from.test(m[2]));
+    if (!d) continue;
+    const [def, named = ''] = m[1].includes('{') ? [m[1].split('{')[0].replace(/,\s*$/, '').trim(), m[1].slice(m[1].indexOf('{') + 1, m[1].indexOf('}'))] : [m[1].trim(), ''];
+    if (def && d.names.includes('default')) out.push(def);
+    for (const part of named.split(',').map((x) => x.trim()).filter(Boolean)) {
+      const [orig, local = orig] = part.split(/\s+as\s+/).map((x) => x.trim());
+      if (d.names.includes(orig)) out.push(local);
+    }
+  }
+  return out;
+};
+// How many sends and page draws a source makes (imports aside).
+const sendsIn = (src) => {
+  const code = noImports(codeOf(src));
+  const named = drawerNames(src);
+  const local = named.length ? (code.match(new RegExp(`\\b(${named.join('|')})\\b`, 'g')) || []).length : 0;
+  return (code.match(new RegExp(SENDER_RE.source, 'g')) || []).length + local + (noComments(src).match(TWIML_RE) || []).length;
+};
 
 const files = await walk('server').then(async (a) => [...a, ...await walk('shared'), ...(existsSync(join(ROOT, 'apps/platform')) ? await walk('apps/platform') : [])]);
 const sources = Object.fromEntries(await Promise.all(files.map(async (f) => [f, await readFile(join(ROOT, f), 'utf8')])));
-const usesSender = (f) => SENDER_RE.test(codeOf(sources[f]));
+const usesSender = (f) => sendsIn(sources[f]) > 0;
 
 test('T1. every file that sends a message or draws a public page is in CHANNELS', () => {
   const importers = files.filter(usesSender).filter((f) => !DELIVERY.includes(f));
@@ -55,7 +94,7 @@ test('T1. every senders file in CHANNELS really sends (or draws), and the delive
   for (const id of CHANNEL_IDS) {
     for (const f of CHANNELS[id].senders) {
       assert.ok(sources[f] !== undefined, `${id}: ${f} is not a file under ${WALK.join(', ')}`);
-      assert.ok(usesSender(f), `${id}: ${f} is listed as a sender but uses none of ${SENDERS.join(', ')}`);
+      assert.ok(usesSender(f), `${id}: ${f} is listed as a sender but uses none of ${SENDERS.join(', ')}, writes no TwiML and draws no public page`);
     }
   }
   for (const f of DELIVERY) assert.ok(sources[f] !== undefined, `${f} (DELIVERY) is not there`);
@@ -127,34 +166,37 @@ test('T2. every sender of a row that carries the line is tied to the rule: it is
 const SEND_SITES = {
   'server/actions/field.js': 4, // shift (email, text), email-test, account
   'server/ext/abtests/send.js': 2, // email-list/email-press, sms-list (via deliverTexts)
+  'server/ext/abtests/track.js': 1, // link-unknown
   'server/ext/abtests/winner.js': 1,
   'server/ext/calendar/index.js': 1,
   'server/ext/candidates/actions.js': 1,
   'server/ext/gmail/send.js': 2,
   'server/ext/ladders/engine.js': 5, // email-ladder, sms-ladder, and their notices
+  'server/ext/ladders/public.js': 2, // site-plain-own (/lu), link-unknown
+  'server/ext/learn/public.js': 1, // site-plain-public
   'server/ext/letters/actions.js': 1,
   'server/ext/passwords/reset.js': 1,
   'server/ext/payments/refunds.js': 1,
   'server/ext/receipts/core.js': 2,
   'server/ext/receipts/engine.js': 1,
+  'server/ext/receipts/public.js': 1,
   'server/ext/schedule/tell.js': 2,
   'server/ext/site/calendar.js': 1,
   'server/ext/site/public.js': 4,
   'server/ext/site/render/index.js': 1,
-  'server/ext/texting/actions.js': 1,
+  'server/ext/texting/actions.js': 2, // sms-one, calls (ringCaller)
   'server/ext/texting/blast.js': 2,
+  'server/ext/texting/public.js': 11, // calls: the bridge's spoken answers, the empty answer to a text
   'server/ext/twostep/locked.js': 2,
+  'server/ext/voted/signin.js': 2,
+  'server/routes/public.js': 2, // site-plain-own (/u, /bu), link-unknown
   'shared/site/components/form.js': 1,
   'shared/site/components/islands.js': 1,
   'shared/site/components/share.js': 1,
   'shared/site/components/templates.js': 1,
   'shared/site/components/voteguide.js': 1,
 };
-const SENDER_ALL = new RegExp(SENDER_RE.source, 'g');
-const noImports = (code) => code
-  .replace(/(^|\n)\s*(?:import|export)\s[^;]*?\sfrom\s*''\s*;?/g, '$1')
-  .replace(/(^|\n)\s*export\s*\{[^}]*\}\s*;?/g, '$1');
-const sendSites = (f) => (noImports(codeOf(sources[f])).match(SENDER_ALL) || []).length;
+const sendSites = (f) => sendsIn(sources[f]);
 
 test('T1. every send in a file is counted: a new one in a file already listed fails until it is classified', () => {
   const found = Object.fromEntries(files.filter(usesSender).filter((f) => !DELIVERY.includes(f)).map((f) => [f, sendSites(f)]));
@@ -248,8 +290,29 @@ test('the rule stays pure: the website renderer (bundled into the desk) reaches 
   assert.ok(seen.has('shared/site/legal-words.js') && seen.has('shared/site/wording.js'));
 });
 
+// Only the delivery code talks to the providers: no other file names their
+// addresses or sends through Twilio's message or call address. (The
+// connection check reads the campaign's number and sends nothing.)
+const PROVIDER_HOSTS = /api\.twilio\.com|api\.resend\.com|api\.sendgrid\.com|\/Messages\.json|\/Calls\.json/;
+const READS_ONLY = new Set(['server/ext/connections/index.js']);
+test('T1. only the delivery code reaches Twilio and the email providers', () => {
+  const bad = files.filter((f) => !DELIVERY.includes(f) && PROVIDER_HOSTS.test(noComments(sources[f])) && !READS_ONLY.has(f));
+  assert.deepEqual(bad, [], `${bad.join(', ')}: talks to a provider directly. Send through ${DELIVERY.join(', ')} so the guard sees it`);
+  for (const f of READS_ONLY) assert.doesNotMatch(noComments(sources[f]), /\/Messages\.json|\/Calls\.json/, `${f} sends nothing`);
+});
+
 test('the detectors catch what they look for', () => {
-  assert.ok(SENDER_RE.test(codeOf("import { sendText } from '../../lib/notify.js';\nawait sendText({ to, body });")));
-  assert.ok(!SENDER_RE.test(codeOf("rc.w('mod.eventsCalendar') // sendEmail later")));
+  assert.ok(sendsIn("import { sendText } from '../../lib/notify.js';\nawait sendText({ to, body });") > 0);
+  assert.equal(sendsIn("rc.w('mod.eventsCalendar') // sendEmail later"), 0);
+  // A robocall, and a reply that speaks or texts.
+  assert.equal(sendsIn("import { ringCaller, twiml } from './twilio.js';\nawait ringCaller({ to, url });\nreturn twiml(c, '<Say>Vote today</Say>');"), 3);
+  assert.equal(sendsIn("return c.body('<Response><Message>Hi</Message></Response>');"), 1);
+  // A public page drawn with the app's look, under any name.
+  assert.equal(sendsIn("import { page, esc } from '../../lib/publicpage.js';\nreturn c.html(page(ws, 'Thanks', '<h1>Thanks</h1>'));"), 1);
+  assert.equal(sendsIn("import { page as publicPage } from '../../lib/publicpage.js';\nconst page = (t) => publicPage(null, t, '');"), 1);
+  assert.equal(sendsIn("import { esc } from '../../lib/publicpage.js';\nconst page = 1;"), 0);
+  // An email provider called directly.
+  assert.equal(sendsIn("import resend from '../../lib/mail/resend.js';\nawait resend.send({ to, subject });"), 1);
+  assert.match("fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`)", PROVIDER_HOSTS);
   assert.match("const line = `Authorized by ${name}`;", /`Authorized by \$\{/);
 });

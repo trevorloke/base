@@ -39,7 +39,7 @@ lawyer can re-class any row: tell us and it changes in one place.
 | Row | What | base.win adds the line |
 |---|---|---|
 | `site` | Every page of the website | whenever it is filled in |
-| `site-plain-public` | Coming soon, a closed website | whenever it is filled in |
+| `site-plain-public` | Coming soon, a closed website, a public lesson (/learn) | whenever it is filled in (public lessons get it now) |
 | `embed` | The vote guide in another website's frame | whenever it is filled in |
 | `email-list` | Newsletters, email blasts, A/B tests | whenever it is filled in |
 | `email-test` | A test copy to yourself | whenever it is filled in (it shows the real email) |
@@ -48,8 +48,9 @@ lawyer can re-class any row: tell us and it changes in one place.
 | `sms-ladder` | Automatic follow-up texts | whenever it is filled in |
 | `share-kit` | Share posts for staff and volunteers | whenever it is filled in |
 | `mailchimp`, `ads`, `print` | Made outside base.win | shown with a Copy button |
-| `shift`, `receipts`, `account`, `office` | Shift notices, receipts, sign-in emails, office lists | never |
-| `calls` | Live calls | never |
+| `shift`, `receipts`, `account`, `office` | Shift notices, receipts, sign-in emails and pages, office lists | never |
+| `link-unknown` | The page for a link that names no campaign (not found, not valid) | never: no campaign is known there |
+| `calls` | Live calls, and the empty answer to an incoming text | never |
 
 ## For you (or a lawyer) to decide
 
