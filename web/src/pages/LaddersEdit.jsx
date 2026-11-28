@@ -30,7 +30,7 @@
 //   More: rename, "Let people go through again", Delete.
 import { useEffect, useId, useRef, useState } from 'react';
 import { useCaret } from '../components/useCaret.js';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useOutletContext, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { action, apiGet } from '../api.js';
 import { NeedsSignal, NoSignal, noSignal, useOnline } from '../components/NoSignal.jsx';
@@ -44,6 +44,7 @@ import {
 import './shifts.css';
 import './ladders.css';
 import './ladders-webhook.css';
+import { AUTHORIZED_KEY, AuthorizedBanner, authLine, needsAsk, useAuthorized } from '../components/Authorized.jsx';
 
 const BLANK = {
   wait: { kind: 'wait', n: 1, unit: 'days' },
@@ -136,7 +137,10 @@ function TextFields({ s, set, idp }) {
     const caret = at + put.length;
     putCaret(el, caret);
   };
-  const n = toWords(s.body).length;
+  // "Authorized by …" goes before the STOP line once it is filled in
+  // (components/Authorized.jsx): counted with the words.
+  const auth = authLine(useAuthorized().data);
+  const n = toWords(s.body).length + (auth ? auth.length + 1 : 0);
   return (
     <>
       <div className="field">
@@ -151,7 +155,7 @@ function TextFields({ s, set, idp }) {
             onMouseDown={(e) => e.preventDefault()} onClick={() => insert(f.word)}>{f.button}</button>
         ))}
       </div>
-      <p className="lad-hint" id={`${idp}-text-hint`}>Say who it’s from. “Reply STOP to opt out” is added. <span className="mono">{n}/{TEXT_MAX}</span></p>
+      <p className="lad-hint" id={`${idp}-text-hint`}>Say who it’s from. {auth ? <>“{auth}” and “Reply STOP to opt out” are added.</> : '“Reply STOP to opt out” is added.'} <span className="mono">{n}/{TEXT_MAX}</span></p>
     </>
   );
 }
@@ -669,6 +673,11 @@ export default function LaddersEdit() {
   // place or 'add', message }): said in that step, not at the top.
   const [stepError, setStepError] = useState(null);
   const [said, setSaid] = useState(null);
+  // "Authorized by …" (components/Authorized.jsx), and whether this person
+  // may fill it in (Website → Settings is the Website area's).
+  const auth = useAuthorized().data;
+  const { me } = useOutletContext() || {};
+  const mayWebsite = me?.role === 'manager' || (Array.isArray(me?.areas) && me.areas.includes('site'));
 
   const run = async (name, input, words, onError = setError) => {
     setBusy(true);
@@ -685,6 +694,8 @@ export default function LaddersEdit() {
       return res || true;
     } catch (e) {
       onError(e.message);
+      // Refused for the line missing after its date: read it again, and the button asks.
+      if (e?.body?.needsAuthorized) queryClient.invalidateQueries({ queryKey: AUTHORIZED_KEY });
       return null;
     } finally {
       setBusy(false);
@@ -718,7 +729,11 @@ export default function LaddersEdit() {
   const ready = doesSomething(steps);
 
   // The chip says On / Off; a line only when people were picked up or paused.
-  const turnOn = () => run('ladder.setActive', { id: l.id, active: true },
+  // After the Authorized by line's date with none set, a ladder that sends
+  // is turned on with one more tap ("Turn on without it"); once on it keeps
+  // sending, and Today counts each one that went without it.
+  const ask = (hasEmail || hasText) && needsAsk(auth);
+  const turnOn = () => run('ladder.setActive', { id: l.id, active: true, ...(ask ? { withoutAuthorized: true } : {}) },
     (r) => (r.resumed ? `On · ${r.resumed} picked up where they were` : null));
   const turnOff = () => run('ladder.setActive', { id: l.id, active: false },
     (r) => (r.paused ? `Off · ${r.paused} paused in place` : null));
@@ -729,7 +744,7 @@ export default function LaddersEdit() {
       <div className="ops-head">
         <h1>{l.name}</h1>
         {!l.active && (
-          <button type="button" className="btn btn-primary ops-tap" disabled={busy || !ready} onClick={turnOn}>Turn on</button>
+          <button type="button" className="btn btn-primary ops-tap" disabled={busy || !ready} onClick={turnOn}>{ask ? 'Turn on without it' : 'Turn on'}</button>
         )}
       </div>
 
@@ -740,6 +755,7 @@ export default function LaddersEdit() {
       </div>
       {!l.active && <p className="lad-hint">{ready ? 'Only people who start it from now on.' : 'Add a step, then turn it on.'}</p>}
       {said && <p className="ops-done" role="status">{said}</p>}
+      {(hasEmail || hasText) && <AuthorizedBanner a={auth} mayFix={mayWebsite} />}
       {hasEmail && !emailConfigured && (
         <p className="lad-note" role="status">Email isn’t connected — email steps wait. <Link to={CONNECT_TO}>Connect</Link></p>
       )}

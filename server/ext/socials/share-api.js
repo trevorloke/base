@@ -17,7 +17,7 @@ import { here } from '../../lib/mount.js';
 import { siteDomain } from '../site/domain.js';
 import { azKey } from '../../lib/az.js';
 import { selfPerson } from '../relationships/match.js';
-import { authLine, kitOut, kitPage, kitText } from './share.js';
+import { authLine, kitOut, kitOver, kitPage, kitText } from './share.js';
 
 export const shareApi = new Hono();
 
@@ -95,10 +95,14 @@ shareApi.get('/share/kits', async (c) => {
     `select k.*, ${SIGNUPS} as signups, ${SHARERS} as sharers from share_kits k
       where k.workspace_id = $1 and k.deleted_at is null order by k.created_at desc, k.id`, [ws],
   )).rows;
+  // "Authorized by …" goes on every kit once it is filled in: a kit saved
+  // before then may now be over 500 with it (over), said on the desk —
+  // its words are never changed.
+  const line = await authLine(db, ws);
   const kits = [];
   for (const k of rows) {
     const page = await kitPage(db, ws, k.path);
-    kits.push({ ...kitOut(k), live: page.live, page_title: page.title, signups: k.signups, sharers: k.sharers });
+    kits.push({ ...kitOut(k), live: page.live, page_title: page.title, signups: k.signups, sharers: k.sharers, over: kitOver(k, line) });
   }
   const pages = [
     { path: '/', title: 'Home' },
@@ -113,7 +117,7 @@ shareApi.get('/share/kits', async (c) => {
     )).rows,
   ];
   const ready = Boolean((await db.query('select 1 from site_settings where workspace_id = $1', [ws])).rows[0]);
-  return c.json({ ready, line: await authLine(db, ws), pages, kits });
+  return c.json({ ready, line, over: kits.filter((k) => k.over).length, pages, kits });
 });
 
 shareApi.get('/share/kits/:id', async (c) => {

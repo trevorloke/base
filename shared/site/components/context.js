@@ -4,7 +4,9 @@
 // SITE.md "Rendering" for the shapes accepted.
 import { checkTheme } from '../theme.js';
 import { MODULE_BY_KIND } from '../catalogue.js';
-import { authorizedBy, consentName, consentWords, LEGAL_ENGLISH, fillSlots } from '../wording.js';
+import { consentName, consentWords } from '../wording.js';
+import { authorizedLine } from '../authorized.js';
+import { digestWords } from '../legal-words.js';
 import { renderMarkdown, blocksOf, drawBlocks } from '../../markdown.js';
 import { LANG_BY_CODE, isOther } from '../languages.js';
 import { fillWords, layWords, wordsFor, ownWordsFor } from '../ui-words.js';
@@ -50,6 +52,12 @@ export function normalizeSite(site) {
   const own = obj(s.site);
   const par = obj(s.parent);
   const parentUrl = str(par.url).trim();
+  const authOrg = {
+    agentName: str(org0.agentName || org0.agent_name),
+    agentContact: str(org0.agentContact || org0.agent_contact),
+    authorizationLine: str(org0.authorizationLine || org0.authorization || org0.authorized_by),
+    authorizedFrom: str(org0.authorizedFrom || org0.authorized_from),
+  };
   return {
     theme,
     // The campaign's added Google fonts the theme may use (WA).
@@ -66,12 +74,11 @@ export function normalizeSite(site) {
       email: str(org0.email).trim(),
       phone: str(org0.phone).trim(),
       address: str(org0.address).trim(),
-      // "Authorized by …" (wording.js): the financial agent, else the line as typed.
-      authorization: authorizedBy({
-        agentName: str(org0.agentName || org0.agent_name),
-        agentContact: str(org0.agentContact || org0.agent_contact),
-        authorizationLine: str(org0.authorizationLine || org0.authorization || org0.authorized_by),
-      }),
+      // "Authorized by …" (shared/site/authorized.js): what it is made of,
+      // and its English as every page draws it (the financial agent, else
+      // the line as typed). rc.authorizedLine asks the rule per channel.
+      authOrg,
+      authorization: authorizedLine(authOrg, { channel: 'site' }).en,
       privacy: str(org0.privacy_url || org0.privacyUrl || org0.privacy).trim(),
       platformUrl: str(org0.platform_url || org0.platformUrl).trim(),
       platformLabel: str(org0.platform_label || org0.platformLabel).trim(),
@@ -225,12 +232,10 @@ export function renderContext({ kind = 'page', site, page, post, campaign, data,
       return fillWords(r.text, slots);
     },
     // A legal line (decision 28): only approved words, else the English.
-    legal: (key, slots = {}) => {
-      const all = { ...obj(legal.slots), ...slots };
-      const tidy = (x) => x.replace(/[\s,，、]+$/u, '').replace(/\s+/g, ' ').trim();
-      if (lang !== 'en' && arr(legal.current).includes(key) && str(obj(legal.words)[key]).trim()) return { text: tidy(fillSlots(legal.words[key], all)), lang };
-      return { text: tidy(fillSlots(LEGAL_ENGLISH[key], all)), lang: 'en' };
-    },
+    legal: (key, slots = {}) => digestWords({ current: arr(legal.current), words: obj(legal.words) }, lang, key, { ...obj(legal.slots), ...slots }),
+    // "Authorized by …" for a channel of the page (shared/site/authorized.js):
+    // the English, and the approved words in the page's language.
+    authorizedLine: (o) => authorizedLine(s.org.authOrg, { lang, legal: { [lang]: { current: arr(legal.current), words: obj(legal.words) } }, slots: obj(legal.slots), ...o }),
     names: withNames,
     // An island's own words in its props: translated on a language page.
     // On an English page only the campaign's own English words the island

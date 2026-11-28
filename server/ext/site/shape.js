@@ -13,7 +13,7 @@
 //   seo           { title, description, shareImage: { url, alt } }
 //   org           { name, shortName, email, phone, address, platformUrl,
 //                 platformLabel, privacyUrl, agentName, agentContact,
-//                 authorizationLine (the old free line) }
+//                 authorizationLine (the old free line), authorizedFrom }
 //   social        { accounts: [{ name, short, handle, url }] }
 //   theme         shared/site/theme.js checkTheme (a pair under 4.5:1 is refused)
 //   domains       ['imaginesurrey.ca', …] — the site answers at / on these
@@ -25,6 +25,7 @@
 // or tel:; the renderer puts ctx.root in front of the site's own.
 import { z } from 'zod';
 import { consentName, consentWords } from '../../../shared/site/wording.js';
+import { isDay } from '../../../shared/site/authorized.js';
 import { LANG_SLUGS, OTHER_CODES } from '../../../shared/site/languages.js';
 
 export const KINDS = ['newsletter', 'petition', 'pledge', 'volunteer', 'rsvp', 'contact', 'join', 'donate'];
@@ -93,6 +94,11 @@ export const SECTIONS = {
     agentName: text(80).default(''),
     agentContact: text(120).default(''),
     authorizationLine: text(200).default(''),
+    // The date from which the line is needed (campaign time, YYYY-MM-DD),
+    // or '' — not needed yet. It changes only how loudly a missing line is
+    // shown (shared/site/authorized.js neededFrom); the line goes on
+    // whenever it is filled in.
+    authorizedFrom: text(10).default('').refine((v) => v === '' || isDay(v), { message: 'a date like 2026-10-17, or empty' }),
   }),
   social: z.object({
     accounts: z.array(z.object({

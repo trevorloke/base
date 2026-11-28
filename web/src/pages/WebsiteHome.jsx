@@ -23,6 +23,8 @@ import './shifts.css';
 import '../editor.css';
 import './website.css';
 import './website-sites.css';
+import { authorizedSet } from '@base-win/shared/site/authorized';
+import { dayWords, useAuthorized } from '../components/Authorized.jsx';
 
 const KIND_WORDS = {
   petition: ['petition signature', 'petition signatures'],
@@ -61,8 +63,16 @@ export default function WebsiteHome() {
   const here = domain ? hostOf(domain) : typeof window !== 'undefined' ? `${window.location.host}${d?.urls?.site || '/site/'}` : d?.urls?.site;
   const c = d?.counts || {};
   const org = d?.settings?.org || {};
+  // "Authorized by …" (components/Authorized.jsx): the soft row while it
+  // isn't set; red, with its date, once the date it is needed from has come.
+  const auth = useAuthorized().data;
+  const authDue = auth?.warn?.level === 'due';
   const missing = [
-    !(org.agentName && org.agentContact) && { key: 'auth', words: 'No one is named on the Authorized by line yet', to: '/website/settings#wb-s-agent', fix: 'Add who authorized the site' },
+    authorizedSet(org) !== 'set' && {
+      key: 'auth', red: authDue,
+      words: authDue ? `The Authorized by line is needed from ${dayWords(auth.warn.from)} and ${auth.warn.gap === 'missing' ? 'isn’t filled in' : 'has no way to reach your financial agent'}` : 'No one is named on the Authorized by line yet',
+      to: '/website/settings#wb-s-agent', fix: 'Add who authorized the site',
+    },
     !org.privacyUrl && { key: 'privacy', words: 'No privacy policy link yet', to: '/website/settings#wb-s-priv', fix: 'Add the link' },
   ].filter(Boolean);
   const theme = d?.settings?.theme || {};
@@ -119,12 +129,12 @@ export default function WebsiteHome() {
               <h2 id="wb-todo-h" className="wb-todo__h">Before you share the site</h2>
               <ul className="wb-todo__list">
                 {missing.map((m) => (
-                  <li key={m.key} className="wb-todo__item" data-todo={m.key}>
+                  <li key={m.key} className={`wb-todo__item${m.red ? ' wb-todo__item--red' : ''}`} data-todo={m.key}>
                     <span>{m.words}.</span> <Link to={m.to}>{m.fix}</Link>
                   </li>
                 ))}
               </ul>
-              <p className="wb-tile__sub muted">Election rules ask every page of the site to carry them.</p>
+              <p className="wb-tile__sub muted">Once they are filled in, base.win puts them on every page of the site.</p>
             </section>
           )}
 

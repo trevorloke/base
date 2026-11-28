@@ -12,11 +12,16 @@ import { paymentsReady } from './payments.js';
 import { mountMicrositeReads } from './microsite-reads.js';
 import { mountLanguageReads } from './language-reads.js';
 import { mountFontReads } from './fonts.js';
+import { mountAuthorized } from './authorized-api.js';
 
 export const api = new Hono();
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const iso = (d) => (d instanceof Date ? d.toISOString() : d ? new Date(d).toISOString() : null);
+
+// "Authorized by …" for every screen (authorized-api.js): read by every
+// role, so it is answered before the Website area's guard below.
+mountAuthorized(api);
 
 // Everything under /site: the Website area's, or refused — whatever the role.
 // The Languages screen's reads are Website translations' (language-reads.js).

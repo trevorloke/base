@@ -16,6 +16,7 @@ import { runAction } from '../lib/events.js';
 import { page, esc, settingsOf } from '../lib/publicpage.js';
 import { campaignBrand } from '../lib/brand.js';
 import { leaveByLink } from '../ext/media/leave.js';
+import { authorizedOf } from '../lib/authorized.js';
 
 const app = new Hono();
 
@@ -23,6 +24,11 @@ const app = new Hono();
 // its events commit together, on the workspace's hash chain.
 const publicAction = async (db, ws, action, handler) =>
   (await runAction(db, { workspaceId: ws.id, actorId: null, action }, handler)).result;
+
+// A page about the reader's own subscription, with the campaign's
+// "Authorized by" line at its foot when it is filled in
+// (shared/site/authorized.js, channel site-plain-own).
+const ownPage = async (db, ws, title, inner) => page(ws, title, inner, { authorized: await authorizedOf(db, ws.id, { channel: 'site-plain-own' }) });
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // A link that names no campaign still wears the campaign's look.
@@ -40,13 +46,14 @@ const loadSub = async (db, sid) => {
   )).rows[0];
   return row ? { row, ws: { id: row.workspace_id, name: row.name, slug: row.slug, settings: row.settings } } : null;
 };
-const unsubscribedPage = (c, ws) => c.html(page(ws, 'Unsubscribed', `<h1>Unsubscribed.</h1><div class="done">You won't receive further newsletters from ${esc(ws.name)}.</div>`));
+const unsubscribedPage = async (c, db, ws) => c.html(await ownPage(db, ws, 'Unsubscribed', `<h1>Unsubscribed.</h1><div class="done">You won't receive further newsletters from ${esc(ws.name)}.</div>`));
 
 app.get('/u/:id', async (c) => {
-  const found = await loadSub(await getDb(), c.req.param('id'));
+  const db = await getDb();
+  const found = await loadSub(db, c.req.param('id'));
   if (!found) return badUnsubscribe(c);
-  if (found.row.status === 'unsubscribed') return unsubscribedPage(c, found.ws);
-  return c.html(page(found.ws, 'Unsubscribe', `<h1>Unsubscribe from ${esc(found.ws.name)}?</h1>
+  if (found.row.status === 'unsubscribed') return unsubscribedPage(c, db, found.ws);
+  return c.html(await ownPage(db, found.ws, 'Unsubscribe', `<h1>Unsubscribe from ${esc(found.ws.name)}?</h1>
 <form method="post" action="/u/${esc(found.row.id)}"><button type="submit">Unsubscribe</button></form>`));
 });
 
@@ -64,7 +71,7 @@ app.post('/u/:id', async (c) => {
     );
     if (n.affectedRows > 0) emit('subscription', row.id, 'update', { status: 'unsubscribed', source: 'unsubscribe-link' });
   });
-  return unsubscribedPage(c, ws);
+  return unsubscribedPage(c, db, ws);
 });
 
 // ── Unsubscribe from email blasts (/bu/:recipientId) ──
@@ -87,10 +94,11 @@ const loadBlastRecipient = async (db, id) => {
   return row && email ? { ...row, email, ws: { id: row.workspace_id, name: row.name, slug: row.slug, settings: settingsOf(row) } } : null;
 };
 app.get('/bu/:id', async (c) => {
-  const row = await loadBlastRecipient(await getDb(), c.req.param('id'));
+  const db = await getDb();
+  const row = await loadBlastRecipient(db, c.req.param('id'));
   if (!row) return badUnsubscribe(c);
   const what = row.kind === 'press' ? `press releases from ${esc(row.name)}` : esc(row.name);
-  return c.html(page(row.ws, 'Unsubscribe', `<h1>Unsubscribe from ${what}?</h1>
+  return c.html(await ownPage(db, row.ws, 'Unsubscribe', `<h1>Unsubscribe from ${what}?</h1>
 <form method="post" action="/bu/${esc(row.id)}"><button type="submit">Unsubscribe</button></form>`));
 });
 app.post('/bu/:id', async (c) => {
@@ -100,7 +108,7 @@ app.post('/bu/:id', async (c) => {
   const ws = row.ws;
   if (row.kind === 'press') {
     await publicAction(db, ws, 'public.unsubscribe', (tx, emit) => leaveByLink(tx, ws.id, row.email, emit));
-    return c.html(page(ws, 'Unsubscribed', `<h1>Unsubscribed.</h1><div class="done">You won’t get press releases from ${esc(ws.name)} again.</div>`));
+    return c.html(await ownPage(db, ws, 'Unsubscribed', `<h1>Unsubscribed.</h1><div class="done">You won’t get press releases from ${esc(ws.name)} again.</div>`));
   }
   await publicAction(db, ws, 'public.unsubscribe', async (tx, emit) => {
     const sub = (await tx.query('select id, status from subscriptions where workspace_id = $1 and email = $2', [ws.id, row.email])).rows[0];
@@ -119,7 +127,7 @@ app.post('/bu/:id', async (c) => {
       emit('person', p.id, 'update', { tags: next, source: 'blast-unsubscribe' });
     }
   });
-  return c.html(page(ws, 'Unsubscribed', `<h1>Unsubscribed.</h1><div class="done">You won't receive further emails from ${esc(ws.name)}.</div>`));
+  return c.html(await ownPage(db, ws, 'Unsubscribed', `<h1>Unsubscribed.</h1><div class="done">You won't receive further emails from ${esc(ws.name)}.</div>`));
 });
 
 export default app;

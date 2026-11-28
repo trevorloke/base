@@ -43,7 +43,8 @@ import { deliverTexts } from '../texting/blast.js';
 import { brandFor } from '../../lib/brand.js';
 import { whyNot } from '../../lib/reach.js';
 import { onMediaTags } from '../media/rules.js';
-import { authorizedBy } from '@base-win/shared/site/wording';
+import { authorizedLine } from '../../../shared/site/authorized.js';
+import { authorizedFor } from '../../lib/authorized.js';
 import { fillHtml, fillText, firstOf } from '@base-win/shared/email/words';
 
 export const AB_MIN = 50;
@@ -186,27 +187,33 @@ export const deliveredRow = (alias = '') => {
 const hasUnsub = (kind) => kind === 'newsletter' || kind === 'eblast' || kind === 'press';
 const UNSUB_WORDS = { press: 'Don’t want press releases? Unsubscribe' };
 
-// The lines the law asks for under every campaign email, from the website's
-// own settings (Website → Settings: the mailing address, an email or phone,
-// the financial agent): { address, contact, auth }, each '' when not set.
-// Read once per send run. Nothing set: the footer is as it always was.
+// The lines under every campaign email, from the website's own settings
+// (Website → Settings: the mailing address, an email or phone, the
+// financial agent): { address, contact, auth, local, line }, each '' (local
+// null) when not set. auth is "Authorized by …" as the one rule gives it
+// for this channel (shared/site/authorized.js, server/lib/authorized.js),
+// local its approved translation (a ladder in another language), line the
+// rule's whole answer. Read once per send run. Nothing set: the footer is
+// as it always was.
 const trimmed = (v) => String(v ?? '').replace(/\s+/g, ' ').trim();
-export const footOf = async (db, workspaceId) => {
-  let org = {};
-  try {
-    const row = (await db.query('select org from site_settings where workspace_id = $1', [workspaceId])).rows[0];
-    org = (typeof row?.org === 'string' ? JSON.parse(row.org) : row?.org) || {};
-  } catch { org = {}; }
-  return { address: trimmed(org.address), contact: trimmed(org.email) || trimmed(org.phone), auth: trimmed(authorizedBy(org)) };
+export const footOf = async (db, workspaceId, channel = 'email-list', { lang = 'en' } = {}) => {
+  const { org, legal, tz } = await authorizedFor(db, workspaceId);
+  const line = authorizedLine(org, { channel, lang, legal, tz });
+  return {
+    address: trimmed(org.address), contact: trimmed(org.email) || trimmed(org.phone),
+    auth: line.include ? trimmed(line.en) : '', local: line.include ? line.local : null, line,
+  };
 };
 // "PO Box 12, Surrey BC." → "PO Box 12, Surrey BC" — the footer adds its own full stop.
-const stop = (v) => trimmed(v).replace(/\.+$/, '');
-const footLines = (foot) => [foot?.address, foot?.contact].map(stop).filter(Boolean);
+export const stop = (v) => trimmed(v).replace(/\.+$/, '');
+export const footLines = (foot) => [foot?.address, foot?.contact].map(stop).filter(Boolean);
+// The authorization lines, each with its full stop: English, then the translation.
+export const authLines = (foot) => [stop(foot?.auth), stop(foot?.local?.text)].filter(Boolean);
 
 export const blastText = (ctx, kind, body, unsubscribeUrl, foot = null) => {
   const base = ctx.publicUrl || '';
   const words = markdownPlain(body).replace(/(^|[\s(])\/media\/([A-Za-z0-9-]+)/g, `$1${base}/media/$2`);
-  const more = [...footLines(foot), stop(foot?.auth)].filter(Boolean).map((l) => `${l}.\n`).join('');
+  const more = [...footLines(foot), ...authLines(foot)].map((l) => `${l}.\n`).join('');
   return words + (hasUnsub(kind)
     ? `\n\n—\nSent by ${ctx.workspace.name}.\n${more}${UNSUB_WORDS[kind] || 'Unsubscribe'}: ${unsubscribeUrl || '(each recipient gets their own link)'}`
     : `\n\n—\n${ctx.workspace.name}`);
@@ -360,7 +367,7 @@ export const blastHtml = (ctx, kind, body, unsubscribeUrl, token, links, foot = 
   // Sent by <name>. <address>. <contact>.<br><Authorized by …>. — each part
   // only when set, every value escaped.
   const where = footLines(foot).map((l) => ` ${esc(l)}.`).join('');
-  const auth = stop(foot?.auth) ? `<br>${esc(stop(foot.auth))}.` : '';
+  const auth = stop(foot?.auth) ? `<br>${esc(stop(foot.auth))}.${stop(foot?.local?.text) ? `<br><span lang="${esc(foot.local.lang)}">${esc(stop(foot.local.text))}.</span>` : ''}` : '';
   const lines = hasUnsub(kind)
     ? `Sent by ${esc(ctx.workspace.name)}.${where}${auth}${counted}<br>${unsub}`
     : `${esc(ctx.workspace.name)}.${counted}`;
@@ -470,7 +477,7 @@ export const deliver = async (db, ctx, blast, { actorId = null, budgetMs = Infin
     // Email disconnected since the tap: nothing is claimed; the rest stay not sent.
     if (!emailConfigured()) { run.note = NO_PROVIDER; break; }
     if (!attachments) attachments = await loadAttachments(db, workspaceId, { blastId: blast.id });
-    if (!foot) foot = await footOf(db, workspaceId);
+    if (!foot) foot = await footOf(db, workspaceId, blast.kind === 'press' ? 'email-press' : 'email-list');
     if (run.claimed >= max || Date.now() - t0 >= budgetMs) {
       run.more = await anyAsked(db, workspaceId, blast.id);
       break;

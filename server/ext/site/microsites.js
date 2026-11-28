@@ -30,6 +30,7 @@ import { httpError } from '../../actions/util.js';
 import { brandKey } from '../../lib/brand.js';
 import { slugify, hostOf } from './shape.js';
 import { parseJ, readSettings, siteOf, isAppHost, envHosts, appHostSeen, usedWhy } from './store.js';
+import { authorizedSet } from '../../../shared/site/authorized.js';
 
 export const MAX_SITES = 5;
 export const MAX_PAGES = 50;
@@ -334,7 +335,7 @@ export const liveChecklist = async (q, ws, siteId) => {
   const org = (await readSettings(q, ws))?.org || {};
   return [
     { key: 'home', done: Boolean(home), why: 'Publish the home page first' },
-    { key: 'authorized', done: Boolean(org.agentName && org.agentContact), why: 'Add who authorized it: Website → Settings → Organization → Authorized by' },
+    { key: 'authorized', done: authorizedSet(org) === 'set', why: 'Add who authorized it: Website → Settings → Organization → Authorized by' },
     { key: 'privacy', done: Boolean(org.privacyUrl), why: 'Add your privacy policy link: Website → Settings → Organization' },
   ];
 };

@@ -42,6 +42,7 @@ import { apiGet, action, ApiError, NoSignalError } from '../api.js';
 import { isDesk } from '../Shell.jsx';
 import { useTextingStatus, statusOffline, textingOn, useTextingPerson, useOnline } from './TextingStatus.js';
 import { fillTemplate } from './TextingWords.js';
+import { authLine, useAuthorized } from './Authorized.jsx';
 import './texting-card.css';
 
 export { fillTemplate };
@@ -115,6 +116,7 @@ function SendBox({ person, me, status, offline, onSent, onNext }) {
   // A follow-up in your own conversation: blank, no first-text wording.
   const replying = Boolean(conv && info && !info.first);
   const [typed, setTyped] = useState(null); // null until they type
+  const authText = authLine(useAuthorized().data);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(null);   // the text the server sent
   const [error, setError] = useState(null);
@@ -175,6 +177,9 @@ function SendBox({ person, me, status, offline, onSent, onNext }) {
         <textarea id={id} className="tx-body" rows={replying ? 3 : 4} maxLength={1000} value={body}
           placeholder={replying ? 'Write a reply' : undefined}
           onChange={(e) => { setTyped(e.target.value); setError(null); }} />
+        {/* What base.win adds to a first text: "Authorized by …" once it is filled in
+            (components/Authorized.jsx), then the opt-out line. */}
+        {isFirst && authText && !body.includes(authText) && <p className="tx-foot" title="Added to every first text">{authText}</p>}
         {isFirst && !endsWithFooter(body) && <p className="tx-foot" title="Added to every first text">{FOOTER}</p>}
       </div>
       {missing && <p className="tx-line tx-line--warn">Say it’s {status.campaign} in the first text</p>}

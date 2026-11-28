@@ -41,7 +41,8 @@ import { renderSite } from './render/index.js';
 import { siteHost, siteWorkspace, ensureSite, readSettings, menuPages, siteOf, parseJ, mainAddress, envHosts, hostOfRequest } from './store.js';
 import { siteDomain, siteDomainHosts } from './domain.js';
 import { oldPathAnswer } from './old-paths.js';
-import { authorizedBy } from '../../../shared/site/wording.js';
+import { authorizedLine, authorizedHtml } from '../../../shared/site/authorized.js';
+import { digestOf } from '../../../shared/site/legal-words.js';
 import { loadData } from './loaders.js';
 import { calendarHeaders, eventsCalendar } from './calendar.js';
 import { cacheKey, cacheGet, cachePut, cacheGen, remember } from './cache.js';
@@ -414,14 +415,19 @@ const NEWS_PAGE = { id: null, slug: 'news', title: 'News', description: '', modu
 // own name and look and the link back; closed: the main site's, home is
 // the main site.
 // pl: the page's language, for a supporter's own pages (TR decision 40):
-// { lang, w, auth } — its words, and "Authorized by" in it as approved.
-const plainPage = (site, settings, { title, body, status = 200, closed = false, back = true, pl = null, langs = '' }) => {
+// { lang, w, row } — its words, and the approved legal words in it.
+// channel: 'site-plain-own' (a supporter's own pages) or
+// 'site-plain-public' (coming soon, closed): shared/site/authorized.js.
+const plainPage = (site, settings, { title, body, status = 200, closed = false, back = true, pl = null, langs = '', channel = 'site-plain-own' }) => {
   const parentUrl = site.micro || closed ? parentUrlOf(site, settings) : null;
   const s = siteOf(settings, [], site.ws, site.micro && !closed ? { microsite: site.micro, home: null, parentUrl } : null);
   const mainName = settings.org.name || site.ws.name;
   const org = closed ? mainName : s.site?.name || s.org.name || site.ws.name;
   const home = closed ? parentUrl : `${site.root}/`;
-  const auth = authorizedBy(settings.org);
+  const auth = authorizedLine(settings.org, {
+    channel: channel === 'site-plain-public' ? 'site-plain-public' : 'site-plain-own',
+    lang: pl?.lang || 'en', legal: pl ? { [pl.lang]: digestOf(pl.row) } : {}, tz: site.ws.settings?.tz,
+  });
   const html = `<!doctype html><html lang="${pl ? esc(pl.lang) : 'en'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex"><title>${esc(title)} · ${esc(org)}</title>
 <style>${themeCss(s.theme)}
@@ -457,7 +463,7 @@ footer p{margin:8px 0 0}
 </style></head><body>
 ${langs}<header class="top"><a href="${esc(home)}">${esc(org)}</a></header>
 <main id="main">${body}
-<footer>${closed || !back ? '' : `<a href="${esc(home)}">${pl ? esc(pl.w('plain.back', { org })) : `Back to ${esc(org)}`}</a>`}${parentUrl ? `<p class="by">${pl ? esc(pl.w('plain.websiteBy')) : 'A website by'} <a href="${esc(parentUrl)}">${esc(mainName)}</a></p>` : ''}${auth ? `<p class="auth"${pl ? ' lang="en"' : ''}>${esc(auth)}</p>` : ''}${pl?.auth ? `<p class="auth" lang="${esc(pl.lang)}">${esc(pl.auth)}</p>` : ''}</footer></main></body></html>`;
+<footer>${closed || !back ? '' : `<a href="${esc(home)}">${pl ? esc(pl.w('plain.back', { org })) : `Back to ${esc(org)}`}</a>`}${parentUrl ? `<p class="by">${pl ? esc(pl.w('plain.websiteBy')) : 'A website by'} <a href="${esc(parentUrl)}">${esc(mainName)}</a></p>` : ''}${authorizedHtml(auth, { cls: 'auth', pageLang: pl?.lang || 'en' })}</footer></main></body></html>`;
   return { html, status };
 };
 const sendPlain = (c, site, settings, page, { preview = false } = {}) => {
@@ -514,8 +520,7 @@ const plainLanguage = async (c, site, settings) => {
   const slots = legalSlots(settings);
   const w = (key, sl) => fillWords(tr.look(siteWords()[key] ?? key).text, sl);
   const legal = (key) => legalWords(row, want, key, slots);
-  const auth = legal('authorizedBy');
-  return { lang: want, w, legal, row, legalV: `${row.id}.${LEGAL_ENGLISH_HASH}`, auth: auth.lang === want ? auth.text : '' };
+  return { lang: want, w, legal, row, legalV: `${row.id}.${LEGAL_ENGLISH_HASH}` };
 };
 
 // A token for a supporter's own choices, for the links in emails:
@@ -596,6 +601,7 @@ const closedPage = async (c, site) => {
     body: '<h1>This website has closed</h1><p>It isn’t taking sign-ups any more.</p>',
     status: 410,
     closed: true,
+    channel: 'site-plain-public',
   });
 };
 
@@ -650,6 +656,7 @@ export const makeSiteApp = (at) => {
           title: 'Coming soon',
           body: `<h1>Coming soon</h1><p>${esc(m.name)} isn’t open yet. Please come back soon.</p>`,
           back: false,
+          channel: 'site-plain-public',
         });
       }
       // The main site's own: news, the list of petitions, a supporter's
@@ -1022,8 +1029,12 @@ export const makeSiteApp = (at) => {
     const site = c.get('site');
     const id = idOf(c);
     if (id === false) return notFound(c, site);
-    const org = siteOf(await settingsOf(site), [], site.ws).org;
-    const out = await eventsCalendar(site, { name: org.name || site.ws.name, authorization: org.authorization }, { id });
+    const settings = await settingsOf(site);
+    const org = siteOf(settings, [], site.ws).org;
+    // In a site language: its approved "Authorized by" too.
+    const lang = isOther(site.lang) ? site.lang : 'en';
+    const legal = lang !== 'en' ? { [lang]: digestOf((await languagesFor(site.db, site.ws, settings)).legal?.[lang] || null) } : {};
+    const out = await eventsCalendar(site, { name: org.name || site.ws.name, settings: settings.org, lang, legal }, { id });
     if (!out) return notFound(c, site);
     return c.body(out.body, 200, calendarHeaders(out.filename, staging() || site.mirror));
   };

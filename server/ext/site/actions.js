@@ -54,6 +54,8 @@ import { micrositeActions, hostProblem, takeHeld, roomForPage } from './microsit
 import { languageActions } from './language-actions.js';
 import { markRetranslate } from './translate.js';
 import { fontActions, themeProblem, fontsForCheck } from './fonts.js';
+import { authorizedSet } from '../../../shared/site/authorized.js';
+import { authorizedActions } from './authorized-api.js';
 
 const MANAGER = ['manager'];
 const DESK = ['manager', 'treasurer', 'staff'];
@@ -208,6 +210,8 @@ const restoreRow = async (tx, ws, table, id, gone) => {
 };
 
 export const actions = {
+  // "Use that here": the receipts' financial agent copied in (authorized-api.js).
+  ...authorizedActions(siteAction),
   'site.settings.save': siteAction(z.object({
     theme: z.record(z.string(), z.any()).optional(),
     nav: z.any().optional(), footer: z.any().optional(), announcement: z.any().optional(),
@@ -234,10 +238,11 @@ export const actions = {
         if (!['on', 'index', 'monthlyChars', 'oldPosts'].every(same)) throw httpError(403, 'Only a manager can do this');
       }
     }
-    // Who authorized the site, when a save leaves it out (a desk build from
-    // before it was asked for): as it was, never wiped.
+    // Who authorized the site, and the date it is needed from, when a save
+    // leaves them out (a desk build from before they were asked for): as
+    // they were, never wiped.
     if (input.org && typeof input.org === 'object') {
-      const keep = ['agentName', 'agentContact', 'authorizationLine'].filter((k) => input.org[k] === undefined);
+      const keep = ['agentName', 'agentContact', 'authorizationLine', 'authorizedFrom'].filter((k) => input.org[k] === undefined);
       if (keep.length) {
         const was = parseJ((await tx.query('select org from site_settings where workspace_id = $1', [ws])).rows[0]?.org, {}) || {};
         input.org = { ...input.org, ...Object.fromEntries(keep.filter((k) => was[k] !== undefined).map((k) => [k, was[k]])) };
@@ -259,7 +264,7 @@ export const actions = {
     // (microsites.js liveChecklist), and a later save can't take them away.
     if (changed.org) {
       const live = (await tx.query("select 1 from microsites where workspace_id = $1 and status = 'live' and deleted_at is null limit 1", [ws])).rows[0];
-      if (live && !(changed.org.agentName && changed.org.agentContact)) throw httpError(400, 'Take your other websites offline first, or keep who authorized them');
+      if (live && authorizedSet(changed.org) !== 'set') throw httpError(400, 'Take your other websites offline first, or keep who authorized them');
       if (live && !changed.org.privacyUrl) throw httpError(400, 'Take your other websites offline first, or keep your privacy policy link');
     }
     if (input.theme !== undefined) {

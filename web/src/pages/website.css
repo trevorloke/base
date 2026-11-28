@@ -490,3 +490,8 @@
   .btn.wb-row__who { width: 100%; justify-content: flex-start; }
   .wb-editor { padding: var(--s-3); }
 }
+/* "Authorized by …" missing after the date it is needed from. */
+.wb-todo__item--red { color: var(--danger); font-weight: 600; }
+.wb-auth-read { margin: 0 0 8px; padding: 10px 12px; border-radius: 8px; background: var(--panel); }
+.wb-auth-copy { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; margin: 6px 0; }
+.wb-auth-copy span { flex: 1 1 16rem; min-width: 0; overflow-wrap: anywhere; }

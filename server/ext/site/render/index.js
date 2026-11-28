@@ -74,6 +74,16 @@ function pageOf(page, preview) {
   return { ...page, title: content.title ?? page.title, description: content.description ?? page.description, image: content.image ?? page.image, modules: content.modules };
 }
 
+const PREVIEW_MAX = 200;
+const previewWords = (description, line) => {
+  const d = str(description).replace(/\s+/g, ' ').trim();
+  if (!d) return line;
+  const room = PREVIEW_MAX - line.length - 3;
+  if (room < 20) return line;
+  const cut = d.length <= room ? d : `${d.slice(0, room - 1).replace(/\s+\S*$/, '')}…`;
+  return `${cut} · ${line}`;
+};
+
 export function renderSite({ kind = 'page', site, page: rawPage, post, campaign, data, ctx: given = {} } = {}) {
   // The campaign's own words, when it has any, unless the caller sent some.
   const ctx = { ...wordsForRender(), ...(given || {}) };
@@ -125,6 +135,11 @@ export function renderSite({ kind = 'page', site, page: rawPage, post, campaign,
   const meta = (name, content) => (content ? `<meta name="${name}" content="${esc(content)}">` : '');
   const prop = (name, content) => (content ? `<meta property="${name}" content="${esc(content)}">` : '');
   const ogTitle = head.title.replace(/ · [^·]*$/, '') || head.title;
+  // The link preview's words: the description and "Authorized by …"
+  // (shared/site/authorized.js), cut at about 200 characters with the line
+  // kept whole. Search engines' own description is as it was.
+  const card = rc.authorizedLine({ channel: 'share-card' });
+  const ogDescription = card.include ? previewWords(head.description, card.en) : head.description;
   const html = '<!doctype html>'
     // data-scale: a modern theme's heading sizes (site.css); a classic
     // page's markup is as it always was.
@@ -138,7 +153,7 @@ export function renderSite({ kind = 'page', site, page: rawPage, post, campaign,
     + (noindex ? '<meta name="robots" content="noindex">' : '')
     + (head.canonical ? `<link rel="canonical" href="${esc(head.canonical)}">` : '')
     + alternates
-    + prop('og:type', head.type) + prop('og:site_name', head.siteName) + prop('og:title', ogTitle) + prop('og:description', head.description)
+    + prop('og:type', head.type) + prop('og:site_name', head.siteName) + prop('og:title', ogTitle) + prop('og:description', ogDescription)
     + (head.canonical ? prop('og:url', head.canonical) : '')
     + (head.image ? prop('og:image', head.image.url) + prop('og:image:alt', head.image.alt) : '')
     + prop('og:locale', L.og)
