@@ -42,7 +42,7 @@ const whenWord = (iso) => {
   const today = d.toDateString() === new Date().toDateString();
   return d.toLocaleString('en-CA', today ? { hour: 'numeric', minute: '2-digit' } : { weekday: 'short', hour: 'numeric', minute: '2-digit' });
 };
-// A server whose background work is off (STARBASE_JOBS=off): said in the
+// A server whose background work is off (BASE_JOBS=off): said in the
 // words the app uses when something isn't set up (MailchimpPanel says the same).
 const WORK_OFF = 'background work is turned off — ask whoever set up base.win to turn it on';
 const active = (s) => Boolean(s) && (s.status === 'queued' || s.status === 'syncing') && !s.stalled;

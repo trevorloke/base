@@ -412,11 +412,11 @@ const HOUR = 3_600_000;
 // service is named (the map draws the free tiles meanwhile).
 const IGNORED = {
   google: 'GOOGLE_MAPS_TILES can’t be used — set it to 1, with GOOGLE_MAPS_SERVER_KEY',
-  provider: 'STARBASE_TILE_PROVIDER isn’t known — use stadia',
-  'carto-key': 'CARTO needs a key now (STARBASE_TILE_CARTO_KEY)',
+  provider: 'The map provider setting (BASE_TILE_PROVIDER) isn’t known — use stadia',
+  'carto-key': 'CARTO needs a key now — the CARTO key setting (BASE_TILE_CARTO_KEY)',
 };
 // The street map sends a notice, not streets: why, by provider.
-export const NOTICE_CARTO = 'Every place gets the same picture. CARTO’s free map needs a key now: set STARBASE_TILE_CARTO_KEY in Render, or STARBASE_TILE_CLEAN=off.';
+export const NOTICE_CARTO = 'Every place gets the same picture. CARTO’s free map needs a key now: set the CARTO key setting (BASE_TILE_CARTO_KEY) in Render, or turn the Clean look off (BASE_TILE_CLEAN=off).';
 export const NOTICE_OTHER = 'Every place gets the same picture — usually a message from the map’s provider about a key or an account. The picture is below.';
 // One tile, drawn under the Street map line: what this phone gets.
 export const PICTURE = {

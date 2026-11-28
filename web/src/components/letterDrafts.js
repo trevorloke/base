@@ -11,10 +11,14 @@
 // A draft is cleared only when the server has it (onOutboxSent for that
 // client_id), never when it's queued. Shell's sign-out confirm counts them
 // (letterDraftCount) with the outbox's items.
-import { NS } from '../base.js';
+import { NS, OLD_NS } from '../base.js';
 import { onOutboxSent } from '../offline.js';
 
 const FIELD_PREFIX = `${NS}field:v1:`;
+// Where a draft was kept before the app's new name: carried over at start
+// (oldStorage.js); one it could not carry (storage full) still counts here,
+// so sign-out asks before it forgets it.
+const OLD_FIELD_PREFIX = `${OLD_NS}field:v1:`;
 let scope = null;
 // Whose drafts these are (Shell, with setOutboxOwner).
 export const setLetterScope = (me) => {
@@ -40,22 +44,29 @@ export function clearDraft(name) {
 }
 
 const has = (d) => Boolean(d && String(d.body || '').trim());
+// name → what was typed, for this sign-in's drafts under either name (the
+// new one wins).
 const mine = () => {
-  const out = [];
+  const out = new Map();
   const store = ls();
   if (!store || !scope) return out;
-  const pre = `${FIELD_PREFIX}${scope}letters:`;
-  try {
-    for (let i = 0; i < store.length; i += 1) {
-      const k = store.key(i);
-      if (k && k.startsWith(pre)) out.push(k.slice(pre.length));
-    }
-  } catch { /* blocked */ }
+  for (const base of [OLD_FIELD_PREFIX, FIELD_PREFIX]) {
+    const pre = `${base}${scope}letters:`;
+    try {
+      for (let i = 0; i < store.length; i += 1) {
+        const k = store.key(i);
+        if (!k || !k.startsWith(pre)) continue;
+        let d = null;
+        try { d = JSON.parse(store.getItem(k) || 'null')?.data ?? null; } catch { /* unreadable */ }
+        out.set(k.slice(pre.length), d);
+      }
+    } catch { /* blocked */ }
+  }
   return out;
 };
 // Letters typed here and not on the server. One queued in the outbox is
 // counted there, not twice.
-export const letterDraftCount = () => mine().filter((n) => { const d = readDraft(n); return has(d) && !d.queued; }).length;
+export const letterDraftCount = () => [...mine().values()].filter((d) => has(d) && !d.queued).length;
 
 // The server has it: the draft that waited for it goes.
 const KEYED = { 'myletter.submit': () => 'draft', 'myletter.revise': (i) => `edit:${i.id}`, 'myletter.note': (i) => `note:${i.id}` };

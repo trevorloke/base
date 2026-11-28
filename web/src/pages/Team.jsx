@@ -504,7 +504,7 @@ export default function Team({ embedded = false }) {
   const googleOf = new Map((Array.isArray(googleTeam.data) ? googleTeam.data : []).map((x) => [x.user_id, x]));
   const googleChanged = () => queryClient.invalidateQueries({ queryKey: ['google-members'] });
   // Password links (ext/passwords): offered unless this is the public demo
-  // or the campaign has no address to build one from (STARBASE_PUBLIC_URL);
+  // or the campaign has no address to build one from (BASE_PUBLIC_URL);
   // not for someone in another campaign here too.
   const pwLinks = useQuery({ queryKey: ['password-links'], queryFn: () => apiGet('/password-links'), enabled: isManager });
   const pwElsewhere = new Set(pwLinks.data?.elsewhere || []);
@@ -610,7 +610,7 @@ export default function Team({ embedded = false }) {
         ))}
       </ul>
       {pwLinks.data?.on && pwLinks.data?.address === false && (
-        <p className="muted">Password links need this campaign’s web address (STARBASE_PUBLIC_URL).</p>
+        <p className="muted">Password links need this campaign’s web address setting (BASE_PUBLIC_URL).</p>
       )}
 
       {invites.length > 0 && (

@@ -53,8 +53,9 @@
 //   refusedText(item)  → a refused item's reason, in plain words.
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { SIGN_KINDS } from '@starbase/shared/canvass';
+import { OLD_STORAGE } from '@starbase/shared/old-names';
 import { action, ApiError } from './api.js';
-import { BASE, NS } from './base.js';
+import { BASE, NS, OLD_NS } from './base.js';
 
 // The writes a phone may do with no signal (the door card, walk list, Calls,
 // the map's pins and Shifts). person.addAtDoor: a new housemate at a door
@@ -89,6 +90,12 @@ const NOT_ADDED = { status: 400, code: 'not_added', message: 'Not saved — this
 
 const KEY = `${NS}outbox:v2`;
 const V1_KEY = `${NS}outbox:v1`; // knocks only (before this outbox)
+// The same outbox under the app's older name (base.js OLD_NS): a phone that
+// saved knocks before the update, or a tab still open on the older app that
+// keeps saving them there. Read on every read, never written.
+const OLD_KEY = `${OLD_NS}outbox:v2`;
+const OLD_V1_KEY = `${OLD_NS}outbox:v1`;
+const CARRIED = [OLD_KEY, OLD_V1_KEY, V1_KEY];
 const listeners = new Set();
 const sentListeners = new Set();
 let flushing = null; // the running flush (a promise), or null
@@ -114,36 +121,60 @@ export const newClientId = () => (globalThis.crypto?.randomUUID ? globalThis.cry
   }));
 
 const storage = () => { try { return globalThis.localStorage || null; } catch { return null; } };
+// A v1 knock saved with no client id gets one, the same one each time it is
+// read (it is read again while its key can't be removed: storage full).
+const v1Ids = new Map();
 const fromV1 = (k) => {
   const { queued_at: at, ...input } = k;
-  const cid = input.client_id || newClientId();
+  const seen = JSON.stringify(k);
+  const cid = input.client_id || v1Ids.get(seen) || newClientId();
+  v1Ids.set(seen, cid);
   return { cid, name: 'contact.log', input: { ...input, client_id: cid }, meta: {}, at: at || new Date().toISOString(), tries: 0, state: 'pending' };
+};
+const valid = (list) => (Array.isArray(list) ? list.filter((i) => i && i.cid && i.name) : null);
+const listIn = (raw) => { try { const v = JSON.parse(raw || '[]'); return Array.isArray(v) ? v : []; } catch { return []; } };
+// What is stored under the older names (and the v1 knocks), taken into list
+// (by cid: an item already in it wins). Saved under KEY first; an older key is
+// removed only once that save worked, and only if it is still what was read —
+// a tab on the older app may have saved a knock there meanwhile, which is then
+// taken in on the next round. Storage full: the older keys stay as they are
+// (the items are still shown and sent from this tab's memory).
+const takeIn = (ls, list) => {
+  for (let round = 0; round < 3; round += 1) {
+    const raws = CARRIED.map((k) => ls.getItem(k));
+    if (raws.every((r) => r == null)) return list;
+    const have = new Set(list.map((i) => i.cid));
+    for (const i of valid(listIn(raws[0])) || []) if (!have.has(i.cid)) { list.push(i); have.add(i.cid); }
+    for (const k of [...listIn(raws[1]), ...listIn(raws[2])]) {
+      if (!k?.person_id || (k.client_id && have.has(k.client_id))) continue;
+      const it = fromV1(k);
+      list.push(it);
+      have.add(it.cid);
+    }
+    try { ls.setItem(KEY, JSON.stringify(list)); } catch { return list; }
+    let again = false;
+    CARRIED.forEach((k, n) => {
+      if (raws[n] == null) return;
+      if (ls.getItem(k) === raws[n]) ls.removeItem(k);
+      else again = true;
+    });
+    if (!again) return list;
+  }
+  return list;
 };
 const read = () => {
   const ls = storage();
   if (!ls) return [];
-  try {
-    const items = JSON.parse(ls.getItem(KEY) || '[]');
-    const old = JSON.parse(ls.getItem(V1_KEY) || '[]');
-    const list = Array.isArray(items) ? items.filter((i) => i && i.cid && i.name) : [];
-    if (Array.isArray(old) && old.length) {
-      const have = new Set(list.map((i) => i.cid));
-      for (const k of old) if (k?.person_id && !have.has(k.client_id)) list.push(fromV1(k));
-      ls.setItem(KEY, JSON.stringify(list));
-      ls.removeItem(V1_KEY);
-    }
-    return list;
-  } catch { return []; }
+  try { return takeIn(ls, valid(listIn(ls.getItem(KEY))) || []); } catch { return []; }
 };
 let memory = read();
 // The stored list is this tab's own (its last save worked): changes start
 // from it. Storage blocked or full: from this tab's memory.
 let stored = true;
-const valid = (list) => (Array.isArray(list) ? list.filter((i) => i && i.cid && i.name) : null);
 const latest = () => {
   const ls = storage();
   if (!ls || !stored) return memory;
-  try { return valid(JSON.parse(ls.getItem(KEY) || '[]')) || memory; } catch { return memory; }
+  try { return takeIn(ls, valid(JSON.parse(ls.getItem(KEY) || '[]')) || [...memory]); } catch { return memory; }
 };
 // An item is this sign-in's when it says so (older items, saved before items
 // had owners, count as whoever is signed in).
@@ -191,7 +222,7 @@ export function onSentElsewhere(fn) {
 }
 if (typeof window !== 'undefined') {
   window.addEventListener('storage', (e) => {
-    if (e.key !== KEY && e.key !== null) return;
+    if (e.key !== KEY && e.key !== null && !CARRIED.includes(e.key)) return;
     if (e.storageArea && e.storageArea !== storage()) return;
     const before = memory;
     stored = true;
@@ -424,12 +455,17 @@ async function runFlush() {
 }
 
 // One tab sends at a time (the others wait their turn, then find it done).
+// The new lock, then inside it the older app's: a tab still on the older app
+// takes only the older one, so the two never send at once (and never wait on
+// each other in a circle).
+const LOCK = BASE ? `${NS}outbox` : 'base-win-outbox';
+const OLD_LOCK = BASE ? `${OLD_NS}outbox` : OLD_STORAGE.rootLock;
 const oneTabAtATime = (fn) => {
   const locks = globalThis.navigator?.locks;
   if (!locks?.request) return fn();
   let ran = false;
   try {
-    return locks.request((BASE ? `${NS}outbox` : 'starbase-outbox'), () => { ran = true; return fn(); })
+    return locks.request(LOCK, () => locks.request(OLD_LOCK, () => { ran = true; return fn(); }))
       .catch((err) => { if (ran) throw err; return fn(); });
   } catch { return fn(); }
 };

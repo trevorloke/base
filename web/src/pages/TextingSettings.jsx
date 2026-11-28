@@ -159,7 +159,7 @@ export default function TextingSettings() {
 
       <Disclosure title="For your Twilio setup">
         {!d.sms && <p className="tx-line">Texts: set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM.</p>}
-        {!d.voice && <p className="tx-line">Calls: texts, plus STARBASE_PUBLIC_URL (this site’s web address).</p>}
+        {!d.voice && <p className="tx-line">Calls: texts, plus this site’s web address setting (BASE_PUBLIC_URL).</p>}
         <p className="tx-line">Point the number’s incoming messages here:</p>
         <code className="tx-code">{d.webhooks.sms}</code>
       </Disclosure>

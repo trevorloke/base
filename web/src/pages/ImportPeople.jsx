@@ -1,5 +1,5 @@
 // Import people — three steps, one button each: choose a CSV (or paste it),
-// match its columns to Starbase fields and check it (a dry run: nothing is
+// match its columns to base.win fields and check it (a dry run: nothing is
 // saved), then import it in chunks of 1,000 and place everyone on the map.
 // The CSV is parsed here in the browser; the server validates, dedupes against
 // people already on file (email → name+phone → name+address; a row with none

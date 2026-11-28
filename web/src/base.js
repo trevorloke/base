@@ -6,6 +6,11 @@
 //                left as it is
 //   NS           the start of every key this app keeps on the phone, so two
 //                campaigns on base.win never read each other's copies
+//   OLD_NS       the same start under the app's older name (shared/old-names.js):
+//                what a phone kept before is read from it and carried over
+//                (oldStorage.js, offline.js), never written
+import { OLD_STORAGE } from '@starbase/shared/old-names';
+
 export const BASE = (() => {
   if (typeof window === 'undefined') return '';
   const b = window.__BASE__;
@@ -19,4 +24,5 @@ export const at = (path) => {
   return `${BASE}${p}`;
 };
 
-export const NS = BASE ? `starbase:${BASE.slice(1)}:` : 'starbase:';
+export const NS = BASE ? `base-win:${BASE.slice(1)}:` : 'base-win:';
+export const OLD_NS = BASE ? `${OLD_STORAGE.prefix}${BASE.slice(1)}:` : OLD_STORAGE.prefix;

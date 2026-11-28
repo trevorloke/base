@@ -18,6 +18,7 @@ import {
   SIGN_KINDS, SIGN_STATUSES,
 } from '@starbase/shared/canvass';
 import { ex } from '../brand.js';
+import { NS } from '../base.js';
 import { ratingByCode } from '@starbase/shared/scale';
 import { SLATES as FALLBACK_SLATES, slateLabel } from '@starbase/shared/canvass';
 import { placeLabel } from '@starbase/shared/shiftkinds';
@@ -82,7 +83,7 @@ const contactWord = (scale, c) => (c.rating ? `Rated ${ratingText(scale, c.ratin
 // this tab: a phone may reload the page after the dialer or messages app.
 // Until one is picked: Door — except at a desk computer (no dialer), for
 // someone with a phone and no door on the map, where it is a phone call.
-const CHANNEL_KEY = 'starbase.person.channel';
+const CHANNEL_KEY = `${NS}person.channel`;
 const readChannels = () => {
   try { return JSON.parse(sessionStorage.getItem(CHANNEL_KEY) || '{}') || {}; } catch { return {}; }
 };
@@ -139,7 +140,7 @@ function BackLink({ desk, className = 'eyebrow pf-back' }) {
   const navigate = useNavigate();
   const location = useLocation();
   const from = location.state?.from;
-  const inApp = location.key !== 'default'; // opened from another Starbase screen
+  const inApp = location.key !== 'default'; // opened from another base.win screen
   if (from?.to) {
     return inApp
       ? <button type="button" className={className} onClick={() => navigate(-1)}>← {from.label || 'Back'}</button>
