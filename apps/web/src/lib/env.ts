@@ -1,4 +1,5 @@
 import "server-only";
+import { OLD_ENV } from "@/lib/old-names";
 
 function required(name: string): string {
   const value = process.env[name];
@@ -9,6 +10,11 @@ function required(name: string): string {
 function optional(name: string): string | undefined {
   const value = process.env[name];
   return value ? value : undefined;
+}
+
+/** A base.win setting: its new name, else its older one. Trimmed; blank counts as not set. */
+function desk(name: keyof typeof OLD_ENV): string | undefined {
+  return process.env[name]?.trim() || process.env[OLD_ENV[name]]?.trim() || undefined;
 }
 
 function cents(name: string, fallback: number): number {
@@ -128,27 +134,33 @@ export const env = {
     return optional("CRON_SECRET");
   },
 
-  // ── Starbase ("the desk"): the campaign's database app ──
+  // ── base.win ("the desk"): the campaign's database app ──
   // Called only from this server: the key would be visible to anyone if a
-  // browser sent it, so it never has a NEXT_PUBLIC_ name.
-  /** e.g. https://starbase.imaginesurrey.ca, without a trailing slash. */
-  get starbaseUrl() {
-    return optional("STARBASE_URL")?.trim().replace(/\/+$/, "");
+  // browser sent it, so it never has a NEXT_PUBLIC_ name. Each setting is read
+  // under its new name first, then its older name (src/lib/old-names.ts), so
+  // a host set up before the rename keeps working; a blank counts as not set.
+  /** e.g. https://imaginesurrey.base.win, without a trailing slash. */
+  get deskUrl() {
+    return desk("BASE_WIN_URL")?.replace(/\/+$/, "");
   },
-  /** A website key from Starbase → Settings → Services → Website keys (sbk_…). */
-  get starbaseKey() {
-    return optional("STARBASE_KEY")?.trim();
+  /** A website key from base.win → Settings → Services → Website keys (sbk_…). */
+  get deskKey() {
+    return desk("BASE_WIN_KEY");
   },
-  get starbaseEnabled() {
-    return Boolean(this.starbaseUrl && this.starbaseKey);
+  get deskEnabled() {
+    return Boolean(this.deskUrl && this.deskKey);
   },
   /**
-   * The key Starbase sends to POST /api/in/consent (Authorization: Bearer …),
+   * The key base.win sends to POST /api/in/consent (Authorization: Bearer …),
    * so a withdrawal made there is applied here. A different secret from
-   * STARBASE_KEY; without it the endpoint refuses every call.
+   * BASE_WIN_KEY; without it the endpoint refuses every call.
    */
-  get starbaseInboundKey() {
-    return optional("STARBASE_INBOUND_KEY")?.trim();
+  get deskInboundKey() {
+    return desk("BASE_WIN_INBOUND_KEY");
+  },
+  /** The base.win settings read from their older names (blank under the new one), by new name: to rename on the host. */
+  get deskOlderNames(): (keyof typeof OLD_ENV)[] {
+    return (Object.keys(OLD_ENV) as (keyof typeof OLD_ENV)[]).filter((name) => !process.env[name]?.trim() && process.env[OLD_ENV[name]]?.trim());
   },
 
   // ── Human check on public forms (Cloudflare Turnstile) ──

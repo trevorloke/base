@@ -29,6 +29,7 @@ import { todayInSurrey } from "@/lib/shifts";
 import { fieldErrors } from "@/lib/validation";
 import { ActionError, formToObject, formValues, type ActionState } from "./actions";
 import { consentHistory } from "./consent";
+import { deskWords, ledgerSourceLabel } from "@/lib/desk-words";
 import { sendEmail } from "./email";
 import { requireMember } from "./member-auth";
 import { contributionTotals } from "./payments";
@@ -365,9 +366,10 @@ export async function exportPersonData(db: Db, person: Person) {
     rsvps,
     shifts: shiftRows,
     newsletter: subscriber ?? null,
+    // A withdrawal made in the desk before its rename reads as base.win, as a new one does (the ledger row is unchanged).
     consentHistory: consent.map(({ personId: _p, ...c }) => {
       void _p;
-      return c;
+      return { ...c, source: ledgerSourceLabel(c.source), wording: deskWords(c.wording) };
     }),
     emails,
     referrals: { code: person.referralCode, peopleBroughtIn: referredCount[0]?.n ?? 0 },
