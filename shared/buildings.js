@@ -1,72 +1,49 @@
-// Buildings — an address with BUILDING_MIN or more units (a tower, a
-// walk-up, a townhouse complex) worked out when the data is read, never
-// stored. The server (walk order, the building read) and the phone (the
-// map's square, the building sheet) use this one module, so they agree.
+// Buildings and houses with suites, worked out when the data is read. The
+// server (walk order, the building read) and the phone (the map's square,
+// the building sheet) use this one module, so they agree.
 //
-// A door stays address + unit everywhere (doorKey, groupDoors, passes, the
-// outbox): a building is only a way of grouping doors for the eye and for
-// walking them floor by floor. A unit is a door in every count.
+// A building is an address with BUILDING_MIN (3) or more numbered or
+// lettered units (a tower, a walk-up, a townhouse complex); suite words
+// never count. A house with suites is any other address with 2 or more
+// doors. The parsing (the unit inside an address, a unit's key, a door's
+// parts and place) is shared/units.js; this module groups doors.
 //
-//   splitUnit(address)       "1203-123 Main St" → { unit: '1203', civic: '123 Main St' };
-//                            null for anything else. Read only: nothing writes it back.
-//   normAddr(s)              one spelling for a civic address ("1st Avenue." → "1st ave")
-//   civicOf(door) / unitOf(door)
-//   groupBuildings(doors)    { buildings, loose }
+// A door stays address + unit everywhere (passes, the outbox): a building
+// or a house is only a way of grouping doors for the eye and for walking
+// them. A unit or a suite is a door in every count.
+//
+//   splitUnit, normAddr, BUILDING_MIN   from shared/units.js
+//   normUnit(u)              a unit's key (units.js unitKey)
+//   civicOf(door) / unitOf(door)        doorParts(door).civic / .unit
+//   groupPlaces(doors)       { buildings, houses, loose }
+//   groupBuildings(doors)    { buildings, loose } (a house's doors are loose)
 //   buildingOf(doors, anchor) the building that holds a person (or null)
 //   floorOf, floorLabel, unitCompare, floorsShown, unitRows, nextDoor
+import {
+  BUILDING_MIN, splitUnit, normAddr, unitKey, unitKind, doorParts, placeOf, houseCompare, SUITES,
+} from './units.js';
 
-// How many distinct units make an address a building. One constant: the
-// real list's numbers may tune it.
-export const BUILDING_MIN = 4;
+export { BUILDING_MIN, splitUnit, normAddr };
 // Floors from the lowest up (true: from the top down, Penthouse first).
 export const FLOORS_DOWN = false;
 // Doors within this of a building's pin belong to it (about 50 m; the reach
 // the server's doorOf uses for one door).
 export const REACH = 0.0005;
 
-const UNIT = '([a-z]{0,2}\\d{1,4}[a-z]?)';
-const CIVIC_RE = /^\d+[a-z]?\s+[a-z0-9]/i;
-const civicOk = (s) => CIVIC_RE.test(s);
-
-// The unit written inside the address, in the forms lists and typing use.
-// The ambiguous ones ("B-13450 …", a bare "1203 13450 …") are never split,
-// nor a range like "12345-12347" (the right part must be longer).
-export const splitUnit = (address) => {
-  const s = String(address ?? '').trim().replace(/\s+/g, ' ');
-  if (!s) return null;
-  let m = s.match(/^#?\s*(\d{1,4}[a-z]?)\s*-\s*(\d{4,})(\s.*)$/i);
-  if (m) {
-    const left = m[1].replace(/[a-z]$/i, '');
-    const civic = `${m[2]}${m[3]}`.trim();
-    return m[2].length > left.length && civicOk(civic) ? { unit: m[1], civic } : null;
-  }
-  m = s.match(new RegExp(`^#\\s*${UNIT}[\\s,]+(.*)$`, 'i'))
-    || s.match(new RegExp(`^(?:unit|apt|suite)\\.?\\s*#?\\s*${UNIT}\\s*,?\\s+(.*)$`, 'i'));
-  if (m) return civicOk(m[2].trim()) ? { unit: m[1], civic: m[2].trim() } : null;
-  m = s.match(new RegExp(`^(.*?)\\s*,?\\s*#\\s*${UNIT}$`, 'i'))
-    || s.match(new RegExp(`^(.*?)\\s*,?\\s+(?:unit|apt|suite)\\.?\\s*#?\\s*${UNIT}$`, 'i'));
-  if (m) return civicOk(m[1].trim()) ? { unit: m[2], civic: m[1].trim() } : null;
-  return null;
-};
-
-const FOLD = {
-  avenue: 'ave', street: 'st', road: 'rd', drive: 'dr', boulevard: 'blvd',
-  crescent: 'cres', place: 'pl', court: 'ct', highway: 'hwy',
-};
-export const normAddr = (s) => String(s ?? '').toLowerCase().replace(/[.,#]/g, ' ').trim().split(/\s+/)
-  .map((w) => FOLD[w] || w).join(' ');
-
-export const normUnit = (u) => String(u ?? '').trim().toUpperCase().replace(/^#\s*/, '').trim();
+// A unit's key: "Unit #5" → '5', "Bsmt" and "Basement" → 'BSMT', "Main" → ''.
+export const normUnit = unitKey;
 
 // City is not part of it: a city’s name and a neighbourhood’s on one tower are one tower.
-export const civicOf = (door) => normAddr(splitUnit(door?.address)?.civic ?? door?.address ?? '');
-export const unitOf = (door) => normUnit(door?.unit || splitUnit(door?.address)?.unit || '');
+export const civicOf = (door) => doorParts(door).civic;
+export const unitOf = (door) => doorParts(door).unit;
 
 // A floor number, 'PH' (Penthouse) or null (Other units): 3–4 digit units
-// are on "all but the last two digits" (1203 → 12, 305 → 3).
+// are on "all but the last two digits" (1203 → 12, 305 → 3). Suites and
+// other words are on no floor.
 export const floorOf = (unit) => {
   const u = normUnit(unit);
-  if (/^PH/.test(u)) return 'PH';
+  if (/^PH(\d{1,4}[A-Z]?)?$/.test(u)) return 'PH';
+  if (unitKind(u) !== 'unit') return null;
   const m = u.match(/^(\d{1,2})\d{2}[A-Z]?$/);
   return m ? Number(m[1]) : null;
 };
@@ -83,8 +60,23 @@ export const floorCompare = (a, b) => {
   const [rb, nb] = floorRank(b);
   return ra - rb || na - nb;
 };
-export const unitCompare = (a, b) => floorCompare(floorOf(a), floorOf(b))
-  || normUnit(a).localeCompare(normUnit(b), 'en', { numeric: true });
+// In Other units: the blank and the suites first by rank (Main, Upper,
+// Lower, Basement …), then the rest in natural order.
+const suiteRank = (u) => (Object.prototype.hasOwnProperty.call(SUITES, u) ? SUITES[u].rank : Infinity);
+export const unitCompare = (a, b) => {
+  const fa = floorOf(a);
+  const fb = floorOf(b);
+  const byFloor = floorCompare(fa, fb);
+  if (byFloor) return byFloor;
+  const ua = normUnit(a);
+  const ub = normUnit(b);
+  if (fa == null) {
+    const ra = suiteRank(ua);
+    const rb = suiteRank(ub);
+    if (ra !== rb) return ra === Infinity ? 1 : rb === Infinity ? -1 : ra - rb;
+  }
+  return ua.localeCompare(ub, 'en', { numeric: true });
+};
 
 // Floors are worth showing when at least 2 parse and most units (60%) sit on one.
 export const floorsShown = (units) => {
@@ -99,7 +91,8 @@ const near = (a, lat, lng) => Math.abs(Number(a.lat) - lat) <= REACH && Math.abs
 
 // Every civic group (buildings or not): doors with one civic address, near
 // the pin most of them share. The same civic 1 km away is another group.
-const civicGroups = (doors) => {
+// min: how many numbered or lettered units make a building (placeOf).
+const civicGroups = (doors, min = BUILDING_MIN) => {
   const byCivic = new Map();
   const loose = [];
   for (const d of doors || []) {
@@ -123,30 +116,44 @@ const civicGroups = (doors) => {
       const mine = left.filter((d) => near(d, lat, lng));
       left = left.filter((d) => !near(d, lat, lng));
       const units = new Set(mine.map(unitOf)).size;
+      const place = placeOf(mine, min);
       // The address as most of its doors write it, never with a unit inside.
       const spelled = new Map();
       for (const d of mine) {
-        const a = String(splitUnit(d.address)?.civic ?? d.address).trim();
+        const a = doorParts(d).shown;
         spelled.set(a, (spelled.get(a) || 0) + 1);
       }
       const shown = [...spelled.entries()].sort((x, y) => y[1] - x[1])[0][0];
       groups.push({
         key: `${civic}@${pinKey(lat, lng)}`, civic, address: shown, city: mine.find((d) => d.city)?.city ?? null,
-        lat, lng, doors: mine, units, people: mine.reduce((n, d) => n + (d.persons?.length || 0), 0),
+        lat, lng, doors: mine, units, place, people: mine.reduce((n, d) => n + (d.persons?.length || 0), 0),
       });
     }
   }
   return { groups, loose };
 };
 
-export const groupBuildings = (doors, min = BUILDING_MIN) => {
-  const { groups, loose } = civicGroups(doors);
+// Every civic group as a building, a house with suites (its doors in house
+// order: Main, then suites by rank, then the rest) or lone doors.
+export const groupPlaces = (doors, min = BUILDING_MIN) => {
+  const { groups, loose } = civicGroups(doors, min);
   const buildings = [];
+  const houses = [];
   for (const g of groups) {
-    if (g.units >= min) buildings.push(g);
-    else loose.push(...g.doors);
+    if (g.place === 'building') buildings.push(g);
+    else if (g.place === 'house') {
+      const order = g.doors.map((d, i) => [unitOf(d), i, d]);
+      order.sort((x, y) => houseCompare(x[0], y[0]) || x[1] - y[1]);
+      houses.push({ ...g, doors: order.map((x) => x[2]) });
+    } else loose.push(...g.doors);
   }
-  return { buildings, loose };
+  return { buildings, houses, loose };
+};
+
+// Buildings only: a house's doors are loose, as they always were.
+export const groupBuildings = (doors, min = BUILDING_MIN) => {
+  const { buildings, houses, loose } = groupPlaces(doors, min);
+  return { buildings, loose: [...houses.flatMap((h) => h.doors), ...loose] };
 };
 
 // The building that holds this person (or door): their own civic address,
@@ -157,10 +164,10 @@ export const buildingOf = (doors, anchor, min = BUILDING_MIN) => {
   const civic = civicOf(anchor);
   const lat = Number(anchor.lat);
   const lng = Number(anchor.lng);
-  const g = civicGroups(doors).groups
+  const g = civicGroups(doors, min).groups
     .filter((x) => x.civic === civic && near(x, lat, lng))
     .sort((a, b) => (Math.abs(a.lat - lat) + Math.abs(a.lng - lng)) - (Math.abs(b.lat - lat) + Math.abs(b.lng - lng)))[0];
-  return g && g.units >= min ? g : null;
+  return g && g.place === 'building' ? g : null;
 };
 
 // One row per unit: the doors with that unit (one unit written two ways —
