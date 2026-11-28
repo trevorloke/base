@@ -22,21 +22,28 @@ const NEW = 'base-win:';
 // Runs `body` (an async function's text; it gets { m, local, session, asked,
 // fire, out }) in a fresh process: window.__BASE__ = base, storage holding
 // `local` / `session`, setItem throwing while `full` is set. Returns what
-// `out` collected, and the storage afterwards.
-const run = (body, { base = '', local = {}, session = {}, full = false } = {}) => {
+// `out` collected, and the storage afterwards. quota: the most the whole of
+// localStorage may hold (keys and values, in characters), as a phone's does;
+// a save that would go over it throws.
+const run = (body, { base = '', local = {}, session = {}, full = false, quota = 0 } = {}) => {
   const script = `
     class Store {
       constructor(init) { this.m = new Map(Object.entries(init)); this.full = false; }
       get length() { return this.m.size; }
       key(i) { return [...this.m.keys()][i] ?? null; }
       getItem(k) { return this.m.has(k) ? this.m.get(k) : null; }
-      setItem(k, v) { if (this.full) { const e = new Error('QuotaExceededError'); e.name = 'QuotaExceededError'; throw e; } this.m.set(k, String(v)); }
+      size(but) { let n = 0; for (const [k, v] of this.m) if (k !== but) n += k.length + v.length; return n; }
+      setItem(k, v) {
+        v = String(v);
+        if (this.full || (this.quota && this.size(k) + k.length + v.length > this.quota)) { const e = new Error('QuotaExceededError'); e.name = 'QuotaExceededError'; throw e; }
+        this.m.set(k, v);
+      }
       removeItem(k) { this.m.delete(k); }
       clear() { this.m.clear(); }
     }
     const init = JSON.parse(process.env.T_INIT);
     const local = new Store(init.local); const session = new Store(init.session);
-    local.full = init.full;
+    local.full = init.full; local.quota = init.quota;
     const on = {};
     globalThis.window = { __BASE__: init.base, addEventListener(t, fn) { (on[t] ||= []).push(fn); }, removeEventListener() {}, dispatchEvent() { return true; }, location: { reload() {} } };
     globalThis.localStorage = local; globalThis.sessionStorage = session;
@@ -52,7 +59,7 @@ const run = (body, { base = '', local = {}, session = {}, full = false } = {}) =
     process.stdout.write(JSON.stringify({ out, local: Object.fromEntries(local.m), session: Object.fromEntries(session.m) }));
   `;
   const r = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
-    cwd: ROOT, encoding: 'utf8', env: { ...process.env, T_INIT: JSON.stringify({ base, local, session, full }) },
+    cwd: ROOT, encoding: 'utf8', env: { ...process.env, T_INIT: JSON.stringify({ base, local, session, full, quota }) },
   });
   assert.equal(r.status, 0, r.stderr);
   const res = JSON.parse(r.stdout);
@@ -134,6 +141,63 @@ test('with storage full (saving throws), the older keys are kept and the knocks 
   assert.deepEqual(cids(r.local[`${OLD}outbox:v2`]), ['a1', 'b2'], 'nothing removed that could not be saved again');
   assert.ok(r.local[`${OLD}outbox:v1`]);
   assert.equal(r.local[`${NEW}outbox:v2`], undefined);
+});
+
+// A phone with less room left than its older outbox needs once merged, but
+// more than a shorter list needs: what is sent is sent once, and stays sent
+// after a reload; what a sign-out cleared stays cleared after a reload.
+const details = (cid) => ({ cid, name: 'person.details', input: { id: `p-${cid}`, phone: '555-0100' }, meta: {}, at: '2026-10-01T18:00:00.000Z', tries: 0, state: 'pending' });
+const SIGNED_IN = (id) => J({ user: { id }, workspace: { id: 'w1' } });
+const ANSWERS_OK = `globalThis.fetch = async (url) => {
+  out.sent = out.sent || [];
+  out.sent.push(String(url).split('/').pop());
+  if (out.sent.length > 30) throw new Error('sent over and over: ' + out.sent.join(','));
+  return new Response('{"ok":true}', { status: 200, headers: { 'content-type': 'application/json' } });
+};`;
+test('room for less than the merged outbox: a flush sends each older item once and ends, and a reload sends nothing again', () => {
+  const older = { [`${OLD}outbox:v2`]: J([item('a1'), item('b2'), details('d4')]) };
+  for (const quota of [700, 800, 900, 950, 1000, 1100]) {
+    const r = run(`async ({ m, out }) => {
+      ${ANSWERS_OK}
+      const ob = await m('offline.js');
+      ob.setOutboxOwner(${SIGNED_IN('u1')});
+      await ob.flushOutbox();
+      out.pending = ob.pendingCount();
+    }`, { quota, local: older });
+    assert.deepEqual([...r.out.sent].sort(), ['contact.log', 'contact.log', 'person.details'], `room ${quota}: each sent once`);
+    assert.equal(r.out.pending, 0, `room ${quota}`);
+    const again = run(`async ({ m, out }) => {
+      ${ANSWERS_OK}
+      const ob = await m('offline.js');
+      ob.setOutboxOwner(${SIGNED_IN('u1')});
+      out.pending = ob.pendingCount();
+      await ob.flushOutbox();
+    }`, { quota, local: r.local });
+    assert.equal(again.out.pending, 0, `room ${quota}: nothing waiting after a reload`);
+    assert.equal(again.out.sent, undefined, `room ${quota}: nothing sent again after a reload`);
+  }
+});
+
+test('room for less than the merged outbox: what sign-out cleared does not come back after a reload for the next person', () => {
+  const owned = item('a1', { owner: 'w1:A' });
+  const ownerless = item('b2');
+  for (const quota of [300, 400, 500, 0]) {
+    const r = run(`async ({ m, out }) => {
+      const ob = await m('offline.js');
+      ob.setOutboxOwner(${SIGNED_IN('A')});
+      out.before = ob.unsentCount();
+      ob.clearOutbox();
+      out.after = ob.unsentCount();
+    }`, { quota, local: { [`${OLD}outbox:v2`]: J([owned, ownerless]), [`${OLD}outbox:v1`]: J([knock('c3')]) } });
+    assert.equal(r.out.before, 3, `room ${quota}`);
+    assert.equal(r.out.after, 0, `room ${quota}`);
+    const next = run(`async ({ m, out }) => {
+      const ob = await m('offline.js');
+      ob.setOutboxOwner(${SIGNED_IN('B')});
+      out.unsent = ob.unsentCount();
+    }`, { quota, local: r.local });
+    assert.equal(next.out.unsent, 0, `room ${quota}: nothing of A's is waiting for B`);
+  }
 });
 
 test('sending takes the new lock first, then the older one (a tab on the older app only ever takes the older one)', () => {

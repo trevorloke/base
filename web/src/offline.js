@@ -133,21 +133,30 @@ const fromV1 = (k) => {
 };
 const valid = (list) => (Array.isArray(list) ? list.filter((i) => i && i.cid && i.name) : null);
 const listIn = (raw) => { try { const v = JSON.parse(raw || '[]'); return Array.isArray(v) ? v : []; } catch { return []; } };
+// Items this tab sent, dismissed, took back or cleared at sign-out, by cid.
+// Never taken in again from the older keys (while one can't be removed, a
+// merge by cid alone would put a sent knock back as waiting, and send it
+// again), and taken out of them: see forgetOld.
+const handled = new Set();
+// The cid an entry under CARRIED[n] has (or will have) here.
+const oldCid = (n, k) => (n === 0 ? k?.cid : k?.client_id || v1Ids.get(JSON.stringify(k)));
 // What is stored under the older names (and the v1 knocks), taken into list
-// (by cid: an item already in it wins). Saved under KEY first; an older key is
-// removed only once that save worked, and only if it is still what was read —
-// a tab on the older app may have saved a knock there meanwhile, which is then
-// taken in on the next round. Storage full: the older keys stay as they are
-// (the items are still shown and sent from this tab's memory).
+// (by cid: an item already in it wins; one this tab has handled is skipped).
+// Saved under KEY first; an older key is removed only once that save worked,
+// and only if it is still what was read — a tab on the older app may have
+// saved a knock there meanwhile, which is then taken in on the next round.
+// Storage full: the older keys stay as they are (the items are still shown
+// and sent from this tab's memory).
 const takeIn = (ls, list) => {
   for (let round = 0; round < 3; round += 1) {
     const raws = CARRIED.map((k) => ls.getItem(k));
     if (raws.every((r) => r == null)) return list;
-    const have = new Set(list.map((i) => i.cid));
+    const have = new Set([...list.map((i) => i.cid), ...handled]);
     for (const i of valid(listIn(raws[0])) || []) if (!have.has(i.cid)) { list.push(i); have.add(i.cid); }
     for (const k of [...listIn(raws[1]), ...listIn(raws[2])]) {
       if (!k?.person_id || (k.client_id && have.has(k.client_id))) continue;
       const it = fromV1(k);
+      if (have.has(it.cid)) continue;
       list.push(it);
       have.add(it.cid);
     }
@@ -161,6 +170,21 @@ const takeIn = (ls, list) => {
     if (!again) return list;
   }
   return list;
+};
+// Handled items are taken out of the older keys too, so a reload, or another
+// tab, never brings them back: each key is saved again without them (smaller
+// than it was, so it fits where the merged list didn't), or removed when
+// nothing else is left in it. Only ever removes; never adds under the older names.
+const forgetOld = (ls, cids) => {
+  CARRIED.forEach((key, n) => {
+    const raw = ls.getItem(key);
+    if (raw == null) return;
+    const all = listIn(raw);
+    const left = all.filter((k) => !cids.has(oldCid(n, k)));
+    if (left.length === all.length) return;
+    if (!left.length) { ls.removeItem(key); return; }
+    try { ls.setItem(key, JSON.stringify(left)); } catch { /* full even for less: left as it is; this tab still skips them */ }
+  });
 };
 const read = () => {
   const ls = storage();
@@ -206,7 +230,16 @@ const write = (items) => {
   changed();
 };
 // Every change is made to what's stored now (another tab may have added to it).
-const change = (fn) => write(fn(latest()));
+// What a change takes out is handled: never taken in from the older keys again.
+const change = (fn) => {
+  const before = latest();
+  const after = fn(before);
+  const kept = new Set(after.map((i) => i.cid));
+  const gone = new Set(before.map((i) => i.cid).filter((cid) => !kept.has(cid)));
+  for (const cid of gone) handled.add(cid);
+  write(after);
+  if (gone.size) { try { const ls = storage(); if (ls) forgetOld(ls, gone); } catch { /* storage blocked */ } }
+};
 const add = (item) => change((list) => [...list, item]);
 const update = (cid, patch) => change((list) => list.map((i) => (i.cid === cid ? { ...i, ...patch } : i)));
 const remove = (cid) => change((list) => list.filter((i) => i.cid !== cid));
