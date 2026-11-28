@@ -21,16 +21,17 @@ import { spawn } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { addDays, dayOf, instantOf } from './shared/dayparts.js';
+import { bothNames } from './shared/old-names.js';
 
 // The fixtures here are Imagine Surrey's, so the server runs as its production
 // does (render.yaml sets this brand); a brand set by hand is left as set.
-if (process.env.STARBASE_BRAND === undefined) process.env.STARBASE_BRAND = 'imagine-surrey';
+if (bothNames('BASE_BRAND').every((k) => process.env[k] === undefined)) process.env.BASE_BRAND = 'imagine-surrey';
 
 const HERE = fileURLToPath(new URL('.', import.meta.url));
 const PORT = Number(process.env.PORT) || 5153;
 const BASE = `http://127.0.0.1:${PORT}`;
 const ADMIN = `${BASE}/admin`;
-const SHOTS = process.env.SHOTS || '/tmp/starbase-shifthours';
+const SHOTS = process.env.SHOTS || '/tmp/base-win-shifthours';
 mkdirSync(SHOTS, { recursive: true });
 const results = [];
 const check = (name, ok, extra = '') => {
@@ -50,13 +51,13 @@ const until = async (fn, ms = 12000) => {
 
 // ── The server, fresh and in memory ──
 const serverLog = [];
-const env = { ...process.env, STARBASE_OPEN_SIGNUP: '1', STARBASE_DATA: 'memory', PORT: String(PORT) };
-for (const k of ['RESEND_API_KEY', 'MAIL_FROM', 'DATABASE_URL', 'STARBASE_JOBS', 'TWILIO_ACCOUNT_SID']) delete env[k];
+const env = { ...process.env, BASE_OPEN_SIGNUP: '1', BASE_DATA: 'memory', PORT: String(PORT) };
+for (const k of ['RESEND_API_KEY', 'MAIL_FROM', 'DATABASE_URL', 'BASE_JOBS', 'TWILIO_ACCOUNT_SID'].flatMap(bothNames)) delete env[k];
 const server = spawn(process.execPath, ['server/index.js'], { cwd: HERE, env, stdio: ['ignore', 'pipe', 'pipe'] });
 server.stderr.on('data', (d) => serverLog.push(String(d)));
 await new Promise((resolve, reject) => {
   const t = setTimeout(() => reject(new Error(`server did not start: ${serverLog.join('')}`)), 30000);
-  server.stdout.on('data', (d) => { if (/starbase on/.test(String(d))) { clearTimeout(t); resolve(); } });
+  server.stdout.on('data', (d) => { if (/base\.win on :/.test(String(d))) { clearTimeout(t); resolve(); } });
   server.once('exit', (code) => { clearTimeout(t); reject(new Error(`server exited ${code}: ${serverLog.join('')}`)); });
 });
 process.on('exit', () => { try { server.kill('SIGKILL'); } catch { /* gone */ } });

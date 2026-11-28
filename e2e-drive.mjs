@@ -31,8 +31,9 @@ import { deflateRawSync } from 'node:zlib';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { startFakeGoogle } from './server/test/fake-google.js';
 import { startFakeMail } from './server/test/fake-mail.js';
+import { OLD_SETTINGS, bothNames, newNameOf } from './shared/old-names.js';
 
-const SHOTS = process.env.SHOTS || '/tmp/starbase-drive';
+const SHOTS = process.env.SHOTS || '/tmp/base-win-drive';
 mkdirSync(SHOTS, { recursive: true });
 const HOST = '127.0.0.1';
 const PORT = Number(process.env.PORT) || 5320;
@@ -79,7 +80,7 @@ writeFileSync(STUB, `
 import { createServer } from 'node:http';
 // The fixtures here are Imagine Surrey's, so the server runs as its production
 // does (render.yaml sets this brand); a brand set by hand is left as set.
-if (process.env.STARBASE_BRAND === undefined) process.env.STARBASE_BRAND = 'imagine-surrey';
+if (bothNames('BASE_BRAND').every((k) => process.env[k] === undefined)) process.env.BASE_BRAND = 'imagine-surrey';
 
 const { _setLimitsForTest } = await import(${href('ext/drive/export.js')});
 const { _setPaceForTest } = await import(${href('ext/drive/sheets.js')});
@@ -92,9 +93,9 @@ createServer(async (req, res) => {
 }).listen(${CONTROL}, '127.0.0.1');
 `);
 const env = { ...process.env };
-for (const k of Object.keys(env)) if (/^(GOOGLE_|RESEND_|SENDGRID_|MAIL_|STARBASE_)/.test(k)) delete env[k];
+for (const k of Object.keys(env)) if (/^(GOOGLE_|RESEND_|SENDGRID_|MAIL_)/.test(k) || Object.hasOwn(OLD_SETTINGS, newNameOf(k))) delete env[k];
 Object.assign(env, {
-  STARBASE_OPEN_SIGNUP: '1', STARBASE_DATA: 'memory', PORT: String(PORT), STARBASE_PUBLIC_URL: BASE, STARBASE_JOBS_EVERY_MS: '1000',
+  BASE_OPEN_SIGNUP: '1', BASE_DATA: 'memory', PORT: String(PORT), BASE_PUBLIC_URL: BASE, BASE_JOBS_EVERY_MS: '1000',
   GOOGLE_OAUTH_CLIENT_ID: CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET: SECRET, GOOGLE_ACCOUNTS_BASE: G, GOOGLE_OAUTH_BASE: G,
   GOOGLE_TOKEN_KEY: `e2e-drive-token-key-${tag}-0123456789abcdef`,
   GOOGLE_PICKER_KEY: PICKER_KEY, GOOGLE_CLOUD_PROJECT_NUMBER: PROJECT,

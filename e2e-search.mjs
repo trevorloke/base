@@ -22,7 +22,7 @@
 // "Already on the list" while the list is filtered. Each screen at 1440×900 and 390×844: one yellow button at most,
 // no sideways scroll, 48 px targets on a phone.
 //
-//   STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=5440 node server/index.js &
+//   BASE_BRAND=imagine-surrey BASE_OPEN_SIGNUP=1 BASE_DATA=memory PORT=5440 node server/index.js &
 //   BASE=http://127.0.0.1:5440 SHOTS=/tmp/search node e2e-search.mjs
 // Under a client's path (BASE_PATH=/imaginesurrey on the server):
 //   BASE=http://127.0.0.1:5441 BASE_PATH=/imaginesurrey SHOTS=/tmp/search-bp node e2e-search.mjs
@@ -34,7 +34,7 @@ const P = process.env.BASE_PATH || '';
 const FIELD = P ? `${ORIGIN}${P}/field` : ORIGIN;
 const DESK = P ? `${ORIGIN}${P}/desk` : `${ORIGIN}/admin`;
 const API = `${P}/api`;
-const SHOTS = process.env.SHOTS || '/tmp/starbase-search';
+const SHOTS = process.env.SHOTS || '/tmp/base-win-search';
 mkdirSync(SHOTS, { recursive: true });
 const results = [];
 const check = (name, ok, extra = '') => {

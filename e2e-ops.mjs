@@ -57,11 +57,14 @@
 import { createRequire } from 'node:module';
 import { spawn } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
+import { OLD_SETTINGS, bothNames } from './shared/old-names.js';
 
 // The fixtures here are Imagine Surrey's, so the server runs as its production
 // does (render.yaml sets this brand); a brand set by hand is left as set.
-if (process.env.STARBASE_BRAND === undefined) process.env.STARBASE_BRAND = 'imagine-surrey';
+if (bothNames('BASE_BRAND').every((k) => process.env[k] === undefined)) process.env.BASE_BRAND = 'imagine-surrey';
 
+// Any base.win setting's name, new or older (from the table, never typed).
+const SETTING_NAMES = new RegExp(`\\b(${Object.entries(OLD_SETTINGS).flat().join('|')})\\b`);
 const ROOT = new URL('.', import.meta.url).pathname;
 Object.assign(process.env, {
   OPS_HOST: '127.0.0.1:5600', OPS_INSECURE_COOKIES: '1', OPS_ALLOW_LOCAL: '1', OPS_PUBLIC_TEMPLATE: 'http://127.0.0.1:5603/{name}',
@@ -77,7 +80,7 @@ const { publicKeyOf } = await import(`${ROOT}apps/platform/keys.mjs`);
 const { startFakeClient, startPublicAddresses } = await import(`${ROOT}apps/platform/test/fake-client.mjs`);
 const { totp, base32Decode } = await import(`${ROOT}server/lib/twostep.js`);
 
-const OUT = process.env.SHOTS || '/tmp/starbase-ops';
+const OUT = process.env.SHOTS || '/tmp/base-win-ops';
 mkdirSync(OUT, { recursive: true });
 const B = 'http://127.0.0.1:5600';
 const KEY = publicKeyOf(process.env.PLATFORM_SIGNING_KEY).publicKey;
@@ -97,8 +100,8 @@ const REAL = 'http://127.0.0.1:5606';
 // a's isn't there yet: its custom domain is added during the run.
 const addresses = startPublicAddresses({ port: 5603, clients: { a: 'http://127.0.0.1:5601', b: REAL, c: 'http://127.0.0.1:5604' } });
 addresses.down.add('a');
-const realEnv = { ...process.env, PORT: '5606', STARBASE_DATA: 'memory', STARBASE_JOBS: 'off', STARBASE_ENV: 'production', BASE_PLATFORM_PUBKEY: KEY, STARBASE_OWN_URL: REAL };
-for (const k of ['STARBASE_OPEN_SIGNUP', 'STARBASE_DEMO_EMAIL', 'RENDER_EXTERNAL_URL', 'STARBASE_PUBLIC_URL', 'BASE_PATH', 'DATABASE_URL', 'MAIL_PROVIDER', 'RESEND_API_KEY', 'SENDGRID_API_KEY']) delete realEnv[k];
+const realEnv = { ...process.env, PORT: '5606', BASE_DATA: 'memory', BASE_JOBS: 'off', BASE_ENV: 'production', BASE_PLATFORM_PUBKEY: KEY, BASE_OWN_URL: REAL };
+for (const k of ['BASE_OPEN_SIGNUP', 'BASE_DEMO_EMAIL', 'RENDER_EXTERNAL_URL', 'BASE_PUBLIC_URL', 'BASE_PATH', 'DATABASE_URL', 'MAIL_PROVIDER', 'RESEND_API_KEY', 'SENDGRID_API_KEY'].flatMap(bothNames)) delete realEnv[k];
 let realLog = '';
 const real = spawn(process.execPath, ['server/index.js'], { cwd: ROOT, env: realEnv, stdio: ['ignore', 'pipe', 'pipe'] });
 real.stdout.on('data', (d) => { realLog += d; });
@@ -220,9 +223,9 @@ try {
   ok(randoms.length === 2 && randoms.every((r) => /^[A-Za-z0-9_-]{43}$/.test(r)) && randoms[0] !== randoms[1], 'the .env block’s two random values, made by the page');
   const block = (await page.textContent('#env-block')).split('\n');
   ok(block.includes(`BASE_PLATFORM_PUBKEY=${KEY}`), 'the .env block carries base.win’s key');
-  ok(block.includes('STARBASE_PUBLIC_URL=https://a.base.win'), 'the .env block: its own address, a.base.win');
-  ok(block.includes('STARBASE_GEO_BOUNDS=50.61235,-120.51235|50.8,-120.2'), 'the .env block: the map area typed');
-  ok(block.includes('STARBASE_CANDIDATES=none'), 'the .env block: no opponents');
+  ok(block.includes('BASE_PUBLIC_URL=https://a.base.win'), 'the .env block: its own address, a.base.win');
+  ok(block.includes('BASE_GEO_BOUNDS=50.61235,-120.51235|50.8,-120.2'), 'the .env block: the map area typed');
+  ok(block.includes('BASE_CANDIDATES=none'), 'the .env block: no opponents');
   ok(!/BASE_PATH|BASE_DOOR_KEY|BASE_CLIENTS|base\.win\//.test(block.join('\n')) && !/BASE_DOOR_KEY|the door/i.test(await text(page)), 'nothing of the door on the page');
   await look(page, '08-setup-before-address');
   // No usable signing key: the key page's warning where the block would be.
@@ -247,7 +250,7 @@ try {
   await look(page, '09-setup-all-cards');
   await page.click('summary:has-text("More")');
   const yaml = await page.textContent('#yaml-snippet');
-  ok(/plan: basic-1gb/.test(yaml) && !/BASE_DOOR_KEY|BASE_PATH/.test(yaml) && /- key: STARBASE_PUBLIC_URL +# https:\/\/a\.base\.win\n +sync: false/.test(yaml) && !/value: "/.test(yaml), 'the render.yaml block: the database plan, its own address (sync: false, shown as a comment), nothing of the door');
+  ok(/plan: basic-1gb/.test(yaml) && !/BASE_DOOR_KEY|BASE_PATH/.test(yaml) && /- key: BASE_PUBLIC_URL +# https:\/\/a\.base\.win\n +sync: false/.test(yaml) && !/value: "/.test(yaml), 'the render.yaml block: the database plan, its own address (sync: false, shown as a comment), nothing of the door');
   await look(page, '09b-setup-render-yaml');
   // Before the custom domain is there: a chip; once it is, the checklist ticks by itself.
   let aText = await checkNow('a');
@@ -398,7 +401,7 @@ try {
   ok(/its settings live in Render/.test(runningText), 'the running campaign’s set-up page says its settings live in Render');
   ok((await page.textContent('#key-line')).trim() === `BASE_PLATFORM_PUBKEY=${KEY}`, 'it shows the one line to add: base.win’s key');
   ok(/Custom Domains → add c\.base\.win\./.test(runningText) && /Answering at c\.base\.win/.test(runningText), 'and the address step, answering');
-  ok(await page.locator('#env-block, #yaml-snippet, [data-random]').count() === 0 && !/STARBASE_|GOOGLE_TOKEN_KEY|undefined/.test(runningText), 'none of the campaign’s settings, no random keys');
+  ok(await page.locator('#env-block, #yaml-snippet, [data-random]').count() === 0 && !SETTING_NAMES.test(runningText) && !/GOOGLE_TOKEN_KEY|undefined/.test(runningText), 'none of the campaign’s settings, no random keys');
   await look(page, '17b-setup-running-campaign', { primaries: 0 });
   await page.goto(`${B}/key`);
   ok((await page.textContent('#key-value')).trim() === KEY, 'base.win’s key');

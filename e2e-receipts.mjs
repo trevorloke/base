@@ -24,7 +24,7 @@
 // Part 2, email connected through a stand-in provider: this script starts a
 // second fresh in-memory server (MAIL_PORT) whose fetch to api.resend.com is
 // answered locally and logged, never sent; its automatic email waits 4 s
-// (STARBASE_RECEIPT_DELAY_S; a minute in real use). A gift to a donor with an
+// (BASE_RECEIPT_DELAY_S; a minute in real use). A gift to a donor with an
 // email says "receipt emails in a minute" and is sent once by itself
 // ("Sent"), with an idempotency key; Send again sends again; while one says
 // Sending and another has no email there is no yellow button; a Not sent
@@ -34,20 +34,23 @@
 // void notice?", and Yes sends it. What the screen says matches what the
 // stand-in provider got.
 //
-//   STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4106 node server/index.js &
+//   BASE_BRAND=imagine-surrey BASE_OPEN_SIGNUP=1 BASE_DATA=memory PORT=4106 node server/index.js &
 //   BASE=http://127.0.0.1:4106 SHOTS=/tmp/receipts node e2e-receipts.mjs
 import { chromium } from 'playwright-core';
 import { spawn } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { bothNames } from './shared/old-names.js';
 
 // The fixtures here are Imagine Surrey's, so the server runs as its production
 // does (render.yaml sets this brand); a brand set by hand is left as set.
-if (process.env.STARBASE_BRAND === undefined) process.env.STARBASE_BRAND = 'imagine-surrey';
+if (bothNames('BASE_BRAND').every((k) => process.env[k] === undefined)) process.env.BASE_BRAND = 'imagine-surrey';
 
+// A setting left blank under both its names (an older name in the shell would be read otherwise).
+const blank = (...names) => Object.fromEntries(names.flatMap(bothNames).map((k) => [k, '']));
 const BASE = process.env.BASE || 'http://localhost:3200';
 const ADMIN = { toString() { return `${BASE}/admin`; } }; // the desk's pages live in the admin (web/src/mode.js)
-const SHOTS = process.env.SHOTS || '/tmp/starbase-receipts';
+const SHOTS = process.env.SHOTS || '/tmp/base-win-receipts';
 const MAIL_PORT = Number(process.env.MAIL_PORT) || Number(new URL(BASE).port || 3200) + 50;
 const MAIL_BASE = `http://127.0.0.1:${MAIL_PORT}`;
 mkdirSync(SHOTS, { recursive: true });
@@ -472,7 +475,7 @@ globalThis.fetch = async (url, init) => {
 };`;
 const outbox = [];
 const child = spawn(process.execPath, ['--import', `data:text/javascript,${encodeURIComponent(STUB)}`, fileURLToPath(new URL('./server/index.js', import.meta.url))], {
-  env: { ...process.env, STARBASE_OPEN_SIGNUP: '1', STARBASE_DATA: 'memory', PORT: String(MAIL_PORT), RESEND_API_KEY: 'e2e-stand-in', MAIL_FROM: 'receipts@example.org', STARBASE_JOBS_EVERY_MS: '1000', STARBASE_RECEIPT_DELAY_S: '4', STARBASE_PUBLIC_URL: '' },
+  env: { ...process.env, BASE_OPEN_SIGNUP: '1', BASE_DATA: 'memory', PORT: String(MAIL_PORT), RESEND_API_KEY: 'e2e-stand-in', MAIL_FROM: 'receipts@example.org', BASE_JOBS_EVERY_MS: '1000', BASE_RECEIPT_DELAY_S: '4', ...blank('BASE_PUBLIC_URL') },
   stdio: ['ignore', 'pipe', 'inherit'],
 });
 let buf = '';

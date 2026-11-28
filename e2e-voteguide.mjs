@@ -1,6 +1,6 @@
 // Voter guide E2E (VG) — one campaign on a file-backed database, the server
 // started and restarted by this suite with the clock moved only by
-// STARBASE_CLOCK_SHIFT_MS (STARBASE_E2E=1), a fake B.C. address service on
+// BASE_CLOCK_SHIFT_MS (BASE_E2E=1), a fake B.C. address service on
 // 5513 and a plain "someone else's website" on 5514 that frames the embed.
 // Made-up data only ("Example Community Hall", "Sample Secondary School");
 // the dates are relative to the test's today (advance days in 3 and 4
@@ -46,7 +46,7 @@
 //
 //   flock -o SP/batch6/locks/browser.lock node e2e-voteguide.mjs                       (5510)
 //   BASE_PATH=/imaginesurrey PORT=5511 flock -o SP/batch6/locks/browser.lock node e2e-voteguide.mjs
-// SHOTS=<dir> for the screenshots (default /tmp/starbase-voteguide).
+// SHOTS=<dir> for the screenshots (default /tmp/base-win-voteguide).
 import { chromium } from 'playwright-core';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
@@ -56,10 +56,11 @@ import { join } from 'node:path';
 import { qrMatrix } from './shared/qr.js';
 import { LEGAL_ENGLISH } from './shared/site/wording.js';
 import { startFakeTranslate } from './server/test/fake-translate.js';
+import { bothNames } from './shared/old-names.js';
 
 // The fixtures here are Imagine Surrey's, so the server runs as its production
 // does (render.yaml sets this brand); a brand set by hand is left as set.
-if (process.env.STARBASE_BRAND === undefined) process.env.STARBASE_BRAND = 'imagine-surrey';
+if (bothNames('BASE_BRAND').every((k) => process.env[k] === undefined)) process.env.BASE_BRAND = 'imagine-surrey';
 
 const PORT = Number(process.env.PORT || 5510);
 const P = String(process.env.BASE_PATH || '').replace(/\/+$/, '');
@@ -71,7 +72,7 @@ const API = `${ORIGIN}${P}/api`;
 const GEO_PORT = 5513;
 const FRAME_PORT = 5514;
 const TRANSLATE_PORT = 5512; // the stand-in Google Translation (TR), for the Punjabi page
-const SHOTS = process.env.SHOTS || '/tmp/starbase-voteguide';
+const SHOTS = process.env.SHOTS || '/tmp/base-win-voteguide';
 mkdirSync(SHOTS, { recursive: true });
 const DATA = mkdtempSync(join(tmpdir(), 'vg-e2e-'));
 const results = [];
@@ -117,8 +118,8 @@ let server = null;
 const startServer = async (shift = 0) => {
   server = spawn(process.execPath, ['server/index.js'], {
     env: {
-      ...process.env, PORT: String(PORT), STARBASE_OPEN_SIGNUP: '1', STARBASE_DATA: DATA, STARBASE_E2E: '1', STARBASE_CLOCK_SHIFT_MS: String(Math.round(shift)),
-      GEOCODER: 'bc', BC_GEOCODER_URL: `http://127.0.0.1:${GEO_PORT}`, STARBASE_GEO_BOUNDS: '49.002,-122.92|49.222,-122.67', SITE_CACHE_SECONDS: '60',
+      ...process.env, PORT: String(PORT), BASE_OPEN_SIGNUP: '1', BASE_DATA: DATA, BASE_E2E: '1', BASE_CLOCK_SHIFT_MS: String(Math.round(shift)),
+      GEOCODER: 'bc', BC_GEOCODER_URL: `http://127.0.0.1:${GEO_PORT}`, BASE_GEO_BOUNDS: '49.002,-122.92|49.222,-122.67', SITE_CACHE_SECONDS: '60',
       GOOGLE_TRANSLATE_API_BASE: fakeT.url, GOOGLE_TRANSLATE_KEY: 'test-translate-key-vg',
       ...(P ? { BASE_PATH: P } : {}),
     },

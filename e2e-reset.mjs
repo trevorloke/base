@@ -1,5 +1,5 @@
 // Forgot password — browser check. A fresh in-memory server under a
-// client's path (BASE_PATH=/a, STARBASE_PUBLIC_URL=…/a) with a stand-in for
+// client's path (BASE_PATH=/a, BASE_PUBLIC_URL=…/a) with a stand-in for
 // Resend (server/test/fake-mail.js) loaded into it; a volunteer on a laptop
 // and on a 390×844 phone:
 //   · Sign in → Forgot your password? → their email → "a link is on its
@@ -11,7 +11,7 @@
 //   · with no sender, Forgot says to ask a manager, with no form;
 //   · Settings → Members: a manager's Password link for a volunteer — with
 //     no sender the link with Copy; with one, "Emailed", and no link shown;
-//     with no STARBASE_PUBLIC_URL, no Password link at all.
+//     with no BASE_PUBLIC_URL, no Password link at all.
 // Phones: no sideways scroll, every control 48 px or more. Screenshots of
 // each screen, desktop and phone.
 //
@@ -22,6 +22,7 @@ import { spawn } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { base32Decode, hotp, totpStep } from './server/lib/twostep.js';
+import { bothNames } from './shared/old-names.js';
 
 const PORT = Number(process.env.PORT) || 5620;
 const FAKE = PORT + 1;
@@ -30,7 +31,7 @@ const ORIGIN = `http://127.0.0.1:${PORT}`;
 const P = '/a';
 const FIELD = `${ORIGIN}${P}/field`;
 const DESK = `${ORIGIN}${P}/desk`;
-const SHOTS = process.env.SHOTS || '/tmp/starbase-reset';
+const SHOTS = process.env.SHOTS || '/tmp/base-win-reset';
 mkdirSync(SHOTS, { recursive: true });
 const PASSWORD = 'first-password-2026';
 const results = [];
@@ -48,7 +49,7 @@ writeFileSync(STUB, `
 import { createServer } from 'node:http';
 // The fixtures here are Imagine Surrey's, so the server runs as its production
 // does (render.yaml sets this brand); a brand set by hand is left as set.
-if (process.env.STARBASE_BRAND === undefined) process.env.STARBASE_BRAND = 'imagine-surrey';
+if (bothNames('BASE_BRAND').every((k) => process.env[k] === undefined)) process.env.BASE_BRAND = 'imagine-surrey';
 
 const { startFakeMail } = await import(${href('test/fake-mail.js')});
 const fake = await startFakeMail({ provider: 'resend', port: ${FAKE} });
@@ -64,8 +65,8 @@ createServer(async (req, res) => {
   res.end('ok');
 }).listen(${CONTROL}, '127.0.0.1');
 `);
-const env = { ...process.env, STARBASE_OPEN_SIGNUP: '1', STARBASE_DATA: 'memory', PORT: String(PORT), STARBASE_JOBS: 'off', BASE_PATH: P, STARBASE_PUBLIC_URL: `${ORIGIN}${P}` };
-for (const k of ['MAIL_PROVIDER', 'RESEND_API_KEY', 'RESEND_API_BASE', 'RESEND_WEBHOOK_SECRET', 'SENDGRID_API_KEY', 'MAIL_FROM', 'STARBASE_DEMO_EMAIL']) delete env[k];
+const env = { ...process.env, BASE_OPEN_SIGNUP: '1', BASE_DATA: 'memory', PORT: String(PORT), BASE_JOBS: 'off', BASE_PATH: P, BASE_PUBLIC_URL: `${ORIGIN}${P}` };
+for (const k of ['MAIL_PROVIDER', 'RESEND_API_KEY', 'RESEND_API_BASE', 'RESEND_WEBHOOK_SECRET', 'SENDGRID_API_KEY', 'MAIL_FROM', 'BASE_DEMO_EMAIL'].flatMap(bothNames)) delete env[k];
 const server = spawn(process.execPath, ['--import', pathToFileURL(STUB).href, 'server/index.js'], {
   cwd: fileURLToPath(new URL('.', import.meta.url)), env, stdio: ['ignore', 'pipe', 'pipe'],
 });
@@ -270,7 +271,7 @@ try {
     await ctx.close();
   }
   // No campaign address: no Password link (every tap would be refused).
-  await control('/set', { env: { STARBASE_PUBLIC_URL: null } });
+  await control('/set', { env: { BASE_PUBLIC_URL: null } });
   try {
     await mgr.goto(`${DESK}/settings`);
     const r = mgr.locator('.ot-item', { hasText: 'Sam Example' });
@@ -278,7 +279,7 @@ try {
     await mgr.waitForLoadState('networkidle');
     check('no address: no Password link', (await r.getByRole('button', { name: 'Password link' }).count()) === 0);
     check('no address: says why', await mgr.getByText('Password links need this campaign’s web address').isVisible().catch(() => false));
-  } finally { await control('/set', { env: { STARBASE_PUBLIC_URL: `${ORIGIN}${P}` } }); }
+  } finally { await control('/set', { env: { BASE_PUBLIC_URL: `${ORIGIN}${P}` } }); }
   await mgrCtx.close();
 } catch (e) {
   check('the walk finished', false, e.stack || e.message);

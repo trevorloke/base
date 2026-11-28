@@ -1,16 +1,17 @@
-// Starbase release E2E — one fresh Imagine Surrey workspace, end to end across
+// base.win release E2E — one fresh Imagine Surrey workspace, end to end across
 // every screen: signup → seed Surrey doors → map (rate, outcome, sign, deep
 // link, filters) → people (tags) → Calls → profile → shifts (assign +
 // notify) → outreach (newsletter, press) → public
 // pages → Today → team invite → volunteer on a phone (map, shifts, signs,
 // what they can't reach) → audit chain.
 //
-//   STARBASE_BRAND=imagine-surrey node server/index.js   (in-memory DB, serves web/dist)  then  node e2e.mjs
+//   BASE_BRAND=imagine-surrey node server/index.js   (in-memory DB, serves web/dist)  then  node e2e.mjs
 import { chromium } from 'playwright-core';
+import { OLD_WORD } from './shared/old-names.js';
 
 const BASE = process.env.BASE || 'http://localhost:3200';
 const ADMIN = { toString() { return `${BASE}/admin`; } }; // the desk's pages live in the admin (web/src/mode.js)
-const SHOTS = process.env.SHOTS || '/tmp/starbase-shots';
+const SHOTS = process.env.SHOTS || '/tmp/base-win-shots';
 const results = [];
 const check = (name, ok, extra = '') => {
   results.push(!!ok);
@@ -72,7 +73,7 @@ await page.waitForURL(/\/admin\/?$/, { timeout: 15000 });
 const me = (await api('/auth/me')).json;
 check('workspace created with slug', me.workspace.slug === 'imagine-surrey', me.workspace.slug);
 check('setup is BC municipal', me.workspace.jurisdiction === 'bc-municipal', me.workspace.jurisdiction);
-check('brand reads base.win, never Starbase', /base\.win/i.test(await text()) && !/starbase/i.test(await text()));
+check('brand reads base.win, never the older name', /base\.win/i.test(await text()) && !new RegExp(OLD_WORD, 'i').test(await text()));
 
 // ── 2. Seed Surrey doors (Newton) ──
 const P = {};

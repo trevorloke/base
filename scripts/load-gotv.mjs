@@ -40,7 +40,7 @@ const pct = (xs, p) => { if (!xs.length) return null; const s = [...xs].sort((a,
 // ── The server ──
 const server = spawn(process.execPath, ['--import', './scripts/load-gotv-probe.mjs', 'server/index.js'], {
   cwd: ROOT,
-  env: { ...process.env, PORT: String(PORT), STARBASE_OPEN_SIGNUP: '1', LOAD_PROBE_FILE: PROBE, GEOCODE_ON_SAVE: 'off', PG_POOL_MAX: process.env.PG_POOL_MAX || '10' },
+  env: { ...process.env, PORT: String(PORT), BASE_OPEN_SIGNUP: '1', LOAD_PROBE_FILE: PROBE, GEOCODE_ON_SAVE: 'off', PG_POOL_MAX: process.env.PG_POOL_MAX || '10' },
   stdio: ['ignore', 'pipe', 'pipe'],
 });
 let serverLog = '';

@@ -15,14 +15,14 @@
 // (they're signed out, and set it up again at sign-in). Phones: no
 // sideways scroll; screenshots of every new screen, desktop and phone.
 //
-//   STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4150 node server/index.js &
+//   BASE_BRAND=imagine-surrey BASE_OPEN_SIGNUP=1 BASE_DATA=memory PORT=4150 node server/index.js &
 //   BASE=http://127.0.0.1:4150 SHOTS=/tmp/platform node e2e-platform.mjs
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
 import { base32Decode, hotp, totpStep } from './server/lib/twostep.js';
 
 const BASE = process.env.BASE || 'http://localhost:3200';
-const SHOTS = process.env.SHOTS || '/tmp/starbase-platform';
+const SHOTS = process.env.SHOTS || '/tmp/base-win-platform';
 mkdirSync(SHOTS, { recursive: true });
 const results = [];
 const check = (name, ok, extra = '') => {

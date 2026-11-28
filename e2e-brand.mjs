@@ -3,7 +3,7 @@
 // are presets through one rule (shared/brand-look.js), on the same look: a
 // light, neutral shell where the campaign's logo — or its initials — and one
 // colour do the branding. This script starts two fresh in-memory servers:
-// one STARBASE_BRAND=base named "Demo Campaign" (as staging is), one Imagine
+// one BASE_BRAND=base named "Demo Campaign" (as staging is), one Imagine
 // Surrey (as production is, nothing set but the name). On each: the page
 // arrives marked before it paints, with that brand's icon and shades; the
 // campaign leads (logo, or initials and name) and base.win is the small line
@@ -27,9 +27,12 @@
 import { chromium } from 'playwright-core';
 import { spawn } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
+import { bothNames } from './shared/old-names.js';
 
+// A setting left blank under both its names (an older name in the shell would be read otherwise).
+const blank = (...names) => Object.fromEntries(names.flatMap(bothNames).map((k) => [k, '']));
 const PORT = Number(process.env.PORT) || 4180;
-const SHOTS = process.env.SHOTS || '/tmp/starbase-brand';
+const SHOTS = process.env.SHOTS || '/tmp/base-win-brand';
 mkdirSync(SHOTS, { recursive: true });
 const results = [];
 const check = (name, ok, extra = '') => {
@@ -40,7 +43,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const servers = [];
 const start = async (port, env) => {
   const s = spawn(process.execPath, ['server/index.js'], {
-    env: { ...process.env, STARBASE_OPEN_SIGNUP: '1', STARBASE_DATA: 'memory', PORT: String(port), STARBASE_JOBS: 'off', STARBASE_BRAND: '', STARBASE_ORG_NAME: '', STARBASE_ENV: '', ...env },
+    env: { ...process.env, BASE_OPEN_SIGNUP: '1', BASE_DATA: 'memory', PORT: String(port), BASE_JOBS: 'off', ...blank('BASE_BRAND', 'BASE_ORG_NAME', 'BASE_ENV'), ...env },
     stdio: ['ignore', 'ignore', 'inherit'],
   });
   servers.push(s);
@@ -124,7 +127,7 @@ const shoot = async (base, who, scheme) => {
 
 // ── base.win's own look (staging) ──
 // Sign-up closes once the campaign is set up, as on staging itself.
-const BASE = await start(PORT, { STARBASE_BRAND: 'base', STARBASE_ENV: 'staging', STARBASE_ORG_NAME: 'Demo Campaign', STARBASE_OPEN_SIGNUP: '' });
+const BASE = await start(PORT, { BASE_BRAND: 'base', BASE_ENV: 'staging', BASE_ORG_NAME: 'Demo Campaign', ...blank('BASE_OPEN_SIGNUP') });
 {
   const html = await (await fetch(`${BASE}/`)).text();
   check('base: the page leaves marked data-brand="base", with the Base icon and a light bar colour (app.css holds its shades: no block)',
@@ -391,7 +394,7 @@ const BASE = await start(PORT, { STARBASE_BRAND: 'base', STARBASE_ENV: 'staging'
 }
 
 // ── Imagine Surrey's own (production: only the name set) ──
-const IS = await start(PORT + 1, { STARBASE_ENV: 'production', STARBASE_ORG_NAME: 'Imagine Surrey' });
+const IS = await start(PORT + 1, { BASE_ENV: 'production', BASE_ORG_NAME: 'Imagine Surrey' });
 {
   const html = await (await fetch(`${IS}/`)).text();
   check('imagine-surrey: marked, with the star as its icon, its shades in the page before the stylesheets (Surrey Navy the accent) and a light bar',

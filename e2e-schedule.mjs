@@ -41,16 +41,17 @@ import { createServer } from 'node:http';
 import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { addDays, dayOf, instantOf, weekBounds, weekStart } from './shared/dayparts.js';
+import { bothNames } from './shared/old-names.js';
 
 // The fixtures here are Imagine Surrey's, so the server runs as its production
 // does (render.yaml sets this brand); a brand set by hand is left as set.
-if (process.env.STARBASE_BRAND === undefined) process.env.STARBASE_BRAND = 'imagine-surrey';
+if (bothNames('BASE_BRAND').every((k) => process.env[k] === undefined)) process.env.BASE_BRAND = 'imagine-surrey';
 
 const HERE = fileURLToPath(new URL('.', import.meta.url));
 const PORT = Number(process.env.PORT) || 4900;
 const BASE = `http://127.0.0.1:${PORT}`;
 const ADMIN = `${BASE}/admin`;
-const SHOTS = process.env.SHOTS || '/tmp/starbase-schedule';
+const SHOTS = process.env.SHOTS || '/tmp/base-win-schedule';
 mkdirSync(SHOTS, { recursive: true });
 const results = [];
 const check = (name, ok, extra = '') => {
@@ -102,15 +103,15 @@ await new Promise((r) => twilio.listen(PORT + 2, '127.0.0.1', r));
 
 // ── The server, fresh and in memory ──
 const serverLog = [];
-const env = { ...process.env, STARBASE_OPEN_SIGNUP: '1', STARBASE_DATA: 'memory', PORT: String(PORT),
+const env = { ...process.env, BASE_OPEN_SIGNUP: '1', BASE_DATA: 'memory', PORT: String(PORT),
   GEOCODER: 'bc', BC_GEOCODER_URL: `http://127.0.0.1:${PORT + 1}`,
   TWILIO_ACCOUNT_SID: 'ACe2eschedule', TWILIO_AUTH_TOKEN: `token-${tag}`, TWILIO_FROM: '+16045550100', TWILIO_API_BASE: `http://127.0.0.1:${PORT + 2}` };
-for (const k of ['RESEND_API_KEY', 'MAIL_FROM', 'DATABASE_URL', 'STARBASE_JOBS', 'BC_GEOCODER_KEY']) delete env[k];
+for (const k of ['RESEND_API_KEY', 'MAIL_FROM', 'DATABASE_URL', 'BASE_JOBS', 'BC_GEOCODER_KEY'].flatMap(bothNames)) delete env[k];
 const server = spawn(process.execPath, ['server/index.js'], { cwd: HERE, env, stdio: ['ignore', 'pipe', 'pipe'] });
 server.stderr.on('data', (d) => serverLog.push(String(d)));
 await new Promise((resolve, reject) => {
   const t = setTimeout(() => reject(new Error(`server did not start: ${serverLog.join('')}`)), 30000);
-  server.stdout.on('data', (d) => { if (/starbase on/.test(String(d))) { clearTimeout(t); resolve(); } });
+  server.stdout.on('data', (d) => { if (/base\.win on :/.test(String(d))) { clearTimeout(t); resolve(); } });
   server.once('exit', (code) => { clearTimeout(t); reject(new Error(`server exited ${code}: ${serverLog.join('')}`)); });
 });
 // Whatever ends this run, the server goes with it.

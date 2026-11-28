@@ -1,4 +1,4 @@
-// Starbase A/B subject lines + open/click tracking — browser check.
+// base.win A/B subject lines + open/click tracking — browser check.
 //
 // Starts its own fresh in-memory server with a stand-in email provider
 // (fetch to Resend is answered locally and each message written to a
@@ -21,12 +21,13 @@ import { chromium } from 'playwright-core';
 import { spawn } from 'node:child_process';
 import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { bothNames } from './shared/old-names.js';
 
 const PORT = Number(process.env.PORT) || 4104;
 const CONTROL = PORT + 10000;
 const BASE = `http://127.0.0.1:${PORT}`;
 const ADMIN = { toString() { return `${BASE}/admin`; } }; // the desk's pages live in the admin (web/src/mode.js)
-const SHOTS = process.env.SHOTS || '/tmp/starbase-abtests';
+const SHOTS = process.env.SHOTS || '/tmp/base-win-abtests';
 mkdirSync(SHOTS, { recursive: true });
 const MAILBOX = `${SHOTS}/mailbox.jsonl`;
 const STUB = `${SHOTS}/provider-stub.mjs`;
@@ -51,7 +52,7 @@ import { createServer } from 'node:http';
 import { appendFileSync } from 'node:fs';
 // The fixtures here are Imagine Surrey's, so the server runs as its production
 // does (render.yaml sets this brand); a brand set by hand is left as set.
-if (process.env.STARBASE_BRAND === undefined) process.env.STARBASE_BRAND = 'imagine-surrey';
+if (bothNames('BASE_BRAND').every((k) => process.env[k] === undefined)) process.env.BASE_BRAND = 'imagine-surrey';
 
 const real = globalThis.fetch;
 let slowMs = 0;
@@ -66,8 +67,8 @@ globalThis.fetch = async (url, init) => {
 createServer(async (req, res) => {
   if (req.url === '/connect') process.env.RESEND_API_KEY = 'e2e-key';
   // A slow email service, and no time in the request: the send job sends.
-  if (req.url === '/slow') { slowMs = 120; process.env.STARBASE_SEND_INLINE_MS = '0'; }
-  if (req.url === '/fast') { slowMs = 0; delete process.env.STARBASE_SEND_INLINE_MS; }
+  if (req.url === '/slow') { slowMs = 120; process.env.BASE_SEND_INLINE_MS = '0'; }
+  if (req.url === '/fast') { slowMs = 0; for (const k of ${JSON.stringify(bothNames('BASE_SEND_INLINE_MS'))}) delete process.env[k]; }
   if (req.url === '/due' || req.url === '/age') {
     const { getDb } = await import(${JSON.stringify(pathToFileURL(`${serverDir}db/client.js`).href)});
     const db = await getDb();
@@ -77,9 +78,9 @@ createServer(async (req, res) => {
   res.end('ok');
 }).listen(${CONTROL}, '127.0.0.1');
 `);
-const env = { ...process.env, STARBASE_OPEN_SIGNUP: '1', STARBASE_DATA: 'memory', PORT: String(PORT), STARBASE_JOBS_EVERY_MS: '500' };
+const env = { ...process.env, BASE_OPEN_SIGNUP: '1', BASE_DATA: 'memory', PORT: String(PORT), BASE_JOBS_EVERY_MS: '500' };
 delete env.RESEND_API_KEY;
-delete env.STARBASE_PUBLIC_URL;
+for (const k of bothNames('BASE_PUBLIC_URL')) delete env[k];
 const server = spawn(process.execPath, ['--import', pathToFileURL(STUB).href, 'server/index.js'], {
   cwd: fileURLToPath(new URL('.', import.meta.url)), env, stdio: ['ignore', 'pipe', 'pipe'],
 });

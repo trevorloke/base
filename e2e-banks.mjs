@@ -16,14 +16,14 @@
 // way once it has sent; a list an open bank
 // calls can't be deleted, and a closed bank whose list was deleted stays closed.
 //
-//   STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4132 node server/index.js &
+//   BASE_BRAND=imagine-surrey BASE_OPEN_SIGNUP=1 BASE_DATA=memory PORT=4132 node server/index.js &
 //   BASE=http://127.0.0.1:4132 SHOTS=/tmp/banks node e2e-banks.mjs
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
 
 const BASE = process.env.BASE || 'http://localhost:3200';
 const ADMIN = `${BASE}/admin`;
-const SHOTS = process.env.SHOTS || '/tmp/starbase-banks';
+const SHOTS = process.env.SHOTS || '/tmp/base-win-banks';
 mkdirSync(SHOTS, { recursive: true });
 const results = [];
 const check = (name, ok, extra = '') => {
@@ -225,7 +225,7 @@ await page.waitForFunction(() => /305 to call/.test(document.querySelector('.cl-
 check('Calls with the list: "305 to call" — the true number, not the first 300', /305 to call/.test(await page.innerText('.cl-progress')), await page.innerText('.cl-progress'));
 // The first 290 by name called already in this sitting: the next part comes in by itself.
 const first300 = (await api(`/persons?list=${manyList.id}&has=phone&reach=call&limit=300`)).json.persons;
-await page.evaluate((ids) => sessionStorage.setItem('starbase.calls.done', JSON.stringify(Object.fromEntries(ids.map((id) => [id, { outcome: 'no_answer' }])))), first300.slice(0, 290).map((p) => p.id));
+await page.evaluate((ids) => sessionStorage.setItem('base-win:calls.done', JSON.stringify(Object.fromEntries(ids.map((id) => [id, { outcome: 'no_answer' }])))), first300.slice(0, 290).map((p) => p.id));
 await page.reload({ waitUntil: 'domcontentloaded' });
 await page.waitForSelector('.cl-progress', { timeout: 10000 });
 await page.waitForFunction(() => /\b15 to call/.test(document.querySelector('.cl-progress')?.innerText || ''), null, { timeout: 8000 }).catch(() => {});
@@ -236,7 +236,7 @@ check('290 done: "15 to call", and the list goes on past 300 (Many 301–305 are
   /\b15 to call/.test(await page.innerText('.cl-progress')) && [301, 302, 303, 304, 305].every((n) => upNext.includes(`Many ${n} Example`)) && !/Start over/.test(await page.innerText('main')),
   `${await page.innerText('.cl-progress')} · ${upNext.join(', ')}`);
 await page.screenshot({ path: `${SHOTS}/04-calls-past-300.png` });
-await page.evaluate(() => sessionStorage.removeItem('starbase.calls.done'));
+await page.evaluate(() => sessionStorage.removeItem('base-win:calls.done'));
 
 // ── The last call made with no signal: the list waits for it to send, then ends on the server's word ──
 const six = Array.from({ length: 6 }, (_, i) => ({ name: `Six ${i + 1} Example`, phone: `604-555-017${i}` }));
@@ -291,7 +291,7 @@ check('Calls on the bank: "540 to call" and "0 of 540 done" — the whole bank, 
 // Every number loaded is called on this phone, and none has reached the
 // server yet: the screen says how many are still waiting, and asks once.
 const loaded = (await api(`/banks/${bigBank.id}/mine`)).json.persons;
-await page.evaluate(({ ids, bank }) => sessionStorage.setItem('starbase.calls.done', JSON.stringify(Object.fromEntries(ids.map((id) => [id, { outcome: 'contacted', bank }])))), { ids: loaded.map((p) => p.id), bank: bigBank.id });
+await page.evaluate(({ ids, bank }) => sessionStorage.setItem('base-win:calls.done', JSON.stringify(Object.fromEntries(ids.map((id) => [id, { outcome: 'contacted', bank }])))), { ids: loaded.map((p) => p.id), bank: bigBank.id });
 mineAsked = 0;
 await page.reload({ waitUntil: 'domcontentloaded' });
 await page.waitForFunction(() => /40 more to call/.test(document.querySelector('main')?.innerText || ''), null, { timeout: 10000 }).catch(() => {});
@@ -328,7 +328,7 @@ check('the last number called: "540 of 540 done" and "All done — every number 
   /540 of 540 done/.test(await page.innerText('.cl-bank__line')) && /All done — every number on your list is called/.test(bigEnd) && !/Start over/.test(bigEnd),
   `${await page.innerText('.cl-bank__line')} · ${bigEnd.slice(-120)}`);
 await page.screenshot({ path: `${SHOTS}/06-bank-all-done.png` });
-await page.evaluate(() => sessionStorage.removeItem('starbase.calls.done'));
+await page.evaluate(() => sessionStorage.removeItem('base-win:calls.done'));
 // The list can't be deleted from under an open bank: the screen says which bank.
 await page.goto(`${ADMIN}/lists/${bigList.id}`, { waitUntil: 'domcontentloaded' });
 await page.waitForSelector('.ls-tools', { timeout: 10000 });

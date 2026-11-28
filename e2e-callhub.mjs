@@ -30,13 +30,14 @@ import { chromium } from 'playwright-core';
 import { spawn } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 import { startFakeCallHub } from './server/test/fake-callhub.js';
+import { bothNames } from './shared/old-names.js';
 
 // The fixtures here are Imagine Surrey's, so the server runs as its production
 // does (render.yaml sets this brand); a brand set by hand is left as set.
-if (process.env.STARBASE_BRAND === undefined) process.env.STARBASE_BRAND = 'imagine-surrey';
+if (bothNames('BASE_BRAND').every((k) => process.env[k] === undefined)) process.env.BASE_BRAND = 'imagine-surrey';
 
 const PORT = Number(process.env.PORT) || 4980;
-const SHOTS = process.env.SHOTS || '/tmp/starbase-callhub';
+const SHOTS = process.env.SHOTS || '/tmp/base-win-callhub';
 mkdirSync(SHOTS, { recursive: true });
 const KEY = 'e2e-callhub-key-not-a-real-one';
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -44,15 +45,15 @@ const ADMIN = `${BASE}/admin`;
 
 const fake = await startFakeCallHub({ port: PORT + 1, apiKey: KEY });
 const env = {
-  ...process.env, STARBASE_OPEN_SIGNUP: '1', STARBASE_DATA: 'memory', PORT: String(PORT),
-  CALLHUB_API_KEY: KEY, CALLHUB_API_BASE: fake.url, STARBASE_PUBLIC_URL: BASE, STARBASE_JOBS_EVERY_MS: '1000',
+  ...process.env, BASE_OPEN_SIGNUP: '1', BASE_DATA: 'memory', PORT: String(PORT),
+  CALLHUB_API_KEY: KEY, CALLHUB_API_BASE: fake.url, BASE_PUBLIC_URL: BASE, BASE_JOBS_EVERY_MS: '1000',
 };
-for (const k of ['STARBASE_JOBS', 'BASE_PATH', 'SITE_HOSTS']) delete env[k];
+for (const k of ['BASE_JOBS', 'BASE_PATH', 'SITE_HOSTS'].flatMap(bothNames)) delete env[k];
 const server = spawn(process.execPath, ['server/index.js'], { env, stdio: ['ignore', 'pipe', 'inherit'] });
 process.on('exit', () => { server.kill(); });
 await new Promise((resolve, reject) => {
   const t = setTimeout(() => reject(new Error('server did not start')), 30000);
-  server.stdout.on('data', (b) => { if (/starbase on :/.test(String(b))) { clearTimeout(t); resolve(); } });
+  server.stdout.on('data', (b) => { if (/base\.win on :/.test(String(b))) { clearTimeout(t); resolve(); } });
   server.on('exit', (code) => reject(new Error(`server exited ${code}`)));
 });
 

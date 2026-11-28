@@ -28,7 +28,7 @@ if (!/bench|scratch/i.test(dbName)) { console.error(`refused: "${dbName}" doesn'
   if (n) { console.error(`refused: "${dbName}" already holds ${n} campaign(s)`); process.exit(2); }
 }
 process.env.DATABASE_URL = url;
-process.env.STARBASE_OPEN_SIGNUP = '1';
+process.env.BASE_OPEN_SIGNUP = '1';
 process.env.GEOCODE_ON_SAVE = 'off';
 const { app } = await import('../server/index.js');
 const { getDb } = await import('../server/db/client.js');

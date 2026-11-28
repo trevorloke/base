@@ -5,13 +5,13 @@
 // sees them on file: first and last apart, a Mainstreeting contact with the
 // place, the volunteer request. Measured at 390.
 //
-//   STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4136 node server/index.js &
+//   BASE_BRAND=imagine-surrey BASE_OPEN_SIGNUP=1 BASE_DATA=memory PORT=4136 node server/index.js &
 //   BASE=http://127.0.0.1:4136 SHOTS=/tmp/mainstreet node e2e-mainstreet.mjs
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
 
 const BASE = process.env.BASE || 'http://localhost:3200';
-const SHOTS = process.env.SHOTS || '/tmp/starbase-mainstreet';
+const SHOTS = process.env.SHOTS || '/tmp/base-win-mainstreet';
 mkdirSync(SHOTS, { recursive: true });
 const results = [];
 const check = (name, ok, extra = '') => {

@@ -36,15 +36,16 @@ import { spawn } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { startFakeMail } from './server/test/fake-mail.js';
+import { bothNames } from './shared/old-names.js';
 
 // The fixtures here are Imagine Surrey's, so the server runs as its production
 // does (render.yaml sets this brand); a brand set by hand is left as set.
-if (process.env.STARBASE_BRAND === undefined) process.env.STARBASE_BRAND = 'imagine-surrey';
+if (bothNames('BASE_BRAND').every((k) => process.env[k] === undefined)) process.env.BASE_BRAND = 'imagine-surrey';
 
 const PORT = Number(process.env.PORT || 5160);
 const BASE = `http://127.0.0.1:${PORT}`;
 const ADMIN = `${BASE}/admin`;
-const SHOTS = process.env.SHOTS || '/tmp/starbase-calendar';
+const SHOTS = process.env.SHOTS || '/tmp/base-win-calendar';
 mkdirSync(SHOTS, { recursive: true });
 const results = [];
 const check = (name, ok, extra = '') => {
@@ -56,8 +57,8 @@ const tag = Date.now().toString(36);
 
 // ── the server, with email connected to the stand-in ──
 const fake = await startFakeMail({ provider: 'resend' });
-const env = { ...process.env, STARBASE_OPEN_SIGNUP: '1', STARBASE_DATA: 'memory', PORT: String(PORT) };
-for (const k of ['MAIL_PROVIDER', 'SENDGRID_API_KEY', 'SENDGRID_API_BASE', 'STARBASE_PUBLIC_URL', 'SITE_HOSTS', 'BASE_PATH']) delete env[k];
+const env = { ...process.env, BASE_OPEN_SIGNUP: '1', BASE_DATA: 'memory', PORT: String(PORT) };
+for (const k of ['MAIL_PROVIDER', 'SENDGRID_API_KEY', 'SENDGRID_API_BASE', 'BASE_PUBLIC_URL', 'SITE_HOSTS', 'BASE_PATH'].flatMap(bothNames)) delete env[k];
 Object.assign(env, { RESEND_API_KEY: 're_e2e_calendar', RESEND_API_BASE: fake.url, MAIL_FROM: 'Sample Campaign <team@example.org>' });
 const server = spawn(process.execPath, ['server/index.js'], { cwd: fileURLToPath(new URL('.', import.meta.url)), env, stdio: ['ignore', 'pipe', 'pipe'] });
 let serverLog = '';

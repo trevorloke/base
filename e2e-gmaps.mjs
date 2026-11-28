@@ -35,10 +35,11 @@ import http from 'node:http';
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { bothNames } from './shared/old-names.js';
 
 // The fixtures here are Imagine Surrey's, so the server runs as its production
 // does (render.yaml sets this brand); a brand set by hand is left as set.
-if (process.env.STARBASE_BRAND === undefined) process.env.STARBASE_BRAND = 'imagine-surrey';
+if (bothNames('BASE_BRAND').every((k) => process.env[k] === undefined)) process.env.BASE_BRAND = 'imagine-surrey';
 
 const ROOT = fileURLToPath(new URL('.', import.meta.url));
 const PORT = Number(process.env.PORT) || 5340;
@@ -167,7 +168,7 @@ const startServer = async (extra = {}) => {
   server = spawn(process.execPath, ['server/index.js'], {
     cwd: ROOT,
     env: {
-      ...process.env, STARBASE_OPEN_SIGNUP: '1', STARBASE_DATA: 'memory', PORT: String(PORT), STARBASE_JOBS: 'off',
+      ...process.env, BASE_OPEN_SIGNUP: '1', BASE_DATA: 'memory', PORT: String(PORT), BASE_JOBS: 'off',
       GEOCODER: 'bc', BC_GEOCODER_URL: `http://127.0.0.1:${BC_PORT}`, GEOCODE_ON_SAVE: 'on',
       GOOGLE_MAPS_SERVER_KEY: 'e2e-not-a-key', GOOGLE_MAPS_TILES_URL: `http://127.0.0.1:${G_PORT}/v1`, GOOGLE_PLACES_URL: `http://127.0.0.1:${G_PORT}/v1`,
       GOOGLE_MAPS_TILES: 'on', ADDRESS_SUGGEST: '', ...extra,
@@ -176,7 +177,7 @@ const startServer = async (extra = {}) => {
   });
   await new Promise((resolve, reject) => {
     const t = setTimeout(() => reject(new Error('server did not start')), 30000);
-    server.stdout.on('data', (b) => { if (/starbase on :/.test(String(b))) { clearTimeout(t); resolve(); } });
+    server.stdout.on('data', (b) => { if (/base\.win on :/.test(String(b))) { clearTimeout(t); resolve(); } });
     server.on('exit', (code) => reject(new Error(`server exited ${code}`)));
   });
 };
@@ -360,7 +361,7 @@ let s = await seed();
       const c = size === '390' ? await sized(c0, opts) : c0;
       const p = await pageIn(c, `${who}-${size}`);
       await p.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
-      await p.evaluate(() => { for (const k of Object.keys(localStorage)) if (/map:view/.test(k)) localStorage.removeItem(k); localStorage.setItem('starbase:map:view', 'muted'); });
+      await p.evaluate(() => { for (const k of Object.keys(localStorage)) if (/map:view/.test(k)) localStorage.removeItem(k); localStorage.setItem('base-win:map:view', 'muted'); });
       const freeBefore = free.asked;
       await openMap(p, app === 'admin' ? '/admin/map' : '/map');
       const srcs = await tileSrcs(p);

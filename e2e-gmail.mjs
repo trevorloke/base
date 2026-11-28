@@ -23,12 +23,13 @@ import { chromium } from 'playwright-core';
 import { spawn } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 import { startFakeGoogle } from './server/test/fake-google.js';
+import { bothNames } from './shared/old-names.js';
 
 // The fixtures here are Imagine Surrey's, so the server runs as its production
 // does (render.yaml sets this brand); a brand set by hand is left as set.
-if (process.env.STARBASE_BRAND === undefined) process.env.STARBASE_BRAND = 'imagine-surrey';
+if (bothNames('BASE_BRAND').every((k) => process.env[k] === undefined)) process.env.BASE_BRAND = 'imagine-surrey';
 
-const SHOTS = process.env.SHOTS || '/tmp/starbase-gmail';
+const SHOTS = process.env.SHOTS || '/tmp/base-win-gmail';
 mkdirSync(SHOTS, { recursive: true });
 const HOST = '127.0.0.1';
 const PORT = Number(process.env.PORT) || 5240;
@@ -67,7 +68,7 @@ const fake = await startFakeGoogle({
 const procs = [];
 const startServer = async (port, env, label) => {
   const child = spawn(process.execPath, ['server/index.js'], {
-    env: { ...process.env, STARBASE_OPEN_SIGNUP: '1', STARBASE_DATA: 'memory', PORT: String(port), ...env },
+    env: { ...process.env, BASE_OPEN_SIGNUP: '1', BASE_DATA: 'memory', PORT: String(port), ...env },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let log = '';
@@ -91,9 +92,9 @@ let browser;
 const errors = [];
 const offHost = [];
 try {
-  await startServer(PORT, { ...GOOGLE_ENV, STARBASE_PUBLIC_URL: BASE }, 'base.win');
-  await startServer(NOG_PORT, { STARBASE_PUBLIC_URL: NOG }, 'base.win without Google');
-  await startServer(BP_PORT, { ...GOOGLE_ENV, STARBASE_PUBLIC_URL: `${BP}${P}`, BASE_PATH: P }, 'base.win under BASE_PATH');
+  await startServer(PORT, { ...GOOGLE_ENV, BASE_PUBLIC_URL: BASE }, 'base.win');
+  await startServer(NOG_PORT, { BASE_PUBLIC_URL: NOG }, 'base.win without Google');
+  await startServer(BP_PORT, { ...GOOGLE_ENV, BASE_PUBLIC_URL: `${BP}${P}`, BASE_PATH: P }, 'base.win under BASE_PATH');
 
   browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--no-sandbox', '--disable-dev-shm-usage'] });
   const newPage = async (viewport, label) => {
