@@ -1,14 +1,15 @@
 import type { ReactNode } from "react";
 import { AdminPage } from "@/components/admin/content/AdminPage";
 import Link from "next/link";
-import { StarbaseForms, TestEmailForm, TestSmsForm } from "@/components/admin/content/IntegrationTests";
+import { DeskForms, TestEmailForm, TestSmsForm } from "@/components/admin/content/IntegrationTests";
 import { getDb } from "@/lib/db";
 import { env } from "@/lib/env";
 import { requireAdmin } from "@/lib/server/admin-auth";
 import { integrationStats } from "@/lib/server/content-admin";
-import { NOT_SUPPORTED_YET, starbaseUrlProblem } from "@/lib/server/starbase";
+import { NOT_SUPPORTED_YET, deskUrlProblem } from "@/lib/server/desk";
 import { localUploadProblem } from "@/lib/server/storage";
-import { outboxStats } from "@/lib/server/starbase-outbox";
+import { outboxStats } from "@/lib/server/desk-outbox";
+import { deskWords } from "@/lib/desk-words";
 
 type Tone = "ok" | "warn" | "off" | "bad";
 
@@ -73,13 +74,13 @@ export default async function IntegrationsPage() {
   const analytics = env.plausibleDomain ? `Plausible (${env.plausibleDomain})` : env.gaMeasurementId ? `Google Analytics (${env.gaMeasurementId})` : null;
   const queueStale = stats.email.oldestQueuedAt ? Date.now() - stats.email.oldestQueuedAt.getTime() > 10 * 60_000 : false;
 
-  // Starbase: the key is shown only by the first characters Starbase lists it by.
-  const starbaseOn = env.starbaseEnabled;
-  const starbaseUrlIssue = starbaseOn ? starbaseUrlProblem(env.starbaseUrl) : null;
+  // base.win: the key is shown only by the first characters base.win lists it by.
+  const deskOn = env.deskEnabled;
+  const deskUrlIssue = deskOn ? deskUrlProblem(env.deskUrl) : null;
   const deskError = desk.lastError;
-  const inboundOn = Boolean(env.starbaseInboundKey);
+  const inboundOn = Boolean(env.deskInboundKey);
   const keyRefused = Boolean(deskError && desk.counts.pending > 0 && /^(401|403|404):/.test(deskError.message));
-  const starbaseTone: Tone = !starbaseOn ? "off" : starbaseUrlIssue || keyRefused ? "bad" : desk.counts.failed > 0 || (deskError && desk.counts.pending > 0) ? "warn" : "ok";
+  const deskTone: Tone = !deskOn ? "off" : deskUrlIssue || keyRefused ? "bad" : desk.counts.failed > 0 || (deskError && desk.counts.pending > 0) ? "warn" : "ok";
   const humanKeys = [env.turnstileSiteKey, env.turnstileSecretKey].filter(Boolean).length;
 
   return (
@@ -140,20 +141,20 @@ export default async function IntegrationsPage() {
           )}
         </Card>
         <Card
-          title="Starbase (the desk)"
-          tone={starbaseTone}
+          title="base.win (the desk)"
+          tone={deskTone}
           rows={[
-            ["Connection", starbaseOn ? (starbaseUrlIssue ?? `Configured: ${env.starbaseUrl}`) : "Not configured: sign-ups are kept here as skipped and not sent"],
-            ["Website key", env.starbaseKey ? `Set (${env.starbaseKey.slice(0, 10)}…)` : "Not set"],
+            ["Connection", deskOn ? (deskUrlIssue ?? `Configured: ${env.deskUrl}`) : "Not configured: sign-ups are kept here as skipped and not sent"],
+            ["Website key", env.deskKey ? `Set (${env.deskKey.slice(0, 10)}…)` : "Not set"],
             ["Waiting to send", String(desk.counts.pending)],
             ["Sent", `${desk.counts.sent}${desk.lastSentAt ? ` (last ${when(desk.lastSentAt)})` : ""}`],
-            ["Refused by Starbase", String(desk.counts.failed)],
+            ["Refused by base.win", String(desk.counts.failed)],
             ["Skipped", String(desk.counts.skipped)],
             [
-              "Unsubscribes and STOPs to Starbase",
+              "Unsubscribes and STOPs to base.win",
               desk.consent.notSupported > 0 ? (
                 <span style={{ fontWeight: 700 }}>
-                  {desk.consent.notSupported} waiting: {NOT_SUPPORTED_YET.toLowerCase()} (this Starbase has no /in/v1/consent). They go once it does.
+                  {desk.consent.notSupported} waiting: {NOT_SUPPORTED_YET.toLowerCase()} (this base.win server has no /in/v1/consent). They go once it does.
                 </span>
               ) : desk.consent.pending > 0 ? (
                 `${desk.consent.pending} waiting, ${desk.consent.sent} sent`
@@ -161,28 +162,31 @@ export default async function IntegrationsPage() {
                 `${desk.consent.sent} sent`
               ),
             ],
-            ["Unsubscribes from Starbase", inboundOn ? "On: Starbase can withdraw consent here (POST /api/in/consent)" : "Off: STARBASE_INBOUND_KEY isn't set"],
+            ["Unsubscribes from base.win", inboundOn ? "On: base.win can withdraw consent here (POST /api/in/consent)" : "Off: BASE_WIN_INBOUND_KEY isn't set"],
+            ...(env.deskOlderNames.length
+              ? ([["Setting names", `${env.deskOlderNames.join(", ")}: set on the host under the older name, which still works. Rename it when it suits you, with the same value.`]] as [string, string][])
+              : []),
             [
               "Last problem",
               deskError ? (
                 <span style={keyRefused ? { color: "var(--red-hover)", fontWeight: 700 } : undefined}>
-                  {deskError.message} ({when(deskError.at)}){keyRefused ? ". Check the key: sign-ups are waiting until it works." : ""}
+                  {deskWords(deskError.message)} ({when(deskError.at)}){keyRefused ? ". Check the key: sign-ups are waiting until it works." : ""}
                 </span>
               ) : (
                 "none"
               ),
             ],
           ]}
-          env={["STARBASE_URL", "STARBASE_KEY", "STARBASE_INBOUND_KEY"]}
+          env={["BASE_WIN_URL", "BASE_WIN_KEY", "BASE_WIN_INBOUND_KEY"]}
         >
           <p className="small">
             New sign-ups (petitions, pledges, the newsletter, volunteer shifts, memberships, deletion requests), edits in the supporter portal, and tags for RSVPs, paid
             orders and promise follows are sent from this server, and so is every unsubscribe and text STOP. Money never is: no donation, fee or order amount.{" "}
-            <Link href="/admin/integrations/starbase">See everything sent</Link>
+            <Link href="/admin/integrations/desk">See everything sent</Link>
             {" · "}
             <Link href="/admin/desk-gifts">Gifts to log at the desk</Link>
           </p>
-          {starbaseOn && <StarbaseForms waiting={desk.counts.pending} />}
+          {deskOn && <DeskForms waiting={desk.counts.pending} />}
         </Card>
         <Card
           title="Human check (Cloudflare Turnstile)"
@@ -202,7 +206,7 @@ export default async function IntegrationsPage() {
         >
           {!env.humanCheckEnabled && (
             <p className="small" style={{ color: "var(--red-hover)", fontWeight: 700 }}>
-              The live site should have this on: every accepted sign-up becomes a supporter record here and in Starbase, and can file a request for the desk. Make a free
+              The live site should have this on: every accepted sign-up becomes a supporter record here and in base.win, and can file a request for the desk. Make a free
               Turnstile widget in Cloudflare and set both keys.
             </p>
           )}

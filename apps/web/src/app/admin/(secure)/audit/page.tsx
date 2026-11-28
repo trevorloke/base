@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { auditActionLabel, auditEntityLabel, deskWords } from "@/lib/desk-words";
 import { getDb } from "@/lib/db";
 import { requireAdmin } from "@/lib/server/admin-auth";
 import { AUDIT_PAGE_SIZE, auditFacets, listAudit, parseAuditFilters, type AuditFilters } from "@/lib/server/staff";
@@ -58,10 +59,10 @@ export default async function AuditPage({ searchParams }: PageProps<"/admin/audi
           <label htmlFor="action">Action</label>
           <select id="action" name="action" className="input input--compact" defaultValue={filters.action}>
             <option value="">Any</option>
-            {!facets.actions.includes(filters.action) && filters.action && <option value={filters.action}>{filters.action}</option>}
+            {!facets.actions.includes(filters.action) && filters.action && <option value={filters.action}>{auditActionLabel(filters.action)}</option>}
             {facets.actions.map((a) => (
               <option key={a} value={a}>
-                {a}
+                {auditActionLabel(a)}
               </option>
             ))}
           </select>
@@ -109,16 +110,16 @@ export default async function AuditPage({ searchParams }: PageProps<"/admin/audi
                   <tr key={r.id}>
                     <td>{WHEN.format(r.at)}</td>
                     <td>{r.userName ?? r.userEmail ?? "system"}</td>
-                    <td>{r.action}</td>
+                    <td>{auditActionLabel(r.action)}</td>
                     <td className="cell-wrap">
-                      {r.entity ?? ""}
+                      {auditEntityLabel(r.entity) ?? ""}
                       {r.entityId && (
                         <span className="small" style={{ display: "block" }}>
                           {link ? <Link href={link}>{r.entityId}</Link> : r.entityId}
                         </span>
                       )}
                     </td>
-                    <td className="cell-wrap">{r.details ? <pre className="details-json">{JSON.stringify(r.details)}</pre> : ""}</td>
+                    <td className="cell-wrap">{r.details ? <pre className="details-json">{deskWords(JSON.stringify(r.details))}</pre> : ""}</td>
                   </tr>
                 );
               })}

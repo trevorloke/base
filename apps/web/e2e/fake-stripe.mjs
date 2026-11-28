@@ -1,7 +1,7 @@
 // A stand-in for the outside services the site calls, so the end-to-end
 // suites run without accounts: the Stripe API endpoints (point the site at it
-// with STRIPE_API_BASE=http://localhost:<port>), Starbase's website API
-// (STARBASE_URL=http://localhost:<port>) and Cloudflare Turnstile's siteverify
+// with STRIPE_API_BASE=http://localhost:<port>), base.win's website API
+// (BASE_WIN_URL=http://localhost:<port>) and Cloudflare Turnstile's siteverify
 // (TURNSTILE_VERIFY_URL=http://localhost:<port>/turnstile/siteverify).
 //
 // Besides the Stripe endpoints it has three test-only ones: GET /__log lists
@@ -34,22 +34,22 @@ function parseForm(body) {
   return out;
 }
 
-// ── Fake Starbase: GET /in/v1/ping, POST /in/v1/people, /in/v1/consent ───
-// The same rules as Starbase's server/ext/intake/index.js: a Bearer website
+// ── Fake base.win: GET /in/v1/ping, POST /in/v1/people, /in/v1/consent ───
+// The same rules as base.win's server/ext/intake/index.js: a Bearer website
 // key, JSON only, the same strict field schema and limits, and
 // Idempotency-Key replays (same key + same body → the first answer with
 // replayed: true; same key + another body → 409). POST /in/v1/consent (the
-// consent withdrawals the website sends) answers 404, as a Starbase without
+// consent withdrawals the website sends) answers 404, as a base.win without
 // the endpoint does, until it is switched on. Test-only endpoints:
-// GET /__starbase lists every request; POST /__starbase/fail {status, times,
+// GET /__base-win lists every request; POST /__base-win/fail {status, times,
 // path?} answers the next `times` requests (to `path`, if given) with
-// `status`; POST /__starbase/key {key} changes the accepted key (as if the
-// old one were revoked); POST /__starbase/consent {supported} switches the
-// consent endpoint on or off; POST /__starbase/reset clears it all.
-// The key the site is given (run.mjs sets STARBASE_KEY for both).
-const STARBASE_TEST_KEY = process.env.STARBASE_KEY || "sbk_e2eTestKey0123456789abcdefABCDEF";
-const starbaseInitial = () => ({ key: STARBASE_TEST_KEY, requests: [], fail: { status: 0, times: 0, path: null }, idem: new Map(), people: new Map(), consentSupported: false });
-const starbase = starbaseInitial();
+// `status`; POST /__base-win/key {key} changes the accepted key (as if the
+// old one were revoked); POST /__base-win/consent {supported} switches the
+// consent endpoint on or off; POST /__base-win/reset clears it all.
+// The key the site is given (run.mjs sets BASE_WIN_KEY for both).
+const DESK_TEST_KEY = process.env.BASE_WIN_KEY || "sbk_e2eTestKey0123456789abcdefABCDEF";
+const deskInitial = () => ({ key: DESK_TEST_KEY, requests: [], fail: { status: 0, times: 0, path: null }, idem: new Map(), people: new Map(), consentSupported: false });
+const deskFake = deskInitial();
 const str = (max) => z.string().trim().max(max).optional().nullable();
 const personIn = z
   .object({
@@ -83,19 +83,19 @@ const consentIn = z
   .strict()
   .refine((v) => v.email || v.phone, { message: "an email or a phone" });
 
-function fakeStarbase(req, res, url, raw) {
+function fakeDesk(req, res, url, raw) {
   const send = (status, o) => {
     res.writeHead(status, { "content-type": "application/json" });
     res.end(JSON.stringify(o));
     return { status, body: o };
   };
-  if (url.pathname === "/__starbase" && req.method === "GET") return send(200, starbase.requests);
-  if (url.pathname.startsWith("/__starbase/")) {
+  if (url.pathname === "/__base-win" && req.method === "GET") return send(200, deskFake.requests);
+  if (url.pathname.startsWith("/__base-win/")) {
     const p = raw ? JSON.parse(raw) : {};
-    if (url.pathname === "/__starbase/fail") starbase.fail = { status: Number(p.status) || 0, times: Number(p.times) || 0, path: p.path ? String(p.path) : null };
-    if (url.pathname === "/__starbase/key") starbase.key = String(p.key ?? STARBASE_TEST_KEY);
-    if (url.pathname === "/__starbase/consent") starbase.consentSupported = p.supported === true;
-    if (url.pathname === "/__starbase/reset") Object.assign(starbase, starbaseInitial());
+    if (url.pathname === "/__base-win/fail") deskFake.fail = { status: Number(p.status) || 0, times: Number(p.times) || 0, path: p.path ? String(p.path) : null };
+    if (url.pathname === "/__base-win/key") deskFake.key = String(p.key ?? DESK_TEST_KEY);
+    if (url.pathname === "/__base-win/consent") deskFake.consentSupported = p.supported === true;
+    if (url.pathname === "/__base-win/reset") Object.assign(deskFake, deskInitial());
     return send(200, { ok: true });
   }
   let body = null;
@@ -112,20 +112,20 @@ function fakeStarbase(req, res, url, raw) {
     body,
     at: new Date().toISOString(),
   };
-  starbase.requests.push(record);
+  deskFake.requests.push(record);
   const answer = (status, o) => {
     record.status = status;
     record.answer = o;
     return send(status, o);
   };
-  if (starbase.fail.times > 0 && (!starbase.fail.path || starbase.fail.path === url.pathname)) {
-    starbase.fail.times -= 1;
-    return answer(starbase.fail.status, { error: `simulated ${starbase.fail.status}` });
+  if (deskFake.fail.times > 0 && (!deskFake.fail.path || deskFake.fail.path === url.pathname)) {
+    deskFake.fail.times -= 1;
+    return answer(deskFake.fail.status, { error: `simulated ${deskFake.fail.status}` });
   }
   const m = /^Bearer\s+(sbk_[A-Za-z0-9]{20,})$/.exec(req.headers.authorization || "");
-  if (!m || m[1] !== starbase.key) return answer(401, { error: "a valid key goes in the Authorization header: Bearer sbk_…" });
+  if (!m || m[1] !== deskFake.key) return answer(401, { error: "a valid key goes in the Authorization header: Bearer sbk_…" });
   if (req.method === "GET" && url.pathname === "/in/v1/ping") return answer(200, { ok: true, campaign: "Imagine Surrey (test)", key: "Website" });
-  const consent = url.pathname === "/in/v1/consent" && starbase.consentSupported;
+  const consent = url.pathname === "/in/v1/consent" && deskFake.consentSupported;
   if (req.method !== "POST" || !(url.pathname === "/in/v1/people" || consent)) return answer(404, { error: "not found" });
   if (!/^application\/json\b/i.test(req.headers["content-type"] || "")) return answer(415, { error: "send JSON (Content-Type: application/json)" });
   if (body === null) return answer(400, { error: "the body isn’t JSON" });
@@ -136,19 +136,19 @@ function fakeStarbase(req, res, url, raw) {
   }
   const idem = String(req.headers["idempotency-key"] ?? "").trim().slice(0, 200);
   const hash = createHash("sha256").update(raw).digest("hex");
-  if (idem && starbase.idem.has(idem)) {
-    const prev = starbase.idem.get(idem);
+  if (idem && deskFake.idem.has(idem)) {
+    const prev = deskFake.idem.get(idem);
     if (prev.hash !== hash) return answer(409, { error: "that Idempotency-Key was used with a different body" });
     return answer(200, { ok: true, ...prev.answer, replayed: true });
   }
   if (consent) {
-    if (idem) starbase.idem.set(idem, { hash, answer: {} });
+    if (idem) deskFake.idem.set(idem, { hash, answer: {} });
     return answer(200, { ok: true });
   }
   const who = parsed.data.email || `${parsed.data.name ?? ""}|${parsed.data.phone ?? ""}`;
-  const personId = starbase.people.get(who) ?? randomUUID();
-  starbase.people.set(who, personId);
-  if (idem) starbase.idem.set(idem, { hash, answer: { person_id: personId } });
+  const personId = deskFake.people.get(who) ?? randomUUID();
+  deskFake.people.set(who, personId);
+  if (idem) deskFake.idem.set(idem, { hash, answer: { person_id: personId } });
   return answer(200, { ok: true, person_id: personId });
 }
 
@@ -158,7 +158,7 @@ http
     req.on("data", (c) => (body += c));
     req.on("end", () => {
       const url = new URL(req.url, "http://x");
-      if (url.pathname.startsWith("/in/v1/") || url.pathname === "/__starbase" || url.pathname.startsWith("/__starbase/")) return void fakeStarbase(req, res, url, body);
+      if (url.pathname.startsWith("/in/v1/") || url.pathname === "/__base-win" || url.pathname.startsWith("/__base-win/")) return void fakeDesk(req, res, url, body);
       // Fake Cloudflare Turnstile siteverify: only "ok-token" passes.
       if (req.method === "POST" && url.pathname === "/turnstile/siteverify") {
         const form = new URLSearchParams(body);
