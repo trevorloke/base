@@ -24,11 +24,14 @@ test('splitUnit reads every form of a unit written inside the address', () => {
   ]) assert.deepEqual(splitUnit(s), want, s);
   assert.deepEqual(splitUnit('1203B-13450 104 Ave'), { unit: '1203B', civic: '13450 104 Ave' });
   assert.deepEqual(splitUnit('12-1345 King George Blvd'), { unit: '12', civic: '1345 King George Blvd' });
+  // One letter, a hyphen and a civic of 4 or more digits is a letter unit (UNITS D5; it was refused before).
+  assert.deepEqual(splitUnit('B-13450 104 Ave'), { unit: 'B', civic: '13450 104 Ave' });
 });
 
 test('splitUnit never splits the ambiguous forms', () => {
-  for (const s of ['B-13450 104 Ave', '1203 13450 104 Ave', '12345-12347 King George Blvd', '13450 104 Ave',
-    '1234-5678 King George Blvd', '#5 Main St', 'Unit 4, Main St', '', null, 'General delivery']) {
+  for (const s of ['1203 13450 104 Ave', '12345-12347 King George Blvd', '13450 104 Ave',
+    '1234-5678 King George Blvd', '#5 Main St', 'Unit 4, Main St', '', null, 'General delivery',
+    '13450A 104 Ave', '123 Upper Rd']) {
     assert.equal(splitUnit(s), null, String(s));
   }
 });
@@ -59,6 +62,12 @@ test('unitCompare: floors from the lowest up, Penthouse after, Other units last'
   assert.deepEqual([...units].sort(unitCompare), ['201', '305', '1001', '1203', '1702', 'PH2', '2', 'TH3']);
 });
 
+test('unitCompare: in Other units, the blank and the suites come first by rank, then the rest', () => {
+  const units = ['Side door', '2', 'Coach house', 'Bsmt', '', 'Upper', '201', 'B', 'TH3'];
+  assert.deepEqual([...units].sort(unitCompare), ['201', '', 'Upper', 'Bsmt', 'Coach house', '2', 'B', 'Side door', 'TH3']);
+  for (const u of ['Bsmt', 'Basement suite', 'Coach house', 'Upper']) assert.equal(floorOf(u), null, u);
+});
+
 test('floorsShown: at least 2 floors and 60% of units on one', () => {
   assert.equal(floorsShown(['201', '202', '301', '1', '2']), true, '3 of 5 is 60%');
   assert.equal(floorsShown(['201', '202', '1', '2', '3']), false, 'one floor only');
@@ -67,18 +76,22 @@ test('floorsShown: at least 2 floors and 60% of units on one', () => {
   assert.equal(floorsShown([]), false);
 });
 
-test('groupBuildings: 3 units stay loose, 4 group; no-address doors never group', () => {
-  const three = ['1', '2', '3'].map((u) => door('100 Oak St', u));
-  assert.equal(groupBuildings(three).buildings.length, 0);
-  assert.equal(groupBuildings(three).loose.length, 3);
-  const four = [...three, door('100 Oak St', '4')];
-  const { buildings, loose } = groupBuildings(four);
-  assert.equal(BUILDING_MIN, 4);
+// UNITS D1 (decision U1): 3 or more numbered or lettered units make a
+// building (it was 4); 2 are a house with suites, and suite words never count.
+test('groupBuildings: 2 units stay loose, 3 group; suite words never count; no-address doors never group', () => {
+  const two = ['1', '2'].map((u) => door('100 Oak St', u));
+  assert.equal(groupBuildings(two).buildings.length, 0);
+  assert.equal(groupBuildings(two).loose.length, 2);
+  const three = [...two, door('100 Oak St', '3')];
+  const { buildings, loose } = groupBuildings(three);
+  assert.equal(BUILDING_MIN, 3);
   assert.equal(buildings.length, 1);
   assert.equal(loose.length, 0);
-  assert.equal(buildings[0].units, 4);
-  assert.equal(buildings[0].people, 4);
+  assert.equal(buildings[0].units, 3);
+  assert.equal(buildings[0].people, 3);
   assert.equal(buildings[0].key, `100 oak st@${LAT.toFixed(5)},${LNG.toFixed(5)}`);
+  const suites = [null, 'Bsmt', 'Coach house', 'Upper', 'Garden suite'].map((u) => door('102 Oak St', u));
+  assert.equal(groupBuildings(suites).buildings.length, 0, 'a house with four suites is not a building');
   const spots = ['1', '2', '3', '4'].map((u) => ({ address: null, unit: u, lat: LAT, lng: LNG, persons: [] }));
   assert.equal(groupBuildings(spots).buildings.length, 0);
 });
@@ -107,17 +120,17 @@ test('groupBuildings: hyphen-form and Unit-column rows of one tower are one buil
 });
 
 test('buildingOf finds the anchor when the majority pin moves', () => {
-  const old = ['101', '102', '103'].map((u) => door('13450 104 Ave', u));
+  const old = ['101', '102'].map((u) => door('13450 104 Ave', u));
   const anchor = old[0];
-  const before = buildingOf([...old, door('13450 104 Ave', '104')], anchor);
+  const before = buildingOf([...old, door('13450 104 Ave', '103')], anchor);
   // Six more units re-geocoded 0.0004° north: the group's pin is now theirs.
   const shifted = ['201', '202', '203', '204', '205', '206'].map((u) => door('13450 104 Ave', u, { lat: LAT + 0.0004 }));
   const after = buildingOf([...old, ...shifted], anchor);
   assert.ok(before && after);
   assert.notEqual(before.key, after.key);
-  assert.equal(after.units, 9);
+  assert.equal(after.units, 8);
   assert.ok(after.doors.includes(anchor));
-  assert.equal(buildingOf(old, anchor), null, 'three units: not a building');
+  assert.equal(buildingOf(old, anchor), null, 'two units: not a building (a house with suites)');
   assert.equal(buildingOf(old, { address: null, lat: LAT, lng: LNG }), null);
 });
 
