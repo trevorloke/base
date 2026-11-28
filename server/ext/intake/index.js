@@ -31,7 +31,7 @@ import { newId, runAction } from '../../lib/events.js';
 import { makeLimiter } from '../../lib/guard.js';
 import { civic } from '../../lib/address.js';
 import { httpError } from '../../actions/util.js';
-import { splitFirst } from '@starbase/shared/names';
+import { splitFirst } from '@base-win/shared/names';
 import { websiteMemberTag, ensureWebsiteMembership } from '../membership/index.js';
 
 export const sql = `
@@ -356,7 +356,7 @@ publicRoutes.post('/in/v1/people', async (c) => {
 //     nothing is on the log too. Never 404 or 403: the website reads those
 //     as "not built yet" and "a wrong key".
 //   Going out (outbound.js): an events hook queues website.consent jobs when
-//     STARBASE_WEBSITE_URL and STARBASE_WEBSITE_KEY are set (website.js) and
+//     BASE_WEBSITE_URL and BASE_WEBSITE_KEY are set (website.js) and
 //     the campaign has a live website key. What the website said
 //     (intake.consent) is never sent back.
 //   intake.website.resend     managers: everything waiting or given up on goes again now
@@ -441,7 +441,7 @@ publicRoutes.post('/in/v1/consent', async (c) => {
   }
 });
 
-const NOT_CONNECTED = 'The website isn’t connected here: STARBASE_WEBSITE_URL and STARBASE_WEBSITE_KEY aren’t both set';
+const NOT_CONNECTED = 'The website isn’t connected here: BASE_WEBSITE_URL and BASE_WEBSITE_KEY aren’t both set';
 const websiteReady = async (tx, ws) => {
   if (!websiteOn()) throw httpError(409, NOT_CONNECTED);
   if (!(await hasWebsiteKey(tx, ws))) throw httpError(409, 'Make a website key first: only a campaign with one sends to the website');

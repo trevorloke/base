@@ -218,8 +218,8 @@ test('a send goes out without holding the campaign lock: a door knock mid-send i
 });
 
 test('a big list goes out from the send job: the tap answers at once with "going", a few hundred per run, nothing to try again meanwhile', async () => {
-  process.env.STARBASE_SEND_INLINE_MS = '0';
-  process.env.STARBASE_SEND_PER_RUN = '8';
+  process.env.BASE_SEND_INLINE_MS = '0';
+  process.env.BASE_SEND_PER_RUN = '8';
   try {
     const { c, ws, emails } = await workspace('Big list', 20);
     await withEmail(async (sent) => {
@@ -255,8 +255,8 @@ test('a big list goes out from the send job: the tap answers at once with "going
       [[0, 'queued', true], [8, 'queued', true], [8, 'queued', true], [4, 'sent', false]]);
     assert.equal((await c.get('/api/audit/verify')).json.ok, true);
   } finally {
-    delete process.env.STARBASE_SEND_INLINE_MS;
-    delete process.env.STARBASE_SEND_PER_RUN;
+    delete process.env.BASE_SEND_INLINE_MS;
+    delete process.env.BASE_SEND_PER_RUN;
   }
 });
 
@@ -265,7 +265,7 @@ test('Send now from the send job while volunteers knock: a door knock is not kep
   const p = await c.createPerson('Raj Door', { phone: '604-555-0143' });
   delete process.env.RESEND_API_KEY;
   const id = (await c.action('blast.send', { kind: 'newsletter', subject: 'Busy resend', body: 'Hi' })).json.blast.id;
-  process.env.STARBASE_SEND_INLINE_MS = '0';
+  process.env.BASE_SEND_INLINE_MS = '0';
   try {
     await withEmail(async (sent) => {
       const r = await c.action('blast.resend', { id });
@@ -287,7 +287,7 @@ test('Send now from the send job while volunteers knock: a door knock is not kep
       assert.deepEqual([b.status, b.sent_count, b.going_count], ['sent', 30, 0]);
     }, { delay: 40 });
   } finally {
-    delete process.env.STARBASE_SEND_INLINE_MS;
+    delete process.env.BASE_SEND_INLINE_MS;
   }
 });
 

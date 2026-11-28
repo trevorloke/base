@@ -11,7 +11,7 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { dayWords, normWords } from '@starbase/shared/voteguide';
+import { dayWords, normWords } from '@base-win/shared/voteguide';
 import { action, apiGet, apiPost } from '../api.js';
 import { NeedsSignal, NoSignal, noSignal, useOnline } from '../components/NoSignal.jsx';
 import { Toast, WebsiteTabs, useToast } from '../components/site/Bits.jsx';

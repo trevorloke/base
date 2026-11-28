@@ -11,7 +11,7 @@ import {
   tileHealth, TILE_WAIT_MS, checkLines, timeOfDay, placingPoll, retryLate, tileAt, streetMove, pickLook, tileHost, mapLooks,
   defaultLook, noticeTiles, sameBytes, frontTiles, NOTICE_CARTO, NOTICE_OTHER, PICTURE,
 } from '../../web/src/pages/mapView.js';
-import { bandOf } from '@starbase/shared/scale';
+import { bandOf } from '@base-win/shared/scale';
 
 // ── Which part of the map is asked for ──
 // A 1158 × 850 map (a 1440 × 900 window) and a phone's 390 × 722.
@@ -421,7 +421,7 @@ test('…and each trouble is flagged in its own line, so one screenshot says whi
   assert.deepEqual([flagged(l), said(l).tiles.value], [['tiles'], 'Muted · OpenStreetMap — isn’t loading: 0 loaded, 18 failed']);
   // A campaign's own provider is named by its host (never its whole address); the server's own tiles by what the server says they are.
   assert.match(said(checkLines({ ...CHECK, tiles: { ...CHECK.tiles, source: 'tiles.example', custom: true } }, { ...PAGE, look: 'Muted', tilesFrom: 'tiles.example' })).tiles.value, /^Muted · tiles\.example — /);
-  // Stadia (STARBASE_TILE_PROVIDER=stadia) by its name, as Going live §5 says.
+  // Stadia (BASE_TILE_PROVIDER=stadia) by its name, as Going live §5 says.
   assert.match(said(checkLines({ ...CHECK, tiles: { ...CHECK.tiles, source: 'Stadia Maps', custom: true } }, { ...PAGE, look: 'Standard', tilesFrom: 'tiles.stadiamaps.com' })).tiles.value, /^Standard · Stadia Maps — /);
   assert.match(said(checkLines({ ...CHECK, tiles: { ...CHECK.tiles, source: 'Google Maps', custom: true } }, { ...PAGE, look: 'Standard', tilesFrom: '' })).tiles.value, /^Standard · Google Maps — /);
   // A street map address the server ignored is said on the same line.
@@ -480,7 +480,7 @@ test('with Google on, a saved Clean, no pick or an old Free map pick draws Googl
   // Gone there by itself: the free map is drawn (and on it, no other).
   const auto = pickLook({ views: GVIEWS, viewPick: 'clean', drawnAuto: 'free', baseUrl: G, muted: MUTED });
   assert.deepEqual([auto.providerView.key, auto.otherLook], ['free', null]);
-  // Without the free map (STARBASE_TILE_CLEAN=off): Google has no other look, as before.
+  // Without the free map (BASE_TILE_CLEAN=off): Google has no other look, as before.
   assert.equal(pickLook({ views: GVIEWS.slice(0, 2), viewPick: 'clean', baseUrl: G, muted: MUTED }).otherLook, null);
 });
 
@@ -542,7 +542,7 @@ test('the services behind the map: one line each, after the street map — waiti
   assert.deepEqual(flagged(l), ['tiles', 'tilesvc']);
   // A Google or provider setting the map couldn't use: flagged, with what to set.
   l = checkLines({ ...CHECK, tiles: { ...CHECK.tiles, ignored: ['google', 'provider'] } }, PAGE, { services: { state: 'ok', data: FREE } });
-  assert.deepEqual([said(l).tilesvc.warn, said(l).tilesvc.note], [true, 'GOOGLE_MAPS_TILES can’t be used — set it to 1, with GOOGLE_MAPS_SERVER_KEY\nSTARBASE_TILE_PROVIDER isn’t known — use stadia']);
+  assert.deepEqual([said(l).tilesvc.warn, said(l).tilesvc.note], [true, 'GOOGLE_MAPS_TILES can’t be used — set it to 1, with GOOGLE_MAPS_SERVER_KEY\nThe map provider setting (BASE_TILE_PROVIDER) isn’t known — use stadia']);
   // Address lookup: the B.C. service busy (no Google words), Google's refused, or turned off.
   const busy = { ok: false, code: 'busy', plain: 'The B.C. address service is busy. It tries again by itself; a BC_GEOCODER_KEY raises the limit.', said: '', fix: null };
   l = checkLines(CHECK, PAGE, { services: { state: 'ok', data: { ...GOOD, lookup: { ...GOOD.lookup, probe: busy } } } });
@@ -660,7 +660,7 @@ test('the map’s check names a notice, flags its service line, and carries the 
   const l = checkLines(CHECK, page, { services: { state: 'ok', data: FREE } });
   const t = said(l).tiles;
   assert.deepEqual([t.value, t.note, t.warn], ['Clean · CARTO — sends a notice, not streets', NOTICE_CARTO, true]);
-  assert.match(NOTICE_CARTO, /STARBASE_TILE_CARTO_KEY in Render, or STARBASE_TILE_CLEAN=off/);
+  assert.match(NOTICE_CARTO, /the CARTO key setting \(BASE_TILE_CARTO_KEY\) in Render, or turn the Clean look off \(BASE_TILE_CLEAN=off\)/);
   assert.deepEqual(t.picture, { src: pic, label: 'What this phone gets for the middle of the map:', alt: 'A piece of the street map, as this phone gets it', failed: 'No picture came back.', small: false });
   assert.equal(PICTURE.failed, 'No picture came back.');
   assert.deepEqual([said(l).tilesvc.value, said(l).tilesvc.warn], ['CARTO (Clean) · straight to the phones', true], 'its service line flagged too');
@@ -674,7 +674,7 @@ test('the map’s check names a notice, flags its service line, and carries the 
   assert.equal(said(checkLines(CHECK, PAGE)).tiles.picture, undefined, 'no map yet: no picture');
   // An operator's keyless CARTO address: said where the service is named.
   const keyless = checkLines({ ...CHECK, tiles: { ...CHECK.tiles, ignored: ['carto-key'] } }, PAGE, { services: { state: 'ok', data: FREE } });
-  assert.match(said(keyless).tilesvc.note, /CARTO needs a key now \(STARBASE_TILE_CARTO_KEY\)/);
+  assert.match(said(keyless).tilesvc.note, /CARTO needs a key now — the CARTO key setting \(BASE_TILE_CARTO_KEY\)/);
 });
 
 test('the front page’s map: the Map’s own look, shade and all — never Google’s tiles, the free map instead', () => {

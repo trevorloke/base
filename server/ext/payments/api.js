@@ -14,7 +14,7 @@
 //               the donor, the amount, since when, the last month in],
 //     monthly_cents }
 import { Hono } from 'hono';
-import { DEFAULT_SLATE } from '@starbase/shared/canvass';
+import { DEFAULT_SLATE } from '@base-win/shared/canvass';
 import { paymentsReady, stripeMode } from './stripe.js';
 import { money, tzOf } from './limits.js';
 

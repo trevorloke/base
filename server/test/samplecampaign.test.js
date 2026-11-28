@@ -23,8 +23,8 @@ const { bootstrap } = await import('../db/schema.js');
 const { createSession, SESSION_COOKIE } = await import('../lib/auth.js');
 const { seedSample, samplePeople, pinFor, demoOwnsIt, sampleMaking, SAMPLE_VERSION, AREAS } = await import('../lib/samplecampaign.js');
 
-const DEMO = BLOCK.STARBASE_DEMO_EMAIL;
-const KEYS = ['STARBASE_ENV', 'STARBASE_SAMPLE', 'STARBASE_SAMPLE_RESET', 'STARBASE_DEMO_EMAIL', 'STARBASE_OPEN_SIGNUP', 'STARBASE_BRAND'];
+const DEMO = BLOCK.BASE_DEMO_EMAIL;
+const KEYS = ['BASE_ENV', 'BASE_SAMPLE', 'BASE_SAMPLE_RESET', 'BASE_DEMO_EMAIL', 'BASE_OPEN_SIGNUP', 'BASE_BRAND'];
 let kept; let db;
 const wipe = async () => {
   await db.query('drop schema public cascade');
@@ -55,14 +55,14 @@ const enter = async () => {
 };
 // Somebody else's campaign, made the way a stranger would make it.
 const strangersCampaign = async (email = 'someone@example.org') => {
-  const wanted = process.env.STARBASE_SAMPLE;
-  delete process.env.STARBASE_SAMPLE;
-  process.env.STARBASE_OPEN_SIGNUP = '1';
+  const wanted = process.env.BASE_SAMPLE;
+  delete process.env.BASE_SAMPLE;
+  process.env.BASE_OPEN_SIGNUP = '1';
   const c = new Client();
   const r = await c.signup({ email, workspaceName: 'Not The Sample' });
   assert.equal(r.status, 201, JSON.stringify(r.json));
-  delete process.env.STARBASE_OPEN_SIGNUP;
-  process.env.STARBASE_SAMPLE = wanted;
+  delete process.env.BASE_OPEN_SIGNUP;
+  process.env.BASE_SAMPLE = wanted;
   return c;
 };
 // An app that fails where told to, for the cases where a make goes wrong.
@@ -133,7 +133,7 @@ test('each pin is on its street’s piece of centreline', () => {
 test('nothing seeded is a real name: the people, the cast, the shifts', () => {
   const everything = JSON.stringify({ people: samplePeople(320), cast: CAST, block: BLOCK });
   assert.deepEqual(findReal(everything), []);
-  assert.equal(CAST.OPPONENTS_LINE, BLOCK.STARBASE_CANDIDATES, 'render.yaml sets the cast’s opponents');
+  assert.equal(CAST.OPPONENTS_LINE, BLOCK.BASE_CANDIDATES, 'render.yaml sets the cast’s opponents');
 });
 
 test('the print: a change to the sample raises SAMPLE_VERSION', async () => {
@@ -202,7 +202,7 @@ test('the same version: nothing; the same version for another demo email: made a
   assert.equal(await seedSample(app, quiet, N), null);
   assert.equal(await count('persons'), N + 1);
 
-  process.env.STARBASE_DEMO_EMAIL = 'new-demo@base.win';
+  process.env.BASE_DEMO_EMAIL = 'new-demo@base.win';
   assert.equal((await seedSample(app, quiet, N)).people, N);
   assert.equal(await count('persons'), N);
   assert.deepEqual(await made(), { version: SAMPLE_VERSION, state: 'made', email: 'new-demo@base.win', attempts: 0 });
@@ -230,7 +230,7 @@ test('G5: somebody else’s first campaign, or two campaigns: nothing dropped, a
   let log = logs();
   assert.equal(await seedSample(app, log, N), null);
   assert.equal(await count('persons'), 1);
-  assert.match(log.lines.join('\n'), /this database’s first campaign is not the demo account’s, so nothing was dropped\. To start over, set STARBASE_SAMPLE_RESET to a new word\./);
+  assert.match(log.lines.join('\n'), /this database’s first campaign is not the demo account’s, so nothing was dropped\. To start over, set BASE_SAMPLE_RESET to a new word\./);
   assert.equal(await made(), null, 'seen before anything is claimed');
 
   await wipe();
@@ -351,7 +351,7 @@ test('a new reset word starts it over; the same word again does nothing', async 
   assert.ok(await seedSample(app, quiet, N));
   const visitor = await enter();
   await visitor.createPerson('Left Behind');
-  process.env.STARBASE_SAMPLE_RESET = 'first';
+  process.env.BASE_SAMPLE_RESET = 'first';
   assert.equal((await seedSample(app, quiet, N)).people, N);
   assert.equal(await count('persons'), N);
   assert.equal(await count('workspaces'), 1);
@@ -363,7 +363,7 @@ test('production, or no sample asked for: nothing made, nothing dropped, whateve
   assert.ok(await seedSample(app, quiet, N));
   await (await enter()).createPerson('Left Behind');
   await db.query('update sample_meta.made set version = 1');
-  for (const [k, v] of [['STARBASE_ENV', 'production'], ['STARBASE_SAMPLE', ''], ['STARBASE_DEMO_EMAIL', '']]) {
+  for (const [k, v] of [['BASE_ENV', 'production'], ['BASE_SAMPLE', ''], ['BASE_DEMO_EMAIL', '']]) {
     const was = process.env[k];
     process.env[k] = v;
     assert.equal(await seedSample(app, quiet, N), null, `${k}=${JSON.stringify(v)}`);

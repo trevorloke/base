@@ -15,13 +15,14 @@ import { NoSignal, noSignal, useOnline, NeedsSignalLine } from '../components/No
 import { mergedParts } from '../components/DuplicatesWords.js';
 import './shifts.css'; // the ops-* pieces (the page column, the back link, the buttons)
 import './duplicates.css';
+import { doorLine } from '../../../shared/units.js';
 
 const WHY = { email: 'Same email', phone: 'Same phone and name', address: 'Same name at the same door', postal: 'Same name and postal code', flag: 'Named together on a donation flag' };
 const when = (iso) => new Date(iso).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
 const count = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
 function Side({ p, other, busy, onKeep }) {
-  const lines = [p.email, p.phone, [p.unit, p.address, p.city].filter(Boolean).join(' · ')].filter(Boolean);
+  const lines = [p.email, p.phone, [p.address ? doorLine(p, 'door') : p.unit, p.city].filter(Boolean).join(', ')].filter(Boolean);
   const history = [count(p.contacts, 'contact', 'contacts'), p.gifts ? count(p.gifts, 'gift', 'gifts') : null, p.shifts ? count(p.shifts, 'shift', 'shifts') : null].filter(Boolean);
   return (
     <div className="dup-side">

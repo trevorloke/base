@@ -5,7 +5,7 @@
 // method", "Designation", "Transaction ID"), then by what its values look
 // like — and the person corrects it on screen. Plain JS (no JSX) so the
 // server's tests can check it.
-import { readAmount, readGiftDate, readMethod, flipName, keyRows } from '@starbase/shared/giftfile';
+import { readAmount, readGiftDate, readMethod, flipName, keyRows } from '@base-win/shared/giftfile';
 
 export const GIFT_FIELDS = [
   { key: 'name', label: 'Donor’s full name' },

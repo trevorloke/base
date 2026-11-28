@@ -20,7 +20,7 @@
 // they never collide with other pages' rating styles; styles ship with the
 // field map stylesheet so the component works anywhere.
 import { useEffect, useId, useRef, useState } from 'react';
-import { offeredCandidates, offTail, ratingByCode, ratingWho } from '@starbase/shared/scale';
+import { offeredCandidates, offTail, ratingByCode, ratingWho } from '@base-win/shared/scale';
 import { useScale } from './scale.js';
 import '../pages/map.css';
 import './rating-words.css';
@@ -29,7 +29,7 @@ import './rating-words.css';
 // ratingWho(scale, '4B') → "Locke" ('4' → "Not sure"); ratingSay → the
 // button's words ("Strong yes", "Locke"); ratingText → "1 · Strong yes",
 // "4 · Locke", "4 · Opposed" — toasts: `Rated ${ratingText(scale, code)}`.
-export { ratingWho, ratingSay, ratingText } from '@starbase/shared/scale';
+export { ratingWho, ratingSay, ratingText } from '@base-win/shared/scale';
 export { useScale };
 
 // Small filled chip for a person's current rating — same band colors as the buttons.

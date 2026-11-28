@@ -18,6 +18,14 @@ import { enLang } from './lang.js';
 import { googleLink, outlookLink, shiftEvent } from '../../ics.js';
 import { VoterGuide } from './voteguide.js';
 
+// A supporter's share words, with "Authorized by …" on its own line under
+// them when it is filled in (shared/site/authorized.js): in English, then
+// the approved words in the page's language.
+export const signedShare = (rc, words) => {
+  const a = rc.authorizedLine({ channel: 'share-sheet' });
+  return a.include ? [words, a.en, a.local?.text].filter(Boolean).join('\n') : words;
+};
+
 const TONES = new Set(['paper', 'surface', 'brand', 'accent', 'ink']);
 const DARK = new Set(['brand', 'ink', 'action']);
 const toneOf = (t, fallback = 'paper') => (TONES.has(t) ? t : fallback);
@@ -537,7 +545,9 @@ export function campaignForm(rc, m, c, { idPrefix } = {}) {
     thanks: {
       title: rc.w(pledge ? 'form.signedPledge' : 'form.signedPetition'),
       body: rc.w('form.signedBody'),
-      share: { url: shareUrl, here: pagePath(rc.loc), text: rc.w('act.signedShare', { title: str(c.title) }), subject: str(c.title), label: rc.w('share.it') },
+      // The supporter's "I signed …" words, with "Authorized by …" under
+      // them when it is filled in (shared/site/authorized.js).
+      share: { url: shareUrl, here: pagePath(rc.loc), text: signedShare(rc, rc.w('act.signedShare', { title: str(c.title) })), subject: str(c.title), label: rc.w('share.it') },
     },
   });
 }

@@ -37,10 +37,10 @@ before(async () => {
 });
 
 test('one answer says who is on the map, who is not and why, and what the map is drawn from', async () => {
-  const prev = process.env.STARBASE_GEO_BOUNDS;
-  delete process.env.STARBASE_GEO_BOUNDS; // the campaign's box: Surrey's
+  const prev = process.env.BASE_GEO_BOUNDS;
+  delete process.env.BASE_GEO_BOUNDS; // the campaign's box: Surrey's
   const r = ok(await mgr.get('/api/map/check'));
-  if (prev !== undefined) process.env.STARBASE_GEO_BOUNDS = prev;
+  if (prev !== undefined) process.env.BASE_GEO_BOUNDS = prev;
   assert.deepEqual(r.people, { total: 7, onMap: 4, waiting: 2, noAddress: 1 });
   assert.deepEqual([r.area.inside, r.area.outside], [3, 1], 'one lives outside the campaign’s area');
   assert.deepEqual(r.area.box, [49.002, -122.92, 49.222, -122.67]);
@@ -53,8 +53,8 @@ test('one answer says who is on the map, who is not and why, and what the map is
 });
 
 test('with the campaign’s CARTO key Clean is offered, and the key itself is never in either answer', async () => {
-  const prev = process.env.STARBASE_TILE_CARTO_KEY;
-  process.env.STARBASE_TILE_CARTO_KEY = ' carto-secret ';
+  const prev = process.env.BASE_TILE_CARTO_KEY;
+  process.env.BASE_TILE_CARTO_KEY = ' carto-secret ';
   try {
     const r = ok(await mgr.get('/api/map/check'));
     assert.deepEqual([r.tiles.clean, r.tiles.cartoKey], [true, true]);
@@ -64,21 +64,21 @@ test('with the campaign’s CARTO key Clean is offered, and the key itself is ne
     let s;
     try { s = ok(await mgr.get('/api/map/check/services')); } finally { globalThis.fetch = realFetch; }
     assert.doesNotMatch(JSON.stringify([r, s]), /carto-secret/);
-    process.env.STARBASE_TILE_CLEAN = 'off';
+    process.env.BASE_TILE_CLEAN = 'off';
     const off = ok(await mgr.get('/api/map/check'));
-    assert.deepEqual([off.tiles.clean, off.tiles.cartoKey], [false, true], 'STARBASE_TILE_CLEAN=off: no Clean, key or not');
+    assert.deepEqual([off.tiles.clean, off.tiles.cartoKey], [false, true], 'BASE_TILE_CLEAN=off: no Clean, key or not');
   } finally {
-    delete process.env.STARBASE_TILE_CLEAN;
-    if (prev === undefined) delete process.env.STARBASE_TILE_CARTO_KEY; else process.env.STARBASE_TILE_CARTO_KEY = prev;
+    delete process.env.BASE_TILE_CLEAN;
+    if (prev === undefined) delete process.env.BASE_TILE_CARTO_KEY; else process.env.BASE_TILE_CARTO_KEY = prev;
   }
 });
 
 test('it says when address lookup is turned off, and which street map a campaign set', async () => {
-  const prev = { g: process.env.GEOCODER, t: process.env.STARBASE_TILE_URL };
+  const prev = { g: process.env.GEOCODER, t: process.env.BASE_TILE_URL };
   process.env.GEOCODER = 'off';
-  process.env.STARBASE_TILE_URL = 'https://tiles.example/{z}/{x}/{y}.png?key=not-shown';
+  process.env.BASE_TILE_URL = 'https://tiles.example/{z}/{x}/{y}.png?key=not-shown';
   const r = ok(await mgr.get('/api/map/check'));
-  for (const [k, v] of [['GEOCODER', prev.g], ['STARBASE_TILE_URL', prev.t]]) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+  for (const [k, v] of [['GEOCODER', prev.g], ['BASE_TILE_URL', prev.t]]) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
   assert.equal(r.placing.off, true);
   assert.deepEqual([r.tiles.source, r.tiles.custom, r.tiles.clean], ['tiles.example', true, false]);
   assert.ok(!JSON.stringify(r).includes('not-shown'), 'never the whole address: it may carry a key');

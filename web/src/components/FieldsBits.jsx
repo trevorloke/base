@@ -20,7 +20,7 @@
 import { useId, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { groupsOf } from '@starbase/shared/fieldlists';
+import { groupsOf } from '@base-win/shared/fieldlists';
 import { action, apiGet } from '../api.js';
 import { NeedsSignalLine, NoSignal, noSignal, useOnline } from './NoSignal.jsx';
 import './survey-questions.css';

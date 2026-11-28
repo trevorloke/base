@@ -23,6 +23,7 @@
 // c.env.base tells a route where it is (here(c, path)) for paths it hands
 // out in JSON (the map's tiles, a lesson's page).
 
+import { setting } from '@base-win/shared/old-names';
 export const basePath = (raw = process.env.BASE_PATH) => {
   const s = String(raw || '').trim().replace(/\/+$/, '');
   if (!s) return '';
@@ -100,7 +101,7 @@ const rewriteResponse = async (res, base, rw) => {
 const sendOn = (location) => new Response(null, { status: 302, headers: { location, 'cache-control': 'no-store' } });
 
 // A short address on the public URL's own domain — imaginesurrey.base.win
-// when STARBASE_PUBLIC_URL is https://base.win/imaginesurrey — sends people
+// when BASE_PUBLIC_URL is https://base.win/imaginesurrey — sends people
 // on to the public URL with the path and query kept (under the client's path
 // once), as the door does for the same address (apps/door). So it works
 // whichever service the short address is attached to, and signing in, phone
@@ -108,7 +109,7 @@ const sendOn = (location) => new Response(null, { status: 302, headers: { locati
 // the public URL's host: the server's own (onrender.com) address, the door's
 // requests (which reach it at that address) and a website's own domain are
 // never one. A form keeps its method and body (307).
-export const shortAddress = (url, base, pub = process.env.STARBASE_PUBLIC_URL) => {
+export const shortAddress = (url, base, pub = setting('BASE_PUBLIC_URL')) => {
   let home;
   try { home = new URL(String(pub || '').trim()); } catch { return null; }
   if (!/^https?:$/.test(home.protocol)) return null;

@@ -18,8 +18,8 @@ import { signEntry } from './entry-sign.js';
 const V = JSON.parse(readFileSync(new URL('./entry-vector.json', import.meta.url), 'utf8'));
 const OWN = 'http://127.0.0.1:5620';
 const OP = { id: '7b1f3c2e-0000-4000-8000-000000000001', email: 'owner@example.org' };
-const KEYS = ['BASE_PLATFORM_PUBKEY', 'STARBASE_OWN_URL', 'RENDER_EXTERNAL_URL', 'STARBASE_ENV', 'STARBASE_OPEN_SIGNUP',
-  'STARBASE_DEMO_EMAIL', 'STARBASE_ORG_NAME', 'STARBASE_PUBLIC_URL'];
+const KEYS = ['BASE_PLATFORM_PUBKEY', 'BASE_OWN_URL', 'RENDER_EXTERNAL_URL', 'BASE_ENV', 'BASE_OPEN_SIGNUP',
+  'BASE_DEMO_EMAIL', 'BASE_ORG_NAME', 'BASE_PUBLIC_URL'];
 const saved = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
 
 let db;
@@ -29,7 +29,7 @@ const inst = async () => (await db.query('select instance from platform_identity
 const mint = async (over = {}, opOver = {}) => {
   const now = Math.floor(Date.now() / 1000);
   return signEntry(V.signingKey, {
-    v: 1, kid: V.kid, aud: OWN, env: process.env.STARBASE_ENV, inst: await inst(), iat: now, exp: now + 60,
+    v: 1, kid: V.kid, aud: OWN, env: process.env.BASE_ENV, inst: await inst(), iat: now, exp: now + 60,
     nonce: nonce(), op: { ...OP, stepUpAt: now - 60, ...opOver }, go: '/desk', invite: null, ...over,
   });
 };
@@ -71,26 +71,26 @@ const fresh = async () => {
 // A campaign set up by its own manager (the usual case).
 const withCampaign = async () => {
   await fresh();
-  process.env.STARBASE_OPEN_SIGNUP = '1';
+  process.env.BASE_OPEN_SIGNUP = '1';
   const mgr = new Client();
   const r = await mgr.signup({ name: 'Morgan Example', email: 'morgan@example.org' });
   assert.equal(r.status, 201);
-  delete process.env.STARBASE_OPEN_SIGNUP;
+  delete process.env.BASE_OPEN_SIGNUP;
   return mgr;
 };
 
 before(() => {
   process.env.BASE_PLATFORM_PUBKEY = V.publicKey;
-  process.env.STARBASE_OWN_URL = OWN;
-  process.env.STARBASE_ENV = 'production';
+  process.env.BASE_OWN_URL = OWN;
+  process.env.BASE_ENV = 'production';
   delete process.env.RENDER_EXTERNAL_URL;
-  delete process.env.STARBASE_DEMO_EMAIL;
+  delete process.env.BASE_DEMO_EMAIL;
 });
 beforeEach(() => {
   process.env.BASE_PLATFORM_PUBKEY = V.publicKey;
-  process.env.STARBASE_OWN_URL = OWN;
-  process.env.STARBASE_ENV = 'production';
-  delete process.env.STARBASE_DEMO_EMAIL;
+  process.env.BASE_OWN_URL = OWN;
+  process.env.BASE_ENV = 'production';
+  delete process.env.BASE_DEMO_EMAIL;
 });
 after(() => {
   for (const k of KEYS) if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k];
@@ -106,7 +106,7 @@ test('not ready: no key, or no own origin → 503', async () => {
   process.env.BASE_PLATFORM_PUBKEY = 'not a key';
   assert.equal((await entry(token)).status, 503);
   process.env.BASE_PLATFORM_PUBKEY = V.publicKey;
-  delete process.env.STARBASE_OWN_URL;
+  delete process.env.BASE_OWN_URL;
   r = await entry(token);
   assert.equal(r.status, 503);
   assert.equal(await sessions(), 0);
@@ -197,8 +197,8 @@ test('the instance is made once and kept', async () => {
 
 test('a fresh server with the key: sign-up closed; the first entry makes the campaign', async () => {
   await fresh();
-  delete process.env.STARBASE_OPEN_SIGNUP;
-  process.env.STARBASE_ORG_NAME = 'Example Civic Team';
+  delete process.env.BASE_OPEN_SIGNUP;
+  process.env.BASE_ORG_NAME = 'Example Civic Team';
   try {
     const setup = await new Client().get('/api/auth/setup');
     assert.equal(setup.json.open, false);
@@ -225,12 +225,12 @@ test('a fresh server with the key: sign-up closed; the first entry makes the cam
     assert.ok(!JSON.stringify(all).includes(OP.email), 'the operator’s email is not on the log');
     // Set up now: the usual closed words.
     assert.equal((await new Client().signup({ email: 'later@example.org' })).status, 403);
-    // STARBASE_OPEN_SIGNUP=1 still opens it.
-    process.env.STARBASE_OPEN_SIGNUP = '1';
+    // BASE_OPEN_SIGNUP=1 still opens it.
+    process.env.BASE_OPEN_SIGNUP = '1';
     assert.equal((await new Client().signup({ email: 'forced@example.org' })).status, 201);
   } finally {
-    delete process.env.STARBASE_OPEN_SIGNUP;
-    delete process.env.STARBASE_ORG_NAME;
+    delete process.env.BASE_OPEN_SIGNUP;
+    delete process.env.BASE_ORG_NAME;
   }
 });
 
@@ -274,12 +274,12 @@ test('existing accounts: a support member keeps role and name; a non-member is n
   assert.equal(r2.json.user.id, uid);
   assert.equal((await db.query('select user_id from operator_links where operator_id = $1', [newOp])).rows[0].user_id, uid);
   // The account the operator comes in as gets no password link from a manager.
-  process.env.STARBASE_PUBLIC_URL = 'https://base.win/example';
+  process.env.BASE_PUBLIC_URL = 'https://base.win/example';
   try {
     const link = await mgr.action('member.passwordLink', { user_id: uid });
     assert.equal(link.status, 409);
     assert.match(link.json.error, /base\.win support has no password here\./);
-  } finally { delete process.env.STARBASE_PUBLIC_URL; }
+  } finally { delete process.env.BASE_PUBLIC_URL; }
 
   // An account with that email that isn't on the team: 409, nothing linked, on the log.
   await withCampaign();
@@ -359,8 +359,8 @@ test('the switch: off refuses entry and ends a visit in progress; on the demo it
   assert.equal((await entry(await mint())).status, 200);
 
   // The demo (staging): entry works whatever the switch says.
-  process.env.STARBASE_ENV = 'staging';
-  process.env.STARBASE_DEMO_EMAIL = 'demo@example.org';
+  process.env.BASE_ENV = 'staging';
+  process.env.BASE_DEMO_EMAIL = 'demo@example.org';
   await setSettings({ operatorEntry: false });
   const demo = await entry(await mint());
   assert.equal(demo.status, 200);
@@ -398,7 +398,7 @@ test('what a visit may not do: its own sign-in methods, the switch, password lin
   assert.notEqual((await mgr.action('twostep.start', {})).status, 403);
   // Google link and connect, as support: refused (Google set up, at the public address).
   const g = { id: process.env.GOOGLE_OAUTH_CLIENT_ID, secret: process.env.GOOGLE_OAUTH_CLIENT_SECRET, key: process.env.GOOGLE_TOKEN_KEY };
-  Object.assign(process.env, { GOOGLE_OAUTH_CLIENT_ID: 'test-client.apps.example', GOOGLE_OAUTH_CLIENT_SECRET: 'test-secret', GOOGLE_TOKEN_KEY: 'k'.repeat(40), STARBASE_PUBLIC_URL: 'http://localhost' });
+  Object.assign(process.env, { GOOGLE_OAUTH_CLIENT_ID: 'test-client.apps.example', GOOGLE_OAUTH_CLIENT_SECRET: 'test-secret', GOOGLE_TOKEN_KEY: 'k'.repeat(40), BASE_PUBLIC_URL: 'http://localhost' });
   try {
     for (const q of ['do=link&app=desk', 'do=connect&app=desk&for=drive']) {
       const res = await app.request(`http://localhost/api/auth/google/start?${q}`, { headers: { cookie: r.cookie } });
@@ -412,7 +412,7 @@ test('what a visit may not do: its own sign-in methods, the switch, password lin
     for (const [k, v] of [['GOOGLE_OAUTH_CLIENT_ID', g.id], ['GOOGLE_OAUTH_CLIENT_SECRET', g.secret], ['GOOGLE_TOKEN_KEY', g.key]]) {
       if (v === undefined) delete process.env[k]; else process.env[k] = v;
     }
-    delete process.env.STARBASE_PUBLIC_URL;
+    delete process.env.BASE_PUBLIC_URL;
   }
 });
 
@@ -441,7 +441,7 @@ test('two-step required at the desk: a visit is not stuck setting it up', async 
 
 test('invite: the visit invites the first manager itself, with the campaign’s own address', async () => {
   await withCampaign();
-  process.env.STARBASE_PUBLIC_URL = 'https://base.win/example';
+  process.env.BASE_PUBLIC_URL = 'https://base.win/example';
   try {
     const r = await entry(await mint({ go: '/desk/settings/members', invite: { email: 'sam@example.org' } }));
     assert.equal(r.status, 200);
@@ -454,7 +454,7 @@ test('invite: the visit invites the first manager itself, with the campaign’s 
     assert.ok(inv.json.joinUrl.startsWith('https://base.win/example/join/'), inv.json.joinUrl);
     assert.equal((await db.query("select role from invites where email = 'sam@example.org'")).rows[0].role, 'manager');
   } finally {
-    delete process.env.STARBASE_PUBLIC_URL;
+    delete process.env.BASE_PUBLIC_URL;
   }
 });
 
@@ -521,8 +521,8 @@ test('the switch action: a manager turns it off (ends the visit) and on; never o
   assert.equal((await v.action('workspace.operatorEntry', { on: false })).status, 403);
   assert.equal((await v.get('/api/operator')).status, 403);
   // The demo: refused, and the read says so.
-  process.env.STARBASE_ENV = 'staging';
-  process.env.STARBASE_DEMO_EMAIL = 'demo@example.org';
+  process.env.BASE_ENV = 'staging';
+  process.env.BASE_DEMO_EMAIL = 'demo@example.org';
   const demo = await mgr.action('workspace.operatorEntry', { on: false });
   assert.equal(demo.status, 409);
   assert.equal(demo.json.error, 'The demo can’t change this.');
@@ -538,8 +538,8 @@ test('/api/team: support marked; on the demo its email is its own', async () => 
   assert.equal(row(team).support, true);
   assert.equal(row(team).email, OP.email);
   assert.equal(team.json.members.find((m) => m.email === 'morgan@example.org').support, false);
-  process.env.STARBASE_ENV = 'staging';
-  process.env.STARBASE_DEMO_EMAIL = 'demo@example.org';
+  process.env.BASE_ENV = 'staging';
+  process.env.BASE_DEMO_EMAIL = 'demo@example.org';
   team = await mgr.get('/api/team');
   assert.equal(row(team).email, null);
   assert.equal(team.json.members.find((m) => m.email === 'morgan@example.org').support, false);

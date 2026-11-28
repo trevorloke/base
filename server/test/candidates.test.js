@@ -30,7 +30,7 @@ const committed = async (to) => {
   return Promise.race([look, new Promise((res) => { setTimeout(() => res(false), 1500); })]);
 };
 const saved = {};
-const ENV = ['MAIL_PROVIDER', 'RESEND_API_KEY', 'RESEND_API_BASE', 'MAIL_FROM', 'STARBASE_PTW_CACHE_MS'];
+const ENV = ['MAIL_PROVIDER', 'RESEND_API_KEY', 'RESEND_API_BASE', 'MAIL_FROM', 'BASE_PTW_CACHE_MS'];
 
 let mgr, vol, cand;
 const ids = {};
@@ -64,7 +64,7 @@ before(async () => {
   await new Promise((r) => { mailer.listen(0, '127.0.0.1', r); });
   Object.assign(process.env, {
     MAIL_PROVIDER: 'resend', RESEND_API_KEY: 're_test', RESEND_API_BASE: `http://127.0.0.1:${mailer.address().port}`,
-    MAIL_FROM: 'Team <team@example.org>', STARBASE_PTW_CACHE_MS: '0',
+    MAIL_FROM: 'Team <team@example.org>', BASE_PTW_CACHE_MS: '0',
   });
   await freshDb();
   mgr = new Client();

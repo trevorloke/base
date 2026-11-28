@@ -7,7 +7,7 @@
 // of their fields already on the phone; English when neither has it.
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { guideState } from '@starbase/shared/voteguide';
+import { guideState } from '@base-win/shared/voteguide';
 import { doorState, guideNow, languageOf, useGuide } from './guide.js';
 import '../pages/vote-guide.css';
 

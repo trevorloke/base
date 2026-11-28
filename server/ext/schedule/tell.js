@@ -45,8 +45,8 @@
 // carries on with those. Every write is on the event log: a week's by the
 // person who tapped, a reminder's by nobody (the system).
 import { z } from 'zod';
-import { addDays, dayOf, fmtIn, instantOf, isDay, weekStart, weekdayIndex } from '@starbase/shared/dayparts';
-import { pinPoint, whereWords } from '@starbase/shared/shiftkinds';
+import { addDays, dayOf, fmtIn, instantOf, isDay, weekStart, weekdayIndex } from '@base-win/shared/dayparts';
+import { pinPoint, whereWords } from '@base-win/shared/shiftkinds';
 import { httpError } from '../../actions/util.js';
 import { newId, runAction } from '../../lib/events.js';
 import { runHooks } from '../../lib/hooks.js';
@@ -448,7 +448,7 @@ export const weekState = async (db, ctx, day) => {
     people: new Set(bookings.map((b) => b.person_id)).size,
     shifts: new Set(bookings.map((b) => b.shift_id)).size,
     // What is connected, and whether this server sends in the background
-    // at all (STARBASE_JOBS=off: notices wait).
+    // at all (BASE_JOBS=off: notices wait).
     providers: { email: emailConfigured(), text: textConfigured() },
     jobs: jobRunnerOn(),
     quiet: quiet ? { now: quiet.now, opens: quiet.opens } : null,

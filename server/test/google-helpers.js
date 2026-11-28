@@ -19,7 +19,7 @@ export const acct = (n, extra = {}) => ({
   email: `g${n}.${tag}@gmail.example`, hd: null, name: `G${n} Example`, ...extra,
 });
 
-const KEYS = ['GOOGLE_OAUTH_CLIENT_ID', 'GOOGLE_OAUTH_CLIENT_SECRET', 'GOOGLE_TOKEN_KEY', 'GOOGLE_ACCOUNTS_BASE', 'GOOGLE_OAUTH_BASE', 'STARBASE_PUBLIC_URL', 'NODE_ENV', 'BASE_PATH', 'STARBASE_JOBS'];
+const KEYS = ['GOOGLE_OAUTH_CLIENT_ID', 'GOOGLE_OAUTH_CLIENT_SECRET', 'GOOGLE_TOKEN_KEY', 'GOOGLE_ACCOUNTS_BASE', 'GOOGLE_OAUTH_BASE', 'BASE_PUBLIC_URL', 'NODE_ENV', 'BASE_PATH', 'BASE_JOBS'];
 const saved = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
 export const restoreEnv = () => { for (const k of KEYS) { if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k]; } };
 
@@ -34,7 +34,7 @@ export const startGoogle = async (accounts) => {
 export const googleEnv = (fake) => {
   Object.assign(process.env, {
     GOOGLE_OAUTH_CLIENT_ID: CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET: SECRET, GOOGLE_TOKEN_KEY: TOKEN_KEY,
-    GOOGLE_ACCOUNTS_BASE: fake.base, GOOGLE_OAUTH_BASE: fake.base, STARBASE_PUBLIC_URL: PUBLIC,
+    GOOGLE_ACCOUNTS_BASE: fake.base, GOOGLE_OAUTH_BASE: fake.base, BASE_PUBLIC_URL: PUBLIC,
   });
   delete process.env.NODE_ENV;
   _resetPausesForTest();

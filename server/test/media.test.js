@@ -15,7 +15,7 @@ import { startFakeMail } from './fake-mail.js';
 
 const tag = Math.random().toString(36).slice(2, 8);
 const mail = (who) => `${who}.md.${tag}@example.org`;
-const KEYS = ['MAIL_PROVIDER', 'MAIL_FROM', 'RESEND_API_KEY', 'RESEND_API_BASE', 'SENDGRID_API_KEY', 'STARBASE_PUBLIC_URL', 'MAILCHIMP_API_KEY', 'MAILCHIMP_API_BASE'];
+const KEYS = ['MAIL_PROVIDER', 'MAIL_FROM', 'RESEND_API_KEY', 'RESEND_API_BASE', 'SENDGRID_API_KEY', 'BASE_PUBLIC_URL', 'MAILCHIMP_API_KEY', 'MAILCHIMP_API_BASE'];
 const saved = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
 const BROWSER = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1';
 // A 1×1 PNG.
@@ -24,7 +24,7 @@ let db, resend;
 
 const emailOn = () => {
   for (const k of KEYS) delete process.env[k];
-  Object.assign(process.env, { RESEND_API_KEY: 're_test_key', RESEND_API_BASE: resend.url, MAIL_FROM: 'Imagine Surrey <team@example.org>', STARBASE_PUBLIC_URL: 'https://base.example' });
+  Object.assign(process.env, { RESEND_API_KEY: 're_test_key', RESEND_API_BASE: resend.url, MAIL_FROM: 'Imagine Surrey <team@example.org>', BASE_PUBLIC_URL: 'https://base.example' });
 };
 const ok = (r, msg = '') => { assert.equal(r.status, 200, `${msg} ${JSON.stringify(r.json)}`); return r.json; };
 const pub = (path, init = {}) => app.request(path, { redirect: 'manual', ...init, headers: { 'user-agent': BROWSER, ...(init.headers || {}) } });

@@ -8,8 +8,8 @@
 // A volunteer's search, tag and has=email never match on what they may not
 // see (viewer.js); the desk's does. Features add their own filters by the
 // personsWhere hook, on the same params.
-import { SOCIAL_PLATFORMS } from '@starbase/shared/canvass';
-import { nameWords } from '@starbase/shared/names';
+import { SOCIAL_PLATFORMS } from '@base-win/shared/canvass';
+import { nameWords } from '@base-win/shared/names';
 import { runHooks } from './hooks.js';
 import { isMoneyTag, loginEmail } from './viewer.js';
 

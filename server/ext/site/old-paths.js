@@ -9,7 +9,7 @@
 //   to     a path on this website, with the same ':name' and '*' — sent on
 //          for good (301) only when that page is live here; or 'former' —
 //          the website the domain had before, at its own address
-//          (STARBASE_SITE_FORMER_URL): 302, or 307 for anything but a GET
+//          (BASE_SITE_FORMER_URL): 302, or 307 for anything but a GET
 //          (a mail app's one-click unsubscribe keeps its POST)
 //
 // Asked only where the main site at a domain's root has no page for the

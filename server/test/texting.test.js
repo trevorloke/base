@@ -16,10 +16,10 @@ import { _setClockForTest, keywordOf, asksToStop, quietNow, e164 } from '../ext/
 import { randomUUID } from 'node:crypto';
 
 const tag = Math.random().toString(36).slice(2, 8);
-const PUBLIC = 'https://starbase.example';
+const PUBLIC = 'https://base-win.example';
 const TOKEN = `test-token-${tag}`;
 const CAMPAIGN_NUMBER = '+16045550100';
-const ENV = ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM', 'STARBASE_PUBLIC_URL', 'TWILIO_API_BASE', 'TWILIO_VOICE'];
+const ENV = ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM', 'BASE_PUBLIC_URL', 'TWILIO_API_BASE', 'TWILIO_VOICE'];
 const savedEnv = Object.fromEntries(ENV.map((k) => [k, process.env[k]]));
 const realFetch = globalThis.fetch;
 
@@ -31,7 +31,7 @@ const connect = () => {
   process.env.TWILIO_ACCOUNT_SID = `ACtest${tag}`;
   process.env.TWILIO_AUTH_TOKEN = TOKEN;
   process.env.TWILIO_FROM = CAMPAIGN_NUMBER;
-  process.env.STARBASE_PUBLIC_URL = PUBLIC;
+  process.env.BASE_PUBLIC_URL = PUBLIC;
   delete process.env.TWILIO_API_BASE;
   delete process.env.TWILIO_VOICE;
   globalThis.fetch = async (url, init = {}) => {

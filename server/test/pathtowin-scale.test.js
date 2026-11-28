@@ -18,7 +18,7 @@ let mgr, ws, db;
 const ok = (r) => { assert.equal(r.status, 200, JSON.stringify(r.json)?.slice(0, 300)); return r.json; };
 
 before(async () => {
-  process.env.STARBASE_PTW_CACHE_MS = '60000';
+  process.env.BASE_PTW_CACHE_MS = '60000';
   db = await freshDb();
   mgr = new Client();
   ws = (await mgr.signup({ workspaceName: 'Path to win at scale', email: 'ptw-scale@example.org', jurisdiction: 'bc-municipal' })).json.workspace.id;

@@ -26,8 +26,8 @@ import { liveStrings } from '../ext/site/translate.js';
 import { siteWords } from '../ext/site/from-preset.js';
 import { cacheClear } from '../ext/site/cache.js';
 import { PROBE_SENTENCE } from '../lib/translate.js';
-import { checkTheme, allLooks, SKINS } from '@starbase/shared/site/theme';
-import { MODULES, checkModules, checkProps, newModule } from '@starbase/shared/site/catalogue';
+import { checkTheme, allLooks, SKINS } from '@base-win/shared/site/theme';
+import { MODULES, checkModules, checkProps, newModule } from '@base-win/shared/site/catalogue';
 import { UI_WORDS, translateMessage, fillWords } from '../../shared/site/ui-words.js';
 import { offered, groups } from '../../web/src/components/site/builder.js';
 
@@ -43,10 +43,10 @@ const SITE = `neutral-${tag}.example`;
 // of a postal code: none may be in what another campaign is handed.
 const OWN_SENTENCES = Object.values(IS.site.words);
 
-const saved = { brand: process.env.STARBASE_BRAND, site: process.env.SITE_WORKSPACE };
-const wear = (brand) => { process.env.STARBASE_BRAND = brand; forgetBrand(); };
+const saved = { brand: process.env.BASE_BRAND, site: process.env.SITE_WORKSPACE };
+const wear = (brand) => { process.env.BASE_BRAND = brand; forgetBrand(); };
 after(() => {
-  for (const [k, v] of [['STARBASE_BRAND', saved.brand], ['SITE_WORKSPACE', saved.site]]) {
+  for (const [k, v] of [['BASE_BRAND', saved.brand], ['SITE_WORKSPACE', saved.site]]) {
     if (v === undefined) delete process.env[k]; else process.env[k] = v;
   }
   forgetBrand();

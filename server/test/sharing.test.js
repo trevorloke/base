@@ -45,8 +45,11 @@ test('a kit: a page of the website only, the words fit with the Authorized by li
   await setLine('Authorized by Pat Example, official agent, 604-555-0100');
   const long = await mgr.action('share.kit.save', { title: 'Long', body: 'x'.repeat(480), path: '/' });
   assert.deepEqual([long.status, long.json.error], [400, 'Too long with the Authorized by line — shorten the words']);
-  // Without the line added, the same words fit.
-  const fits = okA(await mgr.action('share.kit.save', { title: 'Long', body: 'x'.repeat(480), path: '/', authorized: false }));
+  // The line goes on every kit once it is filled in (shared/site/authorized.js):
+  // a kit's own "no line" choice no longer makes the same words fit.
+  const still = await mgr.action('share.kit.save', { title: 'Long', body: 'x'.repeat(480), path: '/', authorized: false });
+  assert.deepEqual([still.status, still.json.error], [400, 'Too long with the Authorized by line — shorten the words']);
+  const fits = okA(await mgr.action('share.kit.save', { title: 'Long', body: 'x'.repeat(440), path: '/' }));
   assert.match(fits.kit.code, /^[a-z0-9]{6}$/);
   okA(await mgr.action('share.kit.open', { id: fits.kit.id, open: false }));
   // A volunteer can't write kits; a picture is a desk write too.
@@ -70,7 +73,7 @@ test('share.me: one link per person, made once — even for a role denied Outrea
   okA(await mgr.action('permission.role.set', { role: 'volunteer', grant: [], deny: [] }));
 });
 
-test('/share: the words carry the authorization line only when the kit says so', async () => {
+test('/share: the words carry the authorization line whenever it is filled in, whatever the kit saved', async () => {
   kit = okA(await mgr.action('share.kit.save', { title: 'Sign for SkyTrain', body: 'I signed. Will you?', path: `/act/${petition.slug}` })).kit;
   const plain = okA(await mgr.action('share.kit.save', { title: 'Home', body: 'Have a look', path: '/', authorized: false })).kit;
   const s = okA(await vol.client.get('/api/share'));
@@ -79,7 +82,10 @@ test('/share: the words carry the authorization line only when the kit says so',
   assert.equal(k.text, 'I signed. Will you?\nAuthorized by Pat Example, official agent, 604-555-0100');
   assert.equal(k.page_title, petition.title);
   assert.equal(k.link, `http://localhost/site/r/${s.code}?k=${kit.code}`);
-  assert.equal(s.kits.find((x) => x.id === plain.id).text, 'Have a look');
+  // Saved with the old tick box off: the line goes on all the same, and the
+  // saved choice is kept as it was (never overwritten).
+  assert.equal(s.kits.find((x) => x.id === plain.id).text, 'Have a look\nAuthorized by Pat Example, official agent, 604-555-0100');
+  assert.equal((await db.query('select authorized from share_kits where id = $1', [plain.id])).rows[0].authorized, false);
   assert.equal(s.kits.some((x) => x.title === 'Long'), false, 'a stopped kit is not offered');
   assert.deepEqual(s.kits.map((x) => x.id).slice(0, 2), [plain.id, kit.id], 'newest first');
   // No line set: nothing added.

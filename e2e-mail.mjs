@@ -25,13 +25,14 @@ import { chromium } from 'playwright-core';
 import { spawn } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { bothNames } from './shared/old-names.js';
 
 const PORT = Number(process.env.PORT) || 4970;
 const FAKE = PORT + 1;
 const CONTROL = PORT + 2;
 const BASE = `http://127.0.0.1:${PORT}`;
 const ADMIN = `${BASE}/admin`; // the desk's pages live in the admin (web/src/mode.js)
-const SHOTS = process.env.SHOTS || '/tmp/starbase-mail';
+const SHOTS = process.env.SHOTS || '/tmp/base-win-mail';
 mkdirSync(SHOTS, { recursive: true });
 const DOMAIN = 'campaign.example.org';
 const HOOK = `${BASE}/hooks/mail/resend`;
@@ -54,7 +55,7 @@ writeFileSync(STUB, `
 import { createServer } from 'node:http';
 // The fixtures here are Imagine Surrey's, so the server runs as its production
 // does (render.yaml sets this brand); a brand set by hand is left as set.
-if (process.env.STARBASE_BRAND === undefined) process.env.STARBASE_BRAND = 'imagine-surrey';
+if (${JSON.stringify(bothNames('BASE_BRAND'))}.every((k) => process.env[k] === undefined)) process.env.BASE_BRAND = 'imagine-surrey';
 
 const { startFakeMail } = await import(${href('test/fake-mail.js')});
 const dns = await import(${href('lib/mail/dns.js')});
@@ -91,9 +92,9 @@ createServer(async (req, res) => {
 }).listen(${CONTROL}, '127.0.0.1');
 `);
 
-const env = { ...process.env, STARBASE_OPEN_SIGNUP: '1', STARBASE_DATA: 'memory', PORT: String(PORT), STARBASE_JOBS: 'off' };
+const env = { ...process.env, BASE_OPEN_SIGNUP: '1', BASE_DATA: 'memory', PORT: String(PORT), BASE_JOBS: 'off' };
 for (const k of ['MAIL_PROVIDER', 'RESEND_API_KEY', 'RESEND_API_BASE', 'RESEND_WEBHOOK_SECRET', 'RESEND_REGION', 'SENDGRID_API_KEY', 'SENDGRID_API_BASE',
-  'SENDGRID_WEBHOOK_PUBLIC_KEY', 'MAIL_FROM', 'STARBASE_PUBLIC_URL']) delete env[k];
+  'SENDGRID_WEBHOOK_PUBLIC_KEY', 'MAIL_FROM', 'BASE_PUBLIC_URL'].flatMap(bothNames)) delete env[k];
 const server = spawn(process.execPath, ['--import', pathToFileURL(STUB).href, 'server/index.js'], {
   cwd: fileURLToPath(new URL('.', import.meta.url)), env, stdio: ['ignore', 'pipe', 'pipe'],
 });

@@ -3,9 +3,9 @@
 // (shared/brand.js), or its own when its server has a preset
 // (lib/preset.js) — each through the one rule that turns a brand colour
 // into every shade on screen (shared/brand-look.js). Once saved, the saved
-// brand is the look: STARBASE_BRAND only chooses what a campaign STARTS from.
+// brand is the look: BASE_BRAND only chooses what a campaign STARTS from.
 //
-//   STARBASE_BRAND   base, or a preset's name. Unset or unknown is base
+//   BASE_BRAND   base, or a preset's name. Unset or unknown is base
 //                    (lib/preset.js brandKey says the one exception).
 //
 // The app's page (index.html) leaves marked <html data-brand="…"> (the
@@ -27,9 +27,9 @@
 // is stored: colours are six-digit hex, choices come from fixed lists,
 // pictures are ids, words are escaped — a saved brand can never put markup,
 // script or CSS into a page.
-import { APP_NAME, BRANDS } from '@starbase/shared/brand';
-import { deriveLook, lookCss, lookChrome, SIDEBARS, CORNERS, headingOf } from '@starbase/shared/brand-look';
-import { FONT_BY_VALUE, BUILT_FILES, LATIN, LATIN_EXT } from '@starbase/shared/site/fonts';
+import { APP_NAME, BRANDS } from '@base-win/shared/brand';
+import { deriveLook, lookCss, lookChrome, SIDEBARS, CORNERS, headingOf } from '@base-win/shared/brand-look';
+import { FONT_BY_VALUE, BUILT_FILES, LATIN, LATIN_EXT } from '@base-win/shared/site/fonts';
 import { brandKey, presetFor } from './preset.js';
 import { getDb } from '../db/client.js';
 

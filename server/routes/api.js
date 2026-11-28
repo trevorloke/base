@@ -2,6 +2,7 @@
 // go exclusively through POST /api/actions/:name. GET /api/events is the
 // sync protocol AND the public API — the same endpoint the app uses — and
 // GET /api/export is the contractual one-click full-fidelity export.
+import { setting } from '@base-win/shared/old-names';
 import { mayRun, decide, decideArea, areaOfPath, areasFor } from '../lib/perms.js';
 import { Hono } from 'hono';
 import { getCookie } from 'hono/cookie';
@@ -13,13 +14,16 @@ import { runAction, verifyChain } from '../lib/events.js';
 import { ACTIONS, httpError } from '../actions/index.js';
 import { tierFor } from '../lib/tiers.js';
 import { emailConfigured, textConfigured } from '../lib/notify.js';
-import { RECORD_TYPES } from '@starbase/shared/registry';
+import { RECORD_TYPES } from '@base-win/shared/registry';
 import { staleTimeZoneData } from '../lib/tzcheck.js';
 import { startOfDay } from '../lib/tzsql.js';
 import { DEFAULT_TZ } from '../lib/org.js';
 import { crossSiteWrite } from '../lib/guard.js';
 import dataRoutes from './data.js';
 import { pointInPolygon, groupDoors, walkOrder } from '../lib/geo.js';
+import { doorSql, doorCivicSql, doorUnitSql, doorUnitKindSql, FRESH, doorOfParts, markHouses } from '../lib/doors.js';
+import { doorParts, doorKey, unitWords, houseCompare, placeOf } from '../../shared/units.js';
+import { groupPlaces, REACH } from '@base-win/shared/buildings';
 import { checkCap } from '../lib/cap.js';
 import { campaignDay } from '../lib/gifts.js';
 import { EXTENSIONS } from '../ext.js';
@@ -27,7 +31,7 @@ import { privateFieldIds } from '../ext/fields/people.js';
 import { runHooks } from '../lib/hooks.js';
 import { forViewer, loginEmail } from '../lib/viewer.js';
 import { geoBox } from '../lib/org.js';
-import { RATING_CODE_RE } from '@starbase/shared/scale';
+import { RATING_CODE_RE } from '@base-win/shared/scale';
 import { personsWhere, joinWhere } from '../lib/audience.js';
 import { azKey, azAfter } from '../lib/az.js';
 import { mayReach, address, person, person as personCols, noCallSql, whyNotSql, NO_CONTACT } from '../lib/reach.js';
@@ -36,10 +40,10 @@ import { goingRow, repeatRow, retryable, sendJobOn } from '../ext/abtests/send.j
 import { notSuppressed } from '../lib/mail/index.js';
 import { attachmentsOf } from '../ext/abtests/attach.js';
 import { onMedia } from '../ext/media/rules.js';
-import { toWords } from '@starbase/shared/email/words';
+import { toWords } from '@base-win/shared/email/words';
 // The open pass (ext/passes) and the door rule it shares with the phone.
 import { openPass, listedWhere } from '../ext/passes/rule.js';
-import { doorState, inPass } from '@starbase/shared/passes';
+import { doorState, inPass } from '@base-win/shared/passes';
 // Where people use the app: never a website domain (ext/site).
 import { hostOfRequest, noteAppHost } from '../ext/site/store.js';
 // The records a maybe one donor names, by name (ext/payments).
@@ -94,7 +98,7 @@ app.use('*', async (c, next) => {
     return c.json({ error: SETUP_FIRST, two_step: 'set_up' }, 401);
   }
   // Public base URL for links in outbound mail (unsubscribe).
-  ctx.publicUrl = (process.env.STARBASE_PUBLIC_URL || `${new URL(c.req.url).origin}${c.env?.base || ''}`).replace(/\/$/, '');
+  ctx.publicUrl = (setting('BASE_PUBLIC_URL') || `${new URL(c.req.url).origin}${c.env?.base || ''}`).replace(/\/$/, '');
   // The host this request came in on (the app answers there: never a website
   // domain), as the site gate reads it, noted for the saves to come
   // (ext/site/store.js hostOfRequest, noteAppHost).
@@ -193,7 +197,9 @@ app.post('/actions/:name', async (c) => {
     const done = await action.after(c.get('db'), ctx, result);
     return c.json(shaped(done.result, done.lastSeq ?? lastSeq));
   } catch (e) {
-    if (e.status) return c.json({ error: e.message, ...(e.field ? { field: e.field } : {}), ...(e.link !== undefined ? { link: e.link } : {}) }, e.status);
+    // extra: what a refusal tells the screen besides its words (a send
+    // after the Authorized by line's date: { needsAuthorized, from }).
+    if (e.status) return c.json({ ...(e.extra && typeof e.extra === 'object' ? e.extra : {}), error: e.message, ...(e.field ? { field: e.field } : {}), ...(e.link !== undefined ? { link: e.link } : {}) }, e.status);
     throw e;
   }
 });
@@ -256,7 +262,10 @@ app.get('/persons', async (c) => {
      order by ${azKey('p')} limit $4`,
     params,
   );
-  return c.json({ persons: rows.slice(0, limit).map(personRow).map(forViewer(ctx)), more: rows.length > limit });
+  // A door at a house carries place 'house' (lib/doors.js markHouses): the
+  // row reads "Suite B · 10500 134 St" as the map, walk list and profile do.
+  const out = await markHouses(c.get('db'), ctx.workspaceId, rows.slice(0, limit).map(personRow), { reach: REACH });
+  return c.json({ persons: out.map(forViewer(ctx)), more: rows.length > limit });
 });
 
 // How many people a People query names — the real number, however long the
@@ -295,12 +304,12 @@ export const turfsOnly = (ctx) => ctx.role === 'volunteer'
 //   else { truncated: true, count } and no rows at all.
 // From further out it is a count per patch (/map/density). ?person=<id>
 // answers that one person's door, wherever it is and however dense the place.
-const MAP_ALL = () => Number(process.env.STARBASE_MAP_ALL) || 5000;
-// At most this many people in one view load (STARBASE_MAP_VIEW, for tests).
-const mapView = () => Number(process.env.STARBASE_MAP_VIEW) || MAP_VIEW_DEFAULT;
+const MAP_ALL = () => Number(setting('BASE_MAP_ALL')) || 5000;
+// At most this many people in one view load (BASE_MAP_VIEW, for tests).
+const mapView = () => Number(setting('BASE_MAP_VIEW')) || MAP_VIEW_DEFAULT;
 const MAP_VIEW_DEFAULT = 8000;
-// At most this many doors as dots in one view (STARBASE_MAP_DOTS, for tests).
-const mapDots = () => Number(process.env.STARBASE_MAP_DOTS) || 25000;
+// At most this many doors as dots in one view (BASE_MAP_DOTS, for tests).
+const mapDots = () => Number(setting('BASE_MAP_DOTS')) || 25000;
 const bboxParam = (v) => {
   const b = String(v || '').split(',').map(Number);
   return b.length === 4 && b.every(Number.isFinite) && b[0] <= b[2] && b[1] <= b[3] && b[0] >= -90 && b[2] <= 90 ? b : null;
@@ -362,41 +371,55 @@ const signsIn = async (db, ws, bbox) => (await db.query(
 // One row per door, for dots: where it is (to the metre), the household's
 // band — 0 not asked yet · 1 undecided · 2 support · 3 opposed, the
 // strongest there, as a pin's colour is (shared/scale.js bandOf says which
-// codes are which) — how many people, and u: the most units at any one
-// address there (a building has 4 or more, shared/buildings.js; several
-// houses on one rough geocode never add up to one). An address with its
-// unit in front ("1203-13450 104 Ave", "#1203-…") is counted with its
-// building. The spot is rounded as a float (a numeric round of every row
-// cost more than counting the units does); only a point exactly halfway
-// between two spots can land on the other one, a metre away.
+// codes are which) — how many people, u and h. A door is one door key
+// (server/lib/doors.js: the stored parts, or for a row not worked out yet
+// the address and unit as written, as before), grouped by its civic address
+// at the spot:
+//   u: a building's units (3 or more numbered or lettered units at one
+//      address, shared/units.js placeOf; suite words and other text never
+//      count), else 1 (0 for a spot with no address at all). An older phone
+//      reads u >= 4 as a building, a newer one u >= 2.
+//   h: a house with suites' doors (2 or more doors, not a building), else 0.
+// Several houses on one rough geocode never add up to one building. The
+// spot is rounded as a float (a numeric round of every row cost more than
+// counting the units does); only a point exactly halfway between two spots
+// can land on the other one, a metre away.
 // null: more doors than MAP_DOTS.
 const doorDots = async (db, ws, bbox, rating) => {
   const rows = (await db.query(
-    `select lat, lng, max(band)::int as band, sum(n)::int as n, max(u)::int as u from (
-       select lat, lng, max(band) as band, sum(n) as n, count(*) filter (where a <> '') as u from (
-         select round(lat * 100000) / 100000 as lat, round(lng * 100000) / 100000 as lng,
-                case when strpos(address, '-') > 0
-                  then regexp_replace(lower(btrim(address)), '^\\s*#?\\d{1,4}[a-z]?\\s*-\\s*(?=\\d{4,})', '')
-                  else lower(btrim(coalesce(address, ''))) end as c,
-                lower(btrim(coalesce(address, ''))) as a, lower(btrim(coalesce(unit, ''))) as un,
-                max(case when rating ~ '^4[A-Z]{0,2}$' then 3 when rating in ('1', '2') then 2 when rating = '3' then 1 else 0 end) as band,
+    `select lat, lng, max(band)::int as band, sum(n)::int as n, max(u)::int as u, max(h)::int as h from (
+       select lat, lng, max(band) as band, sum(n) as n,
+              case when count(distinct un) filter (where k in ('unit', 'letter')) >= ${BUILDING_UNITS} then count(distinct un)
+                   when c = '' then 0 else 1 end as u,
+              case when c <> '' and count(distinct un) filter (where k in ('unit', 'letter')) < ${BUILDING_UNITS}
+                    and count(distinct un) >= 2 then count(distinct un) else 0 end as h
+       from (
+         select round(p.lat * 100000) / 100000 as lat, round(p.lng * 100000) / 100000 as lng,
+                ${doorCivicSql('p')} as c, ${doorUnitSql('p')} as un, ${doorUnitKindSql('p')} as k,
+                max(case when p.rating ~ '^4[A-Z]{0,2}$' then 3 when p.rating in ('1', '2') then 2 when p.rating = '3' then 1 else 0 end) as band,
                 count(*) as n
-         from persons
-         where workspace_id = $1 and deleted_at is null and lat between $2 and $4 and lng between $3 and $5
-           ${rating ? 'and rating = $6' : ''}
+         from persons p
+         where p.workspace_id = $1 and p.deleted_at is null and p.lat between $2 and $4 and p.lng between $3 and $5
+           ${rating ? 'and p.rating = $6' : ''}
          group by 1, 2, 3, 4, 5
        ) d group by lat, lng, c
      ) s group by 1, 2 limit ${mapDots() + 1}`,
     rating ? [ws, ...bbox, rating] : [ws, ...bbox],
   )).rows;
-  return rows.length > mapDots() ? null : rows.map((r) => [r.lat, r.lng, r.band, r.n, r.u]);
+  return rows.length > mapDots() ? null : rows.map((r) => [r.lat, r.lng, r.band, r.n, r.u, r.h]);
 };
+// How many numbered or lettered units make a building (shared/units.js BUILDING_MIN).
+const BUILDING_UNITS = 3;
 
-// One person's door: everyone at their address and unit (within about 50 m —
-// the same words in another city are another door), or with no address, at
-// their spot — and that door's signs. Not on the map, or nobody: no door.
+// One person's door: everyone at their door (the one door key, within about
+// 50 m — the same words in another city are another door), or with no
+// address, at their spot — and that door's signs. For a house with suites
+// (shared/units.js placeOf) also its other doors, so the door card can
+// switch between them on a list too big to load whole (house: in house
+// order, each with its unit, words and people; place: 'house' | 'building'
+// | 'door'). Not on the map, or nobody: no door.
 const doorOf = async (db, ctx, id) => {
-  const none = { persons: [], signs: [], scope: 'door' };
+  const none = { persons: [], signs: [], scope: 'door', place: 'door', house: [] };
   if (!UUID_RE.test(id)) return none;
   const p = (await db.query(
     `select address, unit, lat, lng from persons
@@ -404,26 +427,56 @@ const doorOf = async (db, ctx, id) => {
     [id, ctx.workspaceId],
   )).rows[0];
   if (!p) return none;
-  const reach = p.address ? 0.0005 : 0.00001;
+  const reach = p.address ? REACH : 0.00001;
+  const box = [ctx.workspaceId, p.lat - reach, p.lat + reach, p.lng - reach, p.lng + reach];
+  const anchor = doorOfParts(p);
+  // Worked out (the stored parts, indexed), or not yet (as written, as before).
   const sameDoor = p.address
-    ? `(lower(btrim(address)) = lower(btrim($7::text)) and lower(btrim(coalesce(unit, ''))) = lower(btrim(coalesce($8::text, ''))))`
+    ? `((${FRESH('persons')} and door_civic = $7 and door_unit = $8)
+        or (not (${FRESH('persons')}) and lower(btrim(address)) = lower(btrim($9::text)) and lower(btrim(coalesce(unit, ''))) = lower(btrim(coalesce($10::text, '')))))`
     : 'address is null';
   const persons = (await db.query(
     `select ${doorCols(ctx)} from persons
      where workspace_id = $1 and deleted_at is null and lat between $2 and $3 and lng between $4 and $5
        and (id = $6 or ${sameDoor})
      order by lower(name) limit 500`,
-    [ctx.workspaceId, p.lat - reach, p.lat + reach, p.lng - reach, p.lng + reach, id, ...(p.address ? [p.address, p.unit] : [])],
+    [...box, id, ...(p.address ? [anchor.civic, anchor.unit, p.address, p.unit] : [])],
   )).rows.map(personRow);
+  // The other doors at this civic address nearby: read by the stored civic
+  // (or, not worked out yet, every row there), and kept by the parser's own.
+  let place = 'door';
+  let house = [];
+  if (p.address && anchor.civic) {
+    const near = (await db.query(
+      `select ${doorCols(ctx)} from persons
+       where workspace_id = $1 and deleted_at is null and lat between $2 and $3 and lng between $4 and $5
+         and address is not null and (door_civic = $6 or not (${FRESH('persons')}))
+       order by lower(name) limit 3000`,
+      [...box, anchor.civic],
+    )).rows.map(personRow).filter((x) => doorParts(x).civic === anchor.civic);
+    const own = doorKey(p);
+    const doors = new Map();
+    for (const x of [...persons, ...near]) {
+      const k = doorKey(x);
+      if (!doors.has(k)) doors.set(k, { unit: doorParts(x).unit, address: x.address, unit_raw: x.unit, persons: new Map() });
+      doors.get(k).persons.set(x.id, x);
+    }
+    place = placeOf([...doors.values()].map((d) => ({ address: d.address, unit: d.unit_raw })));
+    if (place === 'house') {
+      house = [...doors.entries()].filter(([k]) => k !== own)
+        .sort((a, b) => houseCompare(a[1].unit, b[1].unit))
+        .map(([, d]) => ({ unit: d.unit, unit_words: unitWords(d.unit, 'house'), persons: [...d.persons.values()].map(forViewer(ctx)) }));
+    }
+  }
   // Its signs, matched as the map matches them: a person there, or the
-  // address of a door with no unit.
+  // address of the main door.
   const signs = (await db.query(
     `select id, person_id, address, lat, lng, kind, status from signs
      where workspace_id = $1 and status <> 'removed'
        and (person_id = any($2::uuid[]) or ($3 <> '' and lower(btrim(address)) = $3))`,
-    [ctx.workspaceId, persons.map((x) => x.id), p.address && !String(p.unit || '').trim() ? String(p.address).trim().toLowerCase() : ''],
+    [ctx.workspaceId, persons.map((x) => x.id), p.address && anchor.unit === '' ? String(p.address).trim().toLowerCase() : ''],
   )).rows;
-  return { persons: persons.map(forViewer(ctx)), signs, scope: 'door', at: [Number(p.lat), Number(p.lng)] };
+  return { persons: persons.map(forViewer(ctx)), signs, scope: 'door', at: [Number(p.lat), Number(p.lng)], place, house, unit_words: unitWords(anchor.unit, place) };
 };
 
 // Where the map opens: on the campaign's own list. When most people are
@@ -561,6 +614,33 @@ app.get('/map/density', async (c) => {
   return c.json({ cell, cells: rows.map((r) => [r.y, r.x, r.r, r.n]) });
 });
 
+// The other doors at a person's house (a house with suites only: a
+// building's other units are its own sheet): [{ unit, unit_words, people,
+// first_id }] in house order, near their pin when they have one.
+const atHouseOf = async (db, ctx, person) => {
+  const { civic } = doorOfParts(person);
+  if (!person.address || !civic) return [];
+  const near = person.lat != null && person.lng != null;
+  const rows = (await db.query(
+    `select p.id, p.address, p.unit from persons p
+     where p.workspace_id = $1 and p.deleted_at is null and p.address is not null
+       and (p.door_civic = $2 or not (${FRESH('p')}))
+       ${near ? 'and p.lat between $3 and $4 and p.lng between $5 and $6' : ''}
+     order by ${azKey('p')} limit 3000`,
+    near ? [ctx.workspaceId, civic, person.lat - REACH, person.lat + REACH, person.lng - REACH, person.lng + REACH] : [ctx.workspaceId, civic],
+  )).rows.filter((x) => doorParts(x).civic === civic);
+  const own = doorKey(person);
+  const doors = new Map([[own, { unit: doorParts(person).unit, address: person.address, unit_raw: person.unit, ids: [] }]]);
+  for (const x of rows) {
+    const k = doorKey(x);
+    if (!doors.has(k)) doors.set(k, { unit: doorParts(x).unit, address: x.address, unit_raw: x.unit, ids: [] });
+    if (x.id !== person.id) doors.get(k).ids.push(x.id);
+  }
+  if (placeOf([...doors.values()].map((d) => ({ address: d.address, unit: d.unit_raw }))) !== 'house') return [];
+  return [...doors.entries()].filter(([k]) => k !== own).sort((a, b) => houseCompare(a[1].unit, b[1].unit))
+    .map(([, d]) => ({ unit: d.unit, unit_words: unitWords(d.unit, 'house'), people: d.ids.length, first_id: d.ids[0] || null }));
+};
+
 app.get('/persons/:id', async (c) => {
   if (badId(c)) return c.json({ error: 'not found' }, 404);
   const ctx = c.get('ctx');
@@ -630,13 +710,19 @@ app.get('/persons/:id', async (c) => {
   )).rows;
   const donor = await tierFor(db, ctx.workspaceId, person.id);
   // dnc: asked not to be contacted (any capitals) — the desk's key line leaves them out.
+  // The same door (one door key, lib/doors.js: worked out, or as written
+  // while the row isn't yet), and the other doors at the same house
+  // (at_house: "Also at this house: Main (2 people)").
+  const mine = doorOfParts(person);
   const household = (await db.query(
     `select p.id, p.name, p.rating, lower(p.tags::text) like $5 as dnc from persons p
      where p.workspace_id = $1 and p.deleted_at is null and p.id <> $2 and p.address is not null
-       and lower(p.address) = lower($3) and coalesce(p.unit, '') = coalesce($4, '')
+       and ((${FRESH('p')} and p.door_civic = $6 and p.door_unit = $7)
+         or (not (${FRESH('p')}) and lower(p.address) = lower($3) and coalesce(p.unit, '') = coalesce($4, '')))
      order by ${azKey('p')}`,
-    [ctx.workspaceId, person.id, person.address || '', person.unit || null, `%"${NO_CONTACT}"%`],
+    [ctx.workspaceId, person.id, person.address || '', person.unit || null, `%"${NO_CONTACT}"%`, mine.civic, mine.unit],
   )).rows;
+  const atHouse = await atHouseOf(db, ctx, person);
   if (ctx.role === 'volunteer') {
     // Followers (ext/socials) are the desk's.
     delete person.social_reach; delete person.followers;
@@ -652,13 +738,13 @@ app.get('/persons/:id', async (c) => {
     }
     return c.json({
       person: forViewer(ctx)(personRow(person)), gifts: [], totals: [], contacts, roles, signs, shifts, donor: null,
-      household: household.map(({ id, name, rating }) => ({ id, name, rating })),
+      household: household.map(({ id, name, rating }) => ({ id, name, rating })), at_house: atHouse,
       latest_move: latestMove ? { reason: latestMove.reason, result: latestMove.result } : null,
       move_open: moveOpen, may_move: mayMove,
     });
   }
   return c.json({
-    person: personRow(person), gifts, totals, contacts, roles, signs, shifts, donor, household,
+    person: personRow(person), gifts, totals, contacts, roles, signs, shifts, donor, household, at_house: atHouse,
     latest_move: latestMove, move_open: moveOpen,
   });
 });
@@ -810,13 +896,39 @@ export const walkFor = async (db, ctx, t, { names = false } = {}) => {
   const pass = await openPass(db, ctx.workspaceId);
   const box = boxOf(polygon);
   const located = box ? await loadLocated(db, ctx, pass, box, await listedWhere(db, ctx, pass), { names }) : [];
-  const doors = walkOrder(groupDoors(located.filter((p) => pointInPolygon(p.lat, p.lng, polygon))).filter((d) => inPass(d, pass)));
+  // Each door's place is worked out from every located door inside the
+  // turf, before the round leaves any out: a round that wants two units
+  // and the blank row of a tower still walks a building, and the basement
+  // suite of a house whose main door is done is still that house's.
+  const all = withPlaces(groupDoors(located.filter((p) => pointInPolygon(p.lat, p.lng, polygon))), pass);
+  const doors = walkOrder(all.filter((d) => inPass(d, pass)));
   return {
     turf: { id: t.id, name: t.name, color: t.color, notes: t.notes, polygon },
     doors: await shapeDoors(db, ctx, doors, pass),
     pass: pass ? { id: pass.id, name: pass.name, kind: pass.kind, who: pass.who, list_id: pass.list_id || null, tries: pass.tries, started_at: pass.started_at } : null,
     stats: turfStats(polygon, located, pass),
   };
+};
+
+// Each door with its place (shared/buildings.js groupPlaces): place
+// 'building' | 'house' | 'door', civic, units (the place's distinct units,
+// whatever the round), group (the place's key; null for a lone door),
+// house_doors (a house's doors in house order: unit, words, in_round) and
+// unit_words (the unit as that place words it: "Unit 1203", "Basement
+// suite", "Main"). The phone uses these when they are there and works them
+// out itself when they are not (an older kept copy).
+export const withPlaces = (doors, pass) => {
+  const { buildings, houses } = groupPlaces(doors);
+  const info = new Map();
+  for (const b of buildings) for (const d of b.doors) info.set(d, { place: 'building', civic: b.civic, units: b.units, group: b.key, house_doors: null });
+  for (const h of houses) {
+    const list = h.doors.map((d) => ({ unit: d.parts.unit, words: unitWords(d.parts.unit, 'house'), in_round: inPass(d, pass) }));
+    for (const d of h.doors) info.set(d, { place: 'house', civic: h.civic, units: h.units, group: h.key, house_doors: list });
+  }
+  return doors.map((d) => {
+    const at = info.get(d) || { place: 'door', civic: d.parts.civic, units: 1, group: null, house_doors: null };
+    return { ...d, ...at, unit_words: unitWords(d.parts.unit, at.place) };
+  });
 };
 
 // The walk list's doors as the phone gets them: each person as this viewer
@@ -834,11 +946,14 @@ export const shapeDoors = async (db, ctx, doors, pass) => {
     `select id, person_id, address, kind, status from signs where workspace_id = $1 and status <> 'removed'`,
     [ctx.workspaceId],
   )).rows;
+  // (A sign by address stands at the main door: unit key '', the civic
+  // address read the parser's way, so "10388 134 St." finds it too.)
   const signsAt = (d) => {
     const ids = new Set(d.persons.map((p) => p.id));
-    const addr = !d.unit && d.address ? String(d.address).trim().toLowerCase() : null;
+    const parts = d.parts || doorParts(d);
+    const civic = parts.unit === '' && d.address ? parts.civic : null;
     return signs
-      .filter((s) => (s.person_id ? ids.has(s.person_id) : addr && String(s.address || '').trim().toLowerCase() === addr))
+      .filter((s) => (s.person_id ? ids.has(s.person_id) : civic && s.address && doorParts({ address: s.address }).civic === civic))
       .map(({ id, kind, status }) => ({ id, kind, status }));
   };
   // Each door's state in the open pass (open · again · done) and the most
@@ -1268,9 +1383,7 @@ app.get('/brief', async (c) => {
             count(*) filter (where w.channel = 'phone' and w.created_by = $2)::int as my_calls,
             count(*) filter (where w.channel = 'text' and w.created_by = $2)::int as my_texts
      from (
-       select c.channel, c.created_by,
-              case when nullif(trim(p.address), '') is null then p.id::text
-                   else lower(trim(p.address)) || '|' || lower(trim(coalesce(p.unit, ''))) end as door
+       select c.channel, c.created_by, ${doorSql('p')} as door
        from contacts c join persons p on p.id = c.person_id
        where c.workspace_id = $1 and c.created_at >= now() - interval '7 days'
      ) w`, [ws, ctx.user.id],
@@ -1357,12 +1470,15 @@ app.get('/export', async (c) => {
   const ws = ctx.workspaceId;
   const hidden = await privateOf(db, ctx);
   const out = {
-    format: 'starbase-export',
+    format: 'base-win-export',
     version: 1,
     exportedAt: new Date().toISOString(),
     workspace: ctx.workspace,
     ...(hidden.length ? { left_out: { private_fields: [...new Set(hidden.map((f) => f.name))], why: 'Only a manager’s backup carries private fields' } } : {}),
-    persons: (await db.query('select * from persons where workspace_id = $1', [ws])).rows,
+    // Less the four door columns (lib/doors.js): worked out from address
+    // and unit, and worked out again wherever the rows go.
+    persons: (await db.query('select * from persons where workspace_id = $1', [ws])).rows
+      .map(({ door_civic: _c, door_unit: _u, door_kind: _k, door_src: _s, ...r }) => r),
     events: (await db.query('select * from events where workspace_id = $1 order by seq', [ws])).rows.map(blankPrivate(hidden)),
   };
   for (const t of Object.values(RECORD_TYPES)) {
@@ -1380,7 +1496,7 @@ app.get('/export', async (c) => {
     const ids = new Set(hidden.map((f) => f.id));
     out.person_field_values = out.person_field_values.filter((r) => !ids.has(r.field_id));
   }
-  c.header('Content-Disposition', 'attachment; filename="starbase-export.json"');
+  c.header('Content-Disposition', 'attachment; filename="base-win-export.json"');
   return c.json(out);
 });
 

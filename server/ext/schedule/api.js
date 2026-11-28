@@ -22,8 +22,8 @@
 // (lib/perms.js). Not under /shifts/…: routes/api.js answers /shifts/:id
 // and 404s anything else there before feature routes mount.
 import { Hono } from 'hono';
-import { dayOf, isDay } from '@starbase/shared/dayparts';
-import { SHIFT_KIND_CODES } from '@starbase/shared/shiftkinds';
+import { dayOf, isDay } from '@base-win/shared/dayparts';
+import { SHIFT_KIND_CODES } from '@base-win/shared/shiftkinds';
 import { now } from '../texting/rules.js';
 import { nameFor, placesFor, pointOf } from './places.js';
 import { tzOf } from './rules.js';

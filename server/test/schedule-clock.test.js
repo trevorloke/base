@@ -9,7 +9,7 @@ import { freshDb, Client } from './helpers.js';
 import {
   WEEK_PARTS, addClock, clockOf, clockWords, dayOf, fmtIn, fromInput, instantOf, partOf, spanWords, toInput, wallClock,
   weekBounds, weekPartOf, zonedISO,
-} from '@starbase/shared/dayparts';
+} from '@base-win/shared/dayparts';
 import { shiftMessage } from '../lib/notify.js';
 
 const BC = 'America/Vancouver';

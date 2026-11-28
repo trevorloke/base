@@ -7,7 +7,7 @@
 //   (an import that left addresses without a pin starts one), one that just
 //   finished, and one that is paused: it tries again by itself, and this
 //   says when ("Try now" does it at once). Where the server runs no background
-//   jobs (STARBASE_JOBS=off), the page looks up batches itself instead:
+//   jobs (BASE_JOBS=off), the page looks up batches itself instead:
 //   POST /api/data/geocode {limit: 25} until nothing is left (or the lookup
 //   fails twice running). Desk roles only: renders nothing for volunteers.
 //   summary = { located, missed, errored, remaining, unmatched, stopped, error }

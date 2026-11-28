@@ -12,7 +12,7 @@
 //   useWebDid(), webChoices(web)  what the website filter can offer (a new
 //                            phone bank's "Who to call" uses them too)
 import { useQuery } from '@tanstack/react-query';
-import { OUTCOMES } from '@starbase/shared/canvass';
+import { OUTCOMES } from '@base-win/shared/canvass';
 import { apiGet } from '../api.js';
 import { OUTCOME_LABEL } from './RatingButtons.jsx';
 import { webLabel } from './WebDid.js';

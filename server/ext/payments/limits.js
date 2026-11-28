@@ -22,7 +22,7 @@
 import { capFor, donorYearTotal } from '../../lib/cap.js';
 import { campaignDay } from '../../lib/gifts.js';
 import { DEFAULT_TZ } from '../../lib/org.js';
-import { DEFAULT_SLATE, slateLabel } from '@starbase/shared/canvass';
+import { DEFAULT_SLATE, slateLabel } from '@base-win/shared/canvass';
 import { sameText, samePhone, samePostal, sharesOf, listed, sharedWords } from '../duplicates/same.js';
 
 export const money = (cents) => `$${(Number(cents || 0) / 100).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;

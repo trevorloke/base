@@ -6,8 +6,8 @@ import { z } from 'zod';
 import {
   CHANNELS, OUTCOMES, EMAIL_OUTCOMES, SIGN_KIND_CODES, SIGN_STATUSES,
   VOLUNTEER_ROLE_CODES, SOCIAL_PLATFORMS, SHIFT_STATUSES,
-} from '@starbase/shared/canvass';
-import { RATING_CODE_RE } from '@starbase/shared/scale';
+} from '@base-win/shared/canvass';
+import { RATING_CODE_RE } from '@base-win/shared/scale';
 // The campaign's own scale (ext/scale): which codes a new rating may use.
 import { checkRating } from '../ext/scale/rules.js';
 import { createHash, randomBytes } from 'node:crypto';
@@ -28,19 +28,20 @@ import { audienceOf, recipientsOf } from '../ext/lists/audience.js';
 import { resolveFrom } from '../ext/senders/rules.js';
 // Who is on the media list (ext/media): tagged media or influencer, any capitals.
 import { LISTS, onLists, onMedia } from '../ext/media/rules.js';
-import { fillText, firstOf, toCodes } from '@starbase/shared/email/words';
-import { emailProblem, stillToFill, testProblem } from '@starbase/shared/email/check';
+import { fillText, firstOf, toCodes } from '@base-win/shared/email/words';
+import { emailProblem, stillToFill, testProblem } from '@base-win/shared/email/check';
 import { mayReach, person, address, whyNotSql } from '../lib/reach.js';
 import { e164, namesCampaign, MAX_BODY as TEXT_MAX } from '../ext/texting/rules.js';
 import { textConfigured } from '../lib/notify.js';
 import { DEFAULT_TZ } from '../lib/org.js';
 import { demoEmail } from '../lib/demo.js';
 // Kinds, saved places and the campaign's clock for shifts (ext/schedule).
-import { SHIFT_KIND_CODES, shiftKind } from '@starbase/shared/shiftkinds';
+import { SHIFT_KIND_CODES, shiftKind } from '@base-win/shared/shiftkinds';
 import {
   BOTH_ENDS, END_FIRST, LONGEST_KEPT, clockInput, dayInput, endsAfterStart, fitHours, livePlace, minutesInput, movedTimes, needInput, titleFor,
   turfWords, tzOf,
 } from '../ext/schedule/rules.js';
+import { authorizedOf, askBeforeSending } from '../lib/authorized.js';
 
 const ALL_ROLES = ['manager', 'treasurer', 'staff', 'volunteer'];
 const DESK_ROLES = ['manager', 'treasurer', 'staff'];
@@ -898,6 +899,9 @@ export const FIELD_ACTIONS = {
       // /api/templates/:ref): none may go out still in it. An email: the
       // ready-made templates' own never may (shared/email/check.js).
       placeholders_from: PLACEHOLDERS_FROM,
+      // "Send without it": the Authorized by line's "needed from" date has
+      // come with no line set, and the desk said send anyway (lib/authorized.js).
+      withoutAuthorized: z.boolean().optional(),
     }),
     handler: async (tx, ctx, input, emit) => {
       const isText = input.kind === 'text';
@@ -922,6 +926,9 @@ export const FIELD_ACTIONS = {
       if (input.ab?.metric === 'clicks' && findLinks(input.body).length === 0) {
         throw httpError(400, 'winner by clicks needs a link in the message');
       }
+      // After the line's date with none set: asked first (409), never held.
+      const auth = await authorizedOf(tx, ctx.workspaceId, { channel: isText ? 'sms-list' : input.kind === 'press' ? 'email-press' : 'email-list' });
+      const { authMissing } = askBeforeSending(auth, input);
       let picked = null;
       let audience;
       if (toList) {
@@ -998,6 +1005,7 @@ export const FIELD_ACTIONS = {
         ...(picked ? { list_id: picked.list?.id || null, list_name: picked.name, filter: picked.filter } : {}),
         ...(test ? { ab: { subject_b: ab.subject_b, pct: ab.pct, wait_hours: ab.wait_hours, metric: ab.metric, status: test.status } } : {}),
         ...(attachments.length ? { attachments: attachments.map((a) => a.filename) } : {}),
+        ...(authMissing ? { auth_missing: true } : {}),
       });
       return {
         blast: {
@@ -1047,11 +1055,16 @@ export const FIELD_ACTIONS = {
       attachment_ids: z.array(z.uuid()).max(ATTACH_COUNT).optional(),
       sender_id: z.uuid().nullish(),
       placeholders_from: PLACEHOLDERS_FROM,
+      withoutAuthorized: z.boolean().optional(),
     }),
-    handler: async (tx, ctx, input) => {
+    handler: async (tx, ctx, input, emit) => {
       input = emailCodes(input);
       const problem = testProblem(input.subject, input.body);
       if (problem) throw httpError(400, problem);
+      const { authMissing } = askBeforeSending(await authorizedOf(tx, ctx.workspaceId, { channel: 'email-test' }), input);
+      // A test copy keeps nothing on record, except the choice to send it
+      // without the Authorized by line ("Send me a test without it").
+      if (authMissing) emit('blast_test', newId(), 'create', { kind: input.kind, auth_missing: true });
       if (!emailConfigured()) throw httpError(409, 'Email isn’t connected — nothing can be sent yet');
       if (!ctx.user?.email) throw httpError(409, 'your sign-in has no email address');
       // From the address the real send would go from.
@@ -1064,7 +1077,7 @@ export const FIELD_ACTIONS = {
       const plan = result[SEND];
       const attachments = await loadAttachments(db, ctx.workspaceId, { ids: plan.attachment_ids || [], userId: ctx.user.id });
       const fill = { first: firstOf({ name: ctx.user.name }), campaign: ctx.workspace.name };
-      const foot = await footOf(db, ctx.workspaceId);
+      const foot = await footOf(db, ctx.workspaceId, 'email-test');
       const res = await sendEmail({
         from: plan.from || undefined,
         to: ctx.user.email,

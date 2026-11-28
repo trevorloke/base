@@ -2,7 +2,7 @@
 // say what goes where, to be replaced with the campaign's own. No facts
 // about anyone: the campaign's name is the one it was set up with, and
 // every other line is an instruction or a placeholder.
-import { SKINS } from '@starbase/shared/site/theme';
+import { SKINS } from '@base-win/shared/site/theme';
 
 export default (ws) => {
   const name = String(ws?.name || '').trim() || 'Our campaign';

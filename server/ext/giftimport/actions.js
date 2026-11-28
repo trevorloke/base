@@ -13,7 +13,7 @@ import { newId } from '../../lib/events.js';
 import { logGift, voidGift, campaignDay } from '../../lib/gifts.js';
 import { capFor, donorYearTotal } from '../../lib/cap.js';
 import { DEFAULT_TZ } from '../../lib/org.js';
-import { DEFAULT_SLATE } from '@starbase/shared/canvass';
+import { DEFAULT_SLATE } from '@base-win/shared/canvass';
 import { readRow } from './rows.js';
 import { findDonors } from './match.js';
 

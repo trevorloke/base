@@ -262,7 +262,7 @@ async function startServer(brand) {
   serverLog = '';
   server = spawn(process.execPath, ['server/index.js'], {
     cwd: ROOT,
-    env: { ...process.env, PORT: String(PORT), STARBASE_OPEN_SIGNUP: '1', STARBASE_DATA: 'memory', STARBASE_BRAND: brand },
+    env: { ...process.env, PORT: String(PORT), BASE_OPEN_SIGNUP: '1', BASE_DATA: 'memory', BASE_BRAND: brand },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   server.stdout.on('data', (d) => { serverLog += d; });

@@ -34,15 +34,16 @@
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
 import http from 'node:http';
+import { bothNames } from './shared/old-names.js';
 
 // The fixtures here are Imagine Surrey's, so the server runs as its production
 // does (render.yaml sets this brand); a brand set by hand is left as set.
-if (process.env.STARBASE_BRAND === undefined) process.env.STARBASE_BRAND = 'imagine-surrey';
+if (bothNames('BASE_BRAND').every((k) => process.env[k] === undefined)) process.env.BASE_BRAND = 'imagine-surrey';
 
 const PORT = Number(process.env.PORT) || 5310;
 const BASE = `http://127.0.0.1:${PORT}`;
 const SITE = `http://127.0.0.1:${PORT + 2}`;
-const SHOTS = process.env.SHOTS || '/tmp/starbase-payments';
+const SHOTS = process.env.SHOTS || '/tmp/base-win-payments';
 mkdirSync(SHOTS, { recursive: true });
 const results = [];
 const check = (name, ok, extra = '') => {
@@ -56,9 +57,9 @@ const KEY = `sk_test_e2e_${tag}`;
 const yr = new Date().getFullYear();
 
 // ── base.win, in this process, with Stripe pointed at the stand-in ──
-for (const k of ['DATABASE_URL', 'RESEND_API_KEY', 'MAIL_FROM', 'STARBASE_PUBLIC_URL', 'BASE_PATH', 'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM']) delete process.env[k];
+for (const k of ['DATABASE_URL', 'RESEND_API_KEY', 'MAIL_FROM', 'BASE_PUBLIC_URL', 'BASE_PATH', 'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM'].flatMap(bothNames)) delete process.env[k];
 Object.assign(process.env, {
-  STARBASE_OPEN_SIGNUP: '1', STARBASE_DATA: 'memory', GEOCODE_ON_SAVE: 'off',
+  BASE_OPEN_SIGNUP: '1', BASE_DATA: 'memory', GEOCODE_ON_SAVE: 'off',
   STRIPE_SECRET_KEY: KEY, STRIPE_WEBHOOK_SECRET: SECRET,
 });
 const { startFakeStripe } = await import('./server/test/fake-stripe.js');

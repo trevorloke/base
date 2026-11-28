@@ -6,8 +6,8 @@ import { z } from 'zod';
 import { httpError } from '../../actions/util.js';
 import { newId } from '../../lib/events.js';
 import { timeZone } from '../../lib/org.js';
-import { toCodes } from '@starbase/shared/email/words';
-import { STARTER_KEYS, starterOf } from '@starbase/shared/email/starters';
+import { toCodes } from '@base-win/shared/email/words';
+import { STARTER_KEYS, starterOf } from '@base-win/shared/email/starters';
 import { DESK, GONE, USES, holds, refusal } from './rules.js';
 
 export const MAX_TEMPLATES = 200;

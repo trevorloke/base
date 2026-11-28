@@ -13,11 +13,14 @@ import { useLiveChip, usePracticeOverlay } from '../components/GotvLive.js';
 import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useNavigate, useSearchParams, useLocation, Link, Navigate, useOutletContext } from 'react-router-dom';
 import { useQueries, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
-import { VOLUNTEER_ROLES, SUGGESTED_TAGS, noCalls } from '@starbase/shared/canvass';
-import { PLATFORMS as SOCIAL_NETWORKS, countWord, platformWord } from '@starbase/shared/socials';
-import { bandOf, codesInBand, offTail, ratingByCode } from '@starbase/shared/scale';
+import { VOLUNTEER_ROLES, SUGGESTED_TAGS, noCalls } from '@base-win/shared/canvass';
+import { PLATFORMS as SOCIAL_NETWORKS, countWord, platformWord } from '@base-win/shared/socials';
+import { bandOf, codesInBand, offTail, ratingByCode } from '@base-win/shared/scale';
 import RatingButtons, { RatingChip, ratingSay, ratingText, useScale } from '../components/RatingButtons.jsx';
+import { OLD_STORAGE } from '@base-win/shared/old-names';
 import { queueAction, useOutbox } from '../offline.js';
+import { NS } from '../base.js';
+import { carryKey } from '../oldStorage.js';
 import SurveyQuestions, { answersSaid, answersTail, useSurvey } from '../components/SurveyQuestions.jsx';
 import { queuedText, useThisDevice } from '../components/queued.js';
 import { phoneCopy, showingCopy, useKeepCopy } from '../components/OfflineCache.js';
@@ -41,7 +44,7 @@ import { CUT_KEYS, CutGroups, addCuts, cutChips, useTurfs, useWebDid } from '../
 import ScriptLine, { useScripts } from '../components/ScriptLine.jsx';
 import NameFields from '../components/NameFields.jsx';
 import NameAz from '../components/NameAz.jsx';
-import { streetLine } from '../components/people.js';
+import { UnitSuggestions, streetLine } from '../components/people.js';
 import {
   LOADING, RULE_KEYS, RuleGroups, SnapshotForm, Unavailable, fmt, ruleChips, rulesPicked, useAudienceChoices, useKnowsName, useListNames,
 } from '../components/AudienceBits.jsx';
@@ -695,7 +698,8 @@ function AddPersonForm({ onClose, me }) {
           <div className="form-row">
             <div className="field" style={{ flex: '0 1 90px' }}>
               <label htmlFor="np-unit">Unit</label>
-              <input id="np-unit" className="input" maxLength={40} value={form.unit} onChange={set('unit')} />
+              <input id="np-unit" className="input" maxLength={40} list="np-unit-words" value={form.unit} onChange={set('unit')} />
+              <UnitSuggestions id="np-unit-words" />
             </div>
             <div className="field">
               <label htmlFor="np-city">City</label>
@@ -1045,7 +1049,7 @@ function PeopleList() {
 // ─────────────────────────────────────────────────────────────────────────────
 // Who has been called or texted in this sitting (this tab only), so the queue
 // moves on and a reload doesn't start over. A convenience: never required.
-const DONE_KEY = 'starbase.calls.done';
+const DONE_KEY = `${NS}calls.done`;
 const readDone = () => {
   try { return JSON.parse(sessionStorage.getItem(DONE_KEY) || '{}') || {}; } catch { return {}; }
 };
@@ -1053,10 +1057,16 @@ const writeDone = (map) => {
   try { sessionStorage.setItem(DONE_KEY, JSON.stringify(map)); } catch { /* private mode: memory only */ }
 };
 // Phone or Text: the last one you used, per sign-in on this phone (Calls
-// opens on it). A convenience: a link that names one (?channel=) wins.
-const channelKey = (me) => `starbase.calls.channel:${me?.workspace?.id || ''}:${me?.user?.id || ''}`;
+// opens on it). A convenience: a link that names one (?channel=) wins. Kept
+// before under a name of its own (shared/old-names.js): carried over the
+// first time it is read.
+const whose = (me) => `${me?.workspace?.id || ''}:${me?.user?.id || ''}`;
+const channelKey = (me) => `${NS}calls.channel:${whose(me)}`;
 const readChannel = (me) => {
-  try { return localStorage.getItem(channelKey(me)) === 'text' ? 'text' : 'phone'; } catch { return 'phone'; }
+  try {
+    carryKey(localStorage, `${OLD_STORAGE.callsChannel}${whose(me)}`, channelKey(me));
+    return localStorage.getItem(channelKey(me)) === 'text' ? 'text' : 'phone';
+  } catch { return 'phone'; }
 };
 const saveChannel = (me, c) => {
   try { localStorage.setItem(channelKey(me), c); } catch { /* private mode: not remembered */ }

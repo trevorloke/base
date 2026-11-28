@@ -108,12 +108,12 @@ test('robots.txt and the sitemap; staging keeps every crawler out', async () => 
   const draft = ok(await mgr.action('site.page.create', { title: 'Secret plans' })).page;
   assert.ok(!(await hit('/sitemap.xml', { host: SITE })).text.includes('secret-plans'), 'never a draft');
   ok(await mgr.action('site.page.delete', { id: draft.id }));
-  process.env.STARBASE_ENV = 'staging';
+  process.env.BASE_ENV = 'staging';
   try {
     assert.equal((await hit('/robots.txt', { host: SITE })).text, 'User-agent: *\nDisallow: /\n');
     assert.match((await hit('/', { host: SITE })).headers.get('x-robots-tag'), /noindex/);
   } finally {
-    delete process.env.STARBASE_ENV;
+    delete process.env.BASE_ENV;
   }
 });
 

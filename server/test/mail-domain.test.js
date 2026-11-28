@@ -13,7 +13,7 @@ import { _setResolverForTest, dmarcOf } from '../lib/mail/dns.js';
 
 const tag = Math.random().toString(36).slice(2, 8);
 const KEYS = ['MAIL_PROVIDER', 'MAIL_FROM', 'RESEND_API_KEY', 'RESEND_API_BASE', 'RESEND_WEBHOOK_SECRET', 'RESEND_REGION', 'SENDGRID_API_KEY', 'SENDGRID_API_BASE',
-  'SENDGRID_WEBHOOK_PUBLIC_KEY', 'STARBASE_PUBLIC_URL', 'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET'];
+  'SENDGRID_WEBHOOK_PUBLIC_KEY', 'BASE_PUBLIC_URL', 'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET'];
 const saved = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
 const DOMAIN = 'imaginesurrey.example';
 const HOOK = 'https://base.example/hooks/mail/resend';
@@ -22,7 +22,7 @@ let db, mgr, staff, ws, resend, grid;
 let txt = {}; // name → TXT records, or an Error to throw
 const lookups = [];
 
-const env = (set) => { for (const k of KEYS) delete process.env[k]; Object.assign(process.env, { STARBASE_PUBLIC_URL: 'https://base.example', ...set }); };
+const env = (set) => { for (const k of KEYS) delete process.env[k]; Object.assign(process.env, { BASE_PUBLIC_URL: 'https://base.example', ...set }); };
 const useResend = (more = {}) => env({ RESEND_API_KEY: 're_domain_secret', RESEND_API_BASE: resend.url, MAIL_FROM: `Imagine Surrey <team@${DOMAIN}>`, ...more });
 const useSendgrid = (more = {}) => env({ MAIL_PROVIDER: 'sendgrid', SENDGRID_API_KEY: 'SG.domain_secret', SENDGRID_API_BASE: grid.url, MAIL_FROM: `Imagine Surrey <team@${DOMAIN}>`, ...more });
 const ok = (r) => { assert.equal(r.status, 200, JSON.stringify(r.json)); return r.json; };

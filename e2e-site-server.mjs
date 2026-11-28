@@ -14,16 +14,16 @@
 // and /unsubscribe asks before it does it. The desk's preview link shows a
 // draft. Phone and desktop: no sideways scroll; tap targets 48px.
 //
-//   SITE_HOSTS=127.0.0.1 SITE_SECRET=e2e-site-secret-0123456789 STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=5010 node server/index.js &
+//   SITE_HOSTS=127.0.0.1 SITE_SECRET=e2e-site-secret-0123456789 BASE_BRAND=imagine-surrey BASE_OPEN_SIGNUP=1 BASE_DATA=memory PORT=5010 node server/index.js &
 //   BASE=http://127.0.0.1:5010 SITE_SECRET=e2e-site-secret-0123456789 SHOTS=/tmp/site-server node e2e-site-server.mjs
 //
-// The same on the website's own domain (STARBASE_SITE_DOMAIN, SITE.md "On
+// The same on the website's own domain (BASE_SITE_DOMAIN, SITE.md "On
 // its own domain"): the browser reaches campaign.example and its www. at
 // this machine (--host-resolver-rules), so every request carries the
 // domain as its Host. Then also: canonical and og:url on the domain, www.
 // sent on to it, /site on the app's address sent on to it, the present
 // website's old addresses, and nothing of the app there by a Host header.
-//   STARBASE_SITE_DOMAIN=campaign.example SITE_SECRET=… STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=5010 node server/index.js &
+//   BASE_SITE_DOMAIN=campaign.example SITE_SECRET=… BASE_BRAND=imagine-surrey BASE_OPEN_SIGNUP=1 BASE_DATA=memory PORT=5010 node server/index.js &
 //   BASE=http://127.0.0.1:5010 DOMAIN=campaign.example SITE_SECRET=… node e2e-site-server.mjs
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
@@ -32,10 +32,10 @@ import { request as httpRequest } from 'node:http';
 const BASE = (process.env.BASE || 'http://127.0.0.1:3200').replace(/\/$/, '');
 const DOMAIN = String(process.env.DOMAIN || '').trim().toLowerCase();
 const PORT = new URL(BASE).port;
-// The campaign's own domain: SITE_HOSTS=127.0.0.1, or STARBASE_SITE_DOMAIN.
+// The campaign's own domain: SITE_HOSTS=127.0.0.1, or BASE_SITE_DOMAIN.
 const SITE = DOMAIN ? `http://${DOMAIN}${PORT ? `:${PORT}` : ''}` : BASE.replace('localhost', '127.0.0.1');
 const APP = BASE.replace('127.0.0.1', 'localhost'); // the app's own address
-const SHOTS = process.env.SHOTS || '/tmp/starbase-site-server';
+const SHOTS = process.env.SHOTS || '/tmp/base-win-site-server';
 process.env.SITE_SECRET = process.env.SITE_SECRET || 'e2e-site-secret-0123456789';
 const { sign } = await import('./server/ext/site/tokens.js');
 mkdirSync(SHOTS, { recursive: true });
@@ -273,7 +273,7 @@ check('…not indexed, framed by the app only', /noindex/.test(pr.headers()['x-r
 const live = await v.goto(`${SITE}/donate`, { waitUntil: 'domcontentloaded' });
 check('…while the site still shows what is published', live.status() === 200 && !/Draft words for the preview/.test(await v.content()));
 
-// ── on the website's own domain (STARBASE_SITE_DOMAIN) ──
+// ── on the website's own domain (BASE_SITE_DOMAIN) ──
 if (DOMAIN) {
   // A request to this machine with the Host header it names: → { status, location }.
   const byHost = (path, host, method = 'GET') => new Promise((resolve, reject) => {

@@ -15,7 +15,7 @@
 //     from an import, the API without a key, or anything else, only codes
 //     on the list;
 //   - a code the scale never had — never.
-import { normalizeScale, ratingByCode, makeCode, cleanWord, DEFAULT_STEPS, LIMITS, UNSURE_WORD } from '@starbase/shared/scale';
+import { normalizeScale, ratingByCode, makeCode, cleanWord, DEFAULT_STEPS, LIMITS, UNSURE_WORD } from '@base-win/shared/scale';
 import { httpError } from '../../actions/util.js';
 // The scale's starting list is the server's preset's: lib/preset.js tells
 // shared/scale.js who says it, so it is loaded wherever the scale is read.

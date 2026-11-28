@@ -33,9 +33,11 @@
 // /key and /connected are the People area's (lib/perms.js); /mine is in no
 // area on purpose, so My people stays with anyone denied People.
 import { Hono } from 'hono';
-import { rankTies } from '@starbase/shared/ties';
+import { rankTies } from '@base-win/shared/ties';
 import { NO_CONTACT } from '../../lib/reach.js';
 import { azKey } from '../../lib/az.js';
+import { markHouses } from '../../lib/doors.js';
+import { REACH } from '@base-win/shared/buildings';
 import { selfPerson } from './match.js';
 import { PERSON_COLS, personOut } from './actions.js';
 import { TIE_READERS } from './index.js';
@@ -107,16 +109,18 @@ api.get('/persons/:id/knows', async (c) => {
   if (!person) return c.json({ error: 'not found' }, 404);
   const rows = (await db.query(
     `select r.id, r.kind, r.note, r.close, r.created_at as linked_at, p.id as pid, p.name, p.last_name, p.rating, ${dncSql('p')} as dnc,
-            p.unit, p.address, p.city
+            p.unit, p.address, p.city, p.lat, p.lng
      from ${LINKS_OF}
      order by ${azKey('p')}`,
     [ws, id],
   )).rows;
-  const knows = rows.map((r) => ({
+  // A door at a house carries place 'house' (lib/doors.js): "Suite B · 10500 134 St".
+  const doors = await markHouses(db, ws, rows.map((r) => ({ id: r.pid, address: r.address, unit: r.unit, lat: r.lat, lng: r.lng })), { reach: REACH });
+  const knows = rows.map((r, i) => ({
     id: r.id, kind: r.kind, note: r.note ?? null, close: Boolean(r.close), linked_at: r.linked_at,
     // Street and city: the desk tells two people of the same name apart.
     person: { id: r.pid, name: r.name, last_name: r.last_name ?? null, rating: r.rating ?? null, dnc: Boolean(r.dnc),
-      unit: r.unit ?? null, address: r.address ?? null, city: r.city ?? null },
+      unit: r.unit ?? null, address: r.address ?? null, city: r.city ?? null, ...(doors[i].place ? { place: doors[i].place } : {}) },
   }));
   // Who brought them in: the other end of the link that added them (kept
   // even if that link was later removed).

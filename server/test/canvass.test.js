@@ -3,8 +3,8 @@
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { freshDb, Client } from './helpers.js';
-import { noCalls, noCallsWord } from '@starbase/shared/canvass';
-import { ratingCodes } from '@starbase/shared/scale';
+import { noCalls, noCallsWord } from '@base-win/shared/canvass';
+import { ratingCodes } from '@base-win/shared/scale';
 
 let c;
 

@@ -17,17 +17,17 @@ import { useQuery } from '@tanstack/react-query';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { apiGet } from '../api.js';
-import { bandOf } from '@starbase/shared/scale';
+import { bandOf } from '@base-win/shared/scale';
 import { phoneCopy, useKeepCopy } from './OfflineCache.js';
 import { useOnline } from './NoSignal.jsx';
 import { DEFAULT_TILES, homeStart, homeView, openHome, safeAttribution } from './tiles.js';
 import { MARK, TILE_WAIT_MS, css, frontTiles, tileHealth, tileHost, turfColor } from '../pages/mapView.js';
 import { MY_DOORS, readViewPref, tellServiceWorker, useBandTurfs } from '../pages/mapQueries.js';
 import { askNotice } from '../pages/tileProbe.js';
+import { doorKey } from '../../../shared/units.js';
 
 const FIVE_MIN = 5 * 60_000;
 const EMPTY = [];
-const norm = (s) => String(s || '').trim().toLowerCase();
 // A tile address as the map fills it ({r}: @2x on a sharp screen).
 const drawnAs = (url) => String(url).replace(/\{r\}/g, L.Browser.retina ? '@2x' : '');
 const ring = (poly) => (Array.isArray(poly) ? poly.map(([a, b]) => [Number(a), Number(b)]).filter((p) => p.every(Number.isFinite)) : []);
@@ -38,7 +38,8 @@ function doorsOf(persons) {
   const byKey = new Map();
   for (const p of persons) {
     if (p.lat == null || p.lng == null) continue;
-    const key = p.address ? `${norm(p.address)}|${norm(p.unit)}` : `@${Number(p.lat).toFixed(5)},${Number(p.lng).toFixed(5)}`;
+    // (The one door key, as the Map's: shared/units.js doorKey.)
+    const key = doorKey(p, { none: (x) => `@${Number(x.lat).toFixed(5)},${Number(x.lng).toFixed(5)}` });
     const d = byKey.get(key) || { lat: Number(p.lat), lng: Number(p.lng), bands: new Set() };
     d.bands.add(bandOf(p.rating) || 'unrated');
     byKey.set(key, d);

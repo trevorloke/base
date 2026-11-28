@@ -15,7 +15,7 @@
 // is YYYY-MM-DD and must be a real day. Empty (null, "", spaces) means
 // "not filled in" — saving it clears the value.
 
-import { choiceKey, MANY_SPLIT } from '@starbase/shared/fieldlists';
+import { choiceKey, MANY_SPLIT } from '@base-win/shared/fieldlists';
 
 export const KINDS = ['text', 'note', 'yesno', 'choice', 'choices', 'number', 'date'];
 export const KIND_WORD = { text: 'Text', note: 'Long text', yesno: 'Yes/No', choice: 'Pick one', choices: 'Pick several', number: 'Number', date: 'Date' };
@@ -39,7 +39,7 @@ export const cleanName = (s) => String(s ?? '').trim().replace(/\s+/g, ' ');
 // apostrophes as ', and " - " as " – " — so "christian - catholic" from a
 // CSV cell finds "Christian – Catholic". MANY_SPLIT: what Pick several
 // reads a cell apart on.
-export { choiceKey, MANY_SPLIT } from '@starbase/shared/fieldlists';
+export { choiceKey, MANY_SPLIT } from '@base-win/shared/fieldlists';
 // choiceKey in SQL, for grouping stored words in the database (Turn into a
 // list, GET /fields): the same steps, every kind of space as JavaScript's
 // trim and \s know it (Postgres's own \s may not know a non-breaking one).

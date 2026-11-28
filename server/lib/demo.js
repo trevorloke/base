@@ -3,12 +3,13 @@
 // neither is ever read on production — a client's server can't be framed by
 // another site (voter data on screen) or opened without a sign-in, whatever
 // its settings say.
-//   STARBASE_FRAME_HOSTS   the sites that may frame the app, comma-separated
+//   BASE_FRAME_HOSTS   the sites that may frame the app, comma-separated
 //                          origins (https://base.win,https://www.base.win)
-//   STARBASE_DEMO_EMAIL    the account every demo visitor is signed in as,
+//   BASE_DEMO_EMAIL    the account every demo visitor is signed in as,
 //                          one already in the campaign. A visitor can do
 //                          whatever it can, so the campaign must be the
 //                          sample one (lib/samplecampaign.js)
+import { setting } from '@base-win/shared/old-names';
 import { envName } from './org.js';
 
 const allowed = () => envName() !== 'production';
@@ -16,7 +17,7 @@ const allowed = () => envName() !== 'production';
 export const frameHosts = () => {
   if (!allowed()) return [];
   const out = [];
-  for (const raw of String(process.env.STARBASE_FRAME_HOSTS || '').split(',')) {
+  for (const raw of String(setting('BASE_FRAME_HOSTS') || '').split(',')) {
     let u;
     try { u = new URL(raw.trim()); } catch { continue; }
     if (u.protocol !== 'https:' && u.hostname !== 'localhost' && u.hostname !== '127.0.0.1') continue;
@@ -27,7 +28,7 @@ export const frameHosts = () => {
 
 export const demoEmail = () => {
   if (!allowed()) return '';
-  const e = String(process.env.STARBASE_DEMO_EMAIL || '').trim().toLowerCase();
+  const e = String(setting('BASE_DEMO_EMAIL') || '').trim().toLowerCase();
   return /^[^\s@]+@[^\s@]+$/.test(e) ? e.slice(0, 320) : '';
 };
 

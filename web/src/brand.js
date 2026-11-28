@@ -10,7 +10,7 @@
 // the campaign's own example words, its features and where its maps open.
 // The logo's address is the server's own (/brand/…): BrandMark puts a
 // client's path in front of it (base.js at).
-import { BRANDS, DEFAULT_BRAND } from '@starbase/shared/brand';
+import { BRANDS, DEFAULT_BRAND } from '@base-win/shared/brand';
 
 // base.win's own values: what a page with nothing written into it wears.
 const OWN = { ...BRANDS[DEFAULT_BRAND] };

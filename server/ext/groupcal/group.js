@@ -12,8 +12,8 @@
 // What an entry carries: its title, times, place, the item's notes, and who
 // it is for. Never a shift's instructions, anyone's name on a shift, a
 // phone or an email.
-import { googleLink, shiftEvent } from '@starbase/shared/ics';
-import { addDays, dayOf } from '@starbase/shared/dayparts';
+import { googleLink, shiftEvent } from '@base-win/shared/ics';
+import { addDays, dayOf } from '@base-win/shared/dayparts';
 import { shiftAppLink } from '../../lib/calendar.js';
 import { DEFAULT_TZ } from '../../lib/org.js';
 import { areasFor, decide } from '../../lib/perms.js';

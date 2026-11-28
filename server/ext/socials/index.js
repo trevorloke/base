@@ -19,7 +19,7 @@ import { httpError } from '../../actions/util.js';
 import { campaignDay } from '../../lib/gifts.js';
 import { DEFAULT_TZ } from '../../lib/org.js';
 import { forViewer } from '../../lib/viewer.js';
-import { PLATFORMS, parseSocial, sameHandle } from '@starbase/shared/socials';
+import { PLATFORMS, parseSocial, sameHandle } from '@base-win/shared/socials';
 
 import { sql as socialSql, shareSql } from './sql.js';
 import { shareActions } from './share.js';

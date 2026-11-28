@@ -202,7 +202,7 @@ api.get('/callhub/pushes', async (c) => {
       ...(await resultsOf(db, ws, p)),
     });
   }
-  // running: whether this server does background work at all (STARBASE_JOBS=off: a push waits).
+  // running: whether this server does background work at all (BASE_JOBS=off: a push waits).
   // not_taken: the campaign's do-not-call numbers CallHub would not take.
   // held: the numbers CallHub still holds that nobody here blocks now.
   return c.json({ on: callhubOn(), running: jobRunnerOn(), pushes, not_taken: await notTaken(db, ws), held: await held(db, ws) });

@@ -6,8 +6,9 @@
 // One column, one big button, and a link back to the campaign's website
 // (workspace settings.website) when it has one. The campaign's website
 // itself lives elsewhere.
-import { deriveLook, headingStack } from '@starbase/shared/brand-look';
+import { deriveLook, headingStack } from '@base-win/shared/brand-look';
 import { brandFor } from './brand.js';
+import { authorizedHtml } from '../../shared/site/authorized.js';
 
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 export const settingsOf = (ws) => (typeof ws?.settings === 'string' ? JSON.parse(ws.settings) : (ws?.settings || {}));
@@ -57,6 +58,7 @@ export const PUBLIC_CSS = `
   .err{border-left-color:var(--bad);margin:0 0 8px}
   footer{margin-top:40px;border-top:1px solid var(--rule);padding-top:12px;font-size:13px;color:var(--ink2)}
   footer a{color:var(--ink2)}
+  footer .auth{font-size:13px;margin:0 0 8px}
 `;
 const CSS = `${PUBLIC_CSS}
   form{margin-top:8px}
@@ -124,10 +126,12 @@ export const campHtml = (brand, name) => {
   return `<div class="camp">${logo}<p class="camp-name">${esc(name)}</p></div>`;
 };
 
-// page(ws, title, inner, { wide, noindex, brand }): ws may be null (a link
-// that names no campaign) — then brand is the one to wear (the campaign's,
-// lib/brand.js campaignBrand), else the preset.
-export const page = (ws, title, inner, { wide = false, noindex = false, brand = null } = {}) => {
+// page(ws, title, inner, { wide, noindex, brand, authorized }): ws may be
+// null (a link that names no campaign) — then brand is the one to wear (the
+// campaign's, lib/brand.js campaignBrand), else the preset. authorized: the
+// "Authorized by" rule's answer for the page's channel
+// (shared/site/authorized.js), drawn at the foot when it carries the line.
+export const page = (ws, title, inner, { wide = false, noindex = false, brand = null, authorized = null } = {}) => {
   const settings = ws ? settingsOf(ws) : {};
   const b = ws ? brandFor(settings) : (brand || brandFor(null));
   const site = settings.website || null;
@@ -135,6 +139,6 @@ export const page = (ws, title, inner, { wide = false, noindex = false, brand = 
 <style>${CSS}</style></head><body><main${wide ? ' class="wide"' : ''}>
 ${ws ? campHtml(b, ws.name) : ''}
 ${inner}
-<footer>${site ? `<a href="${esc(site)}">← ${esc(String(site).replace(/^https?:\/\//, ''))}</a> · ` : ''}Powered by base.win</footer>
+<footer>${authorizedHtml(authorized, { cls: 'auth' })}${site ? `<a href="${esc(site)}">← ${esc(String(site).replace(/^https?:\/\//, ''))}</a> · ` : ''}Powered by base.win</footer>
 </main></body></html>`;
 };

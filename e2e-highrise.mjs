@@ -1,4 +1,4 @@
-// Hi-rises E2E (HR-1) — one fresh in-memory campaign: a manager seeds a
+// Buildings E2E (HR-1) — one fresh in-memory campaign: a manager seeds a
 // 210-unit tower (floors 2–22, ten units a floor, about 1.5 people a unit;
 // half its rows with a Unit column and half written "1203-13450 104 Ave",
 // unit 1203 both ways), a 200-unit tower 60 m away, a 60-unit townhouse
@@ -6,25 +6,28 @@
 // turf around the first tower with a persuasion pass (one try). Made-up
 // "Example" people only. Then, at 1440 × 900 and 390 × 844:
 //   1  z17, z18, z19: each tower is ONE square ("210" / "200"), none of its
-//      units drawn on its own; the house with a suite keeps two small pins;
-//      the 4-unit conversion is a square.
+//      units drawn on its own; the house with a suite (blank + "B") is one
+//      pin with "+ Suite B" under it; the 4-unit conversion is a square.
 //   2  (BUSY server, lean dots) z15 and z17: the tower is a square dot, a
 //      tap on it opens the sheet; a tap on a plain spot still opens a door.
-//   3  Tap the square: "210 units · 210 left", floors from Floor 2, only
+//   3  Tap the square: "Building · 210 units" and "210 left", floors from Floor 2, only
 //      Floor 2 open, unit 1203 one row, ?building=<id> and no address in the
 //      URL; a reload opens it again.
 //   4  Next unit · 201 → the card with "‹ 13450 104 Ave · Floor 2 · Unit 201";
 //      No answer → "Next unit · 202" the one primary → 202; ‹ → "209 left".
+//      Unit 1203 written two ways is one stop with all its people.
 //   5  The townhouse complex: one list, no floors, units 1–60 in order.
 //   6  GOTV filter "Yes, not voted": the square's number is the units shown,
 //      the sheet says "Showing: Yes, not voted · N of 210"; "All" → 210.
-//   7  The walk list: the tower's units 201, 202, … floor by floor; a GOTV
+//   7  The walk list: one "Building · 210 units" block, rows "Unit 201",
+//      "Unit 202", … floor by floor; a GOTV
 //      pass with 3 supporters marked voted: still "210 units", those 3 "Not
 //      on this round", "left" down by 3.
 //   8  Offline (volunteer's phone, walk list kept): "Offline — from your walk
 //      list" with counts; No answer at 201 → Next unit 202, "left" down one;
 //      back online the knock syncs and the sheet agrees.
-//   9  A volunteer without the turf (doors: turfs only): no square, 404 from
+//   9  (and the house: 09-house-* shots, its card with Main and Suite B)
+//      A volunteer without the turf (doors: turfs only): no square, 404 from
 //      /buildings/of; the anchor merged away on the desk → reloading
 //      ?building= says "This building isn’t here any more" and closes.
 //   10 At most one yellow button per screen, targets ≥ 48 px at 390, no
@@ -32,8 +35,8 @@
 // ONLY=1,3,4 runs just those (the BASE_PATH run); RED=1 runs 1, 3 and 7
 // against a tree without buildings and expects them to fail.
 //
-//   STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=5520 node server/index.js &
-//   STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory STARBASE_MAP_ALL=100 STARBASE_MAP_VIEW=100 PORT=5523 node server/index.js &
+//   BASE_BRAND=imagine-surrey BASE_OPEN_SIGNUP=1 BASE_DATA=memory PORT=5520 node server/index.js &
+//   BASE_BRAND=imagine-surrey BASE_OPEN_SIGNUP=1 BASE_DATA=memory BASE_MAP_ALL=100 BASE_MAP_VIEW=100 PORT=5523 node server/index.js &
 //   BASE=http://127.0.0.1:5520 BUSY=http://127.0.0.1:5523 SHOTS=/tmp/hr node e2e-highrise.mjs
 //   (BASE_PATH=/imaginesurrey on 5521: BASE=http://127.0.0.1:5521 BP=/imaginesurrey ONLY=1,3,4 …)
 import { chromium } from 'playwright-core';
@@ -44,7 +47,7 @@ const BUSY = process.env.BUSY || '';
 const BP = process.env.BP || '';
 const FIELD = BP ? `${BP}/field` : '';
 const DESK = BP ? `${BP}/desk` : '/admin';
-const SHOTS = process.env.SHOTS || '/tmp/starbase-highrise';
+const SHOTS = process.env.SHOTS || '/tmp/base-win-highrise';
 const RED = process.env.RED === '1';
 mkdirSync(SHOTS, { recursive: true });
 const ONLY = new Set(String(process.env.ONLY || (RED ? '1,3,7' : '')).split(',').map((x) => x.trim()).filter(Boolean));
@@ -162,7 +165,7 @@ const mapState = (page) => page.evaluate(() => {
   const el = document.querySelector('.map-canvas');
   if (!el) return null;
   const r = el.getBoundingClientRect();
-  const marks = [...el.querySelectorAll('.leaflet-marker-icon')].map((m) => ({ title: m.getAttribute('title') || '', bldg: Boolean(m.querySelector('.map-bldg')), n: m.querySelector('.map-bldg__n')?.innerText || '' }));
+  const marks = [...el.querySelectorAll('.leaflet-marker-icon')].map((m) => ({ title: m.getAttribute('title') || '', bldg: Boolean(m.querySelector('.map-bldg')), house: Boolean(m.querySelector('.map-house__more')), tag: m.querySelector('.map-tag')?.innerText || '', n: m.querySelector('.map-bldg__n')?.innerText || '' }));
   return {
     zoom: Number(el.dataset.zoom), view: el.dataset.view || null, bounds: (el.dataset.bounds || '').split(',').map(Number),
     box: { x: r.x, y: r.y, w: r.width, h: r.height }, marks,
@@ -189,6 +192,24 @@ const pointOf = (st, d) => {
   const [s, w, n, e] = st.bounds;
   return [st.box.x + ((d.lng - w) / (e - w)) * st.box.w, st.box.y + ((merc(n) - merc(d.lat)) / (merc(n) - merc(s))) * st.box.h];
 };
+// Drag the map so a place sits in the middle of the canvas (the phone's
+// card leaves a pin high on the screen, where a zoom in would lose it).
+const centre = async (page, d) => {
+  const st = await mapState(page);
+  if (!st) return;
+  const [x, y] = pointOf(st, d);
+  const cx = st.box.x + st.box.w / 2;
+  const cy = st.box.y + st.box.h / 2;
+  // Start half the way back, so the drag stays on the canvas both ends.
+  const sx = cx - (cx - x) / 2;
+  const sy = cy - (cy - y) / 2;
+  await page.mouse.move(sx, sy);
+  await page.mouse.down();
+  await page.mouse.move(sx + (cx - x) / 2, sy + (cy - y) / 2, { steps: 6 });
+  await page.mouse.move(sx + (cx - x), sy + (cy - y), { steps: 6 });
+  await page.mouse.up();
+  await sleep(500);
+};
 const squares = (st, addr) => st.marks.filter((m) => m.bldg && m.title.startsWith(`${addr},`));
 const pinsOf = (st, addr) => st.marks.filter((m) => !m.bldg && m.title.includes(addr));
 // Simplicity: yellow buttons, sideways scroll, the smallest tap target.
@@ -207,6 +228,9 @@ const simple = async (page, name, sel = null, phone = false) => {
 const SHEET_TAPS = '.bldg-unit, .bldg-floor__head, .bldg-next, .bldg-back, .bldg-sheet .mapsheet-close';
 const sheetText = (page) => page.$eval('.bldg-sheet:not([hidden])', (el) => el.innerText.replace(/\s+/g, ' ').trim()).catch(() => '');
 const countLine = (page) => page.$eval('.bldg-sheet .bldg-count__line', (el) => el.innerText.trim()).catch(() => '');
+// The sheet's subtitle under its address: "Building · 210 units".
+const subLine = (page) => page.$eval('.bldg-sheet:not([hidden]) .door-head__place', (el) => el.innerText.trim()).catch(() => '');
+const sheetSays = async (page) => `${await subLine(page)} | ${await countLine(page)}`;
 const leftOf = (line) => Number((/([\d,]+) left/.exec(line) || [])[1]?.replace(/,/g, '') ?? NaN);
 // (A tree without buildings has no floors: nothing to open, no wait.)
 const openFloor = async (page, label) => {
@@ -271,7 +295,8 @@ const step1 = async (ctxOpts, size, scheme) => {
     const st = await zoomTo(page, 19);
     await sleep(600);
     const now = await mapState(page);
-    check('1: the house with a suite keeps its two small pins', pinsOf(now, HS.addr).length === 2, JSON.stringify(pinsOf(now, HS.addr).map((m) => m.title)));
+    const hs = pinsOf(now, HS.addr);
+    check('1: the house with a suite is one pin with "+ Suite B"', hs.length === 1 && hs[0].house && hs[0].tag === '+ Suite B' && /house with 2 doors: Main, Suite B$/.test(hs[0].title), JSON.stringify(hs.map((m) => [m.title, m.tag])));
     const cv = squares(now, CV.addr);
     check('1: the 4-unit conversion is a square "4"', cv.length === 1 && cv[0].n === '4', JSON.stringify({ zoom: st?.zoom, cv }));
   }
@@ -282,6 +307,41 @@ if (want(1)) {
     await step1({ viewport: { width: 1440, height: 900 } }, 'desk', scheme);
     await step1({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }, 'phone', scheme);
   }
+}
+
+// The house with a suite (blank + "B"): one pin, and its card's door switch.
+const houseShots = async (ctxOpts, size, scheme) => {
+  const ctx = await browser.newContext({ ...ctxOpts, colorScheme: scheme, timezoneId: 'America/Vancouver' });
+  await tiles(ctx);
+  await ctx.addCookies(await dctx.cookies());
+  const H = helpers(await ctx.newPage(), 'manager');
+  const main = anchorOf('HS', '');
+  const suite = anchorOf('HS', 'B');
+  await H.go(`/map?person=${main.id}`);
+  await until(H.page, (s) => s.zoom >= 16, 10000);
+  await H.page.waitForSelector('.door-switch__btn', { timeout: 8000 }).catch(() => {});
+  const sw = await H.page.$$eval('.door-switch__btn', (els) => els.map((e) => ({ t: e.innerText.replace(/\s+/g, ' ').trim(), on: e.getAttribute('aria-pressed') === 'true', h: e.getBoundingClientRect().height })));
+  check(`1 house ${size}${dark(scheme)}: its card shows the door switch, Main pressed, then Suite B`,
+    sw.length === 2 && sw[0].on && /^Main /.test(sw[0].t) && /^Suite B /.test(sw[1].t) && sw.every((b) => b.h >= 55.5), JSON.stringify(sw));
+  const card = await H.text('.door-card');
+  check(`1 house ${size}${dark(scheme)}: the card opens on the linked person's door`, card.includes(main.name) && !card.includes(suite.name), card.slice(0, 100));
+  if (size === 'phone') await H.shot('09-house-card-phone');
+  else await H.shot(`09-house-card-desk${dark(scheme)}`);
+  if (size === 'phone') {
+    await H.page.keyboard.press('Escape');
+    await sleep(500);
+    await centre(H.page, HS);
+    await zoomTo(H.page, 19);
+    await sleep(700);
+    const hs = pinsOf(await mapState(H.page), HS.addr);
+    check('1 house phone z19: one pin with "+ Suite B"', hs.length === 1 && hs[0].house && hs[0].tag === '+ Suite B', JSON.stringify(hs.map((m) => [m.title, m.tag])));
+    await H.shot('09-house-pin-phone');
+  }
+  await ctx.close();
+};
+if (want(1)) {
+  await houseShots({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }, 'phone', 'light');
+  await houseShots({ viewport: { width: 1440, height: 900 } }, 'desk', 'dark');
 }
 
 // Steps 3 and 4 on a phone (and 3 on the desk).
@@ -309,8 +369,8 @@ if (want(3)) {
       await H.page.waitForSelector('.bldg-sheet:not([hidden]) .bldg-count__line', { timeout: 8000 }).catch(() => {});
       check('10 desk: the square opens from the keyboard (focus, Enter)', Boolean(new URL(H.page.url()).searchParams.get('building')), H.page.url());
     } else await tapSquare(H.page, A.addr);
-    const line = await countLine(H.page);
-    check(`3 ${size}: tap the square → "210 units · 210 left"`, line === '210 units · 210 left', line || await sheetText(H.page));
+    const line = await sheetSays(H.page);
+    check(`3 ${size}: tap the square → "Building · 210 units" and "210 left"`, line === 'Building · 210 units | 210 left', line || await sheetText(H.page));
     const heads = await H.page.$$eval('.bldg-floor__head', (els) => els.map((e) => ({ t: e.innerText.replace(/\s+/g, ' ').trim(), open: e.getAttribute('aria-expanded') === 'true' })));
     check(`3 ${size}: floors from Floor 2, only Floor 2 open`, heads.length === 21 && /^Floor 2 · /.test(heads[0]?.t) && heads.filter((h) => h.open).length === 1 && heads[0].open, JSON.stringify(heads.slice(0, 3)));
     const url = new URL(H.page.url());
@@ -319,13 +379,13 @@ if (want(3)) {
     await H.shot(`03-sheet-${size}`);
     await simple(H.page, `3 ${size}: the sheet`, SHEET_TAPS, size === 'phone');
     const labels = await H.page.$$eval('.bldg-sheet .bldg-unit', (els) => els.slice(0, 3).map((e) => e.getAttribute('aria-label')));
-    check(`10 ${size}: unit rows read out with unit and state`, labels.length > 0 && labels.every((l) => /^Unit \d+, .+, (Open|Try again|Done|Not on this round)$/.test(l || '')), JSON.stringify(labels));
+    check(`10 ${size}: unit rows read out with unit and state`, labels.length > 0 && labels.every((l) => /^Unit \d+, .+, (Not knocked|Try again|Done|Voted|Not on this round)$/.test(l || '')), JSON.stringify(labels));
     await openFloor(H.page, 'Floor 12');
     const nos = await unitNos(H.page);
     check(`3 ${size}: unit 1203 (written two ways) is one row`, nos.filter((n) => n === '1203').length === 1, nos.filter((n) => /^12/.test(n)).join(','));
     await H.page.reload({ waitUntil: 'domcontentloaded' });
     await H.page.waitForSelector('.bldg-sheet .bldg-count__line', { timeout: 10000 }).catch(() => {});
-    check(`3 ${size}: a reload opens the sheet again`, /^13450 104 Ave/.test(await H.text('.bldg-sheet .mapsheet-title')) && (await countLine(H.page)) === '210 units · 210 left', await countLine(H.page));
+    check(`3 ${size}: a reload opens the sheet again`, /^13450 104 Ave/.test(await H.text('.bldg-sheet .mapsheet-title')) && (await sheetSays(H.page)) === 'Building · 210 units | 210 left', await sheetSays(H.page));
   }
 }
 if (want(4)) {
@@ -351,8 +411,8 @@ if (want(4)) {
   await mp.click('.bldg-back');
   await mp.waitForSelector('.bldg-sheet:not([hidden])', { timeout: 5000 }).catch(() => {});
   await sleep(1200);
-  const line = await countLine(mp);
-  check('4: ‹ back to the sheet, now "209 left"', line === '210 units · 209 left', line);
+  const line = await sheetSays(mp);
+  check('4: ‹ back to the sheet, now "209 left"', line === 'Building · 210 units | 209 left', line);
   await MP.shot('04-sheet-after-phone');
   // The phone's Back: a unit's card → its building's sheet → the map.
   await mp.locator('.bldg-sheet:not([hidden]) .bldg-unit', { hasText: '203' }).first().click();
@@ -369,33 +429,24 @@ if (want(4)) {
   await mp.waitForSelector('.bldg-sheet:not([hidden]) .bldg-count__line', { timeout: 5000 }).catch(() => {});
 
   // One unit written two ways (1203: two people with a Unit column, one
-  // as "1203-13450 104 Ave"): its row opens the first door; once that is
-  // knocked Next unit is 1203 again, the other door, then 1204.
+  // as "1203-13450 104 Ave"): one stop, all its people on one card; once
+  // it is knocked Next unit moves on to 1204, and 1203 counts once.
   const u1203 = S.made.filter((p) => p.tower === 'A' && p.u === '1203');
-  const hyphen1203 = u1203.find((p) => /^1203-/.test(p.address));
   await openFloor(mp, 'Floor 12');
   await mp.locator('.bldg-sheet:not([hidden]) .bldg-unit', { hasText: '1203' }).first().click();
   await mp.waitForSelector(`${CARD} .bldg-back`, { timeout: 8000 }).catch(() => {});
-  const first1203 = await MP.text(CARD);
-  check('4: 1203’s row opens its first door (Unit column)', u1203.filter((p) => !/^1203-/.test(p.address)).every((p) => first1203.includes(p.name.split(' ')[0])) && !first1203.includes(hyphen1203.name), first1203.slice(0, 80));
-  await mp.locator(`${CARD} .fk-out`, { hasText: 'No answer' }).first().click();
-  await mp.waitForSelector(`${CARD} .bldg-next`, { timeout: 8000 }).catch(() => {});
-  const n1203 = await mp.$eval(`${CARD} .bldg-next`, (el) => el.innerText.trim()).catch(() => '');
-  check('4: after the first door, Next unit is 1203 again (its other door)', n1203 === 'Next unit · 1203', n1203);
-  await mp.click(`${CARD} .bldg-next`);
-  await sleep(800);
-  const second1203 = await MP.text(CARD);
-  check('4: …which opens the door written "1203-13450 104 Ave", with its own person', second1203.includes(hyphen1203.name), second1203.slice(0, 80));
+  const card1203 = await MP.text(CARD);
+  check(`4: 1203 (written two ways) is one stop with its ${u1203.length} people`, u1203.length === 3 && u1203.every((p) => card1203.includes(p.name)), card1203.slice(0, 120));
   await mp.locator(`${CARD} .fk-out`, { hasText: 'No answer' }).first().click();
   await mp.waitForSelector(`${CARD} .bldg-next`, { timeout: 8000 }).catch(() => {});
   const n1204 = await mp.$eval(`${CARD} .bldg-next`, (el) => el.innerText.trim()).catch(() => '');
-  check('4: both doors knocked: Next unit moves on to 1204', n1204 === 'Next unit · 1204', n1204);
+  check('4: 1203 knocked once: Next unit moves on to 1204', n1204 === 'Next unit · 1204', n1204);
   await mp.click(`${CARD} .bldg-back`);
   await mp.waitForSelector('.bldg-sheet:not([hidden])', { timeout: 5000 }).catch(() => {});
   await sleep(1200);
   await openFloor(mp, 'Floor 12');
   const row1203 = await mp.$eval('.bldg-sheet:not([hidden]) .bldg-unit[aria-label^="Unit 1203,"]', (el) => el.getAttribute('aria-label')).catch(() => '');
-  check('4: 1203 is Done once both its doors are, and "left" counts it once', /, Done$/.test(row1203) && (await countLine(mp)) === '210 units · 208 left', `${row1203} · ${await countLine(mp)}`);
+  check('4: 1203 is Done, and "left" counts it once', /, Done$/.test(row1203) && (await sheetSays(mp)) === 'Building · 210 units | 208 left', `${row1203} · ${await sheetSays(mp)}`);
   // Dark, desk: the card with its bar.
   const kctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: 'dark', timezoneId: 'America/Vancouver' });
   await tiles(kctx);
@@ -479,8 +530,8 @@ if (want(8)) {
   await sleep(600);
   await tapSquare(vp, A.addr);
   const chip = await V.text('.bldg-offline');
-  const line = await countLine(vp);
-  check('8: offline, the sheet comes from the walk list kept on the phone, with counts', chip === 'Offline — from your walk list' && line === '210 units · 210 left', `${chip} · ${line}`);
+  const line = await sheetSays(vp);
+  check('8: offline, the sheet comes from the walk list kept on the phone, with counts', chip === 'Offline — from your walk list' && line === 'Building · 210 units | 210 left', `${chip} · ${line}`);
   await V.shot('08-offline-sheet-phone');
   await vp.click('.bldg-next');
   await vp.waitForSelector('.bldg-back', { timeout: 8000 }).catch(() => {});
@@ -491,8 +542,8 @@ if (want(8)) {
   check('8: offline knock → Next unit goes to 202', n2 === 'Next unit · 202', n2);
   await vp.click('.bldg-back');
   await sleep(500);
-  const line2 = await countLine(vp);
-  check('8: …and "left" drops by one', line2 === '210 units · 209 left', line2);
+  const line2 = await sheetSays(vp);
+  check('8: …and "left" drops by one', line2 === 'Building · 210 units | 209 left', line2);
   await V.shot('08-offline-after-knock-phone');
   await vctx.setOffline(false);
   await vp.evaluate(() => window.dispatchEvent(new Event('online')));
@@ -504,8 +555,8 @@ if (want(8)) {
   }
   check('8: back online the knock syncs (the server says 209 open)', synced);
   await sleep(1500);
-  const line3 = await countLine(vp);
-  check('8: …and the sheet agrees', line3 === '210 units · 209 left' && !(await vp.$('.bldg-offline')), line3);
+  const line3 = await sheetSays(vp);
+  check('8: …and the sheet agrees', line3 === 'Building · 210 units | 209 left' && !(await vp.$('.bldg-offline')), line3);
 }
 
 // Step 7: the walk list, then a GOTV pass.
@@ -513,14 +564,27 @@ if (want(7)) {
   const vp = V.page;
   await V.go(`/turfs/${S.turf.id}`);
   await vp.waitForSelector('.walk-door', { timeout: 10000 });
-  const heads = await vp.$$eval('.walk-door__addr', (els) => els.map((e) => e.innerText.trim()));
-  const units = heads.map((h) => (/^(\d+)/.exec(h) || [])[1]).filter(Boolean);
+  // One block for the tower: its header, then rows "Unit 201", "Unit 202"…
+  const block = await vp.$eval('.walk-group--building', (el) => ({
+    addr: el.querySelector('.walk-group__addr')?.innerText.trim() || '',
+    line: el.querySelector('.walk-group__line')?.innerText.trim() || '',
+  })).catch(() => ({ addr: '', line: '' }));
+  check('7: the tower is one block, "Building · 210 units"', block.addr === A.addr && /^Building · 210 units · /.test(block.line), JSON.stringify(block));
+  const words = await vp.$$eval('.walk-door--sub .walk-door__unit', (els) => els.map((e) => e.innerText.trim()));
+  const units = words.map((w) => (/^Unit (\d+)$/.exec(w) || [])[1]).filter(Boolean);
   const expect = towerUnits([2, 3]).flatMap((u) => [u]);
   const firstTwenty = [...new Set(units)].slice(0, 20);
-  check('7: the walk list takes the tower floor by floor: 201, 202, … 310', firstTwenty.join(',') === expect.join(','), firstTwenty.join(','));
+  check('7: the walk list takes the tower floor by floor: Unit 201, Unit 202, … Unit 310', firstTwenty.join(',') === expect.join(','), words.slice(0, 6).join(','));
+  // The address isn't repeated on each unit row (it is there for a screen reader only).
+  const repeated = await vp.$$eval('.walk-door--sub .walk-door__addr--sub', (els) => els.slice(0, 40).filter((e) => {
+    const c = e.cloneNode(true);
+    c.querySelectorAll('.walk-sr').forEach((x) => x.remove());
+    return c.textContent.includes('13450 104 Ave');
+  }).length).catch(() => -1);
+  check('7: a unit row does not repeat the address', repeated === 0, repeated);
   await V.shot('07-walk-list-phone');
   const nextBtn = await V.text('.walk-next__addr');
-  check('7: Next door walks them in that order', /^20[12]\b/.test(nextBtn), nextBtn);
+  check('7: Next door walks them in that order', /^Unit 20[12] · 13450 104 Ave$/.test(nextBtn), nextBtn);
   if (!RED) {
     await D.api('/actions/pass.start', { name: 'GOTV · towers', kind: 'gotv', who: 'support', tries: 2 });
     const before = (await D.api(`/buildings/of/${anchorOf('A', '201').id}`)).json?.building;
@@ -529,11 +593,11 @@ if (want(7)) {
     await D.go(`/map?building=${anchorOf('A', '201').id}`);
     await D.page.waitForSelector('.bldg-sheet .bldg-count__line', { timeout: 10000 }).catch(() => {});
     await openFloor(D.page, 'Floor 3');
-    const line = await countLine(D.page);
+    const line = await sheetSays(D.page);
     const off = await D.page.$$eval('.bldg-sheet .bldg-unit', (els) => els.map((e) => e.getAttribute('aria-label')).filter((l) => /^Unit 3\d\d,.*Not on this round$/.test(l || '')));
     const offSupporters = three.filter((p) => off.some((l) => l.startsWith(`Unit ${p.u},`)));
     check('7: GOTV pass, 3 supporters voted: still "210 units", those 3 "Not on this round", left down by 3',
-      /^210 units · /.test(line) && offSupporters.length === 3 && leftOf(line) === before.open - 3, `${line} · before open ${before?.open} · ${offSupporters.length}`);
+      /^Building · 210 units \| /.test(line) && offSupporters.length === 3 && leftOf(line) === before.open - 3, `${line} · before open ${before?.open} · ${offSupporters.length}`);
     await D.shot('07-gotv-sheet-desk');
     const head2 = await D.page.$eval('.bldg-sheet .bldg-floor__head', (el) => el.innerText.replace(/\s+/g, ' ').trim()).catch(() => '');
     check('7: a floor with nobody on this round says so, never "done"', /^Floor 2 · not on this round/.test(head2), head2);
@@ -587,7 +651,7 @@ if (want(2) && BUSY) {
     await bp.mouse.click(x, y);
     const res = await asked;
     await bp.waitForSelector('.bldg-sheet .bldg-count__line', { timeout: 8000 }).catch(() => {});
-    check(`2 z${z}: a tap on the square dot opens the building's sheet`, Boolean(res) && /^210 units/.test(await countLine(bp)), await countLine(bp));
+    check(`2 z${z}: a tap on the square dot opens the building's sheet`, Boolean(res) && (await sheetSays(bp)) === 'Building · 210 units | 210 left', await sheetSays(bp));
     await bp.keyboard.press('Escape');
     await sleep(400);
     if (z === 17) {

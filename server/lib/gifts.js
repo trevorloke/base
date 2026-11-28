@@ -7,7 +7,7 @@ import { newId } from './events.js';
 import { checkCap } from './cap.js';
 import { runHooks } from './hooks.js';
 import { httpError } from '../actions/util.js';
-import { DEFAULT_SLATE, slateLabel } from '@starbase/shared/canvass';
+import { DEFAULT_SLATE, slateLabel } from '@base-win/shared/canvass';
 import { DEFAULT_TZ } from './org.js';
 
 export const logGift = async (tx, workspace, input, emit) => {

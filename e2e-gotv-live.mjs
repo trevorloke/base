@@ -1,6 +1,6 @@
 // Live GOTV E2E (GOTV stage 2) — one campaign on a file-backed database, the
 // server started and restarted by this suite with the clock moved only by
-// STARBASE_CLOCK_SHIFT_MS (STARBASE_E2E=1). Made-up people only.
+// BASE_CLOCK_SHIFT_MS (BASE_E2E=1). Made-up people only.
 //   0. seed through the voter guide’s own actions: an advance day (today) and
 //      election day (both close 20:00), Place A and Place B, the checklist,
 //      published "for GOTV mode too"; two turfs, a GOTV pass
@@ -47,17 +47,18 @@ import { spawn } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { bothNames } from './shared/old-names.js';
 
 // The fixtures here are Imagine Surrey's, so the server runs as its production
 // does (render.yaml sets this brand); a brand set by hand is left as set.
-if (process.env.STARBASE_BRAND === undefined) process.env.STARBASE_BRAND = 'imagine-surrey';
+if (bothNames('BASE_BRAND').every((k) => process.env[k] === undefined)) process.env.BASE_BRAND = 'imagine-surrey';
 
 const PORT = Number(process.env.PORT || 5500);
 const ORIGIN = `http://127.0.0.1:${PORT}`;
 const DESK = `${ORIGIN}/admin`;
 const FIELD = ORIGIN;
 const API = `${ORIGIN}/api`;
-const SHOTS = process.env.SHOTS || '/tmp/starbase-gotv-live';
+const SHOTS = process.env.SHOTS || '/tmp/base-win-gotv-live';
 const NAMES = Number(process.env.GOTV_NAMES || 300);
 mkdirSync(SHOTS, { recursive: true });
 const DATA = mkdtempSync(join(tmpdir(), 'gotv-e2e-'));
@@ -91,7 +92,7 @@ let shift = 0;
 let server = null;
 const startServer = async (shift = 0) => {
   server = spawn(process.execPath, ['server/index.js'], {
-    env: { ...process.env, PORT: String(PORT), STARBASE_OPEN_SIGNUP: '1', STARBASE_DATA: DATA, STARBASE_E2E: '1', STARBASE_CLOCK_SHIFT_MS: String(Math.round(shift)) },
+    env: { ...process.env, PORT: String(PORT), BASE_OPEN_SIGNUP: '1', BASE_DATA: DATA, BASE_E2E: '1', BASE_CLOCK_SHIFT_MS: String(Math.round(shift)) },
     stdio: ['ignore', 'ignore', 'inherit'],
   });
   for (let i = 0; i < 160; i += 1) {
@@ -403,7 +404,7 @@ try {
   // A name written hours ago, matched now, and taken back.
   const hoursAgo = new Date(at(A1, '10:00') - 3 * HOUR).toISOString();
   await sam.page.evaluate(([ws, uid, w]) => {
-    const k = `starbase:gotv-notes:${ws}:${uid}`;
+    const k = `base-win:gotv-notes:${ws}:${uid}`;
     const list = JSON.parse(localStorage.getItem(k) || '[]');
     list.push({ id: 'note-olamide', typed: 'olamide', written_at: w, place_id: null });
     localStorage.setItem(k, JSON.stringify(list));
@@ -605,7 +606,7 @@ try {
     await moveTo(at(plus(G, 1), '01:58'));
     const wq = new Date(at(G, '19:58')).toISOString();
     const me = (await api(sam.page, '/auth/me')).json;
-    await sam.page.evaluate(([k, v]) => localStorage.setItem(k, v), [`starbase:gotv-notes:${me.workspace.id}:${me.user.id}`, JSON.stringify([{ id: 'note-quinn', typed: 'quinn exa', written_at: wq, place_id: placeA }])]);
+    await sam.page.evaluate(([k, v]) => localStorage.setItem(k, v), [`base-win:gotv-notes:${me.workspace.id}:${me.user.id}`, JSON.stringify([{ id: 'note-quinn', typed: 'quinn exa', written_at: wq, place_id: placeA }])]);
     await go(sam.page, `${FIELD}/`);
     check('12. Today, the day after: "You have 1 name not sent"', await until(async () => /You have 1 name not sent/.test(await text(sam.page)), 8000), (await text(sam.page)).slice(0, 300));
     await go(sam.page, `${FIELD}/gotv`);
@@ -641,7 +642,7 @@ try {
     const me = (await api(ben.page, '/auth/me')).json;
     const many = Array.from({ length: 201 }, (_, i) => ({ id: `note-b${i}`, typed: `name ${i}`, written_at: new Date(at(G, '16:00') + i * 1000).toISOString(), place_id: placeA }));
     many.push({ id: 'note-today', typed: 'today exa', written_at: new Date(at(plus(G, 1), '01:00')).toISOString(), place_id: placeB });
-    await ben.page.evaluate(([k, v]) => localStorage.setItem(k, v), [`starbase:gotv-notes:${me.workspace.id}:${me.user.id}`, JSON.stringify(many)]);
+    await ben.page.evaluate(([k, v]) => localStorage.setItem(k, v), [`base-win:gotv-notes:${me.workspace.id}:${me.user.id}`, JSON.stringify(many)]);
     await go(ben.page, `${FIELD}/gotv`);
     const all = await until(async () => /Polls closed — match your 201 names/.test(await text(ben.page)), 12_000, 400);
     const t12 = await text(ben.page);
@@ -659,7 +660,7 @@ try {
     await ben.page.click('.gv-confirm button:has-text("Yes")');
     const back = await until(async () => /Polls closed — match your 200 names/.test(await text(ben.page)) && /1 name to send/.test(await text(ben.page)) && !(await ben.page.$('#gv-q')), 5000);
     check('12b. done matching: both lists, every place, no box', back, (await text(ben.page)).slice(0, 300));
-    await ben.page.evaluate(([k]) => localStorage.removeItem(k), [`starbase:gotv-notes:${me.workspace.id}:${me.user.id}`]);
+    await ben.page.evaluate(([k]) => localStorage.removeItem(k), [`base-win:gotv-notes:${me.workspace.id}:${me.user.id}`]);
   }
   await moveTo(at(G, '10:00'));
 

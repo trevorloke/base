@@ -24,7 +24,7 @@ import { newId, canonical } from '../../lib/events.js';
 import { now } from '../../lib/clock.js';
 import { localDay } from '../../lib/tzrule.js';
 import { normWords, normAddress } from '../../../shared/voteguide.js';
-import { authorizedBy } from '../../../shared/site/wording.js';
+import { authorizedLine } from '../../../shared/site/authorized.js';
 import { siteAction, actions as siteActions } from '../site/actions.js';
 import { readSettings, isAppHost } from '../site/store.js';
 import { verify } from '../site/tokens.js';
@@ -430,7 +430,7 @@ export const actions = {
     const ws = ctx.workspaceId;
     const guide = buildGuide(await readRows(tx, ws), tzOf(ctx.workspace));
     const settings = await readSettings(tx, ws);
-    const list = checklist(guide, authorizedBy(settings?.org || {}), now());
+    const list = checklist(guide, authorizedLine(settings?.org || {}, { channel: 'embed' }).en, now());
     const missing = list.find((c) => !c.done);
     if (missing) throw httpError(400, missing.words);
     await tx.query("update vote_guide set status = 'published', published_at = now(), published_by = $2 where workspace_id = $1", [ws, ctx.user?.id || null]);

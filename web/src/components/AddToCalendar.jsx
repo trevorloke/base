@@ -14,7 +14,7 @@
 // leaves only the file. disabled: a "Count me in" still on this phone.
 // No signal (or still on the phone): the choices are off, "Needs signal".
 import { useEffect, useRef, useState } from 'react';
-import { googleLink, outlookLink } from '@starbase/shared/ics';
+import { googleLink, outlookLink } from '@base-win/shared/ics';
 import { apiGet } from '../api.js';
 import { NeedsSignalLine, useOnline } from './NoSignal.jsx';
 import './calendar.css';

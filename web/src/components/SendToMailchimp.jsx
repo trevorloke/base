@@ -31,6 +31,7 @@ import { action, apiGet } from '../api.js';
 import FirstPull, { asks } from './FirstPull.jsx';
 import { useOnline } from './NoSignal.jsx';
 import './send-to-mailchimp.css';
+import { useAuthorized } from './Authorized.jsx';
 
 const num = (n) => (Number(n) || 0).toLocaleString('en-CA');
 const plural = (n, one, many = `${one}s`) => (Number(n) === 1 ? one : many);
@@ -42,7 +43,7 @@ const whenWord = (iso) => {
   const today = d.toDateString() === new Date().toDateString();
   return d.toLocaleString('en-CA', today ? { hour: 'numeric', minute: '2-digit' } : { weekday: 'short', hour: 'numeric', minute: '2-digit' });
 };
-// A server whose background work is off (STARBASE_JOBS=off): said in the
+// A server whose background work is off (BASE_JOBS=off): said in the
 // words the app uses when something isn't set up (MailchimpPanel says the same).
 const WORK_OFF = 'background work is turned off — ask whoever set up base.win to turn it on';
 const active = (s) => Boolean(s) && (s.status === 'queued' || s.status === 'syncing') && !s.stalled;
@@ -111,6 +112,7 @@ export default function SendToMailchimp({ listId }) {
   const key = ['mailchimp', 'list', listId];
   const [asking, setAsking] = useState(false);
   const [everyone, setEveryone] = useState(false);
+  const authText = useAuthorized(isOn).data?.en || '';
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   // Sent, and answered with the question about the first pull: { all, since }
@@ -236,6 +238,13 @@ export default function SendToMailchimp({ listId }) {
                   </label>
                   <p className="ops-meta">Only email, first and last name go. Nobody already in your audience is changed.</p>
                   <p className="ops-meta">Anyone who unsubscribed in Mailchimp is turned off here too — only they can rejoin.</p>
+                  {/* Emails built inside Mailchimp: base.win can't add "Authorized by …" (shared/site/authorized.js, row mailchimp). */}
+                  {authText && (
+                    <p className="ops-meta mc-auth">
+                      Emails you build in Mailchimp don’t get base.win’s footer. Paste this in yours: <span>{authText}</span>{' '}
+                      <button type="button" className="btn-link" onClick={() => navigator.clipboard?.writeText(authText).catch(() => {})}>Copy</button>
+                    </p>
+                  )}
                 </>
               )}
               <div className="ops-actions">

@@ -22,7 +22,7 @@ api.get('/lists/:id/mailchimp', async (c) => {
   if (!DESK.includes(ctx.role)) return c.json({ error: 'desk only' }, 403);
   const list = await loadList(db, ws, c.req.param('id'));
   if (!list) return c.json({ error: 'not found' }, 404);
-  // running: whether this server does background work at all (STARBASE_JOBS=off: a sync waits).
+  // running: whether this server does background work at all (BASE_JOBS=off: a sync waits).
   const out = { on: mailchimpOn(), running: jobRunnerOn(), sync: null, first: null };
   // The newest: after a change of audience, the one sent to the audience in use now.
   const row = (await db.query(

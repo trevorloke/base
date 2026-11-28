@@ -46,8 +46,8 @@ import { apiGet, ApiError } from '../api.js';
 import { holdNote, logContact, pendingMoves, queueAction, undoQueued, useOutbox } from '../offline.js';
 import MovePanel from './MovePanel.jsx';
 import { isOffline, queuedChip, queuedSaid, queuedText } from './queued.js';
-import { SIGN_KINDS, noCalls, noCallsWord } from '@starbase/shared/canvass';
-import { directionsUrl } from '@starbase/shared/maps';
+import { SIGN_KINDS, noCalls, noCallsWord } from '@base-win/shared/canvass';
+import { directionsUrl } from '@base-win/shared/maps';
 import RatingButtons, { More, OutcomeButtons, OUTCOME_LABEL, PersonTabs, focusRating, ratingText, useScale } from './RatingButtons.jsx';
 import { IKnowThem, KnowMeChip } from './RelationshipsBits.jsx';
 import QuickDetails from './QuickDetails.jsx';
@@ -62,6 +62,9 @@ import { callsCard, noTexts, textingOn, useTextingStatus } from './TextingCard.j
 import '../pages/map.css';
 import ScriptLine from './ScriptLine.jsx';
 import { BuildingBar } from './BuildingSheet.jsx';
+import DoorSwitch from './DoorSwitch.jsx';
+import { doorLine, doorParts, unitWords } from '../../../shared/units.js';
+import { UnitSuggestions } from './people.js';
 
 // "Wants a sign?" — one tap files a request (Undo is on the toast). A kind
 // this door already has (requested or up) isn't offered again.
@@ -119,10 +122,21 @@ const telHref = (phone) => `tel:${dialable(phone)}`;
 const smsHref = (phone, body) => `sms:${dialable(phone)}?&body=${encodeURIComponent(body)}`;
 const isDnc = (p) => Array.isArray(p?.tags) && p.tags.some((t) => String(t).toLowerCase() === 'do-not-contact');
 
-export function doorTitle(door) {
+// "Basement suite · 10388 134 St", "Unit 1203 · 13450 104 Ave", or the
+// address alone: one way on every screen (shared/units.js doorLine). place:
+// 'house' | 'building' | 'door' (the caller knows it; else the door's own).
+export function doorTitle(door, place) {
   if (!door?.address) return 'Unaddressed pin';
-  return door.unit ? `${door.unit} – ${door.address}` : door.address;
+  return doorLine(door, place);
 }
+// The header's two parts: the door's words (none for a door on its own, or
+// the main door of a house: the switch says Main) and its address.
+const headParts = (door) => {
+  const parts = doorParts(door);
+  const place = door.place || 'door';
+  const words = parts.unit === '' && place !== 'building' ? '' : unitWords(parts.unit, place);
+  return { words, address: parts.shown || door.address || '' };
+};
 
 // Optimistic edits to the map's ['doors'] cache so pins and the card react
 // before the refetch lands. fn gets the cached { persons, signs, unlocated }.
@@ -395,7 +409,8 @@ export function AddDoorForm({ latlng, onPlace, onDone, onCancel, toast, allowGoo
           </div>
           <div className="field" style={{ flex: '1 1 80px' }}>
             <label htmlFor="nd-unit">Unit</label>
-            <input id="nd-unit" className="input" maxLength={40} autoComplete="off" value={form.unit} onChange={set('unit')} />
+            <input id="nd-unit" className="input" maxLength={40} autoComplete="off" list="nd-unit-words" value={form.unit} onChange={set('unit')} />
+            <UnitSuggestions id="nd-unit-words" />
           </div>
         </div>
         <PersonFields idPrefix="nd" form={form} set={set} focusName={false} />
@@ -429,7 +444,12 @@ export function Directions({ to, words, mode, className = 'btn btn-quiet door-ac
 // { label, onBack, onNext, nextLabel, onLogged } — a bar back to the sheet
 // above the card and, once a knock is logged here, "Next unit" as the one
 // primary (never an automatic jump: a note may still follow).
-export default function DoorCard({ door, selectedId, onSelect, onClose, toast, me, canCreate = true, canAddHere = canCreate, allowGoogle = false, building = null }) {
+// house: the card opened at a house with suites (Map.jsx): { doors: [{ key,
+// words, state }] in house order, onPick(key), next: { key, words } | null,
+// onNext, onLogged } — the door switch under the header and, once a knock
+// is logged here, "Next: Basement suite" as the one primary (or "Every door
+// at this house is done"). The card acts only on the selected door's people.
+export default function DoorCard({ door, selectedId, onSelect, onClose, toast, me, canCreate = true, canAddHere = canCreate, allowGoogle = false, building = null, house = null }) {
   const queryClient = useQueryClient();
   const location = useLocation();
   // The profile's back link reads this: "← Map", back to this door (the URL
@@ -552,6 +572,7 @@ export default function DoorCard({ door, selectedId, onSelect, onClose, toast, m
       }, { who: person.name });
       if (person.id === sel?.id) survey.logged(r, { channel: via, outcome, rating, answers, visitOf });
       if (building) { setKnocked(true); building.onLogged?.(person, via, outcome, r); }
+      if (house) { setKnocked(true); house.onLogged?.(person, via, outcome, r); }
       if (pending) backToDoor(); // the call/text is logged — the next tap is back at the door
       // Append-only: "Change" brings the rating row back; the next tap logs the fix.
       const change = { label: 'Change', onClick: () => focusRating(rateRef.current) };
@@ -664,6 +685,7 @@ export default function DoorCard({ door, selectedId, onSelect, onClose, toast, m
 
   const dnc = isDnc(sel);
   const moreId = `door-more-${sel?.id || 'none'}`;
+  const head = headParts(door);
 
   return (
     <aside className="door-card" aria-label={`Door: ${doorTitle(door)}`}>
@@ -675,10 +697,17 @@ export default function DoorCard({ door, selectedId, onSelect, onClose, toast, m
             {!multi && dnc && <span className="chip chip-danger door-dnc">Do not contact</span>}
             {!multi && waitChip && <span className="chip fk-wait door-dnc">{waitChip}</span>}
           </h2>
-          {!multi && <span className="door-head__addr">{doorTitle(door)}</span>}
+          {/* "Basement suite · 10388 134 St": the door's words in ink, never muted grey. */}
+          {!multi && (
+            <span className="door-head__addr">
+              {head.words && <><span className="door-head__unit">{head.words}</span><span aria-hidden="true"> · </span></>}
+              <span className="door-head__street">{head.address}</span>
+            </span>
+          )}
         </div>
         <button type="button" className="btn btn-quiet mapsheet-close" onClick={onClose} aria-label="Close door card">✕</button>
       </header>
+      {house && <DoorSwitch doors={house.doors} value={door.key} onPick={house.onPick} />}
 
       {sel && (
         <section className="door-rate" ref={rateRef} aria-label={`Rate ${sel.name}`}>
@@ -821,6 +850,13 @@ export default function DoorCard({ door, selectedId, onSelect, onClose, toast, m
           {building.nextLabel ? (
             <button type="button" className="btn btn-primary bldg-next" onClick={building.onNext}>{building.nextLabel}</button>
           ) : <p className="bldg-line" role="status">Every unit is done</p>}
+        </div>
+      )}
+      {house && !building && knocked && (
+        <div className="bldg-dock">
+          {house.next ? (
+            <button type="button" className="btn btn-primary bldg-next" onClick={house.onNext}>Next: {house.next.words}</button>
+          ) : <p className="bldg-line" role="status">Every door at this house is done</p>}
         </div>
       )}
     </aside>

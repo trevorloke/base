@@ -5,11 +5,11 @@
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { freshDb, Client } from './helpers.js';
-import { VOLUNTEER_ROLE_CODES } from '@starbase/shared/canvass';
+import { VOLUNTEER_ROLE_CODES } from '@base-win/shared/canvass';
 import {
   SHIFT_KINDS, SHIFT_KIND_CODES, isPinName, kindOf, madeTitle, pinName, pinPoint, placeLabel, repeatDays, shiftKind, siteListOf, whereWords,
-} from '@starbase/shared/shiftkinds';
-import { isClock, isDay } from '@starbase/shared/dayparts';
+} from '@base-win/shared/shiftkinds';
+import { isClock, isDay } from '@base-win/shared/dayparts';
 
 let c, db;
 const ok = (r, msg) => { assert.equal(r.status, 200, `${msg || ''} ${JSON.stringify(r.json)}`); return r.json; };

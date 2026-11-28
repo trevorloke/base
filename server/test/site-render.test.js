@@ -20,7 +20,7 @@ import { presetFor } from '../lib/preset.js';
 
 // Imagine Surrey's own server (this file does not load the test helper):
 // its look is there by name, as its production's is.
-process.env.STARBASE_BRAND = 'imagine-surrey';
+process.env.BASE_BRAND = 'imagine-surrey';
 const IS_SKIN = presetFor('imagine-surrey').site.skin;
 
 const SKIN_NAMES = ['base', 'imagine-surrey'];

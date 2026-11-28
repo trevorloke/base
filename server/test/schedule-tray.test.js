@@ -6,7 +6,7 @@
 // and roles only, never a phone or an email; nobody else on the voter list.
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
-import { addDays, dayOf, weekBounds, weekStart } from '@starbase/shared/dayparts';
+import { addDays, dayOf, weekBounds, weekStart } from '@base-win/shared/dayparts';
 
 const { send, ok, campaign, member } = await import('./site-helpers.js');
 

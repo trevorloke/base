@@ -701,7 +701,7 @@ test('the winner goes out without holding the campaign lock: a door knock mid-se
 });
 
 test('a provider that never answers is given up on: not sure it went, and the send moves on', async () => {
-  process.env.STARBASE_EMAIL_TIMEOUT_MS = '100';
+  process.env.BASE_EMAIL_TIMEOUT_MS = '100';
   let hangTo = null;
   try {
     const { c, ws } = await workspace('Hung', 50);
@@ -726,7 +726,7 @@ test('a provider that never answers is given up on: not sure it went, and the se
       assert.deepEqual(plain.json.counts, { total: 3, sent: 2, failed: 0, queued: 0, sending: 1 });
     }, { hang: (to) => to === hangTo });
   } finally {
-    delete process.env.STARBASE_EMAIL_TIMEOUT_MS;
+    delete process.env.BASE_EMAIL_TIMEOUT_MS;
   }
 });
 
@@ -781,7 +781,7 @@ test('clicks from mail scanners still go to the link but are not counted', async
 });
 
 test('a big list goes out a few hundred per run; meanwhile the rest are "going", not "not sent"', async () => {
-  process.env.STARBASE_AB_SEND_PER_RUN = '15';
+  process.env.BASE_AB_SEND_PER_RUN = '15';
   try {
     const { c, ws } = await workspace('Chunks', 50);
     await withEmail(async (sent) => {
@@ -805,6 +805,6 @@ test('a big list goes out a few hundred per run; meanwhile the rest are "going",
       assert.equal((await events(c, 'blast.ab_winner')).length, 1);
     });
   } finally {
-    delete process.env.STARBASE_AB_SEND_PER_RUN;
+    delete process.env.BASE_AB_SEND_PER_RUN;
   }
 });

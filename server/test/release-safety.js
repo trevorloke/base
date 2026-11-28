@@ -14,6 +14,7 @@
 // a statement that runs against every client's database at every start.
 // `statement` is the statement as normalize() gives it (lower case, one
 // space between words, no comments, no closing semicolon).
+import { newNameOf } from '../../shared/old-names.js';
 export const ALLOWED_AT_START = [
   {
     source: 'apps/platform/db.sql',
@@ -211,25 +212,25 @@ export const FIXED_OK = {
   // Every client's campaign server (base-win, and any base-win-<name>).
   production: {
     NODE_ENV: 'Always production on Render: the server\'s own mode, not the campaign\'s.',
-    STARBASE_ENV: 'Always production on a client\'s service: it is what makes it production (the badge, /api/health).',
+    BASE_ENV: 'Always production on a client\'s service: it is what makes it production (the badge, /api/health).',
   },
   // Staging is base.win's own sample campaign and public demo, not a
   // client's: render.yaml is where its values live, so a sync resetting them
   // is what we want.
   staging: {
     NODE_ENV: 'Always production on Render: the server\'s own mode.',
-    STARBASE_ENV: 'Always staging on the staging service.',
-    STARBASE_BRAND: 'base.win\'s own look on the demo, never a client\'s.',
-    STARBASE_ORG_NAME: 'The made-up sample campaign\'s name.',
-    STARBASE_JURISDICTION: 'The sample runs under the rules a B.C. municipal client does, so staging tests what production does.',
-    STARBASE_TZ: 'The sample campaign\'s time zone.',
-    STARBASE_CITY: 'The sample campaign\'s city.',
-    STARBASE_GEO_BOUNDS: 'The sample campaign\'s map area.',
-    STARBASE_SLATES: 'The sample campaign\'s slates.',
-    STARBASE_FRAME_HOSTS: 'base.win\'s own website, which frames the demo.',
-    STARBASE_DEMO_EMAIL: 'The demo account, the sample campaign\'s manager, on base.win\'s domain.',
-    STARBASE_SAMPLE: 'Makes the sample campaign on an empty staging database.',
-    STARBASE_CANDIDATES: 'The sample\'s made-up opponents.',
+    BASE_ENV: 'Always staging on the staging service.',
+    BASE_BRAND: 'base.win\'s own look on the demo, never a client\'s.',
+    BASE_ORG_NAME: 'The made-up sample campaign\'s name.',
+    BASE_JURISDICTION: 'The sample runs under the rules a B.C. municipal client does, so staging tests what production does.',
+    BASE_TZ: 'The sample campaign\'s time zone.',
+    BASE_CITY: 'The sample campaign\'s city.',
+    BASE_GEO_BOUNDS: 'The sample campaign\'s map area.',
+    BASE_SLATES: 'The sample campaign\'s slates.',
+    BASE_FRAME_HOSTS: 'base.win\'s own website, which frames the demo.',
+    BASE_DEMO_EMAIL: 'The demo account, the sample campaign\'s manager, on base.win\'s domain.',
+    BASE_SAMPLE: 'Makes the sample campaign on an empty staging database.',
+    BASE_CANDIDATES: 'The sample\'s made-up opponents.',
   },
   // The control centre: there is one, at ops.base.win.
   platform: {
@@ -270,7 +271,9 @@ export const settingProblems = (doc) => {
       seen.add(v.key);
       const how = howSet(v);
       if (!how) out.push({ service: s.name, key: v.key, problem: 'no value, no sync: false, nothing generated or linked' });
-      else if (how === 'fixed' && !FIXED_OK[kind][v.key]) out.push({ service: s.name, key: v.key, problem: `a fixed value (${JSON.stringify(v.value)}) that a Blueprint sync would write over this service's own` });
+      // A key by the name the server reads first (shared/old-names.js): an older name
+      // never carries a value in render.yaml itself (release-old-names.test.js).
+      else if (how === 'fixed' && !FIXED_OK[kind][newNameOf(v.key)]) out.push({ service: s.name, key: v.key, problem: `a fixed value (${JSON.stringify(v.value)}) that a Blueprint sync would write over this service's own` });
     }
   }
   return out;

@@ -19,7 +19,7 @@
 // campaign, so each starting candidate's label is the one its server sent.
 import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { CANDIDATE_CODE_RE, cleanWord, defaultScale, normalizeScale, onServer, presetCandidates } from '@starbase/shared/scale';
+import { CANDIDATE_CODE_RE, cleanWord, defaultScale, normalizeScale, onServer, presetCandidates } from '@base-win/shared/scale';
 import { apiGet } from '../api.js';
 import { NS } from '../base.js';
 

@@ -13,7 +13,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { VOLUNTEER_ROLES } from '@starbase/shared/canvass';
+import { VOLUNTEER_ROLES } from '@base-win/shared/canvass';
 import { action } from '../api.js';
 import { usePersonSearch } from './usePersonSearch.js';
 import PersonResults from './PersonResults.jsx';

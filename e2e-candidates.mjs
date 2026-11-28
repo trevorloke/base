@@ -21,13 +21,13 @@
 // call time; Mo is removed and his call time stays closed (no Reopen).
 // Screens at 1440x900 and 390.
 //
-//   STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=5170 node server/index.js &
+//   BASE_BRAND=imagine-surrey BASE_OPEN_SIGNUP=1 BASE_DATA=memory PORT=5170 node server/index.js &
 //   BASE=http://127.0.0.1:5170 SHOTS=/tmp/candidates node e2e-candidates.mjs
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
 
 const BASE = process.env.BASE || 'http://127.0.0.1:5170';
-const SHOTS = process.env.SHOTS || '/tmp/starbase-candidates';
+const SHOTS = process.env.SHOTS || '/tmp/base-win-candidates';
 mkdirSync(SHOTS, { recursive: true });
 const results = [];
 const check = (name, ok, extra = '') => {

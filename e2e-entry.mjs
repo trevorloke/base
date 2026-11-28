@@ -9,7 +9,7 @@
 // (server/test/entry-sign.js). The walk:
 //   1. A fresh server with the key: sign-up says it is set up from the
 //      control centre; a first manager is made with sign-up opened for
-//      that one request (as STARBASE_OPEN_SIGNUP=1 would).
+//      that one request (as BASE_OPEN_SIGNUP=1 would).
 //   2. /admin/enter#t=… → Today with the banner; the address drops #t.
 //   3. Settings → Members: the chip, and the switch disabled with its line.
 //   4. Sign out from the banner → Sign in.
@@ -33,13 +33,14 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { signEntry } from './server/test/entry-sign.js';
+import { bothNames } from './shared/old-names.js';
 
 const V = JSON.parse(readFileSync(new URL('./server/test/entry-vector.json', import.meta.url), 'utf8'));
 const PORT = Number(process.env.PORT) || 5630;
 const CONTROL = PORT + 1;
 const A = `http://127.0.0.1:${PORT}`;
 const B = `http://127.0.0.1:${PORT + 2}`;
-const SHOTS = process.env.SHOTS || '/tmp/starbase-entry';
+const SHOTS = process.env.SHOTS || '/tmp/base-win-entry';
 mkdirSync(SHOTS, { recursive: true });
 const PASSWORD = 'first-password-2026';
 const OP = { id: '7b1f3c2e-0000-4000-8000-000000000001', email: 'owner@example.org' };
@@ -56,7 +57,7 @@ writeFileSync(STUB, `
 import { createServer } from 'node:http';
 // The fixtures here are Imagine Surrey's, so the server runs as its production
 // does (render.yaml sets this brand); a brand set by hand is left as set.
-if (process.env.STARBASE_BRAND === undefined) process.env.STARBASE_BRAND = 'imagine-surrey';
+if (${JSON.stringify(bothNames('BASE_BRAND'))}.every((k) => process.env[k] === undefined)) process.env.BASE_BRAND = 'imagine-surrey';
 
 createServer(async (req, res) => {
   let body = '';
@@ -66,8 +67,8 @@ createServer(async (req, res) => {
   res.end('ok');
 }).listen(${CONTROL}, '127.0.0.1');
 `);
-const base = { ...process.env, STARBASE_DATA: 'memory', STARBASE_JOBS: 'off', STARBASE_ENV: 'production', BASE_PLATFORM_PUBKEY: V.publicKey };
-for (const k of ['STARBASE_OPEN_SIGNUP', 'STARBASE_DEMO_EMAIL', 'RENDER_EXTERNAL_URL', 'STARBASE_PUBLIC_URL', 'BASE_PATH', 'MAIL_PROVIDER', 'RESEND_API_KEY', 'SENDGRID_API_KEY']) delete base[k];
+const base = { ...process.env, BASE_DATA: 'memory', BASE_JOBS: 'off', BASE_ENV: 'production', BASE_PLATFORM_PUBKEY: V.publicKey };
+for (const k of ['BASE_OPEN_SIGNUP', 'BASE_DEMO_EMAIL', 'RENDER_EXTERNAL_URL', 'BASE_PUBLIC_URL', 'BASE_PATH', 'MAIL_PROVIDER', 'RESEND_API_KEY', 'SENDGRID_API_KEY'].flatMap(bothNames)) delete base[k];
 const logs = { A: '', B: '' };
 const start = (name, args, env) => {
   const s = spawn(process.execPath, [...args, 'server/index.js'], { cwd: fileURLToPath(new URL('.', import.meta.url)), env, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -77,8 +78,8 @@ const start = (name, args, env) => {
   return s;
 };
 const servers = [
-  start('A', ['--import', pathToFileURL(STUB).href], { ...base, PORT: String(PORT), STARBASE_OWN_URL: A }),
-  start('B', [], { ...base, PORT: String(PORT + 2), STARBASE_OWN_URL: B, BASE_PATH: '/x' }),
+  start('A', ['--import', pathToFileURL(STUB).href], { ...base, PORT: String(PORT), BASE_OWN_URL: A }),
+  start('B', [], { ...base, PORT: String(PORT + 2), BASE_OWN_URL: B, BASE_PATH: '/x' }),
 ];
 const health = async (o) => fetch(`${o}/api/health`).then((r) => r.json()).catch(() => null);
 for (const o of [A, B]) {
@@ -140,9 +141,9 @@ try {
   await mgr.getByText('This campaign is set up from the base.win control centre.').waitFor();
   check('a fresh server with the key: sign-up says it is set up from the control centre', true);
   await shot(mgr, 'signup-closed-desktop');
-  await control({ STARBASE_OPEN_SIGNUP: '1' });
+  await control({ BASE_OPEN_SIGNUP: '1' });
   const su = await api(mgr, A, '/auth/signup', { name: 'Morgan Example', email: 'morgan@example.org', password: PASSWORD, workspaceName: 'Sample Campaign', jurisdiction: 'bc-municipal' });
-  await control({ STARBASE_OPEN_SIGNUP: null });
+  await control({ BASE_OPEN_SIGNUP: null });
   check('the first manager signs up while it is opened', su.status === 201, JSON.stringify(su.json));
   check('closed again after', (await health(A)).setupOpen === false);
   // A volunteer, joined with their own password, whose email is another operator's (step 10), and someone to knock on (step 7).

@@ -496,13 +496,13 @@ test('dropPurpose from a job; clean-up (onRevoke) runs before the revoke, and wi
   // No background work on this server: the clean-up runs in the write, without a token.
   const w = await join(M.b, `dr.${tag}@example.org`, 'volunteer');
   assert.equal((await connect(w.b, 'test.clean', A[17].sub)).google, 'connected');
-  process.env.STARBASE_JOBS = 'off';
+  process.env.BASE_JOBS = 'off';
   try {
     cleaned.length = 0;
     await w.b.action('google.disconnect', { purpose: 'test.clean' });
     assert.deepEqual(cleaned.map((c) => [c.userId, c.fetch]), [[w.id, false]]);
   } finally {
-    delete process.env.STARBASE_JOBS;
+    delete process.env.BASE_JOBS;
   }
 });
 
@@ -592,9 +592,9 @@ test('payloads pinned; access tokens in no table, job or event', async () => {
 // from its Gmail, read its Drive), so the demo account can do neither.
 test('the demo account: connecting or linking Google is refused before Google, and on the way back', async () => {
   const D = await join(M.b, `demo.${tag}@example.org`, 'staff', 'Demo Visitor');
-  const was = process.env.STARBASE_DEMO_EMAIL;
+  const was = process.env.BASE_DEMO_EMAIL;
   try {
-    process.env.STARBASE_DEMO_EMAIL = `demo.${tag}@example.org`;
+    process.env.BASE_DEMO_EMAIL = `demo.${tag}@example.org`;
     fake.resetCounts();
     assert.equal((await connect(D.b, 'test.other', A[20].sub)).google, 'not-allowed', 'connect');
     assert.equal((await D.b.google(fake, { do: 'link', back: '/profile' }, A[20].sub)).google, 'not-allowed', 'link');
@@ -604,16 +604,16 @@ test('the demo account: connecting or linking Google is refused before Google, a
     assert.equal((await connect(S.b, 'test.other', A[0].sub)).google, 'connected');
     // A flow started before the demo was set: refused when it comes back,
     // and what Google handed over is revoked.
-    delete process.env.STARBASE_DEMO_EMAIL;
+    delete process.env.BASE_DEMO_EMAIL;
     const r = await connect(D.b, 'test.other', A[21].sub, {});
     assert.equal(r.google, 'connected', 'not the demo then');
     await D.b.action('google.disconnect', { purpose: 'test.other' });
     const late = await D.b.google(fake, { do: 'connect', for: 'test.other', app: 'field', back: '/profile' }, A[21].sub, {
-      mangle: (u) => { process.env.STARBASE_DEMO_EMAIL = `demo.${tag}@example.org`; return u; },
+      mangle: (u) => { process.env.BASE_DEMO_EMAIL = `demo.${tag}@example.org`; return u; },
     });
     assert.equal(late.google, 'not-allowed', 'on the way back');
     assert.equal(await grantRow(D.id), null);
   } finally {
-    if (was === undefined) delete process.env.STARBASE_DEMO_EMAIL; else process.env.STARBASE_DEMO_EMAIL = was;
+    if (was === undefined) delete process.env.BASE_DEMO_EMAIL; else process.env.BASE_DEMO_EMAIL = was;
   }
 });

@@ -1,7 +1,8 @@
 // A text blast: one text to everyone on a list, through the campaign's
 // Twilio number, by the same rules as a text from the Calls card — no
 // opted-out number, no do-not-text or do-not-contact, inside quiet hours,
-// the campaign named, "Reply STOP to opt out" on each — and filed in the
+// the campaign named, "Authorized by …" when it is filled in and "Reply
+// STOP to opt out" on each — and filed in the
 // Inbox like any text: a conversation per person, started by whoever sent
 // the blast, so replies (and STOP) land where the desk reads them.
 //
@@ -15,7 +16,8 @@ import { textConfigured } from '../../lib/notify.js';
 import { sendSms, publicBase } from './twilio.js';
 import { settingsFor, quietState, applyOptOut, tzOf } from './store.js';
 import { whyNot } from '../../lib/reach.js';
-import { withFooter, localMinutes, now as clock } from './rules.js';
+import { withFooter, withAuthorized, localMinutes, now as clock } from './rules.js';
+import { authorizedOf } from '../../lib/authorized.js';
 import { askedRow, outcomeOf, recordOutcome, NO_TEXT_PROVIDER, DELIVER_ACTION } from '../abtests/send.js';
 
 const BATCH = 10;
@@ -36,6 +38,8 @@ export const deliverTexts = async (db, ctx, blast, { actorId = null, budgetMs = 
   const run = { sent: 0, failed: 0, skipped: 0, unsure: 0, claimed: 0, note: null, more: false, heldUntil: null };
   const t0 = Date.now();
   const base = publicBase();
+  // "Authorized by …" before the opt-out line (shared/site/authorized.js), read once a run.
+  const auth = await authorizedOf(db, workspaceId, { channel: 'sms-list' });
   for (;;) {
     if (!textConfigured()) { run.note = NO_TEXT_PROVIDER; break; }
     const quiet = quietState(await settingsFor(db, workspaceId), ctx.workspace);
@@ -101,7 +105,7 @@ export const deliverTexts = async (db, ctx, blast, { actorId = null, budgetMs = 
     if (go.empty) break;
     for (const r of go.rows) {
       run.claimed += 1;
-      const body = withFooter(blast.body);
+      const body = withFooter(withAuthorized(blast.body, auth));
       const msgId = newId();
       const res = await sendSms({ to: r.phone, body, statusCallback: base ? `${base}/api/public/twilio/sms-status/${msgId}` : undefined });
       const answer = res.ok ? { sent: true, status: 'sent' } : { sent: false, status: 'failed', detail: res.detail };

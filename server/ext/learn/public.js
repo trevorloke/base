@@ -1,6 +1,6 @@
 // Lessons for supporters: a lesson whose audience is "public" has a page
 // of its own — /learn/<slug> lists them, /learn/<slug>/<id> is one — in
-// the look of Starbase's public pages (lib/publicpage.js). Its file is at
+// the look of base.win's public pages (lib/publicpage.js). Its file is at
 // /learn-files/<id>. Nothing else of the training is public.
 //
 // Training is at /training in the app. A campaign whose set-up gave it
@@ -8,12 +8,13 @@
 // working: it is sent on to /training, the rest of the address kept.
 import { Hono } from 'hono';
 import { getDb } from '../../db/client.js';
-import { renderMarkdown, markdownText, escapeHtml as esc } from '@starbase/shared/markdown';
+import { renderMarkdown, markdownText, escapeHtml as esc } from '@base-win/shared/markdown';
 import { page as publicPage } from '../../lib/publicpage.js';
 import { kindOfType } from './files.js';
 import { serveAsset } from './api.js';
 import { learnName } from '../../lib/brand.js';
 import { preset } from '../../lib/preset.js';
+import { authorizedOf } from '../../lib/authorized.js';
 
 export const publicRoutes = new Hono();
 
@@ -46,7 +47,12 @@ const wsBySlug = async (db, slug) => {
   if (ws) ws.settings = settingsOf(ws);
   return ws;
 };
-const page = (c, db, ws, title, inner) => c.html(publicPage(ws, title, inner, { wide: true, noindex: true }));
+// A public lesson is the campaign's own public words: it carries the
+// campaign's "Authorized by" line when it is filled in
+// (shared/site/authorized.js, channel site-plain-public).
+const page = async (c, db, ws, title, inner) => c.html(publicPage(ws, title, inner, {
+  wide: true, noindex: true, authorized: await authorizedOf(db, ws.id, { channel: 'site-plain-public' }),
+}));
 const KIND_WORD = { note: 'Note', document: 'Document', video: 'Video', audio: 'Audio', picture: 'Picture', contacts: 'Contacts', procedure: 'Procedure' };
 const PUBLIC = `l.workspace_id = $1 and l.deleted_at is null and l.published and l.audience = 'public'`;
 

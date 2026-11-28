@@ -40,8 +40,8 @@ jobs:
         run: |
           set -euo pipefail
           sha="${{ steps.pick.outputs.sha }}"
-          conclusion=$(gh api "repos/${{ github.repository }}/commits/$sha/check-runs?check_name=starbase" \
-            --jq '[.check_runs[] | select(.name == "starbase")] | sort_by(.completed_at) | last | .conclusion // "none"')
+          conclusion=$(gh api "repos/${{ github.repository }}/commits/$sha/check-runs?check_name=base-win" \
+            --jq '[.check_runs[] | select(.name == "base-win")] | sort_by(.completed_at) | last | .conclusion // "none"')
           echo "CI on $sha: $conclusion"
           [ "$conclusion" = "success" ] || { echo "::error::CI has not passed on $sha (it is: $conclusion). Wait for green, or fix main."; exit 1; }
       - name: Fast-forward production

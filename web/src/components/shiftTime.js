@@ -3,7 +3,7 @@
 // time, a phone abroad, the week screen and the emails all say the same hour.
 // Used by the Shifts list, a shift's page, the roster, the crew board and
 // Today.
-import { addDays, clockOf, dayOf, fmtIn, safeZone, spanWords } from '@starbase/shared/dayparts';
+import { addDays, clockOf, dayOf, fmtIn, safeZone, spanWords } from '@base-win/shared/dayparts';
 
 export const zoneOf = (me) => safeZone(me?.workspace?.settings?.tz);
 

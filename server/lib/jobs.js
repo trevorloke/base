@@ -144,6 +144,6 @@ export const startJobRunner = (db, { everyMs = 30_000 } = {}) => {
   timer.unref?.();
 };
 export const runJobsSoon = () => { if (runner) setImmediate(tick); };
-// Whether this process runs jobs (off before startJobRunner, or STARBASE_JOBS=off).
+// Whether this process runs jobs (off before startJobRunner, or BASE_JOBS=off).
 export const jobRunnerOn = () => !!runner;
 export const stopJobRunner = () => { if (timer) clearInterval(timer); timer = null; runner = null; };

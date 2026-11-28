@@ -12,7 +12,7 @@ import vm from 'node:vm';
 
 const SOURCE = readFileSync(new URL('../../web/public/sw.js', import.meta.url), 'utf8');
 const ORIGIN = 'https://app.example';
-const TILES = 'starbase-tiles-v2';
+const TILES = 'base-win-tiles-v2';
 
 // A worker as a browser starts it: its own caches (every read and write takes
 // a turn, as a real one does), and a network that answers every tile.
@@ -68,7 +68,7 @@ const worker = () => {
   };
   const tell = (url) => {
     const waits = [];
-    on.message({ data: { type: 'starbase:tiles', url }, waitUntil: (p) => { waits.push(p); } });
+    on.message({ data: { type: 'base-win:tiles', url }, waitUntil: (p) => { waits.push(p); } });
     return Promise.all(waits);
   };
   const kept = () => [...(stores.get(TILES)?.keys() || [])];

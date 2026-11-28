@@ -29,7 +29,7 @@
 // desk-only read (index.js) and the handler checks the role again.
 import { Hono } from 'hono';
 import { fieldOut } from './actions.js';
-import { DWELLING_TYPES, LIST_TOP, LIST_WORDS_MAX, flipGuesses } from '@starbase/shared/fieldlists';
+import { DWELLING_TYPES, LIST_TOP, LIST_WORDS_MAX, flipGuesses } from '@base-win/shared/fieldlists';
 import { DOESNT_SUIT, ONLY_TEXT, suits, wordsOf } from './convert.js';
 import { preset } from '../../lib/preset.js';
 

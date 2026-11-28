@@ -6,35 +6,36 @@
 //         id and contact.log already has its own client_id.
 //   api   GET /api/map/config (signed in, every role): which map tiles to draw.
 //         Desk roles also get `setup` — where the tiles come from and which
-//         STARBASE_TILE_* settings were ignored — so whoever set them sees it
+//         BASE_TILE_* settings were ignored — so whoever set them sees it
 //         on the map (a mistyped value is otherwise only a server-log line).
 //
 // Map tiles come from OpenStreetMap unless the deployment names its own
 // provider (OSM's volunteer servers are not for heavy use — a big team in
 // election week should switch):
-//   STARBASE_TILE_URL          https://…/{z}/{x}/{y}.png  ({s} optional)
-//   STARBASE_TILE_ATTRIBUTION  the provider's credit line (links allowed)
-//   STARBASE_TILE_MAX_ZOOM     1–22 (default 19)
+//   BASE_TILE_URL          https://…/{z}/{x}/{y}.png  ({s} optional)
+//   BASE_TILE_ATTRIBUTION  the provider's credit line (links allowed)
+//   BASE_TILE_MAX_ZOOM     1–22 (default 19)
 // Or a provider by name, its address and credit filled in:
-//   STARBASE_TILE_PROVIDER     stadia — Stadia Maps' Alidade Smooth (STARBASE_TILE_URL,
+//   BASE_TILE_PROVIDER     stadia — Stadia Maps' Alidade Smooth (BASE_TILE_URL,
 //                              if set, wins over it)
-//   STARBASE_TILE_KEY          the provider's key, if it isn't set to know the
+//   BASE_TILE_KEY          the provider's key, if it isn't set to know the
 //                              campaign's own web address (phones can see it)
 // Read on every request, so a restart is all a change needs.
 // Google Maps instead (lib/gtiles.js): with GOOGLE_MAPS_TILES=on and
 // GOOGLE_MAPS_SERVER_KEY set (a key with the Map Tiles API enabled).
-// The map then draws /tiles/{z}/{x}/{y}.png from Starbase (signed in), which
-// fetches each tile from Google; STARBASE_TILE_* is ignored while it's on.
+// The map then draws /tiles/{z}/{x}/{y}.png from base.win (signed in), which
+// fetches each tile from Google; BASE_TILE_* is ignored while it's on.
 //   GOOGLE_TILES_DAILY_MAX   tiles a day (the campaign's day); past it the
 //                            tiles answer 503 until midnight and phones turn
 //                            to the free map by themselves. Default: none.
 // The Clean look (CARTO's free map) only with the campaign's own CARTO key:
 // since late August 2026 CARTO answers a request with no key with a picture
 // reading "API KEY REQUIRED", which loads like any tile — a map of no streets.
-//   STARBASE_TILE_CARTO_KEY  CARTO's free basemap key (phones can see it, as
+//   BASE_TILE_CARTO_KEY  CARTO's free basemap key (phones can see it, as
 //                            CARTO's browser keys are meant to be used)
-//   STARBASE_TILE_CLEAN=off  never offer CARTO, key or not. The free map
+//   BASE_TILE_CLEAN=off  never offer CARTO, key or not. The free map
 //                            behind Google stays (OpenStreetMap then).
+import { setting } from '@base-win/shared/old-names';
 import { Hono } from 'hono';
 import { getCookie } from 'hono/cookie';
 import { getDb } from '../../db/client.js';
@@ -56,7 +57,7 @@ export const TILE_DEFAULTS = Object.freeze({
   maxZoom: 19,
 });
 
-// Providers by name (STARBASE_TILE_PROVIDER). Stadia's credit is the one its
+// Providers by name (BASE_TILE_PROVIDER). Stadia's credit is the one its
 // documentation shows for its OpenMapTiles-based styles.
 const PRESETS = {
   stadia: {
@@ -80,7 +81,7 @@ const validUrl = (v) => {
 export const CARTO_KEY_PARAM = 'key';
 const isCarto = (url) => /(^|\.)basemaps\.cartocdn\.com$/i.test(hostOf(url));
 const hasCartoKey = (url) => new RegExp(`[?&]${CARTO_KEY_PARAM}=`).test(String(url));
-const cartoKey = (env) => String(env.STARBASE_TILE_CARTO_KEY ?? '').trim();
+const cartoKey = (env) => String(setting('BASE_TILE_CARTO_KEY', env) ?? '').trim();
 const withCartoKey = (url, key) => `${url}${url.includes('?') ? '&' : '?'}${CARTO_KEY_PARAM}=${encodeURIComponent(key)}`;
 
 const warned = new Set();
@@ -107,20 +108,20 @@ export const tileConfig = (env = process.env) => {
     out.ignored.push('google');
     warnOnce(`GOOGLE_MAPS_TILES=${String(env.GOOGLE_MAPS_TILES).trim().slice(0, 40)} isn’t understood — use 1`);
   }
-  const presetName = String(env.STARBASE_TILE_PROVIDER ?? '').trim().toLowerCase();
+  const presetName = String(setting('BASE_TILE_PROVIDER', env) ?? '').trim().toLowerCase();
   const preset = PRESETS[presetName] || null;
   if (presetName && !preset) {
     out.ignored.push('provider');
-    warnOnce(`STARBASE_TILE_PROVIDER=${presetName.slice(0, 40)} isn’t known — use stadia`);
+    warnOnce(`BASE_TILE_PROVIDER=${presetName.slice(0, 40)} isn’t known — use stadia`);
   }
   if (preset) {
-    const key = String(env.STARBASE_TILE_KEY ?? '').trim();
+    const key = String(setting('BASE_TILE_KEY', env) ?? '').trim();
     out.url = key ? `${preset.url}?api_key=${encodeURIComponent(key)}` : preset.url;
     out.attribution = preset.attribution;
     out.maxZoom = preset.maxZoom;
   }
-  if (env.STARBASE_TILE_URL) {
-    const url = validUrl(env.STARBASE_TILE_URL);
+  if (setting('BASE_TILE_URL', env)) {
+    const url = validUrl(setting('BASE_TILE_URL', env));
     if (url) {
       out.url = url;
       if (!preset || !url.startsWith(preset.url)) out.maxZoom = TILE_DEFAULTS.maxZoom;
@@ -130,27 +131,27 @@ export const tileConfig = (env = process.env) => {
         if (cartoKey(env)) out.url = withCartoKey(url, cartoKey(env));
         else {
           out.ignored.push('carto-key');
-          warnOnce('STARBASE_TILE_URL points at CARTO, which needs a key now (STARBASE_TILE_CARTO_KEY)');
+          warnOnce('BASE_TILE_URL points at CARTO, which needs a key now (BASE_TILE_CARTO_KEY)');
         }
       }
     } else {
       out.ignored.push('url');
-      warnOnce('STARBASE_TILE_URL needs http(s) and {z}/{x}/{y} — using OpenStreetMap');
+      warnOnce('BASE_TILE_URL needs http(s) and {z}/{x}/{y} — using OpenStreetMap');
     }
   }
   // A custom provider without its own credit line gets none rather than
   // OpenStreetMap's (that would be a false credit).
-  if (env.STARBASE_TILE_ATTRIBUTION != null && env.STARBASE_TILE_ATTRIBUTION !== '') {
-    out.attribution = String(env.STARBASE_TILE_ATTRIBUTION).slice(0, 500);
+  if (setting('BASE_TILE_ATTRIBUTION', env) != null && setting('BASE_TILE_ATTRIBUTION', env) !== '') {
+    out.attribution = String(setting('BASE_TILE_ATTRIBUTION', env)).slice(0, 500);
   } else if (!/openstreetmap\.org\//i.test(out.url) && !(preset && out.url.startsWith(preset.url))) {
     out.attribution = '';
   }
-  if (env.STARBASE_TILE_MAX_ZOOM) {
-    const z = Number(env.STARBASE_TILE_MAX_ZOOM);
+  if (setting('BASE_TILE_MAX_ZOOM', env)) {
+    const z = Number(setting('BASE_TILE_MAX_ZOOM', env));
     if (Number.isInteger(z) && z >= 1 && z <= 22) out.maxZoom = z;
     else {
       out.ignored.push('maxZoom');
-      warnOnce('STARBASE_TILE_MAX_ZOOM must be a whole number 1–22 — using 19');
+      warnOnce('BASE_TILE_MAX_ZOOM must be a whole number 1–22 — using 19');
     }
   }
   return out;
@@ -177,10 +178,10 @@ const CLEAN_VIEW = {
   maxZoom: 20,
 };
 // Clean, with the campaign's CARTO key — or null: no key, or
-// STARBASE_TILE_CLEAN=off. No address built here names CARTO without it.
+// BASE_TILE_CLEAN=off. No address built here names CARTO without it.
 export const cartoView = (env = process.env) => {
   const key = cartoKey(env);
-  if (!key || env.STARBASE_TILE_CLEAN === 'off') return null;
+  if (!key || setting('BASE_TILE_CLEAN', env) === 'off') return null;
   return { ...CLEAN_VIEW, url: withCartoKey(CLEAN_VIEW.url, key) };
 };
 // The free map behind Google, always there while Google is the map (phones

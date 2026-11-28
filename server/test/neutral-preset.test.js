@@ -1,6 +1,6 @@
 // No other client gets anything of Imagine Surrey's: what is one client's
 // own is a preset (server/presets/, read only through lib/preset.js), used
-// only by the server whose STARBASE_BRAND names it. Here: which brand a
+// only by the server whose BASE_BRAND names it. Here: which brand a
 // server wears; that preset() follows the setting; that a campaign with no
 // preset has no opponents, no city, no map area and no features, and its
 // page is the page as built; that its lookups carry no city or box; and
@@ -20,7 +20,7 @@ import { city, geoBox, geoBounds, mapHome, orgOut } from '../lib/org.js';
 import { geocodeAddress, suggestAddresses, _resetLookupForTest } from '../lib/geocode.js';
 import { inFence } from '../ext/voteguide/api.js';
 import { bootNotes } from '../index.js';
-import { defaultCandidates } from '@starbase/shared/scale';
+import { defaultCandidates } from '@base-win/shared/scale';
 import { checkLines } from '../../web/src/pages/mapView.js';
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
@@ -30,7 +30,7 @@ const ok = (r, msg = '') => { assert.ok(r.status === 200 || r.status === 201, `$
 
 // The settings a server reads its brand and place from, set for one case
 // and put back after the file.
-const ENV = ['STARBASE_BRAND', 'STARBASE_ENV', 'STARBASE_ORG_NAME', 'STARBASE_CITY', 'STARBASE_GEO_BOUNDS', 'STARBASE_CANDIDATES', 'GEOCODER', 'ADDRESS_SUGGEST'];
+const ENV = ['BASE_BRAND', 'BASE_ENV', 'BASE_ORG_NAME', 'BASE_CITY', 'BASE_GEO_BOUNDS', 'BASE_CANDIDATES', 'GEOCODER', 'ADDRESS_SUGGEST'];
 const saved = Object.fromEntries(ENV.map((k) => [k, process.env[k]]));
 const setEnv = (v) => { for (const k of ENV) { if (v[k] === undefined) delete process.env[k]; else process.env[k] = v[k]; } };
 after(() => setEnv(saved));
@@ -47,60 +47,60 @@ const FIVE = [
 test('the brand: set and known, it is what it says; anything else is base.win’s — but a server named exactly Imagine Surrey keeps its own', () => {
   const key = (env) => brandKey(env);
   // Set and known.
-  assert.equal(key({ STARBASE_BRAND: 'imagine-surrey' }), 'imagine-surrey');
-  assert.equal(key({ STARBASE_BRAND: ' Imagine-Surrey ' }), 'imagine-surrey', 'any case, spaces around');
-  assert.equal(key({ STARBASE_BRAND: 'base', STARBASE_ENV: 'production', STARBASE_ORG_NAME: 'Imagine Surrey' }), 'base', 'set to base, it is base whatever the name');
+  assert.equal(key({ BASE_BRAND: 'imagine-surrey' }), 'imagine-surrey');
+  assert.equal(key({ BASE_BRAND: ' Imagine-Surrey ' }), 'imagine-surrey', 'any case, spaces around');
+  assert.equal(key({ BASE_BRAND: 'base', BASE_ENV: 'production', BASE_ORG_NAME: 'Imagine Surrey' }), 'base', 'set to base, it is base whatever the name');
   // Unset or misspelled: nobody's.
   assert.equal(key({}), 'base', 'nothing set');
-  assert.equal(key({ STARBASE_ENV: 'production' }), 'base', 'production, no name');
-  assert.equal(key({ STARBASE_ENV: 'production', STARBASE_ORG_NAME: 'Kamloops Forward' }), 'base', 'another client');
-  assert.equal(key({ STARBASE_BRAND: 'imagine-surey', STARBASE_ENV: 'production', STARBASE_ORG_NAME: 'Kamloops Forward' }), 'base', 'misspelled is never guessed at');
-  assert.equal(key({ STARBASE_BRAND: 'purple' }), 'base');
+  assert.equal(key({ BASE_ENV: 'production' }), 'base', 'production, no name');
+  assert.equal(key({ BASE_ENV: 'production', BASE_ORG_NAME: 'Kamloops Forward' }), 'base', 'another client');
+  assert.equal(key({ BASE_BRAND: 'imagine-surey', BASE_ENV: 'production', BASE_ORG_NAME: 'Kamloops Forward' }), 'base', 'misspelled is never guessed at');
+  assert.equal(key({ BASE_BRAND: 'purple' }), 'base');
   for (const name of ['imagine surrey', 'Imagine  Surrey', 'IMAGINE SURREY', 'Imagine Surrey 2026', 'Friends of Imagine Surrey']) {
-    assert.equal(key({ STARBASE_ENV: 'production', STARBASE_ORG_NAME: name }), 'base', `“${name}” is not the name`);
+    assert.equal(key({ BASE_ENV: 'production', BASE_ORG_NAME: name }), 'base', `“${name}” is not the name`);
   }
   // The one exception: production's own server, should its brand line be
   // missing or misspelled, does not change under its campaign.
-  assert.equal(key({ STARBASE_ENV: 'production', STARBASE_ORG_NAME: 'Imagine Surrey' }), 'imagine-surrey');
-  assert.equal(key({ STARBASE_ENV: 'production', STARBASE_ORG_NAME: ' Imagine Surrey ' }), 'imagine-surrey', 'spaces around a setting are not part of it');
-  assert.equal(key({ STARBASE_BRAND: 'imagine-surey', STARBASE_ENV: 'production', STARBASE_ORG_NAME: 'Imagine Surrey' }), 'imagine-surrey', 'a misspelled brand on that server');
-  assert.equal(key({ STARBASE_ORG_NAME: 'Imagine Surrey' }), 'imagine-surrey', 'a server whose STARBASE_ENV went missing too');
+  assert.equal(key({ BASE_ENV: 'production', BASE_ORG_NAME: 'Imagine Surrey' }), 'imagine-surrey');
+  assert.equal(key({ BASE_ENV: 'production', BASE_ORG_NAME: ' Imagine Surrey ' }), 'imagine-surrey', 'spaces around a setting are not part of it');
+  assert.equal(key({ BASE_BRAND: 'imagine-surey', BASE_ENV: 'production', BASE_ORG_NAME: 'Imagine Surrey' }), 'imagine-surrey', 'a misspelled brand on that server');
+  assert.equal(key({ BASE_ORG_NAME: 'Imagine Surrey' }), 'imagine-surrey', 'a server whose BASE_ENV went missing too');
   // Staging is never worked out to a client's own.
-  assert.equal(key({ STARBASE_ENV: 'staging', STARBASE_ORG_NAME: 'Imagine Surrey' }), 'base');
+  assert.equal(key({ BASE_ENV: 'staging', BASE_ORG_NAME: 'Imagine Surrey' }), 'base');
 });
 
 test('a server given a preset because of its name starts, and says loudly what to set', () => {
   // 1. Production named Imagine Surrey with no brand: it starts, with one line.
-  const unset = { STARBASE_ENV: 'production', STARBASE_ORG_NAME: 'Imagine Surrey', STARBASE_PUBLIC_URL: 'https://example.base.win' };
+  const unset = { BASE_ENV: 'production', BASE_ORG_NAME: 'Imagine Surrey', BASE_PUBLIC_URL: 'https://example.base.win' };
   const note = brandNote(unset);
-  assert.match(note, /^starbase: WARNING — STARBASE_BRAND is not set on a server named Imagine Surrey/);
-  assert.match(note, /Set STARBASE_BRAND=imagine-surrey/);
+  assert.match(note, /^base.win: WARNING — BASE_BRAND is not set on a server named Imagine Surrey/);
+  assert.match(note, /Set BASE_BRAND=imagine-surrey/);
   assert.deepEqual(bootNotes(unset), [note], 'printed with the other start-up warnings; nothing refuses to start');
   // 2. A misspelled brand there: the line names what was typed.
-  assert.match(brandNote({ ...unset, STARBASE_BRAND: 'imagine-surey' }), /STARBASE_BRAND is “imagine-surey”, which is not a brand/);
+  assert.match(brandNote({ ...unset, BASE_BRAND: 'imagine-surey' }), /BASE_BRAND is “imagine-surey”, which is not a brand/);
   // 3. Set, either way: nothing to say.
-  assert.equal(brandNote({ ...unset, STARBASE_BRAND: 'imagine-surrey' }), null);
-  assert.equal(brandNote({ ...unset, STARBASE_BRAND: 'base' }), null);
+  assert.equal(brandNote({ ...unset, BASE_BRAND: 'imagine-surrey' }), null);
+  assert.equal(brandNote({ ...unset, BASE_BRAND: 'base' }), null);
   // 4. Any other server with no brand is base, quietly; staging too.
-  assert.equal(brandNote({ STARBASE_ENV: 'production', STARBASE_ORG_NAME: 'Kamloops Forward' }), null);
-  assert.equal(brandNote({ STARBASE_ENV: 'staging', STARBASE_ORG_NAME: 'Imagine Surrey' }), null);
+  assert.equal(brandNote({ BASE_ENV: 'production', BASE_ORG_NAME: 'Kamloops Forward' }), null);
+  assert.equal(brandNote({ BASE_ENV: 'staging', BASE_ORG_NAME: 'Imagine Surrey' }), null);
   assert.equal(brandNote({}), null);
 });
 
 test('preset() follows the setting, read each time it is asked', () => {
-  setEnv({ STARBASE_BRAND: 'imagine-surrey' });
+  setEnv({ BASE_BRAND: 'imagine-surrey' });
   assert.equal(preset(), IS);
   assert.equal(preset().key, 'imagine-surrey');
   assert.deepEqual([brandHas('membership'), brandHas('sample'), brandHas('donorTiers')], [true, true, true]);
   assert.deepEqual(defaultCandidates().map((c) => [c.code, c.name, c.label]), FIVE);
   assert.equal(city(), 'Surrey');
-  setEnv({ STARBASE_BRAND: 'base' });
+  setEnv({ BASE_BRAND: 'base' });
   assert.notEqual(preset(), IS);
   assert.equal(preset().key, 'base');
   assert.deepEqual([brandHas('membership'), brandHas('sample'), brandHas('donorTiers')], [false, false, false]);
   assert.deepEqual(defaultCandidates(), []);
   assert.equal(city(), '');
-  setEnv({ STARBASE_BRAND: 'imagine-surrey' });
+  setEnv({ BASE_BRAND: 'imagine-surrey' });
   assert.equal(preset(), IS, 'and back');
   assert.deepEqual(PRESET_KEYS, ['imagine-surrey']);
   assert.equal(presetFor('base'), presetFor('nobody'), 'any other name is the neutral one');
@@ -156,7 +156,7 @@ test('only lib/preset.js imports server/presets/, and nothing but the brand’s 
 });
 
 test('brand base never reaches the preset’s files: nothing to load, nothing to serve', () => {
-  setEnv({ STARBASE_BRAND: 'base' });
+  setEnv({ BASE_BRAND: 'base' });
   assert.equal(preset().site.seed, null);
   assert.equal(preset().sample, null);
   assert.equal(preset().site.assets, null);
@@ -168,7 +168,7 @@ test('brand base never reaches the preset’s files: nothing to load, nothing to
 
 test('brand base, nothing else set: no opponents, no city, no map area, no features — and the app’s page is the page as built', async () => {
   await freshDb();
-  setEnv({ STARBASE_BRAND: 'base' });
+  setEnv({ BASE_BRAND: 'base' });
   const c = new Client();
   ok(await c.signup({ workspaceName: `Neutral ${tag}`, email: `neutral+${tag}@example.org`, jurisdiction: 'bc-municipal' }));
   const me = ok(await c.get('/api/auth/me'));
@@ -204,7 +204,7 @@ test('brand base, nothing else set: no opponents, no city, no map area, no featu
 });
 
 test('brand base: an address is looked up with no city and no box; the voter guide has no fence', async () => {
-  setEnv({ STARBASE_BRAND: 'base', GEOCODER: 'bc', ADDRESS_SUGGEST: 'bc' });
+  setEnv({ BASE_BRAND: 'base', GEOCODER: 'bc', ADDRESS_SUGGEST: 'bc' });
   _resetLookupForTest();
   assert.deepEqual([city(), geoBounds(), geoBox(), mapHome()], ['', null, null, null]);
   const asked = [];
@@ -227,7 +227,7 @@ test('brand base: an address is looked up with no city and no box; the voter gui
 
 test('brand base with a map area typed: maps open on it, lookups lean to it — never to another campaign’s', async () => {
   // The control centre's New campaign block, for Kamloops.
-  setEnv({ STARBASE_BRAND: 'base', STARBASE_CITY: 'Kamloops', STARBASE_GEO_BOUNDS: '50.6,-120.5|50.8,-120.2', STARBASE_CANDIDATES: 'none', GEOCODER: 'bc' });
+  setEnv({ BASE_BRAND: 'base', BASE_CITY: 'Kamloops', BASE_GEO_BOUNDS: '50.6,-120.5|50.8,-120.2', BASE_CANDIDATES: 'none', GEOCODER: 'bc' });
   assert.deepEqual(geoBox(), [50.6, -120.5, 50.8, -120.2]);
   assert.deepEqual(mapHome(), { centre: [50.7, -120.35], zoom: 12, bounds: [[50.6, -120.5], [50.8, -120.2]] });
   assert.deepEqual(orgOut().map, mapHome());
@@ -240,15 +240,15 @@ test('brand base with a map area typed: maps open on it, lookups lean to it — 
   try { await suggestAddresses('123 Main', { provider: 'bc' }); } finally { globalThis.fetch = real; }
   assert.match(decodeURIComponent(asked[0]), /bbox=-120\.5,50\.6,-120\.2,50\.8/);
   // Whichever corner was typed first.
-  setEnv({ STARBASE_BRAND: 'base', STARBASE_GEO_BOUNDS: '50.8,-120.2|50.6,-120.5' });
+  setEnv({ BASE_BRAND: 'base', BASE_GEO_BOUNDS: '50.8,-120.2|50.6,-120.5' });
   assert.deepEqual(geoBox(), [50.6, -120.5, 50.8, -120.2]);
   // A map area that can't be read is no area, not somebody else's.
-  setEnv({ STARBASE_BRAND: 'base', STARBASE_GEO_BOUNDS: 'kamloops' });
+  setEnv({ BASE_BRAND: 'base', BASE_GEO_BOUNDS: 'kamloops' });
   assert.deepEqual([geoBounds(), geoBox(), mapHome()], [null, null, null]);
 });
 
 test('brand imagine-surrey, nothing else set: its city, its map area, its five opponents — and a phone reads today’s five labels', async () => {
-  setEnv({ STARBASE_BRAND: 'imagine-surrey' });
+  setEnv({ BASE_BRAND: 'imagine-surrey' });
   assert.equal(city(), 'Surrey');
   assert.deepEqual(geoBox(), [49.002, -122.92, 49.222, -122.67]);
   assert.equal(geoBounds(), null, 'nothing is typed: the area is the preset’s');

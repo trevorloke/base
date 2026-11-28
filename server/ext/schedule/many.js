@@ -45,10 +45,10 @@
 //   answers with those that still have people. → { called_off: [id…],
 //   kept: [{ id, title, starts_at, booked }] }
 import { z } from 'zod';
-import { addDays, fmtIn, instantOf, weekStart, zonedISO } from '@starbase/shared/dayparts';
+import { addDays, fmtIn, instantOf, weekStart, zonedISO } from '@base-win/shared/dayparts';
 import {
   MAX_SHIFTS, MAX_WEEKS, SHIFT_KIND_CODES, madeTitle, repeatDays, shiftKind,
-} from '@starbase/shared/shiftkinds';
+} from '@base-win/shared/shiftkinds';
 import { httpError } from '../../actions/util.js';
 import { newId } from '../../lib/events.js';
 import { areasFor } from '../../lib/perms.js';

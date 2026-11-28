@@ -6,14 +6,14 @@
 // claim on a screen is checked against the API; the new screens are
 // measured (visible words, yellow buttons, sideways scroll, 48px targets).
 //
-//   STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4101 node server/index.js &
+//   BASE_BRAND=imagine-surrey BASE_OPEN_SIGNUP=1 BASE_DATA=memory PORT=4101 node server/index.js &
 //   BASE=http://127.0.0.1:4101 SHOTS=/tmp/surveys node e2e-surveys.mjs
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
 
 const BASE = process.env.BASE || 'http://localhost:3200';
 const ADMIN = { toString() { return `${BASE}/admin`; } }; // the desk's pages live in the admin (web/src/mode.js)
-const SHOTS = process.env.SHOTS || '/tmp/starbase-surveys';
+const SHOTS = process.env.SHOTS || '/tmp/base-win-surveys';
 mkdirSync(SHOTS, { recursive: true });
 const results = [];
 const check = (name, ok, extra = '') => {

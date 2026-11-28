@@ -40,7 +40,7 @@
 //                  every money write needs signal anyway.
 import { useCallback, useSyncExternalStore } from 'react';
 import { onlineManager, useQueryClient } from '@tanstack/react-query';
-import { nameWords } from '@starbase/shared/names';
+import { nameWords } from '@base-win/shared/names';
 import { ApiError, noAnswer } from '../api.js';
 import { copyGeneration, copyKey, copyScope, readCopy, removeCopy, writeCopy } from './OfflineCache.js';
 

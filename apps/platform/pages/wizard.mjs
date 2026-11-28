@@ -84,7 +84,7 @@ const publicCard = ({ name, serverUrl, state, old = false }) => {
 };
 
 // The first manager's invite link is made from the campaign's own address
-// (its STARBASE_PUBLIC_URL), so it opens only once that address is ready.
+// (its BASE_PUBLIC_URL), so it opens only once that address is ready.
 const inviteNotReady = (name) => `Their invite link goes to ${publicHost(name)}, which isn’t ready yet. The link opens once it is: do “Give it its address” first.`;
 
 // Stage 2, with a Render key and Check Render’s answers done: card 1 is
@@ -117,7 +117,7 @@ export const setupPage = ({ v, values, publicKey, serverUrl, addressState, publi
           <li>On that page, <b>Environment → Add from .env</b> → paste this block:
             ${publicKey ? html`${envBlock({ name, display: v.campaign.display, values, publicKey })}
             <button class="btn btn-quiet oc-copy-btn" type="button" data-copy="env-block">Copy</button>
-            <p class="oc-help" data-when-empty>STARBASE_TWO_STEP_KEY and GOOGLE_TOKEN_KEY are empty: press Generate next to each of these two in Render.</p>` : noKey}
+            <p class="oc-help" data-when-empty>BASE_TWO_STEP_KEY and GOOGLE_TOKEN_KEY are empty: press Generate next to each of these two in Render.</p>` : noKey}
           </li>
           <li>Add <code>DATABASE_URL</code> = the database page’s <b>Internal Database URL</b> (copy it across).</li>
           <li>Press <b>Create Web Service</b> (or <b>Save and deploy</b>). Wait for “Live”.</li>

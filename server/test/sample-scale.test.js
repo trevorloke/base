@@ -1,6 +1,6 @@
 // The sample carries its own opponents. Its rating scale is saved with the
 // cast's three when it is made, so the demo names them whatever staging's
-// STARBASE_CANDIDATES holds in Render: a setting a Blueprint sync never
+// BASE_CANDIDATES holds in Render: a setting a Blueprint sync never
 // reached (the opponents an older render.yaml gave) does not come back.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -10,7 +10,7 @@ import { OPPONENTS } from '../lib/samplecast.js';
 const BLOCK = stagingBlock();
 delete BLOCK.NODE_ENV;
 // Made-up stand-ins for an old value still in Render.
-BLOCK.STARBASE_CANDIDATES = '4A:Stalewood:Opposed — Stalewood supporter;4B:Oldbury:Opposed — Oldbury supporter;4C:Formerly:Opposed — Formerly supporter';
+BLOCK.BASE_CANDIDATES = '4A:Stalewood:Opposed — Stalewood supporter;4B:Oldbury:Opposed — Oldbury supporter;4C:Formerly:Opposed — Formerly supporter';
 const saved = Object.fromEntries(Object.keys(BLOCK).map((k) => [k, process.env[k]]));
 Object.assign(process.env, BLOCK);
 const { freshDb } = await import('./helpers.js');

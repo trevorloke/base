@@ -6,13 +6,13 @@
 // are four tabs and "More". (e2e-platform.mjs walks every desk screen for
 // the old names.)
 //
-//   STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4140 node server/index.js &
+//   BASE_BRAND=imagine-surrey BASE_OPEN_SIGNUP=1 BASE_DATA=memory PORT=4140 node server/index.js &
 //   BASE=http://127.0.0.1:4140 SHOTS=/tmp/base node e2e-base.mjs
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
 
 const BASE = process.env.BASE || 'http://localhost:3200';
-const SHOTS = process.env.SHOTS || '/tmp/starbase-base';
+const SHOTS = process.env.SHOTS || '/tmp/base-win-base';
 mkdirSync(SHOTS, { recursive: true });
 const results = [];
 const check = (name, ok, extra = '') => {

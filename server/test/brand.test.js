@@ -1,10 +1,10 @@
 // The brand a campaign wears (lib/brand.js). Before a manager saves one
-// (Settings → Brand, ext/brand), it is the look STARBASE_BRAND names —
+// (Settings → Brand, ext/brand), it is the look BASE_BRAND names —
 // Imagine Surrey's own in its production, base.win's for staging and any
 // other campaign, and base.win's when unset (but for a server named exactly
 // Imagine Surrey, which keeps its own and is told to set the brand). Once
 // saved, the saved brand is the look whatever
-// STARBASE_BRAND says: its shades go into the app's page before the
+// BASE_BRAND says: its shades go into the app's page before the
 // stylesheets (signed out too: sign-in wears it), with its data for script,
 // its pictures asked for early, its icons, the browser's bar colours, the
 // tab's title and the name under the home-screen icon — and the manifest
@@ -23,14 +23,14 @@ import { brandKey, brandFor, brandHtml, brandManifest, brandPages, campaignBrand
 import { emailBody, blastHtml } from '../ext/abtests/send.js';
 import { presetFor } from '../lib/preset.js';
 // base.win's own look, and Imagine Surrey's from its preset.
-import { BRANDS as OWN } from '@starbase/shared/brand';
+import { BRANDS as OWN } from '@base-win/shared/brand';
 const BRANDS = { ...OWN, 'imagine-surrey': presetFor('imagine-surrey').brand };
-import { lookCss } from '@starbase/shared/brand-look';
-import { contrast } from '@starbase/shared/site/theme';
+import { lookCss } from '@base-win/shared/brand-look';
+import { contrast } from '@base-win/shared/site/theme';
 import { rewriters } from '../lib/mount.js';
 import { png, webp, dataUrl } from './brand-images.js';
 
-const ENV = ['STARBASE_BRAND', 'STARBASE_ENV', 'STARBASE_ORG_NAME'];
+const ENV = ['BASE_BRAND', 'BASE_ENV', 'BASE_ORG_NAME'];
 const saved = Object.fromEntries(ENV.map((k) => [k, process.env[k]]));
 const setEnv = (v) => { for (const k of ENV) { if (v[k] === undefined) delete process.env[k]; else process.env[k] = v[k]; } };
 after(() => setEnv(saved));
@@ -51,23 +51,23 @@ const SAVED = {
 };
 
 test('unset, the look is base.win’s: only a server named exactly Imagine Surrey keeps its own; staging and other campaigns get Base’s', () => {
-  setEnv({ STARBASE_ENV: 'production', STARBASE_ORG_NAME: 'Imagine Surrey' });
+  setEnv({ BASE_ENV: 'production', BASE_ORG_NAME: 'Imagine Surrey' });
   assert.equal(brandKey(), 'imagine-surrey', 'production as it is on Render today, should its brand line go missing');
-  setEnv({ STARBASE_ENV: 'production', STARBASE_ORG_NAME: '  imagine   SURREY ' });
+  setEnv({ BASE_ENV: 'production', BASE_ORG_NAME: '  imagine   SURREY ' });
   assert.equal(brandKey(), 'base', 'another spelling of the name is not the name');
-  setEnv({ STARBASE_ENV: 'production' });
+  setEnv({ BASE_ENV: 'production' });
   assert.equal(brandKey(), 'base', 'no name at all: nobody’s');
   setEnv({});
   assert.equal(brandKey(), 'base', 'local, nothing set: nobody’s');
-  setEnv({ STARBASE_ENV: 'staging', STARBASE_ORG_NAME: 'Imagine Surrey' });
+  setEnv({ BASE_ENV: 'staging', BASE_ORG_NAME: 'Imagine Surrey' });
   assert.equal(brandKey(), 'base', 'staging is generic even before its new settings arrive');
-  setEnv({ STARBASE_ENV: 'production', STARBASE_ORG_NAME: 'Another Campaign' });
+  setEnv({ BASE_ENV: 'production', BASE_ORG_NAME: 'Another Campaign' });
   assert.equal(brandKey(), 'base', 'another client');
-  setEnv({ STARBASE_BRAND: 'base', STARBASE_ENV: 'production', STARBASE_ORG_NAME: 'Imagine Surrey' });
+  setEnv({ BASE_BRAND: 'base', BASE_ENV: 'production', BASE_ORG_NAME: 'Imagine Surrey' });
   assert.equal(brandKey(), 'base', 'set, it is what it says');
-  setEnv({ STARBASE_BRAND: 'Imagine-Surrey', STARBASE_ENV: 'staging' });
+  setEnv({ BASE_BRAND: 'Imagine-Surrey', BASE_ENV: 'staging' });
   assert.equal(brandKey(), 'imagine-surrey');
-  setEnv({ STARBASE_BRAND: 'purple', STARBASE_ENV: 'staging' });
+  setEnv({ BASE_BRAND: 'purple', BASE_ENV: 'staging' });
   assert.equal(brandKey(), 'base', 'a bad value is read as unset');
 });
 
@@ -242,8 +242,8 @@ const pages = () => {
 };
 const uploaded = async (kind, buf, type) => { const r = await mgr.action('brand.picture', { kind, data: dataUrl(buf, type) }); assert.equal(r.status, 200, JSON.stringify(r.json)); return r.json.picture.id; };
 
-test('on the way out, signed out: the preset until a manager saves; the saved brand at once after, whatever STARBASE_BRAND says', async () => {
-  setEnv({ STARBASE_BRAND: 'base' });
+test('on the way out, signed out: the preset until a manager saves; the saved brand at once after, whatever BASE_BRAND says', async () => {
+  setEnv({ BASE_BRAND: 'base' });
   forgetBrand();
   const app = pages();
   const first = await app.request('/');
@@ -263,8 +263,8 @@ test('on the way out, signed out: the preset until a manager saves; the saved br
   assert.deepEqual([man.short_name, man.theme_color], ['Riverside', '#0b0b0d'], 'a dark sidebar: the bar is its ground');
   assert.equal((await campaignBrand()).saved, true);
 
-  // STARBASE_BRAND only chooses where a campaign starts.
-  setEnv({ STARBASE_BRAND: 'imagine-surrey' });
+  // BASE_BRAND only chooses where a campaign starts.
+  setEnv({ BASE_BRAND: 'imagine-surrey' });
   forgetBrand();
   assert.match(blockOf(await (await app.request('/')).text()), /--accent:#d81b1e;/);
 
@@ -288,7 +288,7 @@ test('on the way out, signed out: the preset until a manager saves; the saved br
 });
 
 test('a save while the brand is being read: the next page reads afresh; a database slow to answer gets the brand last seen', async () => {
-  setEnv({ STARBASE_BRAND: 'base' });
+  setEnv({ BASE_BRAND: 'base' });
   const READ = /^select settings from workspaces order by/;
   const query = db.query;
   assert.equal((await mgr.action('brand.save', { color: '#0f766e' })).status, 200);
@@ -320,14 +320,14 @@ test('a save while the brand is being read: the next page reads afresh; a databa
 });
 
 test('training is called what the campaign calls it: Permissions, the public lessons', async () => {
-  setEnv({ STARBASE_BRAND: 'base' });
+  setEnv({ BASE_BRAND: 'base' });
   assert.equal(learnName({}), 'Training');
   const label = async () => (await mgr.get('/api/admin/permissions')).json.areas.find((a) => a.key === 'learn').label;
   assert.equal(await label(), 'Training');
-  setEnv({ STARBASE_BRAND: 'imagine-surrey' });
+  setEnv({ BASE_BRAND: 'imagine-surrey' });
   assert.equal(await label(), 'ImagineU', 'unsaved: the preset’s');
   assert.equal((await mgr.action('brand.save', { color: '#003979', learn: 'Volunteer school' })).status, 200);
-  setEnv({ STARBASE_BRAND: 'base' });
+  setEnv({ BASE_BRAND: 'base' });
   assert.equal(await label(), 'Volunteer school', 'saved: the campaign’s, whatever the preset');
   const slug = (await mgr.get('/api/auth/me')).json.workspace.slug;
   const html = await (await (await import('../index.js')).app.request(`/learn/${slug}`)).text();
@@ -336,9 +336,9 @@ test('training is called what the campaign calls it: Permissions, the public les
 });
 
 test('an email’s links take the brand’s colour, as words that read; the logo heads it only when asked, as a picture mail apps draw', async () => {
-  setEnv({ STARBASE_BRAND: 'base' });
+  setEnv({ BASE_BRAND: 'base' });
   assert.match(emailBody('See [the plan](https://example.org/plan)'), /style="color:#4f46e5"/, 'unsaved: the preset’s');
-  setEnv({ STARBASE_BRAND: 'imagine-surrey' });
+  setEnv({ BASE_BRAND: 'imagine-surrey' });
   assert.match(emailBody('See https://example.org/plan'), /style="color:#003979"/);
   const ctx = (brand) => ({ publicUrl: 'https://riverside.example', workspace: { name: 'Riverside & Co', settings: { brand } } });
   const linkIn = (html) => /<a href="[^"]*" style="color:(#[0-9a-f]{6})"/.exec(html)[1];
@@ -370,7 +370,7 @@ test('a saved logo is served to anyone at its /brand and /media addresses (sign-
 });
 
 test('the app’s public pages wear the campaign’s brand: unsubscribe, a receipt, a ladder’s unsubscribe, public lessons', async () => {
-  setEnv({ STARBASE_BRAND: 'base' });
+  setEnv({ BASE_BRAND: 'base' });
   const logo = await uploaded('logo', png(640, 128));
   const dark = await uploaded('logoDark', webp(640, 128), 'image/webp');
   const saved = await mgr.action('brand.save', { color: '#d81b1e', heading: 'barlow-condensed', corners: 'square', logo: { id: logo }, logo_dark: { id: dark } });

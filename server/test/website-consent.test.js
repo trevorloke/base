@@ -10,7 +10,7 @@
 // /api/in/consent from a durable queue — once each, the same bytes on every
 // try, never given up while the website is down — and what the website said
 // is never sent back to it.
-// The website is a stand-in here (fake-website.js at STARBASE_WEBSITE_URL);
+// The website is a stand-in here (fake-website.js at BASE_WEBSITE_URL);
 // the last test holds that stand-in to the website's own source.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -32,6 +32,7 @@ import { _resetPaceForTest, _setRunMsForTest, _setTimeoutForTest, WAITS_MS, PER_
 import { startFakeWebsite, stableJson, consentPayload, requestFor, classifyAnswer, CONSENT_ENDPOINT } from './fake-website.js';
 import { startFakeMail } from './fake-mail.js';
 import { startFakeMailchimp } from './fake-mailchimp.js';
+import { OLD_WORD, settingNames } from '../../shared/old-names.js';
 
 const tag = Math.random().toString(36).slice(2, 8);
 const mail = (who) => `${who}.wc.${tag}@example.org`;
@@ -41,7 +42,7 @@ const dashed = (p) => `${p.slice(2, 5)}-${p.slice(5, 8)}-${p.slice(8)}`;
 const SECRET = `website-inbound-secret-${tag}-${'x'.repeat(12)}`;
 const PUBLIC = 'https://base.example';
 const MAIL_SECRET = `whsec_${Buffer.from(`wc-mail-secret-${tag}`).toString('base64')}`;
-const KEYS = ['STARBASE_WEBSITE_URL', 'STARBASE_WEBSITE_KEY', 'STARBASE_PUBLIC_URL', 'STARBASE_OWN_URL', 'RENDER_EXTERNAL_URL', 'STARBASE_ENV',
+const KEYS = ['BASE_WEBSITE_URL', 'BASE_WEBSITE_KEY', 'BASE_PUBLIC_URL', 'BASE_OWN_URL', 'RENDER_EXTERNAL_URL', 'BASE_ENV',
   'MAILCHIMP_API_KEY', 'MAILCHIMP_API_BASE', 'MAILCHIMP_AUDIENCE_ID', 'MAILCHIMP_WEBHOOK_SECRET',
   'MAIL_PROVIDER', 'MAIL_FROM', 'RESEND_API_KEY', 'RESEND_API_BASE', 'RESEND_WEBHOOK_SECRET', 'SENDGRID_API_KEY',
   'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM', 'TWILIO_API_BASE', 'TWILIO_VOICE'];
@@ -55,7 +56,7 @@ const ok = (r, msg = '') => { assert.equal(r.status, 200, `${msg} ${r.status} ${
 // The sync on (both settings), or off.
 const syncOn = (more = {}) => {
   for (const k of KEYS) delete process.env[k];
-  Object.assign(process.env, { STARBASE_WEBSITE_URL: site.url, STARBASE_WEBSITE_KEY: SECRET, STARBASE_PUBLIC_URL: PUBLIC, ...more });
+  Object.assign(process.env, { BASE_WEBSITE_URL: site.url, BASE_WEBSITE_KEY: SECRET, BASE_PUBLIC_URL: PUBLIC, ...more });
 };
 const syncOff = () => { for (const k of KEYS) delete process.env[k]; };
 
@@ -677,14 +678,14 @@ test('what the website said is never sent back; and nothing is sent with a setti
     await run(w);
     assert.equal(site.calls.length, 0, why);
   };
-  await quiet('no address', () => { delete process.env.STARBASE_WEBSITE_URL; });
-  await quiet('no key', () => { delete process.env.STARBASE_WEBSITE_KEY; });
-  await quiet('http, somewhere else', () => { process.env.STARBASE_WEBSITE_URL = 'http://www.example.org'; });
-  await quiet('not an address', () => { process.env.STARBASE_WEBSITE_URL = 'www.example.org'; });
-  await quiet('this server’s own address', () => { process.env.STARBASE_WEBSITE_URL = 'https://base.example'; });
-  await quiet('a base.win address', () => { process.env.STARBASE_WEBSITE_URL = 'https://another.base.win'; });
-  await quiet('base.win itself', () => { process.env.STARBASE_WEBSITE_URL = 'https://base.win'; });
-  await quiet('staging', () => { process.env.STARBASE_ENV = 'staging'; });
+  await quiet('no address', () => { delete process.env.BASE_WEBSITE_URL; });
+  await quiet('no key', () => { delete process.env.BASE_WEBSITE_KEY; });
+  await quiet('http, somewhere else', () => { process.env.BASE_WEBSITE_URL = 'http://www.example.org'; });
+  await quiet('not an address', () => { process.env.BASE_WEBSITE_URL = 'www.example.org'; });
+  await quiet('this server’s own address', () => { process.env.BASE_WEBSITE_URL = 'https://base.example'; });
+  await quiet('a base.win address', () => { process.env.BASE_WEBSITE_URL = 'https://another.base.win'; });
+  await quiet('base.win itself', () => { process.env.BASE_WEBSITE_URL = 'https://base.win'; });
+  await quiet('staging', () => { process.env.BASE_ENV = 'staging'; });
   // A campaign with no live website key: the sync belongs to the campaign the website's key belongs to.
   const { c: b, ws: wsB } = await campaign('Nokey');
   await quiet('no website key', () => {}, b, wsB);
@@ -758,7 +759,7 @@ test('the job: the website’s own headers and the exact bytes; a retry is the s
   };
   await waiting('a 503', () => site.setKey(null), () => site.setKey(SECRET), 503);
   await waiting('a 401', () => site.setKey('another-secret'), () => site.setKey(SECRET), 401);
-  await waiting('a 404', () => { process.env.STARBASE_WEBSITE_URL = `${site.url}/moved`; }, () => { process.env.STARBASE_WEBSITE_URL = site.url; }, 404);
+  await waiting('a 404', () => { process.env.BASE_WEBSITE_URL = `${site.url}/moved`; }, () => { process.env.BASE_WEBSITE_URL = site.url; }, 404);
   await waiting('a 502', () => site.fail(502), () => site.fail(false), 502);
   await waiting('nobody answering', () => site.down(true), () => site.down(false), 0);
   await waiting('a 429', () => site.busy(1), () => {}, 429);
@@ -858,7 +859,7 @@ test('the job: a body the website refuses is kept with its words while the other
   site.reset();
   await clearQueue(ws);
   await enqueueJob(db, { workspaceId: ws, kind: 'website.consent', payload: { items: [good], tries: 0 } });
-  delete process.env.STARBASE_WEBSITE_KEY;
+  delete process.env.BASE_WEBSITE_KEY;
   assert.deepEqual(await runOnce(ws), { ran: 1, failed: 0 });
   assert.deepEqual([(await jobs(ws))[0].status, site.calls.length], ['done', 0]);
   assert.equal((await mgr.action('intake.website.resend', {})).status, 409);
@@ -954,7 +955,7 @@ test('Settings → Services: the row in each state, Check’s answers, how many 
   const check = async () => { const r = await mgr.post('/api/connections/check', { key: 'website' }); seen.push(JSON.stringify(r.json)); return ok(r); };
   syncOff();
   let s = await row();
-  assert.deepEqual([s.name, s.state, s.missing, s.panel], ['The website — unsubscribes', 'missing', ['STARBASE_WEBSITE_URL', 'STARBASE_WEBSITE_KEY'], undefined]);
+  assert.deepEqual([s.name, s.state, s.missing, s.panel], ['The website — unsubscribes', 'missing', ['BASE_WEBSITE_URL', 'BASE_WEBSITE_KEY'], undefined]);
   assert.equal(s.detail, 'Not set: an unsubscribe here stays here. The website’s own still come in with a website key.');
   assert.deepEqual(await check(), { key: 'website', ok: false, said: s.detail });
   const inbound = (await get('/api/connections')).inbound.find((i) => i.name === 'The website — unsubscribes in');
@@ -969,12 +970,12 @@ test('Settings → Services: the row in each state, Check’s answers, how many 
     assert.deepEqual([s.state, s.missing, s.panel], ['missing', missing, undefined], String(words));
     assert.match(s.detail, words);
   };
-  await off(() => { delete process.env.STARBASE_WEBSITE_KEY; }, ['STARBASE_WEBSITE_KEY'], /^Only one of the two is set: STARBASE_WEBSITE_KEY is missing/);
-  await off(() => { delete process.env.STARBASE_WEBSITE_URL; }, ['STARBASE_WEBSITE_URL'], /^Only one of the two is set: STARBASE_WEBSITE_URL is missing/);
-  await off(() => { process.env.STARBASE_WEBSITE_URL = 'http://www.example.org'; }, [], /must start with https:\/\//);
-  await off(() => { process.env.STARBASE_WEBSITE_URL = 'https://base.example/'; }, [], /this base\.win’s own address/);
-  await off(() => { process.env.STARBASE_WEBSITE_URL = 'https://someone.base.win'; }, [], /is a base\.win address/);
-  await off(() => { process.env.STARBASE_ENV = 'staging'; }, [], /^Off on staging: nothing is ever sent from here\.$/);
+  await off(() => { delete process.env.BASE_WEBSITE_KEY; }, ['BASE_WEBSITE_KEY'], /^Only one of the two is set: BASE_WEBSITE_KEY is missing/);
+  await off(() => { delete process.env.BASE_WEBSITE_URL; }, ['BASE_WEBSITE_URL'], /^Only one of the two is set: BASE_WEBSITE_URL is missing/);
+  await off(() => { process.env.BASE_WEBSITE_URL = 'http://www.example.org'; }, [], /must start with https:\/\//);
+  await off(() => { process.env.BASE_WEBSITE_URL = 'https://base.example/'; }, [], /this base\.win’s own address/);
+  await off(() => { process.env.BASE_WEBSITE_URL = 'https://someone.base.win'; }, [], /is a base\.win address/);
+  await off(() => { process.env.BASE_ENV = 'staging'; }, [], /^Off on staging: nothing is ever sent from here\.$/);
   assert.equal(s.checkable, false);
 
   // On.
@@ -988,13 +989,13 @@ test('Settings → Services: the row in each state, Check’s answers, how many 
   assert.deepEqual(site.calls.map((c) => [c.raw, c.key]), [['{}', null]], 'Check sends an empty body and no Idempotency-Key');
   assert.deepEqual(site.ledger, [], 'and writes nothing on the website');
   site.setKey('not-ours');
-  assert.deepEqual(await check(), { key: 'website', ok: false, said: 'The website refused the key: it must equal its STARBASE_INBOUND_KEY' });
+  assert.deepEqual(await check(), { key: 'website', ok: false, said: 'The website refused the key: it must equal the website’s inbound key setting (the one that equals this server’s website key)' });
   site.setKey(null);
-  assert.deepEqual(await check(), { key: 'website', ok: false, said: 'The website has no STARBASE_INBOUND_KEY yet' });
+  assert.deepEqual(await check(), { key: 'website', ok: false, said: 'The website has no inbound key set yet: set the website’s inbound key setting to this server’s website key' });
   site.setKey(SECRET);
-  process.env.STARBASE_WEBSITE_URL = `${site.url}/old`;
+  process.env.BASE_WEBSITE_URL = `${site.url}/old`;
   assert.deepEqual(await check(), { key: 'website', ok: false, said: 'No such address on the website. If the website now runs on base.win, take both settings away' });
-  process.env.STARBASE_WEBSITE_URL = site.url;
+  process.env.BASE_WEBSITE_URL = site.url;
   site.fail(500);
   assert.deepEqual(await check(), { key: 'website', ok: false, said: 'The website answered 500: HTTP 500' });
   site.fail(false);
@@ -1042,9 +1043,9 @@ test('nothing here names a client: the new files, the guide’s lines and render
   // The names of whoever is in production, read from render.yaml itself (and not the sample's on staging).
   const blocks = yaml.split(/\n {2}- type: /).slice(1);
   const valueOf = (block, k) => new RegExp(`- key: ${k}\\s*\\n\\s*value: *"?([^"\\n#]+)"?`).exec(block)?.[1]?.trim() || null;
-  const named = (block) => ['STARBASE_ORG_NAME', 'STARBASE_BRAND', 'STARBASE_CITY'].map((k) => valueOf(block, k)).filter(Boolean);
-  const sample = new Set(blocks.filter((b) => valueOf(b, 'STARBASE_ENV') === 'staging').flatMap(named).map((x) => x.toLowerCase()));
-  const clients = [...new Set(blocks.filter((b) => valueOf(b, 'STARBASE_ENV') === 'production').flatMap(named).map((x) => x.toLowerCase()))].filter((x) => !sample.has(x));
+  const named = (block) => ['BASE_ORG_NAME', 'BASE_BRAND', 'BASE_CITY'].map((k) => valueOf(block, k)).filter(Boolean);
+  const sample = new Set(blocks.filter((b) => valueOf(b, 'BASE_ENV') === 'staging').flatMap(named).map((x) => x.toLowerCase()));
+  const clients = [...new Set(blocks.filter((b) => valueOf(b, 'BASE_ENV') === 'production').flatMap(named).map((x) => x.toLowerCase()))].filter((x) => !sample.has(x));
 
   const index = read('server/ext/intake/index.js');
   const block = index.slice(index.indexOf('// ── Unsubscribes, both ways'));
@@ -1053,9 +1054,9 @@ test('nothing here names a client: the new files, the guide’s lines and render
   const from = guide.indexOf('\n### Unsubscribes, both ways');
   assert.ok(from > 0, 'the guide has the section');
   const section = guide.slice(from, guide.indexOf('\n## ', from + 1));
-  assert.match(section, /STARBASE_WEBSITE_URL/);
-  assert.match(section, /STARBASE_WEBSITE_KEY/);
-  const yamlLines = yaml.split('\n').filter((l) => /STARBASE_WEBSITE_/.test(l)).join('\n');
+  assert.match(section, /BASE_WEBSITE_URL/);
+  assert.match(section, /BASE_WEBSITE_KEY/);
+  const yamlLines = yaml.split('\n').filter((l) => /BASE_WEBSITE_/.test(l)).join('\n');
   const texts = {
     'server/ext/intake/index.js (the block)': block,
     'INTEGRATIONS.md (the section)': section,
@@ -1067,8 +1068,9 @@ test('nothing here names a client: the new files, the guide’s lines and render
     for (const name of clients) assert.ok(!text.toLowerCase().includes(name), `${where} names a client`);
   }
   // No value, and under no service: a new client never inherits another's website.
-  for (const k of ['STARBASE_WEBSITE_URL', 'STARBASE_WEBSITE_KEY']) {
-    assert.ok(!new RegExp(`- key: ${k}`).test(yaml), `${k} is listed under a service`);
+  // Under either name (shared/old-names.js).
+  for (const k of ['BASE_WEBSITE_URL', 'BASE_WEBSITE_KEY'].flatMap(settingNames)) {
+    assert.ok(!new RegExp(`- key: ${k}\\b`).test(yaml), `${k} is listed under a service`);
     assert.ok(!new RegExp(`${k}\\s*[:=]\\s*\\S`).test(yaml), `${k} is given a value`);
   }
   for (const l of yamlLines.split('\n').filter(Boolean)) assert.match(l, /^\s*#/, 'only in the comment at the top');
@@ -1076,11 +1078,22 @@ test('nothing here names a client: the new files, the guide’s lines and render
 
 // ── 14. The website's side of the contract ──
 const web = (p) => `apps/web/src/${p}`;
-test('the contract: the website’s own source still says what this is built to', { skip: !existsSync(root(web('lib/server/starbase.ts'))) && 'apps/web is not in this checkout' }, () => {
-  const sender = read(web('lib/server/starbase.ts'));
-  const inbound = read(web('lib/server/starbase-inbound.ts'));
-  const route = read(web('app/api/in/consent/route.ts'));
-  const env = read(web('lib/env.ts'));
+// The website's copy here names its files and words for the desk: desk.ts,
+// desk-inbound.ts, BASE_WIN_INBOUND_KEY, "base.win". A copy from before that
+// rename has the older file names and words: it is read the same way, the
+// older ones built from the table (shared/old-names.js), never typed. What
+// is held to the stand-in is unchanged: the wire, the checks and their order.
+const OLD_WORD_CAPITAL = OLD_WORD[0].toUpperCase() + OLD_WORD.slice(1);
+const webFile = (now, before) => (existsSync(root(web(now))) ? web(now) : web(before));
+const asNow = (text) => text
+  .replaceAll(`${OLD_WORD.toUpperCase()}_INBOUND_KEY`, 'BASE_WIN_INBOUND_KEY')
+  .replaceAll('base.win (the desk)', 'base.win')
+  .replaceAll(OLD_WORD_CAPITAL, 'base.win');
+test('the contract: the website’s own source still says what this is built to', { skip: !existsSync(root('apps/web/src')) && 'apps/web is not in this checkout' }, () => {
+  const sender = asNow(read(webFile('lib/server/desk.ts', `lib/server/${OLD_WORD}.ts`)));
+  const inbound = asNow(read(webFile('lib/server/desk-inbound.ts', `lib/server/${OLD_WORD}-inbound.ts`)));
+  const route = asNow(read(web('app/api/in/consent/route.ts')));
+  const env = asNow(read(web('lib/env.ts')));
   const has = (text, snippets) => { for (const s of snippets) assert.ok(text.includes(s), `the website no longer says: ${s}`); };
   // What it sends, and how it reads the answer.
   has(sender, [
@@ -1104,7 +1117,7 @@ test('the contract: the website’s own source still says what this is built to'
   // What it takes, in the order it checks.
   const checks = [
     'if (rateLimited(req, "in-consent", 120)) return error("more than 120 requests a minute", 429);',
-    'if (!key) return error("Inbound consent is off: STARBASE_INBOUND_KEY isn\'t set on the website.", 503);',
+    'if (!key) return error("Inbound consent is off: BASE_WIN_INBOUND_KEY isn\'t set on the website.", 503);',
     'if (!bearerMatches(req.headers.get("authorization"), key)) return error("a valid key goes in the Authorization header: Bearer …", 401);',
     'if (!/^application\\/json\\b/i.test(req.headers.get("content-type") ?? "")) return error("send JSON (Content-Type: application/json)", 415);',
     'if (!idempotencyKey || idempotencyKey.length > 200) return error("send an Idempotency-Key header (1 to 200 characters)", 400);',
@@ -1126,11 +1139,12 @@ test('the contract: the website’s own source still says what this is built to'
     '.refine((v) => v.email || v.phone, { message: "an email or a phone" });',
     'if (d.hash !== hash) return { status: 409, body: { error: "that Idempotency-Key was used with a different body" } };',
     'return { status: 200, body: { ...(d.answer ?? { ok: true }), replayed: true } };',
-    'answer = { ok: true, applied: 0, note: "Grants are not applied from Starbase; only withdrawals are." };',
+    'answer = { ok: true, applied: 0, note: "Grants are not applied from base.win; only withdrawals are." };',
     'answer = { ok: true, applied: matches.length };',
     'const digits = (raw ?? "").replace(/\\D/g, "").replace(/^1(?=\\d{10}$)/, "");',
   ]);
-  has(env, ['return optional("STARBASE_INBOUND_KEY")?.trim();']);
+  // It reads its inbound key setting (under its new name, and its older one: apps/web's own table).
+  assert.match(env, /\bBASE_WIN_INBOUND_KEY\b/, 'the website reads its inbound key setting');
   // And the stand-in answers as that source does.
   assert.equal(stableJson({ b: 1, a: { d: 1, c: 2 } }), '{"a":{"c":2,"d":1},"b":1}');
   assert.deepEqual(classifyAnswer(200, { ok: true }, CONSENT_ENDPOINT), { kind: 'ok', personId: null, replayed: false });
@@ -1147,7 +1161,7 @@ test('the stand-in website checks in the website’s order, and takes each no on
   const body = stableJson(no({ email: mail('standin') }));
   const good = { authorization: `Bearer ${SECRET}`, 'content-type': 'application/json', 'idempotency-key': 'k1' };
   try {
-    assert.deepEqual(await post(good, body), [503, 'Inbound consent is off: STARBASE_INBOUND_KEY isn\'t set on the website.']);
+    assert.deepEqual(await post(good, body), [503, 'Inbound consent is off: BASE_WIN_INBOUND_KEY isn\'t set on the website.']);
     s.setKey(SECRET);
     assert.deepEqual(await post({ ...good, authorization: 'Bearer nope' }, body), [401, 'a valid key goes in the Authorization header: Bearer …']);
     assert.deepEqual(await post({ ...good, 'content-type': 'text/plain' }, body), [415, 'send JSON (Content-Type: application/json)']);
@@ -1162,7 +1176,7 @@ test('the stand-in website checks in the website’s order, and takes each no on
     assert.deepEqual(await again.json(), { ok: true, applied: 1, replayed: true });
     assert.deepEqual(await post(good, stableJson(no({ email: mail('standin-2') }))), [409, 'that Idempotency-Key was used with a different body']);
     const yes = await realFetch(`${s.url}/api/in/consent`, { method: 'POST', headers: { ...good, 'idempotency-key': 'k2' }, body: stableJson({ ...no({ email: mail('standin') }), action: 'grant' }) });
-    assert.deepEqual(await yes.json(), { ok: true, applied: 0, note: 'Grants are not applied from Starbase; only withdrawals are.' });
+    assert.deepEqual(await yes.json(), { ok: true, applied: 0, note: 'Grants are not applied from base.win; only withdrawals are.' });
     assert.equal(s.ledger.length, 1, 'one no, once; a yes is never applied');
   } finally { await s.close(); }
 });

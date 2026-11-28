@@ -8,7 +8,7 @@
 //   hoursWords(shift, booking, tz) → "4:30–6 pm", or null for the whole shift
 //   canPickHours(shift, now)  → it has an end, runs an hour or more, isn't over
 //   <HoursPicker shift tz value onChange />  The whole time · From · Until
-import { hoursOf } from '@starbase/shared/shifthours';
+import { hoursOf } from '@base-win/shared/shifthours';
 import { timeRange, clockText } from './shiftTime.js';
 import '../pages/schedule-hours.css';
 

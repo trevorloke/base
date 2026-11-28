@@ -11,7 +11,7 @@
 //                        so a stray value can never send the secret elsewhere
 //
 // The redirect address is never a setting: always
-// <STARBASE_PUBLIC_URL>/api/auth/google/back, from the setting alone and
+// <BASE_PUBLIC_URL>/api/auth/google/back, from the setting alone and
 // never from a request's host.
 import { configuredUrl } from '../calendar.js';
 import { tokenKeyReady } from './seal.js';
@@ -59,7 +59,7 @@ export const googleSetup = () => {
   const connect = signin && tokenKeyReady();
   let why = null;
   if (!client) why = 'Set GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET';
-  else if (!usableUrl(pub)) why = 'Set STARBASE_PUBLIC_URL (https://…) first';
+  else if (!usableUrl(pub)) why = 'Set BASE_PUBLIC_URL (https://…) first';
   else if (!connect) why = 'Connections need GOOGLE_TOKEN_KEY (32+ random characters)';
   return { signin, connect, why, redirectUri: signin ? redirectUri() : null };
 };

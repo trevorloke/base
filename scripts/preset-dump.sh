@@ -24,7 +24,7 @@
 # Run `npm run build` first: the app's page is the built one.
 # PRESET_DUMP_DATA=/path/to/folder uses a database kept on disk instead (the
 # script signs in when the campaign is already set up).
-# PRESET_DUMP_BRAND= (empty) leaves STARBASE_BRAND unset.
+# PRESET_DUMP_BRAND= (empty) leaves BASE_BRAND unset.
 set -u
 OUT=${1:?usage: scripts/preset-dump.sh OUT_DIR [PORT]}
 P=${2:-4790}
@@ -40,15 +40,18 @@ URL=http://127.0.0.1:$P
 
 # Imagine Surrey's production settings: render.yaml, the base-win service.
 # No candidates, map area or province are set there.
-export STARBASE_ENV=production
-export STARBASE_ORG_NAME="Imagine Surrey"
-export STARBASE_CITY=Surrey
-export STARBASE_JURISDICTION=bc-municipal
-export STARBASE_TZ=America/Vancouver
-export STARBASE_SLATES="council:City council,school_board:School board"
-if [ "${PRESET_DUMP_BRAND-imagine-surrey}" = "" ]; then unset STARBASE_BRAND; else export STARBASE_BRAND="${PRESET_DUMP_BRAND-imagine-surrey}"; fi
-unset STARBASE_CANDIDATES STARBASE_GEO_BOUNDS STARBASE_PROVINCE STARBASE_PUBLIC_URL STARBASE_OPEN_SIGNUP NODE_ENV RENDER DATABASE_URL BASE_PATH
-export STARBASE_DATA=${PRESET_DUMP_DATA:-memory}
+export BASE_ENV=production
+export BASE_ORG_NAME="Imagine Surrey"
+export BASE_CITY=Surrey
+export BASE_JURISDICTION=bc-municipal
+export BASE_TZ=America/Vancouver
+export BASE_SLATES="council:City council,school_board:School board"
+# A setting cleared here is cleared under both its names: an older name left in
+# the shell would still be read (shared/old-names.js holds both).
+both() { node --input-type=module -e "import { bothNames } from '$ROOT/shared/old-names.js'; console.log(process.argv.slice(1).flatMap(bothNames).join(' '))" "$@"; }
+if [ "${PRESET_DUMP_BRAND-imagine-surrey}" = "" ]; then unset $(both BASE_BRAND); else export BASE_BRAND="${PRESET_DUMP_BRAND-imagine-surrey}"; fi
+unset $(both BASE_CANDIDATES BASE_GEO_BOUNDS BASE_PROVINCE BASE_PUBLIC_URL BASE_OPEN_SIGNUP) NODE_ENV RENDER DATABASE_URL BASE_PATH
+export BASE_DATA=${PRESET_DUMP_DATA:-memory}
 export GEOCODE_ON_SAVE=off
 
 PORT=$P node "$ROOT/server/index.js" > "$OUT/server.log" 2>&1 &

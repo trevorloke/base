@@ -19,9 +19,9 @@ const tag = Math.random().toString(36).slice(2, 8);
 const ok = (r, msg = '') => { assert.ok(r.status === 200 || r.status === 201, `${msg} ${r.status} ${JSON.stringify(r.json)}`); return r.json; };
 const IS = presetFor('imagine-surrey');
 
-const savedBrand = process.env.STARBASE_BRAND;
-const wear = (brand) => { process.env.STARBASE_BRAND = brand; forgetBrand(); };
-after(() => { if (savedBrand === undefined) delete process.env.STARBASE_BRAND; else process.env.STARBASE_BRAND = savedBrand; forgetBrand(); });
+const savedBrand = process.env.BASE_BRAND;
+const wear = (brand) => { process.env.BASE_BRAND = brand; forgetBrand(); };
+after(() => { if (savedBrand === undefined) delete process.env.BASE_BRAND; else process.env.BASE_BRAND = savedBrand; forgetBrand(); });
 
 let db, mgr, ws;
 let loaded = 0;

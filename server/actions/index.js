@@ -11,7 +11,7 @@
 // via POST /api/actions/:name; there is no other way to mutate campaign data.
 import { civic, settleAddress } from '../lib/address.js';
 import { z } from 'zod';
-import { zodFor } from '@starbase/shared/registry';
+import { zodFor } from '@base-win/shared/registry';
 import { newId } from '../lib/events.js';
 import { logGift, voidGift, restoreGift } from '../lib/gifts.js';
 import { FIELD_ACTIONS, personFieldExtensions } from './field.js';

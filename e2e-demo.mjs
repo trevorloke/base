@@ -21,10 +21,11 @@ import { spawn, spawnSync } from 'node:child_process';
 import { mkdirSync, rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { stagingBlock } from './server/test/sample-prints.js';
+import { bothNames } from './shared/old-names.js';
 
 const PORT = Number(process.env.PORT) || 5690;
 const A = `http://127.0.0.1:${PORT}`;
-const SHOTS = process.env.SHOTS || '/tmp/starbase-demo';
+const SHOTS = process.env.SHOTS || '/tmp/base-win-demo';
 const DATA = `${SHOTS}/data`;
 rmSync(DATA, { recursive: true, force: true });
 mkdirSync(DATA, { recursive: true });
@@ -39,8 +40,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // Staging's own settings (NODE_ENV aside: its Secure cookies need https).
 const BLOCK = stagingBlock();
 delete BLOCK.NODE_ENV;
-const env = { ...process.env, ...BLOCK, STARBASE_DATA: DATA, PORT: String(PORT), STARBASE_JOBS: 'off', GEOCODER: 'off', GEOCODE_ON_SAVE: 'off' };
-for (const k of ['STARBASE_OPEN_SIGNUP', 'STARBASE_SAMPLE_RESET', 'BASE_PLATFORM_PUBKEY', 'STARBASE_PUBLIC_URL', 'BASE_PATH', 'DATABASE_URL']) delete env[k];
+const env = { ...process.env, ...BLOCK, BASE_DATA: DATA, PORT: String(PORT), BASE_JOBS: 'off', GEOCODER: 'off', GEOCODE_ON_SAVE: 'off' };
+for (const k of ['BASE_OPEN_SIGNUP', 'BASE_SAMPLE_RESET', 'BASE_PLATFORM_PUBKEY', 'BASE_PUBLIC_URL', 'BASE_PATH', 'DATABASE_URL'].flatMap(bothNames)) delete env[k];
 
 let server = null;
 let log = '';
@@ -50,7 +51,7 @@ const start = () => new Promise((resolve, reject) => {
   server.stdout.on('data', (d) => { log += d; });
   server.stderr.on('data', (d) => { log += d; });
   const t = setTimeout(() => reject(new Error(`the server did not start: ${log.slice(-400)}`)), 60_000);
-  const look = setInterval(() => { if (/starbase on :/.test(log)) { clearInterval(look); clearTimeout(t); resolve(); } }, 100);
+  const look = setInterval(() => { if (/base\.win on :/.test(log)) { clearInterval(look); clearTimeout(t); resolve(); } }, 100);
 });
 const stop = () => new Promise((resolve) => {
   if (!server || server.exitCode !== null) { resolve(); return; }
@@ -106,7 +107,7 @@ try {
   await visitor.goto(`${A}/`);
   await until('the visitor in the app', async () => (await me(visitor)).status === 200 && signedInOff(visitor), 30_000);
   const who = await me(visitor);
-  check('a visitor who opens the app is signed in as the demo account', who.json?.user?.email === BLOCK.STARBASE_DEMO_EMAIL, who.json?.user?.email);
+  check('a visitor who opens the app is signed in as the demo account', who.json?.user?.email === BLOCK.BASE_DEMO_EMAIL, who.json?.user?.email);
   await visitor.waitForLoadState('networkidle');
   check('no password is asked', await visitor.locator('input[type=password]').count() === 0);
   const first = await people(visitor);

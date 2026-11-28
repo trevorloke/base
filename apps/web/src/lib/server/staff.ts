@@ -1,6 +1,7 @@
 import "server-only";
 import { randomInt } from "node:crypto";
-import { and, desc, eq, gt, isNull, ne, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, ne, sql, type SQL } from "drizzle-orm";
+import { newAuditAction, sameAuditActions, sameAuditEntities } from "@/lib/desk-words";
 import type { Db } from "@/lib/db";
 import { adminSessions, adminUsers, auditLog } from "@/lib/db/schema";
 import { adminMagicLinkEmail } from "@/lib/email/messages";
@@ -232,8 +233,12 @@ export async function listAudit(db: Db, f: AuditFilters): Promise<{ rows: AuditR
   const conditions: SQL[] = [];
   if (f.user === "system") conditions.push(isNull(auditLog.userId));
   else if (f.user) conditions.push(sql`(${auditLog.userId}::text = ${f.user} or ${auditLog.userEmail} = ${f.user})`);
-  if (f.action) conditions.push(eq(auditLog.action, f.action));
-  if (f.entity) conditions.push(sql`(${auditLog.entity} ilike ${`%${f.entity.replace(/[\\%_]/g, (c) => `\\${c}`)}%`} or ${auditLog.entityId} = ${f.entity})`);
+  // An action or entity about the desk also finds the rows kept under its older name (src/lib/desk-words.ts).
+  if (f.action) conditions.push(inArray(auditLog.action, sameAuditActions(f.action)));
+  if (f.entity) {
+    const like = sameAuditEntities(f.entity).map((e) => sql`${auditLog.entity} ilike ${`%${e.replace(/[\\%_]/g, (c) => `\\${c}`)}%`}`);
+    conditions.push(sql`(${sql.join(like, sql` or `)} or ${auditLog.entityId} = ${f.entity})`);
+  }
   const where = conditions.length ? and(...conditions) : undefined;
   const [rows, [{ total }]] = await Promise.all([
     db
@@ -263,5 +268,6 @@ export async function auditFacets(db: Db): Promise<{ users: { id: string; name: 
     db.select({ id: adminUsers.id, name: adminUsers.name, email: adminUsers.email }).from(adminUsers).orderBy(adminUsers.name),
     db.selectDistinct({ action: auditLog.action }).from(auditLog).orderBy(auditLog.action).limit(300),
   ]);
-  return { users, actions: actions.map((a) => a.action) };
+  // An older action name is offered once, under its new name, which finds both.
+  return { users, actions: [...new Set(actions.map((a) => newAuditAction(a.action)))].sort() };
 }

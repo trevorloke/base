@@ -1,4 +1,4 @@
-/* Starbase service worker — keeps the field app opening with no signal.
+/* base.win service worker — keeps the field app opening with no signal.
  *
  *   App shell   index.html + every built /assets/* file. Navigations are
  *               network-first (short timeout on bad signal) and fall back to
@@ -20,7 +20,7 @@
  *               (~1500 tiles, oldest out first), so a turf seen with signal
  *               still draws offline. OpenStreetMap's and CARTO's (the Clean
  *               look) always; the map tells this worker any other provider
- *               (GET /api/map/config → postMessage { type: 'starbase:tiles',
+ *               (GET /api/map/config → postMessage { type: 'base-win:tiles',
  *               url }), kept across restarts. Only tiles the map itself
  *               asked for are kept — nothing is ever fetched ahead (tile
  *               servers' usage rules).
@@ -49,6 +49,15 @@
  *
  * Bump VERSION to throw every cache away on the next activate.
  *
+ * What an older worker kept under the app's older name (the block marked
+ * old-names below) is carried over to the new names once this worker has
+ * taken over, in the background — the app, its files, the map's tiles (each
+ * with the time it was kept) and the note of the map's provider — and each
+ * older cache goes only once its copy is done. Until then the tiles and the
+ * notes are read from the older caches too, so a turf seen before the update
+ * still draws with no signal. A copy that fails is tried again the next time
+ * the worker wakes. The page's older tiles message is still understood.
+ *
  * Under a client's path on a shared domain (base.win/yourcampaign — the
  * worker's scope), every address below is under that path and the caches
  * carry its name: another campaign's base.win on the same domain has its own,
@@ -57,14 +66,31 @@
  */
 const BASE = new URL(self.registration.scope).pathname.replace(/\/+$/, '');
 const VERSION = 'v2';
-const NAME = BASE ? `starbase-${BASE.slice(1)}` : 'starbase';
+const NAME = BASE ? `base-win-${BASE.slice(1)}` : 'base-win';
 const SHELL = `${NAME}-shell-${VERSION}`;
 const ASSETS = `${NAME}-assets-${VERSION}`;
 const TILES = `${NAME}-tiles-${VERSION}`;
 const META = `${NAME}-meta-${VERSION}`; // the map's tile provider
 const KEEP = [SHELL, ASSETS, TILES, META];
 // This worker's own caches, old versions included — never another client's.
-const MINE = BASE ? new RegExp(`^${NAME}-(?:shell|assets|tiles|meta)-`) : /^starbase-(?:shell|assets|tiles|meta)-/;
+const MINE = new RegExp(`^${NAME}-(?:shell|assets|tiles|meta)-`);
+const KINDS = ['shell', 'assets', 'tiles', 'meta'];
+
+// old-names: begin
+// Where a worker kept things under the app's older name (shared/old-names.js:
+// a worker can't import it). Read and carried over, never written.
+const OLD_NAME = BASE ? `starbase-${BASE.slice(1)}` : 'starbase';
+const OLD_TILE_AT = 'x-starbase-cached-at';
+const OLD_OLD_FILES_KEY = '/__starbase/old-files';
+const OLD_TILE_CONFIG_KEY = '/__starbase/tiles';
+const OLD_TILES_MESSAGE = 'starbase:tiles';
+// old-names: end
+const OLD_MINE = new RegExp(`^${OLD_NAME}-(?:shell|assets|tiles|meta)-`);
+// The older caches that are carried over (the others an older worker would
+// have thrown away itself), each with the cache it goes into.
+const CARRY = KINDS.map((k) => [`${OLD_NAME}-${k}-${VERSION}`, `${NAME}-${k}-${VERSION}`]);
+const OLD_TILES = `${OLD_NAME}-tiles-${VERSION}`;
+const OLD_META = `${OLD_NAME}-meta-${VERSION}`;
 
 const INDEX = `${BASE}/index.html`;
 const SHELL_EXTRAS = [`${BASE}/manifest.webmanifest`];
@@ -74,10 +100,10 @@ const NAV_TIMEOUT_MS = 4000;  // then show the cached app, let the network finis
 const TILE_TIMEOUT_MS = 5000;
 const TILE_MAX = 1500;
 const TILE_FRESH_MS = 7 * 24 * 3600 * 1000; // re-check a cached tile after a week
-const TILE_AT = 'x-starbase-cached-at';
+const TILE_AT = 'x-base-win-cached-at';
 // When each file stopped being part of the build (path → ms), and how long
 // it stays after that.
-const OLD_FILES_KEY = '/__starbase/old-files';
+const OLD_FILES_KEY = '/__base-win/old-files';
 const OLD_KEEP_MS = 24 * 3600 * 1000;
 
 // The server's own pages (unsubscribe, receipts, public lessons, tracking,
@@ -95,7 +121,7 @@ const isTileHost = (host) => host === 'tile.openstreetmap.org' || host.endsWith(
 // The configured provider, from a template like
 // https://{s}.tiles.example/streets/{z}/{x}/{y}.png?key=… → its host ({s} any
 // subdomain) and the path before the first {…}.
-const TILE_CONFIG_KEY = '/__starbase/tiles';
+const TILE_CONFIG_KEY = '/__base-win/tiles';
 const matcherFor = (template) => {
   const m = /^https?:\/\/([^/]+)(\/[^{]*)/i.exec(String(template || ''));
   if (!m) return null;
@@ -109,17 +135,32 @@ let tileMatcher; // undefined: not read yet; null: OpenStreetMap only
 const loadMatcher = () => {
   if (tileMatcher !== undefined) return Promise.resolve(tileMatcher);
   const read = (m) => { if (tileMatcher === undefined) tileMatcher = m; return tileMatcher; };
-  return caches.open(META)
-    .then((c) => c.match(TILE_CONFIG_KEY))
+  return note(TILE_CONFIG_KEY, OLD_TILE_CONFIG_KEY)
     .then((r) => (r ? r.json() : null))
     .then((cfg) => read(cfg?.url ? matcherFor(cfg.url) : null))
     .catch(() => read(null));
 };
+// One of this worker's notes (in META): under its key, else its older key,
+// else in the older worker's cache while that is still there. Written only
+// under the new key.
+async function note(key, oldKey) {
+  const meta = await caches.open(META);
+  const hit = (await meta.match(key)) || (await meta.match(oldKey));
+  if (hit) return hit;
+  const old = await olderCache(OLD_META);
+  return old ? old.match(oldKey) : null;
+}
+// An older worker's cache, while it is still there (opening one that isn't
+// would make it).
+async function olderCache(name) {
+  if (carried) return null;
+  return (await caches.keys()).includes(name) ? caches.open(name) : null;
+}
 const isConfiguredTile = (url, m) => Boolean(m && m.host.test(url.hostname) && url.pathname.startsWith(m.path));
 
 self.addEventListener('message', (event) => {
   const d = event.data;
-  if (!d || d.type !== 'starbase:tiles' || typeof d.url !== 'string' || d.url.length > 1000) return;
+  if (!d || (d.type !== 'base-win:tiles' && d.type !== OLD_TILES_MESSAGE) || typeof d.url !== 'string' || d.url.length > 1000) return;
   const m = matcherFor(d.url);
   if (!m) return;
   tileMatcher = m;
@@ -148,30 +189,85 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
     const names = await caches.keys();
+    // (An older worker's caches that are carried over stay until their copy is done.)
     await Promise.all(names
-      .filter((n) => MINE.test(n) && !KEEP.includes(n))
+      .filter((n) => (MINE.test(n) && !KEEP.includes(n)) || (OLD_MINE.test(n) && !CARRY.some(([from]) => from === n)))
       .map((n) => caches.delete(n)));
-    // Google's tiles kept by an older worker: gone (no offline use).
+    // Google's tiles kept by an older worker, and CARTO's notice pictures
+    // kept before the map asked with a key: gone (never copied over either).
     if (names.includes(TILES)) {
       const cache = await caches.open(TILES);
       const kept = await cache.keys();
-      await Promise.all(kept
-        .filter((r) => { const u = new URL(r.url); return u.origin === self.location.origin && inside(u.pathname).startsWith('/tiles/'); })
-        .map((r) => cache.delete(r)));
-      // CARTO's notice pictures, kept before the map asked with a key: gone.
-      await Promise.all(kept
-        .filter((r) => { const u = new URL(r.url); return /(^|\.)basemaps\.cartocdn\.com$/.test(u.hostname) && !u.searchParams.has('key'); })
-        .map((r) => cache.delete(r)));
+      await Promise.all(kept.filter((r) => neverKept(r.url)).map((r) => cache.delete(r)));
     }
     await self.clients.claim();
+    // In the background: the pages this worker now answers don't wait for it.
+    Promise.resolve().then(carryOlder);
   })());
 });
+
+// What an older worker kept, into this worker's caches: each entry not
+// already there (tiles with the time they were kept under the new header, at
+// most TILE_MAX in all; the notes under their new keys). An older cache goes
+// only once all of it is copied; a copy that fails leaves it for the next
+// time this worker wakes (carryOlder runs again with its first request).
+let carried = false;
+let carrying = null;
+const carryOlder = () => {
+  if (carried) return Promise.resolve();
+  carrying = carrying || copyOlder().then((done) => { carried = done; }, () => {});
+  return carrying;
+};
+const NOTE_KEYS = [[OLD_TILE_CONFIG_KEY, TILE_CONFIG_KEY], [OLD_OLD_FILES_KEY, OLD_FILES_KEY]];
+// A tile no worker keeps: Google's, through the server (no offline use), and
+// CARTO's asked with no key (its "API KEY REQUIRED" notice, not streets).
+const neverKept = (href) => {
+  const u = new URL(href);
+  return (u.origin === self.location.origin && inside(u.pathname).startsWith('/tiles/'))
+    || (/(^|\.)basemaps\.cartocdn\.com$/.test(u.hostname) && !u.searchParams.has('key'));
+};
+async function copyOlder() {
+  const names = await caches.keys();
+  let done = true;
+  for (const [from, to] of CARRY) {
+    if (!names.includes(from)) continue;
+    try {
+      const src = await caches.open(from);
+      const dst = await caches.open(to);
+      let entries = await src.keys();
+      if (to === TILES) entries = entries.filter((r) => !neverKept(r.url));
+      if (to === TILES) entries = entries.slice(Math.max(0, entries.length - Math.max(0, TILE_MAX - (await dst.keys()).length)));
+      for (const req of entries) {
+        const u = new URL(req.url);
+        const renamed = NOTE_KEYS.find(([o]) => u.origin === self.location.origin && u.pathname === o);
+        const key = renamed ? renamed[1] : req.url;
+        if (await dst.match(key)) continue;
+        const res = await src.match(req);
+        if (!res) continue;
+        await dst.put(key, to === TILES ? await retagged(res) : res);
+      }
+      await caches.delete(from);
+    } catch {
+      done = false; // kept as it is: copied again next time
+    }
+  }
+  return done;
+}
+// An older worker's tile, under the new header with the time it was kept.
+async function retagged(res) {
+  const headers = new Headers(res.headers);
+  const at = res.headers.get(TILE_AT) || res.headers.get(OLD_TILE_AT);
+  headers.delete(OLD_TILE_AT);
+  if (at) headers.set(TILE_AT, at);
+  return new Response(await res.blob(), { status: res.status, statusText: res.statusText, headers });
+}
 
 // ── Routing ──
 
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
+  if (!carried) event.waitUntil?.(carryOlder());
   const url = new URL(req.url);
 
   if (isTileHost(url.hostname)) {
@@ -183,7 +279,7 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(tile(event, url));
     return;
   }
-  // Starbase's own tiles (Google Maps through the server): straight to the
+  // base.win's own tiles (Google Maps through the server): straight to the
   // network, never kept, never served from here (Google's terms).
   if (url.origin === self.location.origin && inside(url.pathname).startsWith('/tiles/')) {
     event.respondWith(fetch(req));
@@ -362,7 +458,7 @@ async function syncAssets(html) {
 async function retireOld(want) {
   try {
     const meta = await caches.open(META);
-    const since = await meta.match(OLD_FILES_KEY).then((r) => (r ? r.json() : {})).catch(() => ({}));
+    const since = await note(OLD_FILES_KEY, OLD_OLD_FILES_KEY).then((r) => (r ? r.json() : {})).catch(() => ({}));
     if (!want && !Object.keys(since).length) return;
     const cache = await caches.open(ASSETS);
     const now = Date.now();
@@ -404,8 +500,9 @@ let tilePuts = 0;
 async function tile(event, url, own = false) {
   const cache = await caches.open(TILES);
   const key = url.href;
-  const hit = await cache.match(key);
-  const age = hit ? Date.now() - Number(hit.headers.get(TILE_AT) || 0) : Infinity;
+  // (Kept by an older worker and not copied over yet: from its cache.)
+  const hit = (await cache.match(key)) || (await (await olderCache(OLD_TILES))?.match(key));
+  const age = hit ? Date.now() - Number(hit.headers.get(TILE_AT) || hit.headers.get(OLD_TILE_AT) || 0) : Infinity;
   if (hit && age < TILE_FRESH_MS) return hit;
 
   const network = fetchTile(key, own);

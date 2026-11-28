@@ -6,7 +6,7 @@
 // "Live recurring" = the largest monthly-cadence gift in the last 62 days.
 // A named tier is sent with its label and its rank (0 the highest), so the
 // profile draws it without knowing any tier by name.
-import { donorTier } from '@starbase/shared/canvass';
+import { donorTier } from '@base-win/shared/canvass';
 import { preset } from './preset.js';
 
 export const tierFor = async (tx, workspaceId, personId) => {

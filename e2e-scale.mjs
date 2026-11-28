@@ -12,14 +12,14 @@
 // (volunteer); volunteers never see the screen or its link; sign-out
 // forgets the phone's copy; the books verify.
 //
-//   STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4212 node server/index.js &
+//   BASE_BRAND=imagine-surrey BASE_OPEN_SIGNUP=1 BASE_DATA=memory PORT=4212 node server/index.js &
 //   BASE=http://127.0.0.1:4212 SHOTS=/tmp/scale node e2e-scale.mjs
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
 
 const BASE = process.env.BASE || 'http://localhost:3200';
 const ADMIN = { toString() { return `${BASE}/admin`; } }; // the desk's pages live in the admin (web/src/mode.js)
-const SHOTS = process.env.SHOTS || '/tmp/starbase-scale';
+const SHOTS = process.env.SHOTS || '/tmp/base-win-scale';
 mkdirSync(SHOTS, { recursive: true });
 const results = [];
 const check = (name, ok, extra = '') => {
@@ -154,7 +154,7 @@ await vp.waitForSelector('aside.door-card .rb-btn', { timeout: 10000 }).catch(()
 await sleep(1500); // the phone copies are written a moment after they load
 let b = await buttonsText(vp, 'aside.door-card');
 check('phone, default scale: 1 Strong yes · 2 Lean yes · 3 Undecided · 4 Opposed', b?.row.join(' | ') === '1 Strong yes | 2 Lean yes | 3 Undecided | 4 Opposed', JSON.stringify(b));
-const kept0 = await vp.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('starbase:copy:') && k.endsWith(':scale')));
+const kept0 = await vp.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('base-win:copy:') && k.endsWith(':scale')));
 check('the phone keeps the scale with this sign-in’s copies', kept0.length === 1 && kept0[0].includes(`:${volId}:`), kept0.join(' | '));
 // The Rating scale screen isn't theirs.
 await vp.click('.acct-btn');
@@ -400,7 +400,7 @@ await vp.click('.acct-btn');
 await vp.click('.acct-panel button:has-text("Sign out")');
 await vp.waitForURL(`${BASE}/login`, { timeout: 8000 }).catch(() => {});
 await sleep(500);
-const left = await vp.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('starbase:copy:') || k.startsWith('starbase:me:')));
+const left = await vp.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('base-win:copy:') || k.startsWith('base-win:me:')));
 check('signed out: the scale copy (and the rest) are gone from the phone', left.length === 0, left.join(' | '));
 await vctx.close();
 

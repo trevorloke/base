@@ -4,7 +4,7 @@
 // preview, a problem Publish found): the catalogue's path ('titlePrefix',
 // 'items[2].title') or the preview's ('items.2.title').
 import { useEffect, useRef } from 'react';
-import { MODULE_BY_KIND } from '@starbase/shared/site/catalogue';
+import { MODULE_BY_KIND } from '@base-win/shared/site/catalogue';
 import { ModuleForm } from '../Fields.jsx';
 
 const domId = (s) => String(s).replace(/[^A-Za-z0-9_-]+/g, '-');

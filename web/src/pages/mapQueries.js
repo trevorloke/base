@@ -3,6 +3,7 @@
 // the reads' query keys and paths (and the name each is kept under on the
 // phone), the saved look, and the word to the service worker about tiles.
 import { useQuery } from '@tanstack/react-query';
+import { OLD_STORAGE } from '@base-win/shared/old-names';
 import { apiGet } from '../api.js';
 import { NS } from '../base.js';
 import { phoneCopy, useKeepCopy } from '../components/OfflineCache.js';
@@ -29,12 +30,15 @@ export const readViewPref = () => { try { return localStorage.getItem(VIEW_PREF)
 
 // Tell the service worker which provider's tiles to keep (a provider the
 // worker doesn't know by itself: OpenStreetMap's and CARTO's it always keeps).
+// Said twice: once as this worker hears it, once as a worker from before the
+// app's new name does (shared/old-names.js) — a phone can still run one
+// until it updates. Each worker reads the one it knows.
 export function tellServiceWorker(url) {
   const sw = typeof navigator !== 'undefined' ? navigator.serviceWorker : null;
   if (!sw) return;
-  const msg = { type: 'starbase:tiles', url };
-  sw.controller?.postMessage(msg);
-  sw.ready?.then((reg) => reg.active?.postMessage(msg)).catch(() => {});
+  const say = (to) => { for (const type of ['base-win:tiles', OLD_STORAGE.tilesMessage]) to?.postMessage({ type, url }); };
+  say(sw.controller);
+  sw.ready?.then((reg) => say(reg.active)).catch(() => {});
 }
 
 // The desk band's outlines (MapWindow.jsx): names and shapes only, nobody

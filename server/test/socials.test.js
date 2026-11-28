@@ -9,7 +9,7 @@ import { getDb } from '../db/client.js';
 import { personsWhere } from '../lib/audience.js';
 import {
   parseSocial, sameHandle, profileUrl, shownHandle, parseCount, countWord, countFull, SAY, PLATFORMS,
-} from '@starbase/shared/socials';
+} from '@base-win/shared/socials';
 
 // ── The reader ──
 const ok = (text, platform, handle, hint) => test(`parse ${JSON.stringify(text)}${hint ? ` (${hint})` : ''} → ${platform} ${handle}`, () => {

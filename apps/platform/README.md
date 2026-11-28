@@ -152,7 +152,7 @@ makes (two paid things), asks for a code, then:
 2. waits for Render to say it is ready (or stops: press **Carry on** later);
 3. makes the service `base-win-<name>` from the production branch, with
    every setting from the campaign's own row in the creating call, so it
-   never starts on the code's defaults. Render makes `STARBASE_TWO_STEP_KEY`
+   never starts on the code's defaults. Render makes `BASE_TWO_STEP_KEY`
    and `GOOGLE_TOKEN_KEY` itself; the new database's address goes from
    Render to Render inside that one call and is kept nowhere here;
 4. saves the service's Render address, as if pasted, and checks it;
@@ -167,8 +167,19 @@ ever deleted. Two new campaigns a day at most. Campaigns added as already
 running, campaigns set up by hand and the sample are never offered it.
 
 A campaign made here can also have a missing setting of its own added
-(**Add STARBASE_TZ** and so on, on its Render page), to the value from its
+(**Add BASE_TZ** and so on, on its Render page), to the value from its
 own row, then a deploy. A setting that has a value is never changed.
+
+**Older setting names.** base.win's settings were renamed (`BASE_TZ` and
+so on). A campaign set up before that has its settings in Render under
+their older names, and they keep working. The control centre asks Render
+about both names of each setting and counts it as set when either is, so
+nothing shows as missing and nothing is added on top of an older name.
+Anything it adds or makes uses the new names only. The Render board and
+each campaign's Render page list, names only, the older names still set
+on that service, each with its new name. To tidy one: in Render, on that
+service's **Environment**, add the new name with exactly the same value,
+Save, then delete the older name. Or leave it; nothing breaks.
 
 Not known until the first real one: how Render answers the two making
 calls, whether it accepts `generateValue` there, and what a second thing
@@ -229,7 +240,7 @@ is ours. So, first:
    deploy, set up again, and put the new base.win key on every campaign.
 4. For every service the key could see: new email, texting and Google keys
    at their providers; a new database password (in Render);
-   `STARBASE_TWO_STEP_KEY` and `GOOGLE_TOKEN_KEY` changed the way their own
+   `BASE_TWO_STEP_KEY` and `GOOGLE_TOKEN_KEY` changed the way their own
    notes say (the new value first, the old one after a comma).
 5. In Render, look at each database's **Access Control** and each service's
    branch, repository, commands, addresses and **Events**. Whatever is not
@@ -299,7 +310,7 @@ Every Render change ends with **Save and deploy**, then wait for “Live”.
   on no other; at the registrar, check the CNAME record named `<name>`
   points at this service’s onrender.com address.
 - **“Not on a real database”:** the campaign keeps its data in the built-in
-  database, not in Postgres. On Render that means `STARBASE_EMBEDDED_DB=1`
+  database, not in Postgres. On Render that means `BASE_EMBEDDED_DB=1`
   was set on its service: without it, a service with an empty
   `DATABASE_URL` does not start. Unless a disk is mounted for it, that
   data is lost at the next deploy. Set `DATABASE_URL` to its database’s
@@ -310,7 +321,7 @@ Every Render change ends with **Save and deploy**, then wait for “Live”.
   Internal Database URL (card 1, step 4), then Save and deploy.
 - **“Sign-up is open to anyone”:** nobody has made the campaign yet, and the
   first person to open its address can. Set `BASE_PLATFORM_PUBKEY` on it
-  (step 5 of First time; remove `STARBASE_OPEN_SIGNUP` if it is set), then
+  (step 5 of First time; remove `BASE_OPEN_SIGNUP` if it is set), then
   **Invite the first manager** from here.
 - **“Production is on …; staging is on …”:** staging has a release this
   campaign doesn’t. Nothing is wrong; GitHub → Actions → *Promote to

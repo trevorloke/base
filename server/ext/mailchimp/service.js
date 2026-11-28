@@ -8,11 +8,13 @@
 // given to Mailchimp and never shown, logged or put in an answer. If
 // Mailchimp answers Connect with a signing secret, it is passed on once, to
 // set as MAILCHIMP_WEBHOOK_SECRET, and kept nowhere here.
+import { setting } from '@base-win/shared/old-names';
 import { apiKey, AudienceError, audienceId, audiences, HOOK_PREFIX, hookUrl, keyFor, mailchimp, mailchimpOn, MailchimpError, webhookSecrets } from './mailchimp.js';
 import { deliveries } from './webhook.js';
 
 const NEEDS = ['MAILCHIMP_API_KEY'];
-const env = (k) => String(process.env[k] || '').trim();
+// A setting by its name, or its older name while that is the one set (shared/old-names.js); any other name as it is.
+const env = (k) => String(setting(k) || '').trim();
 // What could not be confirmed is said where the manager sets it up, in their
 // words: base.win was built against Mailchimp's published API, never tried
 // on a real account (INTEGRATIONS.md) — Check tries theirs.
@@ -121,7 +123,7 @@ export const connect = async (base) => {
   if (!mailchimpOn()) return { ok: false, said: NO_SERVER };
   // Mailchimp is given this base.win's public address: without one it would
   // be told to send to wherever this page happens to be open.
-  if (!env('STARBASE_PUBLIC_URL')) return { ok: false, said: 'Set the public address first (STARBASE_PUBLIC_URL): Mailchimp needs somewhere to send unsubscribes' };
+  if (!env('BASE_PUBLIC_URL')) return { ok: false, said: 'Set the public address first (BASE_PUBLIC_URL): Mailchimp needs somewhere to send unsubscribes' };
   try {
     const audience = await audienceId();
     const hooks = await webhooksOf(audience);

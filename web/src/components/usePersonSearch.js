@@ -12,7 +12,7 @@
 // box opens. While a new term's answer is on its way the last answer stays
 // on screen with fresh: false; it must never be picked from (PersonResults).
 import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query';
-import { foldTerm } from '@starbase/shared/names';
+import { foldTerm } from '@base-win/shared/names';
 import { apiGet } from '../api.js';
 import { useSettled } from './useSettled.js';
 

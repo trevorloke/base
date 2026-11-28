@@ -11,12 +11,13 @@
 //   GET /share/kits/:id   Outreach: one kit and its top 10 sharers.
 //   GET /share/top        Outreach: the top 10 people by people brought in,
 //       through any link of theirs, all time.
+import { setting } from '@base-win/shared/old-names';
 import { Hono } from 'hono';
 import { here } from '../../lib/mount.js';
 import { siteDomain } from '../site/domain.js';
 import { azKey } from '../../lib/az.js';
 import { selfPerson } from '../relationships/match.js';
-import { authLine, kitOut, kitPage, kitText } from './share.js';
+import { authLine, kitOut, kitOver, kitPage, kitText } from './share.js';
 
 export const shareApi = new Hono();
 
@@ -25,7 +26,7 @@ const SHARE_MAX = 20;
 const TOP_MAX = 10;
 const parseJ = (v, d) => (typeof v === 'string' ? JSON.parse(v) : (v ?? d));
 
-// Where a shared link starts: the website's own domain (STARBASE_SITE_DOMAIN),
+// Where a shared link starts: the website's own domain (BASE_SITE_DOMAIN),
 // else the campaign's first saved domain, else the app's /site address (the
 // public address when the app runs under a client's path).
 export const baseOf = (c, domains) => {
@@ -36,7 +37,7 @@ export const baseOf = (c, domains) => {
   const url = new URL(c.req.url);
   const proto = (c.req.header('x-forwarded-proto') || '').split(',')[0].trim() === 'https' ? 'https' : url.protocol.replace(':', '');
   let origin = `${proto}://${url.host}`;
-  const pub = String(process.env.STARBASE_PUBLIC_URL || '').trim();
+  const pub = String(setting('BASE_PUBLIC_URL') || '').trim();
   if (c.env?.base && pub) {
     try {
       const u = new URL(pub);
@@ -94,10 +95,14 @@ shareApi.get('/share/kits', async (c) => {
     `select k.*, ${SIGNUPS} as signups, ${SHARERS} as sharers from share_kits k
       where k.workspace_id = $1 and k.deleted_at is null order by k.created_at desc, k.id`, [ws],
   )).rows;
+  // "Authorized by …" goes on every kit once it is filled in: a kit saved
+  // before then may now be over 500 with it (over), said on the desk —
+  // its words are never changed.
+  const line = await authLine(db, ws);
   const kits = [];
   for (const k of rows) {
     const page = await kitPage(db, ws, k.path);
-    kits.push({ ...kitOut(k), live: page.live, page_title: page.title, signups: k.signups, sharers: k.sharers });
+    kits.push({ ...kitOut(k), live: page.live, page_title: page.title, signups: k.signups, sharers: k.sharers, over: kitOver(k, line) });
   }
   const pages = [
     { path: '/', title: 'Home' },
@@ -112,7 +117,7 @@ shareApi.get('/share/kits', async (c) => {
     )).rows,
   ];
   const ready = Boolean((await db.query('select 1 from site_settings where workspace_id = $1', [ws])).rows[0]);
-  return c.json({ ready, line: await authLine(db, ws), pages, kits });
+  return c.json({ ready, line, over: kits.filter((k) => k.over).length, pages, kits });
 });
 
 shareApi.get('/share/kits/:id', async (c) => {

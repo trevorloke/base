@@ -7,12 +7,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { contrast } from '@starbase/shared/site/theme';
-import { BRANDS as OWN } from '@starbase/shared/brand';
+import { contrast } from '@base-win/shared/site/theme';
+import { BRANDS as OWN } from '@base-win/shared/brand';
 import { presetFor } from '../lib/preset.js';
 // base.win's own look, and Imagine Surrey's from its preset.
 const BRANDS = { 'imagine-surrey': presetFor('imagine-surrey').brand, ...OWN };
-import { deriveLook, lookTokens, lookCss, SIDEBARS, CORNERS } from '@starbase/shared/brand-look';
+import { deriveLook, lookTokens, lookCss, SIDEBARS, CORNERS } from '@base-win/shared/brand-look';
 
 const SCHEMES = ['light', 'dark'];
 const failing = (look) => look.checks.filter((c) => !c.ok).map((c) => `${c.what} ${c.ratio.toFixed(2)} < ${c.min} (${c.fg} on ${c.bg})`);
@@ -118,7 +118,7 @@ test('status words read on every ground (the brand never recolours them, so they
 // alike — none is the brand's, none a status colour, and each reads as an
 // icon or an edge (3:1) on every ground.
 test('the kinds of shift keep their own colours, apart from the brand and the status colours', async () => {
-  const { SHIFT_KINDS } = await import('@starbase/shared/shiftkinds');
+  const { SHIFT_KINDS } = await import('@base-win/shared/shiftkinds');
   for (const scheme of SCHEMES) {
     const kinds = pairs(marked(`kind:${scheme}`));
     const status = pairs(marked(`status:${scheme}`));

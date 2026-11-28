@@ -13,7 +13,7 @@ if (!process.env.DATABASE_URL) { console.error('Set DATABASE_URL to a Postgres t
 process.env.PG_POOL_MAX ||= '4';
 const { freshDb, Client } = await import('../server/test/helpers.js');
 const { runDueJobs } = await import('../server/lib/jobs.js');
-const { DWELLING_TYPES } = await import('@starbase/shared/fieldlists');
+const { DWELLING_TYPES } = await import('@base-win/shared/fieldlists');
 
 const db = await freshDb();
 const ms = (t) => Math.round(performance.now() - t);

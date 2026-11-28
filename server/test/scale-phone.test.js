@@ -14,7 +14,7 @@ import assert from 'node:assert/strict';
 import { freshDb, Client } from './helpers.js';
 import { getDb } from '../db/client.js';
 import { app } from '../index.js';
-import { normalizeScale } from '@starbase/shared/scale';
+import { normalizeScale } from '@base-win/shared/scale';
 
 const tag = Math.random().toString(36).slice(2, 8);
 const DAY = 86400000;
@@ -68,7 +68,7 @@ before(async () => {
 
 const ok = (r, msg = '') => { assert.equal(r.status, 200, `${msg} ${JSON.stringify(r.json)}`); return r.json; };
 const listOf = (s) => s.candidates.map((c) => ({ code: c.code, name: c.name, off: c.off }));
-const outbox = () => JSON.parse(globalThis.localStorage.getItem('starbase:outbox:v2') || '[]');
+const outbox = () => JSON.parse(globalThis.localStorage.getItem('base-win:outbox:v2') || '[]');
 // Queue a knock with the phone's clock at `at` (it waited on the phone since).
 async function knockAt(at, input) {
   const Real = Date;
@@ -137,7 +137,7 @@ test('with no saved scale the phone starts from the list its server names at sig
   assert.equal((await fresh.signup({ workspaceName: `Scale start ${tag}`, email: `scph.start+${tag}@example.org` })).status, 201);
   const me = ok(await fresh.get('/api/auth/me'));
   assert.equal(me.workspace.settings.scale, undefined, 'this campaign has saved no scale');
-  // This server sets no STARBASE_CANDIDATES: Imagine Surrey's five, as always.
+  // This server sets no BASE_CANDIDATES: Imagine Surrey's five, as always.
   // Each with its label: the phone's own code holds no list to take one from.
   assert.deepEqual(me.org.candidates, [
     { code: '4D', name: 'McCallum', label: 'Opposed — Doug McCallum supporter' }, { code: '4B', name: 'Locke', label: 'Opposed — Surrey Connect / Brenda Locke' },
@@ -147,7 +147,7 @@ test('with no saved scale the phone starts from the list its server names at sig
   const start = scaleJs.meScale(me);
   assert.deepEqual(normalizeScale(start.scale), normalizeScale(null), 'for Imagine Surrey: exactly the scale the phone showed before');
   assert.equal(scaleJs.meScale(me), start, 'one answer per sign-in copy');
-  // A server that names nobody (STARBASE_CANDIDATES=none): nobody is offered.
+  // A server that names nobody (BASE_CANDIDATES=none): nobody is offered.
   const nobody = scaleJs.meScale({ ...me, org: { ...me.org, candidates: [] } });
   assert.deepEqual(nobody.scale.candidates, []);
   // A saved scale is the one the sign-in carries, as before.

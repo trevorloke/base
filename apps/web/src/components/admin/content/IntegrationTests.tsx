@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { retryStarbaseRow, sendStarbaseNow, sendTestEmail, sendTestSms, skipStarbaseRow, testStarbase } from "@/app/admin/(secure)/integrations/actions";
+import { retryDeskRow, sendDeskNow, sendTestEmail, sendTestSms, skipDeskRow, testDesk } from "@/app/admin/(secure)/integrations/actions";
 import { fieldError, Notice } from "@/components/admin/Notice";
 import { SubmitButton } from "@/components/admin/SubmitButton";
 import { TextField } from "@/components/forms/Field";
@@ -38,10 +38,10 @@ export function TestSmsForm() {
   );
 }
 
-/** Starbase: "Test connection" (ping) and "Send now" (deliver everything waiting). */
-export function StarbaseForms({ waiting }: { waiting: number }) {
-  const [testState, testAction] = useActionState(testStarbase, null);
-  const [sendState, sendAction] = useActionState(sendStarbaseNow, null);
+/** base.win: "Test connection" (ping) and "Send now" (deliver everything waiting). */
+export function DeskForms({ waiting }: { waiting: number }) {
+  const [testState, testAction] = useActionState(testDesk, null);
+  const [sendState, sendAction] = useActionState(sendDeskNow, null);
   return (
     <div className="stack" style={{ gap: 8 }}>
       <form action={testAction} className="stack" style={{ gap: 8 }}>
@@ -66,8 +66,8 @@ export function StarbaseForms({ waiting }: { waiting: number }) {
 
 /** Retry (failed or skipped → pending, attempts reset) and Skip for one outbox row. */
 export function OutboxRowActions({ id, status }: { id: string; status: string }) {
-  const [retryState, retryAction] = useActionState(retryStarbaseRow, null);
-  const [skipState, skipAction] = useActionState(skipStarbaseRow, null);
+  const [retryState, retryAction] = useActionState(retryDeskRow, null);
+  const [skipState, skipAction] = useActionState(skipDeskRow, null);
   const canRetry = status === "failed" || status === "skipped";
   const canSkip = status === "pending" || status === "failed";
   if (!canRetry && !canSkip && !retryState && !skipState) return null;
@@ -85,7 +85,7 @@ export function OutboxRowActions({ id, status }: { id: string; status: string })
         {canSkip && (
           <form action={skipAction}>
             <input type="hidden" name="id" value={id} />
-            <SubmitButton className="btn btn--outline btn--compact" pendingText="Saving…" confirm="Skip this one? It won't be sent to Starbase.">
+            <SubmitButton className="btn btn--outline btn--compact" pendingText="Saving…" confirm="Skip this one? It won't be sent to base.win.">
               Skip
             </SubmitButton>
           </form>

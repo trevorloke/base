@@ -4,8 +4,8 @@
 // preset changes; server/test/brand-look.test.js fails until they match.
 //   node scripts/look-tokens.mjs            the base preset
 //   node scripts/look-tokens.mjs '#003979'  any colour, to see its shades
-import { BRANDS } from '@starbase/shared/brand';
-import { deriveLook, lookTokens } from '@starbase/shared/brand-look';
+import { BRANDS } from '@base-win/shared/brand';
+import { deriveLook, lookTokens } from '@base-win/shared/brand-look';
 
 const color = process.argv[2];
 const brand = color ? { ...BRANDS.base, color, second: process.argv[3] || null } : BRANDS.base;

@@ -16,7 +16,7 @@
 //   pledgedFor(q, ws, personId, slate)  one donor's open pledges (calltime.log, with roomFor)
 import { capFor } from '../../lib/cap.js';
 import { campaignNow } from '../payments/limits.js';
-import { DEFAULT_SLATE } from '@starbase/shared/canvass';
+import { DEFAULT_SLATE } from '@base-win/shared/canvass';
 
 export const PLEDGE_DAYS = 60;
 

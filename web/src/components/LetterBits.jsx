@@ -3,7 +3,7 @@
 // count against a paper's limit, the campaign's own words in it.
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { size } from '@starbase/shared/letters';
+import { size } from '@base-win/shared/letters';
 import { apiGet } from '../api.js';
 import { phoneCopy, useKeepCopy } from './OfflineCache.js';
 

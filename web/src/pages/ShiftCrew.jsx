@@ -32,8 +32,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { VOLUNTEER_ROLES, noCalls } from '@starbase/shared/canvass';
-import { azSort } from '@starbase/shared/names';
+import { VOLUNTEER_ROLES, noCalls } from '@base-win/shared/canvass';
+import { azSort } from '@base-win/shared/names';
 import { apiGet, action } from '../api.js';
 import { useOnline } from '../components/NoSignal.jsx';
 import { useDragDrop } from '../components/useDragDrop.js';

@@ -10,12 +10,13 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { noCalls, noCallsWord } from '@starbase/shared/canvass';
+import { noCalls, noCallsWord } from '@base-win/shared/canvass';
 import { action, apiGet } from '../api.js';
 import { NeedsSignalLine, NoSignal, noSignal, useOnline } from '../components/NoSignal.jsx';
 import { KIND_WORDS } from '../components/RequestAsk.jsx';
 import './shifts.css';
 import './requests.css';
+import { doorLine } from '../../../shared/units.js';
 
 const dialable = (phone) => String(phone || '').replace(/\s*(?:ext\.?|x|#).*$/i, '').replace(/[^\d+]/g, '');
 const firstName = (name) => String(name || '').trim().split(/\s+/)[0] || '';
@@ -30,8 +31,8 @@ const when = (iso) => {
     : d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
   return `${day.replace(/\.$/, '')} ${time}`;
 };
-// "4 – 7231 132 St", as the walk list says a door.
-const placeOf = (p) => (p.address ? (p.unit ? `${p.unit} – ${p.address}` : p.address) : '');
+// "Unit 4 · 7231 132 St", as every screen says a door (shared/units.js doorLine).
+const placeOf = (p) => (p.address ? doorLine(p, 'door') : '');
 
 function Back() {
   const from = useLocation().state?.from;

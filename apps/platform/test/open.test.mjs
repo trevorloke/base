@@ -15,7 +15,7 @@ import { sha256 } from '../ops-auth.mjs';
 baseEnv();
 const INST = 'EBESExQVFhcYGRobHB0eHw';
 const A = 'https://base-win-a.onrender.com';
-const S = 'https://starbase-staging.onrender.com';
+const S = 'https://base-win-staging.onrender.com';
 const answers = new Map();
 const fetcher = async (url) => {
   const a = answers.get(url);
@@ -23,7 +23,7 @@ const fetcher = async (url) => {
   return { status: a.status || 200, body: JSON.stringify(a.body), ms: 4 };
 };
 const health = (origin, over = {}) => ({
-  ok: true, database: 'ok', service: 'starbase', env: 'production', commit: 'd9130ae', tzdataCurrent: true, ownOrigin: origin, instance: INST,
+  ok: true, database: 'ok', service: 'base.win', env: 'production', commit: 'd9130ae', tzdataCurrent: true, ownOrigin: origin, instance: INST,
   address: 'https://a.base.win', entry: 'ready', platformKids: [currentKid()], setupOpen: false, campaignMade: true, store: 'postgres', ...over,
 });
 const { db } = await freshApp();
@@ -187,7 +187,7 @@ test('pinning: a second environment reporting an instance already pinned is not 
   await b.post('/c/sample/check-now', {});
   const res = await b.post('/c/sample/open', { env: 'staging' });
   assert.equal(res.status, 303);
-  assert.match(res.headers.get('location'), /^https:\/\/starbase-staging\.onrender\.com\/admin\/enter#t=/);
+  assert.match(res.headers.get('location'), /^https:\/\/base-win-staging\.onrender\.com\/admin\/enter#t=/);
   assert.equal((await b.post('/c/sample/open', { env: 'production' })).status, 404, 'the sample has staging only');
 });
 
@@ -198,7 +198,7 @@ test('the sample’s address: a stale code shows the Code field and keeps what w
   assert.equal(res.status, 401);
   const body = await res.text();
   assert.match(body, /It’s been more than 10 minutes/);
-  assert.match(body, /value="https:\/\/starbase-staging\.onrender\.com"/);
+  assert.match(body, /value="https:\/\/base-win-staging\.onrender\.com"/);
   assert.equal((await db.query("select server_url from environments where campaign = 'sample'")).rows[0].server_url, null);
   assert.equal((await b.post('/sample', { server_url: S, code: await codeNow(db, op.secret) })).status, 303);
 });

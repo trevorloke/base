@@ -5,7 +5,7 @@
 // of just the letters shown (/api/site/fonts/sample) under a private name.
 // The desk's browser never asks Google.
 import { useEffect, useState } from 'react';
-import { BUILT_FILES, FONT_BY_VALUE, LATIN, LATIN_EXT, fontFor } from '@starbase/shared/site/fonts';
+import { BUILT_FILES, FONT_BY_VALUE, LATIN, LATIN_EXT, fontFor } from '@base-win/shared/site/fonts';
 import { at } from '../../base.js';
 
 const loaded = new Map(); // key → Promise<boolean>

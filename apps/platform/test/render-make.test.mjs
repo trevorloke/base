@@ -54,7 +54,7 @@ test('the gate: no make, no set and nothing new on the set-up page until Check R
   assert.doesNotMatch(before, /Make it in Render/);
   const closed = async (why) => {
     assert.equal((await r.b.post('/c/x/render/make', {})).status, 404, `make: ${why}`);
-    assert.equal((await r.b.post('/c/a/render/set', { setting: 'STARBASE_TZ' })).status, 404, `set: ${why}`);
+    assert.equal((await r.b.post('/c/a/render/set', { setting: 'BASE_TZ' })).status, 404, `set: ${why}`);
     assert.equal((await r.page('/c/x/setup')).body, before, `the set-up page is as before: ${why}`);
   };
   await closed('no check yet');
@@ -166,7 +166,7 @@ test('Make it in Render: what it will do, then two presses (the database takes a
     serviceDetails: { runtime: 'docker', plan: 'starter', region: 'oregon', healthCheckPath: '/api/health', envSpecificDetails: { dockerfilePath: './Dockerfile', dockerContext: '.' } },
   });
   const sent = Object.fromEntries(create.envVars.map((e) => [e.key, e]));
-  assert.deepEqual(sent.STARBASE_TWO_STEP_KEY, { key: 'STARBASE_TWO_STEP_KEY', generateValue: true }, 'Render makes the random keys');
+  assert.deepEqual(sent.BASE_TWO_STEP_KEY, { key: 'BASE_TWO_STEP_KEY', generateValue: true }, 'Render makes the random keys');
   assert.deepEqual(sent.GOOGLE_TOKEN_KEY, { key: 'GOOGLE_TOKEN_KEY', generateValue: true });
   assert.equal(sent.DATABASE_URL.value, `postgres://u:${SENTINELS.newDb}-${db.id}@${db.id}-a/db`, 'its own new database, by the internal address');
   assert.equal(sent.BASE_PLATFORM_PUBKEY.value, pubkeyValue());
@@ -528,12 +528,12 @@ test('the creating call’s settings: this campaign’s own values only, and Ren
   const camp = { name: 'x', display: 'Example "X"\nCampaign', kind: 'client', values: { city: 'Exampleton', province: 'ON', rules: 'bc-municipal', tz: 'America/Toronto', races: ['council', 'school_board'], bounds: '43.6,-79.5|43.8,-79.2' } };
   const list = serviceSettings({ name: camp.name, display: camp.display, values: camp.values, publicKey: pubkeyValue() });
   assert.deepEqual(list.map((e) => e.key), envLines({ name: 'x', display: 'X', values: camp.values }).map((l) => l.key), 'the .env block’s keys, in its order');
-  for (const e of list.filter((x) => ['STARBASE_TWO_STEP_KEY', 'GOOGLE_TOKEN_KEY'].includes(x.key))) assert.deepEqual(e, { key: e.key, generateValue: true });
+  for (const e of list.filter((x) => ['BASE_TWO_STEP_KEY', 'GOOGLE_TOKEN_KEY'].includes(x.key))) assert.deepEqual(e, { key: e.key, generateValue: true });
   const values = Object.fromEntries(list.filter((e) => 'value' in e).map((e) => [e.key, e.value]));
   assert.deepEqual(values, {
-    NODE_ENV: 'production', STARBASE_ENV: 'production', STARBASE_PUBLIC_URL: 'https://x.base.win', STARBASE_BRAND: 'base', STARBASE_ORG_NAME: 'Example X Campaign',
-    STARBASE_JURISDICTION: 'bc-municipal', STARBASE_PROVINCE: 'ON', STARBASE_TZ: 'America/Toronto', STARBASE_CITY: 'Exampleton', STARBASE_SLATES: 'council:City council,school_board:School board',
-    STARBASE_GEO_BOUNDS: '43.6,-79.5|43.8,-79.2', STARBASE_CANDIDATES: 'none', BASE_PLATFORM_PUBKEY: pubkeyValue(),
+    NODE_ENV: 'production', BASE_ENV: 'production', BASE_PUBLIC_URL: 'https://x.base.win', BASE_BRAND: 'base', BASE_ORG_NAME: 'Example X Campaign',
+    BASE_JURISDICTION: 'bc-municipal', BASE_PROVINCE: 'ON', BASE_TZ: 'America/Toronto', BASE_CITY: 'Exampleton', BASE_SLATES: 'council:City council,school_board:School board',
+    BASE_GEO_BOUNDS: '43.6,-79.5|43.8,-79.2', BASE_CANDIDATES: 'none', BASE_PLATFORM_PUBKEY: pubkeyValue(),
   }, 'no quotes: Render takes each value as it is');
   assert.deepEqual(settingsFor(camp), list);
   const text = JSON.stringify(list);
@@ -549,11 +549,11 @@ test('the creating call’s settings: this campaign’s own values only, and Ren
   assert.deepEqual(writableFor(camp, { stage2: true }), WRITABLE_MADE);
   assert.deepEqual(writableFor({ ...camp, values: {} }, { stage2: true }), ['BASE_PLATFORM_PUBKEY']);
   assert.deepEqual(writableFor({ ...camp, kind: 'sample' }, { stage2: true }), ['BASE_PLATFORM_PUBKEY']);
-  assert.equal(valueFor(camp, 'STARBASE_TZ'), null, 'the gate closed: only base.win’s key');
-  assert.equal(valueFor(camp, 'STARBASE_TZ', { stage2: true }), 'America/Toronto');
-  assert.equal(valueFor(camp, 'STARBASE_PUBLIC_URL', { stage2: true }), 'https://x.base.win');
-  assert.equal(valueFor({ ...camp, values: {} }, 'STARBASE_TZ', { stage2: true }), null);
-  for (const never of ['NODE_ENV', 'STARBASE_ENV', 'DATABASE_URL', 'STARBASE_TWO_STEP_KEY', 'GOOGLE_TOKEN_KEY', 'RESEND_API_KEY', ...DENY]) assert.equal(valueFor(camp, never, { stage2: true }), null, never);
+  assert.equal(valueFor(camp, 'BASE_TZ'), null, 'the gate closed: only base.win’s key');
+  assert.equal(valueFor(camp, 'BASE_TZ', { stage2: true }), 'America/Toronto');
+  assert.equal(valueFor(camp, 'BASE_PUBLIC_URL', { stage2: true }), 'https://x.base.win');
+  assert.equal(valueFor({ ...camp, values: {} }, 'BASE_TZ', { stage2: true }), null);
+  for (const never of ['NODE_ENV', 'BASE_ENV', 'DATABASE_URL', 'BASE_TWO_STEP_KEY', 'GOOGLE_TOKEN_KEY', 'RESEND_API_KEY', ...DENY]) assert.equal(valueFor(camp, never, { stage2: true }), null, never);
   // The table: three new rows, the connection details named once.
   assert.deepEqual([CALLS.makeDatabase, CALLS.connectionInfo, CALLS.makeService], [['POST', '/postgres'], ['GET', '/postgres/{id}/connection-info'], ['POST', '/services']]);
   assert.equal(SHAPES.make.ready, 'available');
@@ -562,50 +562,50 @@ test('the creating call’s settings: this campaign’s own values only, and Ren
 test('add a missing setting (8.1): a campaign made here, a setting that is missing, its own value; then deploy', async () => {
   const r = await rig({ campaigns: ['sample', 'a', 'imaginesurrey'] });
   await r.connect('a', 'imaginesurrey');
-  delete r.world.settingsOf(IDS.a).STARBASE_TZ;
+  delete r.world.settingsOf(IDS.a).BASE_TZ;
   // The gate closed: missing is said, nothing offered.
   let page = (await r.page('/c/a/render')).body;
-  assert.match(page, /Missing: STARBASE_TZ, BASE_PLATFORM_PUBKEY/);
+  assert.match(page, /Missing: BASE_TZ, BASE_PLATFORM_PUBKEY/);
   assert.doesNotMatch(page, /render\/set/);
   await openGate(r);
   page = (await r.page('/c/a/render')).body;
-  assert.match(page, /<form method="post" action="\/c\/a\/render\/set"[^>]*>\s*<input type="hidden" name="setting" value="STARBASE_TZ">\s*<button class="btn btn-quiet" type="submit">Add STARBASE_TZ<\/button>/);
+  assert.match(page, /<form method="post" action="\/c\/a\/render\/set"[^>]*>\s*<input type="hidden" name="setting" value="BASE_TZ">\s*<button class="btn btn-quiet" type="submit">Add BASE_TZ<\/button>/);
   assert.doesNotMatch(page, /name="setting" value="BASE_PLATFORM_PUBKEY"/, 'base.win’s key has its own button');
   r.mark();
-  const res = await r.b.post('/c/a/render/set', { setting: 'STARBASE_TZ' });
+  const res = await r.b.post('/c/a/render/set', { setting: 'BASE_TZ' });
   const body = await res.text();
   assert.equal(res.status, 200);
-  assert.match(flat(body), /Adds STARBASE_TZ = America\/Vancouver to base-win-a, then deploys\. It is added only because it is missing\./);
+  assert.match(flat(body), /Adds BASE_TZ = America\/Vancouver to base-win-a, then deploys\. It is added only because it is missing\./);
   const job = /name="job" value="([0-9a-f]{32})"/.exec(body)[1];
   assert.equal((await r.b.post('/c/a/render/set', { job, code: await r.code() })).status, 303);
   assert.deepEqual(r.writes().map((c) => [c.method, c.path, c.body]), [
-    ['PUT', `/services/${IDS.a}/env-vars/STARBASE_TZ`, { value: 'America/Vancouver' }],
+    ['PUT', `/services/${IDS.a}/env-vars/BASE_TZ`, { value: 'America/Vancouver' }],
     ['POST', `/services/${IDS.a}/deploys`, { clearCache: 'do_not_clear' }],
   ]);
-  assert.equal(r.world.settingsOf(IDS.a).STARBASE_TZ, 'America/Vancouver');
+  assert.equal(r.world.settingsOf(IDS.a).BASE_TZ, 'America/Vancouver');
   const start = (await r.log('render.start')).at(-1);
-  assert.deepEqual([start.payload.what, start.payload.setting], ['set', 'STARBASE_TZ']);
-  assert.equal(wordsFor('render.start', start.payload), 'Asked Render to add STARBASE_TZ');
+  assert.deepEqual([start.payload.what, start.payload.setting], ['set', 'BASE_TZ']);
+  assert.equal(wordsFor('render.start', start.payload), 'Asked Render to add BASE_TZ');
   assert.match(flat((await r.page('/c/a/render')).body), /Missing: BASE_PLATFORM_PUBKEY/);
   // Already set: nothing is changed. Off the list, a campaign added as already running, the sample: Not found.
   r.again();
   r.mark();
-  const set = await r.b.post('/c/a/render/set', { setting: 'STARBASE_TZ' });
+  const set = await r.b.post('/c/a/render/set', { setting: 'BASE_TZ' });
   assert.equal(set.status, 409);
-  assert.match(flat(await set.text()), /STARBASE_TZ is already set on base-win-a\. Nothing was changed\./);
-  for (const setting of ['NODE_ENV', 'STARBASE_ENV', 'DATABASE_URL', 'RESEND_API_KEY', 'STARBASE_SAMPLE', 'BASE_PLATFORM_PUBKEY', '']) {
+  assert.match(flat(await set.text()), /BASE_TZ is already set on base-win-a\. Nothing was changed\./);
+  for (const setting of ['NODE_ENV', 'BASE_ENV', 'DATABASE_URL', 'RESEND_API_KEY', 'BASE_SAMPLE', 'BASE_PLATFORM_PUBKEY', '']) {
     assert.equal((await r.b.post('/c/a/render/set', { setting })).status, 404, setting || 'no setting');
   }
-  assert.equal((await r.b.post('/c/imaginesurrey/render/set', { setting: 'STARBASE_CANDIDATES' })).status, 404);
-  assert.equal((await r.b.post('/c/sample/render/set', { setting: 'STARBASE_TZ' })).status, 404);
+  assert.equal((await r.b.post('/c/imaginesurrey/render/set', { setting: 'BASE_CANDIDATES' })).status, 404);
+  assert.equal((await r.b.post('/c/sample/render/set', { setting: 'BASE_TZ' })).status, 404);
   assert.deepEqual(r.writes(), []);
   // Set in Render between the page and the code: nothing is written.
-  delete r.world.settingsOf(IDS.a).STARBASE_CITY;
-  const asked = await r.b.post('/c/a/render/set', { setting: 'STARBASE_CITY' });
+  delete r.world.settingsOf(IDS.a).BASE_CITY;
+  const asked = await r.b.post('/c/a/render/set', { setting: 'BASE_CITY' });
   const job2 = /name="job" value="([0-9a-f]{32})"/.exec(await asked.text())[1];
-  r.world.settingsOf(IDS.a).STARBASE_CITY = 'Set by hand';
+  r.world.settingsOf(IDS.a).BASE_CITY = 'Set by hand';
   assert.equal((await r.b.post('/c/a/render/set', { job: job2, code: await r.code() })).status, 409);
-  assert.equal(r.world.settingsOf(IDS.a).STARBASE_CITY, 'Set by hand', 'a value already there is never changed');
+  assert.equal(r.world.settingsOf(IDS.a).BASE_CITY, 'Set by hand', 'a value already there is never changed');
   assert.deepEqual(r.writes(), []);
   clean(r.world);
 });

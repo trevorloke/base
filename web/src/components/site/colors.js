@@ -7,7 +7,7 @@
 //                         or lighter) that reads at 4.5:1 on bg — else black
 //                         or white, whichever reads better (theme.js inkFor)
 //   colorWords(key)       what a colour is for, in plain words
-import { PAIRS, contrast, inkFor } from '@starbase/shared/site/theme';
+import { PAIRS, contrast, inkFor } from '@base-win/shared/site/theme';
 
 export const MIN_RATIO = 4.5;
 

@@ -44,7 +44,7 @@ export const DEFAULT_STEPS = Object.freeze([
   { code: '4', band: 'opposed',   word: 'Opposed',    label: 'Opposed — support unknown' },
 ]);
 // The opposed candidates a campaign's scale starts with: nobody, unless the
-// campaign's own server says who. The server reads STARBASE_CANDIDATES
+// campaign's own server says who. The server reads BASE_CANDIDATES
 // ("4A:Hartwell:Opposed — Hartwell supporter;4B:Quist") — a code (4 + one or
 // two letters), a name, and a label (or "Opposed — name"); the desk edits
 // the list after (Rating scale). "none" (any case): nobody — the scale is
@@ -83,7 +83,7 @@ let known = { from: null, text: null, list: NO_CANDIDATES, byCode: new Map(), sc
 const defaults = () => {
   const given = presetList();
   const from = Array.isArray(given) ? given : NO_CANDIDATES;
-  const text = ON_SERVER ? String(globalThis.process.env.STARBASE_CANDIDATES ?? '') : '';
+  const text = ON_SERVER ? String(globalThis.process.env.BASE_CANDIDATES ?? '') : '';
   if (known.from !== from || known.text !== text) {
     const list = ON_SERVER ? startingCandidates(text, from) : from;
     known = { from, text, list, byCode: new Map(list.map((c) => [c.code, c])), scale: null };

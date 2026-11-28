@@ -29,9 +29,12 @@
 import { chromium } from 'playwright-core';
 import { spawn } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
+import { bothNames } from './shared/old-names.js';
 
+// A setting left blank under both its names (an older name in the shell would be read otherwise).
+const blank = (...names) => Object.fromEntries(names.flatMap(bothNames).map((k) => [k, '']));
 const PORT = Number(process.env.PORT) || 4194;
-const SHOTS = process.env.SHOTS || '/tmp/starbase-look';
+const SHOTS = process.env.SHOTS || '/tmp/base-win-look';
 mkdirSync(SHOTS, { recursive: true });
 const results = [];
 const check = (name, ok, extra = '') => {
@@ -42,7 +45,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const servers = [];
 const start = async (port, env) => {
   const s = spawn(process.execPath, ['server/index.js'], {
-    env: { ...process.env, STARBASE_OPEN_SIGNUP: '1', STARBASE_DATA: 'memory', PORT: String(port), STARBASE_JOBS: 'off', STARBASE_BRAND: '', STARBASE_ORG_NAME: '', STARBASE_ENV: '', ...env },
+    env: { ...process.env, BASE_OPEN_SIGNUP: '1', BASE_DATA: 'memory', PORT: String(port), BASE_JOBS: 'off', ...blank('BASE_BRAND', 'BASE_ORG_NAME', 'BASE_ENV'), ...env },
     stdio: ['ignore', 'ignore', 'inherit'],
   });
   servers.push(s);
@@ -241,7 +244,7 @@ const wholeControl = (groups, px) => groups.length >= 3 && groups.every((g) => g
 const none = (b) => b.low.length === 0 && b.edges.length === 0;
 const say = (list) => list.slice(0, 4).join(' | ');
 
-for (const [key, env, campaign] of [['base', { STARBASE_BRAND: 'base' }, 'Riverside Forward'], ['imagine-surrey', { STARBASE_BRAND: 'imagine-surrey' }, 'Imagine Surrey']]) {
+for (const [key, env, campaign] of [['base', { BASE_BRAND: 'base' }, 'Riverside Forward'], ['imagine-surrey', { BASE_BRAND: 'imagine-surrey' }, 'Imagine Surrey']]) {
   const base = await start(key === 'base' ? PORT : PORT + 1, env);
   const s = await setUp(base, campaign);
   check(`${key}: a campaign with sample people, a turf and a shift to look at`, Boolean(s.person && s.turf && s.shift), JSON.stringify({ person: !!s.person, turf: !!s.turf, shift: !!s.shift }));

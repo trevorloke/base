@@ -1,6 +1,6 @@
 // Thin fetch layer over the v2 API. Cookie session auth; money is always
 // integer cents on the wire and dollars on screen.
-import { NS, at } from './base.js';
+import { NS, OLD_NS, at } from './base.js';
 import { sawServerBuild } from './build.js';
 
 export class ApiError extends Error {
@@ -69,6 +69,11 @@ export const apiPost = (path, body) =>
 // campaign, role — no voter data), or null. The app opens on it when the
 // server can't be reached, so what's kept and saved here stays reachable.
 export const ME_KEY = `${NS}me:v1`;
+// Sign-out and a lapsed sign-in forget it, and one the older app saved under
+// its name (a phone rolled back and forward), so it never opens as them.
+export const forgetSavedSignIn = () => {
+  for (const k of [ME_KEY, `${OLD_NS}me:v1`]) { try { localStorage.removeItem(k); } catch { /* storage blocked */ } }
+};
 export const savedSignIn = () => {
   try {
     const saved = JSON.parse(localStorage.getItem(ME_KEY) || 'null');

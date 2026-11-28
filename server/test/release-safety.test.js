@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { bootstrap } from '../db/schema.js';
 import { EXTENSIONS } from '../ext.js';
-import { ddlFor, recordTypeKeys } from '@starbase/shared/registry';
+import { ddlFor, recordTypeKeys } from '@base-win/shared/registry';
 import { ALLOWED_AT_START, destructive, problemsIn, staleAllowed, explainProblems } from './release-safety.js';
 
 const root = new URL('../../', import.meta.url);

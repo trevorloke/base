@@ -28,7 +28,8 @@ import https from 'node:https';
 import { createHash } from 'node:crypto';
 import { cfg, renderKey, RENDER_ID_RE } from './config.mjs';
 import { normalizeOrigin } from './campaigns.mjs';
-import { READABLE, CANARY, guard, valueFor, domainFor, databaseNameFor, REFUSALS, settingsFor, makeNames, makeRefusal, madeHere } from './render-guard.mjs';
+import { READABLE, READ_NAMES, CANARY, guard, valueFor, domainFor, databaseNameFor, REFUSALS, settingsFor, makeNames, makeRefusal, madeHere } from './render-guard.mjs';
+import { newNameOf, settingNames } from '../../shared/old-names.js';
 
 const API_HOST = 'api.render.com';
 const API_PATH = '/v1';
@@ -311,7 +312,7 @@ const CURSOR_RE = /^[A-Za-z0-9_=-]{1,200}$/;
 const PARAM_OK = {
   id: (v) => RENDER_ID_RE.test(v),
   owner: (v) => RENDER_ID_RE.test(v),
-  key: (v) => READABLE.includes(v),
+  key: (v) => READ_NAMES.includes(v),
   host: (v) => HOST_RE.test(v) && v.length <= 200,
 };
 
@@ -460,16 +461,28 @@ export const makeRender = ({ key = renderKey(), base = cfg().renderApi, send, ti
     if (got.missing.length) return fail('unexpected-answer', { field: got.missing[0] });
     return { ok: true, list: got.list, missing: [] };
   });
-  // Is this setting set? The answer carries its value; it is dropped here
-  // and only "set" or "not set" goes on.
-  const isSet = (id, key, { fresh = false } = {}) => cached(`set ${id} ${key}`, fresh, async () => {
-    if (!READABLE.includes(key)) return fail('not-allowed');
-    const res = await call('isSet', { id, key });
-    if (res.failed?.problem === 'not-found') return { ok: true, set: false };
-    if (res.failed) return res.failed;
-    if (obj(res.json).key !== key) return fail('unexpected-answer', { status: res.status, field: 'key' });
-    return { ok: true, set: true };
-  });
+  // Is this setting set? Asked by its name today and by its older name
+  // (shared/old-names.js): set when either is, and `older` when the older
+  // one is (it still works on that service; the pages say the new name to
+  // use). Each answer carries its value; it is dropped here and only "set"
+  // or "not set" goes on. Either one unread: not known.
+  const isSet = (id, key, { fresh = false } = {}) => {
+    const now = newNameOf(String(key ?? ''));
+    return cached(`set ${id} ${now}`, fresh, async () => {
+      if (!READABLE.includes(now)) return fail('not-allowed');
+      let set = false;
+      let older = false;
+      for (const name of settingNames(now)) {
+        const res = await call('isSet', { id, key: name });
+        if (res.failed?.problem === 'not-found') continue;
+        if (res.failed) return res.failed;
+        if (obj(res.json).key !== name) return fail('unexpected-answer', { status: res.status, field: 'key' });
+        set = true;
+        if (name !== now) older = true;
+      }
+      return older ? { ok: true, set, older } : { ok: true, set };
+    });
+  };
   const blueprints = ({ fresh = false } = {}) => cached('blueprints', fresh, async () => {
     const got = items(await call('blueprints'), SHAPES.wrap.blueprints, blueprintOf);
     return got.ok ? { ok: true, list: got.list, missing: got.missing } : got;
@@ -545,6 +558,8 @@ export const makeRender = ({ key = renderKey(), base = cfg().renderApi, send, ti
   // render-guard.mjs from base.win's own key. No caller can hand a value in.
   const setOne = async (t, key) => {
     if (!fits(t, 'service')) return NOT_ALLOWED;
+    // Only ever a name today: never an older name, whatever is on the service.
+    if (typeof key !== 'string' || newNameOf(key) !== key) return NOT_ALLOWED;
     const value = valueFor(about.get(t).campaign, key, { stage2: about.get(t).stage2 });
     if (value == null) return NOT_ALLOWED;
     return done(await call('setOne', { id: t.id, key }, { value }));
@@ -691,7 +706,7 @@ export const makeRender = ({ key = renderKey(), base = cfg().renderApi, send, ti
       out.push(line('lastDeploy', await lastDeploy(sid, { fresh: true })));
       out.push(line('domains', await domains(sid, { fresh: true })));
       const set = await isSet(sid, CANARY, { fresh: true });
-      // Every campaign service has this setting: "not set" means one setting can't be read alone.
+      // Every campaign service has this setting (by one name or the other): "not set" means one setting can't be read alone.
       out.push(line('isSet', set, set.ok && !set.set ? ['one setting read alone'] : []));
     }
     if (did && T.id(did)) out.push(line('database', await database(did, { fresh: true })));

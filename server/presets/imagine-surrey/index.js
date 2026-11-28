@@ -1,5 +1,5 @@
 // Imagine Surrey's preset: everything in base.win that is Imagine Surrey's
-// own, in one object. A server uses it only when STARBASE_BRAND is
+// own, in one object. A server uses it only when BASE_BRAND is
 // imagine-surrey (server/lib/preset.js, the one file that may import this
 // folder); every other campaign's server never reads a value from here.
 //
@@ -235,7 +235,7 @@ export default {
     // does the same thing, sent on only when that page is live; 'former' —
     // its own links in emails it already sent, its members' and its staff's
     // pages — to the present website at its own address, when
-    // STARBASE_SITE_FORMER_URL names it. Retired pages go home, as /stats did.
+    // BASE_SITE_FORMER_URL names it. Retired pages go home, as /stats did.
     oldPaths: [
       ['/stats', '/'],
       ['/join/welcome', '/'],

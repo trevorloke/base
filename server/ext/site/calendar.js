@@ -9,10 +9,11 @@
 // What a public entry carries: its title, times (UTC), the place's words
 // (none for an unnamed pin), GEO when pinned, and the page it is listed on.
 // Never instructions, a link, counts or people.
-import { icsCalendar, shiftEvent } from '@starbase/shared/ics';
-import { pinPoint } from '@starbase/shared/shiftkinds';
+import { icsCalendar, shiftEvent } from '@base-win/shared/ics';
+import { pinPoint } from '@base-win/shared/shiftkinds';
 import { icsFileName, ICS_TYPE } from '../../lib/calendar.js';
 import { loadEvents } from './loaders.js';
+import { authorizedLine, authorizedText } from '../../../shared/site/authorized.js';
 
 // null is the main site.
 export const siteListsEvents = async (q, ws, siteId = null) => (await q.query(
@@ -42,10 +43,12 @@ const loadOne = async (q, ws, id) => {
   };
 };
 
-// org: the site's org (name, authorization) as the pages draw it.
-const publicEvent = (e, { tz, org, home, address }) => {
+// org: { name, settings, lang, legal } — the site's name as the pages draw
+// it, its saved org, and the language the file was asked for in.
+// The description's last line is "Authorized by …" (shared/site/authorized.js).
+const publicEvent = (e, { tz, org, home, address, auth }) => {
   const ev = shiftEvent({ ...e, place_lat: e.lat, place_lng: e.lng }, { tz, private: false });
-  const sign = [`${org.name} — ${address}`, org.authorization || null].filter(Boolean).join('\n');
+  const sign = [`${org.name} — ${address}`, authorizedText(auth) || null].filter(Boolean).join('\n');
   return { ...ev, details: `${ev.details}\n${sign}`, url: home };
 };
 
@@ -54,7 +57,8 @@ export const eventsCalendar = async (site, org, { id = null } = {}) => {
   if (!await siteListsEvents(site.db, site.ws, site.micro?.id ?? null)) return null;
   const tz = site.ws.settings?.tz || 'America/Vancouver';
   const home = `${site.address}${site.root}/`;
-  const at = { tz, org, home, address: `${site.address}${site.root}` };
+  const auth = authorizedLine(org.settings || {}, { channel: 'ics', lang: org.lang || 'en', legal: org.legal || {}, tz });
+  const at = { tz, org, home, address: `${site.address}${site.root}`, auth };
   if (id) {
     const e = await loadOne(site.db, site.ws, id);
     if (!e) return null;

@@ -24,14 +24,14 @@ const tag = Math.random().toString(36).slice(2, 8);
 const mail = (who) => `${who}.mc.${tag}@example.org`;
 const KEY = `mc-test-key-${tag}-us19`;
 const PUBLIC = 'https://base.example';
-const KEYS = ['MAILCHIMP_API_KEY', 'MAILCHIMP_API_BASE', 'MAILCHIMP_AUDIENCE_ID', 'MAILCHIMP_WEBHOOK_SECRET', 'STARBASE_PUBLIC_URL',
+const KEYS = ['MAILCHIMP_API_KEY', 'MAILCHIMP_API_BASE', 'MAILCHIMP_AUDIENCE_ID', 'MAILCHIMP_WEBHOOK_SECRET', 'BASE_PUBLIC_URL',
   'MAIL_PROVIDER', 'RESEND_API_KEY', 'SENDGRID_API_KEY'];
 const saved = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
 let db, fake;
 
 const on = (more = {}) => {
   for (const k of KEYS) delete process.env[k];
-  Object.assign(process.env, { MAILCHIMP_API_KEY: KEY, MAILCHIMP_API_BASE: fake.url, STARBASE_PUBLIC_URL: PUBLIC, ...more });
+  Object.assign(process.env, { MAILCHIMP_API_KEY: KEY, MAILCHIMP_API_BASE: fake.url, BASE_PUBLIC_URL: PUBLIC, ...more });
   _forgetAudienceForTest(); // which audience the account's only one is, is asked afresh
 };
 before(async () => {
@@ -1442,8 +1442,8 @@ test('Settings → Services: the Mailchimp row, Check and Connect — and who ma
   await run(ws);
 
   // Mailchimp needs somewhere public to send to.
-  delete process.env.STARBASE_PUBLIC_URL;
-  assert.deepEqual([(await mgr.action('mailchimp.connect', {})).json.said], ['Set the public address first (STARBASE_PUBLIC_URL): Mailchimp needs somewhere to send unsubscribes']);
+  delete process.env.BASE_PUBLIC_URL;
+  assert.deepEqual([(await mgr.action('mailchimp.connect', {})).json.said], ['Set the public address first (BASE_PUBLIC_URL): Mailchimp needs somewhere to send unsubscribes']);
   on({ MAILCHIMP_AUDIENCE_ID: fake.id });
 
   // Who may: the desk sends a list; managers connect, check and pull; volunteers none of it.

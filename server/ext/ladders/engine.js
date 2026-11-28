@@ -75,12 +75,15 @@
 // voted). The events hook takes anyone who does it off every ladder with
 // that goal at once, whatever step they are on — on or off — and each step
 // looks again before it runs.
+import { setting } from '@base-win/shared/old-names';
 import { newId, runAction } from '../../lib/events.js';
 import { enqueueJob, cancelJobs } from '../../lib/jobs.js';
 import { emailConfigured, sendEmail, textConfigured, unsubscribeHeaders } from '../../lib/notify.js';
 import { DEFAULT_TZ } from '../../lib/org.js';
 import { campaignDay } from '../../lib/gifts.js';
-import { e164, withFooter, localMinutes, now as textClock } from '../texting/rules.js';
+import { e164, withFooter, withAuthorized, localMinutes, now as textClock } from '../texting/rules.js';
+import { footOf, footLines, authLines } from '../abtests/send.js';
+import { authorizedOf, autoMissing } from '../../lib/authorized.js';
 import {
   settingsFor, quietState, applyOptOut, inTouch, isFirstOut, tzOf,
 } from '../texting/store.js';
@@ -581,22 +584,33 @@ const STEPS = {
       await again(c, HOUR);
       return { waiting: 'email' };
     }
-    const base = (process.env.STARBASE_PUBLIC_URL || c.ladder.public_url || '').replace(/\/$/, '');
+    const base = (setting('BASE_PUBLIC_URL') || c.ladder.public_url || '').replace(/\/$/, '');
     const fill = { person, campaign: c.ladder.campaign };
     const unsubscribe = `${base}/lu/${run.id}`;
+    // The lines under every campaign email (abtests/send.js footOf): the
+    // mailing address, the contact, "Authorized by …" (and its approved
+    // words for a ladder in another language). Text only, as always. A
+    // line the step's words already carry (typed in before ladders added
+    // it) is not said again.
+    const foot = await footOf(tx, run.workspace_id, 'email-ladder', { lang: c.ladder.trigger_lang || 'en' });
+    const body = fillIn(s.body, fill);
+    const more = [...footLines(foot), ...authLines(foot).filter((l) => !body.includes(l))].map((l) => `${l}.\n`).join('');
+    // An automatic send can't ask "Send without it": it goes, and says so
+    // on the entry that records it went (deliver), once, whatever the tries.
+    const missing = autoMissing(foot.line);
     // 1. Claim the send: 'sending', committed before the provider is called.
     await tx.query("update ladder_runs set wait = 'sending', updated_at = now() where id = $1", [run.id]);
     run.wait = 'sending';
     await record(c, { kind: 'email', result: 'sending' });
     return {
       send: {
-        run_id: run.id, step: c.step, token: String(run.token), attempt,
+        run_id: run.id, step: c.step, token: String(run.token), attempt, authMissing: missing,
         to: person.email,
         subject: fillIn(s.subject, fill),
         // Every ladder email says who sent it and carries the reader's own
         // unsubscribe (it takes them off the newsletter too), in the text and
         // as the mail app's own Unsubscribe button.
-        text: `${fillIn(s.body, fill)}\n\n—\nSent by ${c.ladder.campaign}.\nUnsubscribe: ${unsubscribe}`,
+        text: `${body}\n\n—\nSent by ${c.ladder.campaign}.\n${more}Unsubscribe: ${unsubscribe}`,
         headers: unsubscribeHeaders(unsubscribe),
       },
     };
@@ -634,16 +648,22 @@ const STEPS = {
       await schedule(tx, run, { step: c.step, at: at.getTime(), wait: 'quiet' });
       return { waiting: 'quiet', until: iso(at) };
     }
+    // "Authorized by …" before the opt-out line (shared/site/authorized.js),
+    // with its approved words for a ladder in another language.
+    const auth = await authorizedOf(tx, ws, { channel: 'sms-ladder', lang: c.ladder.trigger_lang || 'en' });
+    // Without the line after its date: said on the entry that records it
+    // went (deliverText), never on a text Twilio refused.
+    const missing = autoMissing(auth);
     // 1. Claim the send: 'sending', committed before the provider is called.
     await tx.query("update ladder_runs set wait = 'sending', next_at = null, updated_at = now() where id = $1", [run.id]);
     run.wait = 'sending';
     await record(c, { kind: 'text', result: 'sending' });
     return {
       sendText: {
-        run_id: run.id, step: c.step, person_id: person.id, ladder_id: run.ladder_id,
+        run_id: run.id, step: c.step, person_id: person.id, ladder_id: run.ladder_id, authMissing: missing,
         to: e164(person.phone),
         // Who it's from is in the words (checked on save); the opt-out line on each.
-        body: withFooter(fillIn(s.body, { person, campaign: c.ladder.campaign })),
+        body: withFooter(withAuthorized(fillIn(s.body, { person, campaign: c.ladder.campaign }), auth)),
       },
     };
   },
@@ -779,7 +799,7 @@ const deliver = async (db, ws, send) => {
     // other try, change nothing else.
     const late = run.wait !== 'sending' || Number(run.step) !== send.step;
     const retry = !late && !sent && !unsure && tries < EMAIL_TRIES;
-    const entry = { kind: 'email', ...(sent ? { result: 'sent' }
+    const entry = { kind: 'email', ...(sent ? { result: 'sent', ...(send.authMissing ? { auth_missing: true } : {}) }
       : unsure ? { result: 'unsure', detail }
       : { result: 'failed', reason: retry ? 'will_retry' : 'gave_up', detail, tries }) };
     if (late) {
@@ -850,7 +870,7 @@ const deliverText = async (db, ws, send) => {
     if (!run) return { gone: true };
     const ladder = (await tx.query('select steps from ladders where id = $1 and workspace_id = $2', [run.ladder_id, ws])).rows[0];
     const c = { tx, emit, run, steps: parseJson(ladder?.steps, []), step: send.step };
-    const entry = { kind: 'text', ...(res.ok ? { result: 'sent' } : { result: 'failed', reason: 'gave_up', detail }) };
+    const entry = { kind: 'text', ...(res.ok ? { result: 'sent', ...(send.authMissing ? { auth_missing: true } : {}) } : { result: 'failed', reason: 'gave_up', detail }) };
     // The run moved on meanwhile (taken off, deleted, a goal reached): say
     // what happened, change nothing else.
     if (run.wait !== 'sending' || Number(run.step) !== send.step) {

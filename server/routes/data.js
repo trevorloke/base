@@ -5,8 +5,8 @@ import { civic } from '../lib/address.js';
 import { KEY, NAME_ADDR } from '../lib/matchkeys.js';
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { matchRating, offeredCodes, ratingByCode } from '@starbase/shared/scale';
-import { OUTCOMES, VOLUNTEER_ROLES, VOLUNTEER_ROLE_CODES } from '@starbase/shared/canvass';
+import { matchRating, offeredCodes, ratingByCode } from '@base-win/shared/scale';
+import { OUTCOMES, VOLUNTEER_ROLES, VOLUNTEER_ROLE_CODES } from '@base-win/shared/canvass';
 import { dateFrom, parseValue, valueError } from '../ext/fields/kinds.js';
 import { makeAsWritten } from '../ext/fields/convert.js';
 import { timeZone } from '../lib/org.js';
@@ -19,7 +19,9 @@ import { logGift } from '../lib/gifts.js';
 import { runHooks } from '../lib/hooks.js';
 import { readVoted } from '../ext/voted/import.js';
 import { voterNumber } from '../ext/voternumber/index.js';
-import { parseSocial } from '@starbase/shared/socials';
+import { parseSocial } from '@base-win/shared/socials';
+import { doorKey, doorParts } from '../../shared/units.js';
+import { FRESH } from '../lib/doors.js';
 
 const app = new Hono();
 const DESK = ['manager', 'treasurer', 'staff'];
@@ -261,6 +263,10 @@ const candidates = async (tx, workspaceId, clean) => {
   const emails = [...new Set(clean.map((r) => r.email).filter(Boolean))];
   const voters = [...new Set(clean.map((r) => r.voter_number).filter(Boolean))];
   const live = 'select id from persons where workspace_id = $1 and deleted_at is null';
+  const doorKeys = [...new Set(clean.filter((r) => r.address && r.name).map((r) => {
+    const d = doorParts(r);
+    return d.civic ? `${d.civic}\x01${d.unit}\x01${r.name}` : null;
+  }).filter(Boolean))];
   const lookups = [
     [voters, eachValue(`${live} and voter_number = k.v`)],
     [emails, eachValue(`${live} and lower(email) = k.v`)],
@@ -272,6 +278,12 @@ const candidates = async (tx, workspaceId, clean) => {
       where m.workspace_id = $1 and m.undone_at is null and m.from_key = k.v`)],
     [keys.n, eachValue(`select distinct on (name) id from persons where workspace_id = $1 and deleted_at is null
       and ${NAME_ONLY} and ${KEY('name')} = k.v order by name, created_at, id`)],
+    // The same name at the same door written another way ("Basement" for
+    // "Bsmt", the unit in its column or inside the address): by the door
+    // the server worked out (lib/doors.js, persons_ws_door_idx).
+    [doorKeys, eachValue(`select id from persons p where p.workspace_id = $1 and p.deleted_at is null
+      and p.door_civic = split_part(k.v, E'\\x01', 1) and p.door_unit = split_part(k.v, E'\\x01', 2) and ${FRESH('p')}
+      and ${KEY('p.name')} = ${KEY("split_part(k.v, E'\\x01', 3)")}`)],
   ];
   const ids = new Set();
   for (const [values, sql] of lookups) {
@@ -486,11 +498,13 @@ app.post('/import', async (c) => {
       if (p.voter_number && !byVoter.has(p.voter_number)) byVoter.set(p.voter_number, p);
       if (p.email) byEmail.set(lower(p.email), p);
       if (p.phone) byNamePhone.set(`${nameKey(p.name)}|${digits(p.phone)}`, p);
-      if (p.address) byNameAddr.set(`${nameKey(p.name)}|${lower(p.address)}|${lower(p.unit)}`, p);
+      // The door one way (shared/units.js doorKey): "Basement" finds
+      // "Bsmt", and a unit inside the address finds it in its column.
+      if (p.address) byNameAddr.set(`${nameKey(p.name)}|${doorKey(p)}`, p);
       // Where they lived before a move (ext/moves): found there too, unless
       // someone really lives there by that name (they win).
       for (const m of p.prev || []) {
-        const k = m.address && `${nameKey(p.name)}|${lower(m.address)}|${lower(m.unit)}`;
+        const k = m.address && `${nameKey(p.name)}|${doorKey(m)}`;
         if (k && !byNameAddr.has(k)) byNameAddr.set(k, p);
       }
       const k = nameKey(p.name);
@@ -510,7 +524,7 @@ app.post('/import', async (c) => {
       const email = !byNumber && r.email && byEmail.get(r.email);
       const named = byNumber || email ? [] : [
         r.phone && byNamePhone.get(`${nameKey(r.name)}|${digits(r.phone)}`),
-        r.address && byNameAddr.get(`${nameKey(r.name)}|${lower(r.address)}|${lower(r.unit)}`),
+        r.address && byNameAddr.get(`${nameKey(r.name)}|${doorKey(r)}`),
         nameOnly(r) && byName.get(nameKey(r.name)),
       ].filter(Boolean);
       const differs = (p) => !!(p && r.voter_number && p.voter_number && p.voter_number !== r.voter_number);
@@ -530,7 +544,7 @@ app.post('/import', async (c) => {
         // found, not the list — the address and pin are left as they are,
         // and a list that still has another address is counted and shown.
         const moved = !!match.address_status || (match.prev || []).length > 0;
-        if (moved && r.address && (lower(r.address) !== lower(match.address) || lower(r.unit) !== lower(match.unit))) {
+        if (moved && r.address && (!match.address || doorKey(r) !== doorKey(match))) {
           movedKept += 1;
           if (movedRows.length < 50) {
             movedRows.push({ row: r.index + 1, name: r.name, id: match.id, in_file: [r.unit, r.address].filter(Boolean).join(' – '),

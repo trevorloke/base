@@ -43,7 +43,7 @@ const note = (line) => { notes.push(line); console.log(`note  ${line}`); };
 
 // What to do when the sample was not made again (STAGING.md 4d).
 const RESET_WORD = 'If the staging server’s log says “this database’s first campaign is not the demo account’s” or “could not be made in 3 tries”: '
-  + 'make up one new word (for example fresh-2026-11) and set it as STARBASE_SAMPLE_RESET in Render → base-win-staging → Environment. '
+  + 'make up one new word (for example fresh-2026-11) and set it as BASE_SAMPLE_RESET in Render → base-win-staging → Environment. '
   + 'Nobody issues the word and it is not a secret.';
 
 // One read; a read that breaks off is a status of 0, with the reason.

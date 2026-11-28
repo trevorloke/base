@@ -111,7 +111,7 @@ test('brief says what was raised this year, on the campaign’s calendar', async
 test('export carries everything: persons, records, and the event log', async () => {
   const ex = await a.get('/api/export');
   assert.equal(ex.status, 200);
-  assert.equal(ex.json.format, 'starbase-export');
+  assert.equal(ex.json.format, 'base-win-export');
   assert.ok(ex.json.persons.length >= 1);
   assert.ok(ex.json.gifts.length >= 1);
   assert.ok(ex.json.events.length >= 2);

@@ -7,7 +7,7 @@
 //                        on its own: { unavailable: true }, never a 0 — and
 //                        their call time (calltime.js): banks, left, pledged this week
 import { Hono } from 'hono';
-import { SLATES, slateLabel } from '@starbase/shared/canvass';
+import { SLATES, slateLabel } from '@base-win/shared/canvass';
 import { raceNow } from '../pathtowin/api.js';
 import { ROLE_WORDS } from './invite.js';
 import { areasFor } from '../../lib/perms.js';

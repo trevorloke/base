@@ -11,8 +11,8 @@ import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
 import { hit, ok, campaign } from './site-helpers.js';
 import { Client } from './helpers.js';
-import { checkModules } from '@starbase/shared/site/catalogue';
-import { checkTheme } from '@starbase/shared/site/theme';
+import { checkModules } from '@base-win/shared/site/catalogue';
+import { checkTheme } from '@base-win/shared/site/theme';
 import { seedFor } from '../ext/site/seeds/index.js';
 
 let db, mgr, ws;
@@ -21,7 +21,7 @@ const web = (p) => readFileSync(here(`../../apps/web/src/${p}`), 'utf8');
 
 before(async () => {
   // Imagine Surrey's own server: the brand its production sets.
-  process.env.STARBASE_BRAND = 'imagine-surrey';
+  process.env.BASE_BRAND = 'imagine-surrey';
   ({ db, mgr, ws } = await campaign('Imagine Surrey'));
 });
 
@@ -120,7 +120,7 @@ test('made once: a campaign that deletes a page doesn’t get it back', async ()
 });
 
 test('any other campaign: a clean generic site, with its own name and nothing made up', async () => {
-  process.env.STARBASE_BRAND = 'base';
+  process.env.BASE_BRAND = 'base';
   try {
     const other = new Client();
     await other.signup({ workspaceName: 'Riverside Neighbours', email: `base+${Date.now()}@example.org` });
@@ -142,7 +142,7 @@ test('any other campaign: a clean generic site, with its own name and nothing ma
       else assert.doesNotThrow(() => checkModules(p.modules, { strict: true }), p.slug);
     }
   } finally {
-    process.env.STARBASE_BRAND = 'imagine-surrey';
+    process.env.BASE_BRAND = 'imagine-surrey';
   }
 });
 

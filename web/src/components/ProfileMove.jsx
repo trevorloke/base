@@ -11,6 +11,7 @@ import { useState } from 'react';
 import { action } from '../api.js';
 import MovePanel from './MovePanel.jsx';
 import './move.css';
+import { doorLine } from '../../../shared/units.js';
 
 const DAY = 24 * 3600 * 1000;
 const firstName = (name) => String(name || '').trim().split(/\s+/)[0] || '';
@@ -21,7 +22,7 @@ export const dayWords = (ts) => {
   const month = d.toLocaleString('en-CA', { month: 'short' }).replace('.', '');
   return `${d.getDate()} ${month}${d.getFullYear() === new Date().getFullYear() ? '' : ` ${d.getFullYear()}`}`;
 };
-const fromWords = (m) => [m?.from_address, m?.from_unit ? `#${m.from_unit}` : null].filter(Boolean).join(' ');
+const fromWords = (m) => (m?.from_address ? doorLine({ address: m.from_address, unit: m.from_unit }, 'door') : '');
 
 // The Address line for someone marked Address unknown.
 export const addressWords = (person, move, desk) => {

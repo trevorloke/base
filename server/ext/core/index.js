@@ -16,7 +16,7 @@ import { z } from 'zod';
 import { newId } from '../../lib/events.js';
 import { pointInPolygon } from '../../lib/geo.js';
 import { httpError } from '../../actions/util.js';
-import { splitFirst } from '@starbase/shared/names';
+import { splitFirst } from '@base-win/shared/names';
 
 const ALL_ROLES = ['manager', 'treasurer', 'staff', 'volunteer'];
 const parseJ = (v, fb) => (typeof v === 'string' ? JSON.parse(v) : (v ?? fb));

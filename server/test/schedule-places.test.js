@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import { freshDb, Client } from './helpers.js';
 import { verifyChain } from '../lib/events.js';
 import { _setNearestMsForTest } from '../lib/geocode.js';
-import { pinName } from '@starbase/shared/shiftkinds';
+import { pinName } from '@base-win/shared/shiftkinds';
 
 const tag = Math.random().toString(36).slice(2, 8);
 const realFetch = globalThis.fetch;
@@ -29,7 +29,7 @@ const DAY = '2030-05-06';
 
 before(async () => {
   db = await freshDb();
-  for (const k of ['GEOCODER', 'BC_GEOCODER_KEY', 'STARBASE_PROVINCE']) delete process.env[k];
+  for (const k of ['GEOCODER', 'BC_GEOCODER_KEY', 'BASE_PROVINCE']) delete process.env[k];
   process.env.BC_GEOCODER_URL = FAKE;
   globalThis.fetch = async (url, opts) => {
     const u = new URL(String(url));
@@ -49,7 +49,7 @@ before(async () => {
 });
 after(() => {
   globalThis.fetch = realFetch;
-  for (const k of ['GEOCODER', 'BC_GEOCODER_URL', 'BC_GEOCODER_KEY', 'STARBASE_PROVINCE']) { if (env[k] === undefined) delete process.env[k]; else process.env[k] = env[k]; }
+  for (const k of ['GEOCODER', 'BC_GEOCODER_URL', 'BC_GEOCODER_KEY', 'BASE_PROVINCE']) { if (env[k] === undefined) delete process.env[k]; else process.env[k] = env[k]; }
 });
 
 const nameAt = async (pt = KG88) => ok(await mgr.get(`/api/places/name?lat=${pt.lat}&lng=${pt.lng}`));

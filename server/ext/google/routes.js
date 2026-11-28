@@ -6,7 +6,7 @@
 //       the app with ?google=<code>
 //   GET /api/auth/google/back?state=…&code=…  → 302 into the app
 //
-// The redirect address Google knows is <STARBASE_PUBLIC_URL>/api/auth/google/back,
+// The redirect address Google knows is <BASE_PUBLIC_URL>/api/auth/google/back,
 // nothing else. Every answer is a 302 to a path (lib/mount.js puts the
 // client's path in front under BASE_PATH), except signing in from another
 // address, which goes to the same start at the public one.

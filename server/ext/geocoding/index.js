@@ -35,11 +35,14 @@
 //   GEOCODE_CONCURRENCY  lookups at once (default 6)
 //   GEOCODE_BACKOFF_MS   wait after a round where nothing worked (default 30 s, × rounds in a row)
 //   GEOCODE_RETRY_MS     wait before a paused run's first try (default 15 min)
+import { setting } from '@base-win/shared/old-names';
 import { Hono } from 'hono';
 import { runAction } from '../../lib/events.js';
 import { enqueueJob, jobRunnerOn, runJobsSoon } from '../../lib/jobs.js';
 import { geocodeAddress } from '../../lib/geocode.js';
 import { city as orgCity } from '../../lib/org.js';
+import { FRESH } from '../../lib/doors.js';
+import { doorParts, splitUnit } from '../../../shared/units.js';
 
 const KIND = 'geocode.run';
 const ROUND = 120;               // people looked at per round
@@ -58,8 +61,8 @@ const lookupOff = () => (process.env.GEOCODER || '').toLowerCase() === 'off';
 // GEOCODE_RETRY_MS from now — paused by the release before this one (it
 // waited for someone to tap Carry on), or its try never ran (no job runner
 // then, or the try failed for good). Not where lookup is off, nor where no
-// job runner will run it (STARBASE_JOBS=off: the page looks up batches).
-const retryStranded = () => (lookupOff() || process.env.STARBASE_JOBS === 'off' ? '' : `
+// job runner will run it (BASE_JOBS=off: the page looks up batches).
+const retryStranded = () => (lookupOff() || setting('BASE_JOBS') === 'off' ? '' : `
 with stranded as (
   update geocode_runs r set retry_at = now() + interval '${Math.round(retryMs())} milliseconds', updated_at = now()
   where r.state = 'paused' and (r.retry_at is null or (r.retry_at < now() - interval '1 minute' and not exists (
@@ -96,8 +99,12 @@ ${retryStranded()}`;
 const PENDING = `workspace_id = $1 and deleted_at is null and address is not null and lat is null
   and coalesce(attrs->'geocode'->>'status', '') not in ('nomatch', 'weak', 'failed')`;
 
-// One household = one lookup: same street address in the same city.
-const keyOf = (p) => `${String(p.address).trim().toLowerCase().replace(/\s+/g, ' ')}|${String(p.city || orgCity()).trim().toLowerCase()}`;
+// One house = one lookup: the same civic address (no unit or suite: a
+// tower's 300 units, or a basement suite written "10388 134 St Bsmt", are
+// their building's or house's one pin; shared/units.js doorParts) in the
+// same city. The unit is never sent (UNITS D7).
+const civicOf = (p) => doorParts({ address: p.address }).civic;
+const keyOf = (p) => `${civicOf(p) || String(p.address).trim().toLowerCase().replace(/\s+/g, ' ')}|${String(p.city || orgCity()).trim().toLowerCase()}`;
 
 const getRun = async (db, workspaceId) =>
   (await db.query('select * from geocode_runs where workspace_id = $1', [workspaceId])).rows[0] || null;
@@ -136,13 +143,21 @@ export const geocodeRound = async (db, workspaceId, actorId) => {
   // household is finished in one go.
   // lower(address) is indexed (persons_ws_addr_idx); imports store addresses trimmed.
   const lowers = [...new Set(head.flatMap((p) => [String(p.address).toLowerCase(), String(p.address).trim().toLowerCase()]))];
+  // …and at their civic addresses, as the server has worked them out
+  // (persons_ws_door_idx; lib/doors.js): every unit of a tower in one go,
+  // whatever order the list put them in.
+  const civics = [...new Set(head.map(civicOf).filter(Boolean))];
   // One address at a time (lateral): given a whole list in one "= any", the
   // planner guesses it matches most rows and reads the whole table.
   const waiting = (await db.query(
     `select x.* from unnest($2::text[]) as k(a) cross join lateral (
        select id, address, unit, city, postal, attrs->'geocode' as geo from persons
-       where ${PENDING} and lower(address) = k.a offset 0) as x`,
-    [workspaceId, lowers],
+       where ${PENDING} and lower(address) = k.a offset 0) as x
+     union
+     select y.* from unnest($3::text[]) as k(c) cross join lateral (
+       select id, address, unit, city, postal, attrs->'geocode' as geo from persons p
+       where ${PENDING} and p.door_civic = k.c and ${FRESH('p')} offset 0) as y`,
+    [workspaceId, lowers, civics],
   )).rows;
   const groups = new Map();
   for (const p of [...head, ...waiting]) {
@@ -156,17 +171,23 @@ export const geocodeRound = async (db, workspaceId, actorId) => {
 
   // Already on the map at that address? Copy the pin.
   const known = new Map();
+  // (Also by the worked-out civic address: a suite takes its house's pin,
+  // and a house its suite's, with no lookup.)
   for (const r of (await db.query(
     `select x.* from unnest($2::text[]) as k(a) cross join lateral (
        select address, city, lat, lng from persons
-       where workspace_id = $1 and deleted_at is null and lat is not null and lower(address) = k.a limit 5) as x`,
-    [workspaceId, lowers],
+       where workspace_id = $1 and deleted_at is null and lat is not null and lower(address) = k.a limit 5) as x
+     union all
+     select y.* from unnest($3::text[]) as k(c) cross join lateral (
+       select address, city, lat, lng from persons p
+       where p.workspace_id = $1 and p.deleted_at is null and p.lat is not null and p.door_civic = k.c and ${FRESH('p')} limit 5) as y`,
+    [workspaceId, lowers, civics],
   )).rows) if (!known.has(keyOf(r))) known.set(keyOf(r), { lat: r.lat, lng: r.lng });
 
   const toLook = [...groups.values()].filter((g) => !known.has(g.key));
   const concurrency = Math.min(Math.max(Number(process.env.GEOCODE_CONCURRENCY) || 6, 1), 20);
-  // The building, not the unit: one pin per address.
-  const found = await pool(toLook, concurrency, (g) => geocodeAddress({ address: g.first.address, city: g.first.city, postal: g.first.postal }));
+  // The building or house, never the unit: one pin per civic address.
+  const found = await pool(toLook, concurrency, (g) => geocodeAddress({ address: doorParts({ address: g.first.address }).shown || g.first.address, city: g.first.city, postal: g.first.postal }));
 
   let located = 0; let copied = 0; let missed = 0; let errors = 0; let lastError = null; let busy = false;
   const now = new Date().toISOString();
@@ -184,8 +205,11 @@ export const geocodeRound = async (db, workspaceId, actorId) => {
       for (const r of rows) emit('person', r.id, 'update', { lat, lng, geocoded: geo.matched || null });
       return rows.length;
     };
+    // A suite already tried again as its house keeps that mark, so the next
+    // Place on map press does not ask for it once more.
     const mark = (g, geo) => tx.query(
-      `update persons set attrs = jsonb_set(attrs, '{geocode}', $3::jsonb)
+      `update persons set attrs = jsonb_set(attrs, '{geocode}',
+         $3::jsonb || jsonb_strip_nulls(jsonb_build_object('suite_retry', attrs->'geocode'->'suite_retry')))
        where workspace_id = $1 and id = any($2::uuid[]) and lat is null`,
       [workspaceId, [...g.ids], JSON.stringify(geo)],
     );
@@ -298,7 +322,7 @@ const startRun = async (tx, workspaceId, userId) => {
 // An import's own write (action import.persons), just before it commits: if
 // it leaves anyone with an address and no pin, the run starts with it. Not
 // where address lookup is turned off, and not where no job runner would
-// ever pick the run up (STARBASE_JOBS=off: the page's button still looks up
+// ever pick the run up (BASE_JOBS=off: the page's button still looks up
 // batches itself). A file whose people all came with pins, or with no
 // address, starts nothing.
 export const hooks = {
@@ -310,6 +334,30 @@ export const hooks = {
     // (The job is seen once this write is in: a moment from now, not now.)
     if (await startRun(tx, meta.workspaceId, null)) setTimeout(runJobsSoon, 1000).unref?.();
   },
+};
+
+// Once, when Place on map is pressed: people set aside before this release
+// (no match, too vague, failed) whose address has a unit or suite written
+// in it ("Bsmt 10388 134 St", "#1203 13450 104 Ave") wait for a pin again,
+// to be looked up as their house's or building's address now. Only
+// attrs.geocode's status is cleared (suite_retry marks the row so it is
+// never asked again); address and unit stay as they are. → how many.
+const ASIDE = `workspace_id = $1 and deleted_at is null and address is not null and lat is null
+  and attrs->'geocode'->>'status' in ('nomatch', 'weak', 'failed')
+  and coalesce(attrs->'geocode'->>'suite_retry', '') <> 'true'`;
+const suitesAside = async (db, workspaceId) => (await db.query(
+  `select id, address from persons where ${ASIDE} limit 50000`, [workspaceId],
+)).rows.filter((p) => splitUnit(p.address));
+export const requeueSuites = async (db, workspaceId) => {
+  const ids = (await suitesAside(db, workspaceId)).map((p) => p.id);
+  for (let i = 0; i < ids.length; i += 2000) {
+    await db.query(
+      `update persons set attrs = jsonb_set(attrs, '{geocode}', (coalesce(attrs->'geocode', '{}'::jsonb) - 'tries' - 'error') || '{"status": "", "suite_retry": true}'::jsonb)
+        where workspace_id = $1 and id = any($2::uuid[]) and lat is null`,
+      [workspaceId, ids.slice(i, i + 2000)],
+    );
+  }
+  return ids.length;
 };
 
 export const api = new Hono();
@@ -337,6 +385,9 @@ export const status = async (db, workspaceId) => {
     retryAt: (run?.state === 'paused' && run.retry_at) || null,
     remaining: await pendingCount(db, workspaceId),
     unmatched,
+    // Of those, the ones with a suite or unit in the address that the next
+    // Place on map tries again as their house (requeueSuites).
+    suites_aside: unmatched ? (await suitesAside(db, workspaceId)).length : 0,
     jobs: jobRunnerOn(),
   };
 };
@@ -355,9 +406,11 @@ api.post('/geocode/start', async (c) => {
   if (lookupOff()) {
     return c.json({ error: 'geocoding is turned off (GEOCODER=off)', off: true }, 409);
   }
-  // Without the job runner (STARBASE_JOBS=off) nothing would ever pick the
+  // Without the job runner (BASE_JOBS=off) nothing would ever pick the
   // run up: the page falls back to looking up batches itself.
   if (!jobRunnerOn()) return c.json({ error: 'background jobs are off', jobsOff: true }, 409);
+  const retried = await requeueSuites(db, ctx.workspaceId);
+  if (retried) console.log(`geocoding: ${retried} addresses with a suite or unit in them, set aside before, are tried again as their house`);
   if (await db.transaction((tx) => startRun(tx, ctx.workspaceId, ctx.user.id))) runJobsSoon();
   return c.json(await status(db, ctx.workspaceId));
 });

@@ -12,7 +12,7 @@ import { freshDb, Client } from './helpers.js';
 import { app } from '../index.js';
 import { png, jpeg, webp, dataUrl } from './brand-images.js';
 import { imageSize, pictureProblem } from '../ext/brand/pictures.js';
-import { deriveLook, SIDEBARS } from '@starbase/shared/brand-look';
+import { deriveLook, SIDEBARS } from '@base-win/shared/brand-look';
 
 let db, mgr, staff, vol, other;
 before(async () => {

@@ -63,11 +63,11 @@ or people — and ends with the campaign's name, the site's address and the
 authorization line when one is set (`server/ext/site/calendar.js`). The
 app's own calendar links (`/cal/…`) never answer on a site's domain.
 
-### On its own domain (`STARBASE_SITE_DOMAIN`)
+### On its own domain (`BASE_SITE_DOMAIN`)
 
 When the campaign's own domain moves onto base.win (imaginesurrey.ca, from
 the present website), one setting on that client's Render service says so:
-`STARBASE_SITE_DOMAIN=imaginesurrey.ca`. Set in Render only, never in
+`BASE_SITE_DOMAIN=imaginesurrey.ca`. Set in Render only, never in
 `render.yaml`. It works the same for any client.
 
 - **There** the site is at `/`: pages, news, forms, files, `sitemap.xml`,
@@ -90,12 +90,12 @@ the present website), one setting on that client's Render service says so:
   /api/site` → `urls.domain`). Unsubscribe links in emails (`/u`, `/bu`,
   `/lu`) stay on `<name>.base.win`; the domain answers them too.
 - **The unsubscribe sync** (INTEGRATIONS.md, *Unsubscribes, both ways*)
-  stops itself when `STARBASE_WEBSITE_URL` names the domain, its pair or a
+  stops itself when `BASE_WEBSITE_URL` names the domain, its pair or a
   `SITE_HOSTS` host, and Settings → Services, Check and the start-up log say
-  "Take both settings away". Take `STARBASE_WEBSITE_URL` and
-  `STARBASE_WEBSITE_KEY` off at the move.
+  "Take both settings away". Take `BASE_WEBSITE_URL` and
+  `BASE_WEBSITE_KEY` off at the move.
 - **Never the app's address.** A domain where the app answers (base.win or
-  one of its addresses, `STARBASE_PUBLIC_URL`'s, `RENDER_EXTERNAL_HOSTNAME`,
+  one of its addresses, `BASE_PUBLIC_URL`'s, `RENDER_EXTERNAL_HOSTNAME`,
   `APP_HOSTS`), or one that isn't a domain, is not taken, and the start-up
   log says so: the website stays at `/site/`.
 - **Old links** (`server/ext/site/old-paths.js`). Where the site has no page
@@ -114,7 +114,7 @@ the present website), one setting on that client's Render service says so:
   The present website's own machinery — its links in emails it already sent
   (`/newsletter/…`, `/api/newsletter/…`, `/api/tracker/…`), members' pages
   (`/me…`) and its admin (`/admin…`) — goes to the present website at its own
-  address when `STARBASE_SITE_FORMER_URL` names it (https; 302, or 307 for a
+  address when `BASE_SITE_FORMER_URL` names it (https; 302, or 307 for a
   POST, so a mail app's one-click unsubscribe still works); unset, they are
   the 404. Not covered: `/#join` (the part after `#` never reaches a
   server), `/events/<x>/calendar.ics`, `/tracker/feed.xml`, `/shop`'s
@@ -136,9 +136,9 @@ the present website), one setting on that client's Render service says so:
 3. Render → the present website's service → Custom Domains: remove the
    domain and its `www.`.
 4. Render → the client's base.win service → Environment, in one save:
-   `STARBASE_SITE_DOMAIN=<domain>`, `STARBASE_SITE_FORMER_URL=<the present
-   website's own address>` (if step 2), and remove `STARBASE_WEBSITE_URL` and
-   `STARBASE_WEBSITE_KEY`.
+   `BASE_SITE_DOMAIN=<domain>`, `BASE_SITE_FORMER_URL=<the present
+   website's own address>` (if step 2), and remove `BASE_WEBSITE_URL` and
+   `BASE_WEBSITE_KEY`.
 5. Same service → Settings → Custom Domains: add the domain (and its `www.`).
 6. At the registrar: the records Render shows for that service.
 7. Check: the domain shows the website, its `www.` and `<name>.base.win/site/`
@@ -149,13 +149,13 @@ the present website), one setting on that client's Render service says so:
 
 **The way back, in this order:** first move the custom domain (and its
 `www.`) off the base.win service and back to the present website's service,
-its registrar records with it — `STARBASE_SITE_DOMAIN` stays set until then,
+its registrar records with it — `BASE_SITE_DOMAIN` stays set until then,
 or the app's sign-in page would answer on the domain; once the domain shows
-the present website again, remove `STARBASE_SITE_DOMAIN` (and
-`STARBASE_SITE_FORMER_URL`) — `/site/` answers again at once (a browser that
+the present website again, remove `BASE_SITE_DOMAIN` (and
+`BASE_SITE_FORMER_URL`) — `/site/` answers again at once (a browser that
 saw the move may for up to an hour still send it on to the domain, by then
 the present website); set its `NEXT_PUBLIC_SITE_URL` back, its webhooks and
-its cron jobs; set `STARBASE_WEBSITE_URL` and `STARBASE_WEBSITE_KEY` again,
+its cron jobs; set `BASE_WEBSITE_URL` and `BASE_WEBSITE_KEY` again,
 then **Check** and **Send the ones already off here**, so the nos made in
 between reach it.
 
@@ -800,7 +800,7 @@ the web build hasn't made it; `ctx.referral` is the code a referral link
 remembered (the server reads it again on a form post — forms needn't send it).
 `ctx.origin` is then the public address *without* the client's path (root
 has it): the request's own (`https://imaginesurrey.ca`), or under a client's
-path the origin of `STARBASE_PUBLIC_URL` (`https://base.win`) — the sitemap,
+path the origin of `BASE_PUBLIC_URL` (`https://base.win`) — the sitemap,
 robots.txt and a supporter's own share link use the same. A page is cached
 per address, so www and the bare domain never get each other's canonical.
 Module anchors are `#m-<module id>`: the seeds link `/#m-join`.
@@ -982,8 +982,8 @@ website settings, a live page by its address), so a kept page costs the
 database nothing; a page drawn across a Website write is never kept, and
 visitors after the write wait for a fresh draw, not the older one.
 
-Environment: `STARBASE_SITE_DOMAIN` (the website's own domain, "On its own
-domain" above), `STARBASE_SITE_FORMER_URL` (the present website at its own
+Environment: `BASE_SITE_DOMAIN` (the website's own domain, "On its own
+domain" above), `BASE_SITE_FORMER_URL` (the present website at its own
 address), `SITE_HOSTS` (the campaign's own domains), `APP_HOSTS` (the
 app's other addresses on this server, never a website domain: one people
 used before base.win, say), `SITE_WORKSPACE`
@@ -1124,7 +1124,7 @@ theirs, and the server refuses its data anyway).
 Careful with "your own domain": on a host in `domains` only the site answers
 (no sign-in, no app). So `site.settings.save` refuses (400, in plain words)
 every host the app itself answers at: the host the save came in on,
-`STARBASE_PUBLIC_URL`'s, `RENDER_EXTERNAL_HOSTNAME`, the app's other
+`BASE_PUBLIC_URL`'s, `RENDER_EXTERNAL_HOSTNAME`, the app's other
 addresses in `APP_HOSTS`, and base.win and its subdomains (`store.js
 appHosts`; `GET /api/site` lists them as `urls.app_hosts`, and the screen
 refuses them as they're typed). One saved before this check is ignored where

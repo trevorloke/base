@@ -12,7 +12,7 @@ import { freshDb, Client } from './helpers.js';
 import { getDb } from '../db/client.js';
 import {
   defaultScale, ratings, normalizeScale, ratingText, ratingByCode, matchRating, makeCode, offeredCodes, allCodes, bandOf,
-} from '@starbase/shared/scale';
+} from '@base-win/shared/scale';
 import { REPLAY_DAYS, ratingRefusal, applyEdit } from '../ext/scale/rules.js';
 
 const tag = Math.random().toString(36).slice(2, 8);

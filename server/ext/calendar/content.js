@@ -1,7 +1,7 @@
 // What goes into a calendar: a person's own shifts, the voting days and the
 // filing dates — read once here for the calendar link and the one-item
 // files alike.
-import { dayEvent } from '@starbase/shared/ics';
+import { dayEvent } from '@base-win/shared/ics';
 import { decide } from '../../lib/perms.js';
 import { DESK_ROLES } from '../../lib/twostep.js';
 

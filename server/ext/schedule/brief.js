@@ -8,7 +8,7 @@
 //                         ends_at, need, capacity, filled, short }]
 // soonest first, twenty at most; short: how many more it wants. Volunteers
 // don't get it — their Today is their own shifts.
-import { shortBy } from '@starbase/shared/shiftkinds';
+import { shortBy } from '@base-win/shared/shiftkinds';
 
 export const briefShortShifts = async (db, ctx, body) => {
   if (ctx.role === 'volunteer') return;

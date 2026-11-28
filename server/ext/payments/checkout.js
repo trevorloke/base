@@ -56,7 +56,7 @@
 // was kept yet.
 import { newId, runAction } from '../../lib/events.js';
 import { capFor } from '../../lib/cap.js';
-import { SLATE_CODES, DEFAULT_SLATE, slateLabel } from '@starbase/shared/canvass';
+import { SLATE_CODES, DEFAULT_SLATE, slateLabel } from '@base-win/shared/canvass';
 import { DONATE_DECLARATION, JOIN_DECLARATION } from '../../../shared/site/wording.js';
 import { stripeRequest, stripeMode, paymentsReady, StripeError } from './stripe.js';
 import { roomFor, fits, campaignNow, monthlyMax, money } from './limits.js';

@@ -19,7 +19,7 @@ import { basePath } from '../../lib/mount.js';
 import { city as orgCity, geoBox } from '../../lib/org.js';
 import { geocodeAddress } from '../../lib/geocode.js';
 import { parsePlaces, normWords, normAddress } from '../../../shared/voteguide.js';
-import { authorizedBy } from '../../../shared/site/wording.js';
+import { authorizedLine } from '../../../shared/site/authorized.js';
 import { LANG_BY_CODE } from '../../../shared/site/languages.js';
 import { readSettings, mainAddress } from '../site/store.js';
 import { languagesFor } from '../site/translate.js';
@@ -101,7 +101,7 @@ api.get('/site/guide', async (c) => {
   return c.json({
     guide: { ...g, places: g.places.map(({ own_days: own, ...p }) => ({ ...p, own_days: own })) },
     state: deskState(guide, t),
-    checklist: checklist(guide, authorizedBy(settings?.org || {}), t),
+    checklist: checklist(guide, authorizedLine(settings?.org || {}, { channel: 'embed' }).en, t),
     changed_since_checked: changedSinceChecked(guide),
     asked,
     // Every page holding the module, drafts too (the desk links to them).
@@ -133,7 +133,7 @@ const LOOKUP_MS = 5000;
 const PREVIEW_MS = 60_000;
 const AT_ONCE = 4;
 const KM = 10;
-// The campaign's box (STARBASE_GEO_BOUNDS), grown by 10 km on every side. A
+// The campaign's box (BASE_GEO_BOUNDS), grown by 10 km on every side. A
 // campaign with no map area has no fence: anywhere is inside.
 export const inFence = (lat, lng) => {
   const box = geoBox();

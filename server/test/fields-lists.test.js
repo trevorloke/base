@@ -13,7 +13,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { freshDb, Client } from './helpers.js';
 import { app } from '../index.js';
-import { DWELLING_TYPES, splits, choiceKey, guessChoice, groupsOf } from '@starbase/shared/fieldlists';
+import { DWELLING_TYPES, splits, choiceKey, guessChoice, groupsOf } from '@base-win/shared/fieldlists';
 import { CHOICE_KEY_SQL } from '../ext/fields/kinds.js';
 import { presetFor } from '../lib/preset.js';
 import { runDueJobs } from '../lib/jobs.js';

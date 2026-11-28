@@ -30,7 +30,7 @@
 import { Fragment, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { rankTies } from '@starbase/shared/ties';
+import { rankTies } from '@base-win/shared/ties';
 import { apiGet, action } from '../api.js';
 import { newClientId, queueAction, useOutbox } from '../offline.js';
 import { queuedText } from './queued.js';

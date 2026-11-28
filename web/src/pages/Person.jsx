@@ -16,11 +16,12 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   VOLUNTEER_ROLES, SUGGESTED_TAGS,
   SIGN_KINDS, SIGN_STATUSES,
-} from '@starbase/shared/canvass';
+} from '@base-win/shared/canvass';
 import { ex } from '../brand.js';
-import { ratingByCode } from '@starbase/shared/scale';
-import { SLATES as FALLBACK_SLATES, slateLabel } from '@starbase/shared/canvass';
-import { placeLabel } from '@starbase/shared/shiftkinds';
+import { NS } from '../base.js';
+import { ratingByCode } from '@base-win/shared/scale';
+import { SLATES as FALLBACK_SLATES, slateLabel } from '@base-win/shared/canvass';
+import { placeLabel } from '@base-win/shared/shiftkinds';
 import { whenText, zoneOf } from '../components/shiftTime.js';
 import RatingButtons, { OUTCOMES, OutcomeButtons, RatingChip, focusRating, ratingSay, ratingText, useScale } from '../components/RatingButtons.jsx';
 import SurveyQuestions, { PersonAnswers, answersTail, usePersonAnswers, useSurvey } from '../components/SurveyQuestions.jsx';
@@ -35,6 +36,8 @@ import {
   canDesk, invalidatePersonData, isDnc, noCalls, tagWord, noSignal,
 } from './People.jsx';
 import QuickDetails from '../components/QuickDetails.jsx';
+import { UnitSuggestions } from '../components/people.js';
+import { doorLine } from '../../../shared/units.js';
 import './people.css';
 import {
   TextingPersonLink, callsCard, noTexts, textingOn, useTextingPerson, useTextingStatus,
@@ -82,7 +85,7 @@ const contactWord = (scale, c) => (c.rating ? `Rated ${ratingText(scale, c.ratin
 // this tab: a phone may reload the page after the dialer or messages app.
 // Until one is picked: Door — except at a desk computer (no dialer), for
 // someone with a phone and no door on the map, where it is a phone call.
-const CHANNEL_KEY = 'starbase.person.channel';
+const CHANNEL_KEY = `${NS}person.channel`;
 const readChannels = () => {
   try { return JSON.parse(sessionStorage.getItem(CHANNEL_KEY) || '{}') || {}; } catch { return {}; }
 };
@@ -139,7 +142,7 @@ function BackLink({ desk, className = 'eyebrow pf-back' }) {
   const navigate = useNavigate();
   const location = useLocation();
   const from = location.state?.from;
-  const inApp = location.key !== 'default'; // opened from another Starbase screen
+  const inApp = location.key !== 'default'; // opened from another base.win screen
   if (from?.to) {
     return inApp
       ? <button type="button" className={className} onClick={() => navigate(-1)}>← {from.label || 'Back'}</button>
@@ -525,7 +528,8 @@ function EditDetailsForm({ person, refresh, onClose, focus = 'name' }) {
         </div>
         <div className="field" style={{ flex: '0 1 90px' }}>
           <label htmlFor="ed-unit">Unit</label>
-          <input id="ed-unit" className="input" maxLength={40} value={form.unit} onChange={set('unit')} />
+          <input id="ed-unit" className="input" maxLength={40} list="ed-unit-words" value={form.unit} onChange={set('unit')} />
+          <UnitSuggestions id="ed-unit-words" />
         </div>
       </div>
       <div className="form-row">
@@ -549,15 +553,17 @@ function EditDetailsForm({ person, refresh, onClose, focus = 'name' }) {
 
 // editing: null, or the field the form opens on (the header's Edit, a tap on
 // a line, or "Edit details" — the page holds it so the header can open it).
-function Details({ person, household, refresh, desk, me, editing, setEditing, move = null }) {
+function Details({ person, household, atHouse = [], refresh, desk, me, editing, setEditing, move = null }) {
   const [saved, setSaved] = useState(null);
   // The number dials from your own phone only when calls through the campaign are off.
   const ownDialler = textingOn(useTextingStatus(me)).voice === false;
   if (desk && editing) {
     return <EditDetailsForm key={editing} person={person} refresh={refresh} focus={editing} onClose={(said) => { setEditing(null); setSaved(said || null); }} />;
   }
+  // "Basement suite · 10388 134 St": at a house with suites its words are
+  // the house's ("Suite B"), as the map and the walk list say them.
   const addr = [
-    [person.address, person.unit ? `#${person.unit}` : null].filter(Boolean).join(' '),
+    person.address ? doorLine(person, atHouse.length ? 'house' : 'door') : '',
     [person.city, person.postal].filter(Boolean).join('  '),
   ].filter(Boolean);
   const none = <span className="muted">—</span>;
@@ -623,6 +629,21 @@ function Details({ person, household, refresh, desk, me, editing, setEditing, mo
               </ul>
             )}
         </>
+      )}
+      {/* The other doors at this house (a main door and its suites): each
+          its own door, its first person one tap away. */}
+      {person.address && atHouse.length > 0 && (
+        <p className="pf-athouse">
+          Also at this house:{' '}
+          {atHouse.map((h, i) => (
+            <span key={`${h.unit}:${h.first_id || i}`}>
+              {i > 0 && ' · '}
+              {h.first_id
+                ? <Link to={`/people/${h.first_id}`}>{h.unit_words} ({h.people} {h.people === 1 ? 'person' : 'people'})</Link>
+                : <span>{h.unit_words} (nobody on file)</span>}
+            </span>
+          ))}
+        </p>
       )}
 
       {/* About the person, not the phone: its own row at the end of Details. */}
@@ -1036,7 +1057,7 @@ export default function Person() {
 
       <div className="pf-sections">
         <Section title="Details" open={!!open.details} onToggle={toggle('details')}>
-          <Details person={person} household={household} refresh={refresh} desk={desk} me={me} editing={editing} setEditing={setEditing}
+          <Details person={person} household={household} atHouse={profile.data.at_house || []} refresh={refresh} desk={desk} me={me} editing={editing} setEditing={setEditing}
             move={profile.data.latest_move || null} />
         </Section>
         {/* The campaign's own fields (People → More → Profile fields); with no signal and no copy, it says so.

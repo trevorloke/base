@@ -3,6 +3,7 @@
 // brings here. Pure checks only; the database work is ext/operator/enter.js.
 // The token's bytes are pinned by a test vector shared with the control
 // centre (server/test/entry-vector.json); change nothing here without it.
+import { setting } from '@base-win/shared/old-names';
 import { createHash, createPublicKey, verify } from 'node:crypto';
 
 const SPKI = Buffer.from('302a300506032b6570032100', 'hex');
@@ -26,8 +27,8 @@ export const originOf = (x) => {
 };
 
 // This server's own address, the audience a token must name. Render sets
-// RENDER_EXTERNAL_URL on every web service; STARBASE_OWN_URL overrides it.
-export const ownOrigin = () => originOf(process.env.STARBASE_OWN_URL || process.env.RENDER_EXTERNAL_URL);
+// RENDER_EXTERNAL_URL on every web service; BASE_OWN_URL overrides it.
+export const ownOrigin = () => originOf(setting('BASE_OWN_URL') || process.env.RENDER_EXTERNAL_URL);
 
 const rawOf = (k) => (Buffer.isBuffer(k) ? k : Buffer.from(String(k), 'base64url'));
 // The first 8 hex of SHA-256 of the raw 32-byte key: only picks the key.

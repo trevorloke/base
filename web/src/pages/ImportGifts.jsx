@@ -23,8 +23,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, useOutletContext } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { SLATES as FALLBACK_SLATES, slateLabel } from '@starbase/shared/canvass';
-import { dateOrderOf, readGiftDate } from '@starbase/shared/giftfile';
+import { SLATES as FALLBACK_SLATES, slateLabel } from '@base-win/shared/canvass';
+import { dateOrderOf, readGiftDate } from '@base-win/shared/giftfile';
 import { action, fmtMoney } from '../api.js';
 import { newClientId } from '../offline.js';
 import { readXlsx, toCsv } from '../components/xlsx.js';

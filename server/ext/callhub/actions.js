@@ -17,7 +17,7 @@
 //                  { n, people: [{ id, name }], more } or null, so the desk can look.
 // callhub.connect  {}                       managers: give CallHub the address results come back to
 import { z } from 'zod';
-import { RATING_CODE_RE } from '@starbase/shared/scale';
+import { RATING_CODE_RE } from '@base-win/shared/scale';
 import { httpError } from '../../actions/util.js';
 import { azKey } from '../../lib/az.js';
 import { runJobsSoon } from '../../lib/jobs.js';

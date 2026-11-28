@@ -26,7 +26,7 @@
 // measured at both sizes. A step kind the page doesn't know says so and is
 // saved as it is.
 //
-//   STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4103 STARBASE_JOBS_EVERY_MS=1000 node server/index.js &
+//   BASE_BRAND=imagine-surrey BASE_OPEN_SIGNUP=1 BASE_DATA=memory PORT=4103 BASE_JOBS_EVERY_MS=1000 node server/index.js &
 //   BASE=http://127.0.0.1:4103 SHOTS=/tmp/ladders node e2e-ladders.mjs
 //
 // To also watch the step deliver — a test about a made-up person, one
@@ -47,7 +47,7 @@ const BASE = process.env.BASE || 'http://localhost:3200';
 // The stand-in receiver the server sends to (fake-receiver.js), if one is running.
 const HOOKS = (process.env.HOOKS || '').replace(/\/$/, '');
 const ADMIN = { toString() { return `${BASE}/admin`; } }; // the desk's pages live in the admin (web/src/mode.js)
-const SHOTS = process.env.SHOTS || '/tmp/starbase-ladders';
+const SHOTS = process.env.SHOTS || '/tmp/base-win-ladders';
 mkdirSync(SHOTS, { recursive: true });
 const results = [];
 const check = (name, ok, extra = '') => {

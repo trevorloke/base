@@ -9,14 +9,14 @@
 // merge that clears a maybe with a record only the merged one matched
 // names it by what it shared, and links to it. Measured at 1360 and 390.
 //
-//   STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4133 node server/index.js &
+//   BASE_BRAND=imagine-surrey BASE_OPEN_SIGNUP=1 BASE_DATA=memory PORT=4133 node server/index.js &
 //   BASE=http://127.0.0.1:4133 SHOTS=/tmp/dupes node e2e-duplicates.mjs
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
 
 const BASE = process.env.BASE || 'http://localhost:3200';
 const ADMIN = `${BASE}/admin`;
-const SHOTS = process.env.SHOTS || '/tmp/starbase-dupes';
+const SHOTS = process.env.SHOTS || '/tmp/base-win-dupes';
 mkdirSync(SHOTS, { recursive: true });
 const results = [];
 const check = (name, ok, extra = '') => {

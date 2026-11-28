@@ -12,7 +12,7 @@
 //                               88 Ave"), the typed name where one was typed.
 //                               A point nothing could name is "Pinned place"
 //                               here, never its coordinates (placeLabel)
-import { kindOf, madeTitle, placeLabel } from '@starbase/shared/shiftkinds';
+import { kindOf, madeTitle, placeLabel } from '@base-win/shared/shiftkinds';
 
 // Line icons on the app's 24-unit grid, drawn like the tab bar's (Shell.jsx).
 const PATHS = {

@@ -12,11 +12,16 @@ import { paymentsReady } from './payments.js';
 import { mountMicrositeReads } from './microsite-reads.js';
 import { mountLanguageReads } from './language-reads.js';
 import { mountFontReads } from './fonts.js';
+import { mountAuthorized } from './authorized-api.js';
 
 export const api = new Hono();
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const iso = (d) => (d instanceof Date ? d.toISOString() : d ? new Date(d).toISOString() : null);
+
+// "Authorized by …" for every screen (authorized-api.js): read by every
+// role, so it is answered before the Website area's guard below.
+mountAuthorized(api);
 
 // Everything under /site: the Website area's, or refused — whatever the role.
 // The Languages screen's reads are Website translations' (language-reads.js).
@@ -85,7 +90,7 @@ api.get('/site', async (c) => {
     // Website: domains; or the server's SITE_HOSTS: hosts).
     urls: {
       site: here(c, '/site/'),
-      // The website's own domain (STARBASE_SITE_DOMAIN), when this campaign
+      // The website's own domain (BASE_SITE_DOMAIN), when this campaign
       // is the site's: where it answers now, and where /site/ sends people.
       domain: siteDomain() && hosts.length ? `https://${siteDomain()}/` : null,
       domains: (settings.domains || []).map((d) => `https://${d}/`),

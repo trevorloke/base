@@ -13,7 +13,7 @@ import {
 } from '../ext/pathtowin/rules.js';
 
 // Counted fresh on every read, unless a test says otherwise.
-process.env.STARBASE_PTW_CACHE_MS = '0';
+process.env.BASE_PTW_CACHE_MS = '0';
 
 const tokenOf = (url) => url.split('/join/')[1];
 const ok = (r, msg = '') => { assert.equal(r.status, 200, `${msg} ${JSON.stringify(r.json)?.slice(0, 400)}`); return r.json; };
@@ -378,7 +378,7 @@ test('desk only: volunteers never read it (unless given Data); only managers cha
 });
 
 test('kept a minute: a second look is the same count; ?fresh=1 and a new turf count again', async () => {
-  process.env.STARBASE_PTW_CACHE_MS = '60000';
+  process.env.BASE_PTW_CACHE_MS = '60000';
   try {
     const first = ok(await mgr.get('/api/pathtowin'));
     const p = await addPerson(ws, { name: 'Newcomer Example', address: '77 Guildford Example Rd', lat: 49.0555, lng: -122.7555, rating: '1' });
@@ -405,7 +405,7 @@ test('kept a minute: a second look is the same count; ?fresh=1 and a new turf co
     ok(await mgr.action('turf.delete', { id: e }));
     assert.ok(!ok(await mgr.get('/api/pathtowin')).turfs.some((t) => t.id === e), 'a removed turf is gone at once');
   } finally {
-    process.env.STARBASE_PTW_CACHE_MS = '0';
+    process.env.BASE_PTW_CACHE_MS = '0';
   }
 });
 

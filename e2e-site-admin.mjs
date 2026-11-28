@@ -37,14 +37,14 @@
 // targets are 48px, and the full-screen preview opens a tapped section's
 // form in a sheet.
 //
-//   STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=5210 node server/index.js &
+//   BASE_BRAND=imagine-surrey BASE_OPEN_SIGNUP=1 BASE_DATA=memory PORT=5210 node server/index.js &
 //   BASE=http://127.0.0.1:5210 SHOTS=/tmp/site-admin node e2e-site-admin.mjs
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
 import { MODULES } from './shared/site/catalogue.js';
 
 const BASE = (process.env.BASE || 'http://127.0.0.1:3200').replace(/\/$/, '');
-const SHOTS = process.env.SHOTS || '/tmp/starbase-site-admin';
+const SHOTS = process.env.SHOTS || '/tmp/base-win-site-admin';
 mkdirSync(SHOTS, { recursive: true });
 const results = [];
 const check = (name, ok, extra = '') => {

@@ -1,14 +1,15 @@
 // What the email senders (resend.js, sendgrid.js) share: the settings, the
 // From address, the time limit, and the words for a call that failed.
+import { setting } from '@base-win/shared/old-names';
 export const env = (k) => String(process.env[k] || '').trim();
 export const has = (k) => Boolean(env(k));
 // A setting that takes several values while one is rolled to the next.
 export const listOf = (k) => env(k).split(',').map((s) => s.trim()).filter(Boolean);
 
-// One email's time limit (STARBASE_EMAIL_TIMEOUT_MS, 15 s): a sender that
+// One email's time limit (BASE_EMAIL_TIMEOUT_MS, 15 s): a sender that
 // hasn't answered by then is given up on, so a hung connection never holds a
 // send (or anything waiting on it) for long.
-export const timeoutMs = () => Number(process.env.STARBASE_EMAIL_TIMEOUT_MS) || 15_000;
+export const timeoutMs = () => Number(setting('BASE_EMAIL_TIMEOUT_MS')) || 15_000;
 // A read for a screen (the domain's records, Check): 8 s, as every Check.
 export const READ_MS = 8000;
 

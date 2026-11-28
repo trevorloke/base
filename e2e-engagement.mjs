@@ -17,14 +17,14 @@
 // scroll, 48px targets); screenshots at 1360×900 and 390×844. The books
 // verify.
 //
-//   STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4180 STARBASE_JOBS_EVERY_MS=1000 node server/index.js &
+//   BASE_BRAND=imagine-surrey BASE_OPEN_SIGNUP=1 BASE_DATA=memory PORT=4180 BASE_JOBS_EVERY_MS=1000 node server/index.js &
 //   BASE=http://127.0.0.1:4180 SHOTS=/tmp/engagement node e2e-engagement.mjs
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
 
 const BASE = process.env.BASE || 'http://localhost:3200';
 const ADMIN = `${BASE}/admin`;
-const SHOTS = process.env.SHOTS || '/tmp/starbase-engagement';
+const SHOTS = process.env.SHOTS || '/tmp/base-win-engagement';
 mkdirSync(SHOTS, { recursive: true });
 const results = [];
 const check = (name, ok, extra = '') => {

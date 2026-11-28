@@ -59,7 +59,7 @@ test('no key: NoTokenKey, and nothing is ever written to app_secrets', async () 
 
 test('two-step’s sealing and Google’s never open each other, even with the same key', async () => {
   process.env.GOOGLE_TOKEN_KEY = K1;
-  process.env.STARBASE_TWO_STEP_KEY = K1;
+  process.env.BASE_TWO_STEP_KEY = K1;
   const twoStep = await sealSecret(db, 'authenticator-key');
   assert.equal(openToken(twoStep), null);
   const google = sealToken('refresh-token');

@@ -15,7 +15,7 @@ import { runDueJobs } from '../lib/jobs.js';
 import { _setClockForTest } from '../ext/texting/rules.js';
 import { noticeWords } from '../ext/schedule/tell.js';
 import { shiftMessage } from '../lib/notify.js';
-import { hoursOf } from '@starbase/shared/shifthours';
+import { hoursOf } from '@base-win/shared/shifthours';
 
 const tag = Math.random().toString(36).slice(2, 8);
 const TZ = 'America/Vancouver';
@@ -140,12 +140,12 @@ test('a shift the long form made longer than a day keeps its length when its sta
 });
 
 test('a Toronto shift from 10 pm on the night the clocks go back runs 300 elapsed minutes (2:00, not 3:00)', async () => {
-  const savedTz = process.env.STARBASE_TZ;
-  process.env.STARBASE_TZ = 'America/Toronto';
+  const savedTz = process.env.BASE_TZ;
+  process.env.BASE_TZ = 'America/Toronto';
   const east = new Client();
   let eastWs;
   try { eastWs = (await east.signup({ workspaceName: `East ${tag}`, email: `hrs-east+${tag}@example.org` })).json.workspace.id; } finally {
-    if (savedTz === undefined) delete process.env.STARBASE_TZ; else process.env.STARBASE_TZ = savedTz;
+    if (savedTz === undefined) delete process.env.BASE_TZ; else process.env.BASE_TZ = savedTz;
   }
   // Sunday, November 3, 2030: 2:00 EDT becomes 1:00 EST.
   const s = ok(await east.action('shift.createMany', { kind: 'event', location: 'Queen St', days: ['2030-11-02'], start: '22:00', minutes: 300 })).shifts[0];

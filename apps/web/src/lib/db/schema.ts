@@ -1,4 +1,5 @@
 import { sql } from "drizzle-orm";
+import { DB } from "../old-names";
 import {
   type AnyPgColumn,
   boolean,
@@ -58,9 +59,10 @@ export const people = pgTable(
     // Relational organizing: the share code this person hands out, and who brought them in.
     referralCode: text("referral_code"),
     referredById: uuid("referred_by_id").references((): AnyPgColumn => people.id, { onDelete: "set null" }),
-    // The id the campaign's database (Starbase, "the desk") answered for this
-    // person, so staff can find the same supporter there.
-    starbasePersonId: text("starbase_person_id"),
+    // The id the campaign's database (base.win, "the desk") answered for this
+    // person, so staff can find the same supporter there. (The column keeps
+    // its older name: see src/lib/old-names.ts.)
+    deskPersonId: text(DB.personId),
     createdAt: createdAt(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -158,9 +160,9 @@ export const contributions = pgTable(
     stripeInvoiceId: text("stripe_invoice_id"),
     stripeSubscriptionId: text("stripe_subscription_id"),
     paidAt: timestamp("paid_at", { withTimezone: true }),
-    // When the treasurer logged this gift at the desk (Starbase → Donations →
+    // When the treasurer logged this gift at the desk (base.win → Donations →
     // Log a gift), where the contribution limits are checked. Online gifts are
-    // never sent to Starbase automatically.
+    // never sent to base.win automatically.
     deskLoggedAt: timestamp("desk_logged_at", { withTimezone: true }),
     deskLoggedById: uuid("desk_logged_by").references((): AnyPgColumn => adminUsers.id, { onDelete: "set null" }),
     createdAt: createdAt(),
@@ -797,37 +799,39 @@ export const consentEvents = pgTable(
   (t) => [index("consent_events_person_idx").on(t.personId, t.createdAt), index("consent_events_email_idx").on(t.email, t.createdAt)],
 ).enableRLS();
 
-// ── Starbase ("the desk") ─────────────────────────────────────────────────
+// ── base.win ("the desk") ─────────────────────────────────────────────────
 // Sign-ups the website forwards to the campaign's database. Public routes
 // only write a row here; delivery happens after the response (and from the
-// daily job), so Starbase being slow or down never touches a visitor's form.
+// daily job), so base.win being slow or down never touches a visitor's form.
 // The row id is the Idempotency-Key, so a retry never makes a second person.
-// Money, RSVPs, orders and follows are never written here.
-export const starbaseOutboxStatus = pgEnum("starbase_outbox_status", ["pending", "sent", "failed", "skipped"]);
+// Money, RSVPs, orders and follows are never written here. The table, its
+// type, its indexes and the person id column keep their older names (the
+// live website runs on the same database): src/lib/old-names.ts.
+export const deskOutboxStatus = pgEnum(DB.outboxStatus, ["pending", "sent", "failed", "skipped"]);
 
-export const starbaseOutbox = pgTable(
-  "starbase_outbox",
+export const deskOutbox = pgTable(
+  DB.outbox,
   {
     id: id(),
     // petition | pledge | newsletter | volunteer-shift | membership | deletion-request
     kind: text("kind").notNull(),
     personId: uuid("person_id").references(() => people.id, { onDelete: "set null" }),
-    // Which Starbase endpoint the row goes to, and the exact body sent there.
+    // Which base.win endpoint the row goes to, and the exact body sent there.
     endpoint: text("endpoint").notNull().default("/in/v1/people"),
     payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
-    status: starbaseOutboxStatus("status").notNull().default("pending"),
+    status: deskOutboxStatus("status").notNull().default("pending"),
     attempts: integer("attempts").notNull().default(0),
     lastError: text("last_error"),
     lastAttemptAt: timestamp("last_attempt_at", { withTimezone: true }),
-    starbasePersonId: text("starbase_person_id"),
+    deskPersonId: text(DB.personId),
     nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).defaultNow(),
     createdAt: createdAt(),
     sentAt: timestamp("sent_at", { withTimezone: true }),
   },
   (t) => [
-    index("starbase_outbox_due_idx").on(t.status, t.nextAttemptAt),
-    index("starbase_outbox_person_idx").on(t.personId),
-    index("starbase_outbox_created_idx").on(t.createdAt),
+    index(DB.outboxIdx.due).on(t.status, t.nextAttemptAt),
+    index(DB.outboxIdx.person).on(t.personId),
+    index(DB.outboxIdx.created).on(t.createdAt),
   ],
 ).enableRLS();
 

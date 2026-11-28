@@ -18,8 +18,8 @@
 //                                    { kind, subject, body } (Outreach, desk only)
 // Subjects and bodies are as stored (codes); the screens show them in words.
 import { Hono } from 'hono';
-import { NO_ADDRESS, placeholders } from '@starbase/shared/email/words';
-import { STARTERS, starterOf } from '@starbase/shared/email/starters';
+import { NO_ADDRESS, placeholders } from '@base-win/shared/email/words';
+import { STARTERS, starterOf } from '@base-win/shared/email/starters';
 import { footOf } from '../abtests/send.js';
 import { baseOf } from '../socials/share-api.js';
 import { GONE, USES, maySave, mayStart, refusal } from './rules.js';
@@ -72,10 +72,13 @@ api.get('/templates', async (c) => {
       order by lower(t.name) collate "C", t.id`,
     [ctx.workspaceId, use],
   )).rows;
-  const f = await footOf(db, ctx.workspaceId);
+  const { line, ...f } = await footOf(db, ctx.workspaceId, use === 'press' ? 'email-press' : 'email-list');
+  // What the law-shaped lines still lack: the mailing address; and the
+  // Authorized by line once its "needed from" date has come with none set.
+  const missing = [!f.address && 'address', line.status === 'empty' && line.required && 'authorizedBy'].filter(Boolean);
   return c.json({
     starters, mine, canSave: maySave(ctx, use), canHide: manager,
-    foot: { name: ctx.workspace?.name || '', ...f, missing: f.address ? [] : ['address'] },
+    foot: { name: ctx.workspace?.name || '', ...f, missing },
     links: await linksOf(c, db, ctx.workspaceId),
   });
 });

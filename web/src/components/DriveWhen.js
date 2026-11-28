@@ -2,7 +2,7 @@
 // Through shared/dayparts.js (onClock), so B.C.'s UTC-7-all-year rule holds
 // on a browser whose own time-zone rules still fall back in November, the
 // same hour every other screen shows.
-import { onClock } from '@starbase/shared/dayparts';
+import { onClock } from '@base-win/shared/dayparts';
 
 export const driveWhen = (iso, tz, time = true) => {
   const d = iso ? new Date(iso) : null;

@@ -18,7 +18,7 @@ import { presetFor } from '../lib/preset.js';
 import { tierFor } from '../lib/tiers.js';
 import { prepareCheckout } from '../ext/payments/index.js';
 import { sourceOf } from '../ext/drive/export.js';
-import { donorTier } from '@starbase/shared/canvass';
+import { donorTier } from '@base-win/shared/canvass';
 import { commandsFor } from '../../web/src/components/commands.js';
 import { todayOf } from '../ext/audience/index.js';
 
@@ -31,9 +31,9 @@ const today = todayOf({});
 const year = Number(today.slice(0, 4));
 const IS = presetFor('imagine-surrey');
 
-const savedBrand = process.env.STARBASE_BRAND;
-const wear = (brand) => { process.env.STARBASE_BRAND = brand; forgetBrand(); };
-after(() => { if (savedBrand === undefined) delete process.env.STARBASE_BRAND; else process.env.STARBASE_BRAND = savedBrand; forgetBrand(); });
+const savedBrand = process.env.BASE_BRAND;
+const wear = (brand) => { process.env.BASE_BRAND = brand; forgetBrand(); };
+after(() => { if (savedBrand === undefined) delete process.env.BASE_BRAND; else process.env.BASE_BRAND = savedBrand; forgetBrand(); });
 
 let db, mgr, ws, user;
 const gift = (personId, cents, extra = {}) => mgr.action('gift.log', { person_id: personId, amount_cents: cents, date: `${year}-01-02`, method: 'cheque', ...extra });

@@ -9,28 +9,33 @@
 import { publicHost } from './campaigns.mjs';
 import { pubkeyValue } from './keys.mjs';
 import { hasValues, serviceSettings, JURISDICTIONS, PROVINCES, TIME_ZONES } from './snippets.mjs';
+import { settingNames } from '../../shared/old-names.js';
 
 // Settings the control centre may ask Render about, one at a time, and only
 // "is it set?": the value is dropped inside render-api.mjs. None is a secret.
-export const READABLE = ['NODE_ENV', 'STARBASE_ENV', 'STARBASE_PUBLIC_URL', 'STARBASE_BRAND', 'STARBASE_ORG_NAME', 'STARBASE_JURISDICTION', 'STARBASE_TZ',
-  'STARBASE_CITY', 'STARBASE_SLATES', 'STARBASE_PROVINCE', 'STARBASE_GEO_BOUNDS', 'STARBASE_CANDIDATES', 'BASE_PLATFORM_PUBKEY'];
+// Each is listed by its name today; Render is asked about its older name too
+// (shared/old-names.js), and it counts as set when either is.
+export const READABLE = ['NODE_ENV', 'BASE_ENV', 'BASE_PUBLIC_URL', 'BASE_BRAND', 'BASE_ORG_NAME', 'BASE_JURISDICTION', 'BASE_TZ',
+  'BASE_CITY', 'BASE_SLATES', 'BASE_PROVINCE', 'BASE_GEO_BOUNDS', 'BASE_CANDIDATES', 'BASE_PLATFORM_PUBKEY'];
 // Settings the control centre may set, and only to a value it works out
 // itself. Today that is base.win's public key and nothing else.
 export const WRITABLE = ['BASE_PLATFORM_PUBKEY'];
 // Stage 2, once Check Render’s answers has opened it: on a campaign made
 // with New campaign, a missing setting may also be added, to the value
 // worked out from that campaign's own row (the same as its .env block).
-export const WRITABLE_MADE = ['BASE_PLATFORM_PUBKEY', 'STARBASE_PUBLIC_URL', 'STARBASE_BRAND', 'STARBASE_ORG_NAME', 'STARBASE_CITY', 'STARBASE_JURISDICTION',
-  'STARBASE_PROVINCE', 'STARBASE_TZ', 'STARBASE_SLATES', 'STARBASE_GEO_BOUNDS', 'STARBASE_CANDIDATES'];
+export const WRITABLE_MADE = ['BASE_PLATFORM_PUBKEY', 'BASE_PUBLIC_URL', 'BASE_BRAND', 'BASE_ORG_NAME', 'BASE_CITY', 'BASE_JURISDICTION',
+  'BASE_PROVINCE', 'BASE_TZ', 'BASE_SLATES', 'BASE_GEO_BOUNDS', 'BASE_CANDIDATES'];
 // Every campaign service has this one, so it tells whether Render lets one
 // setting be read alone: if Render says it isn't set, nothing was read.
-export const CANARY = 'STARBASE_ENV';
+export const CANARY = 'BASE_ENV';
+// Every name Render may be asked about: each readable setting, and its older name.
+export const READ_NAMES = READABLE.flatMap(settingNames);
 
 // What a campaign's service should have set, by how the campaign came here.
 // A client added as already running was set up by hand: the three settings
 // it never had are its own configuration, never "missing".
 export const neededFor = (campaign) => {
-  if (campaign.kind === 'sample') return ['STARBASE_ENV', 'BASE_PLATFORM_PUBKEY'];
+  if (campaign.kind === 'sample') return ['BASE_ENV', 'BASE_PLATFORM_PUBKEY'];
   if (!hasValues(campaign.values)) return [...READABLE.slice(0, 9), 'BASE_PLATFORM_PUBKEY'];
   return [...READABLE];
 };
@@ -43,21 +48,25 @@ const PUBKEY_VALUE_RE = /^[A-Za-z0-9_-]{43}(,[A-Za-z0-9_-]{43})*$/;
 // One line of words: 1 to 120 characters, no control characters.
 const plain = (v) => typeof v === 'string' && v.length >= 1 && v.length <= 120 && !/[\u0000-\u001f\u007f]/.test(v);
 const NUM = '-?\\d{1,3}(?:\\.\\d{1,6})?';
+// The two random keys Render makes itself, on a service being made here:
+// by their names today only.
+const GENERATED = ['BASE_TWO_STEP_KEY', 'GOOGLE_TOKEN_KEY'];
+export const mayGenerate = (key) => GENERATED.includes(key);
 // What each value must look like, whatever the campaign's row says.
 const SHAPE_OK = {
   BASE_PLATFORM_PUBKEY: (v) => PUBKEY_VALUE_RE.test(v),
-  STARBASE_PUBLIC_URL: (v, c) => v === `https://${publicHost(c.name)}`,
-  STARBASE_BRAND: (v) => v === 'base',
-  STARBASE_ORG_NAME: plain,
-  STARBASE_CITY: plain,
-  STARBASE_JURISDICTION: (v) => JURISDICTIONS.includes(v),
-  STARBASE_PROVINCE: (v) => PROVINCES.some((p) => p[0] === v),
-  STARBASE_TZ: (v) => TIME_ZONES.includes(v),
-  STARBASE_SLATES: (v) => /^[a-z_]{1,30}:[^,:\u0000-\u001f]{1,60}(,[a-z_]{1,30}:[^,:\u0000-\u001f]{1,60}){0,9}$/.test(v),
-  STARBASE_GEO_BOUNDS: (v) => new RegExp(`^${NUM},${NUM}\\|${NUM},${NUM}$`).test(v),
-  STARBASE_CANDIDATES: (v) => v === 'none',
+  BASE_PUBLIC_URL: (v, c) => v === `https://${publicHost(c.name)}`,
+  BASE_BRAND: (v) => v === 'base',
+  BASE_ORG_NAME: plain,
+  BASE_CITY: plain,
+  BASE_JURISDICTION: (v) => JURISDICTIONS.includes(v),
+  BASE_PROVINCE: (v) => PROVINCES.some((p) => p[0] === v),
+  BASE_TZ: (v) => TIME_ZONES.includes(v),
+  BASE_SLATES: (v) => /^[a-z_]{1,30}:[^,:\u0000-\u001f]{1,60}(,[a-z_]{1,30}:[^,:\u0000-\u001f]{1,60}){0,9}$/.test(v),
+  BASE_GEO_BOUNDS: (v) => new RegExp(`^${NUM},${NUM}\\|${NUM},${NUM}$`).test(v),
+  BASE_CANDIDATES: (v) => v === 'none',
   NODE_ENV: (v) => v === 'production',
-  STARBASE_ENV: (v) => v === 'production',
+  BASE_ENV: (v) => v === 'production',
 };
 // The settings a campaign made here is given, from its own row only, each
 // checked against its shape: [{ key, value } | { key, generateValue }].
@@ -66,7 +75,7 @@ export const settingsFor = (campaign) => {
   if (!madeHere(campaign)) return null;
   const list = serviceSettings({ name: campaign.name, display: campaign.display, values: campaign.values, publicKey: pubkeyValue() });
   for (const e of list) {
-    if (e.generateValue) { if (!['STARBASE_TWO_STEP_KEY', 'GOOGLE_TOKEN_KEY'].includes(e.key)) return null; continue; }
+    if (e.generateValue) { if (!mayGenerate(e.key)) return null; continue; }
     if (!SHAPE_OK[e.key]?.(e.value, campaign)) return null;
   }
   return list;

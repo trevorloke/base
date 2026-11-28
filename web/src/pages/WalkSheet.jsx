@@ -15,7 +15,9 @@ import NameAz from '../components/NameAz.jsx';
 import { NeedsSignal, noSignal, useOnline } from '../components/NoSignal.jsx';
 import { useScripts } from '../components/ScriptLine.jsx';
 import { useVotedMode } from '../components/Voted.jsx';
-import { azSort } from '@starbase/shared/names';
+import { azSort } from '@base-win/shared/names';
+import { floorLabel, floorOf, floorsShown } from '@base-win/shared/buildings';
+import { doorParts, unitWords } from '../../../shared/units.js';
 import { hasArea, isDesk } from '../Shell.jsx';
 import { todayWords } from './QuickReport.jsx';
 import './shifts.css';
@@ -86,39 +88,95 @@ function Sheet({ s, script, me }) {
   // A door with no house number (a rural route, a site) would head its
   // own street and then repeat under it: those go last, under one heading.
   const doors = [...s.doors.filter((d) => d.house_number), ...s.doors.filter((d) => !d.house_number)];
+  // A house or a building (the server's place, worked out before "Still to
+  // knock" left any door out): its address once, then a line per door —
+  // "Main", "Basement suite"; "Unit 201", floor by floor — each with its
+  // people. A door on its own: its address, with its unit's words in front.
+  const blocks = [];
+  for (const d of doors) {
+    const last = blocks[blocks.length - 1];
+    const grouped = d.group != null && (d.place === 'house' || d.place === 'building');
+    if (grouped && last?.group === d.group) last.doors.push(d);
+    else blocks.push({ group: grouped ? d.group : null, place: grouped ? d.place : 'door', doors: [d] });
+  }
+  // (The server's words for the door's unit; worked out here when it sends none.)
+  const wordsOf = (d) => d.unit_words ?? unitWords(doorParts(d).unit, 'door');
   let street = null;
   const body = [];
-  doors.forEach((d, i) => {
-    const head = d.house_number ? (d.street || 'No street') : 'Other addresses';
+  const stateTag = (d) => (d.state === 'done' ? <span className="ws-door__state">Done</span>
+    : d.state === 'again' ? <span className="ws-door__state">Try again</span> : null);
+  const peopleRows = (d) => [...d.persons].sort(azSort).map((p) => (
+    <tr key={p.id}>
+      <td className="ws-person">
+        <NameAz person={p} />
+        <span className="ws-person__facts">
+          {[p.rating_word ? `Last: ${lastWord(p.rating_word)}` : '', p.voted_at ? 'Voted' : ''].filter(Boolean).join(' · ')}
+          {p.no_contact && <>{p.rating_word || p.voted_at ? ' · ' : ''}<span className="ws-skip">Do not contact — skip</span></>}
+        </span>
+      </td>
+      {heads.map((h) => <td key={h} className="ws-tick"><span className="ws-box" aria-hidden="true" /></td>)}
+      <td className="ws-note"><span className="ws-line" aria-hidden="true" /></td>
+    </tr>
+  ));
+  blocks.forEach((b, i) => {
+    const d0 = b.doors[0];
+    const head = d0.house_number ? (d0.street || 'No street') : 'Other addresses';
     if (head !== street) {
       street = head;
       body.push(<tbody key={`s${i}`}><tr className="ws-street"><th colSpan={cols} scope="colgroup">{head}</th></tr></tbody>);
     }
-    const done = d.state === 'done';
-    body.push(
-      <tbody key={`d${i}`} className={`ws-door${done ? ' is-done' : ''}`}>
-        <tr className="ws-door__addr">
-          <td colSpan={cols}>
-            {d.house_number ? `${d.house_number} ${d.street}` : d.address}{d.unit ? `, Unit ${d.unit}` : ''}
-            {done && <span className="ws-door__state">Done</span>}
-            {d.state === 'again' && <span className="ws-door__state">Try again</span>}
-          </td>
-        </tr>
-        {[...d.persons].sort(azSort).map((p) => (
-          <tr key={p.id}>
-            <td className="ws-person">
-              <NameAz person={p} />
-              <span className="ws-person__facts">
-                {[p.rating_word ? `Last: ${lastWord(p.rating_word)}` : '', p.voted_at ? 'Voted' : ''].filter(Boolean).join(' · ')}
-                {p.no_contact && <>{p.rating_word || p.voted_at ? ' · ' : ''}<span className="ws-skip">Do not contact — skip</span></>}
-              </span>
+    const where = d0.house_number ? `${d0.house_number} ${d0.street}` : (doorParts(d0).shown || d0.address);
+    if (b.place === 'door') {
+      const done = d0.state === 'done';
+      body.push(
+        <tbody key={`d${i}`} className={`ws-door${done ? ' is-done' : ''}`}>
+          <tr className="ws-door__addr">
+            <td colSpan={cols}>
+              {wordsOf(d0) ? `${wordsOf(d0)} · ` : ''}{where}
+              {stateTag(d0)}
             </td>
-            {heads.map((h) => <td key={h} className="ws-tick"><span className="ws-box" aria-hidden="true" /></td>)}
-            <td className="ws-note"><span className="ws-line" aria-hidden="true" /></td>
           </tr>
-        ))}
-      </tbody>,
-    );
+          {peopleRows(d0)}
+        </tbody>,
+      );
+      return;
+    }
+    const keys = b.doors.map((d) => doorParts(d).unit);
+    const floors = b.place === 'building' && floorsShown(keys);
+    const units = d0.units || b.doors.length;
+    // A building on paper: one tbody per floor (or the whole building with
+    // no floors), kept on one page where it fits; the address line opens the
+    // first, and every later floor's line names the building on paper, so a
+    // page the building runs on to says which building and floor it is. A
+    // unit's line never ends a page without its people (quick.css).
+    const groups = [];
+    b.doors.forEach((d, j) => {
+      const f = floors ? floorOf(keys[j]) : null;
+      if (!groups.length || (floors && groups[groups.length - 1].floor !== f)) groups.push({ floor: f, rows: [] });
+      groups[groups.length - 1].rows.push(
+        <tr key={`u${j}`} className={`ws-unit${d.state === 'done' ? ' is-done' : ''}`}>
+          <td colSpan={cols}><b>{d.unit_words || unitWords(keys[j], b.place)}</b>{stateTag(d)}</td>
+        </tr>,
+        ...peopleRows(d),
+      );
+    });
+    groups.forEach((g, gi) => {
+      body.push(
+        <tbody key={`d${i}:${gi}`} className={`ws-door ws-door--${b.place}${gi ? ' ws-door--more' : ''}`}>
+          {gi === 0 && (
+            <tr className="ws-door__addr">
+              <td colSpan={cols}>{where}{b.place === 'building' ? ` · Building · ${fmt(units)} ${units === 1 ? 'unit' : 'units'}` : ''}</td>
+            </tr>
+          )}
+          {floors && (
+            <tr className="ws-floor">
+              <td colSpan={cols}>{gi > 0 && <span className="ws-floor__where">{where} · </span>}{floorLabel(g.floor)}</td>
+            </tr>
+          )}
+          {g.rows}
+        </tbody>,
+      );
+    });
   });
   return (
     <div className="ws-sheet">
@@ -188,6 +246,7 @@ function WalkOne({ turf }) {
             : <button type="button" className="btn btn-quiet ops-tap" disabled>Download CSV</button>}
         </div>
       </div>
+      {s && !q.isError && <p className="ws-csvnote qr-noprint">In the CSV, Unit is written in words, as on the sheet: “Unit 1203”, “Basement suite”.</p>}
       {s && (s.pass || door?.body) && (
         <div className="qr-noprint">
           {s.pass && (

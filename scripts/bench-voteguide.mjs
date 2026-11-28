@@ -72,8 +72,8 @@ if (!process.env.DATABASE_URL) {
 const DATABASE_URL = process.env.DATABASE_URL || `postgres://postgres:postgres@127.0.0.1:${WIRE}/postgres`;
 const server = fork('scripts/bench-voteguide-server.mjs', [], {
   env: {
-    ...process.env, PORT: String(PORT), STARBASE_OPEN_SIGNUP: '1', DATABASE_URL, ...(pglite ? { PG_POOL_MAX: '1' } : {}), STARBASE_JOBS: 'off',
-    GEOCODER: 'bc', BC_GEOCODER_URL: `http://127.0.0.1:${GEO}`, STARBASE_GEO_BOUNDS: '49.002,-122.92|49.222,-122.67', SITE_CACHE_SECONDS: '60',
+    ...process.env, PORT: String(PORT), BASE_OPEN_SIGNUP: '1', DATABASE_URL, ...(pglite ? { PG_POOL_MAX: '1' } : {}), BASE_JOBS: 'off',
+    GEOCODER: 'bc', BC_GEOCODER_URL: `http://127.0.0.1:${GEO}`, BASE_GEO_BOUNDS: '49.002,-122.92|49.222,-122.67', SITE_CACHE_SECONDS: '60',
   },
   stdio: ['ignore', 'ignore', 'inherit', 'ipc'],
 });

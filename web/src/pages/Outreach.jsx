@@ -31,9 +31,10 @@ import SenderPick, { fromChoices, useSenders } from '../components/SenderPick.js
 import {
   FootBlock, SaveAsTemplate, StartFrom, TemplatesRow, TemplatesScreen, loadTemplate, useOf, useTemplates,
 } from '../components/EmailTemplates.jsx';
-import { EMAIL_FILLS, NO_ADDRESS, placeholders, toCodes, toWords } from '@starbase/shared/email/words';
-import { emailProblem, stillToFill } from '@starbase/shared/email/check';
+import { EMAIL_FILLS, NO_ADDRESS, placeholders, toCodes, toWords } from '@base-win/shared/email/words';
+import { emailProblem, stillToFill } from '@base-win/shared/email/check';
 import { useSendScope } from '../components/SendScope.js';
+import { AUTHORIZED_KEY, AuthorizedBanner, authLine, needsAsk, useAuthorized } from '../components/Authorized.jsx';
 import './outreach.css';
 import { BRAND } from '../brand.js';
 
@@ -535,7 +536,12 @@ export function ComposeCard({
   // Winner by clicks needs a link in the message; without one it's by opens.
   const links = hasLinks(body);
   const plan = testing ? abPlan(audienceCount, ab.pct) : null;
-  const textLen = body.trim().length + (body.trim() ? TEXT_FOOTER.length + 1 : 0);
+  // "Authorized by …" (components/Authorized.jsx): a text counts it, as it
+  // goes before the STOP line; after its date with none set, Send asks.
+  const auth = useAuthorized().data;
+  const ask = needsAsk(auth);
+  const textAuth = isText ? authLine(auth) : '';
+  const textLen = body.trim().length + (body.trim() ? TEXT_FOOTER.length + 1 + (textAuth && !body.includes(textAuth) ? textAuth.length + 1 : 0) : 0);
   const textOk = !isText || (textLen <= TEXT_MAX && (!campaign || body.toLowerCase().includes(String(campaign).toLowerCase())));
   const ready = (isText || subject.trim().length > 0) && body.trim().length > 0 && textOk
     && (ab == null || audienceCount != null) && (!testing || ab.subject_b.trim().length > 0) && (!audience || audienceCount != null);
@@ -685,8 +691,12 @@ export function ComposeCard({
       ...(extra || {}), ...(isText ? {} : from),
       ...(testing && !isText ? { ab: { ...ab, subject_b: ab.subject_b.trim(), metric: links ? ab.metric : 'opens' } } : {}),
       ...(files.length && !isText ? { attachment_ids: files.map((f) => f.id) } : {}),
+      ...(ask ? { withoutAuthorized: true } : {}),
     });
     setConfirming(false);
+    // Refused because the line is missing after its date (a screen read
+    // before it was due): the answer again, and the confirm asks.
+    if (!res) queryClient.invalidateQueries({ queryKey: AUTHORIZED_KEY });
     if (!res) {
       unanswered.current = true;
       const late = await onRecord();
@@ -741,6 +751,7 @@ export function ComposeCard({
       const r = await action(acts.test, {
         kind, subject: subject.trim(), body: body.trim(), ...(fromList.length ? { placeholders_from: fromList } : {}),
         ...(files.length ? { attachment_ids: files.map((f) => f.id) } : {}), ...from,
+        ...(ask ? { withoutAuthorized: true } : {}),
       });
       const parts = Number(r.placeholders) || 0;
       setTest(r.sent
@@ -770,7 +781,7 @@ export function ComposeCard({
             onChange={(e) => { setBody(e.target.value); setConfirming(false); }}
             placeholder={`Hi, it's ${campaign || 'the campaign'} — `} />
           <span className="ops-meta">
-            <span className={`mono${textLen > TEXT_MAX ? ' error' : ''}`}>{textLen}/{TEXT_MAX}</span> · “{TEXT_FOOTER}” goes on the end of each.
+            <span className={`mono${textLen > TEXT_MAX ? ' error' : ''}`}>{textLen}/{TEXT_MAX}</span> · {textAuth ? <>“{textAuth}” and </> : null}“{TEXT_FOOTER}” {textAuth ? 'go' : 'goes'} on the end of each.
             {campaign && !body.toLowerCase().includes(String(campaign).toLowerCase()) && body.trim() && <> Say it’s {campaign} in the text.</>}
           </span>
         </div>
@@ -790,6 +801,7 @@ export function ComposeCard({
         fills={EMAIL_FILLS} links={tq.data?.links} footer={<FootBlock foot={foot} kind={kind} />}
         placeholder={kind === 'press' ? 'FOR IMMEDIATE RELEASE …' : 'Hello friends,'} />}
       {warn && <p className="tp-warn" role="status">{warn}</p>}
+      <AuthorizedBanner a={auth} mayFix={mayWebsite} />
       {!isText && <div className="ot-attach">
         <input ref={fileRef} type="file" multiple hidden accept={ATTACH_ACCEPT} onChange={pickFiles} />
         {files.length > 0 && (
@@ -835,8 +847,9 @@ export function ComposeCard({
             <span>{testing && !offline ? abAsk(plan, ab.wait_hours)
               : <>{offline ? 'Save for' : 'Send to'} <strong>{audienceCount}</strong> {noun(audienceCount)}{confirmWho || ''}?</>}</span>
             <button type="button" className="btn btn-primary ot-btn-tap" disabled={act.busy || !online} onClick={send}>
-              {act.busy ? (offline ? 'Saving…' : 'Sending…') : offline ? 'Yes, save' : 'Yes, send'}
+              {act.busy ? (offline ? 'Saving…' : 'Sending…') : offline ? (ask ? 'Save without it' : 'Yes, save') : ask ? 'Send without it' : 'Yes, send'}
             </button>
+            {ask && mayWebsite && <Link className="btn btn-quiet ot-btn-tap" to="/website/settings#wb-s-agent">Add it first</Link>}
             <button type="button" className="btn btn-quiet ot-btn-tap" disabled={act.busy} onClick={() => setConfirming(false)}>No</button>
             {/* No Connect link here: leaving would drop the draft. */}
             {offline && online && <span className="ot-confirm-note">{isText ? 'Texting' : 'Email'} isn’t connected — nothing is sent.</span>}
@@ -852,7 +865,7 @@ export function ComposeCard({
             </span>
             {!offline && !isText && (
               <button type="button" className="btn btn-quiet ot-btn-tap" disabled={!ready || test?.busy || uploading || !online} onClick={sendTest}>
-                {test?.busy ? 'Sending…' : 'Send me a test'}
+                {test?.busy ? 'Sending…' : ask ? 'Send me a test without it' : 'Send me a test'}
               </button>
             )}
             <span className="spacer" />
@@ -1382,7 +1395,7 @@ function TextingTab(props) {
   );
 }
 
-// Email & texting: on or off, said once. They're switched on where Starbase
+// Email & texting: on or off, said once. They're switched on where base.win
 // is hosted, not here — so the line says who to ask.
 function Connections({ focus, isManager }) {
   // A side read of Today's brief (its time isn't this screen's, KeptCopies.js).

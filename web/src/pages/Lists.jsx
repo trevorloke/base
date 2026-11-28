@@ -21,7 +21,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSettled } from '../components/useSettled.js';
 import { usePersonSearch } from '../components/usePersonSearch.js';
 import PersonResults from '../components/PersonResults.jsx';
-import { VOLUNTEER_ROLES } from '@starbase/shared/canvass';
+import { VOLUNTEER_ROLES } from '@base-win/shared/canvass';
 import { ApiError, apiGet } from '../api.js';
 import { NoSignal, noSignal } from '../components/NoSignal.jsx';
 import SendToMailchimp from '../components/SendToMailchimp.jsx';

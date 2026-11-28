@@ -277,12 +277,12 @@ test('copy a week: a full shift takes no more, a week copies only onto another w
 
 test('copy a week across a clock change keeps the local time — not “168 hours later”', async () => {
   // A campaign on Toronto time: clocks go forward on March 14, 2027.
-  const saved = process.env.STARBASE_TZ;
-  process.env.STARBASE_TZ = 'America/Toronto';
+  const saved = process.env.BASE_TZ;
+  process.env.BASE_TZ = 'America/Toronto';
   const east = new Client();
   let eastWs;
   try { eastWs = (await east.signup({ workspaceName: `East ${tag}`, email: `many-east+${tag}@example.org` })).json.workspace.id; } finally {
-    if (saved === undefined) delete process.env.STARBASE_TZ; else process.env.STARBASE_TZ = saved;
+    if (saved === undefined) delete process.env.BASE_TZ; else process.env.BASE_TZ = saved;
   }
   const made = ok(await east.action('shift.createMany', { kind: 'burma_shave', location: 'Yonge & Bloor', start: '06:30', end: '08:30', days: ['2027-03-09'], repeat: { weeks: 2 } }));
   const mine = await rows('select starts_at, ends_at from shifts where workspace_id = $1 order by starts_at', [eastWs]);

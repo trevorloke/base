@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { brandHtml, brandFor } from '../lib/brand.js';
 import { rewriters } from '../lib/mount.js';
-import { BRANDS as OWN } from '@starbase/shared/brand';
+import { BRANDS as OWN } from '@base-win/shared/brand';
 import { presetFor } from '../lib/preset.js';
 // base.win's own look, and Imagine Surrey's from its preset.
 const BRANDS = { ...OWN, 'imagine-surrey': presetFor('imagine-surrey').brand };
@@ -68,7 +68,7 @@ const worker = (base, net) => {
     return out;
   };
   const shellIndex = async () => {
-    const r = stores.get(`${base ? `starbase-${base.slice(1)}` : 'starbase'}-shell-v2`)?.get(`${ORIGIN}${base}/index.html`);
+    const r = stores.get(`${base ? `base-win-${base.slice(1)}` : 'base-win'}-shell-v2`)?.get(`${ORIGIN}${base}/index.html`);
     return r ? r.clone().text() : null;
   };
   return { ...api, asked, kept, stores, answer, open, shellIndex };

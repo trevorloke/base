@@ -119,3 +119,48 @@
 }
 .bldg-back__text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .door-card .bldg-dock { margin: var(--s-2) 0 0; }
+
+/* Houses with suites (UNITS.md §5.1): one pin, in its main door's colour,
+   with a small door mark at its lower right in the other doors' colours.
+   (The pin colours are map.css's literals: the base map is light in both
+   schemes.) */
+.map-house-wrap {
+  --house-support: #138a52;
+  --house-undecided: #f5a524;
+  --house-opposed: #d43c3c;
+  --house-unrated: var(--door-unrated, #8a90a6);
+}
+.map-house__more {
+  position: absolute;
+  right: -9px;
+  bottom: -7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  border: 1.5px solid #ffffff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px #161a2e;
+}
+.map-house__more svg { width: 8px; height: 10px; fill: #ffffff; filter: drop-shadow(0 0 1px #161a2e); }
+
+/* The small words under a mark from close in: "+ Basement suite" under a
+   house, "Building" under a square. Ink on paper with an ink edge; never
+   a tap target (a tap goes through to whatever is under it), and drawn
+   only where they cover no other mark (Map.jsx). */
+.map-tag {
+  position: absolute;
+  left: 24px;
+  top: 50px;
+  transform: translateX(-50%);
+  padding: 1px 5px;
+  white-space: nowrap;
+  font: 700 13px/16px var(--font-sans);
+  color: var(--ink);
+  background: var(--paper-0);
+  border: 1px solid var(--ink);
+  border-radius: var(--r-sm);
+  pointer-events: none;
+}
+.map-tag--bldg { top: 50px; }

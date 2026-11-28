@@ -2,7 +2,7 @@
 // (ext/site/public.js, actions.js, store.js): the "one address per page"
 // redirect stays on this site whatever the path looks like ('//other.host/'
 // is a path here, never another site); the app's own address — the host a
-// save comes in on, STARBASE_PUBLIC_URL's, the host's own name
+// save comes in on, BASE_PUBLIC_URL's, the host's own name
 // (RENDER_EXTERNAL_HOSTNAME), base.win — is never saved as a website domain,
 // not by a manager and not by someone a manager granted Website; and one
 // saved before this check is ignored, so the app can't be locked out of its
@@ -84,34 +84,34 @@ test('someone granted Website can’t take the app’s address either', async ()
   ok(await mgr.post(at(APP, '/api/actions/site.settings.save'), { domains: [] }));
 });
 
-test('the app’s own addresses are refused whichever host the save comes from: STARBASE_PUBLIC_URL, the host’s name, base.win', async () => {
-  process.env.STARBASE_PUBLIC_URL = 'https://starbase.imaginesurrey.example/';
-  process.env.RENDER_EXTERNAL_HOSTNAME = 'starbase-test.onrender.com';
+test('the app’s own addresses are refused whichever host the save comes from: BASE_PUBLIC_URL, the host’s name, base.win', async () => {
+  process.env.BASE_PUBLIC_URL = 'https://base-win.imaginesurrey.example/';
+  process.env.RENDER_EXTERNAL_HOSTNAME = 'base-win-test.onrender.com';
   try {
-    for (const d of ['starbase.imaginesurrey.example', 'https://STARBASE-TEST.onrender.com/', 'base.win', 'imaginesurrey.base.win']) {
+    for (const d of ['base-win.imaginesurrey.example', 'https://BASE-WIN-TEST.onrender.com/', 'base.win', 'imaginesurrey.base.win']) {
       const r = await mgr.action('site.settings.save', { domains: ['vote.example.net', d] });
       assert.equal(r.status, 400, d);
       assert.match(r.json.error, /base\.win itself answers/, d);
     }
     assert.deepEqual(ok(await mgr.get('/api/site')).settings.domains, []);
   } finally {
-    delete process.env.STARBASE_PUBLIC_URL;
+    delete process.env.BASE_PUBLIC_URL;
     delete process.env.RENDER_EXTERNAL_HOSTNAME;
   }
 });
 
 test('a domain saved before that is the app’s own is ignored: the app still answers there, and the undo goes through', async () => {
-  process.env.RENDER_EXTERNAL_HOSTNAME = 'starbase-test.onrender.com';
+  process.env.RENDER_EXTERNAL_HOSTNAME = 'base-win-test.onrender.com';
   try {
     // As a save before this release could have left it.
-    await db.query('update site_settings set domains = $2 where workspace_id = $1', [ws, JSON.stringify(['starbase-test.onrender.com', 'vote.example.net'])]);
+    await db.query('update site_settings set domains = $2 where workspace_id = $1', [ws, JSON.stringify(['base-win-test.onrender.com', 'vote.example.net'])]);
     forgetDomains();
-    const host = 'starbase-test.onrender.com';
+    const host = 'base-win-test.onrender.com';
     assert.equal((await mgr.get(at(host, '/api/auth/me'))).status, 200, 'the app, not the site');
     assert.equal((await hit('/', { host: 'vote.example.net' })).status, 200, 'the campaign’s domain still has the site');
     const site = ok(await mgr.get(at(host, '/api/site')));
-    assert.deepEqual(site.settings.domains, ['starbase-test.onrender.com', 'vote.example.net'], 'the screen shows it, to be taken off');
-    assert.deepEqual(site.urls.app_hosts.includes('starbase-test.onrender.com'), true, 'and says it is the app’s');
+    assert.deepEqual(site.settings.domains, ['base-win-test.onrender.com', 'vote.example.net'], 'the screen shows it, to be taken off');
+    assert.deepEqual(site.urls.app_hosts.includes('base-win-test.onrender.com'), true, 'and says it is the app’s');
     ok(await mgr.post(at(host, '/api/actions/site.settings.save'), { domains: ['vote.example.net'] }));
     assert.deepEqual(ok(await mgr.get('/api/site')).settings.domains, ['vote.example.net']);
     ok(await mgr.action('site.settings.save', { domains: [] }));
@@ -127,10 +127,10 @@ const noDomains = async () => {
   forgetDomains();
 };
 const UPSTREAM = 'imagine-surrey-verify.onrender.com'; // the door's upstream (RENDER_EXTERNAL_HOSTNAME)
-const OLD = 'starbase.imaginesurrey-verify.example'; // the app's address from before base.win
+const OLD = 'base-win.imaginesurrey-verify.example'; // the app's address from before base.win
 
 test('an address people use the app at is never a website domain: the old one, saved from base.win', async () => {
-  process.env.STARBASE_PUBLIC_URL = 'https://base.win/imaginesurrey';
+  process.env.BASE_PUBLIC_URL = 'https://base.win/imaginesurrey';
   process.env.RENDER_EXTERNAL_HOSTNAME = UPSTREAM;
   try {
     // Someone still opens the app at its old address (a bookmark, a phone's installed app).
@@ -138,7 +138,7 @@ test('an address people use the app at is never a website domain: the old one, s
     // A manager at base.win (the door's upstream host) can't make it the website.
     const r = await mgr.post(at(UPSTREAM, '/api/actions/site.settings.save'), { domains: [OLD] });
     assert.equal(r.status, 400, JSON.stringify(r.json));
-    assert.match(r.json.error, /^People used base\.win at starbase\.imaginesurrey-verify\.example \(last on [A-Z][a-z]+ \d{1,2}, \d{4}\), so the app still answers there\. If it should now be only the website, ask whoever runs the server to add it to SITE_HOSTS\.$/);
+    assert.match(r.json.error, /^People used base\.win at base-win\.imaginesurrey-verify\.example \(last on [A-Z][a-z]+ \d{1,2}, \d{4}\), so the app still answers there\. If it should now be only the website, ask whoever runs the server to add it to SITE_HOSTS\.$/);
     forgetDomains();
     // The app still answers there: the API, sign-in, Twilio's replies.
     assert.equal((await mgr.get(at(OLD, '/api/auth/me'))).status, 200);
@@ -146,27 +146,27 @@ test('an address people use the app at is never a website domain: the old one, s
     assert.deepEqual((await hit('/api/public/twilio/sms', { host: OLD, method: 'POST', form: { From: '+16045550100', Body: 'STOP' } })).json, { error: 'bad signature' });
     assert.deepEqual(ok(await mgr.get(at(UPSTREAM, '/api/site'))).settings.domains, [], 'nothing saved');
   } finally {
-    delete process.env.STARBASE_PUBLIC_URL;
+    delete process.env.BASE_PUBLIC_URL;
     delete process.env.RENDER_EXTERNAL_HOSTNAME;
     await noDomains();
   }
 });
 
 test('the server’s other addresses (APP_HOSTS) are refused too, and one saved before is ignored', async () => {
-  process.env.APP_HOSTS = ' https://Starbase.Old-Campaign.example/ ,second.example.net:443';
+  process.env.APP_HOSTS = ' https://Base-Win.Old-Campaign.example/ ,second.example.net:443';
   try {
-    for (const d of ['starbase.old-campaign.example', 'https://SECOND.example.net/']) {
+    for (const d of ['base-win.old-campaign.example', 'https://SECOND.example.net/']) {
       const r = await mgr.action('site.settings.save', { domains: ['vote.example.net', d] });
       assert.equal(r.status, 400, d);
       assert.match(r.json.error, /base\.win itself answers/, d);
     }
     const site = ok(await mgr.get('/api/site'));
     assert.deepEqual(site.settings.domains, [], 'nothing saved');
-    for (const h of ['starbase.old-campaign.example', 'second.example.net']) assert.ok(site.urls.app_hosts.includes(h), `the screen refuses ${h} as it’s typed`);
+    for (const h of ['base-win.old-campaign.example', 'second.example.net']) assert.ok(site.urls.app_hosts.includes(h), `the screen refuses ${h} as it’s typed`);
     // As a save before this release could have left it: the app answers there, and the undo goes through.
-    await db.query('update site_settings set domains = $2 where workspace_id = $1', [ws, JSON.stringify(['starbase.old-campaign.example', 'vote.example.net'])]);
+    await db.query('update site_settings set domains = $2 where workspace_id = $1', [ws, JSON.stringify(['base-win.old-campaign.example', 'vote.example.net'])]);
     forgetDomains();
-    assert.equal((await mgr.get(at('starbase.old-campaign.example', '/api/auth/me'))).status, 200, 'the app, not the site');
+    assert.equal((await mgr.get(at('base-win.old-campaign.example', '/api/auth/me'))).status, 200, 'the app, not the site');
     assert.equal((await hit('/', { host: 'vote.example.net' })).status, 200, 'the campaign’s domain still has the site');
     ok(await mgr.action('site.settings.save', { domains: ['vote.example.net'] }));
   } finally {
@@ -254,10 +254,10 @@ test('where the app answers is noted before the answer, once an hour; a note tha
 });
 
 test('a note that fails is written by the next request there, not an hour on: the site can’t take the address meanwhile', async () => {
-  const OLD2 = 'starbase.old-verify.example';
+  const OLD2 = 'base-win.old-verify.example';
   const noted = async () => (await db.query('select 1 from app_hosts where host = $1', [OLD2])).rows.length > 0;
-  const was = { STARBASE_PUBLIC_URL: process.env.STARBASE_PUBLIC_URL, RENDER_EXTERNAL_HOSTNAME: process.env.RENDER_EXTERNAL_HOSTNAME };
-  process.env.STARBASE_PUBLIC_URL = 'https://base.win/imaginesurrey';
+  const was = { BASE_PUBLIC_URL: process.env.BASE_PUBLIC_URL, RENDER_EXTERNAL_HOSTNAME: process.env.RENDER_EXTERNAL_HOSTNAME };
+  process.env.BASE_PUBLIC_URL = 'https://base.win/imaginesurrey';
   process.env.RENDER_EXTERNAL_HOSTNAME = UPSTREAM;
   const real = console.error;
   try {
@@ -276,7 +276,7 @@ test('a note that fails is written by the next request there, not an hour on: th
     assert.equal(await noted(), true, 'noted by the next request');
     const r = await mgr.post(at(UPSTREAM, '/api/actions/site.settings.save'), { domains: [OLD2] });
     assert.equal(r.status, 400, JSON.stringify(r.json));
-    assert.match(r.json.error, /^People used base\.win at starbase\.old-verify\.example \(last on /);
+    assert.match(r.json.error, /^People used base\.win at base-win\.old-verify\.example \(last on /);
     forgetDomains();
     assert.equal((await mgr.get(at(OLD2, '/api/auth/me'))).status, 200, 'the app still answers there');
   } finally {
@@ -336,15 +336,15 @@ test('the app’s own address with a final dot is still the app’s, as itself: 
   }
 });
 
-test('the server’s own lists with a final dot are the same hosts: SITE_HOSTS, APP_HOSTS, STARBASE_PUBLIC_URL', async () => {
-  const was = { SITE_HOSTS: process.env.SITE_HOSTS, APP_HOSTS: process.env.APP_HOSTS, STARBASE_PUBLIC_URL: process.env.STARBASE_PUBLIC_URL };
+test('the server’s own lists with a final dot are the same hosts: SITE_HOSTS, APP_HOSTS, BASE_PUBLIC_URL', async () => {
+  const was = { SITE_HOSTS: process.env.SITE_HOSTS, APP_HOSTS: process.env.APP_HOSTS, BASE_PUBLIC_URL: process.env.BASE_PUBLIC_URL };
   process.env.SITE_HOSTS = `${was.SITE_HOSTS},dotted.example.org.`;
-  process.env.APP_HOSTS = 'starbase.dotted.example.';
-  process.env.STARBASE_PUBLIC_URL = 'https://public.dotted.example./';
+  process.env.APP_HOSTS = 'base-win.dotted.example.';
+  process.env.BASE_PUBLIC_URL = 'https://public.dotted.example./';
   try {
     assert.match((await hit('/', { host: 'dotted.example.org' })).text, /data-skin=/, 'the site');
     assert.equal((await mgr.get(at('dotted.example.org', '/api/auth/me'))).status, 404, 'nothing of the app');
-    for (const d of ['starbase.dotted.example', 'public.dotted.example']) {
+    for (const d of ['base-win.dotted.example', 'public.dotted.example']) {
       const r = await mgr.action('site.settings.save', { domains: [d] });
       assert.equal(r.status, 400, d);
       assert.match(r.json.error, /base\.win itself answers/, d);

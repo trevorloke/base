@@ -13,7 +13,7 @@
 // screen is checked against the API; each screen is measured (one yellow
 // button, no sideways scroll, 48px targets on the phone).
 //
-//   STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4450 node server/index.js &
+//   BASE_BRAND=imagine-surrey BASE_OPEN_SIGNUP=1 BASE_DATA=memory PORT=4450 node server/index.js &
 //   BASE=http://127.0.0.1:4450 SHOTS=/tmp/shiftturfs node e2e-shiftturfs.mjs
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
@@ -21,7 +21,7 @@ import { addDays, clockOf, dayOf, instantOf } from './shared/dayparts.js';
 
 const BASE = process.env.BASE || 'http://localhost:3200';
 const ADMIN = { toString() { return `${BASE}/admin`; } }; // the desk's pages live in the admin (web/src/mode.js)
-const SHOTS = process.env.SHOTS || '/tmp/starbase-shiftturfs';
+const SHOTS = process.env.SHOTS || '/tmp/base-win-shiftturfs';
 mkdirSync(SHOTS, { recursive: true });
 const results = [];
 const check = (name, ok, extra = '') => {

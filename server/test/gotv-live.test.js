@@ -18,7 +18,7 @@ import { campaign, ok, no, readSSE, clockBack, square, plus, at } from './gotv-h
 import { turfIndex, rebuild, dropIndex } from '../ext/voted/turfindex.js';
 import { forgetSummary } from '../ext/voted/summary.js';
 
-process.env.STARBASE_GOTV_PING_MS = '300';
+process.env.BASE_GOTV_PING_MS = '300';
 let k;
 const open = (client, headers = {}) => app.request('/api/voted/live', { headers: { cookie: client.cookie, ...headers } });
 const sheet = (c, person, place, extra = {}) => c.action('vote.mark', { person_id: person.id, source: 'scrutineer', place_id: place, client_id: randomUUID(), ...extra });
@@ -311,7 +311,7 @@ test('scrutineers on duty: only on a voting day, inside its window, at a place o
 test('a held campaign lock: vote.mark answers 503 after the wait, which the outbox retries (real Postgres only)', async (t) => {
   const db = await getDb();
   if (!db.pool || !process.env.GOTV_REAL_PG) { t.skip('needs a real Postgres (GOTV_REAL_PG=1 with DATABASE_URL)'); return; }
-  process.env.STARBASE_GOTV_LOCK_MS = '1000';
+  process.env.BASE_GOTV_LOCK_MS = '1000';
   const holder = await db.pool.connect();
   try {
     await holder.query('begin');
@@ -324,6 +324,6 @@ test('a held campaign lock: vote.mark answers 503 after the wait, which the outb
   } finally {
     await holder.query('rollback');
     holder.release();
-    delete process.env.STARBASE_GOTV_LOCK_MS;
+    delete process.env.BASE_GOTV_LOCK_MS;
   }
 });

@@ -10,7 +10,7 @@
 //   More: the fonts added to the site, with Remove (Undo) and "Not used".
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { FEELS, FONT_BY_VALUE, FONT_WORDS, PAIRINGS, firstVisitKb, fontFor, profileFor } from '@starbase/shared/site/fonts';
+import { FEELS, FONT_BY_VALUE, FONT_WORDS, PAIRINGS, firstVisitKb, fontFor, profileFor } from '@base-win/shared/site/fonts';
 import { action, apiGet, apiPost } from '../../api.js';
 import { Dialog } from './Bits.jsx';
 import { loadFace, loadSample, stackOf, useFaces } from './fontFaces.js';

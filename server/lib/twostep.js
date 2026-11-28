@@ -5,7 +5,7 @@
 // mfa.ts). Tables: ext/twostep/sql.js; the screens: web/src/components/TwoStep.jsx.
 //
 // The secret at rest is sealed with AES-256-GCM under a key from the
-// environment, STARBASE_TWO_STEP_KEY (32 characters or more; several,
+// environment, BASE_TWO_STEP_KEY (32 characters or more; several,
 // separated by commas, while moving to a new one: the first seals, every one
 // opens). Unset, base.win makes a key of its own and keeps it in the
 // database (app_secrets) — it works, but anyone with a copy of the database
@@ -22,6 +22,7 @@
 // (workspace settings.twoStepRequired) — the desk roles (manager, treasurer,
 // staff) and a volunteer given an area under Admin → Permissions. Other
 // volunteers' sign-in is unchanged unless they turn it on themselves.
+import { setting, OLD_SETTINGS } from '@base-win/shared/old-names';
 import {
   createCipheriv, createDecipheriv, createHash, createHmac, hkdfSync, randomBytes, randomInt, scrypt, timingSafeEqual,
 } from 'node:crypto';
@@ -144,20 +145,26 @@ export function setupFor(secret, { account, issuer }) {
 }
 
 // ── The secret at rest ──
-export const KEY_ENV = 'STARBASE_TWO_STEP_KEY';
+export const KEY_ENV = 'BASE_TWO_STEP_KEY';
 export const KEY_MIN = 32;
 const KEY_INFO = 'base.win/two-step-secret/v1';
 const derive = (raw, info = KEY_INFO) => Buffer.from(hkdfSync('sha256', raw, Buffer.alloc(0), info, 32));
 
 // The keys from the environment, the first one sealing: [{ kid, key }].
+// Under both names (shared/old-names.js), the new name's keys come first and
+// the older name's after, so every secret sealed under either still opens.
 // A value too short to be a real key is left out (Settings → Services says so).
-const envKeys = () => String(process.env[KEY_ENV] || '').split(/[\s,]+/).filter((k) => k.length >= KEY_MIN)
+const envKeys = () => String(setting(KEY_ENV) || '').split(/[\s,]+/).filter((k) => k.length >= KEY_MIN)
   .map((raw) => ({ kid: `e${derive(raw, 'base.win/two-step-kid/v1').toString('hex').slice(0, 10)}`, key: derive(raw) }));
 
 // Where the sealing key comes from, for Settings → Services (no key in it).
+// With a key in use, short lists each name (the new one, then the older one)
+// holding a value too short to use: a copy missing a character works only
+// until the other name is deleted.
 export const keyStatus = () => {
-  const raw = String(process.env[KEY_ENV] || '').trim();
-  if (envKeys().length) return { source: 'env' };
+  const raw = String(setting(KEY_ENV) || '').trim();
+  const short = [KEY_ENV, OLD_SETTINGS[KEY_ENV]].filter((name) => String(process.env[name] || '').split(/[\s,]+/).some((k) => k && k.length < KEY_MIN));
+  if (envKeys().length) return short.length ? { source: 'env', problem: 'short', short } : { source: 'env' };
   return { source: 'database', problem: raw ? 'short' : 'unset' };
 };
 

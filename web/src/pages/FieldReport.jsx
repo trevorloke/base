@@ -8,7 +8,7 @@
 // browser's today. Reads only (server/ext/fieldreport).
 import { useState } from 'react';
 import { Link, useOutletContext, useSearchParams } from 'react-router-dom';
-import { addDays, dayOf, safeZone, weekStart } from '@starbase/shared/dayparts';
+import { addDays, dayOf, safeZone, weekStart } from '@base-win/shared/dayparts';
 import { useQuery } from '@tanstack/react-query';
 import { apiGet } from '../api.js';
 import { NoSignal, noSignal } from '../components/NoSignal.jsx';

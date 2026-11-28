@@ -67,7 +67,7 @@ beforeEach(() => {
   fake.clearKnobs(); fake.cal.reset(); fake.resetCounts();
   _resetPausesForTest(); _resetTokensForTest(); _resetGcalForTest();
   process.env.GOOGLE_TOKEN_KEY = TOKEN_KEY;
-  delete process.env.STARBASE_JOBS;
+  delete process.env.BASE_JOBS;
 });
 after(async () => {
   for (const k of Object.keys(keep)) console[k] = keep[k];
@@ -104,10 +104,10 @@ test('the switch: off by default (no link, no push); manager-only; on needs Goog
   process.env.GOOGLE_TOKEN_KEY = TOKEN_KEY;
   ok(await M.b.action('gcal.settings', { on: true }));
   assert.equal((await gcal(M)).available, true);
-  process.env.STARBASE_JOBS = 'off';
+  process.env.BASE_JOBS = 'off';
   assert.equal((await gcal(M)).why, 'jobs-off');
   assert.equal((await gcal(M)).available, false);
-  delete process.env.STARBASE_JOBS;
+  delete process.env.BASE_JOBS;
   // Connected before it was on: Keep my shifts (gcal.on) makes the link.
   assert.equal((await gcal(V)).google.connected, true);
   ok(await V.b.action('gcal.on', {}));
@@ -736,7 +736,7 @@ test('with no background work: a disconnect or the switch going off leaves the l
   assert.equal((await connect(V, 0)).google, 'connected');
   await jobs();
   assert.equal((await linkRow(V.id)).state, 'ok');
-  process.env.STARBASE_JOBS = 'off';
+  process.env.BASE_JOBS = 'off';
   ok(await V.b.action('google.disconnect', { purpose: 'calendar.mine' }));
   const l = await linkRow(V.id);
   assert.equal(l.state, 'left');
@@ -746,13 +746,13 @@ test('with no background work: a disconnect or the switch going off leaves the l
   assert.equal((await db.query(`select count(*)::int as n from jobs where workspace_id = $1 and kind = 'gcal.stop' and status = 'pending'`, [M.ws])).rows[0].n, 0);
   ok(await V.b.action('gcal.stop', {}));
   assert.equal(await linkRow(V.id), null);
-  delete process.env.STARBASE_JOBS;
+  delete process.env.BASE_JOBS;
   assert.equal((await connect(V, 0)).google, 'connected');
   await jobs();
-  process.env.STARBASE_JOBS = 'off';
+  process.env.BASE_JOBS = 'off';
   ok(await M.b.action('gcal.settings', { on: false }));
   assert.equal((await linkRow(V.id)).state, 'left');
-  delete process.env.STARBASE_JOBS;
+  delete process.env.BASE_JOBS;
   ok(await V.b.action('gcal.stop', {}));
   ok(await M.b.action('gcal.settings', { on: true }));
 });

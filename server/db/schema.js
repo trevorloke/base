@@ -1,7 +1,8 @@
 // Core DDL. One place, executed idempotently at boot. Record-type tables are
 // generated from the shared registry — the registry IS the migration source.
-import { ddlFor, recordTypeKeys } from '@starbase/shared/registry';
-import { FOLD_FROM, FOLD_TO } from '@starbase/shared/names';
+import { ddlFor, recordTypeKeys } from '@base-win/shared/registry';
+import { FOLD_FROM, FOLD_TO } from '@base-win/shared/names';
+import { doorSchemaSql, STALE_INDEX, STALE_INDEX_RE } from '../lib/doors.js';
 
 const CORE = `
 create table if not exists workspaces (
@@ -351,7 +352,9 @@ create table if not exists jobs (
 );
 create index if not exists jobs_due_idx on jobs (status, run_at);
 create unique index if not exists jobs_key_idx on jobs (workspace_id, key) where key is not null;
-`;
+-- Each door's parts (server/lib/doors.js): worked out from address and unit
+-- by the server, beside them, never instead of them.
+${doorSchemaSql()}`;
 
 export const bootstrap = async (db) => {
   // Several instances may boot against one Postgres at once; serialize DDL.
@@ -362,6 +365,13 @@ export const bootstrap = async (db) => {
     await db.exec(FOLD);
     for (const key of recordTypeKeys()) await db.exec(ddlFor(key));
     await db.exec(ALTERS);
+    // The stale-door index of another parser version (lib/doors.js): its
+    // predicate no longer matches what the sweeper asks, so it would only
+    // slow writes down. An index, never a row: nothing is lost.
+    const older = (await db.query(
+      "select indexname from pg_indexes where schemaname = current_schema() and tablename = 'persons' and indexname like 'persons\\_door\\_stale\\_v%'",
+    )).rows.map((r) => r.indexname).filter((n) => STALE_INDEX_RE.test(n) && n !== STALE_INDEX);
+    for (const n of older) await db.exec(`drop index if exists ${n}`);
     // Feature modules' tables (server/ext/*). Imported here, not at the top,
     // because feature modules may import the db client, which imports this.
     const { EXTENSIONS } = await import('../ext.js');

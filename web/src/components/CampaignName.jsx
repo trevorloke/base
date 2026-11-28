@@ -1,6 +1,6 @@
 // Settings → Campaign (managers): what the campaign is called — the name on
 // top of every screen, on sign-in and sign-up (GET /api/auth/setup gives the
-// campaign's own name once it's set up, not STARBASE_ORG_NAME), on public
+// campaign's own name once it's set up, not BASE_ORG_NAME), on public
 // pages and in emails (workspace.update). Not the sender emails come from:
 // that's MAIL_FROM on the server, shown under Services. A campaign set up
 // under one name (a staging copy, a renamed party) is renamed here in one

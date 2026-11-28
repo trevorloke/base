@@ -8,7 +8,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { freshDb, Client } from './helpers.js';
-import { FOLD_FROM, FOLD_TO, foldName, foldTerm, azSort } from '@starbase/shared/names';
+import { FOLD_FROM, FOLD_TO, foldName, foldTerm, azSort } from '@base-win/shared/names';
 import { setSearchCap, setSearchTrace } from '../ext/search/index.js';
 
 let db, mgr, vol, ws;

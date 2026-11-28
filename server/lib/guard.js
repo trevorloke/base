@@ -4,7 +4,7 @@
 //
 // clientIp(c)  The address a request came from, as the proxy in front saw
 //   it. Proxies append the address they saw to X-Forwarded-For, so the
-//   trustworthy entry is the one STARBASE_TRUSTED_PROXIES hops from the
+//   trustworthy entry is the one BASE_TRUSTED_PROXIES hops from the
 //   right (default 1: one proxy, e.g. Render); anything further left was
 //   written by whoever sent the request and is ignored. With no proxy
 //   header, X-Real-IP, else 'local'.
@@ -22,6 +22,7 @@
 //   fetch: the browser says it came from another site, or the body isn't
 //   JSON (a plain <form> can post text/plain or form data with the cookie
 //   attached; the app never does). → the refusal to send, or null.
+import { setting } from '@base-win/shared/old-names';
 import { createHash, timingSafeEqual } from 'node:crypto';
 
 const LIMITER_MAX = 20_000;
@@ -51,7 +52,7 @@ export const clientIp = (c) => {
   if (door) return door;
   const xff = c.req.header('x-forwarded-for');
   if (xff) {
-    const hops = Math.max(1, Number(process.env.STARBASE_TRUSTED_PROXIES) || 1);
+    const hops = Math.max(1, Number(setting('BASE_TRUSTED_PROXIES')) || 1);
     const parts = xff.split(',').map((s) => s.trim()).filter(Boolean);
     const ip = parts[Math.max(0, parts.length - hops)];
     if (ip) return ip.slice(0, 64);

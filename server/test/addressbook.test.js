@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { freshDb, Client } from './helpers.js';
 import { verifyChain } from '../lib/events.js';
-import { readContacts, looksLikeContacts } from '@starbase/shared/contactsfile';
+import { readContacts, looksLikeContacts } from '@base-win/shared/contactsfile';
 
 const tag = Math.random().toString(36).slice(2, 8);
 let db, mgr, ws, staff, staffId, vol, volId, cand, candId, denied, deniedId, counter;

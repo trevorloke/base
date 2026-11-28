@@ -13,16 +13,16 @@ import { runDueJobs } from '../lib/jobs.js';
 import { startFakeMail } from './fake-mail.js';
 import {
   EMAIL_FILLS, toCodes, toWords, unfilled, placeholders, firstOf, fillHtml, fillText,
-} from '@starbase/shared/email/words';
-import { STARTERS, STARTER_PLACEHOLDERS } from '@starbase/shared/email/starters';
-import { emailProblem } from '@starbase/shared/email/check';
+} from '@base-win/shared/email/words';
+import { STARTERS, STARTER_PLACEHOLDERS } from '@base-win/shared/email/starters';
+import { emailProblem } from '@base-win/shared/email/check';
 import { blastHtml, blastText, composeBlast } from '../ext/abtests/send.js';
 
 const L = await import('../../web/src/components/LaddersWords.js');
 
 const tag = Math.random().toString(36).slice(2, 8);
 const mail = (who) => `${who}.tp.${tag}@example.org`;
-const KEYS = ['MAIL_PROVIDER', 'MAIL_FROM', 'RESEND_API_KEY', 'RESEND_API_BASE', 'SENDGRID_API_KEY', 'STARBASE_PUBLIC_URL', 'MAILCHIMP_API_KEY', 'MAILCHIMP_API_BASE'];
+const KEYS = ['MAIL_PROVIDER', 'MAIL_FROM', 'RESEND_API_KEY', 'RESEND_API_BASE', 'SENDGRID_API_KEY', 'BASE_PUBLIC_URL', 'MAILCHIMP_API_KEY', 'MAILCHIMP_API_BASE'];
 const saved = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
 let db, resend;
 
@@ -36,7 +36,7 @@ before(async () => {
   db = await freshDb();
   resend = await startFakeMail({ provider: 'resend' });
   for (const k of KEYS) delete process.env[k];
-  Object.assign(process.env, { RESEND_API_KEY: 're_test_key', RESEND_API_BASE: resend.url, MAIL_FROM: 'Campaign <team@example.org>', STARBASE_PUBLIC_URL: 'https://base.example' });
+  Object.assign(process.env, { RESEND_API_KEY: 're_test_key', RESEND_API_BASE: resend.url, MAIL_FROM: 'Campaign <team@example.org>', BASE_PUBLIC_URL: 'https://base.example' });
 });
 after(async () => {
   await resend.close();

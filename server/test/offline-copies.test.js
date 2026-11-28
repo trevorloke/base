@@ -75,8 +75,8 @@ test('each app start drops copies over a day old (the scale stays) and anyone el
   put(local, m, 'q:staff:signs', { signs: [] });
   put(session, m, 'q:staff:brief', { money: null }, Date.now() - 2 * DAY);
   put(local, other, 'q:manager:signs', { signs: [] });
-  local.setItem('starbase:field:v1:w1:u1:walk:t1', JSON.stringify({ at: Date.now() - 2 * DAY, data: { turf: { name: 'Old' } } }));
-  local.setItem('starbase:field:v1:w1:u1:walk:t2', JSON.stringify({ at: Date.now(), data: { turf: { name: 'New' } } }));
+  local.setItem('base-win:field:v1:w1:u1:walk:t1', JSON.stringify({ at: Date.now() - 2 * DAY, data: { turf: { name: 'Old' } } }));
+  local.setItem('base-win:field:v1:w1:u1:walk:t2', JSON.stringify({ at: Date.now(), data: { turf: { name: 'New' } } }));
   OC.keepOnlyMine(m);
   assert.ok(!has(local, m, 'q:staff:persons:q=&limit=300&tag=donor-prospect'), 'a list three days old goes');
   assert.ok(!has(local, m, 'doors'));
@@ -84,8 +84,8 @@ test('each app start drops copies over a day old (the scale stays) and anyone el
   assert.ok(has(local, m, 'scale'), 'the rating scale stays: no one’s details, and an old list beats the default');
   assert.ok(has(local, m, 'q:staff:signs'), 'today’s copy stays');
   assert.ok(!has(local, other, 'q:manager:signs'), 'another sign-in’s copy goes');
-  assert.equal(local.getItem('starbase:field:v1:w1:u1:walk:t1'), null, 'an old walk list goes');
-  assert.ok(local.getItem('starbase:field:v1:w1:u1:walk:t2'));
+  assert.equal(local.getItem('base-win:field:v1:w1:u1:walk:t1'), null, 'an old walk list goes');
+  assert.ok(local.getItem('base-win:field:v1:w1:u1:walk:t2'));
 });
 
 test('a role change forgets every copy kept under the old role (a staff member made a volunteer)', () => {
@@ -104,7 +104,7 @@ test('a role change forgets every copy kept under the old role (a staff member m
   assert.ok(!has(local, staff, 'doors'), 'the desk-shaped doors go (they hold everyone’s email)');
   assert.ok(!has(local, staff, 'calls:q=&limit=300&has=phone'));
   // A copy under another role's name goes even without the marker (copies from before it).
-  local.removeItem('starbase:copy-role:v1');
+  local.removeItem('base-win:copy-role:v1');
   OC.forgetPhoneCopies();
   put(local, vol, 'q:staff:signs', { signs: [] });
   put(local, vol, 'q:volunteer:brief', { money: null });
@@ -113,7 +113,7 @@ test('a role change forgets every copy kept under the old role (a staff member m
   assert.ok(has(local, vol, 'q:volunteer:brief'));
   // Sign-out forgets all of it, the marker too.
   OC.forgetPhoneCopies();
-  assert.equal([...local.m.keys()].filter((k) => k.startsWith('starbase:copy')).length, 0);
+  assert.equal([...local.m.keys()].filter((k) => k.startsWith('base-win:copy')).length, 0);
 });
 
 test('what a manager typed and has not saved (Settings → Brand) is theirs, for this tab: there at once, gone at sign-out, never the next sign-in’s', () => {

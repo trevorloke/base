@@ -19,18 +19,19 @@
 // Nothing is ever translated while a visitor waits: a GET never queues a
 // sweep, and a segment a page needs but doesn't have shows in English.
 import { createHash } from 'node:crypto';
-import { checkProps } from '@starbase/shared/site/catalogue';
+import { checkProps } from '@base-win/shared/site/catalogue';
 import { OTHER_CODES, LANG_BY_CODE } from '../../../shared/site/languages.js';
 import { normSeg, segmentsOf, moduleSegments } from '../../../shared/site/segments.js';
 import { siteWords } from './from-preset.js';
 import { LEGAL_ENGLISH } from '../../../shared/site/wording.js';
-import { VOLUNTEER_ROLES } from '@starbase/shared/canvass';
+import { VOLUNTEER_ROLES } from '@base-win/shared/canvass';
 import { newId, runAction } from '../../lib/events.js';
 import { enqueueJob } from '../../lib/jobs.js';
 import { prepare, readBack, translateBatch, translateKey, MAX_SEGMENTS, MAX_CHARS } from '../../lib/translate.js';
 import { parseJ, readSettings } from './store.js';
 import { cacheClear } from './cache.js';
 import { latestLegal, keyCurrent } from './legal.js';
+import { agentNamed } from '../../../shared/site/authorized.js';
 
 export const segHash = (text) => createHash('sha256').update(normSeg(text)).digest('hex');
 // The Simplified→Traditional dictionary is about 80 MB once built: loaded
@@ -61,7 +62,7 @@ const sentLanguages = (on) => {
 export const offeredLanguages = (settings, legal = {}, state = {}) => {
   const on = settings?.languages?.on || [];
   if (!on.length) return [];
-  if (!String(settings?.org?.agentName || '').trim()) return [];
+  if (!agentNamed(settings?.org)) return [];
   return OTHER_CODES.filter((c) => on.includes(c) && keyCurrent(legal[c], 'authorizedBy') && state[c]?.ready_at);
 };
 

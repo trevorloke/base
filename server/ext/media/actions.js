@@ -27,8 +27,8 @@
 //   media.resend   blast.resend, for a press release only
 import { z } from 'zod';
 import { httpError } from '../../actions/util.js';
-import { SOCIAL_PLATFORMS } from '@starbase/shared/canvass';
-import { parseSocial, platformWord } from '@starbase/shared/socials';
+import { SOCIAL_PLATFORMS } from '@base-win/shared/canvass';
+import { parseSocial, platformWord } from '@base-win/shared/socials';
 import { actions as FILES, ATTACH_COUNT } from '../abtests/attach.js';
 import { abInput } from '../abtests/send.js';
 import { DESK_ROLES, KINDS, LISTS, isDesk, kindOf, listsOf, offMedia, onMediaTags } from './rules.js';
@@ -91,6 +91,8 @@ const releaseInput = z.object({
   }).optional(),
   // The template it was started from: its placeholders (blast.send).
   placeholders_from: z.array(z.string().max(122)).max(200).optional(),
+  // "Send without it" (blast.send, lib/authorized.js): kept, so it reaches blast.send.
+  withoutAuthorized: z.boolean().optional(),
 });
 
 // An outlet's fields (decision 1, LTE). Web addresses and emails are what
@@ -294,7 +296,7 @@ export const actions = {
 
   'media.test': {
     roles: DESK_ROLES,
-    input: releaseInput.pick({ subject: true, body: true, attachment_ids: true, sender_id: true, placeholders_from: true }),
+    input: releaseInput.pick({ subject: true, body: true, attachment_ids: true, sender_id: true, placeholders_from: true, withoutAuthorized: true }),
     handler: async (tx, ctx, input, emit) => (await field())['blast.test'].handler(tx, ctx, { ...input, kind: 'press' }, emit),
     after: async (db, ctx, result) => (await field())['blast.test'].after(db, ctx, result),
   },

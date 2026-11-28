@@ -13,8 +13,11 @@ public website under `/site/`. There are three environments — one shared
 staging (`https://staging.base.win`), each client's production, and the
 control centre (`https://ops.base.win`) — and `https://base.win` is the
 front page; the one map of them is [GOING-LIVE.md](GOING-LIVE.md), section 0.
-Internal names — the `STARBASE_*` settings, package names, the database —
-are unchanged, so nothing deployed moves.
+Settings are named `BASE_*` (*Run*, below). Servers set up before 2026-12
+may still have older names for these; they keep working, and Settings →
+Services lists any to rename. Nothing deployed moves: the database, the
+work saved on phones and every setting in Render keep working
+(GOING-LIVE.md, section 10).
 
 Not in use today: one front door at base.win for every client (`apps/door`;
 [its README](apps/door/README.md)), with `base.win/<client>` the public
@@ -60,10 +63,10 @@ button, no paragraphs, everything else one tap away.
 | **Shifts** | Schedule a week by tap: **Shifts → Week** lists each day's shifts from 6 am, *+* adds them — what, where, which days, when — with nothing typed and no number asked, a card moves by a drag or a tap, and a week copies to the next; tap a name and it stays in hand while you tap its shifts; notify by email + text with instructions and a link; volunteers see the list a day at a time and tap *Count me in* on the row; a shift can carry turfs; *Count me in* puts the walk list on your phone; the desk can *Edit* a shift (moved in time or place → *Let them know*) or *Call off* one, which takes back the walk lists it gave. Each shift has a **crew board**: drag volunteers on from a tray (free or busy then, asked to volunteer, new), onto its turfs — each person gets only their turf's walk list — or *No walk list*; team lead and driver; *Here* / *No-show* on the day; *Split the rest evenly*. **Shifts → Volunteers** is the roster: asked to volunteer, new, active, lapsed, by role; call, text and *Put on a shift* in a tap |
 | **Donations** | Gifts (one-time / monthly), each to one slate — city council or school board — with the entity-keyed cap engine (the annual limit is per contributor per slate); receipts; donor tiers; gifts made in another tool, brought in from its file; the financial agent's filing dates, counted down — the only money base.win tracks |
 | **Signs** | Billboards (4×8), large (4×4), lawn — requested → installed → removed |
-| **Lists** | Saved filters (a tag, a rating band, a role, has an email…, any People filter — the new rules under *More rules*) and hand-picked lists of people: the one audience for an email or a text, a phone bank (`bank.create` with `list_id`), a pass (`list_id` on the pass), a CSV, a report. Each row has **Email · Text · Call · Walk** — a send to the list, a new phone bank from it, a pass that walks it — each with how many it reaches, and a list's page has the same four with its five numbers. Each list has its numbers — people · can be emailed · texted · called · reachable by any of the three (*Who may be emailed, texted or called*) — kept a minute (`STARBASE_LIST_COUNTS_MS`) and counted again at once when the list changes, or people change in a way a list can read (an edit or a tag, a gift, a membership, the newsletter, a STOP, an import or a merge; a list on another list follows it) — the field's stream of door and phone logs and voted marks waits for the minute; the names never wait for them (`GET /lists?counts=later`, then `GET /lists/:id/counts`, asked three at a time). People's *Save as a list* keeps the rule; *Save these people as they are now* (on People and on a list's page; `list.snapshot`) keeps exactly who a filter or a list names at that moment, as a hand-picked list — up to the whole file. Every number is the number, *Loading…* or *Unavailable — Try again* |
+| **Lists** | Saved filters (a tag, a rating band, a role, has an email…, any People filter — the new rules under *More rules*) and hand-picked lists of people: the one audience for an email or a text, a phone bank (`bank.create` with `list_id`), a pass (`list_id` on the pass), a CSV, a report. Each row has **Email · Text · Call · Walk** — a send to the list, a new phone bank from it, a pass that walks it — each with how many it reaches, and a list's page has the same four with its five numbers. Each list has its numbers — people · can be emailed · texted · called · reachable by any of the three (*Who may be emailed, texted or called*) — kept a minute (`BASE_LIST_COUNTS_MS`) and counted again at once when the list changes, or people change in a way a list can read (an edit or a tag, a gift, a membership, the newsletter, a STOP, an import or a merge; a list on another list follows it) — the field's stream of door and phone logs and voted marks waits for the minute; the names never wait for them (`GET /lists?counts=later`, then `GET /lists/:id/counts`, asked three at a time). People's *Save as a list* keeps the rule; *Save these people as they are now* (on People and on a list's page; `list.snapshot`) keeps exactly who a filter or a list names at that moment, as a hand-picked list — up to the whole file. Every number is the number, *Loading…* or *Unavailable — Try again* |
 | **Reports** | Quick reports first: seven ready-made lists of people, each one tap away to print or download as CSV — a paper walking list for one turf (doors in walking order, tick boxes in the campaign's own words, no phones or emails; also Print on a turf's walk list at the desk), Donors (this year, last year, all time, lapsed, monthly; A–Z or largest first), Interested in being a candidate, Volunteers, Members, Signs to put up, and Moved — needs an address; then, under More, the campaign in numbers (people by rating, tags, cities, people added by week, contacts by week, donations by month, the newsletter list, sends), each downloadable as CSV; any table as a spreadsheet; the full JSON export; Field, by turf (coverage, talks, support found, not-homes; by canvasser; CSV). Donations by month, the gifts and members downloads and the money totals need Donations as well as Data |
 | **Website** | The campaign's public site (managers, and whoever is granted the Website area): pages built from sections (hero, text, petition, donate, events, news…) that are added from a catalogue, dragged into order, hidden, edited in plain forms and published — the draft saves itself, *Preview* shows it, *Publish* says exactly which section needs a look; the theme (colours checked for contrast as they're picked, fonts, corners, logo); the menu, footer, announcement bar, search and sharing; news posts; petitions and pledges with their signatures. SITE.md has how it fits together |
-| **Path to win** | Today → Go to, and the search (desk; the Data area). Each race's win number — typed in, or worked out from eligible voters × expected turnout × share needed, the campaign's own numbers (managers set them) — and the supporters to find for it; supporters found (rated 1 or 2) against that, the pace a week to election day (GOTV's, else one set here) beside the last 4 weeks', a 12-week trend from the ratings, and the turfs ranked by a score out of 100 whose parts are shown (supporters still to find = doors not yet knocked × supporters per 100 doors knocked; persuadables left; time since the last knock), on a map coloured by priority and in a list — tap one to open it on the main map. Counted in SQL, kept a minute (`STARBASE_PTW_CACHE_MS`) |
+| **Path to win** | Today → Go to, and the search (desk; the Data area). Each race's win number — typed in, or worked out from eligible voters × expected turnout × share needed, the campaign's own numbers (managers set them) — and the supporters to find for it; supporters found (rated 1 or 2) against that, the pace a week to election day (GOTV's, else one set here) beside the last 4 weeks', a 12-week trend from the ratings, and the turfs ranked by a score out of 100 whose parts are shown (supporters still to find = doors not yet knocked × supporters per 100 doors knocked; persuadables left; time since the last knock), on a map coloured by priority and in a list — tap one to open it on the main map. Counted in SQL, kept a minute (`BASE_PTW_CACHE_MS`) |
 | **Outreach** | Two modules. **Email** (like Mailchimp): *Write an email* to the newsletter's subscribers or to any list, in Markdown (headings, bold, lists, links, pictures; files attached; *Send me a test*; two subject lines to test), then what went out — opens, clicks, past sends — the subscribers, and ladders (automatic emails, texts and follow-ups, started by what people do on the website, a shift booked, came to or missed, a gift, a membership, a survey; a goal — came to a shift, gave, joined, voted — takes them off; a *Send to a web address* step posts one small signed message about the person to another tool — Zapier, Make, a Slack channel — with *Send a test* to set the other end up first: INTEGRATIONS.md, *Connect anything*; Settings → Services → *Going out* points there). Ladders → Follow-ups: every open follow-up by organizer and the time to first contact. **Texting** (like CallHub): *Write a text* to any list, with the one-to-one rules (quiet hours, STOP, do-not-contact); the Inbox of replies; phone banks; texting one by one; texting settings |
 | **Training** | Training for every role (Imagine Surrey calls its own *ImagineU*): courses of modules, each module a mix of materials — notes, documents, videos, audio, pictures, links — and the marker of progress: ticked *Done*, counted per course (*2 of 5 modules done*); the desk edits in place and sees who has done what; a module marked public has a page anyone can open at `/learn/<slug>` |
 
@@ -72,16 +75,16 @@ Volunteers get five tabs — **Today · Map · Calls · Shifts · Training** —
 
 **One campaign per deployment; setup is one-time.** Each client runs on
 its own services and database. The deployment names the campaign and its
-rules (`STARBASE_ORG_NAME`, `STARBASE_JURISDICTION`, `STARBASE_TZ`,
-`STARBASE_CITY`, `STARBASE_SLATES`, `STARBASE_CANDIDATES` — see *Run*);
+rules (`BASE_ORG_NAME`, `BASE_JURISDICTION`, `BASE_TZ`,
+`BASE_CITY`, `BASE_SLATES`, `BASE_CANDIDATES` — see *Run*);
 the first person to open `/signup` sets it up (name, email, password; the
 campaign's name too, when the deployment left it blank) and becomes its
 manager. After that sign-up is closed (`POST /api/auth/signup` → 403) and
 Sign in hides the link; `GET /api/auth/setup` says which (`{ open,
 organization, org }` — `organization` is the campaign's own name once it's
-set up). `STARBASE_OPEN_SIGNUP=1` keeps it open — the test
+set up). `BASE_OPEN_SIGNUP=1` keeps it open — the test
 suite sets it, since tests make several workspaces to check they stay
-apart. `STARBASE_ENV=staging` puts a *Staging* badge on every screen and
+apart. `BASE_ENV=staging` puts a *Staging* badge on every screen and
 in `/api/health`, so a test environment is never mistaken for the real one.
 
 Managers reach **Admin** from the account menu (their initials):
@@ -179,7 +182,7 @@ campaign's manager can't clear — on the server's shell (Render → the service
 → Shell), `node scripts/reset-two-step.mjs their@email` does the same.
 Turning it on or off, new recovery codes, a recovery code spent at sign-in,
 a lock, a reset and the requirement are on the event log (nothing secret in it).
-Keys are sealed with `STARBASE_TWO_STEP_KEY` (INTEGRATIONS.md); the tables
+Keys are sealed with `BASE_TWO_STEP_KEY` (INTEGRATIONS.md); the tables
 (`server/ext/twostep`) are never in the export. The how: `server/lib/twostep.js`.
 
 ### Forgot password
@@ -188,16 +191,16 @@ Keys are sealed with `STARBASE_TWO_STEP_KEY` (INTEGRATIONS.md); the tables
 the address, that a link is on its way. The link works once, for 30 minutes;
 it opens **Choose a new password**, which signs that person out everywhere
 else and still asks the two-step code when it's on. It is built only from
-`STARBASE_PUBLIC_URL` (never the address a request came to) and carries its
+`BASE_PUBLIC_URL` (never the address a request came to) and carries its
 token after `#`, so it never reaches a server log; only the token's hash is
 kept. Three asks an hour per email and ten per address, at most three live
 links, and a new ask never ends an earlier one. Without a sender or
-`STARBASE_PUBLIC_URL`, and on the public demo, the screen says to ask a
+`BASE_PUBLIC_URL`, and on the public demo, the screen says to ask a
 manager instead: **Settings → Members → Password link** on someone's row
 (not yourself, not another manager, not anyone in another campaign on the
 same server) makes a 24-hour link — emailed to them and never shown when
 email is set up, shown with Copy when it isn't; a link whose email doesn't
-go is ended at once. It needs `STARBASE_PUBLIC_URL` too (without it the
+go is ended at once. It needs `BASE_PUBLIC_URL` too (without it the
 button isn't shown). Both are on the event log, never the link
 (`server/ext/passwords`).
 
@@ -232,6 +235,8 @@ sign-up is closed: the control centre's first visit makes the campaign.
 `ownOrigin`, `instance`, `address`, `entry` (`ready`, `no-key`, `bad-key`,
 `no-origin`), `platformKids`, `setupOpen`, `campaignMade` (a workspace
 exists) and `store` (`postgres` or `embedded`: where the campaign is kept).
+`ownOrigin` (the server's Render address) is given only to a caller who
+asked at that address, as the control centre does; anyone else gets `null`.
 It also says `doorKey`, which only the door option reads (not in use
 today).
 
@@ -961,7 +966,7 @@ is only the person's id. Donations and RSVPs aren't taken that way.
 The same key takes the website's unsubscribes: `POST /in/v1/consent` (an
 unsubscribe, a text STOP, a preference change), applied the way base.win's
 own are. An address or number nobody has yet is held, so nothing later puts
-it back. With `STARBASE_WEBSITE_URL` and `STARBASE_WEBSITE_KEY` set,
+it back. With `BASE_WEBSITE_URL` and `BASE_WEBSITE_KEY` set,
 base.win's own unsubscribes and STOPs go to the website too, from a queue
 that never gives up while the website is down (`server/ext/intake`:
 `consent.js` in, `outbound.js` out; INTEGRATIONS.md, *Unsubscribes, both
@@ -1050,7 +1055,7 @@ anything — *Placing addresses · 12,400 of 150,000* where *Not on map* was,
 *Placing addresses paused* while it waits to try again — and draws what it
 has placed as it goes. Nobody is placed by guessing: a person with no
 address stays off the map (the Map check counts them). With
-`STARBASE_JOBS=off` nothing starts by itself, and the page falls back to
+`BASE_JOBS=off` nothing starts by itself, and the page falls back to
 looking up batches itself.
 
 **Typing an address** (`server/ext/addresses`, `web/src/components/AddressField.jsx`):
@@ -1261,7 +1266,7 @@ gets the default. A send keeps its From (Try again, the A/B winner).
 Invites, shift notices, receipts, two-step and ladder emails stay on
 MAIL_FROM.
 
-Set `STARBASE_PUBLIC_URL` (e.g. `https://imaginesurrey.base.win`) so links
+Set `BASE_PUBLIC_URL` (e.g. `https://imaginesurrey.base.win`) so links
 in outbound mail — newsletter unsubscribe footers, invite links, the
 pictures in a message, calendar links — point at the public host. Password
 links are built from it alone: without it Forgot password says to ask a
@@ -1351,7 +1356,7 @@ booking, never someone who can't make it. Both keep the texting rules, and
 leave the email out for *do-not-email* and *do-not-contact*, and for an
 address that bounced for good or reported spam (the row says so). With
 neither email nor texting connected an evening reminds nobody and marks
-nobody as reminded; with `STARBASE_JOBS=off` notices and reminders wait.
+nobody as reminded; with `BASE_JOBS=off` notices and reminders wait.
 
 ### Who may be emailed, texted or called
 
@@ -1390,13 +1395,13 @@ election week should switch to a paid provider.
 
 | Variable | What for | Default |
 |---|---|---|
-| `STARBASE_TILE_URL` | tile template, `https://…/{z}/{x}/{y}.png` (`{s}` optional; an API key can ride in the query string) | `https://tile.openstreetmap.org/{z}/{x}/{y}.png` |
-| `STARBASE_TILE_ATTRIBUTION` | the provider's credit line (text and links) | the OpenStreetMap credit (none for another provider unless set) |
-| `STARBASE_TILE_MAX_ZOOM` | deepest zoom the provider serves, 1–22 | `19` |
-| `STARBASE_TILE_PROVIDER` | a provider by name: `stadia` (Stadia Maps' Alidade Smooth — its address, credit and zoom 20 filled in; `STARBASE_TILE_URL` wins over it) | — |
-| `STARBASE_TILE_KEY` | the named provider's key, added as `?api_key=` (phones can see it — use only where the provider can't be told the campaign's own web address) | — |
-| `STARBASE_TILE_CARTO_KEY` | the campaign's free CARTO basemap key: the *Clean* look is offered (and the map opens on it) only with it, and it is added to every CARTO address (phones can see it) | — (no Clean) |
-| `STARBASE_TILE_CLEAN` | `off`: never offer CARTO, key or not (the free map behind Google stays, OpenStreetMap's) | — |
+| `BASE_TILE_URL` | tile template, `https://…/{z}/{x}/{y}.png` (`{s}` optional; an API key can ride in the query string) | `https://tile.openstreetmap.org/{z}/{x}/{y}.png` |
+| `BASE_TILE_ATTRIBUTION` | the provider's credit line (text and links) | the OpenStreetMap credit (none for another provider unless set) |
+| `BASE_TILE_MAX_ZOOM` | deepest zoom the provider serves, 1–22 | `19` |
+| `BASE_TILE_PROVIDER` | a provider by name: `stadia` (Stadia Maps' Alidade Smooth — its address, credit and zoom 20 filled in; `BASE_TILE_URL` wins over it) | — |
+| `BASE_TILE_KEY` | the named provider's key, added as `?api_key=` (phones can see it — use only where the provider can't be told the campaign's own web address) | — |
+| `BASE_TILE_CARTO_KEY` | the campaign's free CARTO basemap key: the *Clean* look is offered (and the map opens on it) only with it, and it is added to every CARTO address (phones can see it) | — (no Clean) |
+| `BASE_TILE_CLEAN` | `off`: never offer CARTO, key or not (the free map behind Google stays, OpenStreetMap's) | — |
 | `GOOGLE_MAPS_SERVER_KEY` | Google's key (Map Tiles API, Places API (New)). Alone it does not change the map. **Tell us Google or the free map for canvassing.** | — |
 | `GOOGLE_MAPS_TILES` | `on` (or `1`) makes Google the map, with the key set. Phones don't keep Google's map for no-signal areas | unset: the free map |
 | `GOOGLE_TRANSLATE_KEY` | Google Cloud Translation, a key restricted to it alone: the campaign's website in Punjabi and Chinese, translated ahead of time (SITE.md "Languages") | no language can be turned on; languages already on keep their words, new wording stays English |
@@ -1473,9 +1478,9 @@ built from a walk list kept on the phone.
 
 **The map's look** is each person's own (Show → *Map*, kept on that
 browser, and only when they tap one): *Standard* (what the map opens on);
-*Clean* (only with `STARBASE_TILE_CARTO_KEY`, and then the map opens on it:
+*Clean* (only with `BASE_TILE_CARTO_KEY`, and then the map opens on it:
 CARTO's light map of the same OpenStreetMap streets, without shop icons,
-parking lots or house numbers — `STARBASE_TILE_CLEAN=off` leaves it out;
+parking lots or house numbers — `BASE_TILE_CLEAN=off` leaves it out;
 check CARTO's terms for your volume; a phone that saved Clean draws
 Standard while it isn't offered); *Muted* (grey streets, so the doors stand out) and
 *Dark* (for night), drawn over any tiles; and with Google Maps on, its
@@ -1515,7 +1520,7 @@ to read on any base map, and from zoom 14 every dot wears a white ring),
 drawn on canvas tiles so a whole voter file pans smoothly; at 16 a door
 with a sign flies a little flag, at 17 a household's size is on its dot. A
 tap near a dot opens that door (or zooms in, further out). Up to
-`STARBASE_MAP_ALL` (5,000) located people the map loads them all at once
+`BASE_MAP_ALL` (5,000) located people the map loads them all at once
 (and keeps a copy on the phone). A bigger list is asked for by the part of
 the map on screen (the screen and 15% more, counted first): from zoom 14
 door by door — the people themselves where they fit (2,400 in a view, 8,000
@@ -1531,7 +1536,7 @@ on *My turf*: a volunteer's own doors come whole, and the list's answers
 aren't drawn there).
 
 The map opens on the campaign's own list: where its people are inside the
-campaign's area (`STARBASE_GEO_BOUNDS`) when most of them are, else the
+campaign's area (`BASE_GEO_BOUNDS`) when most of them are, else the
 middle of the list — a few addresses in another city don't zoom it out to
 the province. **Whole list** goes back there from anywhere, and a view
 with nobody on screen says *Nobody on file here · Back to your list* (one
@@ -1638,19 +1643,19 @@ data: no brand recolours them.
 
 A campaign starts in base.win's own look: **`base`** (indigo, no logo,
 training called *Training*; `shared/brand.js`). Nothing in it names any
-campaign. `STARBASE_BRAND` unset, or a word that names nothing, is `base`.
+campaign. `BASE_BRAND` unset, or a word that names nothing, is `base`.
 
 One campaign has a set-up of its own, turned on by
-`STARBASE_BRAND=imagine-surrey`: Surrey Navy `#003979` with marigold
+`BASE_BRAND=imagine-surrey`: Surrey Navy `#003979` with marigold
 `#ffc72c` as the second colour, Imagine Surrey's wordmark as the logo,
 training called *ImagineU*, and the rest of *One campaign's own set-up*
 (below). One exception keeps a server from changing under its campaign: a
 server that is not staging and is named exactly `Imagine Surrey`
-(`STARBASE_ORG_NAME`) still gets that set-up with no brand line, and its log
+(`BASE_ORG_NAME`) still gets that set-up with no brand line, and its log
 says to add the line.
 
 Once a manager saves the campaign's own brand (**Settings → Brand**;
-`server/ext/brand`), that is the look, whatever `STARBASE_BRAND` says: one
+`server/ext/brand`), that is the look, whatever `BASE_BRAND` says: one
 colour and maybe a second, the sidebar (light, the brand colour or dark),
 corners, the heading face, a logo, a logo for dark backgrounds, a square
 mark and the app icons made from it (without one, the icons of the brand it
@@ -1710,11 +1715,11 @@ is the campaign's name.
 
 base.win is the same code for every campaign. What belongs to one campaign
 is kept apart, in one folder (`server/presets/imagine-surrey/`), and used
-only by the server whose `STARBASE_BRAND` names it. No other campaign's
+only by the server whose `BASE_BRAND` names it. No other campaign's
 server reads it, sends it or serves it. `server/lib/preset.js` is the one
 file that opens the folder.
 
-What a campaign on `STARBASE_BRAND=base` starts with:
+What a campaign on `BASE_BRAND=base` starts with:
 
 - **Rating scale**: nobody on it, until the campaign adds its own opponents.
 - **City and map**: the ones typed for it in New campaign. With none, new
@@ -1788,7 +1793,7 @@ Surrey defaults to `bc-municipal` (LECFA); the slates (city council, school
 board) are `SLATES` in `shared/canvass.js`.
 
 Database: PGlite (embedded, real Postgres) — in-memory for tests, file-backed
-via `STARBASE_DATA=./data`; hosted Postgres via `DATABASE_URL` in v0.3.
+via `BASE_DATA=./data`; hosted Postgres via `DATABASE_URL` in v0.3.
 Tenancy is a membership (`user × workspace × role`: manager / treasurer /
 staff / volunteer). **Volunteers** can rate doors, log calls and texts, drop
 pins, request signs, add a new housemate (name and phone) at a door in
@@ -1800,7 +1805,7 @@ signature, and blast lists.
 
 **What faces the internet** (`server/lib/guard.js`): request bodies are
 capped (256 KB; 16 MB for a CSV import, 4 MB for a picture); the address
-a request is from is the entry `STARBASE_TRUSTED_PROXIES` hops from the
+a request is from is the entry `BASE_TRUSTED_PROXIES` hops from the
 right of `X-Forwarded-For` (default 1 — one proxy, as on Render), never
 what the sender wrote — behind the base.win door (not in use today), the
 visitor's address as the door says it, believed only with the key the door
@@ -1819,25 +1824,27 @@ and no image bytes.
 
 Everything a deployment knows about its campaign comes from the
 environment (`server/lib/org.js`); the code names no client.
+Servers set up before 2026-12 may still have older names for these; they
+keep working, and Settings → Services lists any to rename.
 
 | Variable | What it sets | Default |
 |---|---|---|
-| `STARBASE_ORG_NAME` | the campaign's name until it's set up: shown on sign-in and taken by the first sign-up (after that, sign-in shows the campaign's own name, which a manager can change in Settings → Campaign) | blank: the first sign-up names it |
-| `STARBASE_JURISDICTION` | `bc-municipal`, `bc-provincial` or `federal` — which contribution-limit rules apply (`cap_rules`) | `bc-municipal` |
-| `STARBASE_TZ` | the campaign's time zone (shifts, receipts, quiet hours, the campaign's day) | `America/Vancouver` |
-| `STARBASE_CITY` | the city new addresses default to | none (Imagine Surrey's set-up: `Surrey`) |
-| `STARBASE_PROVINCE` | two letters, for geocoding | `BC` |
-| `STARBASE_GEO_BOUNDS` | `lat,lng\|lat,lng`, the box address lookups and suggestions are kept to (BC, Google, Nominatim), and where maps open | none: lookups are not kept to a box, maps open wide and the map's check says *Map area: Not set* (Imagine Surrey's set-up: a box around Surrey) |
-| `STARBASE_SLATES` | `code:Label,code:Label` — the slates a gift can go to, each its own annual limit | `council:City council,school_board:School board` |
-| `STARBASE_CANDIDATES` | `4D:Name:Label;4B:Name` — the opposed candidates a new rating scale starts with (the desk edits them after), or `none` for no opponents | nobody (Imagine Surrey's set-up: its five) |
-| `STARBASE_ENV` | `production` or `staging` — said on screen and at `/api/health` | `production` when hosted (`NODE_ENV=production`, or on Render), else `local` |
-| `STARBASE_BRAND` | `base`, or `imagine-surrey` to turn on Imagine Surrey's own set-up (*One campaign's own set-up*, above). The look is the one a campaign starts from, until a manager saves its own in Settings → Brand | `base` (a server named exactly `Imagine Surrey` that is not staging: `imagine-surrey`, with a line in its log) |
-| `STARBASE_SITE_DOMAIN` | the website's own domain once it moves onto base.win (`imaginesurrey.ca`): the website at `/` there and on its `www.`, nothing of the app; `<name>.base.win/site/` sends people there; set in Render, never in `render.yaml` (SITE.md, GOING-LIVE.md §2) | blank: the website is at `/site/` |
-| `STARBASE_SITE_FORMER_URL` | the present website at its own address (`https://…`), while it keeps running after the move: its own links in emails it sent go there (SITE.md) | blank: those links are the website's "Page not found" |
+| `BASE_ORG_NAME` | the campaign's name until it's set up: shown on sign-in and taken by the first sign-up (after that, sign-in shows the campaign's own name, which a manager can change in Settings → Campaign) | blank: the first sign-up names it |
+| `BASE_JURISDICTION` | `bc-municipal`, `bc-provincial` or `federal` — which contribution-limit rules apply (`cap_rules`) | `bc-municipal` |
+| `BASE_TZ` | the campaign's time zone (shifts, receipts, quiet hours, the campaign's day) | `America/Vancouver` |
+| `BASE_CITY` | the city new addresses default to | none (Imagine Surrey's set-up: `Surrey`) |
+| `BASE_PROVINCE` | two letters, for geocoding | `BC` |
+| `BASE_GEO_BOUNDS` | `lat,lng\|lat,lng`, the box address lookups and suggestions are kept to (BC, Google, Nominatim), and where maps open | none: lookups are not kept to a box, maps open wide and the map's check says *Map area: Not set* (Imagine Surrey's set-up: a box around Surrey) |
+| `BASE_SLATES` | `code:Label,code:Label` — the slates a gift can go to, each its own annual limit | `council:City council,school_board:School board` |
+| `BASE_CANDIDATES` | `4D:Name:Label;4B:Name` — the opposed candidates a new rating scale starts with (the desk edits them after), or `none` for no opponents | nobody (Imagine Surrey's set-up: its five) |
+| `BASE_ENV` | `production` or `staging` — said on screen and at `/api/health` | `production` when hosted (`NODE_ENV=production`, or on Render), else `local` |
+| `BASE_BRAND` | `base`, or `imagine-surrey` to turn on Imagine Surrey's own set-up (*One campaign's own set-up*, above). The look is the one a campaign starts from, until a manager saves its own in Settings → Brand | `base` (a server named exactly `Imagine Surrey` that is not staging: `imagine-surrey`, with a line in its log) |
+| `BASE_SITE_DOMAIN` | the website's own domain once it moves onto base.win (`imaginesurrey.ca`): the website at `/` there and on its `www.`, nothing of the app; `<name>.base.win/site/` sends people there; set in Render, never in `render.yaml` (SITE.md, GOING-LIVE.md §2) | blank: the website is at `/site/` |
+| `BASE_SITE_FORMER_URL` | the present website at its own address (`https://…`), while it keeps running after the move: its own links in emails it sent go there (SITE.md) | blank: those links are the website's "Page not found" |
 | `SITE_HOSTS` | the campaign's own domains (`imaginesurrey.ca,www.imaginesurrey.ca`): the website at `/` there, nothing of the app — written with a final dot too (`imaginesurrey.ca.`), it's the same domain (SITE.md) | blank: the website is at `/site/` only |
-| `APP_HOSTS` | the app's other addresses on this server (an older one people still use, such as `starbase.imaginesurrey.ca`, beside the public `imaginesurrey.base.win`): never made a website domain, so the app keeps answering there (SITE.md) | blank |
+| `APP_HOSTS` | the app's other addresses on this server (an older one people still use, such as Imagine Surrey's address from before the rename, beside the public `imaginesurrey.base.win`): never made a website domain, so the app keeps answering there (SITE.md) | blank |
 | `BASE_PLATFORM_PUBKEY` | the control centre's public key (ops.base.win → base.win’s key; 43 characters; two, comma-separated, while it changes its key): lets base.win support open this desk, and closes first-run sign-up until the first visit makes the campaign. Pasted in Render, never in git (`sync: false`); emptied, all entry stops and open visits end | blank: no entry (`/api/health` says `no-key`) |
-| `STARBASE_OWN_URL` | this server's own origin (`https://<service>.onrender.com`), the address an entry token must name — only when Render's `RENDER_EXTERNAL_URL` is missing or wrong | `RENDER_EXTERNAL_URL` |
+| `BASE_OWN_URL` | this server's own origin (`https://<service>.onrender.com`), the address an entry token must name — only when Render's `RENDER_EXTERNAL_URL` is missing or wrong | `RENDER_EXTERNAL_URL` |
 | `SITE_SECRET` | signs the website's preview and email-preference links (16+ characters); each campaign's signing secret for a ladder's *Send to a web address* step is made from it, so changing it changes that secret and breaks those links in every email already sent — to change only the signing secret, the step's *Make a new secret* (INTEGRATIONS.md) | blank: one is made and kept in the database |
 
 Three environments (GOING-LIVE.md, section 0): one shared **staging**
@@ -1869,14 +1876,14 @@ its settings and where each key comes from: [INTEGRATIONS.md](INTEGRATIONS.md);
 **Settings → Services** checks each one live.
 
 ```sh
-cd starbase
+cd base
 npm install
 npm test                 # server suite, in-memory Postgres, no setup (it runs as
                          # Imagine Surrey's server; the neutral-*.test.js files as another campaign's)
 node e2e.mjs             # browser journey against a running server (see header); the
                          # e2e scripts start their server as Imagine Surrey's own
 npm run build            # web → web/dist
-STARBASE_DATA=./data node server/index.js   # API + web on :3200
+BASE_DATA=./data node server/index.js   # API + web on :3200
 ```
 
 ```

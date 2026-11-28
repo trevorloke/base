@@ -27,7 +27,7 @@ import { envName } from '../../lib/org.js';
 import { newId, runAction } from '../../lib/events.js';
 import { enqueueJob } from '../../lib/jobs.js';
 import { httpError } from '../../actions/util.js';
-import { FONTS, fontFor, slugFor } from '@starbase/shared/site/fonts';
+import { FONTS, fontFor, slugFor } from '@base-win/shared/site/fonts';
 import { ensureSiteTx, parseJ } from './store.js';
 import { cacheClear } from './cache.js';
 

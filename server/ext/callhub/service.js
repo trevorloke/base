@@ -5,6 +5,7 @@
 //
 // That address ends in a key made from the API key (callhub.js): it is
 // given to CallHub and never shown, logged or put in an answer.
+import { setting } from '@base-win/shared/old-names';
 import { callhub, callhubOn, CallHubError, hookUrl, HOOK_PREFIX, idOf, listAll } from './callhub.js';
 import { heldNumbers } from './dnc.js';
 import { whoseNumbers } from './people.js';
@@ -93,8 +94,8 @@ export const connect = async (base) => {
   if (!callhubOn()) return { ok: false, said: 'CALLHUB_API_KEY isn’t set' };
   // CallHub is given this base.win's public address: without one it would
   // be told to send results to wherever this page happens to be open.
-  if (!String(process.env.STARBASE_PUBLIC_URL || '').trim()) {
-    return { ok: false, said: 'Set the public address first (STARBASE_PUBLIC_URL): CallHub needs somewhere to send results' };
+  if (!String(setting('BASE_PUBLIC_URL') || '').trim()) {
+    return { ok: false, said: 'Set the public address first (BASE_PUBLIC_URL): CallHub needs somewhere to send results' };
   }
   const want = hookUrl(base);
   try {

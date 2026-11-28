@@ -13,7 +13,7 @@ export const SIGNUP_LOCK = 7240526;
 export const noWorkspace = async (db) => !(await db.query('select 1 from workspaces limit 1')).rows[0];
 // First-run sign-up: open on a server with no campaign yet — unless it holds
 // the control centre's key (BASE_PLATFORM_PUBKEY), whose campaign is set up
-// from there. STARBASE_OPEN_SIGNUP=1 opens it whatever (tests, a rebuild).
+// from there. BASE_OPEN_SIGNUP=1 opens it whatever (tests, a rebuild).
 // /api/auth/setup and /api/health say the same.
 export const setupOpen = async (db) => openSignupForced() || (!parseKeys().length && (await noWorkspace(db)));
 

@@ -55,31 +55,31 @@ test('a client’s name, brand or map area written as a fixed value is caught, w
     branch: production
     autoDeploy: true
     envVars:
-      - key: STARBASE_ENV
+      - key: BASE_ENV
         value: production
       - key: DATABASE_URL
         fromDatabase:
           name: base-win-riverton-db
           property: connectionString
-      - key: STARBASE_ORG_NAME
+      - key: BASE_ORG_NAME
         value: "Riverton Forward"   # a client's name
-      - key: STARBASE_GEO_BOUNDS
+      - key: BASE_GEO_BOUNDS
         value: '43.6,-79.7|43.8,-79.4'
-      - key: STARBASE_TWO_STEP_KEY
+      - key: BASE_TWO_STEP_KEY
         generateValue: true
       - key: RESEND_API_KEY
         sync: false
 
 databases:`);
   const problems = settingProblems(parseYaml(copy)).filter((p) => p.service === 'base-win-riverton');
-  assert.deepEqual(problems.map((p) => `${p.service} ${p.key}`), ['base-win-riverton STARBASE_ORG_NAME', 'base-win-riverton STARBASE_GEO_BOUNDS']);
+  assert.deepEqual(problems.map((p) => `${p.service} ${p.key}`), ['base-win-riverton BASE_ORG_NAME', 'base-win-riverton BASE_GEO_BOUNDS']);
   const said = explainSettings(problems);
-  assert.match(said, /base-win-riverton STARBASE_ORG_NAME: a fixed value \("Riverton Forward"\)/);
+  assert.match(said, /base-win-riverton BASE_ORG_NAME: a fixed value \("Riverton Forward"\)/);
   assert.match(said, /write it as "sync: false" and set it once in Render/);
   // Staging's sample values are base.win's own; the same key on a client's
   // service is not.
-  assert.equal(FIXED_OK.staging.STARBASE_ORG_NAME.length > 0, true);
-  assert.equal(FIXED_OK.production.STARBASE_ORG_NAME, undefined);
+  assert.equal(FIXED_OK.staging.BASE_ORG_NAME.length > 0, true);
+  assert.equal(FIXED_OK.production.BASE_ORG_NAME, undefined);
   // A service this check does not know is asked about, not passed.
   assert.match(settingProblems({ services: [{ name: 'something-else', envVars: [] }] })[0].problem, /does not know/);
   // A setting with nothing at all is caught too.

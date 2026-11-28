@@ -11,7 +11,7 @@
 // it, as the list stands each time a walk list loads; who still applies on
 // top (All doors unless said). 404 when the list isn't this campaign's.
 import { z } from 'zod';
-import { KIND_CODES, WHO_CODES, TRIES_MAX } from '@starbase/shared/passes';
+import { KIND_CODES, WHO_CODES, TRIES_MAX } from '@base-win/shared/passes';
 import { httpError } from '../../actions/util.js';
 import { newId } from '../../lib/events.js';
 import { openPass } from './rule.js';

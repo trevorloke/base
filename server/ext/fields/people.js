@@ -20,7 +20,7 @@
 import { newId } from '../../lib/events.js';
 import { httpError } from '../../actions/util.js';
 import { preset } from '../../lib/preset.js';
-import { FAITHS, DWELLING_TYPES, LANGUAGES, groupMembers } from '@starbase/shared/fieldlists';
+import { FAITHS, DWELLING_TYPES, LANGUAGES, groupMembers } from '@base-win/shared/fieldlists';
 import { FIELDS_MAX, choicesOf, nameKey, parseValue, valueError } from './kinds.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

@@ -18,8 +18,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useOutletContext, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { SIGN_KINDS, SIGN_STATUSES } from '@starbase/shared/canvass';
-import { directionsUrl } from '@starbase/shared/maps';
+import { SIGN_KINDS, SIGN_STATUSES } from '@base-win/shared/canvass';
+import { directionsUrl } from '@base-win/shared/maps';
 import { apiGet, action } from '../api.js';
 import { PersonPicker } from './Shifts.jsx';
 import { NoSignal, noSignal, useOnline, NeedsSignalLine } from '../components/NoSignal.jsx';
@@ -27,6 +27,19 @@ import './shifts.css';
 import './signs.css';
 import AddressField, { lookupAddress, pinOf } from '../components/AddressField.jsx';
 import { ex } from '../brand.js';
+import { unitKey, unitKind, unitWords } from '../../../shared/units.js';
+
+// A picked door as the sign's address, in a form every screen reads back as
+// that door (shared/units.js): "10388 134 St, Basement suite",
+// "13450 104 Ave #1203"; the main door is the address alone.
+const signAddress = (a) => {
+  const key = unitKey(a.unit);
+  if (!key) return a.address;
+  const kind = unitKind(key);
+  if (kind === 'suite') return `${a.address}, ${unitWords(key, 'house')}`;
+  if (kind === 'unit' || kind === 'letter') return `${a.address} #${key}`;
+  return `${a.address}, ${a.unit}`;
+};
 
 // The registry label carries the size ("Large sign (4×4)"); it rides along as a tooltip.
 const kindSize = (code) => SIGN_KINDS.find((k) => k.code === code)?.label ?? code;
@@ -272,7 +285,7 @@ function PlaceSignForm({ presetPersonId, canCreatePerson, onSaved, onClose }) {
             value={address}
             placed={Boolean(pin)}
             onChange={(v) => { setAddress(v); setPin(null); }}
-            onPick={(a) => { setAddress(a.unit ? `${a.unit} – ${a.address}` : a.address); setPin(pinOf(a)); }}
+            onPick={(a) => { setAddress(signAddress(a)); setPin(pinOf(a)); }}
             hint={address.trim() ? 'Pick it from the list to pin it — a corner is fine as typed' : null}
           />
           {mode === 'person' && person && !person.address && !address.trim() && (

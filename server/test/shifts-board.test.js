@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { freshDb, Client } from './helpers.js';
 import {
   DAY_PARTS, partOf, dayOf, partRange, weekStart, weekBounds, zonedISO,
-} from '@starbase/shared/dayparts';
+} from '@base-win/shared/dayparts';
 
 let c;
 const uniq = () => Math.random().toString(36).slice(2, 8);

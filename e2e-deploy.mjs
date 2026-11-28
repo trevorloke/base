@@ -26,10 +26,11 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { bothNames } from './shared/old-names.js';
 
 // The fixtures here are Imagine Surrey's, so the server runs as its production
 // does (render.yaml sets this brand); a brand set by hand is left as set.
-if (process.env.STARBASE_BRAND === undefined) process.env.STARBASE_BRAND = 'imagine-surrey';
+if (bothNames('BASE_BRAND').every((k) => process.env[k] === undefined)) process.env.BASE_BRAND = 'imagine-surrey';
 
 const PORT = Number(process.env.PORT) || 4946;
 const DOOR = Number(process.env.DOOR_PORT) || PORT + 1;
@@ -88,12 +89,12 @@ const deploy = async (dir) => {
 // ── The server, and a door in front of it that can be slow to hand over a page ──
 const server = spawn(process.execPath, ['server/index.js'], {
   cwd: fileURLToPath(new URL('.', import.meta.url)),
-  env: { ...process.env, STARBASE_OPEN_SIGNUP: '1', STARBASE_DATA: 'memory', PORT: String(PORT), STARBASE_JOBS: 'off', GEOCODE_ON_SAVE: 'off' },
+  env: { ...process.env, BASE_OPEN_SIGNUP: '1', BASE_DATA: 'memory', PORT: String(PORT), BASE_JOBS: 'off', GEOCODE_ON_SAVE: 'off' },
   stdio: ['ignore', 'pipe', 'inherit'],
 });
 await new Promise((resolve, reject) => {
   const t = setTimeout(() => reject(new Error('server did not start')), 30000);
-  server.stdout.on('data', (b) => { if (/starbase on :/.test(String(b))) { clearTimeout(t); resolve(); } });
+  server.stdout.on('data', (b) => { if (/base\.win on :/.test(String(b))) { clearTimeout(t); resolve(); } });
   server.on('exit', (code) => reject(new Error(`server exited ${code}`)));
 });
 const slow = { path: null, ms: 0 };
@@ -228,9 +229,9 @@ try {
   await fresh.evaluate(async () => {
     const name = (await caches.keys()).find((n) => /-meta-/.test(n));
     const meta = await caches.open(name);
-    const since = await (await meta.match('/__starbase/old-files')).json();
+    const since = await (await meta.match('/__base-win/old-files')).json();
     for (const k of Object.keys(since)) since[k] -= 25 * 3600 * 1000;
-    await meta.put('/__starbase/old-files', new Response(JSON.stringify(since), { headers: { 'content-type': 'application/json' } }));
+    await meta.put('/__base-win/old-files', new Response(JSON.stringify(since), { headers: { 'content-type': 'application/json' } }));
   });
   await fresh.reload({ waitUntil: 'networkidle' });
   await sleep(2500);

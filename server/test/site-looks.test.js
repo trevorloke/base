@@ -21,7 +21,7 @@ const { checkTheme, allLooks, lookOf } = theme;
 // Every look a website can pick (this work adds it; before it, the campaign's own list).
 const everyLook = theme.everyLook || allLooks;
 
-const ENV = ['STARBASE_BRAND'];
+const ENV = ['BASE_BRAND'];
 const had = Object.fromEntries(ENV.map((k) => [k, process.env[k]]));
 after(() => { for (const k of ENV) { if (had[k] === undefined) delete process.env[k]; else process.env[k] = had[k]; } });
 
@@ -186,8 +186,8 @@ test('the legal lines: each on its own line, readable, in every look, and no loo
   // A campaign's own look too, with its own stylesheet linked (Imagine
   // Surrey's server: its brand, for this check only). Whether a stylesheet
   // can hide the line is read in a browser (e2e-site-render, every look).
-  const brand = process.env.STARBASE_BRAND;
-  process.env.STARBASE_BRAND = 'imagine-surrey';
+  const brand = process.env.BASE_BRAND;
+  process.env.BASE_BRAND = 'imagine-surrey';
   try {
     const keys = everyLook().map((l) => l.key);
     assert.ok(keys.includes('imagine-surrey'), `the campaign's own look is checked too: ${keys.join(', ')}`);
@@ -197,7 +197,7 @@ test('the legal lines: each on its own line, readable, in every look, and no loo
       assert.match(html, /<div class="footer-bottom">[\s\S]*Authorized by Ada Example, 604-555-0100/, `${l.key} on the campaign's own server`);
     }
   } finally {
-    process.env.STARBASE_BRAND = brand;
+    process.env.BASE_BRAND = brand;
   }
   const block = rule('.footer-bottom');
   for (const want of ['display: flex !important', 'flex-direction: column !important', 'visibility: visible !important', 'opacity: 1 !important', 'position: static !important', 'font-size: 15px !important']) {
@@ -210,7 +210,7 @@ test('the legal lines: each on its own line, readable, in every look, and no loo
 // ── The desk: the look before, and the published page in Theme's preview ──
 let mgr;
 before(async () => {
-  process.env.STARBASE_BRAND = 'base';
+  process.env.BASE_BRAND = 'base';
   ({ mgr } = await campaign('Riverside Forward'));
 });
 

@@ -1,5 +1,7 @@
-// Buildings (HR-1): an address with 4 or more units — a tower, a walk-up, a
-// townhouse complex — read as one thing, so the map can draw it as one
+// Buildings (HR-1): an address with 3 or more numbered or lettered units —
+// a tower, a walk-up, a townhouse complex, a triplex — read as one thing
+// (suite words never count: a house with a basement suite and a coach
+// house is a house, shared/units.js placeOf), so the map can draw it as one
 // square and its sheet can list its floors and units. Worked out when it is
 // read (shared/buildings.js), never stored: a door stays address + unit.
 //
@@ -10,11 +12,20 @@
 //   GET /api/buildings/at?lat=&lng=   the building at a dot (the busy map):
 //                                     the person nearest the point, within
 //                                     the dot's own spot
+//   GET /api/buildings/house/:personId  the doors at that person's civic
+//                                     address nearby (a house with suites),
+//                                     each with its state on the open round:
+//                                     { pass, doors: [{ key, unit, state, in_round }] }
+//                                     in house order. The map's door switch
+//                                     reads it, so a door knocked from
+//                                     another phone (or before a reload)
+//                                     shows its state, never "Not knocked".
 //
-// Answer: { building: { key, address, city, lat, lng, units, people, open,
-// again, done, floors }, doors, pass } — doors shaped as the walk list's
-// (routes/api.js shapeDoors), each with unit, floor and in_round, in floor
-// order. Who is in the building is decided before the pass: a door the open
+// Answer: { building: { key, place: 'building', address, city, lat, lng,
+// units, people, open, again, done, floors }, doors, pass } — doors shaped
+// as the walk list's (routes/api.js shapeDoors), each with unit, unit_label
+// (the unit's key), unit_words ("Unit 1203", "No unit number"), floor and
+// in_round, in floor order. Who is in the building is decided before the pass: a door the open
 // pass doesn't want stays, in_round false, and isn't counted in open/again/
 // done (unit rows on this round), so a pass never shrinks a building.
 // { building: null }: not a building — the map opens the door as before.
@@ -24,13 +35,14 @@
 // kept to their turfs gets a building only inside one (a tower is one point).
 import { Hono } from 'hono';
 import { openPass, listedWhere } from '../passes/rule.js';
-import { inPass } from '@starbase/shared/passes';
+import { inPass, doorState } from '@base-win/shared/passes';
 import { groupDoors } from '../../lib/geo.js';
 import { inMyTurf } from '../core/index.js';
 import { scopeOf } from '../voted/state.js';
 import {
   buildingOf, unitRows, unitOf, floorOf, unitCompare, floorsShown, REACH,
-} from '@starbase/shared/buildings';
+} from '@base-win/shared/buildings';
+import { unitWords, doorParts, doorKey, houseCompare } from '../../../shared/units.js';
 
 // Routes import the extensions, so the walk list's own read is imported
 // when asked for, not at load (ext.js: features never import routes/*).
@@ -78,7 +90,7 @@ const readBuilding = async (db, ctx, anchor) => {
   // when it is written inside the address (unit stays as on file: the door).
   const shaped = (await shapeDoors(db, ctx, b.doors, pass)).map((d, i) => {
     const unit = unitOf(d);
-    return { ...d, unit_label: unit, floor: floorOf(unit), in_round: inPass(b.doors[i], pass) };
+    return { ...d, unit_label: unit, unit_words: unitWords(unit, 'building'), place: 'building', floor: floorOf(unit), in_round: inPass(b.doors[i], pass) };
   }).sort((x, y) => unitCompare(x.unit_label, y.unit_label));
   // A building can reach past a turf's edge: while GOTV keeps a volunteer
   // to their turfs and phone banks, its people outside them carry no voted
@@ -91,11 +103,28 @@ const readBuilding = async (db, ctx, anchor) => {
   const n = (state) => rows.filter((r) => r.state === state).length;
   return {
     building: {
-      key: b.key, address: b.address, city: b.city, lat: b.lat, lng: b.lng, units: b.units, people: b.people,
+      key: b.key, place: 'building', address: b.address, city: b.city, lat: b.lat, lng: b.lng, units: b.units, people: b.people,
       open: n('open'), again: n('again'), done: n('done'), floors: floorsShown(shaped.map((d) => d.unit_label)),
     },
     doors: shaped,
     pass: passOut(pass),
+  };
+};
+
+// The doors at the anchor's civic address within a building's reach, each
+// with its state on the open round, read as the walk list reads them
+// (loadLocated, shared/passes.js doorState and inPass).
+const readHouse = async (db, ctx, anchor) => {
+  const { loadLocated } = await walkRoute();
+  const pass = await openPass(db, ctx.workspaceId);
+  const onList = await listedWhere(db, ctx, pass);
+  const civic = doorParts(anchor).civic;
+  const located = (await loadLocated(db, ctx, pass, square(Number(anchor.lat), Number(anchor.lng)), onList))
+    .filter((p) => String(p.address || '').trim() && doorParts(p).civic === civic);
+  const doors = groupDoors(located).sort((a, b) => houseCompare(a.parts.unit, b.parts.unit));
+  return {
+    pass: passOut(pass),
+    doors: doors.map((d) => ({ key: doorKey(d), unit: d.parts.unit, state: doorState(d, pass), in_round: inPass(d, pass) })),
   };
 };
 
@@ -130,6 +159,18 @@ api.get('/buildings/of/:personId', async (c) => {
     return c.json(GONE, 404);
   }
   return answer(c, anchor);
+});
+
+api.get('/buildings/house/:personId', async (c) => {
+  const id = c.req.param('personId');
+  if (!UUID_RE.test(id)) return c.json(GONE, 404);
+  const ctx = c.get('ctx');
+  const db = c.get('db');
+  const anchor = await anchorOf(db, ctx, id);
+  if (!placed(anchor)) return c.json(GONE, 404);
+  const { turfsOnly } = await walkRoute();
+  if (turfsOnly(ctx) && !(await inMyTurf(db, ctx, anchor.lat, anchor.lng))) return c.json(NOT_MINE, 404);
+  return c.json(await readHouse(db, ctx, anchor));
 });
 
 api.get('/buildings/at', async (c) => {

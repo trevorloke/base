@@ -43,7 +43,7 @@ export const VOLUNTEER_ROLES = [
   { code: 'data_entry',          label: 'Data entry' },
   { code: 'event_hosting',       label: 'Event hosting' },
   { code: 'zone_house_captain',  label: 'Zone house captain' },
-  { code: 'highrise_captain',    label: 'Hi-rise building captain', detail: 'Building (name or address)' },
+  { code: 'highrise_captain',    label: 'Building captain', detail: 'Building (name or address)' },
   { code: 'food',                label: 'Food' },
   { code: 'translation',         label: 'Translation', detail: 'Language' },
   { code: 'burmashave',          label: 'Burmashave' },
@@ -93,7 +93,7 @@ export const donorTier = ({ yearCents = 0, monthlyCents = 0 }, tiers = []) => {
 // annual limit is per contributor per slate (each slate is its own election —
 // city council, school board — and LECFA's limit is per jurisdiction; verify
 // with Elections BC). A gift that names no slate is to the first one. The
-// server reads them from STARBASE_SLATES ("code:Label,code:Label"); the app
+// server reads them from BASE_SLATES ("code:Label,code:Label"); the app
 // takes the server's (me.org.slates) and keeps these as the fallback.
 export const DEFAULT_SLATES = [
   { code: 'council', label: 'City council' },
@@ -110,7 +110,7 @@ export const parseSlates = (text) => {
   }
   return out.length ? out : null;
 };
-export const SLATES = parseSlates(globalThis.process?.env?.STARBASE_SLATES) || DEFAULT_SLATES;
+export const SLATES = parseSlates(globalThis.process?.env?.BASE_SLATES) || DEFAULT_SLATES;
 export const SLATE_CODES = SLATES.map((s) => s.code);
 export const DEFAULT_SLATE = SLATES[0].code;
 export const slateLabel = (code, slates = SLATES) => slates.find((s) => s.code === (code || slates[0]?.code))?.label || String(code);

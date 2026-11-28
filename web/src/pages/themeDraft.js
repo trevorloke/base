@@ -1,7 +1,7 @@
 // The Theme screen's draft (pages/WebsiteTheme.jsx), kept apart so a test
 // can read it without a browser.
-import { COLOR_KEYS, FONT_BY_VALUE, RADII, SKINS, lookOf } from '@starbase/shared/site/theme';
-import { isAdded } from '@starbase/shared/site/fonts';
+import { COLOR_KEYS, FONT_BY_VALUE, RADII, SKINS, lookOf } from '@base-win/shared/site/theme';
+import { isAdded } from '@base-win/shared/site/fonts';
 import { hexOf } from '../components/site/colors.js';
 
 // A theme as the server keeps it, with every key there (a skin's for any

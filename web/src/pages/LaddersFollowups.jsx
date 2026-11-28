@@ -15,7 +15,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { noCalls, noCallsWord } from '@starbase/shared/canvass';
+import { noCalls, noCallsWord } from '@base-win/shared/canvass';
 import { action, apiGet } from '../api.js';
 import { NoSignal, noSignal } from '../components/NoSignal.jsx';
 import { LadBack, fmtWhen } from '../components/LaddersBits.jsx';

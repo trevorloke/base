@@ -4,7 +4,7 @@
 // an Undo; a record already on file that reads that way gets the same as a
 // suggestion (shared/names.js). form: { first, middle, last }.
 import { useState } from 'react';
-import { splitFirst } from '@starbase/shared/names';
+import { splitFirst } from '@base-win/shared/names';
 
 export default function NameFields({ id, form, setForm, autoFocus = false }) {
   const [moved, setMoved] = useState(null); // { from, first, middle } — the last automatic move, for Undo

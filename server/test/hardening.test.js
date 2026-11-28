@@ -14,14 +14,14 @@ const env = { ...process.env };
 
 before(async () => {
   await freshDb();
-  delete process.env.STARBASE_TRUSTED_PROXIES;
+  delete process.env.BASE_TRUSTED_PROXIES;
   mgr = new Client();
   const r = await mgr.signup({ workspaceName: 'Imagine Surrey', email: 'hard.manager@example.org', password: 'hardening-2026', jurisdiction: 'bc-municipal' });
   slug = r.json.workspace.slug;
   wsId = r.json.workspace.id;
 });
 after(() => {
-  for (const k of ['STARBASE_TRUSTED_PROXIES', 'STRIPE_SECRET_KEY', 'BASE_DOOR_KEY']) {
+  for (const k of ['BASE_TRUSTED_PROXIES', 'STRIPE_SECRET_KEY', 'BASE_DOOR_KEY']) {
     if (env[k] === undefined) delete process.env[k]; else process.env[k] = env[k];
   }
 });
@@ -38,9 +38,9 @@ test('clientIp: the proxy’s own entry wins; what the sender wrote further left
   assert.equal(clientIp(c('203.0.113.9')), '203.0.113.9');
   assert.equal(clientIp(c(undefined, '198.51.100.1')), '198.51.100.1');
   assert.equal(clientIp(c(undefined, undefined)), 'local');
-  process.env.STARBASE_TRUSTED_PROXIES = '2';
+  process.env.BASE_TRUSTED_PROXIES = '2';
   assert.equal(clientIp(c('1.2.3.4, 203.0.113.9, 10.0.0.1')), '203.0.113.9', 'two proxies: the entry two from the right');
-  delete process.env.STARBASE_TRUSTED_PROXIES;
+  delete process.env.BASE_TRUSTED_PROXIES;
 });
 
 // The base.win door (apps/door) in front: every request reaches this server
@@ -72,7 +72,7 @@ test('clientIp: the door’s word for whose request it is — believed only with
 // One sign-in try through the real door: the visitor's address as the
 // proxy in front of the door wrote it; the door's own request, as this
 // server's proxy passes it on. → the server's answer.
-const doorClients = new Map([['imaginesurrey', { name: 'Imagine Surrey', origin: 'https://starbase-is.onrender.com' }]]);
+const doorClients = new Map([['imaginesurrey', { name: 'Imagine Surrey', origin: 'https://base-win-is.onrender.com' }]]);
 const throughDoor = async (visitor, body, { doorKey = DOOR_KEY } = {}) => {
   let status = 0;
   const fetchImpl = async (url, init) => {

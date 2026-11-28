@@ -6,12 +6,13 @@
 // that campaign's; any other (SITE_HOSTS, or the app's own address at
 // /site/) is SITE_WORKSPACE's (a slug) or else the first campaign set up on
 // this server — one campaign per deployment (lib/org.js).
+import { setting } from '@base-win/shared/old-names';
 import { getDb } from '../../db/client.js';
 import { runAction } from '../../lib/events.js';
 import { brandKey, brandFor } from '../../lib/brand.js';
-import { deriveLook } from '@starbase/shared/brand-look';
+import { deriveLook } from '@base-win/shared/brand-look';
 import { DEFAULT_TZ } from '../../lib/org.js';
-import { checkTheme } from '@starbase/shared/site/theme';
+import { checkTheme } from '@base-win/shared/site/theme';
 // The looks and starting words this server's set-up brings, if any (read by
 // checkTheme and the catalogue each time they are asked).
 import './from-preset.js';
@@ -28,7 +29,7 @@ const iso = (d) => (d instanceof Date ? d.toISOString() : d ? new Date(d).toISOS
 
 // ── Hosts ──
 // SITE_HOSTS and APP_HOSTS are the operator's, and so is the website's own
-// domain (STARBASE_SITE_DOMAIN, and its pair): domain.js reads them. Where
+// domain (BASE_SITE_DOMAIN, and its pair): domain.js reads them. Where
 // the app itself answers (appHosts) is never a website domain:
 // site.settings.save refuses those and the host the save came in on; a
 // domain saved as one before is ignored below, so the app can't be locked
@@ -158,9 +159,9 @@ export const siteHost = async (c) => {
 
 // The main site's public address, for another website's link back, its
 // privacy link and a petition's canonical address: its own domain
-// (STARBASE_SITE_DOMAIN), else its first saved domain,
+// (BASE_SITE_DOMAIN), else its first saved domain,
 // else the first SITE_HOSTS, else the app's own /site (fallback: the
-// request's origin and the client's path, when STARBASE_PUBLIC_URL isn't set).
+// request's origin and the client's path, when BASE_PUBLIC_URL isn't set).
 export const mainAddress = (settings, fallback = '') => {
   const own = siteDomain();
   if (own) return `https://${own}`;
@@ -169,7 +170,7 @@ export const mainAddress = (settings, fallback = '') => {
   const env = envHosts().find((h) => hostOf(h));
   if (env) return `https://${env}`;
   try {
-    const u = new URL(String(process.env.STARBASE_PUBLIC_URL || '').trim());
+    const u = new URL(String(setting('BASE_PUBLIC_URL') || '').trim());
     if (/^https?:$/.test(u.protocol)) return `${u.origin}${u.pathname.replace(/\/+$/, '')}/site`;
   } catch { /* not set */ }
   return fallback;

@@ -27,8 +27,9 @@ import { newId } from '../../lib/events.js';
 import { httpError } from '../../actions/util.js';
 import {
   e164, NO_TEXT_TAG, NO_CONTACT_TAG, NO_CALL_TAG, MAX_BODY, PER_MINUTE,
-  namesCampaign, withFooter, hasBlanks,
+  namesCampaign, withFooter, withAuthorized, hasBlanks,
 } from './rules.js';
+import { authorizedOf } from '../../lib/authorized.js';
 import { smsReady, voiceReady, publicBase, sendSms, ringCaller } from './twilio.js';
 import {
   settingsFor, quietState, isOptedOut, applyOptOut, isFirstOut, tagsOf, inTouch, answerElsewhere,
@@ -94,7 +95,9 @@ const sendIn = async (tx, ctx, emit, conv, rawBody) => {
   const first = await isFirstOut(tx, conv.id);
   if (first) {
     if (!namesCampaign(body, ctx.workspace.name)) throw httpError(400, `Say it's ${ctx.workspace.name} in the first text`);
-    body = withFooter(body);
+    // The first text only: "Authorized by …" when it is filled in
+    // (shared/site/authorized.js), then the opt-out line.
+    body = withFooter(withAuthorized(body, await authorizedOf(tx, ctx.workspaceId, { channel: 'sms-one' })));
   }
   const id = newId();
   const base = publicBase();

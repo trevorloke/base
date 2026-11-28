@@ -15,13 +15,14 @@ import { chromium } from 'playwright-core';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
 import { mkdirSync } from 'node:fs';
+import { bothNames } from './shared/old-names.js';
 
 // The fixtures here are Imagine Surrey's, so the server runs as its production
 // does (render.yaml sets this brand); a brand set by hand is left as set.
-if (process.env.STARBASE_BRAND === undefined) process.env.STARBASE_BRAND = 'imagine-surrey';
+if (bothNames('BASE_BRAND').every((k) => process.env[k] === undefined)) process.env.BASE_BRAND = 'imagine-surrey';
 
 const PORT = Number(process.env.PORT) || 4120;
-const SHOTS = process.env.SHOTS || '/tmp/starbase-addresses';
+const SHOTS = process.env.SHOTS || '/tmp/base-win-addresses';
 mkdirSync(SHOTS, { recursive: true });
 
 // ── The stand-in address service ──
@@ -53,13 +54,13 @@ let BASE = process.env.BASE;
 const ADMIN = { toString() { return `${BASE}/admin`; } };
 if (!BASE) {
   server = spawn(process.execPath, ['server/index.js'], {
-    env: { ...process.env, STARBASE_OPEN_SIGNUP: '1', STARBASE_DATA: 'memory', PORT: String(PORT), STARBASE_JOBS: 'off',
+    env: { ...process.env, BASE_OPEN_SIGNUP: '1', BASE_DATA: 'memory', PORT: String(PORT), BASE_JOBS: 'off',
       GEOCODER: 'bc', BC_GEOCODER_URL: FAKE, GEOCODE_ON_SAVE: 'on' },
     stdio: ['ignore', 'pipe', 'inherit'],
   });
   await new Promise((resolve, reject) => {
     const t = setTimeout(() => reject(new Error('server did not start')), 30000);
-    server.stdout.on('data', (b) => { if (/starbase on :/.test(String(b))) { clearTimeout(t); resolve(); } });
+    server.stdout.on('data', (b) => { if (/base\.win on :/.test(String(b))) { clearTimeout(t); resolve(); } });
     server.on('exit', (code) => reject(new Error(`server exited ${code}`)));
   });
   BASE = `http://127.0.0.1:${PORT}`;

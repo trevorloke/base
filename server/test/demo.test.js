@@ -6,11 +6,11 @@ import { freshDb, Client } from './helpers.js';
 import { app } from '../index.js';
 import { bootstrap } from '../db/schema.js';
 
-const KEYS = ['STARBASE_ENV', 'STARBASE_FRAME_HOSTS', 'STARBASE_DEMO_EMAIL', 'STARBASE_SAMPLE', 'STARBASE_OPEN_SIGNUP'];
+const KEYS = ['BASE_ENV', 'BASE_FRAME_HOSTS', 'BASE_DEMO_EMAIL', 'BASE_SAMPLE', 'BASE_OPEN_SIGNUP'];
 let kept; let db;
 beforeEach(async () => {
   kept = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
-  delete process.env.STARBASE_SAMPLE;
+  delete process.env.BASE_SAMPLE;
   db = await freshDb();
 });
 afterEach(() => { for (const k of KEYS) { if (kept[k] === undefined) delete process.env[k]; else process.env[k] = kept[k]; } });
@@ -18,21 +18,21 @@ afterEach(() => { for (const k of KEYS) { if (kept[k] === undefined) delete proc
 const health = () => app.request('/api/health');
 
 test('nobody may frame the app unless staging names a site', async () => {
-  process.env.STARBASE_ENV = 'staging';
-  delete process.env.STARBASE_FRAME_HOSTS;
+  process.env.BASE_ENV = 'staging';
+  delete process.env.BASE_FRAME_HOSTS;
   let r = await health();
   assert.equal(r.headers.get('x-frame-options'), 'DENY');
 
-  process.env.STARBASE_FRAME_HOSTS = 'https://base.win, https://www.base.win/, http://evil.example, nonsense';
+  process.env.BASE_FRAME_HOSTS = 'https://base.win, https://www.base.win/, http://evil.example, nonsense';
   r = await health();
   assert.equal(r.headers.get('x-frame-options'), null);
   assert.equal(r.headers.get('content-security-policy'), "frame-ancestors 'self' https://base.win https://www.base.win");
 });
 
 test('production ignores both settings', async () => {
-  process.env.STARBASE_ENV = 'production';
-  process.env.STARBASE_FRAME_HOSTS = 'https://base.win';
-  process.env.STARBASE_DEMO_EMAIL = 'demo@example.org';
+  process.env.BASE_ENV = 'production';
+  process.env.BASE_FRAME_HOSTS = 'https://base.win';
+  process.env.BASE_DEMO_EMAIL = 'demo@example.org';
   const r = await health();
   assert.equal(r.headers.get('x-frame-options'), 'DENY');
   assert.equal(r.headers.get('content-security-policy'), null);
@@ -40,16 +40,16 @@ test('production ignores both settings', async () => {
 });
 
 test('the demo signs a visitor in as the demo account', async () => {
-  process.env.STARBASE_ENV = 'staging';
-  delete process.env.STARBASE_DEMO_EMAIL;
+  process.env.BASE_ENV = 'staging';
+  delete process.env.BASE_DEMO_EMAIL;
   assert.equal((await app.request('/api/auth/demo')).status, 404, 'off until an account is named');
 
   const mgr = new Client();
   await mgr.signup({ email: 'demo@example.org' });
-  process.env.STARBASE_DEMO_EMAIL = 'nobody@example.org';
+  process.env.BASE_DEMO_EMAIL = 'nobody@example.org';
   assert.equal((await app.request('/api/auth/demo')).status, 503, 'an account not in the campaign');
 
-  process.env.STARBASE_DEMO_EMAIL = 'Demo@Example.org';
+  process.env.BASE_DEMO_EMAIL = 'Demo@Example.org';
   const r = await app.request('/api/auth/demo');
   assert.equal(r.status, 302);
   assert.equal(r.headers.get('location'), '/');
@@ -68,10 +68,10 @@ const empty = async () => {
   await bootstrap(db);
 };
 const sampleServer = () => {
-  process.env.STARBASE_ENV = 'staging';
-  process.env.STARBASE_SAMPLE = 'vancouver';
-  process.env.STARBASE_DEMO_EMAIL = 'demo@example.org';
-  delete process.env.STARBASE_OPEN_SIGNUP; // the real first run
+  process.env.BASE_ENV = 'staging';
+  process.env.BASE_SAMPLE = 'vancouver';
+  process.env.BASE_DEMO_EMAIL = 'demo@example.org';
+  delete process.env.BASE_OPEN_SIGNUP; // the real first run
 };
 const html = { accept: 'text/html,application/xhtml+xml' };
 
@@ -87,12 +87,12 @@ test('a sample server takes no sign-up but the sample’s own, even with an empt
 });
 
 test('/api/auth/setup says demo: true only where there is a demo', async () => {
-  process.env.STARBASE_ENV = 'staging';
-  delete process.env.STARBASE_DEMO_EMAIL;
+  process.env.BASE_ENV = 'staging';
+  delete process.env.BASE_DEMO_EMAIL;
   assert.equal('demo' in (await (await app.request('/api/auth/setup')).json()), false);
-  process.env.STARBASE_DEMO_EMAIL = 'demo@example.org';
+  process.env.BASE_DEMO_EMAIL = 'demo@example.org';
   assert.equal((await (await app.request('/api/auth/setup')).json()).demo, true);
-  process.env.STARBASE_ENV = 'production';
+  process.env.BASE_ENV = 'production';
   assert.equal('demo' in (await (await app.request('/api/auth/setup')).json()), false, 'never on production');
 });
 

@@ -22,6 +22,7 @@
 // again, with the same key, so the donor never gets a second copy by itself.
 // A provider refusal is tried again (three tries in all), then the receipt
 // says "Not sent — the email failed" and waits for Send again.
+import { setting } from '@base-win/shared/old-names';
 import { runAction } from '../../lib/events.js';
 import { emailConfigured, sendEmail } from '../../lib/notify.js';
 import {
@@ -77,7 +78,7 @@ const refreshUnderSavepoint = async (tx, ctx, personId) => {
 export const runEmailJob = async (db, job) => {
   const receiptId = job.payload?.receipt_id;
   if (!receiptId) return;
-  const base = process.env.STARBASE_PUBLIC_URL || null;
+  const base = setting('BASE_PUBLIC_URL') || null;
   const ws = job.workspace_id;
   const act = (fn) => runAction(db, { workspaceId: ws, actorId: null, action: SEND_ACTION }, fn);
 

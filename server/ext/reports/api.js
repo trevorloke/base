@@ -71,7 +71,7 @@ api.get('/export/:dataset', async (c) => {
   const privateToo = c.req.query('private') === '1';
   if (privateToo && ctx.role !== 'manager') return c.json({ error: 'Only a manager can download private fields' }, 403);
   const { head, rows } = await datasetRows(db, ctx.workspaceId, name, { privateToo });
-  return csvResponse(c, `starbase-${name}`, head, rows);
+  return csvResponse(c, `base-win-${name}`, head, rows);
 });
 export const DATASET_NAMES = Object.keys(DATASETS);
 export const REPORT_NAMES = Object.keys(REPORTS);

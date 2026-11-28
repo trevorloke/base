@@ -15,7 +15,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { freshDb, Client } from './helpers.js';
 import { getDb } from '../db/client.js';
-import { doorState, inUniverse, inPass, passLine, KINDS, WHO } from '@starbase/shared/passes';
+import { doorState, inUniverse, inPass, passLine, KINDS, WHO } from '@base-win/shared/passes';
 
 const tag = Math.random().toString(36).slice(2, 8);
 let mgr, vol, ws, turf;

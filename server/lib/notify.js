@@ -11,9 +11,9 @@
 //   SMS:   set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM
 
 import { DEFAULT_TZ } from './org.js';
-import { fmtIn } from '@starbase/shared/dayparts';
-import { whereWords } from '@starbase/shared/shiftkinds';
-import { hoursOf } from '@starbase/shared/shifthours';
+import { fmtIn } from '@base-win/shared/dayparts';
+import { whereWords } from '@base-win/shared/shiftkinds';
+import { hoursOf } from '@base-win/shared/shifthours';
 // One email through the sender in use, and whether there is one (lib/mail
 // says what sendEmail takes and answers).
 export { emailConfigured, sendEmail } from './mail/index.js';

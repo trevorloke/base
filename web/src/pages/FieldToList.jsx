@@ -17,7 +17,7 @@
 // (ext/fields/convert.js makeAsWritten); the server does the rest.
 import { useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { DWELLING_TYPES, choiceKey, guessChoice } from '@starbase/shared/fieldlists';
+import { DWELLING_TYPES, choiceKey, guessChoice } from '@base-win/shared/fieldlists';
 import { action, apiGet } from '../api.js';
 import { NeedsSignalLine } from '../components/NoSignal.jsx';
 import { FIELDS_QUERY } from '../components/FieldsBits.jsx';

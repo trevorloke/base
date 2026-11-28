@@ -14,6 +14,7 @@ import { runAction } from '../../lib/events.js';
 import { NO_EMAIL_TAG, noEmail, tagsOf } from './shape.js';
 import { page as publicPage } from '../../lib/publicpage.js';
 import { campaignBrand } from '../../lib/brand.js';
+import { authorizedOf } from '../../lib/authorized.js';
 
 export const publicRoutes = new Hono();
 
@@ -21,8 +22,13 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 
 // The public pages' look (lib/publicpage.js): the campaign's brand, its logo
-// over its name, one button.
+// over its name, one button. A run's page (its campaign known) carries the
+// campaign's "Authorized by" line when it is filled in
+// (shared/site/authorized.js, channel site-plain-own).
 const page = (row, title, inner, brand) => publicPage(row ? { name: row.name, settings: row.settings } : null, title, inner, { brand });
+const ownPage = async (db, row, title, inner) => publicPage({ name: row.name, settings: row.settings }, title, inner, {
+  authorized: await authorizedOf(db, row.workspace_id, { channel: 'site-plain-own' }),
+});
 
 const bad = async (c) => c.html(page(null, 'Unsubscribe',
   "<h1>This unsubscribe link isn't valid — reply to the email to be removed.</h1>", await campaignBrand()), 404);
@@ -47,15 +53,15 @@ const isOff = async (db, ws, email) => {
   )).rows;
   return people.length > 0 && people.every(noEmail);
 };
-const done = (c, row) => c.html(page(row, 'Unsubscribed',
+const done = async (c, db, row) => c.html(await ownPage(db, row, 'Unsubscribed',
   `<h1>Unsubscribed.</h1><div class="done">You won't receive further newsletters or automatic emails from ${esc(row.name)}.</div>`));
 
 publicRoutes.get('/lu/:id', async (c) => {
   const db = await getDb();
   const row = await load(db, c.req.param('id'));
   if (!row) return bad(c);
-  if (await isOff(db, row.workspace_id, row.email)) return done(c, row);
-  return c.html(page(row, 'Unsubscribe', `<h1>Unsubscribe from ${esc(row.name)}?</h1>
+  if (await isOff(db, row.workspace_id, row.email)) return done(c, db, row);
+  return c.html(await ownPage(db, row, 'Unsubscribe', `<h1>Unsubscribe from ${esc(row.name)}?</h1>
 <form method="post" action="/lu/${esc(row.id)}"><button type="submit">Unsubscribe</button></form>`));
 });
 
@@ -90,5 +96,5 @@ publicRoutes.post('/lu/:id', async (c) => {
       emit('person', p.id, 'update', { tags, source: 'ladder-unsubscribe' });
     }
   });
-  return done(c, row);
+  return done(c, db, row);
 });

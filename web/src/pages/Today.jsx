@@ -49,8 +49,8 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { allCodes, bandOf, ratingByCode } from '@starbase/shared/scale';
-import { hoursOf } from '@starbase/shared/shifthours';
+import { allCodes, bandOf, ratingByCode } from '@base-win/shared/scale';
+import { hoursOf } from '@base-win/shared/shifthours';
 import { ApiError, apiGet, apiPost, fmtMoney } from '../api.js';
 import { ratingWho, useScale } from '../components/RatingButtons.jsx';
 import { useFollowupCount } from '../components/LaddersCount.js';
@@ -64,7 +64,7 @@ import { hasArea } from '../Shell.jsx';
 import { MineAllTime } from '../components/FieldReportBits.jsx';
 import { turfNames } from '../components/ShiftTurfs.jsx';
 import { clockText, whenText, zoneOf } from '../components/shiftTime.js';
-import { fmtIn } from '@starbase/shared/dayparts';
+import { fmtIn } from '@base-win/shared/dayparts';
 import '../components/operator.css';
 import { daysLeft, filingDay, filingSoon } from '../components/FilingWords.js';
 import './today.css';
@@ -78,8 +78,9 @@ import { gotvNoteCount } from '../components/gotvNotes.js';
 import './gotv.css';
 import { quickFor } from '../components/commands.js';
 import { guideNow, guideSoon, useGuide } from '../components/guide.js';
-import { guideState } from '@starbase/shared/voteguide';
+import { guideState } from '@base-win/shared/voteguide';
 import './home.css';
+import { dayWords, useAuthorized } from '../components/Authorized.jsx';
 
 const greeting = () => {
   const h = new Date().getHours();
@@ -540,8 +541,15 @@ function NeedsYou({ b, me }) {
   const moved = Number(b.moved?.open) || 0;
   // The campaign's replies to letters this person wrote (brief.letters).
   const replies = Number(b.letters?.unseen) || 0;
+  // "Authorized by …" (components/Authorized.jsx): amber within 14 days of
+  // the date it is needed from, red on and after it, while it is missing or
+  // has no way to reach the agent; and the automatic sends that went
+  // without it. Nothing at all while no date is typed.
+  const auth = useAuthorized().data;
+  const authWarn = auth?.warn || null;
+  const autoMissing = authWarn?.level === 'due' ? Number(auth.automaticMissing) || 0 : 0;
   const empty = !flagged.length && !newVols && !shortShifts.length && !signs && !followups.n && !newTexts && !requests.n && !letters.n
-    && !connectEmail && !moved && !replies;
+    && !connectEmail && !moved && !replies && !authWarn;
 
   return (
     <section className="today-section" aria-labelledby="today-needs-h">
@@ -591,6 +599,19 @@ function NeedsYou({ b, me }) {
             <LinkRow to="/people?moved=open" main={<><strong className="mono">{num(moved)}</strong> moved — {moved === 1 ? 'needs' : 'need'} an address</>} />
           )}
           {connectEmail && <LinkRow to="/settings/services" main="Connect email" />}
+          {authWarn && (
+            <LinkRow to="/website/settings#wb-s-agent"
+              main={authWarn.gap === 'missing'
+                ? `The Authorized by line is needed from ${dayWords(authWarn.from)}`
+                : `The Authorized by line needs a way to reach your financial agent by ${dayWords(authWarn.from)}`}
+              chip={authWarn.level === 'due' ? (authWarn.gap === 'missing' ? 'Missing' : 'Not complete') : 'Add it'}
+              chipCls={`chip ${authWarn.level === 'due' ? 'chip-danger' : 'chip-warn'}`} />
+          )}
+          {autoMissing > 0 && (
+            <LinkRow to="/website/settings#wb-s-agent"
+              main={<><strong className="mono">{num(autoMissing)}</strong> automatic {plural(autoMissing, 'email or text', 'emails and texts')} went out without the line since {dayWords(authWarn.from)}</>}
+              chip="Missing" chipCls="chip chip-danger" />
+          )}
         </ul>
       )}
       {/* base.win support's visits this week (ext/operator brief.js), managers only. */}

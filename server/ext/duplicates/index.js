@@ -49,8 +49,9 @@ import { z } from 'zod';
 import { httpError } from '../../actions/util.js';
 import { flagIfOver, maybesAbout, recheckMaybes } from '../../lib/gifts.js';
 import { runHooks } from '../../lib/hooks.js';
-import { DEFAULT_SLATE } from '@starbase/shared/canvass';
+import { DEFAULT_SLATE } from '@base-win/shared/canvass';
 import { sameText, samePhone, samePostal, sharesOf, sharedWords } from './same.js';
+import { FRESH } from '../../lib/doors.js';
 
 import { touchVotedFeed } from '../voted/live.js';
 
@@ -410,9 +411,10 @@ api.get('/duplicates', async (c) => {
               nullif(lower(trim(coalesce(email, ''))), '') as em,
               nullif(${samePhone('phone')}, '') as ph,
               ${sameText('name')} as nm,
-              nullif(${sameText('address')}, '') as ad,
-              lower(coalesce(unit, '')) as un
-         from persons where workspace_id = $1 and deleted_at is null and kind = 'person'
+              -- The same door (lib/doors.js): worked out, or as written while a row isn't yet.
+              nullif(case when ${FRESH('q')} then q.door_civic else ${sameText('address')} end, '') as ad,
+              case when ${FRESH('q')} then q.door_unit else lower(coalesce(unit, '')) end as un
+         from persons q where workspace_id = $1 and deleted_at is null and kind = 'person'
      ), hits as (
        select a.id as a, b.id as b, 'email' as why from p a join p b on a.em = b.em and a.id < b.id
        union all

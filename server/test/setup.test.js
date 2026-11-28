@@ -1,4 +1,4 @@
-// First-run setup: the deployment names the campaign (STARBASE_ORG_NAME);
+// First-run setup: the deployment names the campaign (BASE_ORG_NAME);
 // the first sign-up makes its workspace; after that sign-up is closed and
 // people join by invite, and sign-in says the campaign's own name — a
 // rename in Settings → Campaign included. (org.test.js: a deployment that
@@ -12,11 +12,11 @@ const tokenOf = (joinUrl) => joinUrl.split('/join/')[1];
 before(async () => {
   await freshDb();
   delete process.env.RESEND_API_KEY;
-  delete process.env.STARBASE_OPEN_SIGNUP; // the real, closed-after-setup behaviour
-  process.env.STARBASE_ORG_NAME = 'Imagine Surrey';
-  process.env.STARBASE_TZ = 'America/Vancouver';
+  delete process.env.BASE_OPEN_SIGNUP; // the real, closed-after-setup behaviour
+  process.env.BASE_ORG_NAME = 'Imagine Surrey';
+  process.env.BASE_TZ = 'America/Vancouver';
 });
-after(() => { process.env.STARBASE_OPEN_SIGNUP = '1'; delete process.env.STARBASE_ORG_NAME; delete process.env.STARBASE_TZ; });
+after(() => { process.env.BASE_OPEN_SIGNUP = '1'; delete process.env.BASE_ORG_NAME; delete process.env.BASE_TZ; });
 
 let mgr;
 
@@ -70,10 +70,10 @@ test('a second person still gets in by invite', async () => {
   assert.equal(me.status, 200);
 });
 
-test('renamed in Settings → Campaign: sign-in and sign-up say the new name, not STARBASE_ORG_NAME', async () => {
+test('renamed in Settings → Campaign: sign-in and sign-up say the new name, not BASE_ORG_NAME', async () => {
   const r = await mgr.action('workspace.update', { name: 'Surrey Forward' });
   assert.equal(r.status, 200, JSON.stringify(r.json));
-  assert.equal(process.env.STARBASE_ORG_NAME, 'Imagine Surrey', 'the deployment still says the old name');
+  assert.equal(process.env.BASE_ORG_NAME, 'Imagine Surrey', 'the deployment still says the old name');
   const setup = await new Client().get('/api/auth/setup');
   assert.equal(setup.json.open, false);
   assert.equal(setup.json.organization, 'Surrey Forward', 'the sign-in page names the campaign as it is called now');
@@ -83,8 +83,8 @@ test('renamed in Settings → Campaign: sign-in and sign-up say the new name, no
   assert.doesNotMatch(late.json.error, /Imagine Surrey/);
 });
 
-test('STARBASE_OPEN_SIGNUP=1 opens sign-up again (tests, local dev)', async () => {
-  process.env.STARBASE_OPEN_SIGNUP = '1';
+test('BASE_OPEN_SIGNUP=1 opens sign-up again (tests, local dev)', async () => {
+  process.env.BASE_OPEN_SIGNUP = '1';
   try {
     const setup = (await new Client().get('/api/auth/setup')).json;
     assert.equal(setup.open, true);
@@ -92,6 +92,6 @@ test('STARBASE_OPEN_SIGNUP=1 opens sign-up again (tests, local dev)', async () =
     const r = await new Client().signup();
     assert.equal(r.status, 201);
   } finally {
-    delete process.env.STARBASE_OPEN_SIGNUP;
+    delete process.env.BASE_OPEN_SIGNUP;
   }
 });

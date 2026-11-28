@@ -1,3 +1,6 @@
+// First, before any module reads what this phone kept: what it kept under
+// the app's older name is carried to the new one (oldStorage.js).
+import './oldStorage.js';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -6,7 +9,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import './app.css';
 import App from './App.jsx';
 import { ADMIN_BASE, FIELD_BASE, fieldHref, appMode } from './mode.js';
-import { ME_KEY, NoSignalError, TWO_STEP_EVENT, noAnswer, savedSignIn } from './api.js';
+import { ME_KEY, NoSignalError, TWO_STEP_EVENT, forgetSavedSignIn, noAnswer, savedSignIn } from './api.js';
 import { keptPersister, watchKeptCopies } from './components/KeptCopies.js';
 import { forgetPhoneCopies, keepOnlyMine } from './components/OfflineCache.js';
 import { closeOutbox } from './offline.js';
@@ -54,7 +57,7 @@ const isMeKey = (key) => key.length === 1 && key[0] === 'me';
 // Leaving because another tab signed out: this tab's own clear() must not
 // forget what that tab saved (it may be the next person's sign-in).
 let leaving = false;
-const forgetMe = () => { if (leaving) return; try { localStorage.removeItem(ME_KEY); } catch { /* storage blocked */ } };
+const forgetMe = () => { if (!leaving) forgetSavedSignIn(); };
 
 if (typeof navigator !== 'undefined' && navigator.onLine === false) {
   const saved = savedSignIn();

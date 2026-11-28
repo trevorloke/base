@@ -1,6 +1,7 @@
 // Sharing E2E — share kits on one fresh in-memory campaign. A manager at a
 // desk (1440) sets the authorization line, makes a post on Outreach →
-// Sharing for the open petition (with a picture), and sees it listed. A
+// Sharing for the open petition (with a picture; the line goes on every
+// post, no tick box), and sees it listed. A
 // volunteer on a 390×844 phone sees "Share · 1 post" on Today, opens /share:
 // their link (/r/…), the post's link (/r/…?k=…), Copy words copies the words
 // and the link, Share opens WhatsApp · Text · Facebook · X · Email · Copy in
@@ -15,14 +16,14 @@
 // Outreach → Sharing and "New post to share". Both screens are measured at
 // 390 and 1440.
 //
-//   STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=5110 node server/index.js &
+//   BASE_BRAND=imagine-surrey BASE_OPEN_SIGNUP=1 BASE_DATA=memory PORT=5110 node server/index.js &
 //   BASE=http://127.0.0.1:5110 SHOTS=/tmp/sharing node e2e-sharing.mjs
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
 
 const BASE = process.env.BASE || 'http://127.0.0.1:5110';
 const ADMIN = `${BASE}/admin`;
-const SHOTS = process.env.SHOTS || '/tmp/starbase-sharing';
+const SHOTS = process.env.SHOTS || '/tmp/base-win-sharing';
 mkdirSync(SHOTS, { recursive: true });
 const results = [];
 const check = (name, ok, extra = '') => {
@@ -124,8 +125,9 @@ await page.click('button.btn-primary:has-text("New post to share")');
 await page.fill('.sk-edit input.input', 'Sign for SkyTrain');
 await page.fill('.sk-edit textarea', 'I signed for SkyTrain to South Surrey. Will you?');
 await page.selectOption('.sk-edit select', `/act/${petition.slug}`);
-check('the editor shows the line and its reminder', /Pictures should carry this line/.test(await page.innerText('.sk-edit')) && (await page.innerText('.sk-edit')).includes(LINE));
-check('the checkbox "Add “Authorized by …” to the words" is on', await page.isChecked('.sk-check input'));
+check('the editor shows the line and its reminder', /base\.win adds this line to every post\. Pictures should carry it too\./.test(await page.innerText('.sk-edit')) && (await page.innerText('.sk-edit')).includes(LINE));
+// The line goes on every post once it is filled in (shared/site/authorized.js): no per-post tick box.
+check('no per-post "Add “Authorized by …”" tick box', await page.locator('.sk-edit input[type=checkbox]').count() === 0);
 check('the counter counts the line and says it fits X', /of 500 with the Authorized by line · Under 280 fits X/.test(await tc(page, '.sk-count')), await tc(page, '.sk-count'));
 // A picture, under More details.
 await page.click('.sk-more');

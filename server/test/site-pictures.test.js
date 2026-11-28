@@ -6,8 +6,8 @@
 // post's summary made from its words.
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
-import { checkImage, checkProps } from '@starbase/shared/site/catalogue';
-import { knownPictures, summaryFrom } from '@starbase/shared/site/pictures';
+import { checkImage, checkProps } from '@base-win/shared/site/catalogue';
+import { knownPictures, summaryFrom } from '@base-win/shared/site/pictures';
 import { renderSite } from '../ext/site/render/index.js';
 import { baseSample } from './site-samples.js';
 import { ok, campaign } from './site-helpers.js';

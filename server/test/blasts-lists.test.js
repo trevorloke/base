@@ -19,7 +19,7 @@ let ws;
 let list;
 const people = {};
 
-const ENV = ['RESEND_API_KEY', 'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM', 'STARBASE_PUBLIC_URL'];
+const ENV = ['RESEND_API_KEY', 'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM', 'BASE_PUBLIC_URL'];
 const saved = Object.fromEntries(ENV.map((k) => [k, process.env[k]]));
 const realFetch = globalThis.fetch;
 const emails = [];
@@ -30,7 +30,7 @@ const stubProviders = () => {
   process.env.TWILIO_ACCOUNT_SID = `ACtest${tag}`;
   process.env.TWILIO_AUTH_TOKEN = `tok${tag}`;
   process.env.TWILIO_FROM = '+16045550100';
-  process.env.STARBASE_PUBLIC_URL = 'https://starbase.example';
+  process.env.BASE_PUBLIC_URL = 'https://base-win.example';
   globalThis.fetch = async (url, init = {}) => {
     const u = String(url);
     if (u.startsWith('https://api.resend.com/')) { emails.push(JSON.parse(init.body)); return new Response('{"id":"msg"}', { status: 200 }); }
@@ -80,7 +80,7 @@ test('an email blast to a list: everyone who may be emailed, each with their own
   assert.deepEqual(emails.map((m) => m.to[0]).sort(), [mail('anne'), mail('dev')]);
   const m = emails[0];
   assert.match(m.html, /<strong>Saturday<\/strong>/);
-  const link = /href="(https:\/\/starbase\.example\/bu\/[0-9a-f-]{36})"/.exec(m.html)?.[1];
+  const link = /href="(https:\/\/base-win\.example\/bu\/[0-9a-f-]{36})"/.exec(m.html)?.[1];
   assert.ok(link, 'the unsubscribe link');
   assert.equal(m.headers['List-Unsubscribe'], `<${link}>`);
   const listed = await blastOf(r.json.blast.id);

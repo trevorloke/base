@@ -1,7 +1,10 @@
 // The canvass map's own rules, with no map library in them (so they can be
 // tested as they are — server/test/mapview.test.js): which part of the map a
 // big list asks for, how many people it takes whole, what it draws once an
-// answer is in, and how its marks are coloured.
+// answer is in, and how its marks are coloured; and how a walk list's
+// houses and buildings are put together (with shared/units.js).
+import { doorParts, unitWords } from '../../../shared/units.js';
+import { floorOf, floorsShown, groupPlaces } from '@base-win/shared/buildings';
 
 // A list too big to load at once (a city's voter file) is drawn three ways:
 //   further out than DOT_ZOOM  a picture: people per patch of the map
@@ -62,8 +65,78 @@ export const drawnFor = ({ doors, view, density }) => {
 // (band: 0 not asked yet · 1 undecided · 2 support · 3 opposed — the
 // household's, as a pin's colour is).
 const BAND_NAME = ['unrated', 'undecided', 'support', 'opposed'];
-// u: the most units at one address at the spot (a building from BUILDING_MIN).
-export const dotsFrom = (rows) => (rows || []).map(([lat, lng, band, n, u]) => ({ lat, lng, band: BAND_NAME[band] || 'unrated', n, u: u || 0 }));
+// u: the most units at one address at the spot (a building from BUILDING_MIN);
+// h: the doors of a house with suites there (its main door and suites, 2 or
+// more; 0 when there is none, or an older server that sends five values).
+export const dotsFrom = (rows) => (rows || []).map(([lat, lng, band, n, u, h]) => ({ lat, lng, band: BAND_NAME[band] || 'unrated', n, u: u || 0, h: h || 0 }));
+// A house with suites: an item the map grouped from the doors it holds
+// ({ isHouse }), or a busy view's dot with 2 or more doors at one house (h).
+export const isHouseDot = (d) => Boolean(d?.isHouse || d?.h >= 2);
+
+// ── Houses and buildings, for the walk list and the map's tags ──
+// (shared/units.js reads each door; shared/buildings.js groups them.)
+// Each door with its place: 'building' | 'house' | 'door', its group (the
+// place's key; null for a door on its own), civic, units and unit_words.
+// The server sends these on the walk list (worked out before a round
+// leaves any door out, so a tower thinned to two units is still a
+// building): they are kept as they came. A list kept on the phone by an
+// older version has none, and they are worked out here from that list.
+export const placesOf = (doors) => {
+  const list = doors || [];
+  if (list.every((d) => d.place)) return list;
+  const { buildings, houses } = groupPlaces(list);
+  const info = new Map();
+  for (const b of buildings) for (const d of b.doors) info.set(d, { place: 'building', group: b.key, civic: b.civic, units: b.units });
+  for (const h of houses) for (const d of h.doors) info.set(d, { place: 'house', group: h.key, civic: h.civic, units: h.units });
+  return list.map((d) => {
+    if (d.place) return d;
+    const at = info.get(d) || { place: 'door', group: null, civic: doorParts(d).civic, units: 1 };
+    return { ...d, ...at, unit_words: unitWords(doorParts(d).unit, at.place) };
+  });
+};
+
+// The walk list in blocks, in the order it came (the server's walk order
+// keeps a house's or a building's doors together): a door on its own, or a
+// house or building with its doors under one address. A building's doors
+// carry their floor; floors: whether to show floor headings.
+export const walkBlocks = (doors) => {
+  const out = [];
+  for (const d of doors || []) {
+    const last = out[out.length - 1];
+    const grouped = d.group != null && (d.place === 'house' || d.place === 'building');
+    if (grouped && last && last.group === d.group) { last.doors.push(d); continue; }
+    out.push({
+      key: grouped ? `${d.place}:${d.group}` : null,
+      place: grouped ? d.place : 'door',
+      group: grouped ? d.group : null,
+      address: doorParts(d).shown || d.address || '',
+      units: d.units ?? 1,
+      doors: [d],
+    });
+  }
+  for (const b of out) {
+    if (b.place !== 'building') continue;
+    const keys = b.doors.map((d) => doorParts(d).unit);
+    b.floors = floorsShown(keys);
+    b.doors = b.doors.map((d, i) => ({ ...d, floor: floorOf(keys[i]) }));
+  }
+  return out;
+};
+
+// The map's small words under a mark (a house's "+ Basement suite", a
+// building's "Building"): screen boxes { left, top, right, bottom } in
+// pixels, so a tag is shown only where it covers no other mark (two houses
+// one lot apart at street zoom are about 38 px apart: their tags would).
+// at: the mark's point on screen (a pin's tip, a square's middle).
+export const TAG_PX = { font: 13, char: 7.4, pad: 12, height: 20 };
+export const tagBox = (at, text, { below = 8 } = {}) => {
+  const w = Math.ceil(String(text).length * TAG_PX.char + TAG_PX.pad);
+  return { left: at.x - w / 2, right: at.x + w / 2, top: at.y + below, bottom: at.y + below + TAG_PX.height };
+};
+// A pin's 48 px tap box (its tip sits 42 px down it); a square's, centred.
+export const pinBox = (at) => ({ left: at.x - 24, right: at.x + 24, top: at.y - 42, bottom: at.y + 6 });
+export const squareBox = (at) => ({ left: at.x - 24, right: at.x + 24, top: at.y - 24, bottom: at.y + 24 });
+export const boxesMeet = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
 
 // ── Turfs ──
 // New turfs cycle through hues that never read as a rating band (no green,
@@ -412,11 +485,11 @@ const HOUR = 3_600_000;
 // service is named (the map draws the free tiles meanwhile).
 const IGNORED = {
   google: 'GOOGLE_MAPS_TILES can’t be used — set it to 1, with GOOGLE_MAPS_SERVER_KEY',
-  provider: 'STARBASE_TILE_PROVIDER isn’t known — use stadia',
-  'carto-key': 'CARTO needs a key now (STARBASE_TILE_CARTO_KEY)',
+  provider: 'The map provider setting (BASE_TILE_PROVIDER) isn’t known — use stadia',
+  'carto-key': 'CARTO needs a key now — the CARTO key setting (BASE_TILE_CARTO_KEY)',
 };
 // The street map sends a notice, not streets: why, by provider.
-export const NOTICE_CARTO = 'Every place gets the same picture. CARTO’s free map needs a key now: set STARBASE_TILE_CARTO_KEY in Render, or STARBASE_TILE_CLEAN=off.';
+export const NOTICE_CARTO = 'Every place gets the same picture. CARTO’s free map needs a key now: set the CARTO key setting (BASE_TILE_CARTO_KEY) in Render, or turn the Clean look off (BASE_TILE_CLEAN=off).';
 export const NOTICE_OTHER = 'Every place gets the same picture — usually a message from the map’s provider about a key or an account. The picture is below.';
 // One tile, drawn under the Street map line: what this phone gets.
 export const PICTURE = {
