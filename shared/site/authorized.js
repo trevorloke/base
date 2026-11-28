@@ -53,10 +53,10 @@ export const CHANNELS = Object.freeze({
     hooks: ['server/ext/site/public.js'],
   }),
   'site-plain-own': row({
-    what: 'A supporter’s own pages: email preferences, unsubscribe, a link that expired',
+    what: 'A supporter’s own pages: email preferences, unsubscribe (the website’s, and the one every email links to), a link that expired',
     kind: 'unclear', owner: true, include: 'when-set', form: 'html-footer',
     senders: ['server/ext/site/public.js'],
-    hooks: ['server/ext/site/public.js'],
+    hooks: ['server/ext/site/public.js', 'server/routes/public.js', 'server/ext/ladders/public.js'],
   }),
   embed: row({
     what: 'The voter guide in another website’s frame',

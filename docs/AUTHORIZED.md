@@ -57,8 +57,11 @@ Each of these gets the line whenever it is filled in, until you say
 otherwise. Some already carried it before this change (press releases and
 the plain pages), so the real question is "keep or stop".
 
-1. `site-plain-own`: your own pages (email preferences, unsubscribe, a link
-   that expired). They carried the line before.
+1. `site-plain-own`: a reader's own pages: email preferences, a link that
+   expired, and the unsubscribe page every newsletter, email blast, press
+   release and automatic email links to. The website's own preferences and
+   unsubscribe pages carried the line before; the unsubscribe pages the
+   emails link to get it now.
 2. `ics`: calendar files people add to their own calendars. They carried
    the line before.
 3. `share-card`: link previews (the card a social app draws when a page link

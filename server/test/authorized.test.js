@@ -326,6 +326,25 @@ test('T9. a share kit saved without the line still shows it; the 500 check count
   assert.equal(desk.over, 1);
 });
 
+test('the unsubscribe pages every email links to (/u, /bu, /lu) carry it; with it empty they don’t', async () => {
+  const one = async (sql) => (await db.query(sql, [ws])).rows[0]?.id;
+  const sub = await one('select id from subscriptions where workspace_id = $1 limit 1');
+  const rcpt = await one("select r.id from blast_recipients r join blasts b on b.id = r.blast_id where r.workspace_id = $1 and b.kind = 'eblast' and r.email is not null limit 1");
+  const run = await one('select r.id from ladder_runs r join persons p on p.id = r.person_id where r.workspace_id = $1 and p.email is not null limit 1');
+  assert.ok(sub && rcpt && run, 'a subscription, an email blast recipient and a ladder run to unsubscribe');
+  const paths = [`/u/${sub}`, `/bu/${rcpt}`, `/lu/${run}`];
+  await setOrg(SET);
+  for (const p of paths) {
+    const r = await hit(p);
+    assert.equal(r.status, 200, p);
+    assert.match(r.text, /Unsubscribe/, p);
+    assert.ok(r.text.includes(`<p class="auth">${LINE}</p>`), `${p}: the line`);
+  }
+  await setOrg(EMPTY);
+  for (const p of paths) assert.doesNotMatch((await hit(p)).text, /Authorized by/, p);
+  await setOrg(SET);
+});
+
 test('the website, plain pages, the calendar file, the link preview and the share sheet carry it', async () => {
   await setOrg(SET);
   const home = await hit('/site/');
