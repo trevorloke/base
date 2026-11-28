@@ -47,10 +47,10 @@ import { DEFAULT_TILES, homeStart, homeView, safeAttribution } from '../componen
 import { ex } from '../brand.js';
 import { DotLayer, DensityLayer, cellAt, countLabel, isBuildingDot, isHouseDot, nearest } from './mapDots.js';
 import { groupPlaces, unitRows } from '@base-win/shared/buildings';
-import { TERMINAL } from '@base-win/shared/passes';
 import { doorLine, doorParts, houseCompare, houseTag, unitWords } from '../../../shared/units.js';
 import BuildingSheet, { GONE_LINE, buildingKey, mapDoorKey, nextUnit, rowMark, seedDoor, unitLine, useBuilding } from '../components/BuildingSheet.jsx';
-import { nextAtHouse, stillToKnock } from '../components/DoorSwitch.jsx';
+import { nextAtHouse } from '../components/DoorSwitch.jsx';
+import { firstToKnock, houseDoorState, keptFor, serverStates } from '../components/houseState.js';
 import '../components/buildings.css';
 import { DOT_ZOOM, LONE_PIN_ZOOM, PIN_ZOOM, MARK, markTheme, TILE_WAIT_MS, boxesMeet, css, cellOf, cellsFrom, defaultLook, dotsFrom, drawnFor, inBox, mapLooks, pickLook, pinBox, placingPoll, rowsBudget, squareBox, streetMove, tagBox, tileAt, tileHealth, tileHost, TURF_COLORS, turfColor, viewBox } from './mapView.js';
 import { askNotice, forgetNotice, knownNotice } from './tileProbe.js';
@@ -285,19 +285,17 @@ function spreadStacked(doors) {
   }
 }
 
-// The walk lists kept on this phone, for a house's door states: each
-// person's door state on its round, and the doors the round leaves out
-// ("civic|unit", from the list's house_doors). Read when a house is opened.
-function readKept(me) {
-  const byPerson = new Map();
-  const off = new Set();
-  for (const { id } of cachedWalkLists(me)) {
-    for (const d of keptWalkList(me, id)?.data?.doors || []) {
-      for (const p of d.persons || []) if (!byPerson.has(p.id)) byPerson.set(p.id, d.state || 'open');
-      if (d.civic) for (const h of d.house_doors || []) if (h.in_round === false) off.add(`${d.civic}|${h.unit}`);
-    }
-  }
-  return { byPerson, off };
+// The walk lists kept on this phone, for a house's door states when the
+// server can't answer (offline): each person's door state on its round, and
+// the doors the round leaves out ("civic|unit", from the list's
+// house_doors) — only the lists kept for one round (houseState.js keptFor:
+// the one the server last named, else the newest list's).
+// How long a tap on a house waits for the server's door states before it
+// opens on what the phone has.
+const HOUSE_WAIT_MS = 2500;
+const onlineNow = () => typeof navigator === 'undefined' || navigator.onLine !== false;
+function readKept(me, passId) {
+  return keptFor(cachedWalkLists(me).map(({ id }) => keptWalkList(me, id)), passId);
 }
 
 const EMPTY_MODEL = { doors: [], byPerson: new Map(), orphanSigns: [], buildings: [], houses: [] };
@@ -1723,29 +1721,53 @@ export default function MapPage() {
       : visible),
     [buildings.length, houses.length, visible, inBuilding, inHouse, buildingItems, houseItems],
   );
-  // A house's doors as its card's switch shows them, each with its state:
-  // a knock still on this phone or sent from the card (by person), else
-  // the walk list kept on the phone (its round's state, and "Not on this
-  // round"), else Not knocked. A tap on the house opens its first door
-  // still to knock; a link opens the door it names (?person).
+  // A house's doors as its card's switch shows them, each with its state
+  // (components/houseState.js): the server's for the open round
+  // (/buildings/house/:id, whoever knocked them and on whatever phone),
+  // with a knock still on this phone or sent from the card laid over it;
+  // with no answer (no signal) the walk lists kept on the phone for that
+  // round; else Not knocked. A tap on the house opens its first door not
+  // knocked, else the first to try again (else Main); a link opens the
+  // door it names (?person).
   const [houseSent, setHouseSent] = useState({});
+  // The round the server last named: which kept lists to read offline.
+  const housePassRef = useRef(undefined);
+  const houseAnchor = selectedHouse?.doors[0]?.persons[0]?.id || null;
+  const houseQuery = (id) => ({
+    queryKey: ['doors', 'house', id],
+    queryFn: () => apiGet(`/buildings/house/${encodeURIComponent(id)}`),
+    staleTime: 5_000,
+    retry: 0,
+  });
+  const houseQ = useQuery({ ...houseQuery(houseAnchor), enabled: Boolean(houseAnchor) && online });
+  if (houseQ.data) housePassRef.current = houseQ.data.pass?.id ?? null;
+  const server = useMemo(() => serverStates(houseQ.data), [houseQ.data]);
   const houseOpenKey = selectedHouse?.key || null;
-  const kept = useMemo(() => (houseOpenKey ? readKept(me) : null), [houseOpenKey, me]);
+  const kept = useMemo(() => (houseOpenKey && !server ? readKept(me, housePassRef.current) : null), [houseOpenKey, me, server]);
   const knocks = useMemo(() => ({ ...houseSent, ...pendingKnocks(outbox.items) }), [houseSent, outbox.items]);
-  const houseState = useCallback((d, from = kept) => {
-    if (voting && d.persons.length > 0 && d.persons.every(hasVoted)) return 'voted';
-    const listed = d.persons.map((p) => from?.byPerson.get(p.id)).find(Boolean);
-    if (listed === 'done') return 'done';
-    const mine = d.persons.map((p) => knocks[p.id]).filter(Boolean);
-    if (mine.length) return mine.some((k) => TERMINAL.includes(k.outcome)) ? 'done' : 'again';
-    if (listed) return listed;
-    if (from?.off.has(d.key)) return 'off';
-    return 'open';
-  }, [voting, hasVoted, kept, knocks]);
+  const houseState = useCallback((d, from = { server, kept }) => houseDoorState(d, {
+    server: from.server, kept: from.kept, knocks, voted: voting && d.persons.length > 0 && d.persons.every(hasVoted),
+  }), [voting, hasVoted, server, kept, knocks]);
+  // The states for a house about to open: the server's (asked now, a short
+  // wait at most), else the kept lists for its round.
+  const houseFrom = async (anchorId) => {
+    if (anchorId && onlineNow()) {
+      try {
+        const answer = await Promise.race([
+          queryClient.fetchQuery(houseQuery(anchorId)),
+          new Promise((_, no) => { setTimeout(() => no(new Error('slow')), HOUSE_WAIT_MS); }),
+        ]);
+        housePassRef.current = answer?.pass?.id ?? null;
+        const srv = serverStates(answer);
+        if (srv) return { server: srv, kept: null };
+      } catch { /* no answer: the phone's own copy */ }
+    }
+    return { server: null, kept: readKept(me, housePassRef.current) };
+  };
   // The person to open at a house a busy view's dot stands for: the doors at
   // the nearest person's civic address, in house order, the first one still
   // to knock (else Main).
-  const houseFirst = (persons, near) => {
+  const houseFirst = async (persons, near) => {
     const civic = doorParts(near).civic;
     const byDoor = new Map();
     for (const p of persons || []) {
@@ -1756,13 +1778,17 @@ export default function MapPage() {
     }
     const list = [...byDoor.values()].sort((a, b) => houseCompare(a.unit, b.unit));
     if (list.length < 2) return near;
-    const from = readKept(me);
-    return (list.find((d) => stillToKnock(houseState(d, from))) || list[0]).persons[0];
+    const from = await houseFrom(list[0].persons[0].id);
+    return firstToKnock(list, (d) => houseState(d, from)).persons[0];
   };
-  const openHouse = (h) => {
+  const houseSeqRef = useRef(0);
+  const openHouse = async (h) => {
     if (h.key === selectedMarkRef.current) return;
-    const from = readKept(me);
-    const first = h.doors.find((d) => stillToKnock(houseState(d, from))) || h.doors[0];
+    const mine = (houseSeqRef.current += 1);
+    const from = await houseFrom(h.doors[0]?.persons[0]?.id);
+    // Another pin was tapped meanwhile, or this house is open already.
+    if (mine !== houseSeqRef.current || h.key === selectedMarkRef.current) return;
+    const first = firstToKnock(h.doors, (d) => houseState(d, from));
     if (first?.persons[0]) select(first.persons[0].id);
   };
   const houseCard = useMemo(() => {
@@ -2111,7 +2137,8 @@ export default function MapPage() {
       const map = mapRef.current;
       if (!nearestOne) { map?.setView([dot.lat, dot.lng], Math.min(offZoomRef.current, map.getZoom() + 1)); return; }
       // A house's dot: its first door still to knock (Main first), as a tap on its pin.
-      const who = isHouseDot(dot) ? houseFirst(res.persons, nearestOne) : nearestOne;
+      const who = isHouseDot(dot) ? await houseFirst(res.persons, nearestOne) : nearestOne;
+      if (mine !== spotSeqRef.current) return;
       // Their door is here already: the card opens without asking again.
       queryClient.setQueryData(['doors', 'door', who.id], (was) => was || { persons: res.persons, signs: res.signs || [], scope: 'door' });
       select(who.id);

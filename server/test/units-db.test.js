@@ -319,6 +319,34 @@ test('map ?person=: the door, and the other doors at its house (the door switch 
   assert.deepEqual(prof.at_house.map((d) => [d.unit_words, d.people]), [['Basement suite', 1], ['Coach house', 1]]);
 });
 
+// ── 6c. A house's door states come from the server, for the open round ──
+test('house states: each door at a house with its state on the open round, whoever asks and whatever their phone keeps', async () => {
+  const Q = { lat: 49.55, lng: -122.6 };
+  const main = await insert({ name: 'Nia Example', address: '11200 134 St', ...Q });
+  const bsmt = await insert({ name: 'Oto Example', address: '11200 134 St Bsmt', ...Q });
+  const coach = await insert({ name: 'Pia Example', address: '11200 134 St', unit: 'Coach house', ...Q });
+  await insert({ name: 'Far Example', address: '11200 134 St', lat: Q.lat + 0.01, lng: Q.lng });
+  await fill();
+  const first = ok(await mgr.action('pass.start', { name: 'House round', kind: 'persuasion', who: 'all', tries: 2 })).pass;
+  ok(await mgr.action('contact.log', { person_id: main, channel: 'door', outcome: 'no_answer' }));
+  ok(await mgr.action('contact.log', { person_id: coach, channel: 'door', outcome: 'refused' }));
+  const read = async (id) => ok(await mgr.get(`/api/buildings/house/${id}`));
+  const j = await read(bsmt);
+  assert.equal(j.pass?.id, first.id, 'the open round');
+  assert.deepEqual(j.doors.map((d) => [d.key, d.unit, d.state, d.in_round]), [
+    ['11200 134 st|', '', 'again', true], ['11200 134 st|BSMT', 'BSMT', 'open', true], ['11200 134 st|COACH', 'COACH', 'done', true],
+  ], 'Main to try again, the basement suite not knocked, the coach house done (the same civic 1 km away is not this house)');
+  assert.deepEqual((await read(main)).doors.map((d) => d.state), ['again', 'open', 'done'], 'the same from any door of the house');
+  // A new round: every door is open again on it.
+  ok(await mgr.action('pass.end', { id: first.id }));
+  const second = ok(await mgr.action('pass.start', { name: 'Second round', kind: 'persuasion', who: 'all', tries: 2 })).pass;
+  const k = await read(bsmt);
+  assert.equal(k.pass?.id, second.id);
+  assert.deepEqual(k.doors.map((d) => d.state), ['open', 'open', 'open']);
+  ok(await mgr.action('pass.end', { id: second.id }));
+  assert.equal((await mgr.get('/api/buildings/house/not-an-id')).status, 404);
+});
+
 // ── 16. Search finds suites and units written in the address ──
 test('search: “10388 134” finds the suite written “Bsmt 10388 134 St”; “13450 104” the unit “#1203 13450 104 Ave”', async () => {
   await insert({ name: 'Lou Example', address: 'Bsmt 11100 134 St', lat: 49.6, lng: -122.6 });

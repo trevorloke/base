@@ -17,7 +17,9 @@
 //   2  Tap 10388: "Doors at this house", Main pressed, "Basement suite · Not
 //      knocked"; the header reads "Ana Example / 10388 134 St".
 //   3  No answer at Main → the one primary is "Next: Basement suite" → the
-//      header reads "Basement suite · 10388 134 St", Ben Example.
+//      header reads "Basement suite · 10388 134 St", Ben Example. 3b: a
+//      fresh phone (no walk list kept, nothing knocked on it) reads "Main ·
+//      Try again" from the server and opens the house on the basement suite.
 //   4  The walk list (a volunteer's phone): 10388 is one block with Main
 //      (Try again) and Basement suite (Not knocked); the duplex reads Suite A
 //      and Suite B; the mid-rise reads "Building · 24 units" with rows
@@ -25,6 +27,7 @@
 //   5  Offline (the kept walk list, no signal): Refused at the basement suite
 //      → it is Done, Main still Try again. Back online it syncs: the turf's
 //      progress and Today's doors read 2 doors knocked at 10388, never 1, never 3.
+//      5b: a fresh phone reads Main Try again, Basement suite Done ✓, and opens on Main.
 //   6  The printed walking list: "10388 134 St" once, then "Main" and
 //      "Basement suite"; "13600 104 Ave · Building · 24 units"; the CSV's
 //      Number 13600 and Unit "Unit 201"; the PDF (Letter) says the same.
@@ -439,12 +442,30 @@ const step3 = async (H, name) => {
   check(`${name}: the switch now has Basement suite pressed`, sw2.length === 2 && sw2[1].on && !sw2[0].on, JSON.stringify(sw2.map((b) => [b.t, b.on])));
   await H.shot(`03-card-basement-${name.split(' ')[1] || 'phone'}`);
 };
+// A house opened on a phone that knocked none of its doors and keeps no walk
+// list (a fresh context): the switch reads each door's state from the
+// server, and the card opens on the first door still not knocked.
+const fresh = async (name, want, opensOn) => {
+  const { ctx, H } = await asManager('phone', 'light');
+  await openHouse(H, 'phone');
+  await sleep(600);
+  const sw = await switchOf(H.page);
+  const head = await cardHead(H);
+  check(`${name}: a fresh phone reads ${want.map((t) => `"${t}"`).join(', ')} and opens on ${opensOn}`,
+    sw.map((b) => b.t).join('|') === want.join('|') && sw[opensOn === 'Main' ? 0 : 1]?.on === true
+      && (opensOn === 'Main' ? /^Ana Example\b/.test(head) : /^Ben Example Basement suite · 10388 134 St\b/.test(head)),
+    `${JSON.stringify(sw.map((b) => [b.t, b.on]))} · ${head}`);
+  await H.shot(`03-card-fresh-${name.replace(/\W+/g, '-')}`);
+  await ctx.close();
+};
 if (want(3) && !BIG) {
   const { ctx, H } = await asManager('phone', 'light');
   await openHouse(H, 'phone');
   await step3(H, '3 phone');
   await simple(H.page, '3 phone: the basement suite\'s card', '.door-switch__btn', 56);
   await ctx.close();
+  // Main was knocked (No answer) on another phone: never "Main · Not knocked" here.
+  if (!RED) await fresh('3b', ['Main Try again', 'Basement suite Not knocked'], 'Basement suite');
 }
 
 // ── A volunteer with the turf, on a phone ──
@@ -560,6 +581,8 @@ if (want(5) && V && !RED) {
     stats?.doorsDone === 1 && stats?.doorsAgain === 1 && stats?.doors === 41, JSON.stringify(stats && { doors: stats.doors, done: stats.doorsDone, again: stats.doorsAgain }));
   const brief = (await D.api('/brief')).json;
   check('5: Today\'s doors this week: 2 (Main and the basement suite, never 1 merged, never 3)', brief?.field?.doors === 2, JSON.stringify(brief?.field));
+  // The basement suite was knocked from the volunteer's walk list: a fresh phone sees it Done.
+  await fresh('5b', ['Main Try again', 'Basement suite Done ✓'], 'Main');
 }
 
 // ── Step 9 (review 1): the volunteer's map, on Mine, opens the mid-rise ──

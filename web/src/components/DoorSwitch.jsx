@@ -1,9 +1,11 @@
 // The doors of one house (a main door and its suites: a basement suite, a
 // coach house…), side by side at the top of the door card, so a canvasser
 // picks the door they are standing at. One button per door, big enough for
-// a thumb in a glove (56 px): the door's words, then its state. The card
-// opens on the first door not done (Main first), or on the door a link
-// names; a tap swaps the people and the knock buttons below, nothing else.
+// a thumb in a glove (56 px): the door's words, then its state (the
+// server's for the open round: components/houseState.js). The card opens on
+// the first door not knocked, else the first to try again (Main first), or
+// on the door a link names; a tap swaps the people and the knock buttons
+// below, nothing else.
 // Two doors sit side by side, three or four in a 2 × 2 grid, five or more
 // in one column. (UNITS.md §5.2; words: §6.)
 

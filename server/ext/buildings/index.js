@@ -12,6 +12,14 @@
 //   GET /api/buildings/at?lat=&lng=   the building at a dot (the busy map):
 //                                     the person nearest the point, within
 //                                     the dot's own spot
+//   GET /api/buildings/house/:personId  the doors at that person's civic
+//                                     address nearby (a house with suites),
+//                                     each with its state on the open round:
+//                                     { pass, doors: [{ key, unit, state, in_round }] }
+//                                     in house order. The map's door switch
+//                                     reads it, so a door knocked from
+//                                     another phone (or before a reload)
+//                                     shows its state, never "Not knocked".
 //
 // Answer: { building: { key, place: 'building', address, city, lat, lng,
 // units, people, open, again, done, floors }, doors, pass } — doors shaped
@@ -27,14 +35,14 @@
 // kept to their turfs gets a building only inside one (a tower is one point).
 import { Hono } from 'hono';
 import { openPass, listedWhere } from '../passes/rule.js';
-import { inPass } from '@base-win/shared/passes';
+import { inPass, doorState } from '@base-win/shared/passes';
 import { groupDoors } from '../../lib/geo.js';
 import { inMyTurf } from '../core/index.js';
 import { scopeOf } from '../voted/state.js';
 import {
   buildingOf, unitRows, unitOf, floorOf, unitCompare, floorsShown, REACH,
 } from '@base-win/shared/buildings';
-import { unitWords } from '../../../shared/units.js';
+import { unitWords, doorParts, doorKey, houseCompare } from '../../../shared/units.js';
 
 // Routes import the extensions, so the walk list's own read is imported
 // when asked for, not at load (ext.js: features never import routes/*).
@@ -103,6 +111,23 @@ const readBuilding = async (db, ctx, anchor) => {
   };
 };
 
+// The doors at the anchor's civic address within a building's reach, each
+// with its state on the open round, read as the walk list reads them
+// (loadLocated, shared/passes.js doorState and inPass).
+const readHouse = async (db, ctx, anchor) => {
+  const { loadLocated } = await walkRoute();
+  const pass = await openPass(db, ctx.workspaceId);
+  const onList = await listedWhere(db, ctx, pass);
+  const civic = doorParts(anchor).civic;
+  const located = (await loadLocated(db, ctx, pass, square(Number(anchor.lat), Number(anchor.lng)), onList))
+    .filter((p) => String(p.address || '').trim() && doorParts(p).civic === civic);
+  const doors = groupDoors(located).sort((a, b) => houseCompare(a.parts.unit, b.parts.unit));
+  return {
+    pass: passOut(pass),
+    doors: doors.map((d) => ({ key: doorKey(d), unit: d.parts.unit, state: doorState(d, pass), in_round: inPass(d, pass) })),
+  };
+};
+
 // The person, if they are still somewhere on the map at an address.
 const anchorOf = async (db, ctx, id) => (await db.query(
   `select id, address, unit, city, lat, lng from persons
@@ -134,6 +159,18 @@ api.get('/buildings/of/:personId', async (c) => {
     return c.json(GONE, 404);
   }
   return answer(c, anchor);
+});
+
+api.get('/buildings/house/:personId', async (c) => {
+  const id = c.req.param('personId');
+  if (!UUID_RE.test(id)) return c.json(GONE, 404);
+  const ctx = c.get('ctx');
+  const db = c.get('db');
+  const anchor = await anchorOf(db, ctx, id);
+  if (!placed(anchor)) return c.json(GONE, 404);
+  const { turfsOnly } = await walkRoute();
+  if (turfsOnly(ctx) && !(await inMyTurf(db, ctx, anchor.lat, anchor.lng))) return c.json(NOT_MINE, 404);
+  return c.json(await readHouse(db, ctx, anchor));
 });
 
 api.get('/buildings/at', async (c) => {
