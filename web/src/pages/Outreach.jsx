@@ -1382,7 +1382,7 @@ function TextingTab(props) {
   );
 }
 
-// Email & texting: on or off, said once. They're switched on where Starbase
+// Email & texting: on or off, said once. They're switched on where base.win
 // is hosted, not here — so the line says who to ask.
 function Connections({ focus, isManager }) {
   // A side read of Today's brief (its time isn't this screen's, KeptCopies.js).

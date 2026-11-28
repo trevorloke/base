@@ -68,7 +68,7 @@ const worker = (base, net) => {
     return out;
   };
   const shellIndex = async () => {
-    const r = stores.get(`${base ? `starbase-${base.slice(1)}` : 'starbase'}-shell-v2`)?.get(`${ORIGIN}${base}/index.html`);
+    const r = stores.get(`${base ? `base-win-${base.slice(1)}` : 'base-win'}-shell-v2`)?.get(`${ORIGIN}${base}/index.html`);
     return r ? r.clone().text() : null;
   };
   return { ...api, asked, kept, stores, answer, open, shellIndex };

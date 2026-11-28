@@ -25,7 +25,7 @@
 // holds (src/offline.js) is laid over them — a person added here, a dropped
 // pin, a sign request, a rating — so it shows at once, marked "Not sent yet".
 // Pins go through the outbox too. Tiles come from GET /api/map/config
-// (OpenStreetMap unless STARBASE_TILE_* say otherwise); the service worker
+// (OpenStreetMap unless BASE_TILE_* say otherwise); the service worker
 // keeps the ones already looked at, so a turf seen with signal still draws.
 import { usePracticeOverlay } from '../components/GotvLive.js';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -949,7 +949,7 @@ function NameTurfForm({ points, doors, takenNames, busy, error, counted = true, 
 const tilesLine = (setup) => {
   if (!setup?.source) return null;
   const ignored = Array.isArray(setup.ignored) ? setup.ignored : [];
-  const off = [ignored.includes('google') && 'Google Maps setting ignored', ignored.includes('provider') && 'provider name ignored', ignored.includes('url') && 'custom address ignored', ignored.includes('maxZoom') && 'max zoom ignored', ignored.includes('carto-key') && 'CARTO needs a key now (STARBASE_TILE_CARTO_KEY)'].filter(Boolean);
+  const off = [ignored.includes('google') && 'Google Maps setting ignored', ignored.includes('provider') && 'provider name ignored', ignored.includes('url') && 'custom address ignored', ignored.includes('maxZoom') && 'max zoom ignored', ignored.includes('carto-key') && 'CARTO needs a key now — the CARTO key setting (BASE_TILE_CARTO_KEY)'].filter(Boolean);
   return `Map tiles: ${setup.source}${off.length ? ` — ${off.join(', ')}` : ''}`;
 };
 

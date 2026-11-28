@@ -49,7 +49,7 @@ before(async () => {
   // An old phone still holding a v1 knock: it moves into the new outbox.
   const old = await c.createPerson('Old Knock', { address: '7101 124 St', lat: 49.131, lng: -122.852 });
   installBrowser();
-  store.set('starbase:outbox:v1', JSON.stringify([{ person_id: old.id, channel: 'door', outcome: 'no_answer', client_id: '6a1b7e0c-2f43-4e7a-9a59-6c6f2b9d7a10', queued_at: new Date().toISOString() }]));
+  store.set('base-win:outbox:v1', JSON.stringify([{ person_id: old.id, channel: 'door', outcome: 'no_answer', client_id: '6a1b7e0c-2f43-4e7a-9a59-6c6f2b9d7a10', queued_at: new Date().toISOString() }]));
   net.cookie = c.cookie;
   ob = await import('../../web/src/offline.js');
 });
@@ -59,8 +59,8 @@ const contactsOf = async (id) => (await c.get(`/api/persons/${id}`)).json.contac
 
 test('a v1 knock left on the phone moves into the outbox and sends once', async () => {
   assert.equal(ob.pendingCount(), 1);
-  assert.equal(store.has('starbase:outbox:v1'), false, 'the old key is gone');
-  const item = JSON.parse(store.get('starbase:outbox:v2'))[0];
+  assert.equal(store.has('base-win:outbox:v1'), false, 'the old key is gone');
+  const item = JSON.parse(store.get('base-win:outbox:v2'))[0];
   assert.equal(item.name, 'contact.log');
   assert.equal(item.input.client_id, '6a1b7e0c-2f43-4e7a-9a59-6c6f2b9d7a10');
   const r = await ob.flushOutbox();
@@ -89,7 +89,7 @@ test('offline: a new person, then a knock on them, then a sign — sent in order
   assert.equal(over.signs.length, 1);
   assert.equal(over.signs[0].pending, true);
   // And the sheet says what each one is, in plain words.
-  const words = JSON.parse(store.get('starbase:outbox:v2')).map((i) => ob.itemText(i));
+  const words = JSON.parse(store.get('base-win:outbox:v2')).map((i) => ob.itemText(i));
   assert.match(words[0], /^New person · Ana Souza · \d{1,2}:\d{2} (am|pm)$/);
   assert.match(words[1], /^Knock · Ana Souza · /);
   assert.match(words[2], /^Lawn sign · Ana Souza · /);
@@ -151,7 +151,7 @@ test('vote.mark queued with no signal is sent once; a second flush is a duplicat
   nav.onLine = false;
   const r = await ob.queueAction('vote.mark', { person_id: p.id, voted: true, source: 'door' }, { who: p.name });
   assert.equal(r.queued, true);
-  const item = JSON.parse(store.get('starbase:outbox:v2')).find((i) => i.cid === r.client_id);
+  const item = JSON.parse(store.get('base-win:outbox:v2')).find((i) => i.cid === r.client_id);
   assert.equal(item.name, 'vote.mark');
   assert.equal(item.input.client_id, r.client_id, 'keyed by an id made on the phone');
   assert.match(ob.itemText(item), /^Voted · Voted Offline · /, 'the strip’s sheet, in plain words');
@@ -166,10 +166,10 @@ test('vote.mark queued with no signal is sent once; a second flush is a duplicat
   // append-only. The second flush: the server answers duplicate for the
   // replay (read as done, still one mark), then the take-back lands.
   nav.onLine = false;
-  store.set('starbase:outbox:v2', JSON.stringify([...JSON.parse(store.get('starbase:outbox:v2')), { ...item, tries: 1 }]));
+  store.set('base-win:outbox:v2', JSON.stringify([...JSON.parse(store.get('base-win:outbox:v2')), { ...item, tries: 1 }]));
   await ob.queueAction('vote.mark', { person_id: p.id, voted: false, source: 'door' }, { who: p.name });
   assert.equal(ob.pendingCount(), 2, 'the replay, then the take-back');
-  assert.match(ob.itemText(JSON.parse(store.get('starbase:outbox:v2')).at(-1)), /^Not voted · Voted Offline · /);
+  assert.match(ob.itemText(JSON.parse(store.get('base-win:outbox:v2')).at(-1)), /^Not voted · Voted Offline · /);
   nav.onLine = true;
   assert.equal((await ob.flushOutbox()).sent, 2, 'the replay reads as done; the take-back follows it');
   assert.equal(ob.unsentCount(), 0);
@@ -193,7 +193,7 @@ test('a refusal on replay is kept with the reason; Try again and Dismiss', async
   nav.onLine = true;
   const r = await ob.flushOutbox();
   assert.equal(r.sent, 0);
-  const [item] = JSON.parse(store.get('starbase:outbox:v2'));
+  const [item] = JSON.parse(store.get('base-win:outbox:v2'));
   assert.equal(item.state, 'refused');
   assert.equal(item.error.status, 409);
   assert.match(item.error.message, /already up/);
@@ -207,7 +207,7 @@ test('a refusal on replay is kept with the reason; Try again and Dismiss', async
 
   // Try again: refused again (it's still up), reason kept.
   await ob.retryItem(item.cid);
-  assert.equal(JSON.parse(store.get('starbase:outbox:v2'))[0].state, 'refused');
+  assert.equal(JSON.parse(store.get('base-win:outbox:v2'))[0].state, 'refused');
   // Taken down → a cancel is refused differently; Dismiss drops it.
   ob.dismissItem(item.cid);
   assert.equal(ob.unsentCount(), 0);
@@ -263,7 +263,7 @@ test('a volunteer’s shift sign-up replays as done; a full shift is refused, wi
   assert.equal((await c.action('shift.assign', { shift_id: shift.id, person_id: other.id })).status, 200);
   nav.onLine = true;
   await ob.flushOutbox();
-  const [item] = JSON.parse(store.get('starbase:outbox:v2'));
+  const [item] = JSON.parse(store.get('base-win:outbox:v2'));
   assert.equal(item.state, 'refused');
   assert.match(item.error.message, /full/);
   assert.match(ob.itemText(item), /^Count me in · Phone bank · /);
@@ -300,7 +300,7 @@ test('Take back on a "Count me in" still on the phone: never sent, or "Can’t m
   assert.equal(b.queued, true);
   assert.equal(ob.undoQueued(b.client_id), 'queued');
   assert.equal(ob.undoQueued(b.client_id), 'queued', 'a second tap changes nothing');
-  assert.match(ob.itemText(JSON.parse(store.get('starbase:outbox:v2'))[0]), /^Count me in · undo · Lit drop/);
+  assert.match(ob.itemText(JSON.parse(store.get('base-win:outbox:v2'))[0]), /^Count me in · undo · Lit drop/);
   assert.equal((await ob.flushOutbox()).sent, 1);
   assert.equal(ob.unsentCount(), 0);
   assert.equal(await joins(), 1, 'joined once (the lost answer)');
@@ -345,7 +345,7 @@ test('"Change my hours" on the phone: saved again it replaces the waiting one; a
   const starts = Math.ceil((Date.now() + 2 * 86400_000) / 3600e3) * 3600e3;
   const at = (h) => new Date(starts + h * 3600e3).toISOString();
   const make = async (title, capacity) => (await c.action('shift.create', { title, starts_at: at(0), ends_at: at(6), ...(capacity ? { capacity } : {}) })).json.shift;
-  const items = () => JSON.parse(store.get('starbase:outbox:v2') || '[]');
+  const items = () => JSON.parse(store.get('base-win:outbox:v2') || '[]');
   const full = await make('Canvass', 1);
 
   // Offline: Count me in, my hours, my hours again — one hours item, the newer.
@@ -443,7 +443,7 @@ test('no answer at all: plain words, never "Failed to fetch" — and the outbox 
 
 test('signed out: kept on the phone, sent after signing back in', async () => {
   const p = await c.createPerson('After Sign In', { address: '7210 124 St', lat: 49.1322, lng: -122.8527 });
-  net.cookie = 'starbase_session=nope';
+  net.cookie = 'base_win_session=nope';
   const r = await ob.logContact({ person_id: p.id, channel: 'door', outcome: 'contacted', rating: '1' });
   assert.equal(r.queued, true);
   assert.equal(r.signedOut, true);
@@ -463,7 +463,7 @@ test('each item belongs to the sign-in that saved it: never sent or shown as som
   ob.setOutboxOwner(meA);
   nav.onLine = false;
   await ob.logContact({ person_id: p.id, channel: 'door', outcome: 'contacted', rating: '3' }, { who: p.name });
-  assert.equal(JSON.parse(store.get('starbase:outbox:v2')).at(-1).owner, `${meA.workspace.id}:${meA.user.id}`);
+  assert.equal(JSON.parse(store.get('base-win:outbox:v2')).at(-1).owner, `${meA.workspace.id}:${meA.user.id}`);
   nav.onLine = true;
 
   // The session lapses and the volunteer signs in on this phone.
@@ -474,7 +474,7 @@ test('each item belongs to the sign-in that saved it: never sent or shown as som
   assert.equal(ob.applyOutbox({ persons: [{ id: p.id, name: p.name, lat: 49.1, lng: -122.8 }], signs: [] }).persons[0].rating, undefined, 'not laid over their map');
   assert.equal((await ob.flushOutbox()).sent, 0, 'not theirs to send');
   ob.clearOutbox(); // they sign out: only their own items go
-  assert.equal(JSON.parse(store.get('starbase:outbox:v2')).length, 1, 'the first person’s knock is still on the phone');
+  assert.equal(JSON.parse(store.get('base-win:outbox:v2')).length, 1, 'the first person’s knock is still on the phone');
   assert.equal((await contactsOf(p.id)).length, 0);
 
   // The first person signs back in: it goes, as theirs.
@@ -505,7 +505,7 @@ test('a volunteer, offline: a new housemate at a door in their turf, then a knoc
   assert.equal(made.queued, true);
   const id = made.client_id;
   await ob.logContact({ person_id: id, channel: 'door', outcome: 'contacted', rating: '1' }, { who: 'Ravi Housemate' });
-  const item = JSON.parse(store.get('starbase:outbox:v2')).find((i) => i.cid === id);
+  const item = JSON.parse(store.get('base-win:outbox:v2')).find((i) => i.cid === id);
   assert.equal(item.input.id, id, 'the id is made on the phone');
   assert.equal(item.input.address, undefined, 'the server, not the phone, says where they live');
   assert.match(ob.itemText(item), /^New person · Ravi Housemate · /);
@@ -545,7 +545,7 @@ test('request.ask queued with no signal sends once and a replay is a duplicate',
   nav.onLine = false;
   const r = await ob.queueAction('request.ask', { person_id: p.id, kind: 'volunteer', note: 'free Saturdays, call after 6' }, { who: p.name });
   assert.equal(r.queued, true);
-  const item = JSON.parse(store.get('starbase:outbox:v2')).find((i) => i.cid === r.client_id);
+  const item = JSON.parse(store.get('base-win:outbox:v2')).find((i) => i.cid === r.client_id);
   assert.equal(item.input.client_id, r.client_id, 'keyed by an id made on the phone');
   assert.match(ob.itemText(item), /^Ask the office · Wants to volunteer · Ask Example · \d{1,2}:\d{2} (am|pm)$/);
   assert.equal(ob.pendingCount(), 1);
@@ -597,7 +597,7 @@ test('a knock on someone added here whose adding was refused: kept, in plain wor
   nav.onLine = true;
   const evsBefore = (await c.get('/api/events?since=0&limit=5000')).json.events.length;
   assert.equal((await ob.flushOutbox()).sent, 0);
-  const items = JSON.parse(store.get('starbase:outbox:v2')).filter((i) => i.cid === id || i.input?.person_id === id || i.input?.id === id);
+  const items = JSON.parse(store.get('base-win:outbox:v2')).filter((i) => i.cid === id || i.input?.person_id === id || i.input?.id === id);
   assert.equal(items.length, 3, 'all three still on the phone — never dropped');
   assert.ok(items.every((i) => i.state === 'refused'));
   const [person, knock, pin] = items;
@@ -637,15 +637,15 @@ test('two tabs, one outbox: a save, a send or a dismiss here never drops what an
   await ob.logContact({ person_id: here.id, channel: 'door', outcome: 'contacted', rating: '1' }, { who: here.name });
   // Another tab on this computer saves a knock to the same storage; this tab hasn't heard of it.
   const cid = '0b6f7a52-5d1e-4c39-9d8e-2f5a1c7e4b90';
-  const shared = JSON.parse(store.get('starbase:outbox:v2'));
+  const shared = JSON.parse(store.get('base-win:outbox:v2'));
   shared.push({
     cid, name: 'contact.log', meta: { who: there.name }, at: new Date().toISOString(), tries: 0, state: 'pending',
     input: { person_id: there.id, channel: 'door', outcome: 'contacted', rating: '4', client_id: cid },
   });
-  store.set('starbase:outbox:v2', JSON.stringify(shared));
+  store.set('base-win:outbox:v2', JSON.stringify(shared));
   // This tab saves again: the other tab's knock is still stored (never overwritten by this tab's older list).
   await ob.logContact({ person_id: here.id, channel: 'door', outcome: 'contacted', note: 'Second visit' }, { who: here.name });
-  let stored = JSON.parse(store.get('starbase:outbox:v2'));
+  let stored = JSON.parse(store.get('base-win:outbox:v2'));
   assert.ok(stored.some((i) => i.cid === cid), 'the other tab’s knock survives this tab’s save');
   assert.equal(stored.filter((i) => i.input?.person_id === here.id).length, 2);
   // A refused item dismissed here keeps the other tab's too.
@@ -654,9 +654,9 @@ test('two tabs, one outbox: a save, a send or a dismiss here never drops what an
     cid: junk, name: 'contact.log', meta: {}, at: new Date().toISOString(), tries: 1, state: 'refused', error: { status: 400, message: 'nope' },
     input: { person_id: there.id, channel: 'door', outcome: 'contacted', client_id: junk },
   });
-  store.set('starbase:outbox:v2', JSON.stringify(stored));
+  store.set('base-win:outbox:v2', JSON.stringify(stored));
   ob.dismissItem(junk);
-  stored = JSON.parse(store.get('starbase:outbox:v2'));
+  stored = JSON.parse(store.get('base-win:outbox:v2'));
   assert.equal(stored.length, 3);
   assert.ok(!stored.some((i) => i.cid === junk));
 
@@ -665,7 +665,7 @@ test('two tabs, one outbox: a save, a send or a dismiss here never drops what an
   const r = await ob.flushOutbox();
   assert.equal(r.sent, 3);
   assert.equal(r.left, 0);
-  assert.equal(JSON.parse(store.get('starbase:outbox:v2')).length, 0);
+  assert.equal(JSON.parse(store.get('base-win:outbox:v2')).length, 0);
   assert.equal((await contactsOf(here.id)).length, 2);
   const theirs = await contactsOf(there.id);
   assert.equal(theirs.length, 1);
@@ -702,9 +702,9 @@ test('sign-out: a note still in an open card goes first, as theirs; after it not
   // Signed out: a card closing on the way to Sign in saves nothing here.
   ob.closeOutbox();
   net.cookie = '';
-  const before = store.get('starbase:outbox:v2');
+  const before = store.get('base-win:outbox:v2');
   await assert.rejects(ob.logContact({ person_id: p.id, channel: 'door', outcome: 'contacted', note: 'After sign-out' }), (e) => e.status === 401);
-  assert.equal(store.get('starbase:outbox:v2'), before, 'nothing stored');
+  assert.equal(store.get('base-win:outbox:v2'), before, 'nothing stored');
   assert.equal(ob.unsentCount(), 0);
   // A last render of the screen being left (the same sign-in) doesn't open it again…
   ob.setOutboxOwner(me);
@@ -727,7 +727,7 @@ test('Moved, then a new address, with no signal: knock first, the move once, its
   assert.equal(knock.queued, true);
   const move = await ob.queueMove({ person_id: p.id, to: { address: '9800 King George Blvd' }, contact_client_id: knock.client_id }, { who: p.name });
   assert.equal(move.queued, true);
-  const items = JSON.parse(store.get('starbase:outbox:v2')).slice(-2);
+  const items = JSON.parse(store.get('base-win:outbox:v2')).slice(-2);
   assert.deepEqual(items.map((i) => i.name), ['contact.log', 'person.move'], 'the knock goes first');
   assert.equal(items[1].input.client_id, move.client_id, 'keyed by an id made on the phone');
   assert.match(ob.itemText(items[1]), /^Moved · new address · Moving Offline · \d{1,2}:\d{2} (am|pm)$/);

@@ -17,7 +17,10 @@ import { VOLUNTEER_ROLES, SUGGESTED_TAGS, noCalls } from '@starbase/shared/canva
 import { PLATFORMS as SOCIAL_NETWORKS, countWord, platformWord } from '@starbase/shared/socials';
 import { bandOf, codesInBand, offTail, ratingByCode } from '@starbase/shared/scale';
 import RatingButtons, { RatingChip, ratingSay, ratingText, useScale } from '../components/RatingButtons.jsx';
+import { OLD_STORAGE } from '@starbase/shared/old-names';
 import { queueAction, useOutbox } from '../offline.js';
+import { NS } from '../base.js';
+import { carryKey } from '../oldStorage.js';
 import SurveyQuestions, { answersSaid, answersTail, useSurvey } from '../components/SurveyQuestions.jsx';
 import { queuedText, useThisDevice } from '../components/queued.js';
 import { phoneCopy, showingCopy, useKeepCopy } from '../components/OfflineCache.js';
@@ -1045,7 +1048,7 @@ function PeopleList() {
 // ─────────────────────────────────────────────────────────────────────────────
 // Who has been called or texted in this sitting (this tab only), so the queue
 // moves on and a reload doesn't start over. A convenience: never required.
-const DONE_KEY = 'starbase.calls.done';
+const DONE_KEY = `${NS}calls.done`;
 const readDone = () => {
   try { return JSON.parse(sessionStorage.getItem(DONE_KEY) || '{}') || {}; } catch { return {}; }
 };
@@ -1053,10 +1056,16 @@ const writeDone = (map) => {
   try { sessionStorage.setItem(DONE_KEY, JSON.stringify(map)); } catch { /* private mode: memory only */ }
 };
 // Phone or Text: the last one you used, per sign-in on this phone (Calls
-// opens on it). A convenience: a link that names one (?channel=) wins.
-const channelKey = (me) => `starbase.calls.channel:${me?.workspace?.id || ''}:${me?.user?.id || ''}`;
+// opens on it). A convenience: a link that names one (?channel=) wins. Kept
+// before under a name of its own (shared/old-names.js): carried over the
+// first time it is read.
+const whose = (me) => `${me?.workspace?.id || ''}:${me?.user?.id || ''}`;
+const channelKey = (me) => `${NS}calls.channel:${whose(me)}`;
 const readChannel = (me) => {
-  try { return localStorage.getItem(channelKey(me)) === 'text' ? 'text' : 'phone'; } catch { return 'phone'; }
+  try {
+    carryKey(localStorage, `${OLD_STORAGE.callsChannel}${whose(me)}`, channelKey(me));
+    return localStorage.getItem(channelKey(me)) === 'text' ? 'text' : 'phone';
+  } catch { return 'phone'; }
 };
 const saveChannel = (me, c) => {
   try { localStorage.setItem(channelKey(me), c); } catch { /* private mode: not remembered */ }

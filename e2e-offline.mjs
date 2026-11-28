@@ -1,5 +1,5 @@
-// Starbase offline field mode E2E — a fresh in-memory server with its own tile
-// provider (STARBASE_TILE_*), then, as a desk user on a laptop and a
+// base.win offline field mode E2E — a fresh in-memory server with its own tile
+// provider (BASE_TILE_*), then, as a desk user on a laptop and a
 // volunteer on a 390×844 phone: tiles from the configured provider, kept by
 // the service worker; the map, Calls and Shifts opening with no signal from
 // the phone's copy ("Offline copy"); a new door, a knock on it, a sign
@@ -15,16 +15,67 @@
 // on the phone, with the campaign line on, Call falls back to the phone's
 // own dialler, said in one line.
 //
+//
+// Last, an update with work still on the phone: the app as it was before its
+// new name (its storage, lock, caches and worker under the older names in
+// shared/old-names.js) saves three knocks and a note with no signal and
+// keeps the map's tiles; the new app replaces it, the signal comes back, and
+// the server gets each one exactly once — and the tiles kept before the
+// update still draw with the network blocked.
+//
 //   node e2e-offline.mjs                 (starts its own server on :4102)
-//   BASE=http://127.0.0.1:4102 node e2e-offline.mjs   (a fresh server you started,
-//        with STARBASE_TILE_URL=https://tiles.example/{z}/{x}/{y}.png)
+//   BASE=http://127.0.0.1:4102 node e2e-offline.mjs   (a fresh server you started
+//        from this checkout, with BASE_TILE_URL=https://tiles.example/{z}/{x}/{y}.png)
+//   The update case serves the older app from this checkout's web/dist for a
+//   while (and puts this build back, even when the run fails). The older app
+//   is built once from git (UPGRADE_REV, default 82c8990) into
+//   node_modules/.cache/base-win-upgrade/; UPGRADE_FROM=<dir> uses a build
+//   made elsewhere.
 import { chromium } from 'playwright-core';
-import { spawn } from 'node:child_process';
-import { mkdirSync } from 'node:fs';
+import { spawn, execFileSync } from 'node:child_process';
+import { cpSync, existsSync, mkdirSync, rmSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { OLD_STORAGE } from './shared/old-names.js';
+
+// ── The older app, for the update case ──
+const HERE = fileURLToPath(new URL('.', import.meta.url));
+const CACHE = `${HERE}node_modules/.cache/base-win-upgrade`;
+const olderBuild = () => {
+  if (process.env.UPGRADE_FROM) return process.env.UPGRADE_FROM;
+  const rev = process.env.UPGRADE_REV || '82c8990';
+  const dir = `${CACHE}/${rev}`;
+  if (!existsSync(`${dir}/web/dist/index.html`)) {
+    rmSync(dir, { recursive: true, force: true });
+    mkdirSync(dir, { recursive: true });
+    const tar = execFileSync('git', ['archive', rev, 'web/src', 'web/public', 'web/index.html', 'web/vite.config.js', 'shared'], { cwd: HERE, maxBuffer: 1 << 28 });
+    execFileSync('tar', ['-x', '-C', dir], { input: tar });
+    execFileSync(process.execPath, [`${HERE}node_modules/vite/bin/vite.js`, 'build', '--logLevel', 'warn'], { cwd: `${dir}/web`, stdio: ['ignore', 'ignore', 'inherit'] });
+  }
+  return `${dir}/web/dist`;
+};
+// The server reads web/dist from disk on every request: another build is
+// served by putting it there, and this one goes back afterwards.
+const DIST = `${HERE}web/dist`;
+const THIS_BUILD = `${CACHE}/this-build`;
+let swapped = false;
+const serveBuild = (dir) => {
+  if (!swapped) { rmSync(THIS_BUILD, { recursive: true, force: true }); cpSync(DIST, THIS_BUILD, { recursive: true }); swapped = true; }
+  rmSync(DIST, { recursive: true, force: true });
+  cpSync(dir, DIST, { recursive: true });
+};
+const serveThisBuild = () => {
+  if (!swapped) return;
+  rmSync(DIST, { recursive: true, force: true });
+  cpSync(THIS_BUILD, DIST, { recursive: true });
+  swapped = false;
+};
+process.on('exit', serveThisBuild);
+// The older app's names, from the table (never typed out here).
+const OLD = { ns: OLD_STORAGE.prefix, cache: `${OLD_STORAGE.rootLock.split('-')[0]}-` };
 
 // The fixtures here are Imagine Surrey's, so the server runs as its production
 // does (render.yaml sets this brand); a brand set by hand is left as set.
-if (process.env.STARBASE_BRAND === undefined) process.env.STARBASE_BRAND = 'imagine-surrey';
+if (process.env.BASE_BRAND === undefined) process.env.BASE_BRAND = 'imagine-surrey';
 
 const PORT = Number(process.env.PORT) || 4102;
 const SHOTS = process.env.SHOTS || '/tmp/claude-0/-home-user-mandate/c88a39fd-f6db-552f-95dc-59176433706d/scratchpad/features/offline';
@@ -37,16 +88,16 @@ const ADMIN = { toString() { return `${BASE}/admin`; } }; // the desk's pages li
 if (!BASE) {
   server = spawn(process.execPath, ['server/index.js'], {
     env: {
-      ...process.env, STARBASE_OPEN_SIGNUP: '1', STARBASE_DATA: 'memory', PORT: String(PORT), STARBASE_JOBS: 'off',
-      STARBASE_TILE_URL: TILE_URL,
-      STARBASE_TILE_ATTRIBUTION: '&copy; <a href="https://tiles.example/about">Example Tiles</a><script>alert(1)</script>',
-      STARBASE_TILE_MAX_ZOOM: '19',
+      ...process.env, BASE_OPEN_SIGNUP: '1', BASE_DATA: 'memory', PORT: String(PORT), BASE_JOBS: 'off',
+      BASE_TILE_URL: TILE_URL,
+      BASE_TILE_ATTRIBUTION: '&copy; <a href="https://tiles.example/about">Example Tiles</a><script>alert(1)</script>',
+      BASE_TILE_MAX_ZOOM: '19',
     },
     stdio: ['ignore', 'pipe', 'inherit'],
   });
   await new Promise((resolve, reject) => {
     const t = setTimeout(() => reject(new Error('server did not start')), 30000);
-    server.stdout.on('data', (b) => { if (/starbase on :/.test(String(b))) { clearTimeout(t); resolve(); } });
+    server.stdout.on('data', (b) => { if (/base\.win on :/.test(String(b))) { clearTimeout(t); resolve(); } });
     server.on('exit', (code) => reject(new Error(`server exited ${code}`)));
   });
   BASE = `http://127.0.0.1:${PORT}`;
@@ -121,8 +172,8 @@ const helpers = (page, ctx, desk = false) => ({
       .filter((x) => x.h < floor || x.w < Math.min(44, floor));
     return { words, yellow, overflow, small };
   }, [sel, floor]),
-  copies: () => page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('starbase:copy:') || k.startsWith('starbase:field:'))),
-  outbox: () => page.evaluate(() => JSON.parse(localStorage.getItem('starbase:outbox:v2') || '[]')),
+  copies: () => page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('base-win:copy:') || k.startsWith('base-win:field:'))),
+  outbox: () => page.evaluate(() => JSON.parse(localStorage.getItem('base-win:outbox:v2') || '[]')),
   swReady: () => page.evaluate(() => navigator.serviceWorker.ready.then(() => Boolean(navigator.serviceWorker.controller))),
 });
 
@@ -173,11 +224,11 @@ check('service worker controls the page', await D.swReady().catch(() => false) |
 await D.go('/map');
 await waitDoors(page);
 await sleep(1500);
-check('map tiles come from STARBASE_TILE_URL (not OpenStreetMap)', hits.tiles > 0 && hits.osm === 0, JSON.stringify(hits));
+check('map tiles come from BASE_TILE_URL (not OpenStreetMap)', hits.tiles > 0 && hits.osm === 0, JSON.stringify(hits));
 const credit = await page.$eval('.leaflet-control-attribution', (el) => ({ text: el.innerText, html: el.innerHTML })).catch(() => ({ text: '', html: '' }));
 check('the provider’s credit shows, links kept, script stripped', /Example Tiles/.test(credit.text) && /href="https:\/\/tiles\.example\/about"/.test(credit.html) && !/script|alert/i.test(credit.html), credit.html.slice(0, 120));
 const kept = await page.evaluate(async () => {
-  const c = await caches.open((await caches.keys()).find((k) => k.startsWith('starbase-tiles-')) || 'starbase-tiles-v2');
+  const c = await caches.open((await caches.keys()).find((k) => k.startsWith('base-win-tiles-')) || 'base-win-tiles-v2');
   const keys = (await c.keys()).map((r) => r.url).filter((u) => u.includes('tiles.example'));
   const body = keys.length ? await (await c.match(keys[0])).text() : '';
   return { n: keys.length, marked: body.includes('e2e-tile') };
@@ -399,7 +450,7 @@ const tilesNote = async () => {
 };
 let tn = await tilesNote();
 check('desk map sheet: "Map tiles: tiles.example" (the configured provider)', tn.line === 'Map tiles: tiles.example' && tn.y <= 1, JSON.stringify(tn));
-// The server's answer when STARBASE_TILE_URL was mistyped (unit-tested in offline.test.js).
+// The server's answer when BASE_TILE_URL was mistyped (unit-tested in offline.test.js).
 const dropTilesCopy = () => page.evaluate(() => { for (const k of Object.keys(localStorage)) if (k.endsWith(':mapConfig')) localStorage.removeItem(k); });
 await dropTilesCopy();
 await page.route('**/api/map/config', async (route) => {
@@ -653,12 +704,119 @@ await V.shot('7-vol-signout-asks');
 await vp.click('.acct-confirm button:has-text("Sign out")');
 await vp.waitForURL(`${BASE}/login`, { timeout: 8000 }).catch(() => {});
 await sleep(500);
-const leftKeys = await vp.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('starbase:copy:') || k.startsWith('starbase:field:')).map((k) => [k.split(':').slice(-1)[0], Date.now() - (JSON.parse(localStorage.getItem(k)).at || 0)]));
+const leftKeys = await vp.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('base-win:copy:') || k.startsWith('base-win:field:')).map((k) => [k.split(':').slice(-1)[0], Date.now() - (JSON.parse(localStorage.getItem(k)).at || 0)]));
 check('signed out: the phone forgets its copies and outbox', leftKeys.length === 0 && (await V.outbox()).length === 0, JSON.stringify({ leftKeys, url: vp.url() }));
 const harjitBye = (await D.api(`/persons/${P.harjit.id}`)).json.contacts;
 check('…the note typed on the open door card went first, once, as the volunteer’s',
   harjitBye.length === harjitN + 1 && harjitBye.filter((x) => x.note === byeNote && x.by_name === 'Jas Volunteer').length === 1, `${harjitN} → ${harjitBye.length}`);
 await vctx.close();
+
+// ════════════════════════════════════════════════════════════════════════════
+// 3. An update with work on the phone
+// ════════════════════════════════════════════════════════════════════════════
+const older = olderBuild();
+serveBuild(older);
+const uEmail = `update+${tag}@example.org`;
+const uInv = (await D.api('/actions/member.invite', { email: uEmail, role: 'volunteer' })).json;
+const uctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, timezoneId: 'America/Vancouver' });
+// The provider's tiles, with a switch: off while the new app comes in, so
+// the only tiles it can draw offline afterwards are the ones kept before.
+let tilesDown = false;
+const uTiles = { n: 0 };
+await uctx.route(/tiles\.example\/(\d+)\/(\d+)\/(\d+)\.png/, (route) => {
+  if (tilesDown) return route.abort('internetdisconnected');
+  uTiles.n += 1;
+  const [, , x, y] = route.request().url().match(/\/(\d+)\/(\d+)\/(\d+)\.png/);
+  return route.fulfill({ status: 200, contentType: 'image/svg+xml', headers: { 'access-control-allow-origin': '*' }, body: tileSvg(+x, +y) });
+});
+await uctx.route(/openstreetmap\.org/, (route) => route.abort());
+const up = await uctx.newPage();
+up.on('pageerror', (e) => errors.push('[update] ' + e.message));
+const U = helpers(up, uctx);
+await up.goto(uInv.joinUrl.replace(/^https?:\/\/[^/]+/, BASE), { waitUntil: 'domcontentloaded' });
+await up.waitForSelector('#join-name', { timeout: 8000 });
+await up.fill('#join-name', 'Uma Update');
+await up.fill('#join-password', 'knock-knock-2026');
+await up.click('button[type="submit"]');
+await up.waitForURL(`${BASE}/`, { timeout: 15000 }).catch(() => {});
+const uId = (await U.api('/auth/me')).json.user.id;
+await D.api('/actions/turf.assign', { turf_id: turf.id, user_id: uId });
+// With signal, on the older app: the map once (its doors and tiles kept).
+await U.go('/map');
+await waitDoors(up);
+await U.swReady().catch(() => {});
+await U.go('/map');
+await waitDoors(up);
+await sleep(2500);
+const before = await up.evaluate(async (old) => {
+  const names = await caches.keys();
+  const tiles = names.find((n) => n.startsWith(`${old.cache}tiles-`));
+  const n = tiles ? (await (await caches.open(tiles)).keys()).filter((r) => r.url.includes('tiles.example')).length : 0;
+  return { names, tiles: n, keys: Object.keys(localStorage) };
+}, OLD);
+check('the older app keeps its caches and copies under its older names', before.tiles > 0 && before.names.every((n) => n.startsWith(OLD.cache))
+  && before.keys.length > 0 && before.keys.every((k) => k.startsWith(OLD.ns)), JSON.stringify({ ...before, keys: before.keys.length }));
+// No signal: three knocks and a note, on the older app.
+const contactsOf = async (p) => (await D.api(`/persons/${p.id}`)).json.contacts.filter((x) => x.by_name === 'Uma Update');
+const uKnocks = [[P.maya, '1: Strong support'], [P.tom, '2: Lean support'], [P.dev, '1: Strong support']];
+await U.go(`/map?person=${uKnocks[0][0].id}`);
+await up.waitForSelector('aside.door-card', { timeout: 8000 }).catch(() => {});
+await sleep(1000);
+await uctx.setOffline(true);
+for (const [p, label] of uKnocks) {
+  await U.go(`/map?person=${p.id}`);
+  await up.waitForSelector('aside.door-card', { timeout: 8000 }).catch(() => {});
+  await up.tap(`aside.door-card button[aria-label="${label}"]`).catch(() => up.click(`aside.door-card button[aria-label="${label}"]`));
+  await sleep(500);
+}
+const uNote = `Back after six ${tag}`;
+await U.go(`/map?person=${P.harjit.id}`);
+await up.waitForSelector('aside.door-card', { timeout: 8000 }).catch(() => {});
+await up.tap('aside.door-card .fk-more__btn').catch(() => up.click('aside.door-card .fk-more__btn'));
+await up.fill('#door-note', uNote);
+await up.click('aside.door-card button:has-text("Save note")');
+await sleep(600);
+const waiting = await up.evaluate((k) => JSON.parse(localStorage.getItem(k) || '[]'), `${OLD.ns}outbox:v2`);
+check('no signal, older app: three knocks and a note wait under its older outbox name', waiting.length === 4 && waiting.every((i) => i.state === 'pending'), JSON.stringify(waiting.map((i) => i.name)));
+check('…and nothing reached the server yet', (await Promise.all([...uKnocks.map(([p]) => p), P.harjit].map(contactsOf))).every((c) => c.length === 0));
+// The new app arrives; the signal comes back (the tile provider stays away).
+serveThisBuild();
+tilesDown = true;
+await uctx.setOffline(false);
+await U.go('/map');
+await up.evaluate(() => window.dispatchEvent(new Event('online')));
+let after = null;
+for (let i = 0; i < 40; i += 1) {
+  after = await up.evaluate(async (old) => ({
+    names: await caches.keys(),
+    old: Object.keys(localStorage).filter((k) => k.startsWith(old.ns)),
+    outbox: JSON.parse(localStorage.getItem('base-win:outbox:v2') || '[]').length,
+  }), OLD).catch(() => null);
+  if (after && !after.names.some((n) => n.startsWith(OLD.cache)) && after.old.length === 0 && after.outbox === 0) break;
+  if (i === 10) await U.go('/map'); // the new worker takes over by the next page
+  await sleep(500);
+}
+const sentOnce = await Promise.all([...uKnocks.map(([p]) => p), P.harjit].map(contactsOf));
+check('after the update: the server has each knock exactly once, rated as tapped', uKnocks.every(([, label], n) => sentOnce[n].length === 1 && sentOnce[n][0].rating === label[0]),
+  JSON.stringify(sentOnce.map((c) => c.map((x) => x.rating))));
+check('…and the note exactly once', sentOnce[3].length === 1 && sentOnce[3][0].note === uNote, JSON.stringify(sentOnce[3]));
+check('…nothing left under the older names on the phone, and the outbox is empty', after && after.old.length === 0 && after.outbox === 0, JSON.stringify(after));
+check('the worker’s caches are all under the new name now', after && after.names.length > 0 && after.names.every((n) => n.startsWith('base-win-')), JSON.stringify(after?.names));
+const carriedTiles = await up.evaluate(async () => {
+  const c = await caches.open('base-win-tiles-v2');
+  const keys = (await c.keys()).filter((r) => r.url.includes('tiles.example'));
+  const one = keys.length ? await c.match(keys[0]) : null;
+  return { n: keys.length, at: one?.headers.get('x-base-win-cached-at') || null };
+});
+check('the tiles kept before the update are in the new cache, with the time they were kept', carriedTiles.n >= before.tiles && Number(carriedTiles.at) > 0, JSON.stringify(carriedTiles));
+await uctx.setOffline(true);
+await U.go('/map');
+await waitDoors(up);
+await sleep(1500);
+const uDrawn = await up.$$eval('.leaflet-tile-loaded', (els) => els.filter((i) => i.complete && i.naturalWidth > 0).length).catch(() => 0);
+check('network blocked: the map still draws the tiles kept before the update', uDrawn > 0 && /Offline copy/i.test(await U.text()), uDrawn);
+await U.shot('12-update-offline-map');
+await uctx.close();
 
 // ── The books still verify ──
 const v = (await D.api('/audit/verify')).json;

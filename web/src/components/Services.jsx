@@ -1,4 +1,4 @@
-// Settings → Services (managers): every outside service Starbase uses, what
+// Settings → Services (managers): every outside service base.win uses, what
 // it's for, whether it's set up, and "Check" — one real call to the service
 // (GET /api/connections, POST /api/connections/check — ext/connections).
 // The Email row carries the sender's "Sending domain" (SendingDomain.jsx);

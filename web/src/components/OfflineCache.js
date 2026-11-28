@@ -29,11 +29,15 @@
 // Sign-out forgets both. Settings → Brand keeps a manager's unsaved changes
 // here too (this tab only), so they go the same way.
 import { useEffect } from 'react';
-import { NS } from '../base.js';
+import { NS, OLD_NS } from '../base.js';
 
 const PREFIX = `${NS}copy:v1:`;
 // The walk list's own copies (pages/Turfs.jsx) are forgotten with these.
 const FIELD_PREFIX = `${NS}field:v1:`;
+// The same copies under the app's older name (oldStorage.js carries them over
+// at start; one it could not carry, storage full, is still this phone's to
+// forget). Sign-out forgets both, always: a shared phone keeps nothing.
+const FORGOTTEN = [PREFIX, FIELD_PREFIX, `${OLD_NS}copy:v1:`, `${OLD_NS}field:v1:`];
 const TTL = 24 * 3600 * 1000;
 // A letter typed on this phone (components/letterDrafts.js) is kept two
 // weeks: a half-written op-ed must survive a weekend.
@@ -192,8 +196,9 @@ const forget = (keep) => {
       const all = [];
       for (let i = 0; i < store.length; i += 1) all.push(store.key(i));
       for (const k of all) {
-        if (!k || !(k.startsWith(PREFIX) || k.startsWith(FIELD_PREFIX))) continue;
-        const rest = k.slice(k.startsWith(PREFIX) ? PREFIX.length : FIELD_PREFIX.length);
+        const pre = k ? FORGOTTEN.find((p) => k.startsWith(p)) : null;
+        if (!pre) continue;
+        const rest = k.slice(pre.length);
         if (keep && !keep.all && rest.startsWith(keep.scope)) {
           const name = rest.slice(keep.scope.length);
           const madeAs = /^q:([a-z]+):/.exec(name)?.[1];
@@ -206,13 +211,15 @@ const forget = (keep) => {
   }
 };
 
-// Whose copies these are, and the role they were made under ("ws:user:role").
+// Whose copies these are, and the role they were made under ("ws:user:role"),
+// and the same mark under the app's older name.
 const ROLE_MARK = `${NS}copy-role:v1`;
+const OLD_ROLE_MARK = `${OLD_NS}copy-role:v1`;
 let checked = null;
 // Sign-out: every copy on this phone goes (walk lists too).
 export const forgetPhoneCopies = () => {
   checked = null;
-  try { ls()?.removeItem(ROLE_MARK); } catch { /* storage blocked */ }
+  try { ls()?.removeItem(ROLE_MARK); ls()?.removeItem(OLD_ROLE_MARK); } catch { /* storage blocked */ }
   forget(null);
 };
 // Signed in (Shell, before any screen reads a copy; once per sign-in and
@@ -228,9 +235,9 @@ export const keepOnlyMine = (me) => {
   if (checked === mark) return;
   checked = mark;
   let was = null;
-  try { was = ls()?.getItem(ROLE_MARK) ?? null; } catch { /* storage blocked */ }
+  try { was = ls()?.getItem(ROLE_MARK) ?? ls()?.getItem(OLD_ROLE_MARK) ?? null; } catch { /* storage blocked */ }
   forget({ scope: s, role, all: Boolean(was && was !== mark && was.startsWith(s)) });
-  try { ls()?.setItem(ROLE_MARK, mark); } catch { /* storage full or blocked */ }
+  try { ls()?.setItem(ROLE_MARK, mark); ls()?.removeItem(OLD_ROLE_MARK); } catch { /* storage full or blocked */ }
 };
 
 // ── For components/KeptCopies.js (desk screens) ──

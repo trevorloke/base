@@ -55,7 +55,7 @@ export default function WebsiteHome() {
   const waiting = (d?.pages || []).filter((p) => p.changed && p.status === 'published');
   const drafts = (d?.pages || []).filter((p) => p.status !== 'published');
   const own = [...(d?.urls?.domains || []), ...(d?.urls?.hosts || [])];
-  // Its own domain, once the server names it (STARBASE_SITE_DOMAIN): /site/ sends people there.
+  // Its own domain, once the server names it (BASE_SITE_DOMAIN): /site/ sends people there.
   const domain = d?.urls?.domain || null;
   const view = domain || d?.urls?.site;
   const here = domain ? hostOf(domain) : typeof window !== 'undefined' ? `${window.location.host}${d?.urls?.site || '/site/'}` : d?.urls?.site;
