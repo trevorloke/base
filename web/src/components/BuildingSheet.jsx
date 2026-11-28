@@ -1,6 +1,6 @@
-// The building sheet (HR-1): a tower, a walk-up or a townhouse complex — an
-// address with 4 or more units (shared/buildings.js) — opened from its
-// square on the map. Its floors, then its units, each with who lives there
+// The building sheet (HR-1): a tower, a walk-up, a townhouse complex or a
+// triplex — an address with 3 or more numbered or lettered units
+// (shared/units.js placeOf) — opened from its square on the map. Its floors, then its units, each with who lives there
 // and whether they're done; "Next unit" opens the next one's door card
 // (today's DoorCard, with a bar back here), unit by unit.
 //
@@ -25,6 +25,7 @@ import { bandOf } from '@base-win/shared/scale';
 import {
   buildingOf, floorLabel, floorsShown, nextDoor, unitOf, unitRows, unitStops,
 } from '@base-win/shared/buildings';
+import { doorKey, doorParts, unitKind, unitWords } from '../../../shared/units.js';
 import { overlayPass, waitingTries } from './PassBits.jsx';
 import { pendingVoted } from './Voted.jsx';
 import { usePracticeOverlay } from './GotvLive.js';
@@ -39,13 +40,25 @@ const NOT_MINE = 'Not on your turfs';
 
 const num = (n) => Number(n || 0).toLocaleString('en-CA');
 const firstName = (name) => String(name || '').trim().split(/\s+/)[0] || '';
-const STATE_WORD = { open: 'Open', again: 'Try again', done: 'Done' };
+// The states in the words every screen uses (UNITS.md §6).
+const STATE_WORD = { open: 'Not knocked', again: 'Try again', done: 'Done ✓' };
 
 // A person row of the walk list or the map, with the door's place on it
 // (the map's door model reads each person's address, unit and pin).
 const placed = (d) => d.persons.map((p) => ({
   address: d.address, unit: d.unit, city: d.city ?? null, lat: d.lat, lng: d.lng, ...p,
 }));
+
+// A building as the walk list's server worked it out: its doors on the
+// list (those its round wants) and its whole count of units.
+const keptBuilding = (list, door) => {
+  const doors = list.filter((d) => d.group === door.group);
+  return {
+    key: door.group, address: doorParts(door).shown || door.address, city: door.city ?? null,
+    lat: door.lat, lng: door.lng, units: door.units ?? doors.length, doors,
+    people: doors.reduce((n, d) => n + (d.persons?.length || 0), 0),
+  };
+};
 
 // The building out of a walk list kept on this phone: the one holding the
 // anchor, its doors as the list had them (every one on the round).
@@ -55,7 +68,10 @@ const fromKeptWalkLists = (me, anchorId) => {
     const list = kept?.data?.doors || [];
     const door = list.find((d) => d.persons?.some((p) => p.id === anchorId));
     if (!door) continue;
-    const b = buildingOf(list, door);
+    // The server said which building each door is in, before its round left
+    // any unit out (a tower the round thinned to two units is still one);
+    // a list kept by an older version is grouped here.
+    const b = door.place === 'building' && door.group != null ? keptBuilding(list, door) : buildingOf(list, door);
     if (!b) return null;
     return { b, pass: kept.data.pass || null, at: kept.at };
   }
@@ -180,14 +196,21 @@ export function useBuilding({ anchorId, me, online, mapDoors, showsDoor, filterO
 // unit is done.
 export const nextUnit = (bld, doorKeyNow = null) => {
   if (!bld?.walk?.length) return null;
-  const from = doorKeyNow ? bld.walk.findIndex((s) => rowDoorKey(s.door) === doorKeyNow) : -1;
+  const from = doorKeyNow ? bld.walk.findIndex((s) => mapDoorKey(s.door) === doorKeyNow) : -1;
   const i = nextDoor(bld.walk, from);
   return i >= 0 ? bld.walk[i] : null;
 };
-// A door's key as the map writes it (address + unit, lower-cased).
-const norm = (s) => String(s || '').trim().toLowerCase();
-export const rowDoorKey = (d) => (d.address ? `${norm(d.address)}|${norm(d.unit)}` : `@${Number(d.lat).toFixed(5)},${Number(d.lng).toFixed(5)}`);
-export const unitWords = (row) => (row ? `Unit ${row.unit || '—'}` : '');
+// A door's key, the one way the map, the building sheet and the "Mine"
+// filter all write it (shared/units.js doorKey: "Main" and blank are one
+// door, "1203-13450 104 Ave" and 13450 104 Ave unit 1203 are one); a pin
+// with no address is its spot.
+export const spotKey = (d) => `@${Number(d.lat).toFixed(5)},${Number(d.lng).toFixed(5)}`;
+export const mapDoorKey = (d) => doorKey(d, { none: spotKey });
+// A unit row's words: "Unit 1203", "No unit number", "Basement suite".
+export const rowWords = (row) => (row ? unitWords(row.unit, 'building') : '');
+// What the unit column (and "Next unit · 202") shows: the number itself
+// (bold mono) for a numbered or lettered unit, else the words.
+export const rowMark = (row) => (['unit', 'letter'].includes(unitKind(row.unit)) ? row.unit : unitWords(row.unit, 'building'));
 
 function Bar({ done, total }) {
   const pct = total ? Math.round((done / total) * 100) : 0;
@@ -201,20 +224,22 @@ const rowBand = (row) => {
 const allVoted = (row) => row.persons.length > 0 && row.persons.every((p) => p.voted_at);
 const stateOf = (row, counted) => {
   if (!row.in_round) return { word: 'Not on this round', cls: 'bldg-chip--off' };
-  if (allVoted(row)) return { word: '✓ Voted', cls: 'chip-ok' };
+  if (allVoted(row)) return { word: 'Voted ✓', cls: 'chip-ok' };
   if (!counted) return null;
-  return { word: STATE_WORD[row.state] || 'Open', cls: row.state === 'done' ? 'chip-ok' : row.state === 'again' ? 'fk-wait' : '' };
+  return { word: STATE_WORD[row.state] || STATE_WORD.open, cls: row.state === 'done' ? 'chip-ok' : row.state === 'again' ? 'fk-wait' : '' };
 };
 
 function UnitRow({ row, counted, onOpen }) {
   const first = row.persons[0];
   const who = first ? `${firstName(first.name)}${row.persons.length > 1 ? ` +${row.persons.length - 1}` : ''}` : 'Nobody on file';
   const st = stateOf(row, counted);
-  const label = `Unit ${row.unit || 'without a number'}, ${who.replace(/\+(\d+)$/, 'and $1 more')}${st ? `, ${st.word}` : ''}`;
+  const label = `${rowWords(row)}, ${who.replace(/\+(\d+)$/, 'and $1 more')}${st ? `, ${st.word.replace(' ✓', '')}` : ''}`;
+  const mark = rowMark(row);
+  const numbered = mark === row.unit;
   return (
     <li>
       <button type="button" className="bldg-unit" onClick={() => onOpen(row)} aria-label={label}>
-        <span className="bldg-unit__no mono">{row.unit || '—'}</span>
+        <span className={`bldg-unit__no${numbered ? ' mono' : ' bldg-unit__no--words'}`}>{mark}</span>
         <span className="bldg-unit__who">{who}</span>
         <span className={`bldg-dot bldg-dot--${rowBand(row)}`} aria-hidden="true" />
         {st && <span className={`chip bldg-chip ${st.cls}`}>{st.word}</span>}
@@ -275,9 +300,8 @@ export default function BuildingSheet({ bld, hidden, filterLabel, onOpen, onClos
     body = (
       <>
         <div className="bldg-count">
-          <p className="bldg-count__line" aria-live="polite">
-            {num(bld.units)} {bld.units === 1 ? 'unit' : 'units'}{bld.counted ? ` · ${num(bld.left)} left` : ''}
-          </p>
+          {/* The units are said once, in the subtitle; here what is left. */}
+          {bld.counted && <p className="bldg-count__line" aria-live="polite">{num(bld.left)} left</p>}
           {bld.counted && <Bar done={bld.rows.filter((r) => r.in_round).length - bld.left} total={bld.rows.filter((r) => r.in_round).length} />}
           {bld.source === 'walk' && <span className="chip fk-wait bldg-offline">Offline — from your walk list</span>}
           {bld.source === 'phone' && <span className="chip fk-wait bldg-offline">Offline — showing what’s on the phone</span>}
@@ -318,7 +342,7 @@ export default function BuildingSheet({ bld, hidden, filterLabel, onOpen, onClos
         <div className="bldg-dock">
           {next ? (
             <button type="button" className="btn btn-primary bldg-next" onClick={() => onOpen(next)}>
-              Next unit · {next.unit || '—'}
+              Next unit · {rowMark(next.row)}
             </button>
           ) : bld.counted ? <p className="bldg-line" role="status">Every unit is done</p> : null}
         </div>
@@ -334,7 +358,7 @@ export default function BuildingSheet({ bld, hidden, filterLabel, onOpen, onClos
         <header className="mapsheet-head">
           <div className="door-head">
             <h2 className="mapsheet-title door-head__name">{title}</h2>
-            <span className="door-head__addr">Building</span>
+            <span className="door-head__addr door-head__place">{bld?.status === 'ready' ? `Building · ${num(bld.units)} ${bld.units === 1 ? 'unit' : 'units'}` : 'Building'}</span>
           </div>
           <button type="button" className="btn btn-quiet mapsheet-close" onClick={onClose} aria-label="Close building">✕</button>
         </header>
@@ -354,7 +378,7 @@ export function BuildingBar({ label, onBack }) {
 }
 
 // "13450 104 Ave · Floor 12 · Unit 1203"
-export const unitLine = (bld, row) => [bld?.address, bld?.floors && row ? floorLabel(row.floor) : null, row ? unitWords(row) : null].filter(Boolean).join(' · ');
+export const unitLine = (bld, row) => [bld?.address, bld?.floors && row ? floorLabel(row.floor) : null, row ? rowWords(row) : null].filter(Boolean).join(' · ');
 
 // The door a unit row's tap opens: its first door on this round that isn't
 // done (a unit written two ways: the one still to knock), else its first.

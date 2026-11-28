@@ -28,6 +28,7 @@ import { choiceKey, guessChoice } from '@base-win/shared/fieldlists';
 import { ex } from '../brand.js';
 import './import.css';
 import '../components/voter-number.css';
+import { doorLine, splitUnit } from '../../../shared/units.js';
 
 const DESK = ['manager', 'treasurer', 'staff'];
 const CHECK_CHUNK = 2000; // server max per call
@@ -410,7 +411,9 @@ function errText(e) {
 
 const displayName = (r) => r.name || [r.first, r.middle, r.last].filter(Boolean).join(' ');
 const displayAddress = (r) =>
-  [[r.unit ? `${r.unit} –` : null, r.address].filter(Boolean).join(' '), r.city, r.postal].filter(Boolean).join(', ');
+  [r.address ? doorLine(r, 'door') : r.unit, r.city, r.postal].filter(Boolean).join(', ');
+// How many rows to read for "rows have a suite or unit written in the address".
+const SUITE_SAMPLE = 20000;
 const splitTags = (s) => String(s || '').split(/[;,|]/).map((t) => t.trim()).filter(Boolean);
 
 // Tag suggestion from the file name: "Voters List 2026.csv" → "voters-list-2026".
@@ -882,6 +885,23 @@ function ImportFlow() {
     () => (source ? source.records.slice(0, 5).map((r) => ({ data: toRow(scale, r.cells, mapping, ratingMap, homeCol, roleMap, volCols, more), row: r.row, cells: r.cells })) : []),
     [source, mapping, scale, ratingMap, homeCol, roleMap, volCols, more],
   );
+  // Rows with a suite or a unit written inside the address ("Bsmt 10388
+  // 134 St", "1203-13450 104 Ave"): each is its own door. Only a message;
+  // what the list says stays as typed.
+  const suitesInAddress = useMemo(() => {
+    const col = mapping.indexOf('address');
+    if (!source || col < 0) return null;
+    let n = 0;
+    let example = null;
+    const rows = source.records.slice(0, SUITE_SAMPLE);
+    for (const r of rows) {
+      const a = String(r.cells[col] ?? '').trim();
+      if (!a || !splitUnit(a)) continue;
+      n += 1;
+      if (!example) example = doorLine({ address: a }, 'door');
+    }
+    return n ? { n, example, of: source.records.length > SUITE_SAMPLE ? rows.length : null } : null;
+  }, [source, mapping]);
   // Phone columns Excel cut short ("1.6047E+10"), by column: how many.
   const sciByCol = useMemo(() => {
     const out = {};
@@ -1508,6 +1528,12 @@ function ImportFlow() {
               </div>
             </Reveal>
 
+            {suitesInAddress && (
+              <p className="imp-line" role="status">
+                {suitesInAddress.of ? `Of the first ${fmtN(suitesInAddress.of)} rows, ` : ''}
+                {plural(suitesInAddress.n, 'row has', 'rows have')} a suite or unit written in the address, like <em>{suitesInAddress.example}</em>. Each will be its own door.
+              </p>
+            )}
             {hasName && preview.length > 0 && (
               <Reveal label="Preview">
                 <div className="imp-preview__scroll">

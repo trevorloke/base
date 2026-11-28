@@ -14,15 +14,19 @@
 // asks nearest() / cellAt() where it was tapped.
 import L from 'leaflet';
 import { BUILDING_MIN } from '@base-win/shared/buildings';
-import { MARK, css, cellFill, CELL_ALPHA, dotRadius, ringedAt } from './mapView.js';
+import { MARK, css, cellFill, CELL_ALPHA, dotRadius, isHouseDot, ringedAt } from './mapView.js';
 import { BRAND } from '../brand.js';
 
 const ORDER = ['unrated', 'undecided', 'opposed', 'support']; // drawn last = on top
 
 // A building (shared/buildings.js): a square, not a dot. Either an item the
 // map grouped from the doors it holds ({ isBuilding, shown }) or a busy
-// view's dot whose spot has BUILDING_MIN or more units at one address (u).
+// view's dot whose spot has a building (u: its units, BUILDING_MIN or more;
+// the server sends 1 for anything else, so a house is never one).
 export const isBuildingDot = (d) => Boolean(d?.isBuilding || d?.u >= BUILDING_MIN);
+// A house with suites (mapView.js): a dot with a small notch, its doors
+// opened from its card.
+export { isHouseDot };
 const buildingCount = (d) => (d.isBuilding ? d.shown : d.u);
 export const countLabel = (n) => (n > 999 ? '999+' : Number(n).toLocaleString('en-CA'));
 // The page's own paper and ink (light or dark), read when a tile is drawn.
@@ -149,6 +153,22 @@ export const DotLayer = BucketLayer.extend({
           ctx.stroke();
         }
       }
+    }
+    // A house with suites: the same dot, with a small notch at its lower
+    // right (its other doors), in the page's paper with an ink edge.
+    const paper = themeColor('--paper-0', 'white');
+    const ink = themeColor('--ink', 'black');
+    for (const d of shown) {
+      if (!isHouseDot(d)) continue;
+      const [x, y] = at(d);
+      const r = Math.max(2, r0 * 0.5);
+      ctx.beginPath();
+      ctx.arc(x + r0 * 0.75, y + r0 * 0.75, r, 0, Math.PI * 2);
+      ctx.fillStyle = paper;
+      ctx.fill();
+      ctx.strokeStyle = ink;
+      ctx.lineWidth = 1;
+      ctx.stroke();
     }
     if (squares.length) this._squares(ctx, squares, z, at, r0);
     if (z < 16) return;

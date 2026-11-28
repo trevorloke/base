@@ -1,4 +1,4 @@
-// Map — field mode. Houses as pins (one per address + unit), colored by the
+// Map — field mode. Doors as pins (one per door: shared/units.js doorKey), colored by the
 // household's strongest signal; tap a pin for the door card. Every pin is a
 // 48px tap target. Pins carry no numbers (a rated door has a white dot, the
 // color says the band; a household's head-count is a small people badge on
@@ -34,7 +34,7 @@ import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-quer
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { apiGet, action } from '../api.js';
-import { applyOutbox, queueAction, useOutbox } from '../offline.js';
+import { applyOutbox, pendingKnocks, queueAction, useOutbox } from '../offline.js';
 import { phoneCopy, showingCopy, useKeepCopy } from '../components/OfflineCache.js';
 import { queuedText } from '../components/queued.js';
 import { bandOf, offTail, ratingByCode } from '@base-win/shared/scale';
@@ -45,15 +45,18 @@ import { More, useScale } from '../components/RatingButtons.jsx';
 import GeocodeButton from '../components/GeocodeButton.jsx';
 import { DEFAULT_TILES, homeStart, homeView, safeAttribution } from '../components/tiles.js';
 import { ex } from '../brand.js';
-import { DotLayer, DensityLayer, cellAt, countLabel, isBuildingDot, nearest } from './mapDots.js';
-import { groupBuildings, unitRows } from '@base-win/shared/buildings';
-import BuildingSheet, { GONE_LINE, buildingKey, nextUnit, rowDoorKey, seedDoor, unitLine, useBuilding } from '../components/BuildingSheet.jsx';
+import { DotLayer, DensityLayer, cellAt, countLabel, isBuildingDot, isHouseDot, nearest } from './mapDots.js';
+import { groupPlaces, unitRows } from '@base-win/shared/buildings';
+import { TERMINAL } from '@base-win/shared/passes';
+import { doorLine, doorParts, houseCompare, houseTag, unitWords } from '../../../shared/units.js';
+import BuildingSheet, { GONE_LINE, buildingKey, mapDoorKey, nextUnit, rowMark, seedDoor, unitLine, useBuilding } from '../components/BuildingSheet.jsx';
+import { nextAtHouse, stillToKnock } from '../components/DoorSwitch.jsx';
 import '../components/buildings.css';
-import { DOT_ZOOM, LONE_PIN_ZOOM, PIN_ZOOM, MARK, markTheme, TILE_WAIT_MS, css, cellOf, cellsFrom, defaultLook, dotsFrom, drawnFor, inBox, mapLooks, pickLook, placingPoll, rowsBudget, streetMove, tileAt, tileHealth, tileHost, TURF_COLORS, turfColor, viewBox } from './mapView.js';
+import { DOT_ZOOM, LONE_PIN_ZOOM, PIN_ZOOM, MARK, markTheme, TILE_WAIT_MS, boxesMeet, css, cellOf, cellsFrom, defaultLook, dotsFrom, drawnFor, inBox, mapLooks, pickLook, pinBox, placingPoll, rowsBudget, squareBox, streetMove, tagBox, tileAt, tileHealth, tileHost, TURF_COLORS, turfColor, viewBox } from './mapView.js';
 import { askNotice, forgetNotice, knownNotice } from './tileProbe.js';
 import { TURFS_OUTLINE, TURFS_WHOLE, VIEW_PREF, readViewPref, tellServiceWorker } from './mapQueries.js';
 import { useSharePref } from '../components/ShareLocation.js';
-import { cachedWalkLists, useOnline } from './Turfs.jsx';
+import { cachedWalkLists, keptWalkList, useOnline } from './Turfs.jsx';
 import './map.css';
 import { pendingVoted, useVotedMode } from '../components/Voted.jsx';
 import { NS } from '../base.js';
@@ -204,9 +207,11 @@ function countInside(doors, ring) {
   return { doors: n, people };
 }
 
-// One door per (address + unit); located people without an address group by spot.
-const doorKey = (p) =>
-  p.address ? `${norm(p.address)}|${norm(p.unit)}` : `@${Number(p.lat).toFixed(5)},${Number(p.lng).toFixed(5)}`;
+// One door per door key (shared/units.js: "Main" and blank are one door,
+// "Bsmt" and "Basement" are one, the main door and a suite are two; the
+// building sheet and the "Mine" filter use the same one); located people
+// without an address group by spot.
+const doorKey = mapDoorKey;
 
 // Household signal: any opposed → opposed; else any support → support;
 // else any undecided → undecided; else unrated.
@@ -236,24 +241,31 @@ function buildDoors(data) {
   const byPerson = new Map();
   for (const door of byKey.values()) for (const p of door.persons) byPerson.set(p.id, door);
   const orphanSigns = [];
+  // (A sign by address stands at the main door, its address read the
+  // parser's way: "10388 134 St." finds 10388 134 St.)
   for (const s of data.signs || []) {
-    const door = (s.person_id && byPerson.get(s.person_id)) || (s.address && byKey.get(`${norm(s.address)}|`)) || null;
+    const door = (s.person_id && byPerson.get(s.person_id)) || (s.address && byKey.get(`${doorParts({ address: s.address }).civic}|`)) || null;
     if (door) door.signs.push(s);
     else if (s.lat != null && s.lng != null) orphanSigns.push(s);
   }
   const doors = [...byKey.values()];
   for (const door of doors) { door.band = householdBand(door.persons); door.offset = [0, 0]; }
-  // An address with 4 or more units is a building (shared/buildings.js):
-  // one square, its doors never drawn on their own — so only the rest fan out.
-  const { buildings, loose } = groupBuildings(doors);
+  // An address with 3 or more numbered or lettered units is a building
+  // (shared/units.js placeOf): one square, its doors never drawn on their
+  // own. A house with suites (a main door and a basement suite…) is one pin,
+  // its doors side by side on its card. Only the rest fan out.
+  const { buildings, houses, loose } = groupPlaces(doors);
+  for (const b of buildings) for (const d of b.doors) d.place = 'building';
+  for (const h of houses) for (const d of h.doors) d.place = 'house';
+  for (const d of loose) d.place = 'door';
   spreadStacked(loose);
-  return { doors, byPerson, orphanSigns, buildings };
+  return { doors, byPerson, orphanSigns, buildings, houses };
 }
 
-// Units at one spot that aren't a building (a house and its suite) share a
-// lat/lng, so their pins would stack exactly. Fan the extras out on a small
-// sunflower spiral (pixel offsets, unit order) so every door stays
-// tappable; the first unit keeps the true spot.
+// Doors at one spot that are neither a building nor a house (two unrelated
+// doors on one rough geocode) share a lat/lng, so their pins would stack
+// exactly. Fan the extras out on a small sunflower spiral (pixel offsets,
+// unit order) so every door stays tappable; the first keeps the true spot.
 function spreadStacked(doors) {
   const spots = new Map();
   for (const door of doors) {
@@ -273,7 +285,22 @@ function spreadStacked(doors) {
   }
 }
 
-const EMPTY_MODEL = { doors: [], byPerson: new Map(), orphanSigns: [], buildings: [] };
+// The walk lists kept on this phone, for a house's door states: each
+// person's door state on its round, and the doors the round leaves out
+// ("civic|unit", from the list's house_doors). Read when a house is opened.
+function readKept(me) {
+  const byPerson = new Map();
+  const off = new Set();
+  for (const { id } of cachedWalkLists(me)) {
+    for (const d of keptWalkList(me, id)?.data?.doors || []) {
+      for (const p of d.persons || []) if (!byPerson.has(p.id)) byPerson.set(p.id, d.state || 'open');
+      if (d.civic) for (const h of d.house_doors || []) if (h.in_round === false) off.add(`${d.civic}|${h.unit}`);
+    }
+  }
+  return { byPerson, off };
+}
+
+const EMPTY_MODEL = { doors: [], byPerson: new Map(), orphanSigns: [], buildings: [], houses: [] };
 // Two loads of /map/doors as one (each person and sign once).
 function mergeDoorData(whole, view) {
   if (!view) return whole;
@@ -325,6 +352,7 @@ const MARK_VARS_IMAGERY = { ...MARK_VARS, '--door-unrated': css(MARK.unrated.ima
 // seen, never fetched ahead — tile servers' rules: mapQueries.js tellServiceWorker.)
 const SIGN_STATUS = { installed: 'Installed', requested: 'Requested', removed: 'Removed' };
 const HOUSE_SVG = '<svg viewBox="0 0 12 10" aria-hidden="true"><path d="M6 0 0 5h1.6v5h3.2V7h2.4v3h3.2V5H12z"/></svg>';
+const DOOR_SVG = '<svg viewBox="0 0 10 12" aria-hidden="true"><path d="M1 12V1.2C1 .5 1.5 0 2.2 0h5.6C8.5 0 9 .5 9 1.2V12H7V2H3v10z"/><circle cx="6" cy="7" r=".9"/></svg>';
 const PEOPLE_SVG = '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="4.6" r="3.1"/><path d="M1.8 15.5c0-3.6 2.8-6.2 6.2-6.2s6.2 2.6 6.2 6.2z"/></svg>';
 
 // "Rosa Delgado (4 · Locke)" for a pin's title (the campaign's scale).
@@ -375,7 +403,7 @@ function clusterIcon(doors, offset) {
 // A building's square pin: its count (the units the filter shows) and a bar
 // in the shares of its shown people who are rated each way. Never one
 // resident's colour.
-function buildingIcon(b, selected) {
+function buildingIcon(b, selected, caption = false) {
   // (Shares of everyone shown, rated or not: 10 supporters in a tower of
   // 300 is a sliver of green, the rest the edge colour.)
   const c = { support: 0, undecided: 0, opposed: 0 };
@@ -391,9 +419,35 @@ function buildingIcon(b, selected) {
   const label = `${b.address}, building, ${plural(b.shown, 'unit', 'units')}`;
   return L.divIcon({
     className: 'map-bldg-wrap',
-    html: `<div class="map-bldg${selected ? ' map-bldg--selected' : ''}" aria-label="${esc(label)}" role="img"><span class="map-bldg__n">${countLabel(b.shown)}</span><span class="map-bldg__bar" style="--a:${pct(c.support)};--b:${pct(c.support + c.undecided)};--c:${pct(c.support + c.undecided + c.opposed)}"></span></div>`,
+    html: `<div class="map-bldg${selected ? ' map-bldg--selected' : ''}" aria-label="${esc(label)}" role="img"><span class="map-bldg__n">${countLabel(b.shown)}</span><span class="map-bldg__bar" style="--a:${pct(c.support)};--b:${pct(c.support + c.undecided)};--c:${pct(c.support + c.undecided + c.opposed)}"></span></div>${caption ? '<span class="map-tag map-tag--bldg" aria-hidden="true">Building</span>' : ''}`,
     iconSize: [48, 48],
     iconAnchor: [24, 24],
+  });
+}
+
+// "10388 134 St, house with 2 doors: Main, Basement suite"
+const houseLabel = (h) => `${h.address}, house with ${h.doors.length} doors: ${h.doors.map((d) => unitWords(doorParts(d).unit, 'house')).join(', ')}`;
+// A house with suites: one pin, in its main door's colour (or its first
+// door's, with no main door), with a small door mark at its lower right in
+// the other doors' colours (split three ways for 3 or more doors). No text
+// on the pin itself (its people badge is already a number); the words
+// ("+ Basement suite") hang under it only from close in, where they cover
+// no other mark, and always on the house that is open (Map draws them).
+function houseIcon(h, selected, tag = null, signOk = () => true) {
+  const main = h.doors[0];
+  const n = h.doors.reduce((k, d) => k + d.persons.length, 0);
+  const cls = ['map-pin', `map-pin--${main.band}`, n > 1 ? 'map-pin--multi' : '', selected ? 'map-pin--selected' : ''].filter(Boolean).join(' ');
+  const household = n > 1 ? `<span class="map-pin__hh">${PEOPLE_SVG}${n}</span>` : '';
+  const others = h.doors.slice(1, 4).map((d) => `var(--house-${d.band})`);
+  const split = others.length === 1 ? others[0]
+    : `conic-gradient(${others.map((c, i) => `${c} ${(i * 100) / others.length}% ${((i + 1) * 100) / others.length}%`).join(', ')})`;
+  const flags = h.doors.flatMap((d) => d.signs).filter(signOk).slice(0, 3).map((sg, i) =>
+    `<i class="map-flag map-flag--${esc(sg.status)} map-flag--k-${esc(sg.kind)}" style="left:${34 + i * 10}px;top:-6px"><i class="map-flag__face"></i><i class="map-flag__post"></i></i>`).join('');
+  return L.divIcon({
+    className: 'map-pin-wrap map-house-wrap',
+    html: `<div class="${cls}" aria-label="${esc(houseLabel(h))}" role="img">${main.band === 'unrated' ? '' : '<span class="map-pin__dot"></span>'}${household}<span class="map-house__more" style="background:${split}">${DOOR_SVG}</span></div>${flags}${tag ? `<span class="map-tag" aria-hidden="true">${esc(tag)}</span>` : ''}`,
+    iconSize: [48, 48],
+    iconAnchor: [24, 42],
   });
 }
 
@@ -614,7 +668,7 @@ function PlacePicker({ unlocated, onPick, onClose }) {
           <li key={p.id}>
             <button type="button" className="map-place-row" onClick={() => onPick(p)}>
               <span className="map-place-row__name">{p.name}</span>
-              <span className="map-place-row__addr muted">{p.unit ? `${p.unit} – ` : ''}{p.address}</span>
+              <span className="map-place-row__addr muted">{doorLine(p, 'door')}</span>
             </button>
           </li>
         ))}
@@ -1320,7 +1374,14 @@ export default function MapPage() {
     enabled: Boolean((big || buildingParam) && personParam),
     staleTime: 20_000,
   });
-  const oneDoor = (big || buildingParam) && personParam && doorQ.data?.scope === 'door' ? doorQ.data : null;
+  // (With the other doors of its house, when it is one: the card can switch
+  // between them on a list too big to load whole.)
+  const oneDoor = useMemo(() => {
+    const d = (big || buildingParam) && personParam && doorQ.data?.scope === 'door' ? doorQ.data : null;
+    if (!d?.house?.length) return d;
+    const ids = new Set(d.persons.map((p) => p.id));
+    return { ...d, persons: [...d.persons, ...d.house.flatMap((h) => h.persons || []).filter((p) => !ids.has(p.id))] };
+  }, [big, buildingParam, personParam, doorQ.data]);
   const doorFailed = Boolean(big && personParam && doorQ.isError && !doorQ.data);
   // A big list: what came whole (a volunteer's own turfs, kept on the
   // phone), the people in view where they fit, and the open door — each
@@ -1333,7 +1394,7 @@ export default function MapPage() {
   // Doors answered as dots (a busy view): drawn, counted, opened by a tap.
   const leanAll = useMemo(() => (drawn?.kind === 'dots' ? dotsFrom(drawn.view.dots) : EMPTY_LIST), [drawn]);
   const doorsData = useMemo(() => applyOutbox(baseDoors, outbox.items), [baseDoors, outbox.items]);
-  const { doors, byPerson, orphanSigns, buildings } = useMemo(() => (doorsData ? buildDoors(doorsData) : EMPTY_MODEL), [doorsData]);
+  const { doors, byPerson, orphanSigns, buildings, houses } = useMemo(() => (doorsData ? buildDoors(doorsData) : EMPTY_MODEL), [doorsData]);
   const unlocated = (big ? doorsQ.data?.unlocated : doorsData?.unlocated) ?? 0;
   const doorsCopy = showingCopy(doorsQ);
 
@@ -1445,6 +1506,19 @@ export default function MapPage() {
   const selectedKey = selectedDoor?.key || null;
   // Declared before the marker effects so Leaflet handlers see the current key.
   useEffect(() => { selectedKeyRef.current = selectedKey; }, [selectedKey]);
+  // Houses with suites (shared/units.js): each is one pin on the map, its
+  // doors never drawn on their own. The open door's house: its pin is the
+  // one marked selected, and its card carries the door switch.
+  const inHouse = useMemo(() => {
+    const m = new Map();
+    for (const h of houses) for (const d of h.doors) m.set(d.key, h);
+    return m;
+  }, [houses]);
+  const selectedHouse = selectedKey ? inHouse.get(selectedKey) || null : null;
+  // What is drawn for the open door: its house's pin, or its own.
+  const selectedMark = selectedHouse ? `house:${selectedHouse.key}` : selectedKey;
+  const selectedMarkRef = useRef(null);
+  useEffect(() => { selectedMarkRef.current = selectedMark; }, [selectedMark]);
 
   // Turfs (volunteers get only the ones assigned to them, whole; anyone the
   // server answers as a desk role — a manager in the field app too — gets
@@ -1628,17 +1702,97 @@ export default function MapPage() {
       };
     }).filter((b) => b.shown > 0 && b.anchor);
   }, [buildings, visible, filter]);
-  // What the map draws: the doors not in a building, and the buildings.
+  // A house with suites: one pin for its doors the filter shows (the open
+  // door's always), in its main door's colour; at 0 it isn't drawn.
+  const houseItems = useMemo(() => {
+    if (!houses.length) return EMPTY_LIST;
+    const keys = new Set(visible.map((d) => d.key));
+    return houses.map((h) => {
+      const shownDoors = h.doors.filter((d) => keys.has(d.key));
+      return {
+        isHouse: true, key: `house:${h.key}`, lat: h.lat, lng: h.lng, offset: [0, 0], address: h.address,
+        doors: h.doors, shownDoors, band: h.doors[0].band, persons: shownDoors.flatMap((d) => d.persons),
+        signs: shownDoors.flatMap((d) => d.signs), tag: houseTag(h.doors),
+      };
+    }).filter((h) => h.shownDoors.length > 0);
+  }, [houses, visible]);
+  // What the map draws: the doors in no building or house, the buildings and the houses.
   const drawable = useMemo(
-    () => (buildings.length ? [...visible.filter((d) => !inBuilding.has(d.key)), ...buildingItems] : visible),
-    [buildings.length, visible, inBuilding, buildingItems],
+    () => (buildings.length || houses.length
+      ? [...visible.filter((d) => !inBuilding.has(d.key) && !inHouse.has(d.key)), ...buildingItems, ...houseItems]
+      : visible),
+    [buildings.length, houses.length, visible, inBuilding, inHouse, buildingItems, houseItems],
   );
+  // A house's doors as its card's switch shows them, each with its state:
+  // a knock still on this phone or sent from the card (by person), else
+  // the walk list kept on the phone (its round's state, and "Not on this
+  // round"), else Not knocked. A tap on the house opens its first door
+  // still to knock; a link opens the door it names (?person).
+  const [houseSent, setHouseSent] = useState({});
+  const houseOpenKey = selectedHouse?.key || null;
+  const kept = useMemo(() => (houseOpenKey ? readKept(me) : null), [houseOpenKey, me]);
+  const knocks = useMemo(() => ({ ...houseSent, ...pendingKnocks(outbox.items) }), [houseSent, outbox.items]);
+  const houseState = useCallback((d, from = kept) => {
+    if (voting && d.persons.length > 0 && d.persons.every(hasVoted)) return 'voted';
+    const listed = d.persons.map((p) => from?.byPerson.get(p.id)).find(Boolean);
+    if (listed === 'done') return 'done';
+    const mine = d.persons.map((p) => knocks[p.id]).filter(Boolean);
+    if (mine.length) return mine.some((k) => TERMINAL.includes(k.outcome)) ? 'done' : 'again';
+    if (listed) return listed;
+    if (from?.off.has(d.key)) return 'off';
+    return 'open';
+  }, [voting, hasVoted, kept, knocks]);
+  // The person to open at a house a busy view's dot stands for: the doors at
+  // the nearest person's civic address, in house order, the first one still
+  // to knock (else Main).
+  const houseFirst = (persons, near) => {
+    const civic = doorParts(near).civic;
+    const byDoor = new Map();
+    for (const p of persons || []) {
+      if (!p.address || doorParts(p).civic !== civic) continue;
+      const k = mapDoorKey(p);
+      if (!byDoor.has(k)) byDoor.set(k, { key: k, unit: doorParts(p).unit, persons: [] });
+      byDoor.get(k).persons.push(p);
+    }
+    const list = [...byDoor.values()].sort((a, b) => houseCompare(a.unit, b.unit));
+    if (list.length < 2) return near;
+    const from = readKept(me);
+    return (list.find((d) => stillToKnock(houseState(d, from))) || list[0]).persons[0];
+  };
+  const openHouse = (h) => {
+    if (h.key === selectedMarkRef.current) return;
+    const from = readKept(me);
+    const first = h.doors.find((d) => stillToKnock(houseState(d, from))) || h.doors[0];
+    if (first?.persons[0]) select(first.persons[0].id);
+  };
+  const houseCard = useMemo(() => {
+    if (!selectedHouse) return null;
+    const list = selectedHouse.doors.map((d) => ({
+      key: d.key, words: unitWords(doorParts(d).unit, 'house'), state: houseState(d), first: d.persons[0]?.id || null,
+    }));
+    const next = nextAtHouse(list, selectedKey);
+    return {
+      doors: list,
+      next,
+      onPick: (k) => { const d = list.find((x) => x.key === k); if (d?.first) select(d.first); },
+      onNext: () => { if (next?.first) select(next.first); },
+      // A knock sent from the card (one still on the phone is in the outbox)
+      // counts on the switch at once.
+      onLogged: (person, via, outcome) => {
+        if (via !== 'door') return;
+        setHouseSent((m) => ({ ...m, [person.id]: { outcome, at: new Date().toISOString() } }));
+      },
+    };
+    // (select is stable: a ref's setter, declared further down.)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedHouse, selectedKey, houseState]);
+
   // The open building's sheet (and the unit card inside it): the map's
   // filter applied to the building's own doors, and the knocks sent from
   // its cards since it loaded.
   const [sentHere, setSentHere] = useState({});
   useEffect(() => { setSentHere({}); }, [buildingParam]);
-  const showsDoor = useCallback((d) => shows({ key: rowDoorKey(d), persons: d.persons, signs: d.signs || [], band: householdBand(d.persons) }), [shows]);
+  const showsDoor = useCallback((d) => shows({ key: mapDoorKey(d), persons: d.persons, signs: d.signs || [], band: householdBand(d.persons) }), [shows]);
   const bld = useBuilding({ anchorId: buildingParam, me, online, mapDoors: doors, showsDoor, filterOn: filter !== 'all', sent: sentHere });
   const bldOfAnchor = buildingParam ? inBuilding.get(byPerson.get(buildingParam)?.key) : null;
   const bldSelectedKey = bldOfAnchor ? `building:${bldOfAnchor.key}` : null;
@@ -1694,7 +1848,8 @@ export default function MapPage() {
       if (only) for (const key of ['all', 'support', 'undecided', 'opposed', 'unrated']) c[key] = null;
       // (A building's square dot is its units' doors, not one: its band is
       // one resident's, so only the total counts them.)
-      else for (const d of dots) { c.all += isBuildingDot(d) ? Math.max(1, d.u) : 1; c[d.band] += 1; }
+      // (A house's dot is its doors, the same way.)
+      else for (const d of dots) { c.all += isBuildingDot(d) ? Math.max(1, d.u) : isHouseDot(d) ? d.h : 1; c[d.band] += 1; }
     }
     return c;
     // filters: its keys follow the scale and the doors, both listed here.
@@ -1952,9 +2107,11 @@ export default function MapPage() {
       });
       if (mine !== spotSeqRef.current) return; // another dot was tapped meanwhile
       const far = (p) => (Number(p.lat) - dot.lat) ** 2 + (Number(p.lng) - dot.lng) ** 2;
-      const who = [...(res.persons || [])].sort((a, b) => far(a) - far(b))[0];
+      const nearestOne = [...(res.persons || [])].sort((a, b) => far(a) - far(b))[0];
       const map = mapRef.current;
-      if (!who) { map?.setView([dot.lat, dot.lng], Math.min(offZoomRef.current, map.getZoom() + 1)); return; }
+      if (!nearestOne) { map?.setView([dot.lat, dot.lng], Math.min(offZoomRef.current, map.getZoom() + 1)); return; }
+      // A house's dot: its first door still to knock (Main first), as a tap on its pin.
+      const who = isHouseDot(dot) ? houseFirst(res.persons, nearestOne) : nearestOne;
       // Their door is here already: the card opens without asking again.
       queryClient.setQueryData(['doors', 'door', who.id], (was) => was || { persons: res.persons, signs: res.signs || [], scope: 'door' });
       select(who.id);
@@ -2027,6 +2184,8 @@ export default function MapPage() {
       if (mode === 'add') cancelMode();
       // A building's square opens the building, never one of its units.
       if (door.isBuilding) { openBuilding(door.anchor); return; }
+      // A house's pin opens its first door still to knock (Main first).
+      if (door.isHouse) { openHouse(door); return; }
       if (selectedKeyRef.current === door.key) return;
       select(door.persons[0].id);
     };
@@ -2431,16 +2590,16 @@ export default function MapPage() {
   const groups = useMemo(() => {
     if (pinsOn) return clusterDoors(drawable, zoom, offZoom, viewBounds);
     // (The open door's pin is drawn by itself while the rest are dots.)
-    return lone.filter((g) => g[0].key !== selectedKey && (!viewBounds || viewBounds.contains([g[0].lat, g[0].lng])));
-  }, [pinsOn, lone, drawable, zoom, offZoom, viewBounds, selectedKey]);
+    return lone.filter((g) => g[0].key !== selectedMark && (!viewBounds || viewBounds.contains([g[0].lat, g[0].lng])));
+  }, [pinsOn, lone, drawable, zoom, offZoom, viewBounds, selectedMark]);
   // Below street zoom: every door a dot (the open one keeps its pin) — the
   // doors the map has whole and, on a big list, the ones answered as dots —
   // or a big list's patches further out.
   const dotDoors = useMemo(() => {
     if (pinsOn) return EMPTY_LIST;
     const pinned = lone.length ? new Set(lone.map((g) => g[0].key)) : null;
-    return drawable.filter((d) => d.key !== selectedKey && !pinned?.has(d.key));
-  }, [pinsOn, lone, drawable, selectedKey]);
+    return drawable.filter((d) => d.key !== selectedMark && !pinned?.has(d.key));
+  }, [pinsOn, lone, drawable, selectedMark]);
   const dotItems = useMemo(() => (leanShown.length ? [...dotDoors, ...leanShown] : dotDoors), [dotDoors, leanShown]);
   useEffect(() => {
     const layers = layersRef.current;
@@ -2454,15 +2613,22 @@ export default function MapPage() {
     if (!layers) return;
     layers.chosen.clearLayers();
     if (pinsOn || !selectedDoor || inBuilding.has(selectedDoor.key)) return;
+    // (The open door's house: its one pin, with its words.)
+    const h = selectedHouse ? houseItems.find((x) => x.key === selectedMark) : null;
+    if (h) {
+      L.marker([h.lat, h.lng], { icon: houseIcon(h, true, h.tag, signOk), title: houseLabel(h), alt: houseLabel(h), zIndexOffset: 1000 })
+        .on('click', () => onPinClickRef.current?.(h)).addTo(layers.chosen);
+      return;
+    }
     L.marker([selectedDoor.lat, selectedDoor.lng], {
       icon: pinIcon(selectedDoor, true, signOk),
       title: `${doorTitle(selectedDoor)} — ${selectedDoor.persons.map((p) => personTitle(scale, p)).join(', ')}`,
       zIndexOffset: 1000,
     }).on('click', () => onPinClickRef.current?.(selectedDoor)).addTo(layers.chosen);
-  }, [pinsOn, selectedDoor, signOk, scale, inBuilding]);
+  }, [pinsOn, selectedDoor, signOk, scale, inBuilding, selectedHouse, selectedMark, houseItems]);
   const pulledKey = useMemo(
-    () => (selectedKey && groups.some((g) => g.length > 1 && g.some((d) => d.key === selectedKey)) ? selectedKey : null),
-    [groups, selectedKey],
+    () => (selectedMark && groups.some((g) => g.length > 1 && g.some((d) => d.key === selectedMark)) ? selectedMark : null),
+    [groups, selectedMark],
   );
   useEffect(() => {
     const layers = layersRef.current;
@@ -2470,7 +2636,46 @@ export default function MapPage() {
     layers.doors.clearLayers();
     layers.signs.clearLayers();
     markersRef.current.clear();
+    // The small words under marks ("+ Basement suite" under a house from
+    // CLUSTER_OFF_ZOOM, "Building" under a square from LONE_PIN_ZOOM; always
+    // under the open house): shown only where they cover no other mark, so
+    // a tag never hides the next house's pin.
+    const pt = (it) => {
+      const p = L.CRS.EPSG3857.latLngToPoint(L.latLng(it.lat, it.lng), zoom ?? 0);
+      return { x: p.x + (it.offset?.[0] || 0), y: p.y + (it.offset?.[1] || 0) };
+    };
+    const marks = groups.flatMap((g) => (g.length === 1 ? [{ it: g[0], box: g[0].isBuilding ? squareBox(pt(g[0])) : pinBox(pt(g[0])) }]
+      : [{ it: g[0], box: { ...squareBox(pt(g[0])), left: pt(g[0]).x - 36, right: pt(g[0]).x + 36, top: pt(g[0]).y - 36, bottom: pt(g[0]).y + 36 } }]));
+    const placedTags = [];
+    const tagFor = (it, text, at, below) => {
+      if (!text) return null;
+      const box = tagBox(at, text, { below });
+      if (marks.some((m) => m.it !== it && boxesMeet(box, m.box)) || placedTags.some((b) => boxesMeet(box, b))) return null;
+      placedTags.push(box);
+      return text;
+    };
+    const tagsOn = zoom != null && zoom >= Math.min(CLUSTER_OFF_ZOOM, offZoom);
+    const captionsOn = zoom != null && zoom >= Math.min(LONE_PIN_ZOOM, offZoom);
+    // A house: one pin for its doors (its card switches between them).
+    const addHouse = (h) => {
+      const selected = h.key === selectedMarkRef.current;
+      const tag = tagsOn ? tagFor(h, h.tag, pt(h), 8) : null;
+      const label = houseLabel(h);
+      const marker = L.marker([h.lat, h.lng], {
+        icon: houseIcon(h, selected, selected ? h.tag : tag, signOk),
+        house: { item: h, tag, signOk },
+        title: label,
+        alt: label,
+        riseOnHover: true,
+        zIndexOffset: selected ? 1000 : 100,
+      });
+      marker.on('click', () => onPinClickRef.current?.(h));
+      byKeyboard(marker, () => onPinClickRef.current?.(h));
+      marker.addTo(layers.doors);
+      markersRef.current.set(h.key, marker);
+    };
     const addPin = (door) => {
+      if (door.isHouse) { addHouse(door); return; }
       const selected = door.key === selectedKeyRef.current;
       const marker = L.marker([door.lat, door.lng], {
         icon: pinIcon(door, selected, signOk),
@@ -2487,7 +2692,7 @@ export default function MapPage() {
     const addSquare = (b) => {
       const label = `${b.address}, building, ${plural(b.shown, 'unit', 'units')}`;
       const marker = L.marker([b.lat, b.lng], {
-        icon: buildingIcon(b, b.key === bldSelectedKey),
+        icon: buildingIcon(b, b.key === bldSelectedKey, captionsOn && Boolean(tagFor(b, 'Building', pt(b), 26))),
         title: label,
         alt: label,
         riseOnHover: true,
@@ -2505,8 +2710,8 @@ export default function MapPage() {
       else if (rest.length === 1) addPin(rest[0]);
       else if (rest.length > 1) {
         const seed = rest[0];
-        // A bubble counts doors: a building in it counts its shown units.
-        const flat = rest.some((d) => d.isBuilding) ? rest.flatMap((d) => (d.isBuilding ? d.shownDoors : [d])) : rest;
+        // A bubble counts doors: a building in it counts its shown units, a house its doors.
+        const flat = rest.some((d) => d.isBuilding || d.isHouse) ? rest.flatMap((d) => (d.isBuilding || d.isHouse ? d.shownDoors : [d])) : rest;
         L.marker([seed.lat, seed.lng], {
           icon: clusterIcon(flat, seed.offset),
           title: `${plural(flat.length, 'door', 'doors')} — tap to zoom in`,
@@ -2528,22 +2733,29 @@ export default function MapPage() {
           .addTo(layers.signs);
       }
     }
-  }, [groups, pulledKey, orphanSigns, filter, scale, signOk, zoom, bldSelectedKey]);
+  }, [groups, pulledKey, orphanSigns, filter, scale, signOk, zoom, offZoom, bldSelectedKey]);
 
   // Highlight the selected pin without rebuilding every marker.
   useEffect(() => {
     const paint = (key, on) => {
       const marker = key ? markersRef.current.get(key) : null;
       if (!marker) return;
+      // A house: its words always show while it is open.
+      const house = marker.options.house;
+      if (house) {
+        marker.setIcon(houseIcon(house.item, on, on ? house.item.tag : house.tag, house.signOk));
+        marker.setZIndexOffset(on ? 1000 : 100);
+        return;
+      }
       const el = marker.getElement();
       el?.querySelector('.map-pin')?.classList.toggle('map-pin--selected', on);
       el?.querySelector('.map-dot')?.classList.toggle('map-dot--selected', on);
       marker.setZIndexOffset(on ? 1000 : 0);
     };
     paint(prevSelectedRef.current, false);
-    paint(selectedKey, true);
-    prevSelectedRef.current = selectedKey;
-  }, [selectedKey, groups, pulledKey]);
+    paint(selectedMark, true);
+    prevSelectedRef.current = selectedMark;
+  }, [selectedMark, groups, pulledKey]);
 
   const naming = mode === 'draw' && draft.naming;
   const bldOpen = Boolean(buildingParam && !mode && !pickerOpen && !addAt);
@@ -2787,7 +2999,7 @@ export default function MapPage() {
           <div className="map-mode" role="status">
             <span>
               Tap where <strong>{placing.name}</strong> lives
-              {placing.address ? <span className="map-mode__sub">{placing.unit ? `${placing.unit} – ` : ''}{placing.address}</span> : null}
+              {placing.address ? <span className="map-mode__sub">{doorLine(placing, 'door')}</span> : null}
             </span>
             <button type="button" className="btn" onClick={cancelMode}>Cancel</button>
           </div>
@@ -3050,7 +3262,7 @@ export default function MapPage() {
       )}
       {bldOpen && personParam && selectedDoor && (() => {
         const ready = bld?.status === 'ready';
-        const row = ready ? bld.rows.find((r) => r.doors.some((d) => rowDoorKey(d) === selectedDoor.key)) : null;
+        const row = ready ? bld.rows.find((r) => r.doors.some((d) => mapDoorKey(d) === selectedDoor.key)) : null;
         const next = ready ? nextUnit(bld, selectedDoor.key) : null;
         return (
           <div className="map-sheet">
@@ -3069,7 +3281,7 @@ export default function MapPage() {
                 label: ready ? unitLine(bld, row) : doorTitle(selectedDoor),
                 onBack: backToBuilding,
                 onNext: () => (next ? openUnit(next) : backToBuilding()),
-                nextLabel: next ? `Next unit · ${next.unit || '—'}` : null,
+                nextLabel: next ? `Next unit · ${rowMark(next.row)}` : null,
                 // A knock sent (not queued: the outbox has those) counts
                 // on the sheet at once, before the building is read again.
                 onLogged: (person, via, outcome, r) => {
@@ -3095,6 +3307,7 @@ export default function MapPage() {
             canCreate={canCreate}
             canAddHere={canCreate || Boolean(mineKeys?.has(selectedDoor.key))}
             allowGoogle={isGoogleLook(tiles?.url)}
+            house={houseCard}
           />
         </div>
       )}

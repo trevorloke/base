@@ -44,7 +44,7 @@ import { CUT_KEYS, CutGroups, addCuts, cutChips, useTurfs, useWebDid } from '../
 import ScriptLine, { useScripts } from '../components/ScriptLine.jsx';
 import NameFields from '../components/NameFields.jsx';
 import NameAz from '../components/NameAz.jsx';
-import { streetLine } from '../components/people.js';
+import { UnitSuggestions, streetLine } from '../components/people.js';
 import {
   LOADING, RULE_KEYS, RuleGroups, SnapshotForm, Unavailable, fmt, ruleChips, rulesPicked, useAudienceChoices, useKnowsName, useListNames,
 } from '../components/AudienceBits.jsx';
@@ -698,7 +698,8 @@ function AddPersonForm({ onClose, me }) {
           <div className="form-row">
             <div className="field" style={{ flex: '0 1 90px' }}>
               <label htmlFor="np-unit">Unit</label>
-              <input id="np-unit" className="input" maxLength={40} value={form.unit} onChange={set('unit')} />
+              <input id="np-unit" className="input" maxLength={40} list="np-unit-words" value={form.unit} onChange={set('unit')} />
+              <UnitSuggestions id="np-unit-words" />
             </div>
             <div className="field">
               <label htmlFor="np-city">City</label>

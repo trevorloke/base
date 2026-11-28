@@ -23,6 +23,7 @@ import NameAz from '../components/NameAz.jsx';
 import { MINE_KEY } from '../components/RelationshipsBits.jsx';
 import './shifts.css';
 import './addressbook.css';
+import { doorLine } from '../../../shared/units.js';
 
 const CHECK_SLICE = 500;
 const LINK_SLICE = 200;
@@ -264,7 +265,7 @@ function Finder() {
               {/* A–Z by last name, as every list of people (PS), whatever order the file had. */}
               {[...found].sort((a, b) => azSort(a.person, b.person)).map((f) => {
                 const p = f.person;
-                const where = [p.unit && `${p.unit}-`, p.address].filter(Boolean).join('') || f.email;
+                const where = (p.address ? doorLine(p, 'door') : '') || f.email;
                 const id = `ab-${p.id}`;
                 return (
                   <li key={p.id} className="ops-item">
