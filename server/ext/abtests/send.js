@@ -30,6 +30,7 @@
 // the sender's id. An address on the campaign's suppression list — it
 // bounced for good or reported spam — is taken off the send at the moment
 // its email would go, as a subscriber who left the list is.
+import { setting } from '@starbase/shared/old-names';
 import { z } from 'zod';
 import { randomBytes, randomInt } from 'node:crypto';
 import { emailConfigured, sendEmail, unsubscribeHeaders } from '../../lib/notify.js';
@@ -632,10 +633,10 @@ export const finishRun = async (db, ctx, {
 };
 
 // How long a tap's request sends before it hands the rest to the send job
-// (STARBASE_SEND_INLINE_MS, default 5 s) — all of it when nothing would run
-// that job (no job runner in this process: STARBASE_JOBS=off).
+// (BASE_SEND_INLINE_MS, default 5 s) — all of it when nothing would run
+// that job (no job runner in this process: BASE_JOBS=off).
 export const inlineMs = () => {
-  const v = process.env.STARBASE_SEND_INLINE_MS;
+  const v = setting('BASE_SEND_INLINE_MS');
   if (v != null && v !== '' && Number(v) >= 0) return Number(v);
   return jobRunnerOn() ? 5_000 : Infinity;
 };
@@ -659,12 +660,12 @@ export const runPayload = (action, run, extra = {}) => ({
 });
 
 // The send job: the rest of a tap's send, up to 200 per run
-// (STARBASE_SEND_PER_RUN), then the next run straight away — so other
+// (BASE_SEND_PER_RUN), then the next run straight away — so other
 // background work (receipts, ladders) isn't kept waiting behind a big list.
 // Its writes are the tapping person's, labelled as theirs (blast.send /
 // blast.resend). A run with nothing left to send writes nothing, unless the
 // send's status was never brought up to date (settleBlast).
-const sendPerRun = () => Number(process.env.STARBASE_SEND_PER_RUN) || 200;
+const sendPerRun = () => Number(setting('BASE_SEND_PER_RUN')) || 200;
 export const runSendJob = async (db, job) => {
   const { blast_id: blastId, base = '', actor_id: actorId = null, action = 'blast.send' } = job.payload || {};
   const workspaceId = job.workspace_id;

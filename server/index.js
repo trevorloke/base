@@ -1,8 +1,13 @@
-// Starbase server. Hono app: /api/auth (public), /api/* (workspace-scoped),
+import './lib/adopt-old-names.js';
+// base.win server. Hono app: /api/auth (public), /api/* (workspace-scoped),
 // static web build. Exported for in-process tests via app.request().
-// The preset comes first: which client's own material this server has, if
-// any, is settled before anything else reads it (lib/preset.js).
+// The line above comes first: a setting still under its older name in
+// Render is copied into its new name before any file reads one
+// (lib/adopt-old-names.js). Then the preset: which client's own material
+// this server has, if any, is settled before anything else reads it
+// (lib/preset.js).
 import { brandKey, brandNote, presetRoutes } from './lib/preset.js';
+import { setting } from '@starbase/shared/old-names';
 import { Hono } from 'hono';
 import { relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -109,7 +114,7 @@ app.get('/api/health', async (c) => {
   const open = db ? await setupOpen(db).catch(() => null) : null;
   const made = db ? await noWorkspace(db).then((none) => !none, () => null) : null;
   return c.json({
-    ok: database, database: database ? 'ok' : 'not reachable', service: 'starbase', env: envName(), organization: orgName(), brand: brandKey(), commit: COMMIT, build: currentBuild(), tzdataCurrent: !staleTimeZoneData(),
+    ok: database, database: database ? 'ok' : 'not reachable', service: 'base.win', env: envName(), organization: orgName(), brand: brandKey(), commit: COMMIT, build: currentBuild(), tzdataCurrent: !staleTimeZoneData(),
     ownOrigin: ownOrigin(), instance, address: publicAddress(), entry: entryReadiness(),
     platformKids: parseKeys().map((k) => k.kid), setupOpen: open, campaignMade: made, doorKey: doorKeySet(), store: storeOf(db),
   }, database ? 200 : 503);
@@ -136,36 +141,36 @@ app.get('*', serveStatic({ root: WEB_ROOT, path: 'index.html' }));
 
 // Said loudly in the log when the server starts (it still starts): settings
 // that leave a hosted server half set up. One line each.
-//   - production with no STARBASE_PUBLIC_URL: nothing it sends can link back;
-//   - on Render, a STARBASE_ENV that is neither "production" nor "staging"
+//   - production with no BASE_PUBLIC_URL: nothing it sends can link back;
+//   - on Render, a BASE_ENV that is neither "production" nor "staging"
 //     (unset, or misspelled): what it is treated as (lib/org.js envName);
-//   - no STARBASE_BRAND on a server named as a preset's campaign: it is
+//   - no BASE_BRAND on a server named as a preset's campaign: it is
 //     given that preset because of its name (lib/preset.js brandNote);
-//   - a STARBASE_SITE_DOMAIN that isn't taken, and the unsubscribe sync
+//   - a BASE_SITE_DOMAIN that isn't taken, and the unsubscribe sync
 //     still pointed at the website once base.win serves it.
 export const bootNotes = (env = process.env) => {
   const out = [];
   const brand = brandNote(env);
   if (brand) out.push(brand);
-  const typed = String(env.STARBASE_ENV || '').trim();
+  const typed = String(setting('BASE_ENV', env) || '').trim();
   const name = envName(env);
   if (env.RENDER && typed !== name) {
-    out.push(`starbase: WARNING — STARBASE_ENV is ${typed ? `“${typed}”, which is neither “production” nor “staging”` : 'not set'}: this server is treated as ${name}`
-      + ' (the demo sign-in, the sample campaign and its reset stay off). Set STARBASE_ENV to production or staging: Render → this service → Environment.');
+    out.push(`base.win: WARNING — BASE_ENV is ${typed ? `“${typed}”, which is neither “production” nor “staging”` : 'not set'}: this server is treated as ${name}`
+      + ' (the demo sign-in, the sample campaign and its reset stay off). Set BASE_ENV to production or staging: Render → this service → Environment.');
   }
-  // The website's own domain (STARBASE_SITE_DOMAIN): one that isn't a
+  // The website's own domain (BASE_SITE_DOMAIN): one that isn't a
   // domain, or is where the app answers, is not taken (SITE.md).
   const domain = siteDomainState(env);
-  if (domain.problem === 'not-domain') out.push(`starbase: WARNING — STARBASE_SITE_DOMAIN is “${domain.raw}”, which isn’t a domain (like yourcampaign.ca): the website stays at /site/.`);
-  if (domain.problem === 'app') out.push(`starbase: WARNING — STARBASE_SITE_DOMAIN is ${domain.raw}, where the app itself answers, so it is not taken: the website stays at /site/. Set it to the website’s own domain (like yourcampaign.ca).`);
+  if (domain.problem === 'not-domain') out.push(`base.win: WARNING — BASE_SITE_DOMAIN is “${domain.raw}”, which isn’t a domain (like yourcampaign.ca): the website stays at /site/.`);
+  if (domain.problem === 'app') out.push(`base.win: WARNING — BASE_SITE_DOMAIN is ${domain.raw}, where the app itself answers, so it is not taken: the website stays at /site/. Set it to the website’s own domain (like yourcampaign.ca).`);
   // The unsubscribe sync still pointed at the website once base.win serves it.
   let synced = '';
-  try { synced = new URL(String(env.STARBASE_WEBSITE_URL || '').trim()).hostname.toLowerCase().replace(/\.+$/, ''); } catch { /* not set */ }
+  try { synced = new URL(String(setting('BASE_WEBSITE_URL', env) || '').trim()).hostname.toLowerCase().replace(/\.+$/, ''); } catch { /* not set */ }
   if (synced && siteEnvHosts(env).includes(synced)) {
-    out.push(`starbase: WARNING — STARBASE_WEBSITE_URL is ${synced}, this campaign’s own website, now on base.win: nothing is sent there. Take both settings away (STARBASE_WEBSITE_URL, STARBASE_WEBSITE_KEY): Render → this service → Environment.`);
+    out.push(`base.win: WARNING — BASE_WEBSITE_URL is ${synced}, this campaign’s own website, now on base.win: nothing is sent there. Take both settings away (BASE_WEBSITE_URL, BASE_WEBSITE_KEY): Render → this service → Environment.`);
   }
-  if (name === 'production' && !String(env.STARBASE_PUBLIC_URL || '').trim()) {
-    out.push('starbase: WARNING — STARBASE_PUBLIC_URL is not set on a production server: emails can’t link back here (password resets, shift reminders) and Sign in with Google stays off.'
+  if (name === 'production' && !String(setting('BASE_PUBLIC_URL', env) || '').trim()) {
+    out.push('base.win: WARNING — BASE_PUBLIC_URL is not set on a production server: emails can’t link back here (password resets, shift reminders) and Sign in with Google stays off.'
       + ' Set it to the campaign’s public address, https://<name>.base.win.');
   }
   return out;
@@ -186,24 +191,24 @@ if (isMain) {
   // (lib/mount.js); unset, at the site's root.
   const base = basePath();
   const server = serve({ fetch: mountAt(app, base), port }, () => {
-    console.log(`starbase on :${port}${base ? ` at ${base}` : ''}`);
+    console.log(`base.win on :${port}${base ? ` at ${base}` : ''}`);
   });
   // Staging's sample campaign, made once on an empty database (lib/samplecampaign.js).
   seedSample(app).catch((e) => console.error('sample:', e));
   const tz = staleTimeZoneData();
-  if (tz) console.warn(`starbase: ${tz}`);
+  if (tz) console.warn(`base.win: ${tz}`);
   const moved = clockNote();
-  if (moved) console.warn(`starbase: ${moved}`);
+  if (moved) console.warn(`base.win: ${moved}`);
   // Behind the base.win door without its key, everyone who comes through
   // the door is the door's one address to the limits per address.
   if (base && !doorKeySet()) {
-    console.warn('starbase: under base.win (BASE_PATH) but BASE_DOOR_KEY is not set (32+ characters, the same as the door’s) — everyone who comes through the door counts as one address for sign-in tries and the website’s forms');
+    console.warn('base.win: under base.win (BASE_PATH) but BASE_DOOR_KEY is not set (32+ characters, the same as the door’s) — everyone who comes through the door counts as one address for sign-in tries and the website’s forms');
   }
-  // Background jobs (ladder steps, A/B winners). STARBASE_JOBS=off disables.
-  if (process.env.STARBASE_JOBS !== 'off') {
+  // Background jobs (ladder steps, A/B winners). BASE_JOBS=off disables.
+  if (setting('BASE_JOBS') !== 'off') {
     // A database still starting (or restarting) is tried again, not a crash.
     const startJobs = () => getDb().then(
-      (db) => startJobRunner(db, { everyMs: Number(process.env.STARBASE_JOBS_EVERY_MS) || 30_000 }),
+      (db) => startJobRunner(db, { everyMs: Number(setting('BASE_JOBS_EVERY_MS')) || 30_000 }),
       (e) => { console.error(`database not reachable yet (${e.message}); trying again in 10 s`); setTimeout(startJobs, 10_000).unref?.(); },
     );
     startJobs();

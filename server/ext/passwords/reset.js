@@ -2,7 +2,7 @@
 // manager's, for 24 hours: actions.js). routes/auth.js answers the screens;
 // the how is here.
 //
-// The link is built only from STARBASE_PUBLIC_URL — never from the address
+// The link is built only from BASE_PUBLIC_URL — never from the address
 // the request came to, which anyone can set — and the token travels in the
 // fragment (…/reset#t=…), so it never reaches a server log or a Referer.
 // The Reset screen sends it back by POST. A new ask never ends an earlier
@@ -23,7 +23,7 @@ export const RUN_OUT = 'That link has run out or was already used.';
 const sha256 = (s) => createHash('sha256').update(s).digest('hex');
 export const tokenHash = (token) => sha256(String(token || ''));
 
-// STARBASE_PUBLIC_URL, when it is an http(s) address; else null.
+// BASE_PUBLIC_URL, when it is an http(s) address; else null.
 export const publicBase = () => {
   const raw = configuredUrl();
   if (!raw) return null;
@@ -41,7 +41,7 @@ export const resetByEmail = () => emailConfigured() && Boolean(publicBase()) && 
 // volunteers' app (/field), at a site's root the app's root.
 export const resetLink = (token) => {
   const at = publicBase();
-  if (!at) throw new Error('STARBASE_PUBLIC_URL is not set');
+  if (!at) throw new Error('BASE_PUBLIC_URL is not set');
   return `${at}${basePath() ? '/field/reset' : '/reset'}#t=${token}`;
 };
 

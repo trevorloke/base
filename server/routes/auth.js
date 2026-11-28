@@ -2,6 +2,7 @@
 // manager membership in one transaction; after that, sign-up is closed and
 // everyone else joins by invite (/join). Login binds the session to the
 // user's workspace membership.
+import { setting } from '@starbase/shared/old-names';
 import { areasFor } from '../lib/perms.js';
 import { Hono } from 'hono';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
@@ -49,9 +50,9 @@ app.use('*', async (c, next) => {
   await next();
 });
 
-// Secure cookies behind TLS: on in production unless STARBASE_SECURE_COOKIES=0
+// Secure cookies behind TLS: on in production unless BASE_SECURE_COOKIES=0
 // (e.g. a local container on plain http); force on anywhere with =1.
-const secureFlag = process.env.STARBASE_SECURE_COOKIES;
+const secureFlag = setting('BASE_SECURE_COOKIES');
 const secure = secureFlag ? secureFlag === '1' : process.env.NODE_ENV === 'production';
 // Strict: the cookie goes only with requests the app itself makes (the app
 // is one origin; a link opened from an email loads the app, which then asks
@@ -68,7 +69,7 @@ const signupInput = z.object({
   name: z.string().trim().min(1).max(200),
   email: z.string().email().max(320),
   password: z.string().min(8).max(200),
-  // The deployment names the campaign (STARBASE_ORG_NAME); when it doesn't,
+  // The deployment names the campaign (BASE_ORG_NAME); when it doesn't,
   // the first sign-up does. Tests make several workspaces to check they
   // stay apart, so a name and jurisdiction are always taken when given.
   workspaceName: z.string().trim().min(1).max(200).optional(),
@@ -76,7 +77,7 @@ const signupInput = z.object({
   jurisdiction: z.enum(JURISDICTIONS).optional(),
 });
 
-// Setup is open until the first workspace exists (or STARBASE_OPEN_SIGNUP=1)
+// Setup is open until the first workspace exists (or BASE_OPEN_SIGNUP=1)
 // — except on a server that holds the control centre's key: that one is set
 // up from the control centre (its first entry makes the campaign), so a
 // stranger who finds it fresh can't claim it.
@@ -86,7 +87,7 @@ const closedWords = async (db) => (parseKeys().length && (await noWorkspace(db))
   ? FROM_CONTROL_CENTRE : setupClosedMessage(await campaignName(db)));
 
 // The campaign's own name once it is set up: its workspace's, as a manager
-// last named it (Settings → Campaign) — not STARBASE_ORG_NAME, which only
+// last named it (Settings → Campaign) — not BASE_ORG_NAME, which only
 // names it until then (the first sign-up takes it). One campaign per
 // deployment: the first one made.
 const campaignName = async (db) =>
@@ -230,7 +231,7 @@ app.post('/signup', async (c) => {
 
 // The public demo (lib/demo.js; never on production): no password — every
 // visitor is signed in as the one demo account and sent to the app. Off
-// unless STARBASE_DEMO_EMAIL names an account in the campaign. The visitor
+// unless BASE_DEMO_EMAIL names an account in the campaign. The visitor
 // can do whatever that account can — a manager's is everything — so the
 // campaign on this server is the sample one (lib/samplecampaign.js), with nobody
 // real in it. The same limit from one address as sign-in.

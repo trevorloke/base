@@ -2,6 +2,7 @@
 // go exclusively through POST /api/actions/:name. GET /api/events is the
 // sync protocol AND the public API — the same endpoint the app uses — and
 // GET /api/export is the contractual one-click full-fidelity export.
+import { setting } from '@starbase/shared/old-names';
 import { mayRun, decide, decideArea, areaOfPath, areasFor } from '../lib/perms.js';
 import { Hono } from 'hono';
 import { getCookie } from 'hono/cookie';
@@ -94,7 +95,7 @@ app.use('*', async (c, next) => {
     return c.json({ error: SETUP_FIRST, two_step: 'set_up' }, 401);
   }
   // Public base URL for links in outbound mail (unsubscribe).
-  ctx.publicUrl = (process.env.STARBASE_PUBLIC_URL || `${new URL(c.req.url).origin}${c.env?.base || ''}`).replace(/\/$/, '');
+  ctx.publicUrl = (setting('BASE_PUBLIC_URL') || `${new URL(c.req.url).origin}${c.env?.base || ''}`).replace(/\/$/, '');
   // The host this request came in on (the app answers there: never a website
   // domain), as the site gate reads it, noted for the saves to come
   // (ext/site/store.js hostOfRequest, noteAppHost).
@@ -295,12 +296,12 @@ export const turfsOnly = (ctx) => ctx.role === 'volunteer'
 //   else { truncated: true, count } and no rows at all.
 // From further out it is a count per patch (/map/density). ?person=<id>
 // answers that one person's door, wherever it is and however dense the place.
-const MAP_ALL = () => Number(process.env.STARBASE_MAP_ALL) || 5000;
-// At most this many people in one view load (STARBASE_MAP_VIEW, for tests).
-const mapView = () => Number(process.env.STARBASE_MAP_VIEW) || MAP_VIEW_DEFAULT;
+const MAP_ALL = () => Number(setting('BASE_MAP_ALL')) || 5000;
+// At most this many people in one view load (BASE_MAP_VIEW, for tests).
+const mapView = () => Number(setting('BASE_MAP_VIEW')) || MAP_VIEW_DEFAULT;
 const MAP_VIEW_DEFAULT = 8000;
-// At most this many doors as dots in one view (STARBASE_MAP_DOTS, for tests).
-const mapDots = () => Number(process.env.STARBASE_MAP_DOTS) || 25000;
+// At most this many doors as dots in one view (BASE_MAP_DOTS, for tests).
+const mapDots = () => Number(setting('BASE_MAP_DOTS')) || 25000;
 const bboxParam = (v) => {
   const b = String(v || '').split(',').map(Number);
   return b.length === 4 && b.every(Number.isFinite) && b[0] <= b[2] && b[1] <= b[3] && b[0] >= -90 && b[2] <= 90 ? b : null;
@@ -1357,7 +1358,7 @@ app.get('/export', async (c) => {
   const ws = ctx.workspaceId;
   const hidden = await privateOf(db, ctx);
   const out = {
-    format: 'starbase-export',
+    format: 'base-win-export',
     version: 1,
     exportedAt: new Date().toISOString(),
     workspace: ctx.workspace,
@@ -1380,7 +1381,7 @@ app.get('/export', async (c) => {
     const ids = new Set(hidden.map((f) => f.id));
     out.person_field_values = out.person_field_values.filter((r) => !ids.has(r.field_id));
   }
-  c.header('Content-Disposition', 'attachment; filename="starbase-export.json"');
+  c.header('Content-Disposition', 'attachment; filename="base-win-export.json"');
   return c.json(out);
 });
 

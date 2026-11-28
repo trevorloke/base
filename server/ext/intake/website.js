@@ -3,32 +3,37 @@
 // environment, like every other key — nothing is read from the database,
 // and there is no default:
 //
-//   STARBASE_WEBSITE_URL   the website's address, https://…, no path
-//   STARBASE_WEBSITE_KEY   the secret the website holds as STARBASE_INBOUND_KEY
+//   BASE_WEBSITE_URL   the website's address, https://…, no path
+//   BASE_WEBSITE_KEY   the secret the website holds as its inbound key setting
+//
+// Each is read under its older name too, while that is the one set
+// (shared/old-names.js): a server set up before the rename sends exactly as before.
 //
 // It is on only when both are set, the address is https (http only for this
 // machine itself, for tests), it is not this server's own address and not a
 // base.win address (one client's unsubscribes are never pointed at another
 // client's base.win), not the campaign's own website now that base.win
-// serves it (STARBASE_SITE_DOMAIN, SITE_HOSTS: the two settings come off
+// serves it (BASE_SITE_DOMAIN, SITE_HOSTS: the two settings come off
 // after the move), and this is not staging: staging never sends.
+import { setting } from '@starbase/shared/old-names';
 import { envName } from '../../lib/org.js';
 import { siteEnvHosts } from '../site/domain.js';
 
-export const URL_ENV = 'STARBASE_WEBSITE_URL';
-export const KEY_ENV = 'STARBASE_WEBSITE_KEY';
+export const URL_ENV = 'BASE_WEBSITE_URL';
+export const KEY_ENV = 'BASE_WEBSITE_KEY';
 export const CONSENT_PATH = '/api/in/consent';
 // How what the website itself said is marked here — a number's STOP row
 // (its keyword) and the consent record (its source) — so the run that sends
 // what was already off never sends the website its own words back.
 export const WEBSITE_KEYWORD = 'WEBSITE SYNC';
 export const WEBSITE_SOURCES = ['unsubscribe', 'stop', 'preference', 'deletion'].map((r) => `website-${r}`);
-const env = (k) => String(process.env[k] || '').trim();
+// A setting by its name, or its older name while that is the one set (shared/old-names.js); any other name as it is.
+const env = (k) => String(setting(k) || '').trim();
 const LOCAL = ['localhost', '127.0.0.1', '[::1]'];
 
 const hostOf = (v) => { try { return new URL(v).host.toLowerCase(); } catch { return ''; } };
 // This server's own addresses, as it knows them.
-const ownHosts = () => ['STARBASE_PUBLIC_URL', 'STARBASE_OWN_URL', 'RENDER_EXTERNAL_URL'].map((k) => hostOf(env(k))).filter(Boolean);
+const ownHosts = () => ['BASE_PUBLIC_URL', 'BASE_OWN_URL', 'RENDER_EXTERNAL_URL'].map((k) => hostOf(env(k))).filter(Boolean);
 
 // → { on, host, target, missing: [setting…], problem }
 //   problem: null | 'staging' | 'not-set' | 'half-set' | 'not-address' | 'not-https' | 'own' | 'base-win' | 'moved'

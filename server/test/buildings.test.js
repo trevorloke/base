@@ -206,7 +206,7 @@ test('walkFor’s output for a recorded turf is byte-identical before and after 
 });
 
 test('doorDots: u, the most units at one address at a spot; band still the strongest', async () => {
-  process.env.STARBASE_MAP_ALL = '20';
+  process.env.BASE_MAP_ALL = '20';
   try {
     const A = { lat: 49.30, lng: -122.70 };
     for (let i = 1; i <= 50; i += 1) {
@@ -222,6 +222,6 @@ test('doorDots: u, the most units at one address at a spot; band still the stron
     const tower = ok(await mgr.get(`/api/map/doors?bbox=${T.lat - 0.0002},${T.lng - 0.0002},${T.lat + 0.0002},${T.lng + 0.0002}&dots=1`));
     assert.ok(tower.dots.some((x) => x[4] >= 120), 'the tower’s spot');
   } finally {
-    delete process.env.STARBASE_MAP_ALL;
+    delete process.env.BASE_MAP_ALL;
   }
 });

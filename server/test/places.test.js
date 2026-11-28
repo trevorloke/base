@@ -13,7 +13,7 @@ import { today, _resetForTest as resetUsage } from '../lib/gusage.js';
 
 const env = { ...process.env };
 const realFetch = globalThis.fetch;
-const KEYS = ['GOOGLE_MAPS_SERVER_KEY', 'ADDRESS_SUGGEST', 'GEOCODER', 'STARBASE_GEO_BOUNDS', 'GOOGLE_PLACES_DAILY_MAX', 'GOOGLE_PLACES_PER_PERSON'];
+const KEYS = ['GOOGLE_MAPS_SERVER_KEY', 'ADDRESS_SUGGEST', 'GEOCODER', 'BASE_GEO_BOUNDS', 'GOOGLE_PLACES_DAILY_MAX', 'GOOGLE_PLACES_PER_PERSON'];
 const asked = []; // { host, path, method, headers, body, search }
 let mgr, vol, db;
 
@@ -87,7 +87,7 @@ beforeEach(async () => {
   await db.query('delete from google_usage');
   process.env.GOOGLE_MAPS_SERVER_KEY = 'places-key';
   process.env.ADDRESS_SUGGEST = 'google';
-  for (const k of ['GEOCODER', 'STARBASE_GEO_BOUNDS', 'GOOGLE_PLACES_DAILY_MAX', 'GOOGLE_PLACES_PER_PERSON']) delete process.env[k];
+  for (const k of ['GEOCODER', 'BASE_GEO_BOUNDS', 'GOOGLE_PLACES_DAILY_MAX', 'GOOGLE_PLACES_PER_PERSON']) delete process.env[k];
   _setPlacesLogoForTest(true);
   _resetPlacesForTest();
   resetUsage();
@@ -102,7 +102,7 @@ const awake = () => setInterval(() => {}, 1000); // (abort timers don't hold a t
 
 // ── The library ──
 test('autocomplete: the key in a header, Canada and the campaign’s box, the session; only doors kept, with no pin', async () => {
-  process.env.STARBASE_GEO_BOUNDS = '49.002,-122.92|49.222,-122.67';
+  process.env.BASE_GEO_BOUNDS = '49.002,-122.92|49.222,-122.67';
   const session = randomUUID();
   const rows = await placesSuggest('13450 104', { session });
   assert.equal(toGoogle(), 1);

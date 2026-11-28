@@ -2,7 +2,7 @@
 // (ext/site/public.js → the renderer's head, SITE.md ctx.origin): the
 // canonical address, og:url and og:image, absolute — on the campaign's own
 // domain, on the app's own address (/site/) and under a client's path
-// (base.win/<client>, where STARBASE_PUBLIC_URL says the public address).
+// (base.win/<client>, where BASE_PUBLIC_URL says the public address).
 // A page's own share picture comes before the site's (seo.shareImage), and
 // that before the hero's. A cached page never carries another host's
 // address (www and the bare domain, or a made-up Host on the app's copy).
@@ -80,10 +80,10 @@ test('a page’s own share picture comes first; then the site’s; then its hero
   ok(await mgr.action('site.settings.save', { seo: s.seo }));
 });
 
-test('under a client’s path (base.win/<client>): the public address is STARBASE_PUBLIC_URL’s, the client’s path once', async () => {
+test('under a client’s path (base.win/<client>): the public address is BASE_PUBLIC_URL’s, the client’s path once', async () => {
   const mounted = mountAt(app, '/imaginesurrey');
-  const get = async (path) => (await mounted(new Request(`http://starbase-test.onrender.com${path}`, { headers: { 'x-forwarded-for': '192.0.2.40', 'x-forwarded-proto': 'https' } }))).text();
-  process.env.STARBASE_PUBLIC_URL = 'https://base.win/imaginesurrey';
+  const get = async (path) => (await mounted(new Request(`http://base-win-test.onrender.com${path}`, { headers: { 'x-forwarded-for': '192.0.2.40', 'x-forwarded-proto': 'https' } }))).text();
+  process.env.BASE_PUBLIC_URL = 'https://base.win/imaginesurrey';
   try {
     const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
     const pic = ok(await mgr.action('site.picture', { data: png })).media;
@@ -101,6 +101,6 @@ test('under a client’s path (base.win/<client>): the public address is STARBAS
     ok(await mgr.action('site.page.save', { id: donate.id, image: null }));
     ok(await mgr.action('site.page.publish', { id: donate.id }));
   } finally {
-    delete process.env.STARBASE_PUBLIC_URL;
+    delete process.env.BASE_PUBLIC_URL;
   }
 });

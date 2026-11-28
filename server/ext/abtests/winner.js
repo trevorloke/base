@@ -22,13 +22,14 @@
 //                nothing left to send, when the send still says otherwise
 //                (a run that stopped after its last email: send.js
 //                settleBlast).
-// One run sends at most 200 (STARBASE_AB_SEND_PER_RUN), then leaves the
+// One run sends at most 200 (BASE_AB_SEND_PER_RUN), then leaves the
 // next run queued, so other background work (receipts, ladders) isn't kept
 // waiting behind a big list.
 // A retry (a deploy, a dropped connection) carries on with the rows still
 // 'queued': a 'sending' or 'sent' row is never emailed again by itself.
 // Without email connected nothing is claimed: the rest stay saved
 // (released, not held) and go out on Send now.
+import { setting } from '@starbase/shared/old-names';
 import { runAction } from '../../lib/events.js';
 import { emailConfigured, sendEmail } from '../../lib/notify.js';
 import { enqueueJob, runJobsSoon } from '../../lib/jobs.js';
@@ -42,7 +43,7 @@ import { onMediaTags } from '../media/rules.js';
 import { fillText, firstOf } from '@starbase/shared/email/words';
 
 const BATCH = 10;
-const perRun = () => Number(process.env.STARBASE_AB_SEND_PER_RUN) || 200;
+const perRun = () => Number(setting('BASE_AB_SEND_PER_RUN')) || 200;
 
 export const pickWinner = async (db, job) => {
   const { blast_id: blastId, base = '' } = job.payload || {};

@@ -30,7 +30,7 @@ import { startFakeCallHub } from './fake-callhub.js';
 const tag = Math.random().toString(36).slice(2, 8);
 const KEY = `chkey-${tag}-not-a-real-key`;
 const PUBLIC = 'https://base.example.org';
-const ENV = ['CALLHUB_API_KEY', 'CALLHUB_API_BASE', 'STARBASE_PUBLIC_URL'];
+const ENV = ['CALLHUB_API_KEY', 'CALLHUB_API_BASE', 'BASE_PUBLIC_URL'];
 const saved = Object.fromEntries(ENV.map((k) => [k, process.env[k]]));
 
 let db, fake, mgr, staff, vol, ws;
@@ -107,7 +107,7 @@ after(async () => {
 const connectCallHub = () => {
   process.env.CALLHUB_API_KEY = KEY;
   process.env.CALLHUB_API_BASE = `${fake.url}/v1/`;
-  process.env.STARBASE_PUBLIC_URL = PUBLIC;
+  process.env.BASE_PUBLIC_URL = PUBLIC;
 };
 
 test('not set up: the desk is told CallHub is off, a push says so, the address answers 503, nothing leaves', async () => {
@@ -133,7 +133,7 @@ test('Settings → Services: Check reads and says what is missing; Connect is it
   process.env.CALLHUB_API_KEY = KEY;
   process.env.CALLHUB_API_BASE = `${fake.url}/v1/`;
   const early = ok(await mgr.action('callhub.connect', {}));
-  assert.deepEqual([early.ok, early.said], [false, 'Set the public address first (STARBASE_PUBLIC_URL): CallHub needs somewhere to send results']);
+  assert.deepEqual([early.ok, early.said], [false, 'Set the public address first (BASE_PUBLIC_URL): CallHub needs somewhere to send results']);
   assert.equal(fake.calls.length, 0, 'CallHub was not asked');
   connectCallHub();
   assert.equal(ok(await staff.get('/api/integrations')).callhub, true);

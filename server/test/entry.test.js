@@ -92,17 +92,17 @@ test('own origin: normalized, https only (http on this machine for tests)', () =
   assert.equal(originOf('ftp://example.org'), null);
   assert.equal(originOf(''), null);
   assert.equal(originOf('nonsense'), null);
-  const saved = { own: process.env.STARBASE_OWN_URL, render: process.env.RENDER_EXTERNAL_URL };
+  const saved = { own: process.env.BASE_OWN_URL, render: process.env.RENDER_EXTERNAL_URL };
   try {
-    delete process.env.STARBASE_OWN_URL;
+    delete process.env.BASE_OWN_URL;
     process.env.RENDER_EXTERNAL_URL = 'https://Base-Win-Y.onrender.com';
     assert.equal(ownOrigin(), 'https://base-win-y.onrender.com');
-    process.env.STARBASE_OWN_URL = 'http://127.0.0.1:5620/';
+    process.env.BASE_OWN_URL = 'http://127.0.0.1:5620/';
     assert.equal(ownOrigin(), 'http://127.0.0.1:5620');
-    delete process.env.STARBASE_OWN_URL; delete process.env.RENDER_EXTERNAL_URL;
+    delete process.env.BASE_OWN_URL; delete process.env.RENDER_EXTERNAL_URL;
     assert.equal(ownOrigin(), null);
   } finally {
-    for (const [k, n] of [['own', 'STARBASE_OWN_URL'], ['render', 'RENDER_EXTERNAL_URL']]) {
+    for (const [k, n] of [['own', 'BASE_OWN_URL'], ['render', 'RENDER_EXTERNAL_URL']]) {
       if (saved[k] === undefined) delete process.env[n]; else process.env[n] = saved[k];
     }
   }
@@ -112,10 +112,10 @@ test('BASE_PLATFORM_PUBKEY: blanks and junk skipped; readiness for health', () =
   assert.deepEqual(parseKeys(` , junk, ${V.publicKey} ,${'A'.repeat(42)},`).map((k) => k.kid), [V.kid]);
   assert.deepEqual(parseKeys('').map((k) => k.kid), []);
   assert.deepEqual(parseKeys(undefined).map((k) => k.kid), []);
-  const saved = { key: process.env.BASE_PLATFORM_PUBKEY, own: process.env.STARBASE_OWN_URL, render: process.env.RENDER_EXTERNAL_URL };
+  const saved = { key: process.env.BASE_PLATFORM_PUBKEY, own: process.env.BASE_OWN_URL, render: process.env.RENDER_EXTERNAL_URL };
   try {
     delete process.env.RENDER_EXTERNAL_URL;
-    process.env.STARBASE_OWN_URL = 'http://127.0.0.1:5620';
+    process.env.BASE_OWN_URL = 'http://127.0.0.1:5620';
     delete process.env.BASE_PLATFORM_PUBKEY;
     assert.equal(entryReadiness(), 'no-key');
     process.env.BASE_PLATFORM_PUBKEY = 'junk, also-junk';
@@ -123,10 +123,10 @@ test('BASE_PLATFORM_PUBKEY: blanks and junk skipped; readiness for health', () =
     process.env.BASE_PLATFORM_PUBKEY = V.publicKey;
     assert.deepEqual(parseKeys().map((k) => k.kid), [V.kid]);
     assert.equal(entryReadiness(), 'ready');
-    delete process.env.STARBASE_OWN_URL;
+    delete process.env.BASE_OWN_URL;
     assert.equal(entryReadiness(), 'no-origin');
   } finally {
-    for (const [k, n] of [['key', 'BASE_PLATFORM_PUBKEY'], ['own', 'STARBASE_OWN_URL'], ['render', 'RENDER_EXTERNAL_URL']]) {
+    for (const [k, n] of [['key', 'BASE_PLATFORM_PUBKEY'], ['own', 'BASE_OWN_URL'], ['render', 'RENDER_EXTERNAL_URL']]) {
       if (saved[k] === undefined) delete process.env[n]; else process.env[n] = saved[k];
     }
   }

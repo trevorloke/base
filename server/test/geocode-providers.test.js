@@ -8,7 +8,7 @@ import { geocodeAddress, suggestAddresses, probeLookup, _resetLookupForTest } fr
 
 // The addresses here are Imagine Surrey's, so this runs as its server does
 // (its city and map area are its preset's; any other campaign has none).
-process.env.STARBASE_BRAND = 'imagine-surrey';
+process.env.BASE_BRAND = 'imagine-surrey';
 
 const realFetch = globalThis.fetch;
 const env = { ...process.env };

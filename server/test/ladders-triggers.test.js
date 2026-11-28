@@ -51,7 +51,7 @@ const logOf = (run) => (typeof run.log === 'string' ? JSON.parse(run.log) : run.
 const tagStep = (t) => [{ kind: 'tag', tag: t }];
 
 // ── Twilio, stubbed (as texting.test.js does) ──
-const ENV = ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM', 'STARBASE_PUBLIC_URL', 'TWILIO_API_BASE'];
+const ENV = ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM', 'BASE_PUBLIC_URL', 'TWILIO_API_BASE'];
 const savedEnv = Object.fromEntries(ENV.map((k) => [k, process.env[k]]));
 const realFetch = globalThis.fetch;
 const sms = [];
@@ -59,7 +59,7 @@ const connect = () => {
   process.env.TWILIO_ACCOUNT_SID = `ACtest${tag}`;
   process.env.TWILIO_AUTH_TOKEN = `token-${tag}`;
   process.env.TWILIO_FROM = '+16045550100';
-  process.env.STARBASE_PUBLIC_URL = 'https://base.example';
+  process.env.BASE_PUBLIC_URL = 'https://base.example';
   delete process.env.TWILIO_API_BASE;
   globalThis.fetch = async (url, init = {}) => {
     const u = String(url);

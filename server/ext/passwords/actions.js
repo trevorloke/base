@@ -7,7 +7,7 @@
 // Not for: yourself, another manager (they use Forgot password), base.win
 // support (no password) or the account it comes in as, anyone in another campaign on this server too
 // (another campaign's manager doesn't set their password), the public demo,
-// or a campaign with no address (STARBASE_PUBLIC_URL) to build it from.
+// or a campaign with no address (BASE_PUBLIC_URL) to build it from.
 import { z } from 'zod';
 import { httpError } from '../../actions/util.js';
 import { demoEmail } from '../../lib/demo.js';
@@ -21,7 +21,7 @@ export const actions = {
     input: z.object({ user_id: z.uuid() }),
     handler: async (tx, ctx, input, emit) => {
       if (demoEmail()) throw httpError(409, 'The demo can’t make password links.');
-      if (!publicBase()) throw httpError(409, 'Set the campaign’s address first (STARBASE_PUBLIC_URL).');
+      if (!publicBase()) throw httpError(409, 'Set the campaign’s address first (BASE_PUBLIC_URL).');
       if (input.user_id === ctx.user.id) throw httpError(409, 'For your own, use Forgot your password? on the sign-in screen.');
       const m = (await tx.query(
         `select m.role, u.name, u.email, u.support,

@@ -70,7 +70,7 @@ let rae;
 const team = {};
 before(async () => {
   await freshDb();
-  delete process.env.STARBASE_TWO_STEP_KEY;
+  delete process.env.BASE_TWO_STEP_KEY;
   process.env.RESEND_API_KEY = 're_test_lock';
   process.env.MAIL_FROM = 'Imagine Surrey <team@example.org>';
   globalThis.fetch = async (url, init = {}) => {

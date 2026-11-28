@@ -156,7 +156,7 @@ export const callTimeOf = async (db, ctx) => {
 };
 
 // The site's donate page, as its links name it: its own domain once there
-// is one (STARBASE_SITE_DOMAIN, else the first saved), else the app's /site/donate — null while there's no live page.
+// is one (BASE_SITE_DOMAIN, else the first saved), else the app's /site/donate — null while there's no live page.
 const donateUrl = async (db, ctx) => {
   const page = (await db.query(
     "select 1 from site_pages where workspace_id = $1 and slug = 'donate' and status = 'published' and deleted_at is null",

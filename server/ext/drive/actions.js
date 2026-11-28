@@ -10,6 +10,7 @@
 // first ("Google Drive is for the desk"): mayRun alone would let a
 // volunteer granted an area through. The desk actions list volunteer among
 // their roles only so that refusal is the one they hear.
+import { setting } from '@starbase/shared/old-names';
 import { z } from 'zod';
 import { httpError } from '../../actions/util.js';
 import { newId } from '../../lib/events.js';
@@ -45,7 +46,7 @@ const stoppedRow = (q, id, ws, lock = '') => q.query(
 );
 const isStopped = (ex) => ['failed', 'stopped'].includes(ex.status) || ex.stale;
 const NO_JOBS = 'Background work is off on this server — Send to Google Sheets can’t run';
-const jobsOff = () => process.env.STARBASE_JOBS === 'off';
+const jobsOff = () => setting('BASE_JOBS') === 'off';
 const roomFor = async (tx, ws, userId) => {
   const n = await running(tx, ws, userId);
   if (n.mine) throw httpError(409, 'You’re already sending one to Google Sheets — wait for it to finish');

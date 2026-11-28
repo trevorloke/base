@@ -2,16 +2,17 @@
 // site is served", "On its own domain"). Pure: settings only, no database,
 // read each time they are asked (tests change them between cases).
 //
-//   STARBASE_SITE_DOMAIN       the website's own domain (imaginesurrey.ca),
+//   BASE_SITE_DOMAIN       the website's own domain (imaginesurrey.ca),
 //                              set per service in Render, never in
 //                              render.yaml. Its pair (www. added, or taken
 //                              off) answers too and sends pages on to it.
 //                              Ignored where the app itself answers, so the
 //                              desk can never be locked out of its address.
-//   STARBASE_SITE_FORMER_URL   the website the domain had before, at its own
+//   BASE_SITE_FORMER_URL   the website the domain had before, at its own
 //                              address (https://…): its own links in emails
 //                              it already sent go there (old-paths.js).
 //   SITE_HOSTS, APP_HOSTS      the operator's lists (comma-separated).
+import { setting } from '@starbase/shared/old-names';
 import { hostOf } from './shape.js';
 
 // Host names or addresses, comma-separated (127.0.0.1 for a test), a final dot or not.
@@ -21,14 +22,14 @@ export const hostList = (raw) => String(raw || '').split(',')
 
 // Where the app itself answers — never a website domain (on one of those
 // only the site answers: no sign-in, no app): base.win and its subdomains
-// (the front door), this server's public address (STARBASE_PUBLIC_URL), its
+// (the front door), this server's public address (BASE_PUBLIC_URL), its
 // host's own name (RENDER_EXTERNAL_HOSTNAME) and its other addresses
 // (APP_HOSTS: one people used before base.win, say).
 const DOOR = 'base.win';
 export const appHosts = (env = process.env) => {
   const out = [DOOR];
   try {
-    const h = new URL(String(env.STARBASE_PUBLIC_URL || '').trim()).hostname.toLowerCase().replace(/\.+$/, '');
+    const h = new URL(String(setting('BASE_PUBLIC_URL', env) || '').trim()).hostname.toLowerCase().replace(/\.+$/, '');
     if (h && !out.includes(h)) out.push(h);
   } catch { /* not set */ }
   const r = hostOf(env.RENDER_EXTERNAL_HOSTNAME);
@@ -44,7 +45,7 @@ export const isAppHost = (host, also = [], env = process.env) => {
 // → { domain, problem }: the website's own domain as set, or why it is not
 // taken ('not-domain' | 'app'), or nothing set.
 export const siteDomainState = (env = process.env) => {
-  const raw = String(env.STARBASE_SITE_DOMAIN || '').trim();
+  const raw = String(setting('BASE_SITE_DOMAIN', env) || '').trim();
   if (!raw) return { domain: '', problem: null, raw };
   const h = hostOf(hostList(raw)[0] || '');
   if (!h) return { domain: '', problem: 'not-domain', raw };
@@ -67,7 +68,7 @@ export const siteEnvHosts = (env = process.env) => [...new Set([...hostList(env.
 // never one the website answers at here — '' when not set or not usable.
 const LOCAL = ['localhost', '127.0.0.1'];
 export const formerUrl = (env = process.env) => {
-  const raw = String(env.STARBASE_SITE_FORMER_URL || '').trim();
+  const raw = String(setting('BASE_SITE_FORMER_URL', env) || '').trim();
   if (!raw) return '';
   let u;
   try { u = new URL(raw); } catch { return ''; }

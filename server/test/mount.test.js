@@ -114,8 +114,8 @@ test('at a site’s root (no BASE_PATH) nothing changes', async () => {
 });
 
 test('the short address (imaginesurrey.base.win) sends people on to the public URL, path and query kept', async () => {
-  const before = process.env.STARBASE_PUBLIC_URL;
-  process.env.STARBASE_PUBLIC_URL = 'https://base.win/imaginesurrey';
+  const before = process.env.BASE_PUBLIC_URL;
+  process.env.BASE_PUBLIC_URL = 'https://base.win/imaginesurrey';
   try {
     const at = (url, init) => door(new Request(url, init));
     for (const [from, to] of [
@@ -144,6 +144,6 @@ test('the short address (imaginesurrey.base.win) sends people on to the public U
     assert.equal(shortAddress(new URL('https://imaginesurrey.base.win/'), B, ''), null);
     assert.equal(shortAddress(new URL('https://imaginesurrey.base.win/'), B, 'not a url'), null);
   } finally {
-    if (before === undefined) delete process.env.STARBASE_PUBLIC_URL; else process.env.STARBASE_PUBLIC_URL = before;
+    if (before === undefined) delete process.env.BASE_PUBLIC_URL; else process.env.BASE_PUBLIC_URL = before;
   }
 });

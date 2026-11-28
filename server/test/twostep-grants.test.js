@@ -55,7 +55,7 @@ const people = {};
 
 before(async () => {
   await freshDb();
-  delete process.env.STARBASE_TWO_STEP_KEY;
+  delete process.env.BASE_TWO_STEP_KEY;
   mgr = new Browser();
   const r = ok(await mgr.post('/api/auth/signup', {
     name: 'Rae Example', email: 'rae.grants@example.org', password: 'two-step-2026', workspaceName: 'Imagine Surrey', jurisdiction: 'bc-municipal',

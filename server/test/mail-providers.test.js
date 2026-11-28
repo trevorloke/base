@@ -12,7 +12,7 @@ import resend, { signPayload } from '../lib/mail/resend.js';
 import sendgrid from '../lib/mail/sendgrid.js';
 
 const KEYS = ['MAIL_PROVIDER', 'MAIL_FROM', 'RESEND_API_KEY', 'RESEND_API_BASE', 'RESEND_WEBHOOK_SECRET', 'RESEND_REGION',
-  'SENDGRID_API_KEY', 'SENDGRID_API_BASE', 'SENDGRID_WEBHOOK_PUBLIC_KEY', 'STARBASE_EMAIL_TIMEOUT_MS'];
+  'SENDGRID_API_KEY', 'SENDGRID_API_BASE', 'SENDGRID_WEBHOOK_PUBLIC_KEY', 'BASE_EMAIL_TIMEOUT_MS'];
 const saved = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
 const clear = () => { for (const k of KEYS) delete process.env[k]; };
 const env = (set) => { clear(); Object.assign(process.env, set); };
@@ -112,7 +112,7 @@ test('Resend: one email — the key, the idempotency key, our ref as a tag — a
 });
 
 test('Resend: a refusal is failed; no answer is "not sure"; the same key with other words (409) is "not sure", never a new key', async () => {
-  env({ RESEND_API_KEY: 're_secret_1', RESEND_API_BASE: fakeResend.url, STARBASE_EMAIL_TIMEOUT_MS: '250' });
+  env({ RESEND_API_KEY: 're_secret_1', RESEND_API_BASE: fakeResend.url, BASE_EMAIL_TIMEOUT_MS: '250' });
   fakeResend.reset();
   fakeResend.fail(500);
   const refused = await sendEmail({ to: 'ana@example.org', subject: 'S', text: 'T' });

@@ -41,14 +41,14 @@ test('setup: google only with the client and a usable public address; never the 
     // http://localhost is fine on a laptop, never in production; and the
     // test addresses are ignored there.
     assert.equal((await anon.get('/api/auth/setup')).json.google, false);
-    process.env.STARBASE_PUBLIC_URL = 'https://base.example.org';
+    process.env.BASE_PUBLIC_URL = 'https://base.example.org';
     assert.equal((await anon.get('/api/auth/setup')).json.google, true);
     const { accountsBase, oauthBase } = await import('../lib/google/config.js');
     assert.equal(accountsBase(), 'https://accounts.google.com');
     assert.equal(oauthBase(), 'https://oauth2.googleapis.com');
   } finally {
     delete process.env.NODE_ENV;
-    process.env.STARBASE_PUBLIC_URL = PUBLIC;
+    process.env.BASE_PUBLIC_URL = PUBLIC;
   }
   for (const r of [await anon.get('/api/auth/setup'), await M.b.get('/api/auth/me'), await M.b.get('/api/google')]) {
     assert.ok(!JSON.stringify(r.json).includes(CLIENT_ID), 'the client id is in no answer');
@@ -323,8 +323,8 @@ test('the right address: signing in elsewhere goes to the public one; linking th
 });
 
 test('behind a host that ends TLS (Render): https from X-Forwarded-Proto is the public address; no loop', async () => {
-  const host = 'http://starbase.example.org';
-  process.env.STARBASE_PUBLIC_URL = 'https://starbase.example.org';
+  const host = 'http://base-win.example.org';
+  process.env.BASE_PUBLIC_URL = 'https://base-win.example.org';
   const forwarded = (url, init) => app.request(url, { ...init, headers: { ...init.headers, 'x-forwarded-proto': 'https' } });
   try {
     const b = new Browser({ fetch: forwarded, origin: host });
@@ -340,15 +340,15 @@ test('behind a host that ends TLS (Render): https from X-Forwarded-Proto is the 
     // Plain http with no forwarded https is still not the public address.
     const plain = new Browser({ origin: host });
     const p = await plain.send('GET', '/api/auth/google/start?do=signin&app=field');
-    assert.equal(p.headers.get('location'), 'https://starbase.example.org/api/auth/google/start?do=signin&app=field');
+    assert.equal(p.headers.get('location'), 'https://base-win.example.org/api/auth/google/start?do=signin&app=field');
   } finally {
-    process.env.STARBASE_PUBLIC_URL = PUBLIC;
+    process.env.BASE_PUBLIC_URL = PUBLIC;
   }
 });
 
 test('under BASE_PATH: paths and cookies under the client’s path, the return at /imaginesurrey/desk/', async () => {
   const fetch = mountAt(app, '/imaginesurrey');
-  process.env.STARBASE_PUBLIC_URL = `${PUBLIC}/imaginesurrey`;
+  process.env.BASE_PUBLIC_URL = `${PUBLIC}/imaginesurrey`;
   try {
     const b = new Browser({ fetch: (url, init) => fetch(new Request(url, init)), origin: PUBLIC });
     const s = await b.send('GET', '/imaginesurrey/api/auth/google/start?do=signin&app=desk');
@@ -362,7 +362,7 @@ test('under BASE_PATH: paths and cookies under the client’s path, the return a
     const refused = await anon.send('GET', '/imaginesurrey/api/auth/google/start?do=link&app=desk');
     assert.equal(refused.headers.get('location'), '/imaginesurrey/desk/profile?google=expired');
   } finally {
-    process.env.STARBASE_PUBLIC_URL = PUBLIC;
+    process.env.BASE_PUBLIC_URL = PUBLIC;
   }
 });
 

@@ -1,5 +1,5 @@
 // Forgot password (ext/passwords, routes/auth.js): a link by email built only
-// from STARBASE_PUBLIC_URL with the token in the fragment; the same answer
+// from BASE_PUBLIC_URL with the token in the fragment; the same answer
 // whatever the address; limits per address and per email; links that work
 // once, for 30 minutes, and never end each other until one is used; a
 // reset that ends every sign-in and still asks two-step's code; and a
@@ -17,7 +17,7 @@ import { base32Decode, totp } from '../lib/twostep.js';
 import { _lastResetWork } from '../ext/passwords/reset.js';
 import { startFakeMail } from './fake-mail.js';
 
-const KEYS = ['MAIL_PROVIDER', 'MAIL_FROM', 'RESEND_API_KEY', 'RESEND_API_BASE', 'SENDGRID_API_KEY', 'STARBASE_PUBLIC_URL', 'BASE_PATH', 'STARBASE_DEMO_EMAIL', 'STARBASE_ENV'];
+const KEYS = ['MAIL_PROVIDER', 'MAIL_FROM', 'RESEND_API_KEY', 'RESEND_API_BASE', 'SENDGRID_API_KEY', 'BASE_PUBLIC_URL', 'BASE_PATH', 'BASE_DEMO_EMAIL', 'BASE_ENV'];
 const env = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
 const PUBLIC = 'https://base.win/sample';
 const PASSWORD = 'first-password-2026';
@@ -72,7 +72,7 @@ before(async () => {
   await freshDb();
   for (const k of KEYS) delete process.env[k];
   mail = await startFakeMail({ provider: 'resend' });
-  process.env.STARBASE_PUBLIC_URL = PUBLIC;
+  process.env.BASE_PUBLIC_URL = PUBLIC;
   mgr = new Browser();
   const r = await mgr.post('/api/auth/signup', {
     name: 'Rae Example', email: 'rae@example.org', password: PASSWORD, workspaceName: 'Sample Campaign', jurisdiction: 'bc-municipal',
@@ -94,7 +94,7 @@ after(async () => {
   await mail.close();
 });
 
-test('Forgot password: one email, its link built from STARBASE_PUBLIC_URL with the token in the fragment', async () => {
+test('Forgot password: one email, its link built from BASE_PUBLIC_URL with the token in the fragment', async () => {
   const before0 = mail.sent.length;
   assert.equal((await new Browser().get('/api/auth/setup')).json.resetByEmail, true);
   const r = await forgot('sam@example.org');
@@ -130,14 +130,14 @@ test('Forgot password: the same answer and no email for an unknown address, base
     const r = await forgot(e);
     assert.deepEqual([r.status, r.json], [200, { ok: true }], e);
   }
-  // The demo's account (a staging server: STARBASE_DEMO_EMAIL), and the
+  // The demo's account (a staging server: BASE_DEMO_EMAIL), and the
   // demo turns it off altogether.
-  process.env.STARBASE_DEMO_EMAIL = 'pat@example.org';
+  process.env.BASE_DEMO_EMAIL = 'pat@example.org';
   try {
     assert.equal((await new Browser().get('/api/auth/setup')).json.resetByEmail, false);
     assert.deepEqual((await forgot('pat@example.org')).json, { ok: true });
     assert.deepEqual((await forgot('ned@example.org')).json, { ok: true });
-  } finally { delete process.env.STARBASE_DEMO_EMAIL; }
+  } finally { delete process.env.BASE_DEMO_EMAIL; }
   sender(false);
   try {
     assert.equal((await new Browser().get('/api/auth/setup')).json.resetByEmail, false);
@@ -146,8 +146,8 @@ test('Forgot password: the same answer and no email for an unknown address, base
   assert.equal(mail.sent.length, n, 'nothing sent');
 });
 
-test('Forgot password: STARBASE_PUBLIC_URL unset → no email, never a link from the Host header', async () => {
-  delete process.env.STARBASE_PUBLIC_URL;
+test('Forgot password: BASE_PUBLIC_URL unset → no email, never a link from the Host header', async () => {
+  delete process.env.BASE_PUBLIC_URL;
   const n = mail.sent.length;
   try {
     const b = new Browser();
@@ -156,7 +156,7 @@ test('Forgot password: STARBASE_PUBLIC_URL unset → no email, never a link from
     await _lastResetWork();
     assert.equal(r.status, 200);
     assert.equal(mail.sent.length, n);
-  } finally { process.env.STARBASE_PUBLIC_URL = PUBLIC; }
+  } finally { process.env.BASE_PUBLIC_URL = PUBLIC; }
 });
 
 test('Forgot password: Moe@Example.org and moe@example.org share one limit of 3 an hour', async () => {
@@ -313,10 +313,10 @@ test('member.passwordLink: managers only; refused for yourself, a manager, suppo
     const help = (await db.query("select id from users where email = 'help@example.org'")).rows[0].id;
     await db.query("insert into memberships (user_id, workspace_id, role) values ($1, $2, 'volunteer')", [help, wsId]);
     await refuse(help, /base\.win support has no password here/);
-    process.env.STARBASE_DEMO_EMAIL = 'rae@example.org';
-    try { await refuse(people.pat.id, /The demo can’t make password links/); } finally { delete process.env.STARBASE_DEMO_EMAIL; }
-    delete process.env.STARBASE_PUBLIC_URL;
-    try { await refuse(people.pat.id, /^Set the campaign’s address first \(STARBASE_PUBLIC_URL\)\.$/); } finally { process.env.STARBASE_PUBLIC_URL = PUBLIC; }
+    process.env.BASE_DEMO_EMAIL = 'rae@example.org';
+    try { await refuse(people.pat.id, /The demo can’t make password links/); } finally { delete process.env.BASE_DEMO_EMAIL; }
+    delete process.env.BASE_PUBLIC_URL;
+    try { await refuse(people.pat.id, /^Set the campaign’s address first \(BASE_PUBLIC_URL\)\.$/); } finally { process.env.BASE_PUBLIC_URL = PUBLIC; }
     const shown = await mgr.get('/api/password-links');
     assert.deepEqual({ ...shown.json, elsewhere: shown.json.elsewhere.length }, { on: true, address: true, email: false, elsewhere: 1 });
     assert.deepEqual(shown.json.elsewhere, [people.val.id]);

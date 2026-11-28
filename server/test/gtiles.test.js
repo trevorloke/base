@@ -1,5 +1,5 @@
 // Google Maps as the field map's tiles (lib/gtiles.js + ext/offline):
-// /api/map/config points the map at /tiles/…, which Starbase serves from
+// /api/map/config points the map at /tiles/…, which base.win serves from
 // Google with a session it keeps. Google is mocked.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -49,7 +49,7 @@ before(async () => {
 });
 after(() => {
   globalThis.fetch = realFetch;
-  for (const k of ['GOOGLE_MAPS_TILES', 'GOOGLE_MAPS_SERVER_KEY', 'GOOGLE_MAPS_TILE_TYPE', 'STARBASE_TILE_CLEAN', 'STARBASE_TILE_CARTO_KEY', 'GOOGLE_TILES_DAILY_MAX']) {
+  for (const k of ['GOOGLE_MAPS_TILES', 'GOOGLE_MAPS_SERVER_KEY', 'GOOGLE_MAPS_TILE_TYPE', 'BASE_TILE_CLEAN', 'BASE_TILE_CARTO_KEY', 'GOOGLE_TILES_DAILY_MAX']) {
     if (env[k] === undefined) delete process.env[k]; else process.env[k] = env[k];
   }
 });
@@ -95,7 +95,7 @@ test('no key: OpenStreetMap, quietly, and /tiles is not a thing; a key alone kee
   assert.deepEqual(noKey.setup.ignored, ['google']);
 });
 
-test('on: the map draws /tiles from Starbase, credited to Google, up to zoom 22', async () => {
+test('on: the map draws /tiles from base.win, credited to Google, up to zoom 22', async () => {
   process.env.GOOGLE_MAPS_TILES = '1';
   process.env.GOOGLE_MAPS_SERVER_KEY = 'tiles-key';
   _resetForTest();
@@ -158,13 +158,13 @@ test('other looks: Satellite and Terrain offered with Google on; each its own se
   ]);
   assert.ok(!cfg.views.some((v) => v.key === 'clean'));
   // With the campaign's CARTO key: CARTO's, keyed.
-  process.env.STARBASE_TILE_CARTO_KEY = 'carto-test';
+  process.env.BASE_TILE_CARTO_KEY = 'carto-test';
   assert.equal((await (await get('/api/map/config', mgr.cookie)).json()).views.find((v) => v.fallback).url,
     'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=carto-test');
-  // STARBASE_TILE_CLEAN=off: no CARTO, but the free map is still there.
-  process.env.STARBASE_TILE_CLEAN = 'off';
-  assert.equal((await (await get('/api/map/config', mgr.cookie)).json()).views.find((v) => v.fallback).url, 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', 'STARBASE_TILE_CLEAN=off: OpenStreetMap behind Google');
-  delete process.env.STARBASE_TILE_CLEAN;
+  // BASE_TILE_CLEAN=off: no CARTO, but the free map is still there.
+  process.env.BASE_TILE_CLEAN = 'off';
+  assert.equal((await (await get('/api/map/config', mgr.cookie)).json()).views.find((v) => v.fallback).url, 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', 'BASE_TILE_CLEAN=off: OpenStreetMap behind Google');
+  delete process.env.BASE_TILE_CLEAN;
   assert.equal((await get('/tiles/14/2611/5636.png?t=satellite', mgr.cookie)).status, 200);
   assert.equal((await get('/tiles/14/2611/5636.png?t=satellite', mgr.cookie)).status, 200);
   assert.equal((await get('/tiles/14/2611/5636.png?t=bogus', mgr.cookie)).status, 200);
@@ -175,10 +175,10 @@ test('other looks: Satellite and Terrain offered with Google on; each its own se
   assert.deepEqual(off.views.map((v) => [v.key, v.label]), [['clean', 'Clean']], 'OpenStreetMap, with a CARTO key: Clean, a quiet map of the same streets (Muted and Dark are the phone’s own)');
   assert.match(off.views[0].url, /^https:\/\/\{s\}\.basemaps\.cartocdn\.com\/light_all\/.*\?key=carto-test$/);
   assert.match(off.views[0].attribution, /OpenStreetMap/);
-  process.env.STARBASE_TILE_CLEAN = 'off';
-  assert.equal((await (await get('/api/map/config', mgr.cookie)).json()).views, undefined, 'STARBASE_TILE_CLEAN=off leaves it out');
-  delete process.env.STARBASE_TILE_CLEAN;
-  delete process.env.STARBASE_TILE_CARTO_KEY;
+  process.env.BASE_TILE_CLEAN = 'off';
+  assert.equal((await (await get('/api/map/config', mgr.cookie)).json()).views, undefined, 'BASE_TILE_CLEAN=off leaves it out');
+  delete process.env.BASE_TILE_CLEAN;
+  delete process.env.BASE_TILE_CARTO_KEY;
   assert.equal((await (await get('/api/map/config', mgr.cookie)).json()).views, undefined, 'no CARTO key: no Clean');
 });
 

@@ -4,25 +4,31 @@
 //   db.transaction(async (tx) => ...) → tx.query; commits, or rolls back on throw
 //
 // DATABASE_URL set → node-postgres pool (hosted Postgres: Render, Fly, Neon …).
-// Otherwise PGlite (embedded, real Postgres): file-backed at STARBASE_DATA
-// (default ./data/starbase), or in-memory under the test runner / =memory.
+// Otherwise PGlite (embedded, real Postgres): file-backed at BASE_DATA
+// (default ./data/base-win; in the container, its IMAGE_DATA_DIR,
+// /data/base-win), or in-memory under the test runner / =memory. A folder
+// made under the older default (OLD_DATA_DIRS in shared/old-names.js) is
+// still the one opened while it is there and the new one is not; no folder
+// is ever renamed, copied or deleted.
 // Type parsing is pinned so both backends return identical shapes:
 // date → Date at UTC midnight, int8 → number, json → object.
 //
 // On Render (RENDER is set on every service there) with no DATABASE_URL the
 // server does not start: the embedded database would live inside the
 // container, which is thrown away at the next deploy, and the campaign with
-// it. STARBASE_EMBEDDED_DB=1 says a disk is mounted for it on purpose.
+// it. BASE_EMBEDDED_DB=1 says a disk is mounted for it on purpose.
+import { existsSync } from 'node:fs';
+import { setting, OLD_DATA_DIRS } from '@starbase/shared/old-names';
 import { bootstrap } from './schema.js';
 
 let dbPromise = null;
 
 // Why this server must not start, in one line for the log — or null.
 export const storeRefusal = (env = process.env) => {
-  if (!env.RENDER || String(env.DATABASE_URL || '').trim() || env.STARBASE_EMBEDDED_DB === '1') return null;
-  return 'starbase: not starting — this service is on Render with no DATABASE_URL, so the campaign would be kept in the built-in database inside the container and lost at the next deploy. '
+  if (!env.RENDER || String(env.DATABASE_URL || '').trim() || setting('BASE_EMBEDDED_DB', env) === '1') return null;
+  return 'base.win: not starting — this service is on Render with no DATABASE_URL, so the campaign would be kept in the built-in database inside the container and lost at the next deploy. '
     + 'To fix: Render → this service → Environment → DATABASE_URL = the database’s Internal Database URL. '
-    + '(Or set STARBASE_EMBEDDED_DB=1 if a disk is mounted for the built-in database on purpose.)';
+    + '(Or set BASE_EMBEDDED_DB=1 if a disk is mounted for the built-in database on purpose.)';
 };
 
 // The store's name at /api/health: "postgres" (DATABASE_URL) or "embedded"
@@ -79,12 +85,23 @@ const createPg = async (url) => {
   };
 };
 
+// The built-in database's folder → { dir, older }. Real runs persist by
+// default (./data/base-win) so a restart never wipes a campaign; the test
+// runner and BASE_DATA=memory use an in-memory DB. A folder set under either
+// name wins over every default. IMAGE_DATA_DIR is not a setting: it is the
+// container's own default (Dockerfile), used only when neither name is set.
+// older: the default's older folder is used, because only it is there.
+export const dataDirFor = (env = process.env, exists = existsSync) => {
+  const dir = setting('BASE_DATA', env) || (env.NODE_TEST_CONTEXT ? 'memory' : String(env.IMAGE_DATA_DIR || '').trim() || './data/base-win');
+  const old = Object.hasOwn(OLD_DATA_DIRS, dir) ? OLD_DATA_DIRS[dir] : null;
+  if (old && !exists(dir) && exists(old)) return { dir: old, older: true };
+  return { dir, older: false };
+};
+
 const createPglite = async () => {
   const { PGlite } = await import('@electric-sql/pglite');
-  // Real runs persist by default (./data/starbase) so a restart never wipes a
-  // campaign; the test runner and STARBASE_DATA=memory use an in-memory DB.
-  const testing = !!process.env.NODE_TEST_CONTEXT;
-  const dataDir = process.env.STARBASE_DATA || (testing ? 'memory' : './data/starbase');
+  const { dir: dataDir, older } = dataDirFor();
+  if (older) console.warn(`base.win: using the built-in database's older folder ${dataDir}; it is never moved automatically.`);
   if (dataDir !== 'memory') {
     // PGlite won't create parent folders; a first run must not crash.
     const { mkdirSync } = await import('node:fs');

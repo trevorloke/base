@@ -65,9 +65,9 @@ test('the walk is the preset dump’s list, with the people read whole', () => {
 });
 
 test('the sample is made in full from the staging block', async () => {
-  assert.equal(BLOCK.STARBASE_ENV, 'staging');
-  assert.equal(BLOCK.STARBASE_BRAND, 'base');
-  assert.equal(BLOCK.STARBASE_SAMPLE, 'vancouver');
+  assert.equal(BLOCK.BASE_ENV, 'staging');
+  assert.equal(BLOCK.BASE_BRAND, 'base');
+  assert.equal(BLOCK.BASE_SAMPLE, 'vancouver');
   assert.deepEqual(made, { people: 320, turfs: 4, knocks: made.knocks, shifts: 5, gifts: made.gifts, failed: 0 });
 });
 

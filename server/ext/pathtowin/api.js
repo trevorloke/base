@@ -18,11 +18,12 @@
 //   computed_at  when the counts were made (kept a minute: below)
 //
 // The counts (standing, trend, turfs) are kept for a minute per campaign
-// (STARBASE_PTW_CACHE_MS; 0 turns it off), so a desk reloading the screen
+// (BASE_PTW_CACHE_MS; 0 turns it off), so a desk reloading the screen
 // never recounts 300,000 people. ?fresh=1 counts again now. Drawing,
 // changing or removing a turf, an import and the sample drop the kept copy
 // (index.js); a saved number never needs a recount — the races are worked
 // out on every read from the kept counts.
+import { setting } from '@starbase/shared/old-names';
 import { Hono } from 'hono';
 import { SLATES } from '@starbase/shared/canvass';
 import { mayRun } from '../../lib/perms.js';
@@ -38,7 +39,7 @@ const zoneOf = (tz) => {
 };
 const dateOnly = (d) => (d instanceof Date ? d.toISOString().slice(0, 10) : d ? String(d).slice(0, 10) : null);
 const cacheMs = () => {
-  const v = Number(process.env.STARBASE_PTW_CACHE_MS);
+  const v = Number(setting('BASE_PTW_CACHE_MS'));
   return Number.isFinite(v) && v >= 0 ? v : 60_000;
 };
 

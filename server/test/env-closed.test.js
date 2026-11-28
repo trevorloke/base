@@ -1,11 +1,11 @@
-// STARBASE_ENV unset or misspelled: staging's powers stay off.
+// BASE_ENV unset or misspelled: staging's powers stay off.
 //
 // The name is read exactly (lib/org.js envName): "production" or "staging",
 // spaces around it dropped, capitals not forgiven. Anything else is
 // production wherever the server is hosted — NODE_ENV=production (the
 // Dockerfile sets it) or on Render (RENDER is set on every service there) —
 // and "local" only on a developer's machine. So a client's server whose
-// STARBASE_ENV was mistyped never opens without a password
+// BASE_ENV was mistyped never opens without a password
 // (/api/auth/demo), is never framed by another site, never makes the sample
 // campaign and never drops its database for a reset word.
 import { test, before, beforeEach, afterEach } from 'node:test';
@@ -18,7 +18,7 @@ import { _resetDbForTest } from '../db/client.js';
 import { serviceBlock } from './sample-prints.js';
 import { bootstrap } from '../db/schema.js';
 
-const KEYS = ['STARBASE_ENV', 'NODE_ENV', 'RENDER', 'STARBASE_FRAME_HOSTS', 'STARBASE_DEMO_EMAIL', 'STARBASE_SAMPLE', 'STARBASE_SAMPLE_RESET'];
+const KEYS = ['BASE_ENV', 'NODE_ENV', 'RENDER', 'BASE_FRAME_HOSTS', 'BASE_DEMO_EMAIL', 'BASE_SAMPLE', 'BASE_SAMPLE_RESET'];
 let kept; let db;
 // One campaign with one person in it, made once (over Postgres the whole
 // file shares a database): what a reset word would drop.
@@ -47,7 +47,7 @@ beforeEach(() => {
 });
 afterEach(() => { for (const k of KEYS) { if (kept[k] === undefined) delete process.env[k]; else process.env[k] = kept[k]; } });
 const count = async (table) => Number((await db.query(`select count(*) as n from ${table}`)).rows[0].n);
-const setEnv = (typed) => { if (typed === undefined) delete process.env.STARBASE_ENV; else process.env.STARBASE_ENV = typed; };
+const setEnv = (typed) => { if (typed === undefined) delete process.env.BASE_ENV; else process.env.BASE_ENV = typed; };
 
 // What could be typed on a host by mistake (undefined: not set at all).
 const WRONG = [undefined, '', 'Staging', 'STAGING', 'stagin', 'staging-2', 'Production', 'prod', 'live', 'demo', 'local'];
@@ -59,16 +59,16 @@ const HOSTED = [
 ];
 
 for (const [where, host] of HOSTED) {
-  test(`an unset or misspelled STARBASE_ENV is production: ${where}`, async () => {
+  test(`an unset or misspelled BASE_ENV is production: ${where}`, async () => {
     host();
     // Everything staging would act on, set as staging sets it.
-    process.env.STARBASE_DEMO_EMAIL = 'demo@example.org';
-    process.env.STARBASE_FRAME_HOSTS = 'https://base.win';
-    process.env.STARBASE_SAMPLE = 'vancouver';
-    process.env.STARBASE_SAMPLE_RESET = 'a-word-this-database-has-not-seen';
+    process.env.BASE_DEMO_EMAIL = 'demo@example.org';
+    process.env.BASE_FRAME_HOSTS = 'https://base.win';
+    process.env.BASE_SAMPLE = 'vancouver';
+    process.env.BASE_SAMPLE_RESET = 'a-word-this-database-has-not-seen';
     for (const typed of WRONG) {
       setEnv(typed);
-      const said = `STARBASE_ENV=${JSON.stringify(typed)}`;
+      const said = `BASE_ENV=${JSON.stringify(typed)}`;
       assert.equal(envName(), 'production', said);
       const h = await app.request('/api/health');
       assert.equal((await h.json()).env, 'production', said);
@@ -85,15 +85,15 @@ for (const [where, host] of HOSTED) {
 test('the name is read exactly: spaces around it are dropped, nothing else is forgiven', () => {
   process.env.NODE_ENV = 'production';
   for (const [typed, name] of [['staging', 'staging'], [' staging ', 'staging'], ['production', 'production'], ['production\n', 'production']]) {
-    process.env.STARBASE_ENV = typed;
+    process.env.BASE_ENV = typed;
     assert.equal(envName(), name, JSON.stringify(typed));
   }
 });
 
 test('a developer’s machine (not hosted) is "local"; the sample and its reset still need staging by name', async () => {
-  process.env.STARBASE_DEMO_EMAIL = 'demo@example.org';
-  process.env.STARBASE_SAMPLE = 'vancouver';
-  process.env.STARBASE_SAMPLE_RESET = 'a-word-this-database-has-not-seen';
+  process.env.BASE_DEMO_EMAIL = 'demo@example.org';
+  process.env.BASE_SAMPLE = 'vancouver';
+  process.env.BASE_SAMPLE_RESET = 'a-word-this-database-has-not-seen';
   for (const typed of [undefined, 'Staging', 'dev']) {
     setEnv(typed);
     assert.equal(envName(), 'local', JSON.stringify(typed));
@@ -103,11 +103,11 @@ test('a developer’s machine (not hosted) is "local"; the sample and its reset 
   }
 });
 
-test('staging with no STARBASE_SAMPLE: no sample, nothing dropped, whatever the old record says', async () => {
-  process.env.STARBASE_ENV = 'staging';
-  process.env.STARBASE_DEMO_EMAIL = 'demo@example.org';
+test('staging with no BASE_SAMPLE: no sample, nothing dropped, whatever the old record says', async () => {
+  process.env.BASE_ENV = 'staging';
+  process.env.BASE_DEMO_EMAIL = 'demo@example.org';
   for (const typed of [undefined, '', 'surrey', 'vancouver-2']) {
-    if (typed === undefined) delete process.env.STARBASE_SAMPLE; else process.env.STARBASE_SAMPLE = typed;
+    if (typed === undefined) delete process.env.BASE_SAMPLE; else process.env.BASE_SAMPLE = typed;
     assert.equal(await seedSample(app, () => {}, 8), null, JSON.stringify(typed));
     assert.equal(await count('workspaces'), 1);
     assert.equal(await count('persons'), 1);
@@ -123,9 +123,9 @@ const imagineSurrey = () => {
   Object.assign(process.env, block);
   process.env.RENDER = 'true';
   // What staging's block holds, wrongly set here too: still nothing.
-  process.env.STARBASE_SAMPLE = 'vancouver';
-  process.env.STARBASE_DEMO_EMAIL = 'demo@example.org';
-  process.env.STARBASE_SAMPLE_RESET = 'a-word-this-database-has-not-seen';
+  process.env.BASE_SAMPLE = 'vancouver';
+  process.env.BASE_DEMO_EMAIL = 'demo@example.org';
+  process.env.BASE_SAMPLE_RESET = 'a-word-this-database-has-not-seen';
   return () => { for (const [k, v] of Object.entries(was)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; } };
 };
 
@@ -145,7 +145,7 @@ test('Imagine Surrey: the sample code returns before it asks for the database', 
   const url = process.env.DATABASE_URL;
   const restore = imagineSurrey();
   delete process.env.DATABASE_URL;
-  delete process.env.STARBASE_EMBEDDED_DB;
+  delete process.env.BASE_EMBEDDED_DB;
   _resetDbForTest();
   try {
     await assert.rejects(import('../db/client.js').then((m) => m.getDb()), /not starting/, 'any ask for the database fails here');

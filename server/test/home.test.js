@@ -12,7 +12,7 @@ import { winNumber } from '../ext/pathtowin/rules.js';
 import { raceNow } from '../ext/pathtowin/api.js';
 import { deps, briefGoal } from '../ext/pathtowin/brief.js';
 
-process.env.STARBASE_PTW_CACHE_MS = '0';
+process.env.BASE_PTW_CACHE_MS = '0';
 
 const ok = (r, msg = '') => { assert.equal(r.status, 200, `${msg} ${JSON.stringify(r.json)?.slice(0, 400)}`); return r.json; };
 let db, mgr, staff, noData, vol, ws;

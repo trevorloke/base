@@ -35,6 +35,7 @@
 //   GEOCODE_CONCURRENCY  lookups at once (default 6)
 //   GEOCODE_BACKOFF_MS   wait after a round where nothing worked (default 30 s, × rounds in a row)
 //   GEOCODE_RETRY_MS     wait before a paused run's first try (default 15 min)
+import { setting } from '@starbase/shared/old-names';
 import { Hono } from 'hono';
 import { runAction } from '../../lib/events.js';
 import { enqueueJob, jobRunnerOn, runJobsSoon } from '../../lib/jobs.js';
@@ -58,8 +59,8 @@ const lookupOff = () => (process.env.GEOCODER || '').toLowerCase() === 'off';
 // GEOCODE_RETRY_MS from now — paused by the release before this one (it
 // waited for someone to tap Carry on), or its try never ran (no job runner
 // then, or the try failed for good). Not where lookup is off, nor where no
-// job runner will run it (STARBASE_JOBS=off: the page looks up batches).
-const retryStranded = () => (lookupOff() || process.env.STARBASE_JOBS === 'off' ? '' : `
+// job runner will run it (BASE_JOBS=off: the page looks up batches).
+const retryStranded = () => (lookupOff() || setting('BASE_JOBS') === 'off' ? '' : `
 with stranded as (
   update geocode_runs r set retry_at = now() + interval '${Math.round(retryMs())} milliseconds', updated_at = now()
   where r.state = 'paused' and (r.retry_at is null or (r.retry_at < now() - interval '1 minute' and not exists (
@@ -298,7 +299,7 @@ const startRun = async (tx, workspaceId, userId) => {
 // An import's own write (action import.persons), just before it commits: if
 // it leaves anyone with an address and no pin, the run starts with it. Not
 // where address lookup is turned off, and not where no job runner would
-// ever pick the run up (STARBASE_JOBS=off: the page's button still looks up
+// ever pick the run up (BASE_JOBS=off: the page's button still looks up
 // batches itself). A file whose people all came with pins, or with no
 // address, starts nothing.
 export const hooks = {
@@ -355,7 +356,7 @@ api.post('/geocode/start', async (c) => {
   if (lookupOff()) {
     return c.json({ error: 'geocoding is turned off (GEOCODER=off)', off: true }, 409);
   }
-  // Without the job runner (STARBASE_JOBS=off) nothing would ever pick the
+  // Without the job runner (BASE_JOBS=off) nothing would ever pick the
   // run up: the page falls back to looking up batches itself.
   if (!jobRunnerOn()) return c.json({ error: 'background jobs are off', jobsOff: true }, 409);
   if (await db.transaction((tx) => startRun(tx, ctx.workspaceId, ctx.user.id))) runJobsSoon();

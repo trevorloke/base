@@ -11,6 +11,7 @@
 //   GET /share/kits/:id   Outreach: one kit and its top 10 sharers.
 //   GET /share/top        Outreach: the top 10 people by people brought in,
 //       through any link of theirs, all time.
+import { setting } from '@starbase/shared/old-names';
 import { Hono } from 'hono';
 import { here } from '../../lib/mount.js';
 import { siteDomain } from '../site/domain.js';
@@ -25,7 +26,7 @@ const SHARE_MAX = 20;
 const TOP_MAX = 10;
 const parseJ = (v, d) => (typeof v === 'string' ? JSON.parse(v) : (v ?? d));
 
-// Where a shared link starts: the website's own domain (STARBASE_SITE_DOMAIN),
+// Where a shared link starts: the website's own domain (BASE_SITE_DOMAIN),
 // else the campaign's first saved domain, else the app's /site address (the
 // public address when the app runs under a client's path).
 export const baseOf = (c, domains) => {
@@ -36,7 +37,7 @@ export const baseOf = (c, domains) => {
   const url = new URL(c.req.url);
   const proto = (c.req.header('x-forwarded-proto') || '').split(',')[0].trim() === 'https' ? 'https' : url.protocol.replace(':', '');
   let origin = `${proto}://${url.host}`;
-  const pub = String(process.env.STARBASE_PUBLIC_URL || '').trim();
+  const pub = String(setting('BASE_PUBLIC_URL') || '').trim();
   if (c.env?.base && pub) {
     try {
       const u = new URL(pub);

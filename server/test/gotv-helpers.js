@@ -2,7 +2,7 @@
 // a manager, staff, a staff member given the Admin area, canvassers on two
 // turfs, a scrutineer and a runner; the voter guide's days and two voting
 // places through VG's own actions; and the one clock tests move
-// (lib/clock.js, STARBASE_CLOCK_SHIFT_MS). Made-up people only.
+// (lib/clock.js, BASE_CLOCK_SHIFT_MS). Made-up people only.
 import assert from 'node:assert/strict';
 import { Client } from './helpers.js';
 import { atLocal, localDay } from '../lib/tzrule.js';
@@ -21,8 +21,8 @@ export const square = (lat, lng, d = 0.001) => [[lat + d, lng - d], [lat + d, ln
 const realToday = () => localDay(Date.now(), TZ);
 export const plus = (n) => localDay(atLocal(realToday(), '12:00', TZ) + n * DAY_MS, TZ);
 // Move the clock to a campaign day and wall time.
-export const at = (day, hm) => { process.env.STARBASE_CLOCK_SHIFT_MS = String(atLocal(day, hm, TZ) - Date.now()); };
-export const clockBack = () => { delete process.env.STARBASE_CLOCK_SHIFT_MS; };
+export const at = (day, hm) => { process.env.BASE_CLOCK_SHIFT_MS = String(atLocal(day, hm, TZ) - Date.now()); };
+export const clockBack = () => { delete process.env.BASE_CLOCK_SHIFT_MS; };
 
 export const join = async (mgr, tag, role, name) => {
   const inv = await mgr.action('member.invite', { email: `gv-${name.split(' ')[0].toLowerCase()}+${tag}@example.org`, role });

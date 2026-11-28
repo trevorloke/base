@@ -20,13 +20,13 @@ import * as people from '../ext/fields/people.js';
 import * as lists from '@starbase/shared/fieldlists';
 
 // Read at call time everywhere (lib/preset.js), so set after the imports.
-const brandWas = process.env.STARBASE_BRAND;
-process.env.STARBASE_BRAND = 'base';
-after(() => { if (brandWas === undefined) delete process.env.STARBASE_BRAND; else process.env.STARBASE_BRAND = brandWas; });
+const brandWas = process.env.BASE_BRAND;
+process.env.BASE_BRAND = 'base';
+after(() => { if (brandWas === undefined) delete process.env.BASE_BRAND; else process.env.BASE_BRAND = brandWas; });
 const asBrand = async (key, fn) => {
-  const was = process.env.STARBASE_BRAND;
-  process.env.STARBASE_BRAND = key;
-  try { return await fn(); } finally { process.env.STARBASE_BRAND = was; }
+  const was = process.env.BASE_BRAND;
+  process.env.BASE_BRAND = key;
+  try { return await fn(); } finally { process.env.BASE_BRAND = was; }
 };
 
 const tag = Math.random().toString(36).slice(2, 8);

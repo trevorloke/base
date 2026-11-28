@@ -7,6 +7,7 @@
 //   GOTV_LOCKED, gotvLockMs    the writes that never wait more than 5 s for
 //                              the campaign's lock while GOTV is on or in
 //                              practice: a mark, an undo, a check, a knock
+import { setting } from '@starbase/shared/old-names';
 import { gotvFor, scopeOf } from './state.js';
 
 export const gotvRead = (db, ctx) => gotvFor(db, ctx);
@@ -19,7 +20,7 @@ export const rowLimit = async (db, ctx, params) => {
 };
 
 export const GOTV_LOCKED = new Set(['vote.mark', 'vote.undo', 'gotv.check', 'contact.log']);
-export const LOCK_MS = () => Number(process.env.STARBASE_GOTV_LOCK_MS) || 5_000;
+export const LOCK_MS = () => Number(setting('BASE_GOTV_LOCK_MS')) || 5_000;
 export const gotvLockMs = async (db, ctx) => {
   const g = await gotvFor(db, ctx);
   return g.on || g.practice ? LOCK_MS() : undefined;

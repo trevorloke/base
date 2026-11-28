@@ -1,6 +1,6 @@
-// Google Maps as the field map's tiles, through Starbase. Google's Map Tiles
+// Google Maps as the field map's tiles, through base.win. Google's Map Tiles
 // API hands out tiles against a session, not a plain {z}/{x}/{y} address, so
-// the map asks Starbase for /tiles/{z}/{x}/{y}.png (signed in) and Starbase
+// the map asks base.win for /tiles/{z}/{x}/{y}.png (signed in) and base.win
 // fetches each tile from Google with a session it keeps and renews. Tiles
 // keep Google's own cache rules (its Cache-Control, made private), and the
 // phone's service worker does not keep them: Google's terms allow no offline

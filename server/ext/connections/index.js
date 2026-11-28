@@ -14,6 +14,8 @@
 //                                    must do at the service, said apart.
 //
 // Keys and tokens are never in an answer: only which settings are present.
+import { setting, OLD_HEALTH_SERVICE } from '@starbase/shared/old-names';
+import { olderNames } from '../../lib/adopt-old-names.js';
 import { Hono } from 'hono';
 import { probeLookup, retiredGoogle, RETIRED_WORDS } from '../../lib/geocode.js';
 import { googleKey, googleTilesOn, googleTilesSetting, mapType, probeTiles } from '../../lib/gtiles.js';
@@ -50,10 +52,13 @@ import { websiteService, websiteInbound, checkWebsite } from '../intake/service.
 import { websiteCounts } from '../intake/outbound.js';
 
 const MANAGER = 'manager';
+// What this server's /api/health says it is (server/index.js).
+const HEALTH_SERVICE = 'base.win';
 const TIMEOUT_MS = 8000;
-const env = (k) => String(process.env[k] || '').trim();
+// A setting by its name, or its older name while that is the one set (shared/old-names.js); any other name as it is.
+const env = (k) => String(setting(k) || '').trim();
 const has = (k) => Boolean(env(k));
-const publicUrl = () => env('STARBASE_PUBLIC_URL').replace(/\/$/, '');
+const publicUrl = () => env('BASE_PUBLIC_URL').replace(/\/$/, '');
 const twilioBase = () => (env('TWILIO_API_BASE') || 'https://api.twilio.com').replace(/\/$/, '');
 const provider = () => (env('GEOCODER') || 'bc').toLowerCase();
 // Which kind of number the campaign texts from. Twilio's guidance for Canada:
@@ -140,13 +145,13 @@ const freeTiles = () => {
   const free = source === 'OpenStreetMap';
   return { cfg, free, source: free && cartoView() ? FREE_BOTH : source };
 };
-const CARTO_NEEDS_KEY = 'CARTO needs a key now (STARBASE_TILE_CARTO_KEY)';
+const CARTO_NEEDS_KEY = 'CARTO needs a key now (BASE_TILE_CARTO_KEY)';
 // Why Clean isn't offered on the free map (a choice, not a fault: unflagged).
 const cleanOff = () => {
   if (cartoView()) return '';
-  return env('STARBASE_TILE_CARTO_KEY') && process.env.STARBASE_TILE_CLEAN === 'off'
-    ? ' · Clean is off (STARBASE_TILE_CLEAN=off)'
-    : ' · Clean is off: CARTO’s free map needs a key (STARBASE_TILE_CARTO_KEY)';
+  return env('BASE_TILE_CARTO_KEY') && setting('BASE_TILE_CLEAN') === 'off'
+    ? ' · Clean is off (BASE_TILE_CLEAN=off)'
+    : ' · Clean is off: CARTO’s free map needs a key (BASE_TILE_CARTO_KEY)';
 };
 const freeTilesRow = () => {
   const { cfg, free, source } = freeTiles();
@@ -154,8 +159,8 @@ const freeTilesRow = () => {
   // Every setting the map couldn't use, not only the first.
   const why = [
     googleTilesSetting() === 'unknown' && `GOOGLE_MAPS_TILES=${env('GOOGLE_MAPS_TILES').slice(0, 40)} isn’t understood — use 1`,
-    cfg.ignored.includes('provider') && `STARBASE_TILE_PROVIDER=${env('STARBASE_TILE_PROVIDER').toLowerCase().slice(0, 40)} isn’t known — use stadia`,
-    cfg.ignored.includes('url') && 'STARBASE_TILE_URL needs http(s) and {z}/{x}/{y}',
+    cfg.ignored.includes('provider') && `BASE_TILE_PROVIDER=${env('BASE_TILE_PROVIDER').toLowerCase().slice(0, 40)} isn’t known — use stadia`,
+    cfg.ignored.includes('url') && 'BASE_TILE_URL needs http(s) and {z}/{x}/{y}',
   ].filter(Boolean).join(' · ');
   // An address of the campaign's own on CARTO, with no key: CARTO sends a
   // notice instead of streets, so the row isn't shown as ready.
@@ -169,6 +174,20 @@ const freeTilesRow = () => {
     // A setting it couldn't use leaves the free map drawing: that is what the badge says.
     state: own && !why && !cartoKeyless ? 'ready' : 'default',
   });
+};
+
+// Settings on this server still under their older names in Render
+// (lib/adopt-old-names.js): they keep working; each line says what to rename
+// it to. Not shown at all once there are none. Names only, never a value.
+const olderNamesRow = () => {
+  const older = olderNames();
+  if (!older.length) return null;
+  return {
+    key: 'older-names', name: 'Older setting names still on this server', for: 'Render → this service → Environment: rename each one, then this goes away',
+    launch: false, missing: [], set: [], state: 'ready', checkable: false, flagged: true, flagWord: 'rename in Render',
+    detail: older.map(({ old, now }) => `${old} → ${now}: add ${now}, copy the value exactly, then delete ${old}`).join('\n'),
+    older,
+  };
 };
 
 const row = (key, name, purpose, launch, needs, extra = {}) => {
@@ -185,7 +204,7 @@ export const services = (base = publicUrl()) => {
       state: has('DATABASE_URL') || process.env.NODE_ENV !== 'production' ? 'ready' : 'missing',
       missing: has('DATABASE_URL') || process.env.NODE_ENV !== 'production' ? [] : ['DATABASE_URL'],
     }),
-    row('public', 'Public address', 'Links in every email (invites, unsubscribe, receipts), texting’s delivery reports and calls', true, ['STARBASE_PUBLIC_URL'], {
+    row('public', 'Public address', 'Links in every email (invites, unsubscribe, receipts), texting’s delivery reports and calls', true, ['BASE_PUBLIC_URL'], {
       detail: pub ? `${pub}${/^https:\/\//.test(pub) ? '' : ' — must start with https://'}` : 'Not set: links use whatever address the page was opened at',
       state: pub && /^https:\/\//.test(pub) ? 'ready' : 'missing',
     }),
@@ -207,7 +226,7 @@ export const services = (base = publicUrl()) => {
       }))(retiredGoogle()),
     googleTiles() ? googleTilesRow() : freeTilesRow(),
     row('jobs', 'Background work', 'Sends that go out later, ladder steps, receipts, the address run', true, [], {
-      detail: jobRunnerOn() ? 'Running on this server' : 'Off on this server (STARBASE_JOBS=off — take that setting away): scheduled sends wait',
+      detail: jobRunnerOn() ? 'Running on this server' : 'Off on this server (BASE_JOBS=off — take that setting away): scheduled sends wait',
       state: jobRunnerOn() ? 'ready' : 'missing',
       checkable: false,
     }),
@@ -234,6 +253,8 @@ export const services = (base = publicUrl()) => {
     }))(keyStatus()),
     placesRow(),
   ];
+  const older = olderNamesRow();
+  if (older) list.unshift(older);
   return list;
 };
 
@@ -283,10 +304,11 @@ const CHECKS = {
   },
   public: async () => {
     const pub = publicUrl();
-    if (!pub) return { ok: false, said: 'STARBASE_PUBLIC_URL isn’t set' };
+    if (!pub) return { ok: false, said: 'BASE_PUBLIC_URL isn’t set' };
     const res = await fetch(`${pub}/api/health`, { signal: AbortSignal.timeout(TIMEOUT_MS) });
     const body = await res.json().catch(() => null);
-    if (!res.ok || body?.service !== 'starbase') return { ok: false, said: `${pub} answered ${res.status}, not this base.win` };
+    // A server still on the older code (mid-rollout) answers with the older word.
+    if (!res.ok || ![HEALTH_SERVICE, OLD_HEALTH_SERVICE].includes(body?.service)) return { ok: false, said: `${pub} answered ${res.status}, not this base.win` };
     return { ok: true, said: `${pub} reaches this base.win (${body.env})` };
   },
   email: (db, ws, base) => checkEmail(db, base),
@@ -304,7 +326,7 @@ const CHECKS = {
     const n = (await res.json()).incoming_phone_numbers?.[0];
     if (!n) return { ok: false, said: `${env('TWILIO_FROM')} isn’t a number on this Twilio account` };
     const want = publicUrl() ? `${publicUrl()}/api/public/twilio/sms` : null;
-    if (!want) return { ok: false, said: 'The number is on the account; set STARBASE_PUBLIC_URL so replies and delivery reports reach base.win' };
+    if (!want) return { ok: false, said: 'The number is on the account; set BASE_PUBLIC_URL so replies and delivery reports reach base.win' };
     if (String(n.sms_url || '').replace(/\/$/, '') !== want) {
       return { ok: false, said: `The number is on the account, but its incoming messages go to ${n.sms_url || 'nowhere'} — set it to ${want}` };
     }

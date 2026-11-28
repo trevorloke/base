@@ -18,6 +18,7 @@ import { readFileSync } from 'node:fs';
 import { freshDb, Client } from './helpers.js';
 import { app } from '../index.js';
 import { getDb } from '../db/client.js';
+import { newNameOf } from '../../shared/old-names.js';
 import { forgetBrand } from '../lib/brand.js';
 import { envLines } from '../../apps/platform/snippets.mjs';
 import { loadWords, findIn } from '../../scripts/neutral-bundle.mjs';
@@ -27,11 +28,12 @@ const tag = Math.random().toString(36).slice(2, 8);
 // The block a new campaign's server is given. Left out: NODE_ENV and the
 // public address (they change cookies and hosts, which this in-process
 // server has already read), and the keys, which are random.
-const LEFT_OUT = new Set(['NODE_ENV', 'STARBASE_PUBLIC_URL', 'BASE_PLATFORM_PUBKEY', 'STARBASE_TWO_STEP_KEY', 'GOOGLE_TOKEN_KEY']);
+const LEFT_OUT = new Set(['NODE_ENV', 'BASE_PUBLIC_URL', 'BASE_PLATFORM_PUBKEY', 'BASE_TWO_STEP_KEY', 'GOOGLE_TOKEN_KEY']);
 const BLOCK = Object.fromEntries(envLines({
   name: 'kamloops', display: 'Kamloops Forward',
   values: { rules: 'bc-municipal', province: 'BC', tz: 'America/Vancouver', city: 'Kamloops', races: ['council'], bounds: '50.6,-120.5|50.8,-120.2' },
-}).filter((l) => !LEFT_OUT.has(l.key)).map((l) => [l.key, String(l.value).replace(/^"|"$/g, '')]));
+  // Each line by the name the server reads first (shared/old-names.js), whichever name the control centre writes.
+}).filter((l) => !LEFT_OUT.has(newNameOf(l.key))).map((l) => [newNameOf(l.key), String(l.value).replace(/^"|"$/g, '')]));
 const saved = Object.fromEntries(Object.keys(BLOCK).map((k) => [k, process.env[k]]));
 after(() => { for (const [k, v] of Object.entries(saved)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; } forgetBrand(); });
 
@@ -66,10 +68,10 @@ const read = async (path, cookie) => {
 };
 
 test('the block is the control centre’s: brand base, Kamloops, nobody on the scale', () => {
-  assert.equal(BLOCK.STARBASE_BRAND, 'base');
-  assert.equal(BLOCK.STARBASE_CITY, 'Kamloops');
-  assert.equal(BLOCK.STARBASE_GEO_BOUNDS, '50.6,-120.5|50.8,-120.2');
-  assert.equal(BLOCK.STARBASE_CANDIDATES, 'none');
+  assert.equal(BLOCK.BASE_BRAND, 'base');
+  assert.equal(BLOCK.BASE_CITY, 'Kamloops');
+  assert.equal(BLOCK.BASE_GEO_BOUNDS, '50.6,-120.5|50.8,-120.2');
+  assert.equal(BLOCK.BASE_CANDIDATES, 'none');
   assert.ok(API.length >= 100 && PAGES.length >= 40, `${API.length} API reads, ${PAGES.length} pages`);
 });
 

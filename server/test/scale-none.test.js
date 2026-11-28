@@ -1,4 +1,4 @@
-// STARBASE_CANDIDATES=none: a campaign with no opponents on its rating scale
+// BASE_CANDIDATES=none: a campaign with no opponents on its rating scale
 // — the four steps and "Not sure", never Imagine Surrey's list. Unset or
 // empty is the server's preset's list: Imagine Surrey's five on its own
 // server, exactly as before (its production sets nothing), and nobody on any
@@ -12,7 +12,7 @@ import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 
 // Set for the whole file: the scale's starting list is read whenever it is asked.
-process.env.STARBASE_CANDIDATES = ' None ';
+process.env.BASE_CANDIDATES = ' None ';
 const { freshDb, Client } = await import('./helpers.js');
 const { getDb } = await import('../db/client.js');
 const S = await import('@starbase/shared/scale');
@@ -27,8 +27,8 @@ const IS_LIST = presetFor('imagine-surrey').candidates;
 const SCALE_FILE = new URL('../../shared/scale.js', import.meta.url).href;
 const scaleWith = async (tag, value, { browser = null } = {}) => {
   const proc = globalThis.process;
-  const had = proc.env.STARBASE_CANDIDATES;
-  if (value === undefined) delete proc.env.STARBASE_CANDIDATES; else proc.env.STARBASE_CANDIDATES = value;
+  const had = proc.env.BASE_CANDIDATES;
+  if (value === undefined) delete proc.env.BASE_CANDIDATES; else proc.env.BASE_CANDIDATES = value;
   if (browser === 'bare') globalThis.process = undefined;
   if (browser === 'page') globalThis.document = {};
   try {
@@ -39,15 +39,15 @@ const scaleWith = async (tag, value, { browser = null } = {}) => {
     // setting is `value`, whenever it is called.
     copy.presetCandidates(() => IS_LIST);
     const asSet = (fn) => (...args) => {
-      const now = proc.env.STARBASE_CANDIDATES;
-      if (value === undefined) delete proc.env.STARBASE_CANDIDATES; else proc.env.STARBASE_CANDIDATES = value;
-      try { return fn(...args); } finally { if (now === undefined) delete proc.env.STARBASE_CANDIDATES; else proc.env.STARBASE_CANDIDATES = now; }
+      const now = proc.env.BASE_CANDIDATES;
+      if (value === undefined) delete proc.env.BASE_CANDIDATES; else proc.env.BASE_CANDIDATES = value;
+      try { return fn(...args); } finally { if (now === undefined) delete proc.env.BASE_CANDIDATES; else proc.env.BASE_CANDIDATES = now; }
     };
     return Object.fromEntries(Object.entries(copy).map(([k, v]) => [k, typeof v === 'function' ? asSet(v) : v]));
   } finally {
     globalThis.process = proc;
     delete globalThis.document;
-    if (had === undefined) delete proc.env.STARBASE_CANDIDATES; else proc.env.STARBASE_CANDIDATES = had;
+    if (had === undefined) delete proc.env.BASE_CANDIDATES; else proc.env.BASE_CANDIDATES = had;
   }
 };
 const wire = (x) => JSON.parse(JSON.stringify(x)); // as it crosses to a phone

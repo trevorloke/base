@@ -4,6 +4,7 @@
 // one place (lib/reach.js), the same for a list's numbers, a send's
 // recipients and a phone bank: 'email' one row per address, 'phone' (a
 // text) one row per number, 'call' everyone with a number.
+import { setting } from '@starbase/shared/old-names';
 import { personsWhere, joinWhere } from '../../lib/audience.js';
 import { azKey, azAfter } from '../../lib/az.js';
 import { mayReach, person, emailKey, last10 } from '../../lib/reach.js';
@@ -124,7 +125,7 @@ const countsAt = async (db, ctx, { list = null, filter = null }) => {
 };
 export const countsOf = async (db, ctx, opts) => (await countsAt(db, ctx, opts)).counts;
 
-// A list's numbers, kept for a minute (STARBASE_LIST_COUNTS_MS; 0 under the
+// A list's numbers, kept for a minute (BASE_LIST_COUNTS_MS; 0 under the
 // test runner): the Lists screen and a send's "To" picker read every list,
 // and counting each on every load is slow on a city's voter file. A kept
 // count is dropped when the list itself changes (its updated_at: the
@@ -135,7 +136,7 @@ export const countsOf = async (db, ctx, opts) => (await countsAt(db, ctx, opts))
 // the campaign's books (the first event it writes): a count that read the
 // books before that place missed it, however long the write took to land.
 // One list's own page counts now.
-const keepMs = () => Number(process.env.STARBASE_LIST_COUNTS_MS ?? (process.env.NODE_TEST_CONTEXT ? 0 : 60_000)) || 0;
+const keepMs = () => Number(setting('BASE_LIST_COUNTS_MS') ?? (process.env.NODE_TEST_CONTEXT ? 0 : 60_000)) || 0;
 const kept = new Map();      // list id → { at, seq, stamp, counts }
 const counting = new Map();  // list id + stamp → the count under way ({ counts, seq })
 const peopleSeq = new Map(); // campaign → the place in its books of the last change to its people

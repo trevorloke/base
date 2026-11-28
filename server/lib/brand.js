@@ -3,9 +3,9 @@
 // (shared/brand.js), or its own when its server has a preset
 // (lib/preset.js) — each through the one rule that turns a brand colour
 // into every shade on screen (shared/brand-look.js). Once saved, the saved
-// brand is the look: STARBASE_BRAND only chooses what a campaign STARTS from.
+// brand is the look: BASE_BRAND only chooses what a campaign STARTS from.
 //
-//   STARBASE_BRAND   base, or a preset's name. Unset or unknown is base
+//   BASE_BRAND   base, or a preset's name. Unset or unknown is base
 //                    (lib/preset.js brandKey says the one exception).
 //
 // The app's page (index.html) leaves marked <html data-brand="…"> (the

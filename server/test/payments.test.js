@@ -25,7 +25,7 @@ import { startFakeStripe } from './fake-stripe.js';
 
 const SECRET = 'whsec_payments_test_secret';
 const KEY = 'sk_test_payments_0123456789';
-const ENV = ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'STRIPE_API_BASE', 'RESEND_API_KEY', 'MAIL_FROM', 'STARBASE_PUBLIC_URL'];
+const ENV = ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'STRIPE_API_BASE', 'RESEND_API_KEY', 'MAIL_FROM', 'BASE_PUBLIC_URL'];
 const saved = Object.fromEntries(ENV.map((k) => [k, process.env[k]]));
 const tag = Math.random().toString(36).slice(2, 8);
 const mail = (who) => `${who}.pay.${tag}@example.org`;
@@ -543,7 +543,7 @@ test('the desk: Donations’ online side is the money roles’; volunteers get n
 });
 
 test('Settings → Services: Stripe set up, not set up or in test mode, the webhook address, the events, and Check', async () => {
-  process.env.STARBASE_PUBLIC_URL = 'https://base.example.org/northshore';
+  process.env.BASE_PUBLIC_URL = 'https://base.example.org/northshore';
   try {
     const stripeRow = async () => ok(await mgr.get('/api/connections')).services.find((s) => s.key === 'stripe');
     let s = await stripeRow();
@@ -571,6 +571,6 @@ test('Settings → Services: Stripe set up, not set up or in test mode, the webh
     assert.equal(ok(await mgr.post('/api/connections/check', { key: 'stripe' })).said, 'STRIPE_SECRET_KEY isn’t set');
   } finally {
     process.env.STRIPE_SECRET_KEY = KEY;
-    delete process.env.STARBASE_PUBLIC_URL;
+    delete process.env.BASE_PUBLIC_URL;
   }
 });

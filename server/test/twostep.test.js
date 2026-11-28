@@ -67,7 +67,7 @@ const people = {};
 
 before(async () => {
   await freshDb();
-  delete process.env.STARBASE_TWO_STEP_KEY;
+  delete process.env.BASE_TWO_STEP_KEY;
   delete process.env.RESEND_API_KEY;
   mgr = new Browser();
   const r = await mgr.post('/api/auth/signup', {
@@ -88,7 +88,7 @@ before(async () => {
   }
 });
 after(() => {
-  for (const k of ['STARBASE_TWO_STEP_KEY']) {
+  for (const k of ['BASE_TWO_STEP_KEY']) {
     if (env[k] === undefined) delete process.env[k]; else process.env[k] = env[k];
   }
 });
@@ -197,7 +197,7 @@ test('recovery codes: ten, unambiguous, hashed slowly with a salt, typed back an
 
 test('the secret at rest: sealed with the environment’s key, else one base.win keeps in the database', async () => {
   const db = await getDb();
-  delete process.env.STARBASE_TWO_STEP_KEY;
+  delete process.env.BASE_TWO_STEP_KEY;
   assert.deepEqual(keyStatus(), { source: 'database', problem: 'unset' });
   const inDb = await sealSecret(db, 'JBSWY3DPEHPK3PXP');
   assert.match(inDb, /^v1\.db\.[\w-]+\.[\w-]+\.[\w-]+$/);
@@ -205,20 +205,20 @@ test('the secret at rest: sealed with the environment’s key, else one base.win
   assert.deepEqual(await openSecret(db, inDb), { plain: 'JBSWY3DPEHPK3PXP', current: true });
   assert.notEqual(await sealSecret(db, 'JBSWY3DPEHPK3PXP'), inDb, 'a fresh IV each time');
   // A key too short to be one is left out, and said.
-  process.env.STARBASE_TWO_STEP_KEY = 'too-short';
+  process.env.BASE_TWO_STEP_KEY = 'too-short';
   assert.deepEqual(keyStatus(), { source: 'database', problem: 'short' });
   // Set: it seals; what the database's key sealed still opens (not current).
-  process.env.STARBASE_TWO_STEP_KEY = 'a-long-random-two-step-key-0123456789abcdef';
+  process.env.BASE_TWO_STEP_KEY = 'a-long-random-two-step-key-0123456789abcdef';
   assert.deepEqual(keyStatus(), { source: 'env' });
   const inEnv = await sealSecret(db, 'JBSWY3DPEHPK3PXP');
   assert.match(inEnv, /^v1\.e[0-9a-f]{10}\./);
   assert.deepEqual(await openSecret(db, inEnv), { plain: 'JBSWY3DPEHPK3PXP', current: true });
   assert.deepEqual(await openSecret(db, inDb), { plain: 'JBSWY3DPEHPK3PXP', current: false });
   // Moving to a new key: new first, old after — both open, the new seals.
-  process.env.STARBASE_TWO_STEP_KEY = 'the-next-long-random-two-step-key-0123456789, a-long-random-two-step-key-0123456789abcdef';
+  process.env.BASE_TWO_STEP_KEY = 'the-next-long-random-two-step-key-0123456789, a-long-random-two-step-key-0123456789abcdef';
   assert.deepEqual(await openSecret(db, inEnv), { plain: 'JBSWY3DPEHPK3PXP', current: false });
   // Another key, a tampered value, junk: unreadable.
-  process.env.STARBASE_TWO_STEP_KEY = 'someone-elses-long-random-two-step-key-0123456789';
+  process.env.BASE_TWO_STEP_KEY = 'someone-elses-long-random-two-step-key-0123456789';
   assert.equal(await openSecret(db, inEnv), null);
   const [v, kid, iv, tag, body] = inDb.split('.');
   const flipped = Buffer.from(body, 'base64url'); flipped[0] ^= 1;
@@ -226,7 +226,7 @@ test('the secret at rest: sealed with the environment’s key, else one base.win
   const shortTag = Buffer.from(tag, 'base64url').subarray(0, 4).toString('base64url');
   assert.equal(await openSecret(db, [v, kid, iv, shortTag, body].join('.')), null, 'a cut-short tag is refused');
   assert.equal(await openSecret(db, 'JBSWY3DPEHPK3PXP'), null);
-  delete process.env.STARBASE_TWO_STEP_KEY;
+  delete process.env.BASE_TWO_STEP_KEY;
 });
 
 // ── Turning it on ──
@@ -567,14 +567,14 @@ test('from the server’s shell: the only manager lost their phone and codes —
 });
 
 test('Settings → Services says where the key comes from', async () => {
-  delete process.env.STARBASE_TWO_STEP_KEY;
+  delete process.env.BASE_TWO_STEP_KEY;
   const r = await mgr.get('/api/connections');
   const row = r.json.services.find((s) => s.key === 'twostep');
   assert.ok(row, JSON.stringify(r.json.services.map((s) => s.key)));
   assert.equal(row.state, 'missing');
-  assert.deepEqual(row.missing, ['STARBASE_TWO_STEP_KEY']);
+  assert.deepEqual(row.missing, ['BASE_TWO_STEP_KEY']);
   assert.match(row.detail, /database/);
-  process.env.STARBASE_TWO_STEP_KEY = 'a-long-random-two-step-key-0123456789abcdef';
+  process.env.BASE_TWO_STEP_KEY = 'a-long-random-two-step-key-0123456789abcdef';
   const set = (await mgr.get('/api/connections')).json.services.find((s) => s.key === 'twostep');
   assert.equal(set.state, 'ready');
   // A secret the database's key sealed moves to the new key at its next code.
@@ -585,5 +585,5 @@ test('Settings → Services says where the key comes from', async () => {
   assert.equal((await b.post('/api/auth/login/code', { code: await nextCode(mgrKey, mgrId) })).status, 200);
   const after = (await (await getDb()).query('select secret from two_step where user_id = $1', [mgrId])).rows[0].secret;
   assert.match(after, /^v1\.e[0-9a-f]{10}\./);
-  delete process.env.STARBASE_TWO_STEP_KEY;
+  delete process.env.BASE_TWO_STEP_KEY;
 });

@@ -19,7 +19,7 @@ const P = {};
 const ok = (r) => { assert.equal(r.status, 200, JSON.stringify(r.json)); return r.json; };
 const tag = Math.random().toString(36).slice(2, 8);
 const mail = (who) => `${who}.la.${tag}@example.org`;
-const keep = process.env.STARBASE_LIST_COUNTS_MS;
+const keep = process.env.BASE_LIST_COUNTS_MS;
 
 before(async () => {
   db = await freshDb();
@@ -34,7 +34,7 @@ before(async () => {
   await mk('cy', 'Cy Example', { phone: '604-555-0123', tags: ['member', 'do-not-contact'] });
   await mk('dee', 'Dee Example', { email: mail('dee'), tags: ['volunteer'] });
 });
-after(() => { if (keep === undefined) delete process.env.STARBASE_LIST_COUNTS_MS; else process.env.STARBASE_LIST_COUNTS_MS = keep; });
+after(() => { if (keep === undefined) delete process.env.BASE_LIST_COUNTS_MS; else process.env.BASE_LIST_COUNTS_MS = keep; });
 
 const namesOn = async (id) => ok(await mgr.get(`/api/lists/${id}`)).people.map((p) => p.name.split(' ')[0]);
 
@@ -84,7 +84,7 @@ test('a list’s numbers: people · by email · by text · by phone · reachable
 });
 
 test('counts are kept for a minute, counted again when the list or its people change (the field’s stream waits the minute), and never hold up the names', async () => {
-  process.env.STARBASE_LIST_COUNTS_MS = '60000';
+  process.env.BASE_LIST_COUNTS_MS = '60000';
   const seen = [];
   const real = db.query.bind(db);
   db.query = (sql, params) => { seen.push(String(sql)); return real(sql, params); };
@@ -151,7 +151,7 @@ test('counts are kept for a minute, counted again when the list or its people ch
     assert.equal(ok(await mgr.get(`/api/lists/${live.id}/counts`)).counts.total, 4);
   } finally {
     db.query = real;
-    process.env.STARBASE_LIST_COUNTS_MS = '0';
+    process.env.BASE_LIST_COUNTS_MS = '0';
   }
 });
 
@@ -200,7 +200,7 @@ test('People’s real total, and a call list that carries on past its first load
 });
 
 test('a count that read the books before a change landed is never kept as fresh', async () => {
-  process.env.STARBASE_LIST_COUNTS_MS = '60000';
+  process.env.BASE_LIST_COUNTS_MS = '60000';
   try {
     const { id } = (await mgr.get('/api/lists')).json.lists.find((l) => l.name === 'Members');
     const books = async () => Number((await db.query('select event_seq from workspaces where id = $1', [ws])).rows[0].event_seq);
@@ -218,7 +218,7 @@ test('a count that read the books before a change landed is never kept as fresh'
     ok(await mgr.get(`/api/lists/${id}/counts`));
     assert.ok(keptCounts({ workspaceId: ws }, await loadList(db, ws, id)), 'kept again');
   } finally {
-    process.env.STARBASE_LIST_COUNTS_MS = '0';
+    process.env.BASE_LIST_COUNTS_MS = '0';
   }
 });
 

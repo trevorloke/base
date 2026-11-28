@@ -11,16 +11,16 @@ import { parseCandidates } from '@starbase/shared/scale';
 
 before(async () => {
   await freshDb();
-  delete process.env.STARBASE_OPEN_SIGNUP;
-  delete process.env.STARBASE_ORG_NAME;
-  process.env.STARBASE_ENV = 'staging';
-  process.env.STARBASE_TZ = 'America/Toronto';
-  process.env.STARBASE_CITY = 'Ottawa';
-  process.env.STARBASE_JURISDICTION = 'federal';
+  delete process.env.BASE_OPEN_SIGNUP;
+  delete process.env.BASE_ORG_NAME;
+  process.env.BASE_ENV = 'staging';
+  process.env.BASE_TZ = 'America/Toronto';
+  process.env.BASE_CITY = 'Ottawa';
+  process.env.BASE_JURISDICTION = 'federal';
 });
 after(() => {
-  process.env.STARBASE_OPEN_SIGNUP = '1';
-  for (const k of ['STARBASE_ENV', 'STARBASE_TZ', 'STARBASE_CITY', 'STARBASE_JURISDICTION']) delete process.env[k];
+  process.env.BASE_OPEN_SIGNUP = '1';
+  for (const k of ['BASE_ENV', 'BASE_TZ', 'BASE_CITY', 'BASE_JURISDICTION']) delete process.env[k];
 });
 
 test('a deployment that names no campaign: the first sign-up must, and gets the deployment’s rules', async () => {
@@ -57,8 +57,8 @@ test('/api/health says which environment this is', async () => {
 });
 
 test('a bad time zone or jurisdiction falls back rather than breaking setup', async () => {
-  process.env.STARBASE_TZ = 'Mars/Olympus';
-  process.env.STARBASE_JURISDICTION = 'moon';
+  process.env.BASE_TZ = 'Mars/Olympus';
+  process.env.BASE_JURISDICTION = 'moon';
   const setup = await new Client().get('/api/auth/setup');
   assert.deepEqual([setup.json.org.tz, setup.json.org.jurisdiction], ['America/Vancouver', 'bc-municipal']);
 });

@@ -23,6 +23,7 @@
 //
 // trouble: { code, plain, said?, until? } — code one of client,
 // unavailable, reconnect, paused, denied, not-allowed, domain.
+import { setting } from '@starbase/shared/old-names';
 import { runAction } from '../events.js';
 import { enqueueJob } from '../jobs.js';
 import { openToken, sealToken, tokenKeyReady } from './seal.js';
@@ -255,7 +256,7 @@ export const revokeIfUnshared = async (q, { workspaceId, sub, sealed }) => {
   return { still_at_google: false };
 };
 
-const jobsOff = () => process.env.STARBASE_JOBS === 'off';
+const jobsOff = () => setting('BASE_JOBS') === 'off';
 
 // Take purposes off a grant (all of them: the row goes), inside the caller's
 // write. A purpose with onRevoke gets its clean-up first, in the revoke job

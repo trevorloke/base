@@ -9,6 +9,7 @@
 //
 // The membership entity is shared with paid memberships (ext/membership,
 // ext/payments): only member.* and permission.* actions count.
+import { setting } from '@starbase/shared/old-names';
 import { newId } from '../../lib/events.js';
 import { enqueueJob } from '../../lib/jobs.js';
 import { campaignOf, ensurePush, ensureSweep, PURPOSE, SAID } from './push.js';
@@ -16,7 +17,7 @@ import { campaignOf, ensurePush, ensureSweep, PURPOSE, SAID } from './push.js';
 const QUIET = new Set(['sample.load', 'sample.clear']);
 const WATCH = new Set(['shift', 'shift_assignment', 'workspace', 'filing_dates', 'membership', 'candidate', 'person', 'google_grant']);
 const EVERYONE = new Set(['workspace', 'filing_dates', 'candidate']);
-const jobsOff = () => process.env.STARBASE_JOBS === 'off';
+const jobsOff = () => setting('BASE_JOBS') === 'off';
 
 const counts = (ev, action) => {
   if (!WATCH.has(ev.entityType)) return false;

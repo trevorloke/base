@@ -506,11 +506,11 @@ test('export, Google not answering the same way 20 times, a wrong client, a full
   assert.equal((await exportRow(e.id)).status, 'done');
 
   // With no background work on this server, Send to Google Sheets says so rather than wait forever.
-  process.env.STARBASE_JOBS = 'off';
+  process.env.BASE_JOBS = 'off';
   try {
     no(await send(M.b, 'list', list), 409, 'Background work is off on this server — Send to Google Sheets can’t run');
   } finally {
-    delete process.env.STARBASE_JOBS;
+    delete process.env.BASE_JOBS;
   }
 });
 

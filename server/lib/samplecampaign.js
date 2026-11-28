@@ -5,30 +5,31 @@
 // fiction, and the house numbers (9900-9999) exist on none of these
 // streets. Each pin is in the roadway, on its street's piece of
 // centreline (samplecast.js SEGMENTS).
-//   STARBASE_SAMPLE=vancouver   make it when the database holds no
+//   BASE_SAMPLE=vancouver   make it when the database holds no
 //                               campaign, and make it again by itself when
 //                               a release carries a newer SAMPLE_VERSION:
-//                               the demo account (STARBASE_DEMO_EMAIL) as
+//                               the demo account (BASE_DEMO_EMAIL) as
 //                               its manager, people in four neighbourhoods,
 //                               turfs, knocks, shifts and gifts
-//   STARBASE_SAMPLE_RESET       a word of your choosing (the owner's by-hand
+//   BASE_SAMPLE_RESET       a word of your choosing (the owner's by-hand
 //                               override). When it is one this database
 //                               hasn't seen, EVERYTHING in the database is
 //                               dropped first, and the sample is made in its
 //                               place. The same word again does nothing.
-// Both are read only where STARBASE_ENV is exactly "staging": a client's
+// Both are read only where BASE_ENV is exactly "staging": a client's
 // production server never makes a sample and never drops anything.
 //
 // Made again by itself only when every one of these holds (the guards):
-//   G1, G2  STARBASE_ENV is exactly staging and STARBASE_SAMPLE is vancouver
+//   G1, G2  BASE_ENV is exactly staging and BASE_SAMPLE is vancouver
 //           (sampleWanted; checked before the database is even asked for)
-//   G3      STARBASE_DEMO_EMAIL is set (lib/demo.js: '' on production)
+//   G3      BASE_DEMO_EMAIL is set (lib/demo.js: '' on production)
 //   G4      the sample recorded is older than this code's, or failed, or
 //           died while being made, or is for another demo email
 //   G5      the database holds exactly one campaign and its first manager
 //           is the recorded demo account (demoOwnsIt), checked once before
 //           and again under sign-up's lock in the write that drops
 //   G6      this process won the claim on sample_meta.made
+import { setting } from '@starbase/shared/old-names';
 import { randomBytes } from 'node:crypto';
 import { bootstrap } from '../db/schema.js';
 import { getDb } from '../db/client.js';
@@ -38,17 +39,17 @@ import { orgName } from './org.js';
 import { SIGNUP_LOCK } from './setup.js';
 import { AREAS, FIRST_NAMES, SURNAMES, TAGS, SHIFTS, SEGMENTS, HOUSE_FIRST, HOUSE_LAST, OPPONENTS } from './samplecast.js';
 
-const onStaging = () => String(process.env.STARBASE_ENV || '').trim() === 'staging';
-export const sampleWanted = () => onStaging() && String(process.env.STARBASE_SAMPLE || '').trim().toLowerCase() === 'vancouver';
-const resetWord = () => (sampleWanted() ? String(process.env.STARBASE_SAMPLE_RESET || '').trim().slice(0, 100) : '');
+const onStaging = () => String(setting('BASE_ENV') || '').trim() === 'staging';
+export const sampleWanted = () => onStaging() && String(setting('BASE_SAMPLE') || '').trim().toLowerCase() === 'vancouver';
+const resetWord = () => (sampleWanted() ? String(setting('BASE_SAMPLE_RESET') || '').trim().slice(0, 100) : '');
 
 // What the sample holds, as a number. Raise it by one whenever that
-// changes: this file, samplecast.js, the staging block's STARBASE_ORG_NAME,
-// STARBASE_JURISDICTION or STARBASE_TZ (all stored when the campaign is
+// changes: this file, samplecast.js, the staging block's BASE_ORG_NAME,
+// BASE_JURISDICTION or BASE_TZ (all stored when the campaign is
 // made), or the fields a new campaign starts with. The sample saves the
 // cast's opponents on its own Rating scale when it is made (samplecast.js
-// OPPONENTS), so STARBASE_CANDIDATES gives only their buttons' longer
-// words. Not for STARBASE_DEMO_EMAIL (a change of it makes the sample
+// OPPONENTS), so BASE_CANDIDATES gives only their buttons' longer
+// words. Not for BASE_DEMO_EMAIL (a change of it makes the sample
 // again by itself). The first sample, before this
 // number, counts as 0. The next release that starts on staging drops the
 // old sample and makes this one, once (G1 to G6 above).
@@ -188,7 +189,7 @@ export const demoOwnsIt = async (db, owner) => {
   return Boolean(row && Number(row.n) === 1 && row.email === String(owner || '').toLowerCase());
 };
 
-const NOT_OURS = 'sample: this database’s first campaign is not the demo account’s, so nothing was dropped. To start over, set STARBASE_SAMPLE_RESET to a new word.';
+const NOT_OURS = 'sample: this database’s first campaign is not the demo account’s, so nothing was dropped. To start over, set BASE_SAMPLE_RESET to a new word.';
 
 // ── Making it ──
 // Through the app's own doors (sign-up, then its actions), so everything the
@@ -220,11 +221,11 @@ const makeSample = async (app, log, n, email) => {
   // away: the only way in is the demo's own door (/api/auth/demo).
   const up = await call('/api/auth/signup', {
     name: 'Demo Visitor', email, password: randomBytes(24).toString('base64url'),
-    workspaceName: orgName() || 'Sample Campaign', jurisdiction: process.env.STARBASE_JURISDICTION || 'bc-municipal',
+    workspaceName: orgName() || 'Sample Campaign', jurisdiction: setting('BASE_JURISDICTION') || 'bc-municipal',
   });
   if (!up.ok) { log(`sample: sign-up → ${up.status} ${JSON.stringify(up.json)?.slice(0, 200)}`); return null; }
   // Its own opponents, saved on its Rating scale: the demo names the cast's
-  // three whatever staging's STARBASE_CANDIDATES holds in Render.
+  // three whatever staging's BASE_CANDIDATES holds in Render.
   const scale = await call('/api/actions/scale.save', { candidates: OPPONENTS.map(({ code, name }) => ({ code, name })) });
   if (!scale.ok) log(`sample: scale.save → ${scale.status} ${JSON.stringify(scale.json)?.slice(0, 200)}`);
 
@@ -296,7 +297,7 @@ export const seedSample = async (app, log = console.log, n = 320, { later = late
   if (!sampleWanted()) return null;
   // G3.
   const email = demoEmail();
-  if (!email) { log('sample: STARBASE_DEMO_EMAIL is not set — no sample made'); return null; }
+  if (!email) { log('sample: BASE_DEMO_EMAIL is not set — no sample made'); return null; }
   const db = await getDb();
   await db.exec(META);
   // The owner's by-hand override, as before.

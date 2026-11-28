@@ -1,4 +1,4 @@
-// Public pages. No auth. Starbase's own forms (petitions, newsletter and
+// Public pages. No auth. base.win's own forms (petitions, newsletter and
 // volunteer signup, RSVP, donate) are not here: the campaign's website
 // will feed those in. What stays is what every email needs:
 //   GET/POST /u/:subscriptionId   unsubscribe from the newsletter (GET asks, POST does it)

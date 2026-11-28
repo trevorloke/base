@@ -13,18 +13,18 @@ import { startFakeMail } from './fake-mail.js';
 
 const tag = Math.random().toString(36).slice(2, 8);
 const mail = (who) => `${who}.snd.${tag}@example.org`;
-const KEYS = ['MAIL_PROVIDER', 'MAIL_FROM', 'RESEND_API_KEY', 'RESEND_API_BASE', 'SENDGRID_API_KEY', 'SENDGRID_API_BASE', 'STARBASE_PUBLIC_URL'];
+const KEYS = ['MAIL_PROVIDER', 'MAIL_FROM', 'RESEND_API_KEY', 'RESEND_API_BASE', 'SENDGRID_API_KEY', 'SENDGRID_API_BASE', 'BASE_PUBLIC_URL'];
 const saved = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
 const SYSTEM = 'Imagine Surrey <team@example.org>';
 let db, resend, grid, mgr, ws, sam, samId, val, valId;
 
 const useResend = () => {
   for (const k of KEYS) delete process.env[k];
-  Object.assign(process.env, { RESEND_API_KEY: 're_test_key', RESEND_API_BASE: resend.url, MAIL_FROM: SYSTEM, STARBASE_PUBLIC_URL: 'https://base.example' });
+  Object.assign(process.env, { RESEND_API_KEY: 're_test_key', RESEND_API_BASE: resend.url, MAIL_FROM: SYSTEM, BASE_PUBLIC_URL: 'https://base.example' });
 };
 const useSendgrid = () => {
   for (const k of KEYS) delete process.env[k];
-  Object.assign(process.env, { MAIL_PROVIDER: 'sendgrid', SENDGRID_API_KEY: 'SG.test_key', SENDGRID_API_BASE: grid.url, MAIL_FROM: SYSTEM, STARBASE_PUBLIC_URL: 'https://base.example' });
+  Object.assign(process.env, { MAIL_PROVIDER: 'sendgrid', SENDGRID_API_KEY: 'SG.test_key', SENDGRID_API_BASE: grid.url, MAIL_FROM: SYSTEM, BASE_PUBLIC_URL: 'https://base.example' });
 };
 const ok = (r, msg = '') => { assert.equal(r.status, 200, `${msg} ${JSON.stringify(r.json)}`); return r.json; };
 const join = async (role, name) => {

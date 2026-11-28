@@ -1,6 +1,6 @@
 // Lessons for supporters: a lesson whose audience is "public" has a page
 // of its own — /learn/<slug> lists them, /learn/<slug>/<id> is one — in
-// the look of Starbase's public pages (lib/publicpage.js). Its file is at
+// the look of base.win's public pages (lib/publicpage.js). Its file is at
 // /learn-files/<id>. Nothing else of the training is public.
 //
 // Training is at /training in the app. A campaign whose set-up gave it

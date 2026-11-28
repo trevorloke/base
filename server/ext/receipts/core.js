@@ -5,6 +5,7 @@
 // Wording: the tax line and the footer are settings, not code — the
 // financial agent confirms receipt contents and thresholds with Elections BC
 // (TESTING.md).
+import { setting } from '@starbase/shared/old-names';
 import { randomBytes } from 'node:crypto';
 import { newId } from '../../lib/events.js';
 import { enqueueJob, cancelJobs } from '../../lib/jobs.js';
@@ -32,10 +33,10 @@ export const DEFAULTS = {
 };
 
 // The automatic email waits out the gift's Undo (about a minute), so a gift
-// undone right away never reaches the donor. STARBASE_RECEIPT_DELAY_S for tests.
+// undone right away never reaches the donor. BASE_RECEIPT_DELAY_S for tests.
 export const sendDelaySeconds = () => {
-  const n = Number(process.env.STARBASE_RECEIPT_DELAY_S);
-  return process.env.STARBASE_RECEIPT_DELAY_S !== undefined && Number.isFinite(n) && n >= 0 ? n : 60;
+  const n = Number(setting('BASE_RECEIPT_DELAY_S'));
+  return setting('BASE_RECEIPT_DELAY_S') !== undefined && Number.isFinite(n) && n >= 0 ? n : 60;
 };
 // A send still 'sending' after this long never heard back from the provider.
 const STALE_SENDING_MS = 2 * 60 * 1000;

@@ -1,5 +1,5 @@
 // The website on the campaign's own domain (SITE.md "On its own domain"):
-// STARBASE_SITE_DOMAIN names it (set per service in Render). There the site
+// BASE_SITE_DOMAIN names it (set per service in Render). There the site
 // is at / and names the domain in its canonical, og:url, og:image, sitemap
 // and robots, whichever of the pair (the www. name, or the bare one) was
 // asked; the pair sends a page on to the domain; nothing of the desk or the
@@ -7,7 +7,7 @@
 // domain for good — but a preview, what a preview loads and a form sent
 // from a page opened before stay. The present website's old addresses go to
 // the base.win page that does the same thing, where one is live, and its own
-// email links to it at its own address (STARBASE_SITE_FORMER_URL). Links
+// email links to it at its own address (BASE_SITE_FORMER_URL). Links
 // base.win hands out name the domain, and the unsubscribe sync says its two
 // settings come off once the website is base.win's own.
 import { test, before, afterEach } from 'node:test';
@@ -15,7 +15,7 @@ import assert from 'node:assert/strict';
 
 delete process.env.SITE_HOSTS;
 const DOMAIN = 'campaign.example.org';
-process.env.STARBASE_SITE_DOMAIN = DOMAIN;
+process.env.BASE_SITE_DOMAIN = DOMAIN;
 
 const { hit, send, ok, campaign } = await import('./site-helpers.js');
 const { mainAddress, siteHost } = await import('../ext/site/store.js');
@@ -26,8 +26,8 @@ const { bootNotes } = await import('../index.js');
 
 const WWW = `www.${DOMAIN}`;
 const HTTPS = { 'x-forwarded-proto': 'https' };
-const ENV = ['STARBASE_SITE_DOMAIN', 'STARBASE_SITE_FORMER_URL', 'STARBASE_BRAND', 'SITE_HOSTS', 'STARBASE_PUBLIC_URL', 'APP_HOSTS',
-  'RENDER_EXTERNAL_HOSTNAME', 'STARBASE_WEBSITE_URL', 'STARBASE_WEBSITE_KEY', 'STARBASE_ENV'];
+const ENV = ['BASE_SITE_DOMAIN', 'BASE_SITE_FORMER_URL', 'BASE_BRAND', 'SITE_HOSTS', 'BASE_PUBLIC_URL', 'APP_HOSTS',
+  'RENDER_EXTERNAL_HOSTNAME', 'BASE_WEBSITE_URL', 'BASE_WEBSITE_KEY', 'BASE_ENV'];
 const START = Object.fromEntries(ENV.map((k) => [k, process.env[k]]));
 afterEach(() => {
   for (const k of ENV) {
@@ -67,7 +67,7 @@ test('on the domain the site is at /, and names the domain: canonical, og:url, o
   assert.match(robots.text, new RegExp(`Sitemap: https://${DOMAIN}/sitemap.xml`));
   assert.equal(home.headers.get('x-robots-tag'), null, 'the domain is indexed');
   // The setting may be written as a web address, with a final dot, in capitals.
-  process.env.STARBASE_SITE_DOMAIN = `HTTPS://${DOMAIN.toUpperCase()}./`;
+  process.env.BASE_SITE_DOMAIN = `HTTPS://${DOMAIN.toUpperCase()}./`;
   assert.equal(head((await hit('/donate', { host: DOMAIN, headers: HTTPS })).text).canonical, `https://${DOMAIN}/donate`);
 });
 
@@ -80,7 +80,7 @@ test('the pair (www.) sends a page on to the domain; a form sent there is answer
   assert.equal(sent.status, 200, sent.text.slice(0, 200));
   assert.equal(sent.json.ok, true);
   // A domain written with its www. has the bare name as its pair.
-  process.env.STARBASE_SITE_DOMAIN = WWW;
+  process.env.BASE_SITE_DOMAIN = WWW;
   assert.equal((await hit('/donate', { host: DOMAIN, headers: HTTPS })).location, `https://${WWW}/donate`);
   assert.equal((await hit('/donate', { host: WWW, headers: HTTPS })).status, 200);
 });
@@ -142,23 +142,23 @@ test('/site keeps what can’t move: previews, what they load, forms sent from a
   assert.equal(sent.status, 200, 'a form from a page opened before');
   assert.notEqual((await hit('/site/sites/another')).status, 301, 'other websites keep their own addresses');
   // Without the setting, /site is the site as before.
-  delete process.env.STARBASE_SITE_DOMAIN;
+  delete process.env.BASE_SITE_DOMAIN;
   assert.equal((await hit('/site/donate')).status, 200);
 });
 
 test('a domain where the app answers is never taken: the desk can’t be locked out', async () => {
   for (const bad of ['imaginesurrey.base.win', 'base.win', 'app.example.net']) {
-    process.env.STARBASE_SITE_DOMAIN = bad;
-    process.env.STARBASE_PUBLIC_URL = 'https://app.example.net';
+    process.env.BASE_SITE_DOMAIN = bad;
+    process.env.BASE_PUBLIC_URL = 'https://app.example.net';
     assert.equal((await hit('/site/donate')).status, 200, `${bad}: /site stays`);
     assert.equal((await hit('/api/health', { host: bad })).status, 200, `${bad}: the app still answers there`);
-    assert.ok(bootNotes(process.env).some((n) => n.includes('STARBASE_SITE_DOMAIN') && n.includes(bad)), `${bad}: said at start-up`);
+    assert.ok(bootNotes(process.env).some((n) => n.includes('BASE_SITE_DOMAIN') && n.includes(bad)), `${bad}: said at start-up`);
   }
-  process.env.STARBASE_SITE_DOMAIN = 'not a domain';
+  process.env.BASE_SITE_DOMAIN = 'not a domain';
   assert.equal((await hit('/site/donate')).status, 200);
-  assert.ok(bootNotes(process.env).some((n) => n.includes('STARBASE_SITE_DOMAIN')));
-  process.env.STARBASE_SITE_DOMAIN = DOMAIN;
-  assert.ok(!bootNotes(process.env).some((n) => n.includes('STARBASE_SITE_DOMAIN')), 'a good one says nothing');
+  assert.ok(bootNotes(process.env).some((n) => n.includes('BASE_SITE_DOMAIN')));
+  process.env.BASE_SITE_DOMAIN = DOMAIN;
+  assert.ok(!bootNotes(process.env).some((n) => n.includes('BASE_SITE_DOMAIN')), 'a good one says nothing');
   assert.equal((await siteHost({ req: { url: `http://${DOMAIN}/` } }))?.host, DOMAIN);
 });
 
@@ -181,12 +181,12 @@ test('the present website’s old addresses go to the base.win page that does th
   const r = await hit('/act/skytrain-south-surrey/print', { host: DOMAIN, method: 'POST', body: {} });
   assert.equal(r.status, 404, 'a page is sent on only when it is asked for');
   // Only on the domain: on the app's own address (no domain set) these are the 404.
-  delete process.env.STARBASE_SITE_DOMAIN;
+  delete process.env.BASE_SITE_DOMAIN;
   assert.equal((await hit('/site/stats')).status, 404);
 });
 
 test('the old addresses are the campaign’s own: another campaign’s server has none', async () => {
-  process.env.STARBASE_BRAND = 'base';
+  process.env.BASE_BRAND = 'base';
   const r = await hit('/stats', { host: DOMAIN });
   assert.equal(r.status, 404);
   assert.equal((await hit('/act/skytrain-south-surrey/print', { host: DOMAIN })).status, 404);
@@ -195,7 +195,7 @@ test('the old addresses are the campaign’s own: another campaign’s server ha
 test('the present website’s own links (in emails it sent) go to it at its own address, when that is set', async () => {
   const at = (path, opts = {}) => hit(path, { host: DOMAIN, ...opts });
   assert.equal((await at('/newsletter/unsubscribe?token=abc')).status, 404, 'unset: the 404');
-  process.env.STARBASE_SITE_FORMER_URL = 'https://former-site.example.net/';
+  process.env.BASE_SITE_FORMER_URL = 'https://former-site.example.net/';
   let r = await at('/newsletter/unsubscribe?token=abc');
   assert.deepEqual([r.status, r.location], [302, 'https://former-site.example.net/newsletter/unsubscribe?token=abc']);
   assert.equal(r.headers.get('cache-control'), 'no-store');
@@ -209,7 +209,7 @@ test('the present website’s own links (in emails it sent) go to it at its own 
   assert.equal((await at('/me/caf%C3%A9')).location, 'https://former-site.example.net/me/caf%C3%A9');
   // Never the domain itself, the app's address, or a plain http one.
   for (const bad of [`https://${DOMAIN}`, `https://${WWW}`, 'https://imaginesurrey.base.win', 'http://former-site.example.net']) {
-    process.env.STARBASE_SITE_FORMER_URL = bad;
+    process.env.BASE_SITE_FORMER_URL = bad;
     assert.equal((await at('/newsletter/unsubscribe?token=abc')).status, 404, bad);
   }
 });
@@ -220,29 +220,29 @@ test('links base.win hands out name the domain', async () => {
   const site = ok(await mgr.get('/api/site'));
   assert.equal(site.urls.domain, `https://${DOMAIN}/`);
   assert.ok(site.urls.hosts.includes(`https://${DOMAIN}/`));
-  delete process.env.STARBASE_SITE_DOMAIN;
+  delete process.env.BASE_SITE_DOMAIN;
   assert.equal(ok(await mgr.get('/api/site')).urls.domain, null);
 });
 
 test('the unsubscribe sync: its two settings come off once the website is base.win’s own', async () => {
-  process.env.STARBASE_PUBLIC_URL = 'https://imaginesurrey.base.win';
-  process.env.STARBASE_WEBSITE_KEY = 'x'.repeat(40);
+  process.env.BASE_PUBLIC_URL = 'https://imaginesurrey.base.win';
+  process.env.BASE_WEBSITE_KEY = 'x'.repeat(40);
   for (const url of [`https://${DOMAIN}`, `https://${WWW}/`]) {
-    process.env.STARBASE_WEBSITE_URL = url;
+    process.env.BASE_WEBSITE_URL = url;
     const s = websiteState();
     assert.equal(s.on, false, url);
     assert.equal(s.problem, 'moved');
-    assert.match(whyOff(s), /^STARBASE_WEBSITE_URL is this campaign’s own website, now on base\.win \(.+\)\. Take both settings away\. Nothing is sent\.$/);
+    assert.match(whyOff(s), /^BASE_WEBSITE_URL is this campaign’s own website, now on base\.win \(.+\)\. Take both settings away\. Nothing is sent\.$/);
     assert.deepEqual(await checkWebsite(), { ok: false, said: whyOff(s) });
-    assert.ok(bootNotes(process.env).some((n) => n.includes('STARBASE_WEBSITE_URL') && n.includes('Take both settings away')));
+    assert.ok(bootNotes(process.env).some((n) => n.includes('BASE_WEBSITE_URL') && n.includes('Take both settings away')));
   }
   // A SITE_HOSTS host is the website's own too.
-  delete process.env.STARBASE_SITE_DOMAIN;
+  delete process.env.BASE_SITE_DOMAIN;
   process.env.SITE_HOSTS = 'own-site.example.org';
-  process.env.STARBASE_WEBSITE_URL = 'https://own-site.example.org';
+  process.env.BASE_WEBSITE_URL = 'https://own-site.example.org';
   assert.equal(websiteState().problem, 'moved');
   // A website hosted apart is still sent to.
-  process.env.STARBASE_WEBSITE_URL = 'https://hosted-apart.example.org';
+  process.env.BASE_WEBSITE_URL = 'https://hosted-apart.example.org';
   assert.equal(websiteState().on, true);
-  assert.ok(!bootNotes(process.env).some((n) => n.includes('STARBASE_WEBSITE_URL')));
+  assert.ok(!bootNotes(process.env).some((n) => n.includes('BASE_WEBSITE_URL')));
 });

@@ -2,7 +2,7 @@
 //
 //   Texting from the app: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM
 //     (the campaign's number) — the same variables lib/notify.js reads.
-//   Calls through the campaign: the same, plus STARBASE_PUBLIC_URL (Twilio
+//   Calls through the campaign: the same, plus BASE_PUBLIC_URL (Twilio
 //     must reach this server to ask what to do when the caller answers).
 //     TWILIO_VOICE=off turns calling off while keeping texting.
 //   TWILIO_API_BASE: where the REST API lives (default https://api.twilio.com);
@@ -11,11 +11,12 @@
 // Every inbound request (replies, delivery reports, the call's answer and
 // status) must carry a valid X-Twilio-Signature made with TWILIO_AUTH_TOKEN;
 // anything unsigned is refused.
+import { setting } from '@starbase/shared/old-names';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { textConfigured } from '../../lib/notify.js';
 
 export const smsReady = () => textConfigured();
-export const publicBase = () => String(process.env.STARBASE_PUBLIC_URL || '').trim().replace(/\/$/, '');
+export const publicBase = () => String(setting('BASE_PUBLIC_URL') || '').trim().replace(/\/$/, '');
 export const voiceReady = () => smsReady() && !!publicBase() && process.env.TWILIO_VOICE !== 'off';
 export const campaignNumber = () => String(process.env.TWILIO_FROM || '').trim();
 const apiBase = () => String(process.env.TWILIO_API_BASE || 'https://api.twilio.com').replace(/\/$/, '');

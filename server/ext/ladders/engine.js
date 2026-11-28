@@ -75,6 +75,7 @@
 // voted). The events hook takes anyone who does it off every ladder with
 // that goal at once, whatever step they are on — on or off — and each step
 // looks again before it runs.
+import { setting } from '@starbase/shared/old-names';
 import { newId, runAction } from '../../lib/events.js';
 import { enqueueJob, cancelJobs } from '../../lib/jobs.js';
 import { emailConfigured, sendEmail, textConfigured, unsubscribeHeaders } from '../../lib/notify.js';
@@ -581,7 +582,7 @@ const STEPS = {
       await again(c, HOUR);
       return { waiting: 'email' };
     }
-    const base = (process.env.STARBASE_PUBLIC_URL || c.ladder.public_url || '').replace(/\/$/, '');
+    const base = (setting('BASE_PUBLIC_URL') || c.ladder.public_url || '').replace(/\/$/, '');
     const fill = { person, campaign: c.ladder.campaign };
     const unsubscribe = `${base}/lu/${run.id}`;
     // 1. Claim the send: 'sending', committed before the provider is called.

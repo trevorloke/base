@@ -24,6 +24,7 @@
 // Policy: this site, the YouTube and Vimeo players, and Stripe's checkout
 // as a form's destination; never framed by another site (a draft's preview
 // may be framed by the app's own Website screen).
+import { setting } from '@starbase/shared/old-names';
 import { Hono } from 'hono';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 import { readFile, stat } from 'node:fs/promises';
@@ -204,11 +205,11 @@ const isHttps = (c) => (c.req.header('x-forwarded-proto') || '').split(',')[0].t
 // The address people see in front of the site's root (canonical, og:url,
 // og:image, share links, the sitemap): the request's own — except under a
 // client's path, where the front door forwards base.win/<client> from
-// base.win and STARBASE_PUBLIC_URL (https://base.win/<client>) names it.
+// base.win and BASE_PUBLIC_URL (https://base.win/<client>) names it.
 const publicOrigin = (base, origin) => {
   if (!base) return origin;
   try {
-    const u = new URL(String(process.env.STARBASE_PUBLIC_URL || '').trim());
+    const u = new URL(String(setting('BASE_PUBLIC_URL') || '').trim());
     if (/^https?:$/.test(u.protocol) && u.pathname.replace(/\/+$/, '') === base) return u.origin;
   } catch { /* not set: the request's own */ }
   return origin;
@@ -234,7 +235,7 @@ const siteFor = async (c, at) => {
   // without the language (where the cookies live, where English is).
   const lang = isOther(at.lang) ? at.lang : 'en';
   const home = `${base}${at.home ?? at.root}`;
-  // On the website's own domain (STARBASE_SITE_DOMAIN) or its pair, the
+  // On the website's own domain (BASE_SITE_DOMAIN) or its pair, the
   // address is the domain's itself: one canonical for both.
   const own = !at.siteId && !at.siteKey && (at.home ?? at.root) === '' && siteDomainHosts().includes(hostOfRequest(c));
   const address = own ? `${proto}://${siteDomain()}${url.port ? `:${url.port}` : ''}` : publicOrigin(base, origin);
@@ -1106,7 +1107,7 @@ const microAtApp = (c, next) => {
   // /site/sites/<key>/pa/…: that website in Punjabi.
   return atKey(key, langOfPath(c.req.path, `/site/sites/${key}`)).fetch(c.req.raw, c.env);
 };
-// Once the website has its own domain (STARBASE_SITE_DOMAIN), /site on the
+// Once the website has its own domain (BASE_SITE_DOMAIN), /site on the
 // app's address sends a page on to it, for good (301; kept an hour, so the
 // way back is quick): the same path under the root and the same query. Not
 // what can't move: anything but a GET (a form or an unsubscribe sent from a

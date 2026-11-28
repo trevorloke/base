@@ -19,7 +19,7 @@ export const SURNAMES = ['Alderquist', 'Ashquill', 'Birchlander', 'Brambleholt',
   'Pellamoor', 'Quillhaven', 'Rookmantle', 'Sablecourt', 'Thistlewade', 'Umberfell', 'Vantermoor', 'Wrenfallow', 'Yarrowgate', 'Zellamere'];
 
 // The opponents on the sample's rating scale, each with a made-up elector
-// organization. render.yaml's staging block sets them (STARBASE_CANDIDATES,
+// organization. render.yaml's staging block sets them (BASE_CANDIDATES,
 // exactly this line); the app's buttons say "Opposed — Avendrel", and the
 // organization shows in /api/scale and in lists the server makes.
 export const OPPONENTS = [

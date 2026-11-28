@@ -16,7 +16,7 @@
 //                 workspaces.settings.brand; the event carries it — ids,
 //                 never bytes.
 //   brand.reset   {} → back to the look the campaign started in (the
-//                 preset STARBASE_BRAND names)
+//                 preset BASE_BRAND names)
 // After a save or a reset every page wears it at once: the brand the server
 // keeps for a minute is dropped (lib/brand.js), and so are the website's
 // kept pages (it may follow the brand).

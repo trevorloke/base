@@ -6,7 +6,7 @@
 // source: the order of the checks, the statuses and the words.
 //
 //   const site = await startFakeWebsite({ key })
-//     site.url                 give it to base.win as STARBASE_WEBSITE_URL
+//     site.url                 give it to base.win as BASE_WEBSITE_URL
 //
 // Its side that takes base.win's unsubscribes, POST /api/in/consent, checks
 // in the website's own order: 429 over 120 calls a minute · 503 with no
@@ -39,7 +39,7 @@ import http from 'node:http';
 import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 
-// ── The website's sender (apps/web/src/lib/server/starbase.ts) ──
+// ── The website's sender (apps/web/src/lib/server/desk.ts) ──
 export const CONSENT_CHANNELS = ['email', 'sms'];
 export const CONSENT_REASONS = ['unsubscribe', 'stop', 'preference', 'deletion'];
 export const PEOPLE_ENDPOINT = '/in/v1/people';
@@ -79,7 +79,7 @@ export const requestFor = (key, payload, idempotencyKey) => ({
   body: stableJson(payload),
 });
 
-// ── The website's side that takes base.win's (starbase-inbound.ts, api/in/consent/route.ts) ──
+// ── The website's side that takes base.win's (desk-inbound.ts, api/in/consent/route.ts) ──
 const MAX_BODY = 10_000;
 const trimmed = (max) => z.string().trim().min(1).max(max);
 export const inboundConsentSchema = z.object({
@@ -128,7 +128,7 @@ export const startFakeWebsite = async ({ port = 0, key = null } = {}) => {
       return { status: 200, body: { ...previous.answer, replayed: true } };
     }
     let answer;
-    if (c.action === 'grant') answer = { ok: true, applied: 0, note: 'Grants are not applied from Starbase; only withdrawals are.' };
+    if (c.action === 'grant') answer = { ok: true, applied: 0, note: 'Grants are not applied from base.win; only withdrawals are.' };
     else {
       const digits = phoneDigits(c.phone);
       const matches = people.filter((p) => (c.email && p.email === c.email) || (digits && phoneDigits(p.phone) === digits));
@@ -145,7 +145,7 @@ export const startFakeWebsite = async ({ port = 0, key = null } = {}) => {
     if (state.busy > 0) { state.busy -= 1; return error('more than 120 requests a minute', 429); }
     if (req.method !== 'POST' || new URL(req.url, 'http://x').pathname !== '/api/in/consent') return error('Not found', 404);
     if (rateLimited()) return error('more than 120 requests a minute', 429);
-    if (!state.key) return error('Inbound consent is off: STARBASE_INBOUND_KEY isn\'t set on the website.', 503);
+    if (!state.key) return error('Inbound consent is off: BASE_WIN_INBOUND_KEY isn\'t set on the website.', 503);
     if (!bearerMatches(req.headers.authorization, state.key)) return error('a valid key goes in the Authorization header: Bearer …', 401);
     if (!/^application\/json\b/i.test(req.headers['content-type'] ?? '')) return error('send JSON (Content-Type: application/json)', 415);
     const idempotencyKey = (req.headers['idempotency-key'] ?? '').trim();

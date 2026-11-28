@@ -10,7 +10,7 @@ import { freshDb, Client } from './helpers.js';
 import { startFakeMail } from './fake-mail.js';
 
 const tag = Math.random().toString(36).slice(2, 8);
-const KEYS = ['MAIL_PROVIDER', 'MAIL_FROM', 'RESEND_API_KEY', 'RESEND_API_BASE', 'SENDGRID_API_KEY', 'STARBASE_PUBLIC_URL', 'BASE_PATH'];
+const KEYS = ['MAIL_PROVIDER', 'MAIL_FROM', 'RESEND_API_KEY', 'RESEND_API_BASE', 'SENDGRID_API_KEY', 'BASE_PUBLIC_URL', 'BASE_PATH'];
 const saved = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
 const mail = (who) => `${who}.lc.${tag}@example.org`;
 const ok = (r, msg = '') => { assert.equal(r.status, 200, `${msg} ${JSON.stringify(r.json)}`); return r.json; };
@@ -148,7 +148,7 @@ test('the reply email: once after a suggestion, with the link and none of the le
   assert.equal(r0.email, undefined);
   assert.equal((await row(quiet.id)).emailed_at, null);
 
-  Object.assign(process.env, { RESEND_API_KEY: 're_test_key', RESEND_API_BASE: fake.url, MAIL_FROM: 'Letters Example <team@example.org>', STARBASE_PUBLIC_URL: 'https://app.example.org' });
+  Object.assign(process.env, { RESEND_API_KEY: 're_test_key', RESEND_API_BASE: fake.url, MAIL_FROM: 'Letters Example <team@example.org>', BASE_PUBLIC_URL: 'https://app.example.org' });
   const to = mail('vic');
   const before = sentTo(to).length;
   const l = ok(await submit(vic)).letter;

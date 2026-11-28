@@ -1,7 +1,7 @@
 // The product's name, in one place: base.win — one product for the
 // campaign's people, map, field, money, outreach and website (the website is
 // one of the desk's areas, like People or Donations). The campaign's own
-// name is the workspace's, and leads. Internal names (STARBASE_*
+// name is the workspace's, and leads. Internal names (BASE_*
 // settings, package names, the database) are unchanged, so nothing deployed
 // moves.
 export const APP_NAME = 'base.win';

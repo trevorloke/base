@@ -11,6 +11,7 @@
 //   gcal.stop {}           base.win deletes its calendar from your Google
 //                          account; a link it could no longer reach ('left')
 //                          is only forgotten here
+import { setting } from '@starbase/shared/old-names';
 import { z } from 'zod';
 import { httpError } from '../../actions/util.js';
 import { newId } from '../../lib/events.js';
@@ -21,7 +22,7 @@ import { campaignOf, ensurePush, ensureSweep, PURPOSE, SAID } from './push.js';
 
 const EVERYONE = ['manager', 'treasurer', 'staff', 'volunteer'];
 const parse = (v) => (typeof v === 'string' ? JSON.parse(v) : (v || {}));
-export const jobsOn = () => process.env.STARBASE_JOBS !== 'off';
+export const jobsOn = () => setting('BASE_JOBS') !== 'off';
 const soon = async (db, ctx, result) => { runJobsSoon(); return { result }; };
 
 export const actions = {

@@ -31,8 +31,8 @@ const DAYS = [
   { day: G, kind: 'general', opens: '08:00', closes: '20:00' },
 ];
 // Move the server's clock (lib/clock.js) to a wall time on the campaign's clock.
-const moveTo = (day, hm) => { process.env.STARBASE_CLOCK_SHIFT_MS = String(atLocal(day, hm, TZ) - Date.now()); };
-const moveBack = () => { delete process.env.STARBASE_CLOCK_SHIFT_MS; };
+const moveTo = (day, hm) => { process.env.BASE_CLOCK_SHIFT_MS = String(atLocal(day, hm, TZ) - Date.now()); };
+const moveBack = () => { delete process.env.BASE_CLOCK_SHIFT_MS; };
 
 let db; let mgr; let ws; let staff; let vol; let volId; let fake; let lookups = [];
 const ok = (r, msg = '') => { assert.equal(r.status, 200, `${msg} ${JSON.stringify(r.json)}`); return r.json; };
@@ -57,7 +57,7 @@ before(async () => {
   await new Promise((r) => fake.listen(0, '127.0.0.1', r));
   process.env.GEOCODER = 'bc';
   process.env.BC_GEOCODER_URL = `http://127.0.0.1:${fake.address().port}`;
-  process.env.STARBASE_GEO_BOUNDS = '49.002,-122.92|49.222,-122.67';
+  process.env.BASE_GEO_BOUNDS = '49.002,-122.92|49.222,-122.67';
 });
 after(() => { fake?.close(); moveBack(); });
 
@@ -371,10 +371,10 @@ test('the public guide by the clock: before, open, between, over; the banner; Pe
   assert.match(r.text, /Voting opens today at <span class="vg-keep">8 a\.m\.<\/span>/);
   // Kept at 19:59:30, not served at 20:00:01.
   cacheClear(ws);
-  process.env.STARBASE_CLOCK_SHIFT_MS = String(atLocal(A2, '19:59', TZ) + 30_000 - Date.now());
+  process.env.BASE_CLOCK_SHIFT_MS = String(atLocal(A2, '19:59', TZ) + 30_000 - Date.now());
   r = await hit('/site/voter-guide');
   assert.match(r.text, /Voting is open now/);
-  process.env.STARBASE_CLOCK_SHIFT_MS = String(atLocal(A2, '20:00', TZ) + 1000 - Date.now());
+  process.env.BASE_CLOCK_SHIFT_MS = String(atLocal(A2, '20:00', TZ) + 1000 - Date.now());
   r = await hit('/site/voter-guide');
   assert.match(r.text, /Next day to vote: /, 'the kept page expired at the close');
   cacheClear(ws);

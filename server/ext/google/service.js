@@ -23,7 +23,7 @@ export const googleService = () => {
   const client = NEEDS.every(has);
   const refusal = lastTokenRefusal();
   const detail = [
-    s.signin ? `Redirect address for Google Cloud: ${s.redirectUri}` : client ? 'Set STARBASE_PUBLIC_URL (https://…) first' : 'Lets the team sign in with Google, and Gmail, Drive and Calendar connect',
+    s.signin ? `Redirect address for Google Cloud: ${s.redirectUri}` : client ? 'Set BASE_PUBLIC_URL (https://…) first' : 'Lets the team sign in with Google, and Gmail, Drive and Calendar connect',
     client && (s.connect ? 'Connections: ready' : 'Connections need GOOGLE_TOKEN_KEY (32+ random characters)'),
     refusal && `Google refused at ${clock(refusal.at)}: ${refusal.code === 'client' ? 'wrong client ID or secret' : 'no answer'}`,
     client && basePath() && !doorKeySet() && 'Google sign-in limits count everyone through base.win as one address — set BASE_DOOR_KEY',

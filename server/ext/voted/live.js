@@ -23,6 +23,7 @@
 // The feed's order is commit order: every voted_marks / gotv_practice
 // insert (and every feed bump) happens inside runAction under the
 // campaign's row lock, held until commit (sql.js).
+import { setting } from '@starbase/shared/old-names';
 import { onCommitted } from '../../lib/events.js';
 import { getDb } from '../../db/client.js';
 import { forgetSettings, forgetPosts, forgetScopes, gotvFor, scopeOf, isDesk, rowOf, onNow } from './state.js';
@@ -37,7 +38,7 @@ const BATCH_MS = 1_000;
 const MAX_BATCH = 500;
 const PER_USER = 3;
 const SCOPE_MS = 60_000;
-export const pingMs = () => Number(process.env.STARBASE_GOTV_PING_MS) || 25_000;
+export const pingMs = () => Number(setting('BASE_GOTV_PING_MS')) || 25_000;
 
 const hubs = new Map(); // ws → Set(sub)
 const subsOf = (ws) => { let h = hubs.get(ws); if (!h) { h = new Set(); hubs.set(ws, h); } return h; };

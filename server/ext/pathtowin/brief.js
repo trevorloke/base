@@ -1,6 +1,6 @@
 // Today's win number (GET /api/brief → goal), for the desk people who may
 // open Path to win (desk roles with the Data area): supporters found
-// against the first race in the race list (STARBASE_SLATES order) whose
+// against the first race in the race list (BASE_SLATES order) whose
 // numbers are saved, with the days left and the weekly pace to get there.
 //
 //   set:   { set: true, race, label, supporters, needed, still, pct,

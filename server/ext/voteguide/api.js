@@ -133,7 +133,7 @@ const LOOKUP_MS = 5000;
 const PREVIEW_MS = 60_000;
 const AT_ONCE = 4;
 const KM = 10;
-// The campaign's box (STARBASE_GEO_BOUNDS), grown by 10 km on every side. A
+// The campaign's box (BASE_GEO_BOUNDS), grown by 10 km on every side. A
 // campaign with no map area has no fence: anywhere is inside.
 export const inFence = (lat, lng) => {
   const box = geoBox();

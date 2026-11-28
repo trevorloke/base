@@ -70,8 +70,8 @@ export const checkWebsite = async () => {
   const r = await callWebsite(s.target, { body: '{}', timeout: 7000 });
   const words = withoutKey(typeof r.body?.error === 'string' ? r.body.error : '').slice(0, 200);
   if (r.status === 400 && /idempotency-key/i.test(words)) { websiteUp(); return { ok: true, said: 'The website answers and takes this key' }; }
-  if (r.status === 401) return { ok: false, said: 'The website refused the key: it must equal its STARBASE_INBOUND_KEY' };
-  if (r.status === 503) return { ok: false, said: 'The website has no STARBASE_INBOUND_KEY yet' };
+  if (r.status === 401) return { ok: false, said: 'The website refused the key: it must equal the website’s inbound key setting (the one that equals this server’s website key)' };
+  if (r.status === 503) return { ok: false, said: 'The website has no inbound key set yet: set the website’s inbound key setting to this server’s website key' };
   if (r.status === 404) return { ok: false, said: 'No such address on the website. If the website now runs on base.win, take both settings away' };
   if (r.status === 429) return { ok: false, said: 'The website is busy (more than 120 requests a minute). Try again in a minute' };
   if (r.status === 0) return { ok: false, said: `${r.said} at ${s.host}` };

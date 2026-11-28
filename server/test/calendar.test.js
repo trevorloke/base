@@ -27,7 +27,7 @@ import { _setTicketClockForTest } from '../ext/calendar/tickets.js';
 import { MY_SHIFTS_SQL } from '../ext/calendar/content.js';
 
 const tag = Math.random().toString(36).slice(2, 8);
-const KEYS = ['MAIL_PROVIDER', 'MAIL_FROM', 'RESEND_API_KEY', 'RESEND_API_BASE', 'SENDGRID_API_KEY', 'STARBASE_PUBLIC_URL'];
+const KEYS = ['MAIL_PROVIDER', 'MAIL_FROM', 'RESEND_API_KEY', 'RESEND_API_BASE', 'SENDGRID_API_KEY', 'BASE_PUBLIC_URL'];
 const saved = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
 let db, mail, mgr, ws, vol, volId, vol2, treas, treasId, other;
 const S = {};

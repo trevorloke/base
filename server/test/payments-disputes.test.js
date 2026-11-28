@@ -22,7 +22,7 @@ import { startFakeStripe } from './fake-stripe.js';
 
 const SECRET = 'whsec_payments_disputes_secret';
 const KEY = 'sk_test_payments_disputes_0123';
-const ENV = ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'STRIPE_API_BASE', 'RESEND_API_KEY', 'MAIL_FROM', 'STARBASE_PUBLIC_URL'];
+const ENV = ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'STRIPE_API_BASE', 'RESEND_API_KEY', 'MAIL_FROM', 'BASE_PUBLIC_URL'];
 const saved = Object.fromEntries(ENV.map((k) => [k, process.env[k]]));
 const tag = Math.random().toString(36).slice(2, 8);
 const mail = (who) => `${who}.disputes.${tag}@example.org`;

@@ -2,7 +2,7 @@
 // same code for every campaign; what belongs to one client — its opponents,
 // its city and map, its look, its lists, its membership form, its website —
 // is a preset: one folder under server/presets/, used only by the server
-// whose STARBASE_BRAND names it. Every other campaign's server answers from
+// whose BASE_BRAND names it. Every other campaign's server answers from
 // NEUTRAL below, which holds nothing of anyone's.
 //
 //   preset()        this server's preset, or NEUTRAL. Read when called,
@@ -16,6 +16,7 @@
 // This is the only file that may import from server/presets/ (a test checks).
 // A preset's large files (its website as first made, its sample people, its
 // pictures) are named in it and loaded only through it, only under the brand.
+import { setting } from '@starbase/shared/old-names';
 import { Hono } from 'hono';
 import { readFile } from 'node:fs/promises';
 import { presetCandidates } from '@starbase/shared/scale';
@@ -53,16 +54,16 @@ const NEUTRAL = deepFreeze({
 });
 
 // ── Which brand this server wears ──
-//   STARBASE_BRAND   base, or a preset's name (imagine-surrey). Any case.
+//   BASE_BRAND   base, or a preset's name (imagine-surrey). Any case.
 // Unset, or a word that names nothing, is base — with one exception, kept so
 // that a server set up before this setting existed does not change under its
 // campaign: a server that is not staging and is named exactly as a preset's
 // campaign ("Imagine Surrey") still gets that preset, and its log says to
 // set the brand (brandNote). Staging is never worked out to a preset.
-const typed = (env) => String(env.STARBASE_BRAND || '').trim().toLowerCase();
+const typed = (env) => String(setting('BASE_BRAND', env) || '').trim().toLowerCase();
 const byName = (env) => {
-  if (String(env.STARBASE_ENV || '').trim() === 'staging') return null;
-  const name = String(env.STARBASE_ORG_NAME || '').trim();
+  if (String(setting('BASE_ENV', env) || '').trim() === 'staging') return null;
+  const name = String(setting('BASE_ORG_NAME', env) || '').trim();
   if (!name) return null;
   return PRESET_KEYS.find((k) => PRESETS[k].orgNames.includes(name)) || null;
 };
@@ -79,9 +80,9 @@ export const brandNote = (env = process.env) => {
   if (set === 'base' || PRESETS[set]) return null;
   const key = byName(env);
   if (!key) return null;
-  const name = String(env.STARBASE_ORG_NAME || '').trim();
-  return `starbase: WARNING — STARBASE_BRAND is ${set ? `“${set}”, which is not a brand` : 'not set'} on a server named ${name}:`
-    + ` it is given ${name}’s own set-up (${key}) because of its name. Set STARBASE_BRAND=${key} so that no longer rests on the name: Render → this service → Environment.`;
+  const name = String(setting('BASE_ORG_NAME', env) || '').trim();
+  return `base.win: WARNING — BASE_BRAND is ${set ? `“${set}”, which is not a brand` : 'not set'} on a server named ${name}:`
+    + ` it is given ${name}’s own set-up (${key}) because of its name. Set BASE_BRAND=${key} so that no longer rests on the name: Render → this service → Environment.`;
 };
 
 export const preset = () => PRESETS[brandKey()] || NEUTRAL;
@@ -92,7 +93,7 @@ export const brandHas = (feature) => {
 };
 
 // The rating scale's starting list is this server's preset's (shared/scale.js
-// asks each time; a typed STARBASE_CANDIDATES still comes first).
+// asks each time; a typed BASE_CANDIDATES still comes first).
 presetCandidates(() => preset().candidates);
 
 // ── A preset's own files at the app's addresses ──

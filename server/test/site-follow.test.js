@@ -11,13 +11,13 @@ import { png, webp, dataUrl } from './brand-images.js';
 import { checkTheme, contrast } from '@starbase/shared/site/theme';
 import { deriveLook } from '@starbase/shared/brand-look';
 
-const ENV = ['STARBASE_BRAND', 'SITE_HOSTS'];
+const ENV = ['BASE_BRAND', 'SITE_HOSTS'];
 const had = Object.fromEntries(ENV.map((k) => [k, process.env[k]]));
 after(() => { for (const k of ENV) { if (had[k] === undefined) delete process.env[k]; else process.env[k] = had[k]; } });
 
 let db, mgr, ws;
 before(async () => {
-  process.env.STARBASE_BRAND = 'base';
+  process.env.BASE_BRAND = 'base';
   ({ db, mgr, ws } = await campaign('Riverside Forward'));
 });
 

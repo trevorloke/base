@@ -1,6 +1,7 @@
 // The calendar pieces the server's emails and reads share (shared/ics.js
 // builds the bytes): where a shift opens in the app, a file's name, and the
 // .ics a shift email carries.
+import { setting } from '@starbase/shared/old-names';
 import { icsCalendar, shiftEvent } from '@starbase/shared/ics';
 import { basePath } from './mount.js';
 
@@ -14,7 +15,7 @@ export const shiftAppLink = (publicUrl, { desk = false, id }) => {
   return `${at}${app}/shifts/${id}`;
 };
 // The address emails and jobs use: only the configured one (no request).
-export const configuredUrl = () => String(process.env.STARBASE_PUBLIC_URL || '').trim().replace(/\/+$/, '') || null;
+export const configuredUrl = () => String(setting('BASE_PUBLIC_URL') || '').trim().replace(/\/+$/, '') || null;
 
 // "Burma Shave — King George Blvd & 88 Ave" → burma-shave-king-george-blvd-88-ave.ics
 export const icsFileName = (title) => `${String(title || '').normalize('NFKD').replace(/[̀-ͯ]/g, '')

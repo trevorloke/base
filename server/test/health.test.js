@@ -10,7 +10,7 @@ import { app } from '../index.js';
 import { bootstrap } from '../db/schema.js';
 
 const V = JSON.parse(readFileSync(new URL('./entry-vector.json', import.meta.url), 'utf8'));
-const KEYS = ['BASE_PLATFORM_PUBKEY', 'STARBASE_OWN_URL', 'RENDER_EXTERNAL_URL', 'STARBASE_PUBLIC_URL', 'BASE_DOOR_KEY', 'STARBASE_OPEN_SIGNUP'];
+const KEYS = ['BASE_PLATFORM_PUBKEY', 'BASE_OWN_URL', 'RENDER_EXTERNAL_URL', 'BASE_PUBLIC_URL', 'BASE_DOOR_KEY', 'BASE_OPEN_SIGNUP'];
 const saved = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
 let db;
 
@@ -55,7 +55,7 @@ test('entry: no-key, bad-key, no-origin, ready; the kids held', async () => {
   h = await health();
   assert.equal(h.entry, 'ready');
   assert.equal(h.ownOrigin, 'https://base-win-example.onrender.com');
-  process.env.STARBASE_OWN_URL = 'http://127.0.0.1:5630';
+  process.env.BASE_OWN_URL = 'http://127.0.0.1:5630';
   assert.equal((await health()).ownOrigin, 'http://127.0.0.1:5630');
   process.env.BASE_PLATFORM_PUBKEY = `${V.otherPublicKey},${V.publicKey}`;
   assert.deepEqual((await health()).platformKids, [V.otherKid, 'cd935ce9']);
@@ -63,13 +63,13 @@ test('entry: no-key, bad-key, no-origin, ready; the kids held', async () => {
   // that is not a campaign made: campaignMade says whether a workspace exists.
   assert.equal((await health()).setupOpen, false);
   assert.equal((await health()).campaignMade, false);
-  process.env.STARBASE_OPEN_SIGNUP = '1';
+  process.env.BASE_OPEN_SIGNUP = '1';
   assert.equal((await health()).setupOpen, true);
-  delete process.env.STARBASE_OPEN_SIGNUP;
+  delete process.env.BASE_OPEN_SIGNUP;
 });
 
 test('address and doorKey follow their settings; the door key never shows', async () => {
-  process.env.STARBASE_PUBLIC_URL = 'https://base.win/example/';
+  process.env.BASE_PUBLIC_URL = 'https://base.win/example/';
   process.env.BASE_DOOR_KEY = 'door-key-0123456789abcdef0123456789abcdef';
   const res = await app.request('/api/health');
   const text = await res.text();
@@ -77,7 +77,7 @@ test('address and doorKey follow their settings; the door key never shows', asyn
   assert.equal(h.address, 'https://base.win/example');
   assert.equal(h.doorKey, true);
   assert.ok(!text.includes(process.env.BASE_DOOR_KEY));
-  process.env.STARBASE_PUBLIC_URL = 'not an address';
+  process.env.BASE_PUBLIC_URL = 'not an address';
   assert.equal((await health()).address, null);
   delete process.env.BASE_DOOR_KEY;
   assert.equal((await health()).doorKey, false);
@@ -87,10 +87,10 @@ test('the instance is kept across a restart on the same database; the switch cha
   const first = (await health()).instance;
   await bootstrap(db); // what boot runs again: the tables, the identity row
   assert.equal((await health()).instance, first);
-  process.env.STARBASE_OPEN_SIGNUP = '1';
+  process.env.BASE_OPEN_SIGNUP = '1';
   const mgr = new Client();
   assert.equal((await mgr.signup({ name: 'Morgan Example', email: 'morgan@example.org' })).status, 201);
-  delete process.env.STARBASE_OPEN_SIGNUP;
+  delete process.env.BASE_OPEN_SIGNUP;
   const before = await health();
   assert.equal(before.campaignMade, true);
   assert.equal((await mgr.action('workspace.operatorEntry', { on: false })).status, 200);

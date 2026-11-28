@@ -15,6 +15,7 @@
 // checked word by word in the tests themselves.
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { OLD_SETTINGS } from '../../shared/old-names.js';
 
 export const SAMPLE_PRINT = { version: 3, print: '197a8a280be6dfac93428ae75965cf4ad115bce25ffa8bb95071a8223561bf03' };
 
@@ -50,7 +51,10 @@ export const printNow = async () => {
     people: samplePeople(320),
     cast: Object.fromEntries(Object.keys(cast).sort().map((k) => [k, cast[k]])),
     shifts: cast.SHIFTS,
-    block: { STARBASE_ORG_NAME: block.STARBASE_ORG_NAME, STARBASE_JURISDICTION: block.STARBASE_JURISDICTION, STARBASE_TZ: block.STARBASE_TZ },
+    // Labelled by the settings' older names (shared/old-names.js), as when the
+    // print was recorded: renaming a setting is not a change to the sample, so
+    // the print stays the same and staging's sample is not made again.
+    block: Object.fromEntries(['BASE_ORG_NAME', 'BASE_JURISDICTION', 'BASE_TZ'].map((k) => [OLD_SETTINGS[k], block[k]])),
   };
   return createHash('sha256').update(JSON.stringify(what)).digest('hex');
 };

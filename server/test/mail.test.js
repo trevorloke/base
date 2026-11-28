@@ -17,7 +17,7 @@ const tag = Math.random().toString(36).slice(2, 8);
 const mail = (who) => `${who}.mail.${tag}@example.org`;
 const SECRET = `whsec_${Buffer.from(`mail-test-secret-${tag}`).toString('base64')}`;
 const KEYS = ['MAIL_PROVIDER', 'MAIL_FROM', 'RESEND_API_KEY', 'RESEND_API_BASE', 'RESEND_WEBHOOK_SECRET', 'SENDGRID_API_KEY', 'SENDGRID_API_BASE',
-  'SENDGRID_WEBHOOK_PUBLIC_KEY', 'STARBASE_EMAIL_TIMEOUT_MS', 'STARBASE_PUBLIC_URL'];
+  'SENDGRID_WEBHOOK_PUBLIC_KEY', 'BASE_EMAIL_TIMEOUT_MS', 'BASE_PUBLIC_URL'];
 const saved = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
 let db, resend, grid;
 
@@ -27,11 +27,11 @@ const hookTo = (provider) => async (raw, headers) => {
 };
 const useResend = () => {
   for (const k of KEYS) delete process.env[k];
-  Object.assign(process.env, { RESEND_API_KEY: 're_test_key', RESEND_API_BASE: resend.url, RESEND_WEBHOOK_SECRET: SECRET, MAIL_FROM: 'Imagine Surrey <team@example.org>', STARBASE_PUBLIC_URL: 'https://base.example' });
+  Object.assign(process.env, { RESEND_API_KEY: 're_test_key', RESEND_API_BASE: resend.url, RESEND_WEBHOOK_SECRET: SECRET, MAIL_FROM: 'Imagine Surrey <team@example.org>', BASE_PUBLIC_URL: 'https://base.example' });
 };
 const useSendgrid = ({ events = true } = {}) => {
   for (const k of KEYS) delete process.env[k];
-  Object.assign(process.env, { MAIL_PROVIDER: 'sendgrid', SENDGRID_API_KEY: 'SG.test_key', SENDGRID_API_BASE: grid.url, MAIL_FROM: 'Imagine Surrey <team@example.org>', STARBASE_PUBLIC_URL: 'https://base.example' });
+  Object.assign(process.env, { MAIL_PROVIDER: 'sendgrid', SENDGRID_API_KEY: 'SG.test_key', SENDGRID_API_BASE: grid.url, MAIL_FROM: 'Imagine Surrey <team@example.org>', BASE_PUBLIC_URL: 'https://base.example' });
   if (events) process.env.SENDGRID_WEBHOOK_PUBLIC_KEY = grid.publicKey;
 };
 
@@ -262,7 +262,7 @@ test('a delivered event settles a row left "sending" (not sure it went): sent, t
   const { c, ws } = await campaign('Unsure');
   await subscribe(c, 'u-ana', 'u-ben');
   try {
-    process.env.STARBASE_EMAIL_TIMEOUT_MS = '150';
+    process.env.BASE_EMAIL_TIMEOUT_MS = '150';
     resend.hang();
     const sent = ok(await c.action('blast.send', { kind: 'newsletter', subject: 'Not sure', body: 'Hello' }));
     resend.hang(false);
@@ -330,7 +330,7 @@ test('a delay: the sender has it — a row "not sure it went" went; its words go
   const { c, ws } = await campaign('Delay');
   await subscribe(c, 'd-ana', 'd-ben');
   try {
-    process.env.STARBASE_EMAIL_TIMEOUT_MS = '150';
+    process.env.BASE_EMAIL_TIMEOUT_MS = '150';
     resend.hang();
     const sent = ok(await c.action('blast.send', { kind: 'newsletter', subject: 'Slow', body: 'Hello' }));
     resend.hang(false);
@@ -585,7 +585,7 @@ test('not sure it went, with a sender that can’t drop a repeat: offered only o
   const age = (id, minutes) => db.query(`update blast_recipients set sending_at = now() - make_interval(mins => $2) where blast_id = $1 and status = 'sending'`, [id, minutes]);
   try {
     useSendgrid({ events: false });
-    process.env.STARBASE_EMAIL_TIMEOUT_MS = '150';
+    process.env.BASE_EMAIL_TIMEOUT_MS = '150';
     grid.reset();
     grid.hang();
     const sent = ok(await c.action('blast.send', { kind: 'newsletter', subject: 'Maybe', body: 'Hello' }));
@@ -625,7 +625,7 @@ test('not sure it went, with a sender that can’t drop a repeat: offered only o
     assert.deepEqual(await now(), [0, 0, 0]);
     // With Resend the same rows are offered after ten minutes, as always: its key drops a repeat.
     useResend();
-    process.env.STARBASE_EMAIL_TIMEOUT_MS = '150';
+    process.env.BASE_EMAIL_TIMEOUT_MS = '150';
     const { c: c2 } = await campaign('Repeat Resend');
     await subscribe(c2, 'r-cal');
     resend.hang();

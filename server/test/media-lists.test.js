@@ -12,13 +12,13 @@ import { startFakeMail } from './fake-mail.js';
 
 const tag = Math.random().toString(36).slice(2, 8);
 const mail = (who) => `${who}.md.${tag}@example.org`;
-const KEYS = ['MAIL_PROVIDER', 'MAIL_FROM', 'RESEND_API_KEY', 'RESEND_API_BASE', 'SENDGRID_API_KEY', 'STARBASE_PUBLIC_URL', 'MAILCHIMP_API_KEY', 'MAILCHIMP_API_BASE'];
+const KEYS = ['MAIL_PROVIDER', 'MAIL_FROM', 'RESEND_API_KEY', 'RESEND_API_BASE', 'SENDGRID_API_KEY', 'BASE_PUBLIC_URL', 'MAILCHIMP_API_KEY', 'MAILCHIMP_API_BASE'];
 const saved = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
 let db, resend;
 
 const emailOn = () => {
   for (const k of KEYS) delete process.env[k];
-  Object.assign(process.env, { RESEND_API_KEY: 're_test_key', RESEND_API_BASE: resend.url, MAIL_FROM: 'Imagine Surrey <team@example.org>', STARBASE_PUBLIC_URL: 'https://base.example' });
+  Object.assign(process.env, { RESEND_API_KEY: 're_test_key', RESEND_API_BASE: resend.url, MAIL_FROM: 'Imagine Surrey <team@example.org>', BASE_PUBLIC_URL: 'https://base.example' });
 };
 const ok = (r, msg = '') => { assert.equal(r.status, 200, `${msg} ${JSON.stringify(r.json)}`); return r.json; };
 const rowsOf = async (blastId) => (await db.query('select * from blast_recipients where blast_id = $1 order by email', [blastId])).rows;

@@ -9,7 +9,7 @@
 //   two_step_pending  a sign-in whose password was right, waiting for the
 //                     code: the ticket's hash, wrong tries, ten minutes
 //   app_secrets       base.win's own keys, when the environment gives none
-//                     (the two-step key: STARBASE_TWO_STEP_KEY, else here)
+//                     (the two-step key: BASE_TWO_STEP_KEY, else here)
 export const sql = `
 create table if not exists two_step (
   user_id uuid primary key references users(id) on delete cascade,

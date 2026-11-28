@@ -2,7 +2,7 @@
 // recorded exactly once (person.create on a client-made id, sign.place on a
 // client_id, contact.log on its client_id), shift.join/leave answer a replay
 // with "already on it" / "not on it", and GET /api/map/config names the
-// tiles (OpenStreetMap unless STARBASE_TILE_* say otherwise).
+// tiles (OpenStreetMap unless BASE_TILE_* say otherwise).
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -154,7 +154,7 @@ test('shift.join / shift.leave replays answer "already on it" / "not on it"', as
 });
 
 test('GET /api/map/config: OpenStreetMap by default, for every signed-in role', async () => {
-  setEnv({ STARBASE_TILE_URL: null, STARBASE_TILE_ATTRIBUTION: null, STARBASE_TILE_MAX_ZOOM: null });
+  setEnv({ BASE_TILE_URL: null, BASE_TILE_ATTRIBUTION: null, BASE_TILE_MAX_ZOOM: null });
   const r = await vol.get('/api/map/config');
   assert.equal(r.status, 200);
   assert.deepEqual(r.json.tiles, { ...TILE_DEFAULTS });
@@ -166,38 +166,38 @@ test('GET /api/map/config: OpenStreetMap by default, for every signed-in role', 
   assert.equal(signedOut.status, 401);
 });
 
-test('STARBASE_TILE_* choose the provider; a bad value falls back to OpenStreetMap', async () => {
+test('BASE_TILE_* choose the provider; a bad value falls back to OpenStreetMap', async () => {
   setEnv({
-    STARBASE_TILE_URL: 'https://tiles.example/streets/{z}/{x}/{y}.png?key=abc',
-    STARBASE_TILE_ATTRIBUTION: '&copy; Example Tiles',
-    STARBASE_TILE_MAX_ZOOM: '18',
+    BASE_TILE_URL: 'https://tiles.example/streets/{z}/{x}/{y}.png?key=abc',
+    BASE_TILE_ATTRIBUTION: '&copy; Example Tiles',
+    BASE_TILE_MAX_ZOOM: '18',
   });
   const r = (await c.get('/api/map/config')).json.tiles;
   assert.deepEqual(r, { url: 'https://tiles.example/streets/{z}/{x}/{y}.png?key=abc', attribution: '&copy; Example Tiles', maxZoom: 18 });
 
   // A custom provider with no credit line set gets none (never a false OSM credit).
-  setEnv({ STARBASE_TILE_ATTRIBUTION: null });
+  setEnv({ BASE_TILE_ATTRIBUTION: null });
   assert.equal((await c.get('/api/map/config')).json.tiles.attribution, '');
 
-  assert.equal(tileConfig({ STARBASE_TILE_URL: 'ftp://x/{z}/{x}/{y}' }).url, TILE_DEFAULTS.url);
-  assert.equal(tileConfig({ STARBASE_TILE_URL: 'https://tiles.example/{z}/{x}.png' }).url, TILE_DEFAULTS.url, 'needs {y}');
-  assert.equal(tileConfig({ STARBASE_TILE_MAX_ZOOM: '40' }).maxZoom, 19);
-  assert.equal(tileConfig({ STARBASE_TILE_MAX_ZOOM: 'abc' }).maxZoom, 19);
-  assert.equal(tileConfig({ STARBASE_TILE_URL: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png' }).attribution, TILE_DEFAULTS.attribution,
+  assert.equal(tileConfig({ BASE_TILE_URL: 'ftp://x/{z}/{x}/{y}' }).url, TILE_DEFAULTS.url);
+  assert.equal(tileConfig({ BASE_TILE_URL: 'https://tiles.example/{z}/{x}.png' }).url, TILE_DEFAULTS.url, 'needs {y}');
+  assert.equal(tileConfig({ BASE_TILE_MAX_ZOOM: '40' }).maxZoom, 19);
+  assert.equal(tileConfig({ BASE_TILE_MAX_ZOOM: 'abc' }).maxZoom, 19);
+  assert.equal(tileConfig({ BASE_TILE_URL: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png' }).attribution, TILE_DEFAULTS.attribution,
     'an OpenStreetMap mirror keeps the OpenStreetMap credit');
-  setEnv({ STARBASE_TILE_URL: null, STARBASE_TILE_MAX_ZOOM: null });
+  setEnv({ BASE_TILE_URL: null, BASE_TILE_MAX_ZOOM: null });
   assert.ok(ws);
 });
 
-test('a mistyped STARBASE_TILE_* is shown to desk roles, not only logged', async () => {
+test('a mistyped BASE_TILE_* is shown to desk roles, not only logged', async () => {
   // Taken: the desk sees the provider by its host (never the key in the address).
-  setEnv({ STARBASE_TILE_URL: 'https://tiles.example/streets/{z}/{x}/{y}.png?key=abc', STARBASE_TILE_MAX_ZOOM: '18', STARBASE_TILE_ATTRIBUTION: null });
+  setEnv({ BASE_TILE_URL: 'https://tiles.example/streets/{z}/{x}/{y}.png?key=abc', BASE_TILE_MAX_ZOOM: '18', BASE_TILE_ATTRIBUTION: null });
   let setup = (await c.get('/api/map/config')).json.setup;
   assert.deepEqual(setup, { source: 'tiles.example', custom: true, ignored: [], maxZoom: 18 });
   assert.ok(!JSON.stringify(setup).includes('key=abc'));
 
   // Mistyped: OpenStreetMap is drawn, and the desk is told which setting didn't take.
-  setEnv({ STARBASE_TILE_URL: 'tiles.example/{z}/{x}/{y}.png', STARBASE_TILE_MAX_ZOOM: '25' });
+  setEnv({ BASE_TILE_URL: 'tiles.example/{z}/{x}/{y}.png', BASE_TILE_MAX_ZOOM: '25' });
   const r = (await c.get('/api/map/config')).json;
   assert.equal(r.tiles.url, TILE_DEFAULTS.url);
   assert.equal(r.tiles.maxZoom, 19);
@@ -208,18 +208,18 @@ test('a mistyped STARBASE_TILE_* is shown to desk roles, not only logged', async
   assert.deepEqual(Object.keys(v), ['tiles', 'google'], 'a volunteer: the tiles and whether Google is used (its notice), never the setup (no other looks: no CARTO key)');
   assert.deepEqual(v.google, { tiles: false, places: false });
 
-  setEnv({ STARBASE_TILE_URL: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', STARBASE_TILE_MAX_ZOOM: null });
+  setEnv({ BASE_TILE_URL: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', BASE_TILE_MAX_ZOOM: null });
   setup = (await c.get('/api/map/config')).json.setup;
   assert.equal(setup.source, 'OpenStreetMap', 'an OpenStreetMap mirror is still OpenStreetMap');
   assert.equal(tileSource('https://a.tiles.example:8443/{z}/{x}/{y}.png'), 'a.tiles.example');
-  setEnv({ STARBASE_TILE_URL: null });
+  setEnv({ BASE_TILE_URL: null });
 });
 
 // Every tile address /api/map/config names, looks included.
 const addresses = (cfg) => [cfg.tiles.url, ...(cfg.views || []).map((v) => v.url)];
 const CARTO = /basemaps\.cartocdn\.com/;
 
-test('no CARTO key: no Clean, and no address on CARTO anywhere — Google on or off, STARBASE_TILE_CLEAN unset or off, any provider', async () => {
+test('no CARTO key: no Clean, and no address on CARTO anywhere — Google on or off, BASE_TILE_CLEAN unset or off, any provider', async () => {
   const combos = [];
   for (const google of [null, 'g-key']) {
     for (const clean of [null, 'off']) {
@@ -229,7 +229,7 @@ test('no CARTO key: no Clean, and no address on CARTO anywhere — Google on or 
     }
   }
   for (const k of combos) {
-    setEnv({ STARBASE_TILE_CARTO_KEY: null, GOOGLE_MAPS_TILES: k.google ? 'on' : null, GOOGLE_MAPS_SERVER_KEY: k.google, STARBASE_TILE_CLEAN: k.clean, STARBASE_TILE_URL: k.tileUrl, STARBASE_TILE_PROVIDER: k.provider });
+    setEnv({ BASE_TILE_CARTO_KEY: null, GOOGLE_MAPS_TILES: k.google ? 'on' : null, GOOGLE_MAPS_SERVER_KEY: k.google, BASE_TILE_CLEAN: k.clean, BASE_TILE_URL: k.tileUrl, BASE_TILE_PROVIDER: k.provider });
     for (const who of [c, vol]) {
       const cfg = (await who.get('/api/map/config')).json;
       const at = JSON.stringify(k);
@@ -243,75 +243,75 @@ test('no CARTO key: no Clean, and no address on CARTO anywhere — Google on or 
       }
     }
   }
-  setEnv({ GOOGLE_MAPS_TILES: null, GOOGLE_MAPS_SERVER_KEY: null, STARBASE_TILE_CLEAN: null, STARBASE_TILE_URL: null, STARBASE_TILE_PROVIDER: null });
+  setEnv({ GOOGLE_MAPS_TILES: null, GOOGLE_MAPS_SERVER_KEY: null, BASE_TILE_CLEAN: null, BASE_TILE_URL: null, BASE_TILE_PROVIDER: null });
 });
 
-test('with the campaign’s CARTO key: Clean carries it; behind Google, CARTO unless STARBASE_TILE_CLEAN=off; never in setup', async () => {
-  setEnv({ STARBASE_TILE_CARTO_KEY: ' carto key/1 ', GOOGLE_MAPS_TILES: null, GOOGLE_MAPS_SERVER_KEY: null, STARBASE_TILE_CLEAN: null, STARBASE_TILE_URL: null, STARBASE_TILE_PROVIDER: null });
+test('with the campaign’s CARTO key: Clean carries it; behind Google, CARTO unless BASE_TILE_CLEAN=off; never in setup', async () => {
+  setEnv({ BASE_TILE_CARTO_KEY: ' carto key/1 ', GOOGLE_MAPS_TILES: null, GOOGLE_MAPS_SERVER_KEY: null, BASE_TILE_CLEAN: null, BASE_TILE_URL: null, BASE_TILE_PROVIDER: null });
   let cfg = (await c.get('/api/map/config')).json;
   assert.deepEqual(cfg.views.map((v) => v.key), ['clean']);
   assert.ok(cfg.views[0].url.endsWith(`?key=${encodeURIComponent('carto key/1')}`), cfg.views[0].url);
   assert.ok(!JSON.stringify(cfg.setup).includes('carto'), 'the key is never in setup');
   // Off: no Clean, key or not.
-  setEnv({ STARBASE_TILE_CLEAN: 'off' });
+  setEnv({ BASE_TILE_CLEAN: 'off' });
   cfg = (await c.get('/api/map/config')).json;
   assert.equal(cfg.views, undefined);
   // Google the map: the free map behind it is CARTO with the key…
-  setEnv({ STARBASE_TILE_CLEAN: null, GOOGLE_MAPS_TILES: 'on', GOOGLE_MAPS_SERVER_KEY: 'g-key' });
+  setEnv({ BASE_TILE_CLEAN: null, GOOGLE_MAPS_TILES: 'on', GOOGLE_MAPS_SERVER_KEY: 'g-key' });
   cfg = (await vol.get('/api/map/config')).json;
   const free = cfg.views.filter((v) => v.fallback);
   assert.deepEqual(free.map((v) => [v.key, v.label]), [['free', 'Free map']]);
   assert.match(free[0].url, /^https:\/\/\{s\}\.basemaps\.cartocdn\.com\/.*\?key=carto%20key%2F1$/);
   assert.match(free[0].attribution, /CARTO/);
-  // …and OpenStreetMap with STARBASE_TILE_CLEAN=off: still there.
-  setEnv({ STARBASE_TILE_CLEAN: 'off' });
+  // …and OpenStreetMap with BASE_TILE_CLEAN=off: still there.
+  setEnv({ BASE_TILE_CLEAN: 'off' });
   cfg = (await vol.get('/api/map/config')).json;
   assert.deepEqual(cfg.views.filter((v) => v.fallback).map((v) => [v.key, v.url]), [['free', TILE_DEFAULTS.url]]);
-  setEnv({ STARBASE_TILE_CARTO_KEY: null, GOOGLE_MAPS_TILES: null, GOOGLE_MAPS_SERVER_KEY: null, STARBASE_TILE_CLEAN: null });
+  setEnv({ BASE_TILE_CARTO_KEY: null, GOOGLE_MAPS_TILES: null, GOOGLE_MAPS_SERVER_KEY: null, BASE_TILE_CLEAN: null });
 });
 
-test('a STARBASE_TILE_URL on CARTO: the key added where there is one; without one, kept as set and said', () => {
+test('a BASE_TILE_URL on CARTO: the key added where there is one; without one, kept as set and said', () => {
   const plain = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
-  const keyed = tileConfig({ STARBASE_TILE_URL: plain, STARBASE_TILE_CARTO_KEY: 'k1' });
+  const keyed = tileConfig({ BASE_TILE_URL: plain, BASE_TILE_CARTO_KEY: 'k1' });
   assert.equal(keyed.url, `${plain}?key=k1`);
   assert.deepEqual(keyed.ignored, []);
-  const query = tileConfig({ STARBASE_TILE_URL: `${plain}?lang=en`, STARBASE_TILE_CARTO_KEY: 'k1' });
+  const query = tileConfig({ BASE_TILE_URL: `${plain}?lang=en`, BASE_TILE_CARTO_KEY: 'k1' });
   assert.equal(query.url, `${plain}?lang=en&key=k1`);
-  const own = tileConfig({ STARBASE_TILE_URL: `${plain}?key=theirs`, STARBASE_TILE_CARTO_KEY: 'k1' });
+  const own = tileConfig({ BASE_TILE_URL: `${plain}?key=theirs`, BASE_TILE_CARTO_KEY: 'k1' });
   assert.equal(own.url, `${plain}?key=theirs`, 'a key of the operator’s own is left alone');
-  const none = tileConfig({ STARBASE_TILE_URL: plain });
+  const none = tileConfig({ BASE_TILE_URL: plain });
   assert.deepEqual([none.url, none.ignored], [plain, ['carto-key']]);
   assert.equal(tileSource(keyed.url), 'CARTO');
 });
 
-test('STARBASE_TILE_PROVIDER=stadia: Stadia Maps’ address, credit and zoom in one setting; the address beats it; an unknown one is said', () => {
-  const stadia = tileConfig({ STARBASE_TILE_PROVIDER: ' Stadia ' });
+test('BASE_TILE_PROVIDER=stadia: Stadia Maps’ address, credit and zoom in one setting; the address beats it; an unknown one is said', () => {
+  const stadia = tileConfig({ BASE_TILE_PROVIDER: ' Stadia ' });
   assert.equal(stadia.url, 'https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png');
   assert.match(stadia.attribution, /Stadia Maps.*OpenMapTiles.*OpenStreetMap/);
   assert.equal(stadia.maxZoom, 20);
   assert.deepEqual(stadia.ignored, []);
   assert.equal(tileSource(stadia.url), 'Stadia Maps');
   // A key, where the provider can't be told the campaign's own address.
-  const keyed = tileConfig({ STARBASE_TILE_PROVIDER: 'stadia', STARBASE_TILE_KEY: 'stadia-key ' });
+  const keyed = tileConfig({ BASE_TILE_PROVIDER: 'stadia', BASE_TILE_KEY: 'stadia-key ' });
   assert.equal(keyed.url, 'https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png?api_key=stadia-key');
   assert.match(keyed.attribution, /Stadia Maps/);
-  // STARBASE_TILE_URL wins over the preset.
-  const own = tileConfig({ STARBASE_TILE_PROVIDER: 'stadia', STARBASE_TILE_URL: 'https://tiles.example/{z}/{x}/{y}.png' });
+  // BASE_TILE_URL wins over the preset.
+  const own = tileConfig({ BASE_TILE_PROVIDER: 'stadia', BASE_TILE_URL: 'https://tiles.example/{z}/{x}/{y}.png' });
   assert.deepEqual([own.url, own.attribution, own.maxZoom], ['https://tiles.example/{z}/{x}/{y}.png', '', 19]);
-  const unknown = tileConfig({ STARBASE_TILE_PROVIDER: 'mapbox' });
+  const unknown = tileConfig({ BASE_TILE_PROVIDER: 'mapbox' });
   assert.deepEqual([unknown.url, unknown.ignored], [TILE_DEFAULTS.url, ['provider']]);
   assert.equal(tileSource('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'), 'CARTO');
 });
 
 test('a provider of the campaign’s own (the preset or an address) offers no free map and no Clean', async () => {
-  setEnv({ STARBASE_TILE_PROVIDER: 'stadia', STARBASE_TILE_URL: null });
+  setEnv({ BASE_TILE_PROVIDER: 'stadia', BASE_TILE_URL: null });
   const pre = (await vol.get('/api/map/config')).json;
   assert.match(pre.tiles.url, /stadiamaps/);
   assert.equal(pre.views, undefined, 'no fallback for a direct provider');
-  setEnv({ STARBASE_TILE_PROVIDER: null, STARBASE_TILE_URL: 'https://tiles.example/{z}/{x}/{y}.png' });
+  setEnv({ BASE_TILE_PROVIDER: null, BASE_TILE_URL: 'https://tiles.example/{z}/{x}/{y}.png' });
   assert.equal((await vol.get('/api/map/config')).json.views, undefined);
   // The credit line is every role's (with Google off: the provider's own).
   const credit = await vol.get('/api/map/credit?z=12&n=49.2&s=49.1&e=-122.8&w=-122.9');
   assert.deepEqual([credit.status, credit.json.text], [200, '']);
-  setEnv({ STARBASE_TILE_URL: null });
+  setEnv({ BASE_TILE_URL: null });
 });

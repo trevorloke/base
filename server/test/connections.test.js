@@ -18,8 +18,8 @@ const BILLING_OFF = { error: { code: 403, status: 'PERMISSION_DENIED',
 const tag = Math.random().toString(36).slice(2, 8);
 const realFetch = globalThis.fetch;
 const saved = { ...process.env };
-const KEYS = ['RESEND_API_KEY', 'MAIL_FROM', 'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM', 'STARBASE_PUBLIC_URL',
-  'GEOCODER', 'GOOGLE_MAPS_TILES', 'GOOGLE_MAPS_SERVER_KEY', 'DATABASE_URL', 'TWILIO_VOICE', 'STARBASE_TILE_URL', 'STARBASE_TILE_PROVIDER', 'STARBASE_TILE_KEY',
+const KEYS = ['RESEND_API_KEY', 'MAIL_FROM', 'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM', 'BASE_PUBLIC_URL',
+  'GEOCODER', 'GOOGLE_MAPS_TILES', 'GOOGLE_MAPS_SERVER_KEY', 'DATABASE_URL', 'TWILIO_VOICE', 'BASE_TILE_URL', 'BASE_TILE_PROVIDER', 'BASE_TILE_KEY',
   'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'BASE_PATH', 'CALLHUB_API_KEY', 'CALLHUB_API_BASE',
   'ADDRESS_SUGGEST', 'GEOCODER_FALLBACK', 'GOOGLE_PLACES_DAILY_MAX', 'GOOGLE_PLACES_PER_PERSON', 'GOOGLE_TILES_DAILY_MAX'];
 let mgr, staff;
@@ -53,7 +53,7 @@ before(async () => {
       return new Response(JSON.stringify({ features: [{ geometry: { coordinates: [-122.84, 49.19] }, properties: {
         civicNumber: 100, streetName: '104', streetType: 'Ave', localityName: 'Surrey', fullAddress: '100 104 Ave, Surrey, BC', matchPrecision: 'CIVIC_NUMBER' } }] }));
     }
-    if (u.hostname === 'starbase.example.org') return new Response(JSON.stringify({ ok: true, service: 'starbase', env: 'production' }));
+    if (u.hostname === 'base-win.example.org') return new Response(JSON.stringify({ ok: true, service: 'base.win', env: 'production' }));
     if (u.hostname === 'tile.googleapis.com') {
       return refuse ? new Response(JSON.stringify(BILLING_OFF), { status: 403 }) : new Response(JSON.stringify({ session: 's', expiry: '9999999999' }));
     }
@@ -133,14 +133,14 @@ test('texting: the number is on the account and its replies come here', async ()
   twilioNumbers = [];
   assert.match((await check('texting')).said, /isn’t a number on this Twilio account/);
   twilioNumbers = [{ phone_number: '+16045550100', sms_url: 'https://old.example.org/sms' }];
-  assert.match((await check('texting')).said, /set STARBASE_PUBLIC_URL/);
-  process.env.STARBASE_PUBLIC_URL = 'https://starbase.example.org';
-  assert.match((await check('texting')).said, /go to https:\/\/old\.example\.org\/sms — set it to https:\/\/starbase\.example\.org\/api\/public\/twilio\/sms/);
-  twilioNumbers = [{ phone_number: '+16045550100', sms_url: 'https://starbase.example.org/api/public/twilio/sms' }];
+  assert.match((await check('texting')).said, /set BASE_PUBLIC_URL/);
+  process.env.BASE_PUBLIC_URL = 'https://base-win.example.org';
+  assert.match((await check('texting')).said, /go to https:\/\/old\.example\.org\/sms — set it to https:\/\/base-win\.example\.org\/api\/public\/twilio\/sms/);
+  twilioNumbers = [{ phone_number: '+16045550100', sms_url: 'https://base-win.example.org/api/public/twilio/sms' }];
   const t = await check('texting');
   assert.equal(t.ok, true, t.said);
   const l = await list();
-  assert.equal(l.inbound[0].url, 'https://starbase.example.org/api/public/twilio/sms');
+  assert.equal(l.inbound[0].url, 'https://base-win.example.org/api/public/twilio/sms');
   assert.ok(!JSON.stringify(l).includes('tok'), 'never the token');
   // The row says which kind of number it is: in Canada a text to a list wants a verified toll-free number or a short code.
   const kind = async (from) => { process.env.TWILIO_FROM = from; return byKey(await list()).texting.detail; };
@@ -204,8 +204,8 @@ test('the tiles row reads the map’s own setting: the Stadia preset is named, r
   const key = process.env.GOOGLE_MAPS_SERVER_KEY;
   delete process.env.GOOGLE_MAPS_TILES;
   delete process.env.GOOGLE_MAPS_SERVER_KEY;
-  process.env.STARBASE_TILE_PROVIDER = 'stadia';
-  process.env.STARBASE_TILE_KEY = 'stadiakey';
+  process.env.BASE_TILE_PROVIDER = 'stadia';
+  process.env.BASE_TILE_KEY = 'stadiakey';
   try {
     const t = byKey(await list()).tiles;
     assert.equal(t.name, 'Map background (Stadia Maps)');
@@ -216,51 +216,51 @@ test('the tiles row reads the map’s own setting: the Stadia preset is named, r
     assert.equal(c.said, 'Stadia Maps’ tiles come straight to each phone');
     assert.doesNotMatch(JSON.stringify([t, c]), /OpenStreetMap|stadiakey/);
     // A name the map doesn't know: said, and the free map meanwhile.
-    process.env.STARBASE_TILE_PROVIDER = 'mapbox';
+    process.env.BASE_TILE_PROVIDER = 'mapbox';
     process.env.GOOGLE_MAPS_TILES = 'yes please';
     const u = byKey(await list()).tiles;
     // The free map draws meanwhile; every setting it couldn't use is named.
     assert.equal(u.state, 'default');
     assert.match(u.detail, /GOOGLE_MAPS_TILES=yes please isn’t understood — use 1 · /);
     delete process.env.GOOGLE_MAPS_TILES;
-    assert.match(u.detail, /STARBASE_TILE_PROVIDER=mapbox isn’t known — use stadia/);
-    delete process.env.STARBASE_TILE_PROVIDER;
+    assert.match(u.detail, /BASE_TILE_PROVIDER=mapbox isn’t known — use stadia/);
+    delete process.env.BASE_TILE_PROVIDER;
     const d = byKey(await list()).tiles;
     assert.deepEqual([d.name, d.state], ['Map background (OpenStreetMap)', 'default']);
   } finally {
-    delete process.env.STARBASE_TILE_PROVIDER;
-    delete process.env.STARBASE_TILE_KEY;
+    delete process.env.BASE_TILE_PROVIDER;
+    delete process.env.BASE_TILE_KEY;
     if (google != null) process.env.GOOGLE_MAPS_TILES = google;
     if (key != null) process.env.GOOGLE_MAPS_SERVER_KEY = key;
   }
 });
 
 test('the free map row says which free map, and why Clean is missing (a choice, never flagged)', async () => {
-  for (const k of ['GOOGLE_MAPS_TILES', 'GOOGLE_MAPS_SERVER_KEY', 'STARBASE_TILE_CARTO_KEY', 'STARBASE_TILE_CLEAN', 'STARBASE_TILE_URL', 'STARBASE_TILE_PROVIDER']) delete process.env[k];
+  for (const k of ['GOOGLE_MAPS_TILES', 'GOOGLE_MAPS_SERVER_KEY', 'BASE_TILE_CARTO_KEY', 'BASE_TILE_CLEAN', 'BASE_TILE_URL', 'BASE_TILE_PROVIDER']) delete process.env[k];
   const FIRST = 'OpenStreetMap’s free tiles — not for a large team in election week (see Going live §5)';
   try {
     let t = byKey(await list()).tiles;
-    assert.deepEqual([t.name, t.state, t.detail], ['Map background (OpenStreetMap)', 'default', `${FIRST} · Clean is off: CARTO’s free map needs a key (STARBASE_TILE_CARTO_KEY)`]);
+    assert.deepEqual([t.name, t.state, t.detail], ['Map background (OpenStreetMap)', 'default', `${FIRST} · Clean is off: CARTO’s free map needs a key (BASE_TILE_CARTO_KEY)`]);
     assert.equal((await check('tiles')).said, 'OpenStreetMap’s tiles come straight to each phone · to choose a provider, see Going live §5');
-    process.env.STARBASE_TILE_CARTO_KEY = 'carto-secret';
+    process.env.BASE_TILE_CARTO_KEY = 'carto-secret';
     t = byKey(await list()).tiles;
     assert.deepEqual([t.name, t.state, t.detail], ['Map background (OpenStreetMap and CARTO)', 'default', 'OpenStreetMap’s and CARTO’s free tiles — not for a large team in election week (see Going live §5)']);
     assert.equal((await check('tiles')).said, 'OpenStreetMap’s and CARTO’s tiles come straight to each phone · to choose a provider, see Going live §5');
-    process.env.STARBASE_TILE_CLEAN = 'off';
+    process.env.BASE_TILE_CLEAN = 'off';
     t = byKey(await list()).tiles;
-    assert.deepEqual([t.name, t.state, t.detail], ['Map background (OpenStreetMap)', 'default', `${FIRST} · Clean is off (STARBASE_TILE_CLEAN=off)`]);
+    assert.deepEqual([t.name, t.state, t.detail], ['Map background (OpenStreetMap)', 'default', `${FIRST} · Clean is off (BASE_TILE_CLEAN=off)`]);
     assert.doesNotMatch(JSON.stringify(await list()), /carto-secret/);
     // An address of the campaign's own on CARTO, with no key: not shown as ready.
-    for (const k of ['STARBASE_TILE_CARTO_KEY', 'STARBASE_TILE_CLEAN']) delete process.env[k];
-    process.env.STARBASE_TILE_URL = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+    for (const k of ['BASE_TILE_CARTO_KEY', 'BASE_TILE_CLEAN']) delete process.env[k];
+    process.env.BASE_TILE_URL = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
     t = byKey(await list()).tiles;
-    assert.deepEqual([t.name, t.state, t.detail], ['Map background (CARTO)', 'default', 'CARTO needs a key now (STARBASE_TILE_CARTO_KEY)']);
+    assert.deepEqual([t.name, t.state, t.detail], ['Map background (CARTO)', 'default', 'CARTO needs a key now (BASE_TILE_CARTO_KEY)']);
     // With the key, it is the campaign's own provider, ready.
-    process.env.STARBASE_TILE_CARTO_KEY = 'carto-secret';
+    process.env.BASE_TILE_CARTO_KEY = 'carto-secret';
     t = byKey(await list()).tiles;
     assert.deepEqual([t.name, t.state, t.detail], ['Map background (CARTO)', 'ready', 'CARTO, straight to the phones']);
   } finally {
-    for (const k of ['STARBASE_TILE_CARTO_KEY', 'STARBASE_TILE_CLEAN', 'STARBASE_TILE_URL']) delete process.env[k];
+    for (const k of ['BASE_TILE_CARTO_KEY', 'BASE_TILE_CLEAN', 'BASE_TILE_URL']) delete process.env[k];
   }
 });
 
@@ -289,13 +289,13 @@ test('Google’s map row: a key alone keeps the free row; on with the key and =o
     'Today: 0 tiles',
     'While Google isn’t answering: OpenStreetMap’s free map',
   ]);
-  // The free map behind Google: CARTO's with its key, OpenStreetMap's with STARBASE_TILE_CLEAN=off.
-  process.env.STARBASE_TILE_CARTO_KEY = 'ck';
+  // The free map behind Google: CARTO's with its key, OpenStreetMap's with BASE_TILE_CLEAN=off.
+  process.env.BASE_TILE_CARTO_KEY = 'ck';
   assert.equal(byKey(await list()).tiles.detail.split('\n')[3], 'While Google isn’t answering: CARTO’s free map');
-  process.env.STARBASE_TILE_CLEAN = 'off';
+  process.env.BASE_TILE_CLEAN = 'off';
   assert.equal(byKey(await list()).tiles.detail.split('\n')[3], 'While Google isn’t answering: OpenStreetMap’s free map');
-  delete process.env.STARBASE_TILE_CLEAN;
-  delete process.env.STARBASE_TILE_CARTO_KEY;
+  delete process.env.BASE_TILE_CLEAN;
+  delete process.env.BASE_TILE_CARTO_KEY;
   process.env.GOOGLE_TILES_DAILY_MAX = '20000';
   assert.equal(byKey(await list()).tiles.detail.split('\n')[2], 'Today: 0 tiles of 20,000 (then the free map until midnight)');
   process.env.GOOGLE_TILES_DAILY_MAX = 'lots';
@@ -355,14 +355,14 @@ test('the Places row: off by default (its Check still tests the key), on, logo m
 
 test('files in: the desk’s own address — /desk under the client’s path on base.win, /admin at a server’s root', async () => {
   const lists = (l) => l.inbound.find((i) => i.name === 'Lists and voted files').url;
-  process.env.STARBASE_PUBLIC_URL = 'https://starbase.example.org';
-  assert.equal(lists(await list()), 'https://starbase.example.org/admin/people/import');
+  process.env.BASE_PUBLIC_URL = 'https://base-win.example.org';
+  assert.equal(lists(await list()), 'https://base-win.example.org/admin/people/import');
   // On base.win the desk is /desk (/admin there is only an old address, sent on).
   process.env.BASE_PATH = '/imaginesurrey';
-  process.env.STARBASE_PUBLIC_URL = 'https://base.win/imaginesurrey/';
+  process.env.BASE_PUBLIC_URL = 'https://base.win/imaginesurrey/';
   assert.equal(lists(await list()), 'https://base.win/imaginesurrey/desk/people/import');
   // No public address: the one the page was opened at, under the client's path or at the server's own root.
-  delete process.env.STARBASE_PUBLIC_URL;
+  delete process.env.BASE_PUBLIC_URL;
   const under = await mountAt(app, '/imaginesurrey')(new Request('http://base.test/imaginesurrey/api/connections', { headers: { cookie: mgr.cookie } }));
   assert.equal(lists(await under.json()), 'http://base.test/imaginesurrey/desk/people/import');
   assert.equal(lists(await list()), 'http://localhost/admin/people/import');
@@ -381,8 +381,8 @@ test('Google (sign-in and connections): missing, default, ready — never a valu
     Object.assign(process.env, { GOOGLE_OAUTH_CLIENT_ID: `id-${tag}.apps.example`, GOOGLE_OAUTH_CLIENT_SECRET: secret, GOOGLE_ACCOUNTS_BASE: g.base, GOOGLE_OAUTH_BASE: g.base });
     row = byKey(await list()).google;
     assert.equal(row.state, 'missing');
-    assert.match(row.detail, /Set STARBASE_PUBLIC_URL \(https:\/\/…\) first/);
-    process.env.STARBASE_PUBLIC_URL = 'https://base.example.org';
+    assert.match(row.detail, /Set BASE_PUBLIC_URL \(https:\/\/…\) first/);
+    process.env.BASE_PUBLIC_URL = 'https://base.example.org';
     row = byKey(await list()).google;
     assert.equal(row.state, 'default', 'sign-in works; connections need the key');
     assert.match(row.detail, /^Redirect address for Google Cloud: https:\/\/base\.example\.org\/api\/auth\/google\/back · Connections need GOOGLE_TOKEN_KEY/);
@@ -407,11 +407,11 @@ test('Google (sign-in and connections): missing, default, ready — never a valu
     let c = await check('google');
     assert.equal(c.ok, true, c.said);
     assert.match(c.said, /^Working · Google knows this redirect address · Google accepts this client ID and secret$/);
-    process.env.STARBASE_PUBLIC_URL = 'https://other.example.org';
+    process.env.BASE_PUBLIC_URL = 'https://other.example.org';
     c = await check('google');
     assert.equal(c.ok, false);
     assert.match(c.said, /Add https:\/\/other\.example\.org\/api\/auth\/google\/back to the client’s Authorized redirect URIs/);
-    process.env.STARBASE_PUBLIC_URL = 'https://base.example.org';
+    process.env.BASE_PUBLIC_URL = 'https://base.example.org';
     process.env.GOOGLE_OAUTH_CLIENT_SECRET = 'wrong-secret';
     c = await check('google');
     assert.equal(c.ok, false);
@@ -424,13 +424,13 @@ test('Google (sign-in and connections): missing, default, ready — never a valu
     assert.match(c.said, /^Google has moved its sign-in addresses — base\.win needs an update/);
     assert.ok(!JSON.stringify(c).includes(secret));
   } finally {
-    for (const k of ['GOOGLE_OAUTH_CLIENT_ID', 'GOOGLE_OAUTH_CLIENT_SECRET', 'GOOGLE_TOKEN_KEY', 'GOOGLE_ACCOUNTS_BASE', 'GOOGLE_OAUTH_BASE', 'STARBASE_PUBLIC_URL', 'BASE_PATH']) delete process.env[k];
+    for (const k of ['GOOGLE_OAUTH_CLIENT_ID', 'GOOGLE_OAUTH_CLIENT_SECRET', 'GOOGLE_TOKEN_KEY', 'GOOGLE_ACCOUNTS_BASE', 'GOOGLE_OAUTH_BASE', 'BASE_PUBLIC_URL', 'BASE_PATH']) delete process.env[k];
     await g.close();
   }
 });
 
 test('Gmail (send as yourself): missing until Google’s connections work, off, on — no settings of its own, no Check, the test address said', async () => {
-  const keys = ['GOOGLE_OAUTH_CLIENT_ID', 'GOOGLE_OAUTH_CLIENT_SECRET', 'GOOGLE_TOKEN_KEY', 'STARBASE_PUBLIC_URL', 'GMAIL_API_BASE'];
+  const keys = ['GOOGLE_OAUTH_CLIENT_ID', 'GOOGLE_OAUTH_CLIENT_SECRET', 'GOOGLE_TOKEN_KEY', 'BASE_PUBLIC_URL', 'GMAIL_API_BASE'];
   try {
     let row = byKey(await list()).gmail;
     assert.deepEqual([row.state, row.missing, row.set, row.checkable, row.panel, row.launch], ['missing', [], [], false, 'gmail', false]);
@@ -439,7 +439,7 @@ test('Gmail (send as yourself): missing until Google’s connections work, off, 
     assert.equal(all.indexOf('gmail'), all.indexOf('google') + 1, 'right under the Google row');
     Object.assign(process.env, {
       GOOGLE_OAUTH_CLIENT_ID: `id-${tag}.apps.example`, GOOGLE_OAUTH_CLIENT_SECRET: `secret-${tag}`,
-      GOOGLE_TOKEN_KEY: `google-token-key-${tag}-0123456789abcdefghij`, STARBASE_PUBLIC_URL: 'https://base.example.org',
+      GOOGLE_TOKEN_KEY: `google-token-key-${tag}-0123456789abcdefghij`, BASE_PUBLIC_URL: 'https://base.example.org',
     });
     row = byKey(await list()).gmail;
     assert.deepEqual([row.state, row.detail], ['default', 'Off']);

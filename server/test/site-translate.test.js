@@ -23,7 +23,7 @@ import { presetFor } from '../lib/preset.js';
 
 // Imagine Surrey's own server (this file does not load the test helper):
 // its sample page has a Join form, whose words are its set-up's.
-process.env.STARBASE_BRAND = 'imagine-surrey';
+process.env.BASE_BRAND = 'imagine-surrey';
 
 // Every string the seeds hold.
 const seedStrings = async () => {
@@ -236,7 +236,7 @@ test('the Traditional dictionary loads only when Traditional is made, never at s
     registerHooks({ resolve(spec, ctx, next) { if (spec.includes('opencc')) console.log('LOADED ' + spec); return next(spec, ctx); } });
     await import(${JSON.stringify(new URL('../ext/site/index.js', import.meta.url).href)});
     console.log('IMPORTED');`;
-  const r = spawnSync(process.execPath, ['--input-type=module', '-e', probe], { encoding: 'utf8', env: { ...process.env, STARBASE_DATA: 'memory' }, timeout: 60000 });
+  const r = spawnSync(process.execPath, ['--input-type=module', '-e', probe], { encoding: 'utf8', env: { ...process.env, BASE_DATA: 'memory' }, timeout: 60000 });
   assert.match(r.stdout, /IMPORTED/, r.stderr.slice(0, 500));
   assert.doesNotMatch(r.stdout, /LOADED/, 'importing the website does not load the dictionary');
 });

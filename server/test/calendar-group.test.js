@@ -49,7 +49,7 @@ const feedOf = async (c) => {
 
 before(async () => {
   db = await freshDb();
-  delete process.env.STARBASE_PUBLIC_URL;
+  delete process.env.BASE_PUBLIC_URL;
   mgr = new Client();
   ws = (await mgr.signup({ workspaceName: `Group ${tag}`, email: `grp-mgr+${tag}@example.org`, jurisdiction: 'bc-municipal' })).json.workspace.id;
   ({ client: vol, id: volId } = await join('volunteer', 'Vik'));

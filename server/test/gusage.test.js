@@ -11,7 +11,7 @@ import {
 import { placesFor, _setPlacesLogoForTest } from '../lib/places.js';
 
 const env = { ...process.env };
-const KEYS = ['GOOGLE_PLACES_DAILY_MAX', 'GOOGLE_PLACES_PER_PERSON', 'GOOGLE_TILES_DAILY_MAX', 'STARBASE_TZ', 'ADDRESS_SUGGEST', 'GOOGLE_MAPS_SERVER_KEY'];
+const KEYS = ['GOOGLE_PLACES_DAILY_MAX', 'GOOGLE_PLACES_PER_PERSON', 'GOOGLE_TILES_DAILY_MAX', 'BASE_TZ', 'ADDRESS_SUGGEST', 'GOOGLE_MAPS_SERVER_KEY'];
 let db;
 let now = Date.parse('2026-11-13T19:00:00Z'); // 11 am in Surrey
 
@@ -43,7 +43,7 @@ test('the campaign’s day: midnight in its own time zone, either side, and acro
   assert.equal(secondsToMidnight(Date.parse('2026-11-14T06:59:00Z')), 60);
   // A zone that still changes its clocks: Toronto falls back on 1 Nov 2026,
   // so 31 Oct 23:00 (EDT, UTC-4) is 1 h from midnight, and that day lasts 25 h.
-  process.env.STARBASE_TZ = 'America/Toronto';
+  process.env.BASE_TZ = 'America/Toronto';
   assert.equal(secondsToMidnight(Date.parse('2026-11-01T03:00:00Z')), 3600);
   assert.equal(dayOf(Date.parse('2026-11-01T03:59:59Z')), '2026-10-31');
   assert.equal(dayOf(Date.parse('2026-11-01T04:00:00Z')), '2026-11-01');

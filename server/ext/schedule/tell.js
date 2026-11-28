@@ -448,7 +448,7 @@ export const weekState = async (db, ctx, day) => {
     people: new Set(bookings.map((b) => b.person_id)).size,
     shifts: new Set(bookings.map((b) => b.shift_id)).size,
     // What is connected, and whether this server sends in the background
-    // at all (STARBASE_JOBS=off: notices wait).
+    // at all (BASE_JOBS=off: notices wait).
     providers: { email: emailConfigured(), text: textConfigured() },
     jobs: jobRunnerOn(),
     quiet: quiet ? { now: quiet.now, opens: quiet.opens } : null,
