@@ -45,16 +45,16 @@ use up everyone's.
 1. **The server, for each client.** On the client's base.win service
    (Render: Environment), set
    - `BASE_PATH=/imaginesurrey`
-   - `STARBASE_PUBLIC_URL=https://base.win/imaginesurrey` (links in emails —
+   - `BASE_PUBLIC_URL=https://base.win/imaginesurrey` (links in emails —
      invites, unsubscribe, receipts — then use base.win)
    - `BASE_DOOR_KEY` — the door's key (step 2), the same on every client's
      server: 32 or more random characters (`openssl rand -base64 32`).
      While moving to a new key the server takes both, comma-separated
      (`new,old`): set that, then the door's to the new one, then the
      server's to the new one alone.
-   - `APP_HOSTS=starbase.imaginesurrey.ca` — the app's other addresses on
-     this server, comma-separated: here the one people used before
-     base.win. None of them can be made the website's domain (Website →
+   - `APP_HOSTS` — the app's other addresses on this server,
+     comma-separated: here the one people used before base.win, as it is
+     already set on the service. None of them can be made the website's domain (Website →
      Settings → Your own domain), so the app keeps answering there. Never
      list the website's own domain here.
 
