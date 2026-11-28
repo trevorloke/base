@@ -86,8 +86,12 @@
 .ws-person { font-size: 14px; }
 /* A house or a building: its address once, then a line per door (indented,
    its words in bold: "Main", "Basement suite", "Unit 201"), each with its
-   people; a building under floor headings. A building may run over pages. */
-.ws-door--building { break-inside: auto; page-break-inside: auto; }
+   people; a building under floor headings, a tbody per floor. A building may
+   run over pages, a floor only when it is longer than a page. */
+.ws-door--building { break-inside: avoid; page-break-inside: avoid; }
+.ws-unit { break-after: avoid; page-break-after: avoid; }
+/* On screen the floor line is just the floor; on paper a later floor names its building. */
+.ws-floor__where { display: none; }
 .ws-unit td { padding-top: var(--s-1); padding-left: var(--s-4); font-size: 15px; color: var(--ink); }
 .ws-unit.is-done td { color: var(--text-3); }
 .ws-door--house .ws-person, .ws-door--building .ws-person { padding-left: var(--s-5, 24px); }
@@ -120,6 +124,8 @@
   .qr-print .qr-wrap { border: 0; }
   .qr-print thead { display: table-header-group; }
   .qr-print tr, .qr-print .ws-door { break-inside: avoid; page-break-inside: avoid; }
+  .qr-print .ws-unit, .qr-print .ws-floor, .qr-print .ws-door__addr { break-after: avoid; page-break-after: avoid; }
+  .qr-print .ws-floor__where { display: inline; }
   /* Paper is always a table, even from a phone. */
   .qr-print .qr-table { display: table; font-size: 10.5pt; }
   .qr-print .qr-table thead { display: table-header-group; }

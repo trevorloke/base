@@ -658,6 +658,22 @@ if (want(6) && !BIG) {
     const t = txt.stdout.replace(/[ \t]+/g, ' ');
     check('6: the PDF (Letter): "10388 134 St" once, "Main", "Basement suite", "13600 104 Ave · Building · 24 units"', times(t, '10388 134 St') === 1 && /\bMain\b/.test(t) && /Basement suite/.test(t) && /13600 104 Ave · Building · 24 units/.test(t), t.slice(0, 200));
   } else check('6: pdftotext reads the PDF (needed to check its words)', false, txt.error?.message || txt.stderr);
+  // Short pages, so the mid-rise runs over several: a page it continues on names it (and its floor),
+  // and a unit's line never ends a page without its people.
+  const short = `${SHOTS}/06-walking-list-short.pdf`;
+  await D.page.emulateMedia({ media: 'print' });
+  await D.page.pdf({ path: short, width: '8.5in', height: '6in' });
+  await D.page.emulateMedia({ media: 'screen' });
+  const st = spawnSync('pdftotext', ['-layout', short, '-'], { encoding: 'utf8' });
+  if (st.status === 0) {
+    const pages = st.stdout.split('\f').map((pg) => pg.split('\n').map((l) => l.replace(/[ \t]+/g, ' ').trim()).filter(Boolean)).filter((pg) => pg.length);
+    const midPages = pages.filter((pg) => pg.some((l) => /^Unit [234]0\d\b/.test(l)));
+    const unnamed = midPages.filter((pg) => !pg.some((l) => l.includes('13600 104 Ave')));
+    const dangling = pages.filter((pg) => /^Unit \d+( Done| Try again)?$/.test(pg[pg.length - 1]) || /^Unit \d+( Done| Try again)?$/.test(pg[pg.length - 2] || '') && /^(Private|Page|\d+\/\d+)/.test(pg[pg.length - 1]));
+    check(`6: the mid-rise over ${midPages.length} short pages: each names "13600 104 Ave", no unit's line ends a page without its people`,
+      midPages.length >= 2 && unnamed.length === 0 && dangling.length === 0,
+      JSON.stringify({ pages: pages.length, mid: midPages.length, unnamed: unnamed.map((pg) => pg.slice(0, 4)), dangling: dangling.map((pg) => pg.slice(-2)) }));
+  } else check('6: pdftotext reads the short-page PDF', false, st.error?.message || st.stderr);
 }
 
 // ── Step 7: the profile and People search ──

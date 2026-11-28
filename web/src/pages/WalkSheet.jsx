@@ -144,28 +144,39 @@ function Sheet({ s, script, me }) {
     const keys = b.doors.map((d) => doorParts(d).unit);
     const floors = b.place === 'building' && floorsShown(keys);
     const units = d0.units || b.doors.length;
-    let floor;
-    const rows = [];
+    // A building on paper: one tbody per floor (or the whole building with
+    // no floors), kept on one page where it fits; the address line opens the
+    // first, and every later floor's line names the building on paper, so a
+    // page the building runs on to says which building and floor it is. A
+    // unit's line never ends a page without its people (quick.css).
+    const groups = [];
     b.doors.forEach((d, j) => {
-      if (floors && floorOf(keys[j]) !== floor) {
-        floor = floorOf(keys[j]);
-        rows.push(<tr key={`f${j}`} className="ws-floor"><td colSpan={cols}>{floorLabel(floor)}</td></tr>);
-      }
-      rows.push(
+      const f = floors ? floorOf(keys[j]) : null;
+      if (!groups.length || (floors && groups[groups.length - 1].floor !== f)) groups.push({ floor: f, rows: [] });
+      groups[groups.length - 1].rows.push(
         <tr key={`u${j}`} className={`ws-unit${d.state === 'done' ? ' is-done' : ''}`}>
           <td colSpan={cols}><b>{d.unit_words || unitWords(keys[j], b.place)}</b>{stateTag(d)}</td>
         </tr>,
         ...peopleRows(d),
       );
     });
-    body.push(
-      <tbody key={`d${i}`} className={`ws-door ws-door--${b.place}`}>
-        <tr className="ws-door__addr">
-          <td colSpan={cols}>{where}{b.place === 'building' ? ` · Building · ${fmt(units)} ${units === 1 ? 'unit' : 'units'}` : ''}</td>
-        </tr>
-        {rows}
-      </tbody>,
-    );
+    groups.forEach((g, gi) => {
+      body.push(
+        <tbody key={`d${i}:${gi}`} className={`ws-door ws-door--${b.place}${gi ? ' ws-door--more' : ''}`}>
+          {gi === 0 && (
+            <tr className="ws-door__addr">
+              <td colSpan={cols}>{where}{b.place === 'building' ? ` · Building · ${fmt(units)} ${units === 1 ? 'unit' : 'units'}` : ''}</td>
+            </tr>
+          )}
+          {floors && (
+            <tr className="ws-floor">
+              <td colSpan={cols}>{gi > 0 && <span className="ws-floor__where">{where} · </span>}{floorLabel(g.floor)}</td>
+            </tr>
+          )}
+          {g.rows}
+        </tbody>,
+      );
+    });
   });
   return (
     <div className="ws-sheet">
