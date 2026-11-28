@@ -7,14 +7,14 @@
 // reload, and the Calls card shows the phone script for the person called.
 // Measured at 390: no sideways scroll, nothing under 44px, one yellow.
 //
-//   STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4131 node server/index.js &
+//   BASE_BRAND=imagine-surrey BASE_OPEN_SIGNUP=1 BASE_DATA=memory PORT=4131 node server/index.js &
 //   BASE=http://127.0.0.1:4131 SHOTS=/tmp/scripts node e2e-scripts.mjs
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
 
 const BASE = process.env.BASE || 'http://localhost:3200';
 const ADMIN = `${BASE}/admin`;
-const SHOTS = process.env.SHOTS || '/tmp/starbase-scripts';
+const SHOTS = process.env.SHOTS || '/tmp/base-win-scripts';
 mkdirSync(SHOTS, { recursive: true });
 const results = [];
 const check = (name, ok, extra = '') => {

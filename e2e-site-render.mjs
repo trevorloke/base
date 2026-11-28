@@ -23,7 +23,7 @@
 // the Imagine Surrey home page against imaginesurrey.ca's design (navy hero,
 // red Donate, Montserrat, the red heading shadow, yellow band, deep-navy
 // footer). Screenshots of both skins, desktop and phone, go to SHOTS.
-// Last, the site as its own domain gets it (STARBASE_SITE_DOMAIN): the
+// Last, the site as its own domain gets it (BASE_SITE_DOMAIN): the
 // browser reaches campaign.example at this machine, so the request carries
 // that Host, and the page is drawn at the domain's root with the domain as
 // its address — canonical, og:url, og:image, links and forms on it.
@@ -39,10 +39,11 @@ import { ownAsset } from './server/ext/site/from-preset.js';
 import { imagineSurrey, baseSample, samplePost, sampleData } from './server/test/site-samples.js';
 import { checkTheme, contrast, mix, PAIRS, SKINS, lookOf, everyLook } from './shared/site/theme.js';
 import { buildGuide, publicGuide } from './server/ext/voteguide/read.js';
+import { bothNames } from './shared/old-names.js';
 
 // The renderer runs here as Imagine Surrey's own server does: its look is
 // there by name only under its brand (server/ext/site/from-preset.js).
-if (process.env.STARBASE_BRAND === undefined) process.env.STARBASE_BRAND = 'imagine-surrey';
+if (bothNames('BASE_BRAND').every((k) => process.env[k] === undefined)) process.env.BASE_BRAND = 'imagine-surrey';
 const PORT = Number(process.env.PORT) || 5150;
 const SHOTS = process.env.SHOTS || '/tmp/site-render';
 const ORIGIN = `http://127.0.0.1:${PORT}`;

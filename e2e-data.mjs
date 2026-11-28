@@ -31,7 +31,7 @@
 // Donations says how it stands: Loading… while its reads are out,
 // Unavailable — Try again when they failed.
 //
-//   STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4135 node server/index.js &
+//   BASE_BRAND=imagine-surrey BASE_OPEN_SIGNUP=1 BASE_DATA=memory PORT=4135 node server/index.js &
 //   BASE=http://127.0.0.1:4135 SHOTS=/tmp/data node e2e-data.mjs
 import { chromium } from 'playwright-core';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -41,7 +41,7 @@ import { deflateRawSync } from 'node:zlib';
 
 const BASE = process.env.BASE || 'http://localhost:3200';
 const ADMIN = `${BASE}/admin`;
-const SHOTS = process.env.SHOTS || '/tmp/starbase-data';
+const SHOTS = process.env.SHOTS || '/tmp/base-win-data';
 mkdirSync(SHOTS, { recursive: true });
 const results = [];
 const check = (name, ok, extra = '') => {
@@ -694,7 +694,7 @@ check('…and Vera’s voter number, in its own column', /voter_number/.test(csv
 await page.goto(`${ADMIN}/data`, { waitUntil: 'domcontentloaded' });
 await page.waitForSelector('a:has-text("Download everything")', { timeout: 8000 });
 const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 15000 }), page.click('a:has-text("Download everything")')]);
-check('Download everything: a starbase-export JSON file', /^starbase-export.*\.json$/.test(dl.suggestedFilename()), dl.suggestedFilename());
+check('Download everything: a base-win-export JSON file', /^base-win-export.*\.json$/.test(dl.suggestedFilename()), dl.suggestedFilename());
 check('no page errors', errors.length === 0, errors.join(' | '));
 
 await browser.close();

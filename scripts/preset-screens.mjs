@@ -15,10 +15,10 @@
 //   opened), rating-scale, membership-form, website-theme, field-to-list
 //   (Dwelling type and Campus), training.
 // Dates, times of day and ids are replaced by fixed words.
-// PRESET_SCREENS_BRAND= (empty) leaves STARBASE_BRAND unset.
+// PRESET_SCREENS_BRAND= (empty) leaves BASE_BRAND unset.
 //
 // The same screens for any other campaign (what a neutral one reads):
-//   PRESET_SCREENS_ENV='{"STARBASE_BRAND":"base","STARBASE_ORG_NAME":"Kamloops Forward","STARBASE_CITY":"Kamloops","STARBASE_GEO_BOUNDS":"50.6,-120.5|50.8,-120.2","STARBASE_CANDIDATES":"none"}' \
+//   PRESET_SCREENS_ENV='{"BASE_BRAND":"base","BASE_ORG_NAME":"Kamloops Forward","BASE_CITY":"Kamloops","BASE_GEO_BOUNDS":"50.6,-120.5|50.8,-120.2","BASE_CANDIDATES":"none"}' \
 //   PRESET_SCREENS_ONLY=today,map,rating-scale node scripts/preset-screens.mjs OUT_DIR
 // PRESET_SCREENS_ENV: settings laid over (a value of null takes one away).
 // PRESET_SCREENS_ONLY: only these screens.
@@ -26,6 +26,7 @@ import { chromium } from 'playwright-core';
 import { spawn } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { bothNames } from '../shared/old-names.js';
 
 const OUT = process.argv[2];
 if (!OUT) { console.error('usage: node scripts/preset-screens.mjs OUT_DIR [PORT]'); process.exit(2); }
@@ -36,12 +37,12 @@ mkdirSync(OUT, { recursive: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Imagine Surrey's production settings; no candidates, map area or province.
-const env = { ...process.env, PORT: String(PORT), STARBASE_DATA: 'memory', STARBASE_ENV: 'production',
-  STARBASE_ORG_NAME: 'Imagine Surrey', STARBASE_CITY: 'Surrey', STARBASE_JURISDICTION: 'bc-municipal', STARBASE_TZ: 'America/Vancouver',
-  STARBASE_SLATES: 'council:City council,school_board:School board', GEOCODE_ON_SAVE: 'off' };
+const env = { ...process.env, PORT: String(PORT), BASE_DATA: 'memory', BASE_ENV: 'production',
+  BASE_ORG_NAME: 'Imagine Surrey', BASE_CITY: 'Surrey', BASE_JURISDICTION: 'bc-municipal', BASE_TZ: 'America/Vancouver',
+  BASE_SLATES: 'council:City council,school_board:School board', GEOCODE_ON_SAVE: 'off' };
 const brand = process.env.PRESET_SCREENS_BRAND ?? 'imagine-surrey';
-if (brand) env.STARBASE_BRAND = brand; else delete env.STARBASE_BRAND;
-for (const k of ['STARBASE_CANDIDATES', 'STARBASE_GEO_BOUNDS', 'STARBASE_PROVINCE', 'STARBASE_PUBLIC_URL', 'STARBASE_OPEN_SIGNUP', 'NODE_ENV', 'RENDER', 'DATABASE_URL', 'BASE_PATH']) delete env[k];
+if (brand) env.BASE_BRAND = brand; else for (const k of bothNames('BASE_BRAND')) delete env[k];
+for (const k of ['BASE_CANDIDATES', 'BASE_GEO_BOUNDS', 'BASE_PROVINCE', 'BASE_PUBLIC_URL', 'BASE_OPEN_SIGNUP', 'NODE_ENV', 'RENDER', 'DATABASE_URL', 'BASE_PATH'].flatMap(bothNames)) delete env[k];
 for (const [k, v] of Object.entries(JSON.parse(process.env.PRESET_SCREENS_ENV || '{}'))) { if (v === null) delete env[k]; else env[k] = String(v); }
 delete env.PRESET_SCREENS_ENV;
 const ONLY = (process.env.PRESET_SCREENS_ONLY || '').split(',').map((x) => x.trim()).filter(Boolean);
@@ -111,7 +112,7 @@ try {
   // The first manager, as the sign-up screen does it.
   await page.goto(`${BASE}/signup`, { waitUntil: 'domcontentloaded' });
   await page.fill('#su-name', 'Pat Manager');
-  if (await page.locator('#su-org').count()) await page.fill('#su-org', env.STARBASE_ORG_NAME || 'Imagine Surrey');
+  if (await page.locator('#su-org').count()) await page.fill('#su-org', env.BASE_ORG_NAME || 'Imagine Surrey');
   await page.fill('#su-email', 'pat@example.test');
   await page.fill('#su-password', 'correct-horse-battery-9');
   await page.click('button[type="submit"]');

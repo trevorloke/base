@@ -27,14 +27,15 @@
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
 import { spawn } from 'node:child_process';
+import { bothNames } from './shared/old-names.js';
 
 // The fixtures here are Imagine Surrey's, so the server runs as its production
 // does (render.yaml sets this brand); a brand set by hand is left as set.
-if (process.env.STARBASE_BRAND === undefined) process.env.STARBASE_BRAND = 'imagine-surrey';
+if (bothNames('BASE_BRAND').every((k) => process.env[k] === undefined)) process.env.BASE_BRAND = 'imagine-surrey';
 
 const PORT = Number(process.env.PORT) || 5430;
 const BASE_PATH = (process.env.BASE_PATH || '').replace(/\/$/, '');
-const SHOTS = process.env.SHOTS || '/tmp/starbase-moved';
+const SHOTS = process.env.SHOTS || '/tmp/base-win-moved';
 mkdirSync(SHOTS, { recursive: true });
 const results = [];
 const check = (name, ok, extra = '') => {
@@ -45,13 +46,13 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const tag = Date.now().toString(36);
 
 const server = spawn(process.execPath, ['server/index.js'], {
-  env: { ...process.env, STARBASE_OPEN_SIGNUP: '1', STARBASE_DATA: 'memory', PORT: String(PORT), STARBASE_JOBS: 'off',
+  env: { ...process.env, BASE_OPEN_SIGNUP: '1', BASE_DATA: 'memory', PORT: String(PORT), BASE_JOBS: 'off',
     GEOCODER: 'off', GEOCODE_ON_SAVE: 'off', BASE_PATH },
   stdio: ['ignore', 'pipe', 'inherit'],
 });
 await new Promise((resolve, reject) => {
   const t = setTimeout(() => reject(new Error('server did not start')), 30000);
-  server.stdout.on('data', (b) => { if (/starbase on :/.test(String(b))) { clearTimeout(t); resolve(); } });
+  server.stdout.on('data', (b) => { if (/base\.win on :/.test(String(b))) { clearTimeout(t); resolve(); } });
   server.on('exit', (code) => reject(new Error(`server exited ${code}`)));
 });
 process.on('exit', () => { server.kill(); });

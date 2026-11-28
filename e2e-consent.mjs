@@ -19,6 +19,14 @@
 //   · a body the website refuses is counted apart, with the website's words.
 // Every number on screen is checked against what the stand-in holds; the
 // books verify.
+// Then the same both ways three more times, each on a fresh server, with the
+// settings under each spelling: both sides on the older names, both on the
+// new names, and base.win on the new names with the website on the older
+// ones. The older names come from the two tables (shared/old-names.js for
+// base.win, apps/web/src/lib/old-names.ts for the website), never typed out;
+// the stand-in reads its own settings the website's way (new name first, a
+// blank one counts as not set). Each run checks that every person ends
+// unsubscribed on both sides, with one row each.
 //
 //   npm run build  then  node e2e-consent.mjs   (PORT, SHOTS optional; the
 //   stand-in listens on PORT+1 and the test's controls on PORT+2)
@@ -26,6 +34,10 @@ import { chromium } from 'playwright-core';
 import { spawn } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { OLD_SETTINGS, bothNames } from './shared/old-names.js';
+
+// The website's own table of its older setting names (the website copy in apps/web).
+const { OLD_ENV } = await import('./apps/web/src/lib/old-names.ts');
 
 const PORT = Number(process.env.PORT) || 4990;
 const FAKE = PORT + 1;
@@ -33,7 +45,7 @@ const CONTROL = PORT + 2;
 const BASE = `http://127.0.0.1:${PORT}`;
 const SITE = `http://127.0.0.1:${FAKE}`;
 const ADMIN = `${BASE}/admin`;
-const SHOTS = process.env.SHOTS || '/tmp/starbase-consent';
+const SHOTS = process.env.SHOTS || '/tmp/base-win-consent';
 mkdirSync(SHOTS, { recursive: true });
 const SECRET = 'e2e-website-inbound-secret-0123456789';
 const TWILIO_TOKEN = 'e2e-twilio-token';
@@ -57,13 +69,23 @@ const { _resetPaceForTest } = await import(${href('ext/intake/outbound.js')});
 const { twilioSignature } = await import(${href('ext/texting/twilio.js')});
 const { enqueueJob } = await import(${href('lib/jobs.js')});
 const { getDb } = await import(${href('db/client.js')});
-const site = await startFakeWebsite({ port: ${FAKE}, key: ${JSON.stringify(SECRET)} });
+// The website's own settings, read as the website reads them (apps/web/src/lib/env.ts):
+// the new name, else the older one; a blank one counts as not set.
+const OLDER = ${JSON.stringify(OLD_ENV)};
+let siteEnv = JSON.parse(process.env.E2E_SITE || '{}');
+const siteSetting = (name) => siteEnv[name]?.trim() || siteEnv[OLDER[name]]?.trim() || undefined;
+const site = await startFakeWebsite({ port: ${FAKE}, key: siteSetting('BASE_WIN_INBOUND_KEY') ?? null });
 createServer(async (req, res) => {
   let body = '';
   for await (const c of req) body += c;
   const j = body ? JSON.parse(body) : {};
   if (req.url === '/set') {
     for (const [k, v] of Object.entries(j.env || {})) { if (v === null) delete process.env[k]; else process.env[k] = v; }
+    if ('site' in j) {
+      siteEnv = { ...siteEnv, ...j.site };
+      for (const [k, v] of Object.entries(j.site)) if (v === null) delete siteEnv[k];
+      site.setKey(siteSetting('BASE_WIN_INBOUND_KEY') ?? null);
+    }
     if ('key' in j) site.setKey(j.key);
     if ('down' in j) site.down(j.down);
     if ('fail' in j) site.fail(j.fail);
@@ -71,7 +93,8 @@ createServer(async (req, res) => {
   }
   // A no made on the website itself waits in its outbox; Send now tries them all, as the website does.
   if (req.url === '/withdraw') { site.withdraw({ ...j, at: j.at ? new Date(j.at) : undefined }); return res.end('ok'); }
-  if (req.url === '/sendnow') return res.end(JSON.stringify(await site.sendNow({ url: ${JSON.stringify(BASE)}, key: j.key })));
+  // The website sends to the address and with the key its own settings hold.
+  if (req.url === '/sendnow') return res.end(JSON.stringify(await site.sendNow({ url: siteSetting('BASE_WIN_URL'), key: siteSetting('BASE_WIN_KEY') })));
   // A job waiting its turn is tried now.
   if (req.url === '/hurry') {
     _resetPaceForTest();
@@ -108,25 +131,38 @@ createServer(async (req, res) => {
 }).listen(${CONTROL}, '127.0.0.1');
 `);
 
-const env = { ...process.env, STARBASE_OPEN_SIGNUP: '1', STARBASE_DATA: 'memory', PORT: String(PORT), STARBASE_JOBS_EVERY_MS: '400', TWILIO_AUTH_TOKEN: TWILIO_TOKEN };
-for (const k of ['STARBASE_WEBSITE_URL', 'STARBASE_WEBSITE_KEY', 'STARBASE_PUBLIC_URL', 'STARBASE_OWN_URL', 'RENDER_EXTERNAL_URL', 'STARBASE_ENV', 'STARBASE_JOBS',
-  'MAILCHIMP_API_KEY', 'MAIL_PROVIDER', 'RESEND_API_KEY', 'SENDGRID_API_KEY', 'MAIL_FROM', 'TWILIO_ACCOUNT_SID', 'TWILIO_FROM']) delete env[k];
-const server = spawn(process.execPath, ['--import', pathToFileURL(STUB).href, 'server/index.js'], {
-  cwd: fileURLToPath(new URL('.', import.meta.url)), env, stdio: ['ignore', 'pipe', 'pipe'],
-});
+const env = { ...process.env, BASE_OPEN_SIGNUP: '1', BASE_DATA: 'memory', PORT: String(PORT), BASE_JOBS_EVERY_MS: '400', TWILIO_AUTH_TOKEN: TWILIO_TOKEN,
+  E2E_SITE: JSON.stringify({ BASE_WIN_INBOUND_KEY: SECRET }) };
+for (const k of ['BASE_WEBSITE_URL', 'BASE_WEBSITE_KEY', 'BASE_PUBLIC_URL', 'BASE_OWN_URL', 'RENDER_EXTERNAL_URL', 'BASE_ENV', 'BASE_JOBS',
+  'MAILCHIMP_API_KEY', 'MAIL_PROVIDER', 'RESEND_API_KEY', 'SENDGRID_API_KEY', 'MAIL_FROM', 'TWILIO_ACCOUNT_SID', 'TWILIO_FROM'].flatMap(bothNames)) delete env[k];
+let server = null;
 let serverLog = '';
-process.on('exit', () => { try { server.kill('SIGTERM'); } catch { /* gone */ } });
-server.stdout.on('data', (d) => { serverLog += d; });
-server.stderr.on('data', (d) => { serverLog += d; });
-for (let i = 0; i < 80; i += 1) {
-  if (await fetch(`${BASE}/api/health`).then((r) => r.ok).catch(() => false)) break;
-  await sleep(250);
-}
+process.on('exit', () => { try { server?.kill('SIGTERM'); } catch { /* gone */ } });
+// base.win with the stand-in website loaded into it; → once it answers.
+const startDesk = async (e) => {
+  serverLog = '';
+  server = spawn(process.execPath, ['--import', pathToFileURL(STUB).href, 'server/index.js'], {
+    cwd: fileURLToPath(new URL('.', import.meta.url)), env: e, stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  server.stdout.on('data', (d) => { serverLog += d; });
+  server.stderr.on('data', (d) => { serverLog += d; });
+  for (let i = 0; i < 80; i += 1) {
+    if (await fetch(`${BASE}/api/health`).then((r) => r.ok).catch(() => false)) return true;
+    await sleep(250);
+  }
+  return false;
+};
+const stopDesk = () => new Promise((resolve) => {
+  if (!server || server.exitCode !== null) { resolve(); return; }
+  server.once('exit', () => resolve());
+  server.kill('SIGTERM');
+});
+await startDesk(env);
 const post = (path, body) => fetch(`http://127.0.0.1:${CONTROL}${path}`, { method: 'POST', body: JSON.stringify(body || {}) }).then((r) => r.text());
 const set = (o) => post('/set', o);
 const state = async () => JSON.parse(await post('/state'));
 const hurry = () => post('/hurry');
-const websiteOn = { STARBASE_WEBSITE_URL: SITE, STARBASE_WEBSITE_KEY: SECRET, STARBASE_PUBLIC_URL: BASE };
+const websiteOn = { BASE_WEBSITE_URL: SITE, BASE_WEBSITE_KEY: SECRET, BASE_PUBLIC_URL: BASE };
 
 const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--no-sandbox', '--disable-dev-shm-usage'] });
 const errors = [];
@@ -213,7 +249,7 @@ for (const [size, p] of SIZES) {
   const t = await words(r);
   const m = await measure(r);
   check(`not set (${size}): "Not set up", both settings named, why it matters, no buttons of its own`,
-    /Not set up/.test(t) && /STARBASE_WEBSITE_URL · STARBASE_WEBSITE_KEY/.test(t) && /Not set: an unsubscribe here stays here\. The website’s own still come in with a website key\./.test(t)
+    /Not set up/.test(t) && /BASE_WEBSITE_URL · BASE_WEBSITE_KEY/.test(t) && /Not set: an unsubscribe here stays here\. The website’s own still come in with a website key\./.test(t)
       && (await r.locator('.mcp').count()) === 0 && fits(m), `${t} · ${JSON.stringify(m)}`);
   await shot(r, `01-not-set-${size}`);
 }
@@ -225,6 +261,8 @@ await page.click('.sv2-make button[type="submit"]');
 await page.locator('.sv2-fresh code').waitFor({ timeout: 8000 });
 const KEY = (await page.locator('.sv2-fresh code').innerText()).trim();
 check('a website key is made and shown once', /^sbk_[A-Za-z0-9]{40}$/.test(KEY));
+// The website is given base.win's address and this key, under its new names.
+await set({ site: { BASE_WIN_URL: BASE, BASE_WIN_KEY: KEY } });
 
 // ── The two settings are set ──
 await set({ env: websiteOn });
@@ -250,7 +288,7 @@ for (const [size, p] of SIZES) {
   const said = await pressCheck(p, size === '390');
   const t = await words(r);
   check(`Check with another key on the website (${size}): says which setting it must equal; the badge says "not working"`,
-    said === '✕ The website refused the key: it must equal its STARBASE_INBOUND_KEY' && /Set up · not working/.test(t) && !t.includes(SECRET), `${said} · ${t}`);
+    said === '✕ The website refused the key: it must equal the website’s inbound key setting (the one that equals this server’s website key)' && /Set up · not working/.test(t) && !t.includes(SECRET), `${said} · ${t}`);
   await shot(r, `04-check-wrong-key-${size}`);
 }
 await set({ key: SECRET });
@@ -282,7 +320,7 @@ const before = (await state()).calls.length;
 await post('/withdraw', { email: addr('Ana'), channel: 'email', reason: 'unsubscribe', at: '2026-09-01T17:00:00.000Z' });
 await post('/withdraw', { email: 'nobody-yet@example.org', channel: 'email', reason: 'preference', at: '2026-09-14T03:20:00.000Z' });
 await post('/withdraw', { phone: '+16045550141', channel: 'sms', reason: 'stop', at: '2026-10-02T21:45:00.000Z' });
-const answers = JSON.parse(await post('/sendnow', { key: KEY }));
+const answers = JSON.parse(await post('/sendnow'));
 check('the backlog: all three are taken (the website reads each answer as ok)', answers.length === 3 && answers.every((a) => a.kind === 'ok' && a.replayed === false), JSON.stringify(answers));
 const subs = (await api('/subscriptions')).json.subscriptions;
 const ben = (await api(`/persons/${people.Ben.id}`)).json.person;
@@ -296,7 +334,7 @@ check('nothing comes back to the website for what it said itself', st.calls.leng
   JSON.stringify([st.calls.length - before, st.ledger, st.jobs.length]));
 check('each is on the log, with what happened — and no address', st.said.length === 3 && st.said.map((x) => x.outcome).join() === 'applied,tombstone,applied'
   && !JSON.stringify(st.said).includes('example.org'), JSON.stringify(st.said));
-const again = JSON.parse(await post('/sendnow', { key: KEY }));
+const again = JSON.parse(await post('/sendnow'));
 check('sent rows are not sent again', again.length === 0 && (await state()).outbox.every((r) => r.status === 'sent'));
 
 // ── (b) A click on a newsletter's unsubscribe link, and a text STOP ──
@@ -358,11 +396,11 @@ for (const [size, p] of SIZES) {
 }
 
 // ── Taken away ──
-await set({ env: { STARBASE_WEBSITE_KEY: null } });
+await set({ env: { BASE_WEBSITE_KEY: null } });
 {
   const r = await openServices(page);
   const t = await words(r);
-  check('one setting taken away: "Not set up", which one is missing, no buttons', /Not set up/.test(t) && /Only one of the two is set: STARBASE_WEBSITE_KEY is missing/.test(t) && (await r.locator('.mcp').count()) === 0, t);
+  check('one setting taken away: "Not set up", which one is missing, no buttons', /Not set up/.test(t) && /Only one of the two is set: BASE_WEBSITE_KEY is missing/.test(t) && (await r.locator('.mcp').count()) === 0, t);
   await shot(r, '09-half-set-1440');
 }
 const led = (await state()).ledger.length;
@@ -372,10 +410,95 @@ check('and nothing is queued or sent', (await state()).ledger.length === led && 
 
 check('the key is in no answer the screens read', !JSON.stringify([(await api('/connections')).json, (await api('/intake/website')).json, (await api('/events?since=0&limit=1000')).json]).includes(SECRET));
 check('the books verify', (await api('/audit/verify')).json?.ok === true);
+
+// ── The same both ways under each spelling of the settings ──
+// Each setting under its new name, or its older one (from the tables, never typed).
+const deskNamed = (o, older) => Object.fromEntries(Object.entries(o).map(([k, v]) => [older ? OLD_SETTINGS[k] : k, v]));
+const siteNamed = (o, older) => Object.fromEntries(Object.entries(o).map(([k, v]) => [older ? OLD_ENV[k] : k, v]));
+const RUN_SETTINGS = { BASE_OPEN_SIGNUP: '1', BASE_DATA: 'memory', BASE_JOBS_EVERY_MS: '400', BASE_WEBSITE_URL: SITE, BASE_WEBSITE_KEY: SECRET, BASE_PUBLIC_URL: BASE };
+const RUNS = [
+  ['both sides on the older names', true, true],
+  ['both sides on the new names', false, false],
+  ['base.win on the new names, the website on the older ones', false, true],
+];
+for (const [n, [label, deskOld, siteOld]] of RUNS.entries()) {
+  await stopDesk();
+  const runEnv = { ...env };
+  for (const k of [...Object.keys(RUN_SETTINGS), 'BASE_JOBS'].flatMap(bothNames)) delete runEnv[k];
+  Object.assign(runEnv, deskNamed(RUN_SETTINGS, deskOld), { E2E_SITE: JSON.stringify(siteNamed({ BASE_WIN_INBOUND_KEY: SECRET }, siteOld)) });
+  check(`${label}: base.win starts`, await startDesk(runEnv), serverLog.slice(-300));
+  const older = Object.keys(RUN_SETTINGS).map((k) => `the setting ${OLD_SETTINGS[k]} still works; rename it to ${k} in Render.`);
+  check(`${label}: the start-up log ${deskOld ? 'names each older setting and its new name' : 'names no older setting'}, and never a value`,
+    older.every((line) => serverLog.includes(line) === deskOld) && !serverLog.includes(SECRET), serverLog.slice(0, 600));
+
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, timezoneId: 'America/Vancouver' });
+  const pg = await ctx.newPage();
+  pg.on('pageerror', (e) => errors.push(`${label}: ${e.message}`));
+  await pg.goto(`${BASE}/signup`);
+  await pg.fill('#su-name', 'Rosa Example');
+  if (await pg.locator('#su-org').count()) await pg.fill('#su-org', 'Sample Campaign');
+  await pg.fill('#su-email', `rosa.${n}@consent.example.org`);
+  await pg.fill('#su-password', 'sample-campaign-2026');
+  await pg.click('button[type="submit"]');
+  await pg.waitForURL(/\/admin\/?$/, { timeout: 15000 });
+  const runApi = async (path, body) => {
+    const r = body === undefined ? await pg.request.get(`${BASE}/api${path}`) : await pg.request.post(`${BASE}/api${path}`, { data: body });
+    return { status: r.status(), json: await r.json().catch(() => null) };
+  };
+  const runAct = (name, input) => runApi(`/actions/${name}`, input);
+  const made = (await runAct('intake.key.create', { name: 'Website' })).json;
+  await set({ site: siteNamed({ BASE_WIN_URL: BASE, BASE_WIN_KEY: made?.key }, siteOld) });
+
+  // Four people on the newsletter; Ana and Ben say no in base.win, Cal and Dee on the website.
+  const who = {};
+  for (const [i, w] of ['Ana', 'Ben', 'Cal', 'Dee'].entries()) {
+    const email = `${w.toLowerCase()}.${n}@example.org`;
+    const digits = `604555${String(200 + n * 10 + i).padStart(4, '0')}`;
+    const person = (await runAct('person.create', { name: `${w} Example`, email, phone: digits, tags: ['member'] })).json?.person;
+    await runAct('subscription.add', { email, name: `${w} Example` });
+    who[w] = { id: person?.id, email, phone: `+1${digits}` };
+  }
+  const subsNow = async () => (await runApi('/subscriptions')).json?.subscriptions || [];
+  const subOf = async (w) => (await subsNow()).find((s) => s.email === who[w].email);
+  const startCalls = (await state()).calls.length;
+
+  // base.win → the website: Ana unsubscribes here, Ben texts STOP.
+  await runAct('subscription.remove', { id: (await subOf('Ana'))?.id });
+  const stop = await post('/text', { from: who.Ben.phone, body: 'STOP' });
+  await until(async () => { await hurry(); return (await state()).ledger.length >= 2; }, 15000);
+
+  // The website → base.win: Cal and Dee say no on the website, and it sends them.
+  await post('/withdraw', { email: who.Cal.email, channel: 'email', reason: 'unsubscribe' });
+  await post('/withdraw', { phone: who.Dee.phone, channel: 'sms', reason: 'stop' });
+  const sent = JSON.parse(await post('/sendnow'));
+  await hurry(); await sleep(1500);
+
+  const s = await state();
+  const rowsFor = (w) => s.ledger.filter((r) => (r.email && r.email === who[w].email) || (r.phone && r.phone === who[w].phone));
+  const subs = await subsNow();
+  const tagsOf = async (w) => (await runApi(`/persons/${who[w].id}`)).json?.person?.tags || [];
+  const offHere = subs.find((x) => x.email === who.Ana.email)?.status === 'unsubscribed' && subs.find((x) => x.email === who.Cal.email)?.status === 'unsubscribed'
+    && (await tagsOf('Ben')).includes('do-not-text') && (await tagsOf('Dee')).includes('do-not-text');
+  const offThere = rowsFor('Ana').length === 1 && rowsFor('Ben').length === 1
+    && s.outbox.length === 2 && s.outbox.every((r) => r.status === 'sent');
+  const consentCalls = s.calls.slice(startCalls).filter((c) => c.raw !== '{}');
+  check(`${label}: base.win → website: Ana's email and Ben's STOP each reach the website once, with the website's key`,
+    stop === '200' && rowsFor('Ana').length === 1 && rowsFor('Ben').length === 1 && consentCalls.length >= 2 && consentCalls.every((c) => c.auth === `Bearer ${SECRET}`),
+    JSON.stringify([stop, s.ledger, consentCalls.map((c) => c.auth === `Bearer ${SECRET}`)]));
+  check(`${label}: website → base.win: Cal's email and Dee's number are taken with the website key it holds`,
+    /^sbk_/.test(made?.key || '') && sent.length === 2 && sent.every((a) => a.kind === 'ok' && a.replayed === false), JSON.stringify(sent));
+  check(`${label}: every person ends unsubscribed on both sides`, offHere && offThere,
+    JSON.stringify([subs.map((x) => [x.email, x.status]), s.ledger.map((r) => r.email || r.phone), s.outbox.map((r) => r.status)]));
+  check(`${label}: one row each, and nothing is sent back`,
+    s.ledger.length === 2 && rowsFor('Cal').length === 0 && rowsFor('Dee').length === 0 && s.said.length === 2,
+    JSON.stringify([s.ledger.length, s.said.length]));
+  await ctx.close();
+}
+
 check('no page errors', errors.length === 0, errors.join(' | '));
 
 await browser.close();
-server.kill('SIGTERM');
+await stopDesk();
 const fails = results.filter((r) => !r).length;
 console.log(`\n${results.length - fails}/${results.length} checks passed`);
 if (fails) console.log(serverLog.split('\n').slice(-15).join('\n'));

@@ -5,7 +5,7 @@
 // sees its materials in order, marks it done, and the course reads
 // "1 of 1 module done". Measured at 390.
 //
-//   STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4134 node server/index.js &
+//   BASE_BRAND=imagine-surrey BASE_OPEN_SIGNUP=1 BASE_DATA=memory PORT=4134 node server/index.js &
 //   BASE=http://127.0.0.1:4134 SHOTS=/tmp/imagineu node e2e-imagineu.mjs
 import { chromium } from 'playwright-core';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -14,7 +14,7 @@ import { join } from 'node:path';
 
 const BASE = process.env.BASE || 'http://localhost:3200';
 const ADMIN = `${BASE}/admin`;
-const SHOTS = process.env.SHOTS || '/tmp/starbase-imagineu';
+const SHOTS = process.env.SHOTS || '/tmp/base-win-imagineu';
 mkdirSync(SHOTS, { recursive: true });
 const results = [];
 const check = (name, ok, extra = '') => {

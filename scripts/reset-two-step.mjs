@@ -7,7 +7,7 @@
 //   node scripts/reset-two-step.mjs someone@example.org
 //
 // On Render: the service → Shell. It uses the same database settings as the
-// server (DATABASE_URL, or STARBASE_DATA).
+// server (DATABASE_URL, or BASE_DATA).
 import { getDb } from '../server/db/client.js';
 import { runAction } from '../server/lib/events.js';
 import { resetFromServer } from '../server/lib/twostep.js';

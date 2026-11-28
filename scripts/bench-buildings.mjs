@@ -9,12 +9,14 @@
 //   a walk list over a turf with three towers       no more than 10% slower
 //
 //   node scripts/bench-buildings.mjs <BASE tree> [people]
-// BASE must have node_modules/@starbase pointing at its own folders (see
+// BASE must have its own node_modules, with the workspace packages linked to
+// its own folders (see
 // TESTING.md). Nothing outside this machine is touched.
 import { spawn } from 'node:child_process';
 import { writeFileSync, readFileSync, mkdtempSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
+import { bothNames } from '../shared/old-names.js';
 
 const PORT = 5522;
 const RUNS = 15;
@@ -26,9 +28,10 @@ const fmt = (xs) => `median ${percentile(xs, 50).toFixed(0)} ms · p95 ${percent
 
 // ── A child: the app of one tree against the shared database ──
 const appOf = async (tree) => {
-  process.env.STARBASE_OPEN_SIGNUP = '1';
+  // Both names: the tree before reads the older ones, this tree the new ones.
+  for (const k of bothNames('BASE_OPEN_SIGNUP')) process.env[k] = '1';
   process.env.GEOCODE_ON_SAVE = 'off';
-  process.env.STARBASE_MAP_ALL = '20';
+  for (const k of bothNames('BASE_MAP_ALL')) process.env[k] = '20';
   const { app } = await import(join(tree, 'server/index.js'));
   const { getDb } = await import(join(tree, 'server/db/client.js'));
   let cookie = '';

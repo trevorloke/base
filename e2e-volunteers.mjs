@@ -32,13 +32,13 @@
 // stacks, nothing scrolls sideways, and the tap path works. Screens are
 // measured (≤1 yellow, 48px targets on the phone).
 //
-//   STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4511 node server/index.js &
+//   BASE_BRAND=imagine-surrey BASE_OPEN_SIGNUP=1 BASE_DATA=memory PORT=4511 node server/index.js &
 //   BASE=http://127.0.0.1:4511 SHOTS=/tmp/volunteers node e2e-volunteers.mjs
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
 
 const BASE = process.env.BASE || 'http://localhost:3200';
-const SHOTS = process.env.SHOTS || '/tmp/starbase-volunteers';
+const SHOTS = process.env.SHOTS || '/tmp/base-win-volunteers';
 mkdirSync(SHOTS, { recursive: true });
 const results = [];
 const check = (name, ok, extra = '') => {

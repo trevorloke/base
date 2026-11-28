@@ -21,7 +21,10 @@ import { spawn } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { bothNames } from '../shared/old-names.js';
 
+// Each setting under every name it has had.
+const underBoth = (o) => Object.fromEntries(Object.entries(o).flatMap(([k, v]) => bothNames(k).map((n) => [n, v])));
 const ROOT = process.env.ROOT || join(dirname(fileURLToPath(import.meta.url)), '..');
 const WHEN = process.env.WHEN === 'before' ? 'before' : 'after';
 // The checkout's own catalogue and set-up, so each side seeds as it would.
@@ -88,7 +91,8 @@ async function startServer(brand) {
   serverLog = '';
   server = spawn(process.execPath, ['server/index.js'], {
     cwd: ROOT,
-    env: { ...process.env, PORT: String(PORT), STARBASE_OPEN_SIGNUP: '1', STARBASE_DATA: 'memory', STARBASE_BRAND: brand },
+    // Both names: a checkout from before the rename reads only the older ones.
+    env: { ...process.env, PORT: String(PORT), ...underBoth({ BASE_OPEN_SIGNUP: '1', BASE_DATA: 'memory', BASE_BRAND: brand }) },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   server.stdout.on('data', (d) => { serverLog += d; });

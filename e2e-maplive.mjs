@@ -16,7 +16,7 @@
 //   3. a key, CARTO answering streets: Clean draws, keyed, nothing said, the
 //      check's picture is a street tile; at most two probe asks to CARTO;
 //   4. a probe that can't run (no CORS header): no verdict, no false alarm;
-//   5. Google down (:5413), and with STARBASE_TILE_CLEAN=off (:5414): the
+//   5. Google down (:5413), and with BASE_TILE_CLEAN=off (:5414): the
 //      free map is OpenStreetMap, said as GMP says it; no probe of /tiles/;
 //   10. under BASE_PATH (:5412): step 1, and the check's picture loads.
 // Stage 2 (MAP decisions 9–13):
@@ -48,11 +48,14 @@ import { mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { bothNames } from './shared/old-names.js';
 
 // The fixtures here are Imagine Surrey's, so the server runs as its production
 // does (render.yaml sets this brand); a brand set by hand is left as set.
-if (process.env.STARBASE_BRAND === undefined) process.env.STARBASE_BRAND = 'imagine-surrey';
+if (bothNames('BASE_BRAND').every((k) => process.env[k] === undefined)) process.env.BASE_BRAND = 'imagine-surrey';
 
+// A setting left blank under both its names (an older name in the shell would be read otherwise).
+const blank = (...names) => Object.fromEntries(names.flatMap(bothNames).map((k) => [k, '']));
 const SHOTS = process.env.SHOTS || join(tmpdir(), 'basewin-maplive-shots');
 mkdirSync(SHOTS, { recursive: true });
 const ONLY = new Set((process.env.ONLY || '').split(',').filter(Boolean));
@@ -83,12 +86,12 @@ const GOOGLE_URL = `http://127.0.0.1:${standInGoogle.address().port}/v1`;
 const start = (port, env) => new Promise((resolve, reject) => {
   const p = spawn(process.execPath, ['server/index.js'], {
     cwd: fileURLToPath(new URL('.', import.meta.url)),
-    env: { ...process.env, STARBASE_OPEN_SIGNUP: '1', STARBASE_DATA: 'memory', PORT: String(port), GEOCODE_ON_SAVE: 'off', GEOCODER: 'off', STARBASE_TILE_CARTO_KEY: '', STARBASE_TILE_CLEAN: '', GOOGLE_MAPS_SERVER_KEY: '', GOOGLE_MAPS_TILES: '', ...env },
+    env: { ...process.env, BASE_OPEN_SIGNUP: '1', BASE_DATA: 'memory', PORT: String(port), GEOCODE_ON_SAVE: 'off', GEOCODER: 'off', ...blank('BASE_TILE_CARTO_KEY', 'BASE_TILE_CLEAN'), GOOGLE_MAPS_SERVER_KEY: '', GOOGLE_MAPS_TILES: '', ...env },
     stdio: ['ignore', 'pipe', 'inherit'],
   });
   procs.push(p);
   const t = setTimeout(() => reject(new Error(`server :${port} did not start`)), 30000);
-  p.stdout.on('data', (b) => { if (/starbase on :/.test(String(b))) { clearTimeout(t); resolve(`http://127.0.0.1:${port}`); } });
+  p.stdout.on('data', (b) => { if (/base\.win on :/.test(String(b))) { clearTimeout(t); resolve(`http://127.0.0.1:${port}`); } });
   p.on('exit', (code) => { clearTimeout(t); reject(new Error(`server :${port} exited ${code}`)); });
 });
 
@@ -187,7 +190,7 @@ const state = (pg) => pg.evaluate(() => {
     why: Boolean(document.querySelector('.map-tilenote__why')),
     hosts: [...new Set(imgs.map((i) => { try { return new URL(i.src).host + (new URL(i.src).search.includes('key=') ? '+key' : ''); } catch { return i.src.split('?')[0]; } }))],
     loaded: imgs.filter((i) => i.classList.contains('leaflet-tile-loaded') && i.naturalWidth > 0).length,
-    pick: localStorage.getItem('starbase:map:view'),
+    pick: localStorage.getItem('base-win:map:view'),
   };
 }).catch(() => ({}));
 const until = async (pg, fn, ms = 12000) => {
@@ -205,7 +208,7 @@ const openMap = async (ctx, url, role, pick, net = null) => {
   const pg = await ctx.newPage();
   pg.on('pageerror', (e) => errors.push(`[${role}] ${e.message}`));
   await pg.goto(url, { waitUntil: 'domcontentloaded' });
-  await pg.evaluate((v) => { try { if (v === undefined) return; if (v) localStorage.setItem('starbase:map:view', v); else localStorage.removeItem('starbase:map:view'); } catch {} }, pick);
+  await pg.evaluate((v) => { try { if (v === undefined) return; if (v) localStorage.setItem('base-win:map:view', v); else localStorage.removeItem('base-win:map:view'); } catch {} }, pick);
   await sleep(600);
   if (net) { await sleep(2500); net.carto.length = 0; net.osm.length = 0; } // count one page life: the second
   await pg.reload({ waitUntil: 'domcontentloaded' });
@@ -269,7 +272,7 @@ try {
 
   // ── 2–4. With the campaign's key (:5411) ──
   if (want('notice') || want('good') || want('nocors')) {
-    const camp = await campaign(await start(5411, { STARBASE_TILE_CARTO_KEY: 'test-key' }));
+    const camp = await campaign(await start(5411, { BASE_TILE_CARTO_KEY: 'test-key' }));
     if (want('notice')) {
       // 2. CARTO sends its notice.
       for (const [role, opts, size] of [['manager', DESK, 1440], ['staff', DESK, 1440], ['volunteer', PHONE, 390], ['manager', PHONE, 390]]) {
@@ -312,7 +315,7 @@ try {
           const pic = await pictureOf(wp);
           await wp.screenshot({ path: `${SHOTS}/2-check-notice-manager-1440.png` });
           check('Why?: the Map check’s top line is “Clean · CARTO — sends a notice, not streets”, with the CARTO note',
-            rows[0]?.key === 'tiles' && rows[0].warn && /Clean · CARTO — sends a notice, not streets/.test(rows[0].text) && /CARTO’s free map needs a key now: set STARBASE_TILE_CARTO_KEY in Render, or STARBASE_TILE_CLEAN=off/.test(rows[0].text),
+            rows[0]?.key === 'tiles' && rows[0].warn && /Clean · CARTO — sends a notice, not streets/.test(rows[0].text) && /CARTO’s free map needs a key now: set the CARTO key setting \(BASE_TILE_CARTO_KEY\) in Render, or turn the Clean look off \(BASE_TILE_CLEAN=off\)/.test(rows[0].text),
             JSON.stringify(rows.slice(0, 3)));
           check('…and under it the picture this phone got: the notice (256 px, from CARTO, keyed)',
             pic && pic.w === 256 && pic.h === 256 && /basemaps\.cartocdn\.com\/.*key=test-key/.test(pic.src) && /What this phone gets for the middle of the map:/.test(rows[0].text),
@@ -376,7 +379,7 @@ try {
 
   // ── 5. Google as the map, refusing: the free map is OpenStreetMap ──
   if (want('google')) {
-    for (const [port, label, env] of [[5413, 'no key', {}], [5414, 'STARBASE_TILE_CLEAN=off', { STARBASE_TILE_CLEAN: 'off', STARBASE_TILE_CARTO_KEY: 'test-key' }]]) {
+    for (const [port, label, env] of [[5413, 'no key', {}], [5414, 'BASE_TILE_CLEAN=off', { BASE_TILE_CLEAN: 'off', BASE_TILE_CARTO_KEY: 'test-key' }]]) {
       const base = await start(port, { GOOGLE_MAPS_TILES: '1', GOOGLE_MAPS_SERVER_KEY: 'e2e-not-a-key', GOOGLE_MAPS_TILES_URL: GOOGLE_URL, ...env });
       const camp = await campaign(base);
       const { ctx, net } = await camp.as('manager', DESK, 'notice');

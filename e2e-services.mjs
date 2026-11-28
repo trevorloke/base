@@ -16,24 +16,25 @@
 import { chromium } from 'playwright-core';
 import { spawn } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
+import { bothNames } from './shared/old-names.js';
 
 // The fixtures here are Imagine Surrey's, so the server runs as its production
 // does (render.yaml sets this brand); a brand set by hand is left as set.
-if (process.env.STARBASE_BRAND === undefined) process.env.STARBASE_BRAND = 'imagine-surrey';
+if (bothNames('BASE_BRAND').every((k) => process.env[k] === undefined)) process.env.BASE_BRAND = 'imagine-surrey';
 
 const PORT = Number(process.env.PORT) || 4121;
-const SHOTS = process.env.SHOTS || '/tmp/starbase-services';
+const SHOTS = process.env.SHOTS || '/tmp/base-win-services';
 mkdirSync(SHOTS, { recursive: true });
 let server = null;
 let BASE = process.env.BASE;
 const ADMIN = { toString() { return `${BASE}/admin`; } };
 if (!BASE) {
-  const env = { ...process.env, STARBASE_OPEN_SIGNUP: '1', STARBASE_DATA: 'memory', PORT: String(PORT), STARBASE_JOBS: 'off' };
-  for (const k of ['RESEND_API_KEY', 'MAIL_FROM', 'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM', 'STARBASE_PUBLIC_URL', 'GOOGLE_MAPS_TILES', 'GOOGLE_MAPS_SERVER_KEY', 'ADDRESS_SUGGEST', 'GEOCODER', 'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'CALLHUB_API_KEY', 'CALLHUB_API_BASE', 'MAIL_PROVIDER', 'SENDGRID_API_KEY', 'MAILCHIMP_API_KEY']) delete env[k];
+  const env = { ...process.env, BASE_OPEN_SIGNUP: '1', BASE_DATA: 'memory', PORT: String(PORT), BASE_JOBS: 'off' };
+  for (const k of ['RESEND_API_KEY', 'MAIL_FROM', 'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM', 'BASE_PUBLIC_URL', 'GOOGLE_MAPS_TILES', 'GOOGLE_MAPS_SERVER_KEY', 'ADDRESS_SUGGEST', 'GEOCODER', 'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'CALLHUB_API_KEY', 'CALLHUB_API_BASE', 'MAIL_PROVIDER', 'SENDGRID_API_KEY', 'MAILCHIMP_API_KEY'].flatMap(bothNames)) delete env[k];
   server = spawn(process.execPath, ['server/index.js'], { env, stdio: ['ignore', 'pipe', 'inherit'] });
   await new Promise((resolve, reject) => {
     const t = setTimeout(() => reject(new Error('server did not start')), 30000);
-    server.stdout.on('data', (b) => { if (/starbase on :/.test(String(b))) { clearTimeout(t); resolve(); } });
+    server.stdout.on('data', (b) => { if (/base\.win on :/.test(String(b))) { clearTimeout(t); resolve(); } });
     server.on('exit', (code) => reject(new Error(`server exited ${code}`)));
   });
   BASE = `http://127.0.0.1:${PORT}`;

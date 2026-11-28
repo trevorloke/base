@@ -12,14 +12,14 @@
 // a screen is checked against the API; each screen is measured (yellow
 // buttons, sideways scroll, 48px targets); the audit chain verifies.
 //
-//   STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4430 node server/index.js &
+//   BASE_BRAND=imagine-surrey BASE_OPEN_SIGNUP=1 BASE_DATA=memory PORT=4430 node server/index.js &
 //   BASE=http://127.0.0.1:4430 SHOTS=/tmp/litdrop node e2e-litdrop.mjs
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
 
 const BASE = process.env.BASE || 'http://localhost:3200';
 const ADMIN = { toString() { return `${BASE}/admin`; } }; // the desk's pages live in the admin (web/src/mode.js)
-const SHOTS = process.env.SHOTS || '/tmp/starbase-litdrop';
+const SHOTS = process.env.SHOTS || '/tmp/base-win-litdrop';
 mkdirSync(SHOTS, { recursive: true });
 const results = [];
 const check = (name, ok, extra = '') => {
@@ -197,7 +197,7 @@ await vpage.waitForSelector('.walk-toast', { timeout: 5000 }).catch(() => {});
 await sleep(500);
 const toast2 = await toastText('.walk-toast');
 check('offline tap: toast "Left lit · Saved offline"', toast2 === 'Left lit · Saved offline', toast2);
-const box = await vpage.evaluate(() => JSON.parse(localStorage.getItem('starbase:outbox:v2') || '[]'));
+const box = await vpage.evaluate(() => JSON.parse(localStorage.getItem('base-win:outbox:v2') || '[]'));
 check('the outbox holds one drop for Cy', box.filter((i) => i.name === 'contact.log' && i.input?.outcome === 'left_lit' && i.input.person_id === P.cy.id).length === 1, JSON.stringify(box.map((i) => `${i.name}:${i.input?.outcome}`)));
 const chip = await vpage.$eval('.offline-strip__chip', (el) => el.innerText.replace(/\s+/g, ' ').trim()).catch(() => '');
 check('the strip: 1 saved on this phone', /^1 saved on this phone$/i.test(chip), chip);
@@ -211,7 +211,7 @@ check('…and the server has none yet', (await lits(P.cy.id)).length === 0);
 await vctx.setOffline(false);
 await vpage.evaluate(() => window.dispatchEvent(new Event('online')));
 for (let i = 0; i < 20; i += 1) {
-  const left = await vpage.evaluate(() => JSON.parse(localStorage.getItem('starbase:outbox:v2') || '[]').filter((x) => x.state !== 'done').length);
+  const left = await vpage.evaluate(() => JSON.parse(localStorage.getItem('base-win:outbox:v2') || '[]').filter((x) => x.state !== 'done').length);
   if (left === 0) break;
   await sleep(500);
 }

@@ -42,13 +42,14 @@ import { chromium } from 'playwright-core';
 import { spawn } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { bothNames } from './shared/old-names.js';
 
 const PORT = Number(process.env.PORT) || 4970;
 const FAKE = PORT + 1;
 const CONTROL = PORT + 2;
 const BASE = `http://127.0.0.1:${PORT}`;
 const ADMIN = `${BASE}/admin`; // the desk's pages live in the admin (web/src/mode.js)
-const SHOTS = process.env.SHOTS || '/tmp/starbase-mailchimp';
+const SHOTS = process.env.SHOTS || '/tmp/base-win-mailchimp';
 mkdirSync(SHOTS, { recursive: true });
 const KEY = 'e2e-mailchimp-key-us19';
 const SECRET = 'e2e-signing-secret-shown-once';
@@ -70,7 +71,7 @@ writeFileSync(STUB, `
 import { createServer } from 'node:http';
 // The fixtures here are Imagine Surrey's, so the server runs as its production
 // does (render.yaml sets this brand); a brand set by hand is left as set.
-if (process.env.STARBASE_BRAND === undefined) process.env.STARBASE_BRAND = 'imagine-surrey';
+if (${JSON.stringify(bothNames('BASE_BRAND'))}.every((k) => process.env[k] === undefined)) process.env.BASE_BRAND = 'imagine-surrey';
 
 const { startFakeMailchimp } = await import(${href('test/fake-mailchimp.js')});
 const { _setSliceForTest } = await import(${href('ext/mailchimp/push.js')});
@@ -113,9 +114,9 @@ createServer(async (req, res) => {
 }).listen(${CONTROL}, '127.0.0.1');
 `);
 
-const env = { ...process.env, STARBASE_OPEN_SIGNUP: '1', STARBASE_DATA: 'memory', PORT: String(PORT), STARBASE_JOBS_EVERY_MS: '400' };
-for (const k of ['MAILCHIMP_API_KEY', 'MAILCHIMP_API_BASE', 'MAILCHIMP_AUDIENCE_ID', 'MAILCHIMP_WEBHOOK_SECRET', 'STARBASE_PUBLIC_URL', 'STARBASE_JOBS',
-  'MAIL_PROVIDER', 'RESEND_API_KEY', 'SENDGRID_API_KEY', 'MAIL_FROM']) delete env[k];
+const env = { ...process.env, BASE_OPEN_SIGNUP: '1', BASE_DATA: 'memory', PORT: String(PORT), BASE_JOBS_EVERY_MS: '400' };
+for (const k of ['MAILCHIMP_API_KEY', 'MAILCHIMP_API_BASE', 'MAILCHIMP_AUDIENCE_ID', 'MAILCHIMP_WEBHOOK_SECRET', 'BASE_PUBLIC_URL', 'BASE_JOBS',
+  'MAIL_PROVIDER', 'RESEND_API_KEY', 'SENDGRID_API_KEY', 'MAIL_FROM'].flatMap(bothNames)) delete env[k];
 const server = spawn(process.execPath, ['--import', pathToFileURL(STUB).href, 'server/index.js'], {
   cwd: fileURLToPath(new URL('.', import.meta.url)), env, stdio: ['ignore', 'pipe', 'pipe'],
 });
@@ -130,7 +131,7 @@ for (let i = 0; i < 80; i += 1) {
 const post = (path, body) => fetch(`http://127.0.0.1:${CONTROL}${path}`, { method: 'POST', body: JSON.stringify(body || {}) }).then((r) => r.text());
 const set = (o) => post('/set', o);
 const mc = async (tag = TAG, audienceId = null) => JSON.parse(await post('/state', { tag, audienceId }));
-const mailchimpOn = { MAILCHIMP_API_KEY: KEY, MAILCHIMP_API_BASE: `http://127.0.0.1:${FAKE}`, MAILCHIMP_AUDIENCE_ID: 'aud0001', STARBASE_PUBLIC_URL: BASE };
+const mailchimpOn = { MAILCHIMP_API_KEY: KEY, MAILCHIMP_API_BASE: `http://127.0.0.1:${FAKE}`, MAILCHIMP_AUDIENCE_ID: 'aud0001', BASE_PUBLIC_URL: BASE };
 
 const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--no-sandbox', '--disable-dev-shm-usage'] });
 const errors = [];
@@ -554,7 +555,7 @@ await page.keyboard.press('Enter');
 const again = await until(async () => /^In Mailchimp · 6 addresses/.test(await words(page.locator('.mc-status'))), 10000);
 check('Try again (by keyboard): the line is back, and Sync again with it', again && /^Download CSV Sync again In Mailchimp/.test(await words(page.locator('.ls-tools'))), await words(page.locator('.ls-tools')));
 
-// ── 11. A server whose background work is off (STARBASE_JOBS=off): "Waiting" — never "Syncing…" or "Pulling…" for ever ──
+// ── 11. A server whose background work is off (BASE_JOBS=off): "Waiting" — never "Syncing…" or "Pulling…" for ever ──
 // (This server's is on: what it would answer then is put in its place.)
 const json = (o) => (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(o) });
 const WAITING_OFF = 'Waiting · background work is turned off — ask whoever set up base.win to turn it on';

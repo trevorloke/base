@@ -17,14 +17,14 @@
 // /login — never the sign-in page. Every screen is looked at 1440×900 and
 // 390×844 (no sideways scroll; 48px targets on the phone).
 //
-//   STARBASE_BRAND=imagine-surrey STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=5130 node server/index.js &
+//   BASE_BRAND=imagine-surrey BASE_OPEN_SIGNUP=1 BASE_DATA=memory PORT=5130 node server/index.js &
 //   BASE=http://127.0.0.1:5130 SHOTS=/tmp/microsites node e2e-microsites.mjs
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
 
 const BASE = (process.env.BASE || 'http://127.0.0.1:5130').replace(/\/$/, '');
 const PORT = new URL(BASE).port;
-const SHOTS = process.env.SHOTS || '/tmp/starbase-microsites';
+const SHOTS = process.env.SHOTS || '/tmp/base-win-microsites';
 const DOUG = 'dougdidnt.test';
 const SITE = `http://${DOUG}:${PORT}`;
 const ORG = 'Harbour City Example';

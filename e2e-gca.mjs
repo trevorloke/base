@@ -29,12 +29,13 @@ import { spawn } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { startFakeGoogle } from './server/test/fake-google.js';
+import { bothNames } from './shared/old-names.js';
 
 // The fixtures here are Imagine Surrey's, so the server runs as its production
 // does (render.yaml sets this brand); a brand set by hand is left as set.
-if (process.env.STARBASE_BRAND === undefined) process.env.STARBASE_BRAND = 'imagine-surrey';
+if (bothNames('BASE_BRAND').every((k) => process.env[k] === undefined)) process.env.BASE_BRAND = 'imagine-surrey';
 
-const SHOTS = process.env.SHOTS || '/tmp/starbase-gca';
+const SHOTS = process.env.SHOTS || '/tmp/base-win-gca';
 mkdirSync(SHOTS, { recursive: true });
 const HOST = '127.0.0.1';
 const PORT = Number(process.env.PORT) || 5330;
@@ -77,10 +78,10 @@ let log = '';
 const startServer = async () => {
   server = spawn(process.execPath, ['server/index.js'], {
     env: {
-      ...process.env, STARBASE_OPEN_SIGNUP: '1', STARBASE_DATA: 'memory', PORT: String(PORT), STARBASE_PUBLIC_URL: BASE,
+      ...process.env, BASE_OPEN_SIGNUP: '1', BASE_DATA: 'memory', PORT: String(PORT), BASE_PUBLIC_URL: BASE,
       GOOGLE_OAUTH_CLIENT_ID: CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET: SECRET, GOOGLE_ACCOUNTS_BASE: G, GOOGLE_OAUTH_BASE: G,
       GOOGLE_CALENDAR_API_BASE: `${G}/calendar/v3`, GOOGLE_TOKEN_KEY: `e2e-gca-token-key-${tag}-0123456789abcdef`,
-      STARBASE_JOBS_EVERY_MS: '1000',
+      BASE_JOBS_EVERY_MS: '1000',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });

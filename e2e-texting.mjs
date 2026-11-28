@@ -36,16 +36,17 @@ import { createServer } from 'node:http';
 import { createHmac } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { bothNames } from './shared/old-names.js';
 
 // The fixtures here are Imagine Surrey's, so the server runs as its production
 // does (render.yaml sets this brand); a brand set by hand is left as set.
-if (process.env.STARBASE_BRAND === undefined) process.env.STARBASE_BRAND = 'imagine-surrey';
+if (bothNames('BASE_BRAND').every((k) => process.env[k] === undefined)) process.env.BASE_BRAND = 'imagine-surrey';
 
 const HERE = fileURLToPath(new URL('.', import.meta.url));
 const PORT = Number(process.env.PORT) || 4105;
 const BASE = `http://127.0.0.1:${PORT}`;
 const ADMIN = { toString() { return `${BASE}/admin`; } }; // the desk's pages live in the admin (web/src/mode.js)
-const SHOTS = process.env.SHOTS || '/tmp/starbase-texting';
+const SHOTS = process.env.SHOTS || '/tmp/base-win-texting';
 mkdirSync(SHOTS, { recursive: true });
 const results = [];
 const check = (name, ok, extra = '') => {
@@ -77,19 +78,19 @@ const STUB = `http://127.0.0.1:${stub.address().port}`;
 const texts = () => twilio.filter((r) => r.kind === 'sms');
 const calls = () => twilio.filter((r) => r.kind === 'call');
 
-// ── The Starbase server, fresh and in memory each time ──
+// ── The base.win server, fresh and in memory each time ──
 const PROVIDER_ENV = ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM', 'TWILIO_API_BASE', 'TWILIO_VOICE',
-  'TWILIO_WORKSPACE', 'STARBASE_PUBLIC_URL', 'RESEND_API_KEY', 'MAIL_FROM', 'STRIPE_SECRET_KEY', 'DATABASE_URL'];
+  'TWILIO_WORKSPACE', 'BASE_PUBLIC_URL', 'RESEND_API_KEY', 'MAIL_FROM', 'STRIPE_SECRET_KEY', 'DATABASE_URL'];
 const serverLog = [];
 const startServer = async (extra) => {
-  const env = { ...process.env, STARBASE_OPEN_SIGNUP: '1', STARBASE_DATA: 'memory', PORT: String(PORT), STARBASE_JOBS: 'off' };
-  for (const k of PROVIDER_ENV) delete env[k];
+  const env = { ...process.env, BASE_OPEN_SIGNUP: '1', BASE_DATA: 'memory', PORT: String(PORT), BASE_JOBS: 'off' };
+  for (const k of PROVIDER_ENV.flatMap(bothNames)) delete env[k];
   Object.assign(env, extra);
   const child = spawn(process.execPath, ['server/index.js'], { cwd: HERE, env, stdio: ['ignore', 'pipe', 'pipe'] });
   child.stderr.on('data', (d) => serverLog.push(String(d)));
   await new Promise((resolve, reject) => {
     const t = setTimeout(() => reject(new Error(`server did not start: ${serverLog.join('')}`)), 20000);
-    child.stdout.on('data', (d) => { if (/starbase on/.test(String(d))) { clearTimeout(t); resolve(); } });
+    child.stdout.on('data', (d) => { if (/base\.win on :/.test(String(d))) { clearTimeout(t); resolve(); } });
     child.once('exit', (code) => { clearTimeout(t); reject(new Error(`server exited ${code}: ${serverLog.join('')}`)); });
   });
   return child;
@@ -262,7 +263,7 @@ await stopServer(server);
 // ═════ 2. Twilio connected ═════
 server = await startServer({
   TWILIO_ACCOUNT_SID: `ACe2e${tag}`, TWILIO_AUTH_TOKEN: TOKEN, TWILIO_FROM: CAMPAIGN_NUMBER,
-  STARBASE_PUBLIC_URL: BASE, TWILIO_API_BASE: STUB,
+  BASE_PUBLIC_URL: BASE, TWILIO_API_BASE: STUB,
 });
 const deskCtx = await browser.newContext({ viewport: { width: 1360, height: 900 }, timezoneId: 'America/Vancouver' });
 await tiles(deskCtx);

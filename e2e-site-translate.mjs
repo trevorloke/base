@@ -33,10 +33,11 @@
 import { chromium } from 'playwright-core';
 import { execSync } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
+import { bothNames } from './shared/old-names.js';
 
 // The fixtures here are Imagine Surrey's, so the server runs as its production
 // does (render.yaml sets this brand); a brand set by hand is left as set.
-if (process.env.STARBASE_BRAND === undefined) process.env.STARBASE_BRAND = 'imagine-surrey';
+if (bothNames('BASE_BRAND').every((k) => process.env[k] === undefined)) process.env.BASE_BRAND = 'imagine-surrey';
 
 const PORT = Number(process.env.PORT) || 5470;
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -60,10 +61,10 @@ if (!fonts('zh')) {
 if (!fonts('pa')) console.log('NOTE  no system Gurmukhi font: the site’s own Noto Sans Gurmukhi is what draws it');
 
 // ── base.win, the stand-in Google and the stand-in Stripe, in this process ──
-for (const k of ['DATABASE_URL', 'RESEND_API_KEY', 'MAIL_FROM', 'STARBASE_PUBLIC_URL', 'BASE_PATH', 'SITE_HOSTS', 'GOOGLE_TRANSLATE_KEY']) delete process.env[k];
+for (const k of ['DATABASE_URL', 'RESEND_API_KEY', 'MAIL_FROM', 'BASE_PUBLIC_URL', 'BASE_PATH', 'SITE_HOSTS', 'GOOGLE_TRANSLATE_KEY'].flatMap(bothNames)) delete process.env[k];
 const STRIPE_KEY = `sk_test_tr_${tag}`;
 Object.assign(process.env, {
-  STARBASE_OPEN_SIGNUP: '1', STARBASE_DATA: 'memory', GEOCODE_ON_SAVE: 'off',
+  BASE_OPEN_SIGNUP: '1', BASE_DATA: 'memory', GEOCODE_ON_SAVE: 'off',
   GOOGLE_TRANSLATE_API_BASE: `http://127.0.0.1:${PORT + 1}`,
   STRIPE_SECRET_KEY: STRIPE_KEY, STRIPE_WEBHOOK_SECRET: `whsec_tr_${tag}`,
 });

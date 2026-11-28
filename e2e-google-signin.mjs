@@ -33,12 +33,13 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startFakeGoogle } from './server/test/fake-google.js';
 import { base32Decode, hotp, totpStep } from './server/lib/twostep.js';
+import { bothNames } from './shared/old-names.js';
 
 // The fixtures here are Imagine Surrey's, so the server runs as its production
 // does (render.yaml sets this brand); a brand set by hand is left as set.
-if (process.env.STARBASE_BRAND === undefined) process.env.STARBASE_BRAND = 'imagine-surrey';
+if (bothNames('BASE_BRAND').every((k) => process.env[k] === undefined)) process.env.BASE_BRAND = 'imagine-surrey';
 
-const SHOTS = process.env.SHOTS || '/tmp/starbase-google';
+const SHOTS = process.env.SHOTS || '/tmp/base-win-google';
 mkdirSync(SHOTS, { recursive: true });
 const HOST = '127.0.0.1';
 const PORT = Number(process.env.PORT) || 5300;
@@ -101,7 +102,7 @@ const SERVER_ENV = { ...process.env }; // before Vite sets NODE_ENV=production f
 const procs = [];
 const startServer = async (port, env, label) => {
   const child = spawn(process.execPath, ['server/test/google-e2e-server.js'], {
-    env: { ...SERVER_ENV, STARBASE_OPEN_SIGNUP: '1', STARBASE_DATA: 'memory', PORT: String(port), CONNECT_HOST: HOST_DIR, ...env },
+    env: { ...SERVER_ENV, BASE_OPEN_SIGNUP: '1', BASE_DATA: 'memory', PORT: String(port), CONNECT_HOST: HOST_DIR, ...env },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let log = '';
@@ -131,9 +132,9 @@ let browser;
 const errors = [];
 const offHost = [];
 try {
-  await startServer(PORT, { ...GOOGLE_ENV, STARBASE_PUBLIC_URL: BASE, GOOGLE_TOKEN_KEY: `e2e-google-token-key-${tag}-0123456789abcdef`, POKE_PORT: String(POKE_PORT), STARBASE_JOBS_EVERY_MS: '1000' }, 'base.win');
-  await startServer(BP_PORT, { ...GOOGLE_ENV, STARBASE_PUBLIC_URL: `${BP}${P}`, BASE_PATH: P }, 'base.win under BASE_PATH');
-  await startServer(NOG_PORT, { STARBASE_PUBLIC_URL: NOG }, 'base.win without Google');
+  await startServer(PORT, { ...GOOGLE_ENV, BASE_PUBLIC_URL: BASE, GOOGLE_TOKEN_KEY: `e2e-google-token-key-${tag}-0123456789abcdef`, POKE_PORT: String(POKE_PORT), BASE_JOBS_EVERY_MS: '1000' }, 'base.win');
+  await startServer(BP_PORT, { ...GOOGLE_ENV, BASE_PUBLIC_URL: `${BP}${P}`, BASE_PATH: P }, 'base.win under BASE_PATH');
+  await startServer(NOG_PORT, { BASE_PUBLIC_URL: NOG }, 'base.win without Google');
 
   browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--no-sandbox', '--disable-dev-shm-usage'] });
   const contexts = [];

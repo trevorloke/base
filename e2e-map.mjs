@@ -1,6 +1,6 @@
 // A map people can see — browser suite for a list too big to load at once.
 // Its own server treats a few hundred made-up people as a city's worth
-// (STARBASE_MAP_ALL=40: asked for by the part of the map on screen; at most
+// (BASE_MAP_ALL=40: asked for by the part of the map on screen; at most
 // 60 people whole and 200 doors as dots in one view), so every way the map
 // draws a big list is reached with a small one:
 //   · the first view is the campaign's own list — two people filed in another
@@ -66,10 +66,11 @@ import { mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { bothNames } from './shared/old-names.js';
 
 // The fixtures here are Imagine Surrey's, so the server runs as its production
 // does (render.yaml sets this brand); a brand set by hand is left as set.
-if (process.env.STARBASE_BRAND === undefined) process.env.STARBASE_BRAND = 'imagine-surrey';
+if (bothNames('BASE_BRAND').every((k) => process.env[k] === undefined)) process.env.BASE_BRAND = 'imagine-surrey';
 
 const PORT = Number(process.env.PORT) || 4948;
 const SHOTS = process.env.SHOTS || join(tmpdir(), 'basewin-map-shots');
@@ -106,19 +107,19 @@ await new Promise((resolve) => geocoder.listen(PORT + 1, '127.0.0.1', resolve));
 const server = spawn(process.execPath, ['server/index.js'], {
   cwd: fileURLToPath(new URL('.', import.meta.url)),
   env: {
-    ...process.env, STARBASE_OPEN_SIGNUP: '1', STARBASE_DATA: 'memory', PORT: String(PORT), GEOCODE_ON_SAVE: 'off',
-    STARBASE_JOBS: 'on', STARBASE_JOBS_EVERY_MS: '400', GEOCODER: 'bc', BC_GEOCODER_URL: `http://127.0.0.1:${PORT + 1}`,
+    ...process.env, BASE_OPEN_SIGNUP: '1', BASE_DATA: 'memory', PORT: String(PORT), GEOCODE_ON_SAVE: 'off',
+    BASE_JOBS: 'on', BASE_JOBS_EVERY_MS: '400', GEOCODER: 'bc', BC_GEOCODER_URL: `http://127.0.0.1:${PORT + 1}`,
     GEOCODE_BACKOFF_MS: '0', GEOCODE_RETRY_MS: '8000',
-    STARBASE_MAP_ALL: '40', STARBASE_MAP_VIEW: '60', STARBASE_MAP_DOTS: '200',
+    BASE_MAP_ALL: '40', BASE_MAP_VIEW: '60', BASE_MAP_DOTS: '200',
     // The Clean look (CARTO) is offered only with the campaign's key: this
     // suite's Clean, kept-streets and switch steps need it.
-    STARBASE_TILE_CARTO_KEY: 'test-key',
+    BASE_TILE_CARTO_KEY: 'test-key',
   },
   stdio: ['ignore', 'pipe', 'inherit'],
 });
 await new Promise((resolve, reject) => {
   const t = setTimeout(() => reject(new Error('server did not start')), 30000);
-  server.stdout.on('data', (b) => { if (/starbase on :/.test(String(b))) { clearTimeout(t); resolve(); } });
+  server.stdout.on('data', (b) => { if (/base\.win on :/.test(String(b))) { clearTimeout(t); resolve(); } });
   server.on('exit', (code) => reject(new Error(`server exited ${code}`)));
 });
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -613,7 +614,7 @@ try {
         tiles: el?.dataset.tiles || '', look: (document.querySelector('.map-page')?.className.match(/map-view--(\w+)/) || [])[1] || null,
         note: words('.map-tilenote'),
         loaded: el ? [...el.querySelectorAll('.leaflet-tile-pane img.leaflet-tile-loaded')].filter((i) => i.complete && i.naturalWidth > 0).length : 0,
-        ground: el ? getComputedStyle(el).backgroundColor : null, pick: localStorage.getItem('starbase:map:view'),
+        ground: el ? getComputedStyle(el).backgroundColor : null, pick: localStorage.getItem('base-win:map:view'),
       };
     }).catch(() => ({}));
     // Until fn(state) — and what the line under the count said on the way (the "switched" one goes after a few seconds).
@@ -1412,18 +1413,18 @@ try {
     gServer = spawn(process.execPath, ['server/index.js'], {
       cwd: fileURLToPath(new URL('.', import.meta.url)),
       env: {
-        ...process.env, STARBASE_OPEN_SIGNUP: '1', STARBASE_DATA: 'memory', PORT: String(GPORT), GEOCODE_ON_SAVE: 'off',
+        ...process.env, BASE_OPEN_SIGNUP: '1', BASE_DATA: 'memory', PORT: String(GPORT), GEOCODE_ON_SAVE: 'off',
         GOOGLE_MAPS_TILES: '1', GOOGLE_MAPS_SERVER_KEY: 'e2e-not-a-key', GOOGLE_MAPS_TILES_URL: `http://127.0.0.1:${GOOGLE_PORT}/v1`,
         GEOCODER: 'bc', BC_GEOCODER_URL: `http://127.0.0.1:${PORT + 1}`,
         // The free map behind Google: CARTO's, with the campaign's key.
-        STARBASE_TILE_CARTO_KEY: 'test-key',
+        BASE_TILE_CARTO_KEY: 'test-key',
       },
       stdio: ['ignore', 'pipe', 'inherit'],
     });
     gServer.on('exit', () => standInGoogle.close());
     await new Promise((resolve, reject) => {
       const t = setTimeout(() => reject(new Error('the Google server did not start')), 30000);
-      gServer.stdout.on('data', (b) => { if (/starbase on :/.test(String(b))) { clearTimeout(t); resolve(); } });
+      gServer.stdout.on('data', (b) => { if (/base\.win on :/.test(String(b))) { clearTimeout(t); resolve(); } });
     });
     const GB = `http://127.0.0.1:${GPORT}`;
     // Every context: the free map's tiles from a stand-in (the sandbox can't reach CARTO), counted.
@@ -1459,7 +1460,7 @@ try {
       const pg = await mc.newPage();
       pg.on('pageerror', (e) => errors.push(`[google ${name}] ${e.message}`));
       await pg.goto(`${GB}/admin`, { waitUntil: 'domcontentloaded' });
-      await pg.evaluate((v) => { if (v) localStorage.setItem('starbase:map:view', v); else localStorage.removeItem('starbase:map:view'); }, pick);
+      await pg.evaluate((v) => { if (v) localStorage.setItem('base-win:map:view', v); else localStorage.removeItem('base-win:map:view'); }, pick);
       await pg.goto(`${GB}/admin/map`, { waitUntil: 'domcontentloaded' });
       await pg.waitForFunction(() => document.querySelector('.map-canvas')?.dataset.tiles === 'ok', null, { timeout: 15000 }).catch(() => {});
       await sleep(800);

@@ -25,12 +25,13 @@ import { chromium } from 'playwright-core';
 import { spawn } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { OLD_SETTINGS, bothNames, newNameOf } from './shared/old-names.js';
 
 const PORT = Number(process.env.PORT) || 5450;
 const CONTROL = PORT + 1;
 const BASE = `http://127.0.0.1:${PORT}`;
 const ADMIN = `${BASE}/admin`;
-const SHOTS = process.env.SHOTS || '/tmp/starbase-picklists';
+const SHOTS = process.env.SHOTS || '/tmp/base-win-picklists';
 mkdirSync(SHOTS, { recursive: true });
 const results = [];
 const check = (name, ok, extra = '') => {
@@ -48,7 +49,7 @@ writeFileSync(STUB, `
 import { createServer } from 'node:http';
 // The fixtures here are Imagine Surrey's, so the server runs as its production
 // does (render.yaml sets this brand); a brand set by hand is left as set.
-if (process.env.STARBASE_BRAND === undefined) process.env.STARBASE_BRAND = 'imagine-surrey';
+if (${JSON.stringify(bothNames('BASE_BRAND'))}.every((k) => process.env[k] === undefined)) process.env.BASE_BRAND = 'imagine-surrey';
 
 const { _setPaceForTest } = await import(${JSON.stringify(pathToFileURL(`${serverDir}ext/fields/convert.js`).href)});
 createServer(async (req, res) => {
@@ -59,8 +60,8 @@ createServer(async (req, res) => {
 }).listen(${CONTROL}, '127.0.0.1');
 `);
 const env = { ...process.env };
-for (const k of Object.keys(env)) if (/^(GOOGLE_|RESEND_|SENDGRID_|MAIL_|STARBASE_)/.test(k)) delete env[k];
-Object.assign(env, { STARBASE_OPEN_SIGNUP: '1', STARBASE_DATA: 'memory', PORT: String(PORT), STARBASE_JOBS_EVERY_MS: '1000' });
+for (const k of Object.keys(env)) if (/^(GOOGLE_|RESEND_|SENDGRID_|MAIL_)/.test(k) || Object.hasOwn(OLD_SETTINGS, newNameOf(k))) delete env[k];
+Object.assign(env, { BASE_OPEN_SIGNUP: '1', BASE_DATA: 'memory', PORT: String(PORT), BASE_JOBS_EVERY_MS: '1000' });
 const server = spawn(process.execPath, ['--import', pathToFileURL(STUB).href, 'server/index.js'], {
   cwd: fileURLToPath(new URL('.', import.meta.url)), env, stdio: ['ignore', 'pipe', 'pipe'],
 });
@@ -247,7 +248,7 @@ await S.pg.evaluate(() => navigator.serviceWorker?.ready).catch(() => {});
 await sleep(1500);
 const stored = await S.pg.evaluate(() => {
   const all = [];
-  for (const s of [localStorage, sessionStorage]) for (let i = 0; i < s.length; i += 1) { const k = s.key(i); if (k && k.startsWith('starbase:copy:')) all.push(s.getItem(k)); }
+  for (const s of [localStorage, sessionStorage]) for (let i = 0; i < s.length; i += 1) { const k = s.key(i); if (k && k.startsWith('base-win:copy:')) all.push(s.getItem(k)); }
   return all.join('\n');
 }).catch(() => '');
 // Faith's choices are in the copy (the list's words); Ben's value is not.
