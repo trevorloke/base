@@ -17,7 +17,8 @@
 // (pages/People.jsx carries it with carryKey when it reads it).
 //
 //   carryOldStorage(stores?)        → how many keys were carried (main.jsx runs it first)
-//   carryKey(store, oldKey, newKey) → true when the older key's value is now under newKey
+//   carryKey(store, oldKey, newKey, family?) → true when the older key's value is now under newKey
+//                                     (merged with what is there for unsent work: see both())
 import { BASE, NS, OLD_NS } from './base.js';
 
 // The families kept under NS (server/test/offline-old-names.test.js checks
@@ -65,12 +66,45 @@ const anotherClients = (rest) => {
   return cut > 0 && ALL.some((f) => rest.slice(cut + 1).startsWith(f));
 };
 
-export function carryKey(store, oldKey, newKey) {
+// When both names hold a key, something on the older app wrote it after a
+// start on this one had carried it (a desk tab opened before the update; a
+// phone rolled back, then forward). For most keys the new one is kept (a
+// copy is fetched again; a choice is a choice). Unsent work never is lost:
+//   gotv-notes: / gotv-entered:  both lists, each entry once (by id)
+//   field:v1:…letters:          the draft saved later (its `at`)
+//   me:v1                       kept only if both name the same sign-in;
+//                               two different people: neither (the app asks)
+// → the value to keep under the new name, or null for neither.
+const listOf = (raw) => { try { const v = JSON.parse(raw); return Array.isArray(v) ? v : null; } catch { return null; } };
+const atOf = (raw) => { try { return Number(JSON.parse(raw)?.at) || 0; } catch { return 0; } };
+const whoOf = (raw) => { try { const v = JSON.parse(raw); return v?.user?.id && v?.workspace?.id ? `${v.workspace.id}:${v.user.id}` : null; } catch { return null; } };
+export const both = (rest, older, newer) => {
+  if (rest.startsWith('gotv-notes:') || rest.startsWith('gotv-entered:')) {
+    const a = listOf(newer);
+    const b = listOf(older);
+    if (!a || !b) return a ? newer : older;
+    const seen = new Set();
+    const idOf = (e) => (e && e.id != null ? `id:${e.id}` : JSON.stringify(e));
+    const out = [...a, ...b].filter((e) => { const k = idOf(e); if (seen.has(k)) return false; seen.add(k); return true; });
+    return JSON.stringify(out);
+  }
+  if (rest.startsWith('field:v1:') && rest.includes(':letters:')) return atOf(older) > atOf(newer) ? older : newer;
+  if (rest === 'me:v1') return whoOf(older) && whoOf(older) === whoOf(newer) ? newer : null;
+  return newer;
+};
+
+export function carryKey(store, oldKey, newKey, rest = '') {
   if (!store || !oldKey || !newKey || oldKey === newKey) return false;
   try {
     const v = store.getItem(oldKey);
     if (v == null) return false;
-    if (store.getItem(newKey) == null) store.setItem(newKey, v);
+    const there = store.getItem(newKey);
+    if (there == null) store.setItem(newKey, v);
+    else {
+      const keep = both(rest, v, there);
+      if (keep == null) store.removeItem(newKey);
+      else if (keep !== there) store.setItem(newKey, keep);
+    }
     store.removeItem(oldKey);
     return true;
   } catch { return false; } // storage full or blocked: the older key stays
@@ -92,7 +126,7 @@ export function carryOldStorage(list = stores()) {
       if (!k || !k.startsWith(OLD_NS)) continue;
       const rest = k.slice(OLD_NS.length);
       if (!inFamily(rest) || (!BASE && anotherClients(rest))) continue;
-      if (carryKey(store, k, `${NS}${rest}`)) n += 1;
+      if (carryKey(store, k, `${NS}${rest}`, rest)) n += 1;
     }
   }
   return n;

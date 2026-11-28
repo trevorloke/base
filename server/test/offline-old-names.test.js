@@ -278,6 +278,71 @@ test('at start, everything else kept under the older prefix is carried to the ne
   assert.equal(r.session[`${OLD}brand-saved`], undefined);
 });
 
+// Both names hold a key when something on the older app wrote it after a
+// start on the new one had carried it (a desk tab opened before the update, a
+// phone rolled back and forward): unsent work under either is never dropped.
+test('both names hold Who voted names or a letter draft: nothing either holds is lost', () => {
+  const note = (id, typed) => ({ id, typed, written_at: '2026-10-20T19:00:00.000Z', place_id: 'pl1' });
+  const r = run(`async ({ m, out }) => {
+    await m('oldStorage.js');
+    const N = await m('components/gotvNotes.js');
+    out.notes = N.readNotes(${J(ME)}).map((n) => n.id);
+    const L = await m('components/letterDrafts.js');
+    L.setLetterScope(${J(ME)});
+    out.draft = L.readDraft('draft');
+    out.edit = L.readDraft('edit:L1');
+  }`, { local: {
+    [`${NEW}gotv-notes:w1:u1`]: J([note('n1', 'Ada Brook'), note('n2', 'Ben Cole')]),
+    [`${OLD}gotv-notes:w1:u1`]: J([note('n2', 'Ben Cole'), note('n3', 'Cy Dunn')]),
+    [`${NEW}gotv-entered:w1:u1`]: J([{ id: 'e1', at: '2026-10-20T19:00:00.000Z' }]),
+    [`${OLD}gotv-entered:w1:u1`]: J([{ id: 'e2', at: '2026-10-20T19:05:00.000Z' }]),
+    // The older tab's draft is the later one; the edit under the new name is.
+    [`${NEW}field:v1:w1:u1:letters:draft`]: J({ at: 1000, data: { body: 'First lines' } }),
+    [`${OLD}field:v1:w1:u1:letters:draft`]: J({ at: 2000, data: { body: 'First lines, and the rest' } }),
+    [`${NEW}field:v1:w1:u1:letters:edit:L1`]: J({ at: 3000, data: { body: 'Newer edit' } }),
+    [`${OLD}field:v1:w1:u1:letters:edit:L1`]: J({ at: 2500, data: { body: 'Older edit' } }),
+  } });
+  assert.deepEqual(r.out.notes, ['n1', 'n2', 'n3'], 'every name, each once');
+  assert.deepEqual(JSON.parse(r.local[`${NEW}gotv-entered:w1:u1`]).map((e) => e.id), ['e1', 'e2']);
+  assert.deepEqual(r.out.draft, { body: 'First lines, and the rest' }, 'the later draft is kept');
+  assert.deepEqual(r.out.edit, { body: 'Newer edit' });
+  for (const k of ['gotv-notes:w1:u1', 'gotv-entered:w1:u1', 'field:v1:w1:u1:letters:draft', 'field:v1:w1:u1:letters:edit:L1']) {
+    assert.equal(r.local[`${OLD}${k}`], undefined, `older ${k} gone`);
+  }
+});
+
+test('both names hold a saved sign-in: kept only when they are the same person; otherwise neither is', () => {
+  const OTHER = { ...ME, user: { id: 'u9', name: 'Sam Other' } };
+  const differ = run(`async ({ m, out }) => {
+    await m('oldStorage.js');
+    out.me = (await m('api.js')).savedSignIn();
+  }`, { local: { [`${NEW}me:v1`]: J(OTHER), [`${OLD}me:v1`]: J(ME) } });
+  assert.equal(differ.out.me, null, 'two different people: the app asks who it is, never opens as the wrong one');
+  assert.equal(differ.local[`${NEW}me:v1`], undefined);
+  assert.equal(differ.local[`${OLD}me:v1`], undefined);
+  const same = run(`async ({ m, out }) => {
+    await m('oldStorage.js');
+    out.me = (await m('api.js')).savedSignIn();
+  }`, { local: { [`${NEW}me:v1`]: J(ME), [`${OLD}me:v1`]: J({ ...ME, role: 'manager' }) } });
+  assert.equal(same.out.me?.user?.id, 'u1');
+  assert.equal(same.local[`${OLD}me:v1`], undefined);
+});
+
+test('sign-out also forgets a saved sign-in and Who voted names left under the older names', () => {
+  const r = run(`async ({ m, local, out }) => {
+    const api = await m('api.js');
+    // Written by the older app after this one started (nothing carried them yet).
+    local.setItem(${J(`${OLD}me:v1`)}, ${J(J(ME))});
+    local.setItem(${J(`${OLD}gotv-notes:w1:u1`)}, ${J(J([{ id: 'n9', typed: 'Di Eve' }]))});
+    api.forgetSavedSignIn();
+    const N = await m('components/gotvNotes.js');
+    out.count = N.gotvNoteCount(${J(ME)});
+    N.clearGotvNotes(${J(ME)});
+  }`, { local: { [`${NEW}me:v1`]: J(ME) } });
+  assert.equal(r.out.count, 1, 'counted before sign-out asks');
+  for (const k of [`${NEW}me:v1`, `${OLD}me:v1`, `${OLD}gotv-notes:w1:u1`, `${NEW}gotv-notes:w1:u1`]) assert.equal(r.local[k], undefined, `${k} gone`);
+});
+
 test('under a client’s path, only that client’s older keys are carried', () => {
   const r = run(`async ({ m }) => { await m('oldStorage.js'); }`, { base: '/acme', local: {
     [`${OLD}acme:me:v1`]: J(ME),

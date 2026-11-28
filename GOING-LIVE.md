@@ -192,10 +192,23 @@ fixed value, which a Blueprint sync would write over
    it builds, saving a person waits, and phones keep their saves in the
    outbox until it ends. Deploy outside canvassing hours. Anyone mid-call-
    list who sees *A new version is ready* taps Reload.
-4. Going back to an earlier build (Render → **Rollback**) starts cleanly:
-   the database keeps what the older build expects to find. A build from
-   before other websites (Website → Other websites) doesn't know them, so
-   their pages show up among the main site's until you roll forward again.
+4. Going back to an earlier build (Render → **Rollback**) starts cleanly
+   on the server: the database keeps what the older build expects to find.
+   A build from before other websites (Website → Other websites) doesn't
+   know them, so their pages show up among the main site's until you roll
+   forward again. **Phones are not clean across the rename release
+   (2026-12, section 10):** a phone that opened the new build keeps what it
+   saves under the app's new storage name, which a build from before it
+   does not read. Rolled back past it, such a phone shows nothing waiting
+   to send, and its walk lists and letter drafts are out of sight (not
+   lost) until you roll forward; signing out on the older build leaves them
+   on the phone. So before rolling back past it, ask everyone in the field
+   to send what is waiting (the outbox shows 0) and to sign out of shared
+   phones, and roll forward as soon as you can. Rolled forward, everything
+   waiting under either name is sent once; anything a volunteer entered
+   again on the older build is sent twice, so check for doubled contacts.
+   A phone signed in as two different people across the rollback opens
+   asking who it is.
 
 ## 2 · Domains
 
