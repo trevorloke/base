@@ -136,6 +136,17 @@
 .walk-group:first-child { border-top: 0; }
 .walk-group__addr { margin: 0; font-family: var(--font-serif); font-size: 18px; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
 .walk-group__line { margin: 2px 0 0; font-size: 14px; font-weight: 600; color: var(--text-2); }
+/* A building: one item of the list, holding its floors and units in a list
+   of its own, so a floor heading sticks only over its own building's rows. */
+.walk-block { border-top: 1px solid var(--rule); background: var(--paper-0); }
+.walk-block:first-child { border-top: 0; }
+.walk-block > .walk-group { border-top: 0; }
+.walk-block__doors { list-style: none; margin: 0; padding: 0; }
+.walk-block__doors > .walk-door:first-child { border-top: 1px solid var(--rule); border-radius: 0; }
+.walk-block__doors > .walk-door:last-child { border-radius: 0; }
+.walk-block:last-child .walk-block__doors > .walk-door:last-child {
+  border-bottom-left-radius: calc(var(--r-card) - 1px); border-bottom-right-radius: calc(var(--r-card) - 1px);
+}
 .walk-floor {
   position: sticky;
   top: 0;

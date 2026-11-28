@@ -482,7 +482,7 @@ if (!BIG && (want(4) || want(5) || want(9))) {
   check('a volunteer joins and walks the turf', j.status === 200 && (await D.api('/actions/turf.assign', { turf_id: turf.id, user_id: id })).status === 200);
 }
 // The walk list as blocks: a house or building header, then its rows.
-const walkRead = (page) => page.$$eval('.walk-doors > li', (lis) => lis.map((li) => {
+const walkRead = (page) => page.$$eval('.walk-doors .walk-group, .walk-doors .walk-floor, .walk-doors li.walk-door', (lis) => lis.map((li) => {
   const sub = li.querySelector('.walk-door__addr--sub');
   let shown = '';
   if (sub) { const c = sub.cloneNode(true); c.querySelectorAll('.walk-sr').forEach((x) => x.remove()); shown = c.textContent.trim(); }
@@ -507,7 +507,7 @@ const blocksOf = (rows) => {
   }
   return out;
 };
-const subRow = (page, addr, words) => page.locator('.walk-doors > li.walk-door--sub', { has: page.locator('.walk-door__unit', { hasText: new RegExp(`^${words}$`) }) })
+const subRow = (page, addr, words) => page.locator('.walk-doors li.walk-door--sub', { has: page.locator('.walk-door__unit', { hasText: new RegExp(`^${words}$`) }) })
   .filter({ has: page.locator('.walk-sr', { hasText: addr }) }).first();
 
 if (want(4) && V) {
@@ -535,6 +535,20 @@ if (want(4) && V) {
   // This list walks 104 Ave first: Next door is the mid-rise's first unit.
   const next = await V.text('.walk-next__btn');
   check('4: Next door · Unit 201 · 13600 104 Ave', next === 'Next door Unit 201 · 13600 104 Ave', next);
+  // A building's floor heading stays over its own rows only: past the building it scrolls away (never over a house's rows).
+  const covered = await vp.evaluate(() => {
+    const row = [...document.querySelectorAll('.walk-door--sub')].find((li) => (li.querySelector('.walk-door__unit')?.innerText || '').trim() === 'Suite A');
+    if (!row) return 'no Suite A row';
+    row.scrollIntoView({ block: 'start' });
+    const r = row.getBoundingClientRect();
+    const over = [...document.querySelectorAll('.walk-floor')].filter((f) => { const b = f.getBoundingClientRect(); return b.height > 0 && b.bottom > Math.max(0, r.top - 1) && b.top < r.bottom; });
+    const hit = [2, 8, 16].map((dy) => document.elementFromPoint(r.left + r.width / 2, Math.max(1, r.top) + dy)?.closest('.walk-floor')).find(Boolean);
+    return over.length || hit ? `covered by ${(hit || over[0]).innerText.trim()}` : '';
+  });
+  check('4: past a building no floor heading sticks over a house\'s rows (Suite A at 10500 134 St is not covered)', covered === '', covered);
+  await V.shot('04-walk-list-past-building-phone');
+  await vp.evaluate(() => window.scrollTo(0, 0));
+  await sleep(300);
   const subs = rows.filter((r) => r.sub);
   check('8 phone: every walk sub-row is ≥ 56 px tall', subs.length > 0 && subs.every((r) => r.h >= 55.5), JSON.stringify(subs.map((r) => r.h).slice(0, 4)));
   await simple(vp, '4 phone: the walk list');

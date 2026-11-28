@@ -1042,9 +1042,9 @@ function WalkList({ id }) {
       ) : (
         <ol className="walk-doors">
           {/* A house or a building: its address once, then a row per door
-              (Main, Basement suite · Unit 201…), floor by floor. Its head
-              stays while any of its doors is shown (the Show pill, a GOTV
-              door leaving). */}
+              (Main, Basement suite · Unit 201…), floor by floor (a
+              building's rows in a list of its own). Its head stays while
+              any of its doors is shown (the Show pill, a GOTV door leaving). */}
           {walkBlocks(doors.map((d, i) => ({ ...d, at: i })).filter(inShow)).flatMap((b) => {
             const row = (d, sub = null) => {
               const i = d.at;
@@ -1082,24 +1082,36 @@ function WalkList({ id }) {
             if (b.place === 'door') return [row(b.doors[0])];
             const all = doors.filter((x) => x.group === b.group);
             const leftHere = all.filter((x) => !x.done).length;
-            const head = (
-              <li key={`head:${b.key}:${b.doors[0].key}`} className={`walk-group walk-group--${b.place}`}>
-                <h2 className="walk-group__addr">{b.address}</h2>
-                {b.place === 'building' && (
-                  <p className="walk-group__line">Building · {plural(b.units, 'unit', 'units')} · {leftHere ? `${leftHere} left` : 'Every unit is done'}</p>
-                )}
-              </li>
-            );
-            const out = [head];
+            const sub = (d) => row(d, { words: d.unit_words || doorLabel(d), place: b.place, address: b.address });
+            if (b.place === 'house') {
+              return [
+                <li key={`head:${b.key}:${b.doors[0].key}`} className="walk-group walk-group--house">
+                  <h2 className="walk-group__addr">{b.address}</h2>
+                </li>,
+                ...b.doors.map(sub),
+              ];
+            }
+            // A building is one item holding its own list: a floor heading
+            // stays at the top only while its building's rows scroll under
+            // it, and goes with the building (never over the next house).
+            const rows = [];
             let floor;
             for (const d of b.doors) {
-              if (b.place === 'building' && b.floors && d.floor !== floor) {
+              if (b.floors && d.floor !== floor) {
                 floor = d.floor;
-                out.push(<li key={`floor:${b.key}:${String(floor)}:${d.key}`} className="walk-floor">{floorLabel(floor)}</li>);
+                rows.push(<li key={`floor:${b.key}:${String(floor)}:${d.key}`} className="walk-floor">{floorLabel(floor)}</li>);
               }
-              out.push(row(d, { words: d.unit_words || doorLabel(d), place: b.place, address: b.address }));
+              rows.push(sub(d));
             }
-            return out;
+            return [
+              <li key={`head:${b.key}:${b.doors[0].key}`} className="walk-block">
+                <div className="walk-group walk-group--building">
+                  <h2 className="walk-group__addr">{b.address}</h2>
+                  <p className="walk-group__line">Building · {plural(b.units, 'unit', 'units')} · {leftHere ? `${leftHere} left` : 'Every unit is done'}</p>
+                </div>
+                <ol className="walk-block__doors">{rows}</ol>
+              </li>,
+            ];
           })}
         </ol>
       )}
