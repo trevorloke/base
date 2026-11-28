@@ -69,6 +69,9 @@ const SUITE_WORD = `(?:(?:${[...Object.keys(STEMS), ...Object.keys(TAIL_ONLY)].s
 // A unit token inside an address. In the bare hyphen form a unit has 1–4
 // digits (splitUnit checks); after an explicit word or '#', 1–5.
 const UNIT5 = '[a-z]{0,2}\\d{1,5}[a-z]?';
+// The same with a space or hyphen after its letters ("TH 5", "PH-1"): unitKey
+// reads it as the compact form (TH5, PH1).
+const UNIT5S = '[a-z]{1,2}(?:\\s?-\\s?|\\s)\\d{1,5}[a-z]?';
 // The words that say "a unit follows" (a whole word, never "Northside" → "rthside").
 // Not "No.": in front of a number it is the house number ("No. 10388 134 St").
 const UNIT_WORD = '(?:unit|apt|apartment|suite|ste|rm|room)\\.?';
@@ -115,6 +118,9 @@ export const unitKey = (raw) => {
   if (NO_UNIT.has(s)) return '';
   const suite = suiteOf(s);
   if (suite !== undefined) return suite;
+  // Letters, a space or hyphen, digits: one unit however it is typed ("TH 5", "TH-5" → TH5).
+  const spaced = s.match(/^([A-Z]{1,2})\s?-?\s?(\d{1,5}[A-Z]?)$/);
+  if (spaced) return `${spaced[1]}${spaced[2]}`;
   return s;
 };
 
@@ -129,13 +135,16 @@ export const unitKind = (key) => {
 
 // Each form splitUnit reads, made once.
 const TOKEN = `(${SUITE_WORD}|${UNIT5}|[a-z])`;
+// At the end of the address a unit may have a space or hyphen after its letters.
+const TOKEN_END = `(${SUITE_WORD}|${UNIT5}|${UNIT5S}|[a-z])`;
 const BEFORE = `^(?:#|${UNIT_WORD}(?=[\\s#\\d]))\\s*#?\\s*`;
 const RE = {
-  hyphen: new RegExp(`^(#\\s*)?(${UNIT5}|[a-z]|${SUITE_WORD})\\s*-\\s*(\\d{4,})(\\s.*)$`, 'i'),
+  hyphen: new RegExp(`^(#\\s*)?(${UNIT5}|${UNIT5S}|[a-z]|${SUITE_WORD})\\s*-\\s*(\\d{4,})(\\s.*)$`, 'i'),
+  wordBeforeSpaced: new RegExp(`${BEFORE}(${UNIT5S})\\s*(?:,|\\s-)?\\s+(.*)$`, 'i'),
   wordBefore: new RegExp(`${BEFORE}${TOKEN}\\s*(?:,|\\s-)?\\s+(.*)$`, 'i'),
   suiteBefore: new RegExp(`^(${SUITE_WORD})\\s*(?:,|-)?\\s*(\\d.*)$`, 'i'),
-  hashAfter: new RegExp(`^(.*?)\\s*,?\\s*#\\s*${TOKEN}$`, 'i'),
-  wordAfter: new RegExp(`^(.*?)\\s*,?\\s+${UNIT_WORD}\\s*#?\\s*${TOKEN}$`, 'i'),
+  hashAfter: new RegExp(`^(.*?)\\s*,?\\s*#\\s*${TOKEN_END}$`, 'i'),
+  wordAfter: new RegExp(`^(.*?)\\s*,?\\s+${UNIT_WORD}\\s*#?\\s*${TOKEN_END}$`, 'i'),
   suiteAfterMark: new RegExp(`^(.*?\\S)\\s*(?:,|\\s-)\\s*(${SUITE_WORD})$`, 'i'),
   suiteInBrackets: new RegExp(`^(.*?\\S)\\s*\\(\\s*(${SUITE_WORD})\\s*\\)$`, 'i'),
   suiteAfter: new RegExp(`^(.*?\\S)\\s+(${SUITE_WORD})$`, 'i'),
@@ -170,6 +179,10 @@ export const splitUnit = (address) => {
     return num.length > digits.length ? out(unit, `${num}${rest}`) : null;
   }
   // '#' or a word before: "#1203 13450 …", "Unit 5, 13450 …", "Unit B 10388 …", "Unit Bsmt 10388 …".
+  // ("Unit TH 5 10150 …" first, kept only when a house follows: "Unit B 10388 134 St" is unit B.)
+  m = s.match(RE.wordBeforeSpaced);
+  const spaced = m ? out(m[1], m[2]) : null;
+  if (spaced) return spaced;
   m = s.match(RE.wordBefore);
   if (m && (/\d/.test(m[1]) || m[1].length === 1 || isSuiteWord(m[1]))) return out(m[1], m[2]);
   if (m) return null;

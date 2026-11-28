@@ -187,6 +187,11 @@ test('doorDots: a house is u 1, h 2; a low-rise written “Suite 101” after th
     assert.deepEqual(at(list, H), [H.lat, H.lng, 0, 2, 1, 2], 'one house with two doors');
     assert.deepEqual(at(list, L), [L.lat, L.lng, 0, 40, 40, 0], 'forty units written after the street: one building');
     assert.deepEqual(at(list, T), [T.lat, T.lng, 0, 211, 211, 0], 'a tower and its office row: 211 units');
+    // A townhouse complex typed "TH 1"…"TH 24" (a space in the unit) is a building, not a house with 23 suites.
+    const C = { lat: 49.3015, lng: -122.6 };
+    for (let i = 1; i <= 24; i += 1) await insert({ name: `Town${i} Example`, address: '10150 King George Blvd', unit: `TH ${i}`, ...C });
+    await fill();
+    assert.deepEqual(at(await dots(), C), [C.lat, C.lng, 0, 24, 24, 0], 'TH 1…TH 24: one building of 24 units');
   } finally {
     delete process.env.BASE_MAP_ALL;
   }

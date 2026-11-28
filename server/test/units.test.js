@@ -41,7 +41,9 @@ test('unitKey: every way a suite or unit is typed comes to one key', () => {
     GARDEN: ['Garden', 'garden suite'],
     B: ['b', 'B', 'Suite B', 'Unit B', '#b'],
     PH2: ['ph2', 'PH2', 'Unit PH2', ' #ph2 '],
-    TH5: ['th5'],
+    TH5: ['th5', 'TH 5', 'TH-5', 'th - 5', 'Unit TH 5', '#TH-5'],
+    PH1: ['PH 1', 'PH-1', 'ph–1'],
+    A101: ['A 101', 'A-101', 'Unit A 101'],
     '105A': ['105a', 'Unit 105A'],
     12345: ['12345'],
     1203: ['1203', 'Unit 1203', 'Suite 1203', '#1203'],
@@ -88,6 +90,12 @@ test('splitUnit: every form a unit or suite is written inside the address', () =
     // hyphen, letters and digits
     ['PH1-13450 104 Ave', 'PH1', '13450 104 Ave'],
     ['TH5-10150 King George Blvd', 'TH5', '10150 King George Blvd'],
+    // letters, a space or hyphen, digits (the same unit as TH5, PH1)
+    ['TH 5-10150 King George Blvd', 'TH 5', '10150 King George Blvd'],
+    ['TH-5-10150 King George Blvd', 'TH-5', '10150 King George Blvd'],
+    ['Unit TH 5 10150 King George Blvd', 'TH 5', '10150 King George Blvd'],
+    ['10150 King George Blvd Unit PH-1', 'PH-1', '10150 King George Blvd'],
+    ['10150 King George Blvd #TH 5', 'TH 5', '10150 King George Blvd'],
     // hyphen, one letter (D5)
     ['B-10388 134 St', 'B', '10388 134 St'],
     ['a-10500 134 St', 'a', '10500 134 St'],
@@ -221,6 +229,11 @@ test('placeOf: three or more numbered or lettered units make a building; suite w
   assert.equal(place(['Side door', 'Back door', 'Front door']), 'house');
   assert.equal(place(['', '1', 'Side door', 'Front door']), 'house');
   assert.equal(place(['', '1', '2', 'BSMT', 'COACH']), 'house', 'suite words never count');
+  // Units typed with a space or hyphen are units too: a townhouse complex is a building.
+  assert.equal(place(Array.from({ length: 24 }, (_, i) => `TH ${i + 1}`)), 'building', 'TH 1…TH 24');
+  assert.equal(place(['PH-1', 'PH-2', 'PH-3', 'PH-4', 'PH-5', 'PH-6']), 'building', 'PH-1…PH-6');
+  assert.equal(place(['A 101', 'A 102', 'A 103', 'B 101']), 'building', 'A 101…B 101');
+  assert.equal(placeOf([door('10150 King George Blvd', 'TH 5'), door('10150 King George Blvd', 'TH5')]), 'door', 'TH 5 and TH5: one door');
   assert.equal(placeOf([]), 'door');
   assert.equal(BUILDING_MIN, 3);
 });
